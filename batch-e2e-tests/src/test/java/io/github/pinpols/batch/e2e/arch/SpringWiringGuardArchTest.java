@@ -31,10 +31,9 @@ import org.springframework.context.annotation.ComponentScan;
 class SpringWiringGuardArchTest {
 
   /** 项目所有生产 + 测试 class(含 e2e app)。 */
-  private static final JavaClasses ALL_CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
-          .importPackages("io.github.pinpols.batch");
+  private static final JavaClasses ALL_CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
+      .importPackages("io.github.pinpols.batch");
 
   @Test
   void componentScanCoversSharedSpiAndResiliencePackages() {
@@ -61,21 +60,17 @@ class SpringWiringGuardArchTest {
     ComponentScan scan = E2eConsoleImportApplication.class.getAnnotation(ComponentScan.class);
     List<String> scanned = List.of(scan.basePackages());
 
-    Set<String> uncovered =
-        ALL_CLASSES.stream()
-            .filter(c -> c.getPackageName().startsWith("io.github.pinpols.batch.console."))
-            .filter(
-                c ->
-                    c.isAnnotatedWith("org.springframework.stereotype.Component")
-                        || c.isAnnotatedWith("org.springframework.stereotype.Service")
-                        || c.isAnnotatedWith("org.springframework.stereotype.Repository")
-                        || c.isAnnotatedWith(
-                            "org.springframework.context.annotation.Configuration"))
-            .map(c -> c.getPackageName())
-            .filter(p -> scanned.stream().noneMatch(s -> p.equals(s) || p.startsWith(s + ".")))
-            // e2e 自己的测试包/console 主 app 包(被 excludeFilters 排除的入口类)不计
-            .filter(p -> !p.startsWith("io.github.pinpols.batch.console.e2e"))
-            .collect(Collectors.toCollection(TreeSet::new));
+    Set<String> uncovered = ALL_CLASSES.stream()
+        .filter(c -> c.getPackageName().startsWith("io.github.pinpols.batch.console."))
+        .filter(c -> c.isAnnotatedWith("org.springframework.stereotype.Component")
+            || c.isAnnotatedWith("org.springframework.stereotype.Service")
+            || c.isAnnotatedWith("org.springframework.stereotype.Repository")
+            || c.isAnnotatedWith("org.springframework.context.annotation.Configuration"))
+        .map(c -> c.getPackageName())
+        .filter(p -> scanned.stream().noneMatch(s -> p.equals(s) || p.startsWith(s + ".")))
+        // e2e 自己的测试包/console 主 app 包(被 excludeFilters 排除的入口类)不计
+        .filter(p -> !p.startsWith("io.github.pinpols.batch.console.e2e"))
+        .collect(Collectors.toCollection(TreeSet::new));
 
     Assertions.assertTrue(
         uncovered.isEmpty(),

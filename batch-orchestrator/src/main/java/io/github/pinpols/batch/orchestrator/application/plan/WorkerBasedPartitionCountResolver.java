@@ -29,11 +29,10 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
     if (onlineWorkerCount <= 0) {
       return 0;
     }
-    int partitionFactor =
-        firstPositiveInt(
-            params.get("partitionFactor"),
-            params.get("workerPartitionFactor"),
-            shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
+    int partitionFactor = firstPositiveInt(
+        params.get("partitionFactor"),
+        params.get("workerPartitionFactor"),
+        shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
     return (int) Math.min(256L, onlineWorkerCount * partitionFactor);
   }
 

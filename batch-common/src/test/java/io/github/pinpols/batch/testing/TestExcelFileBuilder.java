@@ -88,18 +88,17 @@ public final class TestExcelFileBuilder {
   public static byte[] customerImport(List<Map<String, Object>> customers) {
     return builder()
         .sheetName("Sheet1")
-        .headers(
-            List.of(
-                "customerNo",
-                "customerName",
-                "customerType",
-                "creditLimit",
-                "currencyCode",
-                "email",
-                "phone",
-                "status",
-                "openDate",
-                "remark"))
+        .headers(List.of(
+            "customerNo",
+            "customerName",
+            "customerType",
+            "creditLimit",
+            "currencyCode",
+            "email",
+            "phone",
+            "status",
+            "openDate",
+            "remark"))
         .rows(customers)
         .build();
   }

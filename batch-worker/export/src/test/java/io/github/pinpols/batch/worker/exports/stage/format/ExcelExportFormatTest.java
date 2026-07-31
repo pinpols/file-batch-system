@@ -27,7 +27,8 @@ class ExcelExportFormatTest {
 
   private final ExcelExportFormat format = new ExcelExportFormat(new ObjectMapper());
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   @Test
   @DisplayName("不配 template = 历史行为:全文本、单 sheet、无类型/样式")
@@ -50,29 +51,19 @@ class ExcelExportFormatTest {
   @Test
   @DisplayName("type=NUMBER/DATE/BOOL 按真类型写,带 format,解析失败回退文本")
   void writesTypedCells_whenColumnTypeDeclared() throws Exception {
-    Map<String, Object> templateConfig =
-        Map.of(
-            "csv_columns",
-            List.of(
-                Map.of(
-                    "source",
-                    "amount",
-                    "header",
-                    "金额",
-                    "type",
-                    "NUMBER",
-                    "numberFormat",
-                    "#,##0.00"),
-                Map.of("source", "ts", "header", "日期", "type", "DATE", "dateFormat", "yyyy-MM-dd"),
-                Map.of("source", "flag", "header", "启用", "type", "BOOL"),
-                Map.of("source", "bad", "header", "坏数字", "type", "NUMBER")));
-    List<Map<String, Object>> rows =
+    Map<String, Object> templateConfig = Map.of(
+        "csv_columns",
         List.of(
-            rowOf(
-                "amount", "1234567.5",
-                "ts", "2026-06-11",
-                "flag", "true",
-                "bad", "not-a-number"));
+            Map.of(
+                "source", "amount", "header", "金额", "type", "NUMBER", "numberFormat", "#,##0.00"),
+            Map.of("source", "ts", "header", "日期", "type", "DATE", "dateFormat", "yyyy-MM-dd"),
+            Map.of("source", "flag", "header", "启用", "type", "BOOL"),
+            Map.of("source", "bad", "header", "坏数字", "type", "NUMBER")));
+    List<Map<String, Object>> rows = List.of(rowOf(
+        "amount", "1234567.5",
+        "ts", "2026-06-11",
+        "flag", "true",
+        "bad", "not-a-number"));
     Path file = tempDir.resolve("typed.xlsx");
 
     format.generate(ctx(file, templateConfig, rows));
@@ -129,17 +120,16 @@ class ExcelExportFormatTest {
   @Test
   @DisplayName("header_style 加粗/背景/冻结/自适应列宽 + header_groups 合并分组表头(仅第 0 行)")
   void appliesHeaderStyleAndMergedGroups_whenConfigured() throws Exception {
-    Map<String, Object> templateConfig =
-        Map.of(
-            "csv_columns",
-                List.of(Map.of("source", "a", "header", "A"), Map.of("source", "b", "header", "B")),
-            "header_style",
-                Map.of(
-                    "bold", true,
-                    "background", "#1F4E78",
-                    "freeze_header", true,
-                    "auto_width", true),
-            "header_groups", List.of(Map.of("title", "分组", "from", 0, "to", 1)));
+    Map<String, Object> templateConfig = Map.of(
+        "csv_columns",
+            List.of(Map.of("source", "a", "header", "A"), Map.of("source", "b", "header", "B")),
+        "header_style",
+            Map.of(
+                "bold", true,
+                "background", "#1F4E78",
+                "freeze_header", true,
+                "auto_width", true),
+        "header_groups", List.of(Map.of("title", "分组", "from", 0, "to", 1)));
     List<Map<String, Object>> rows = List.of(rowOf("a", "1", "b", "2"));
     Path file = tempDir.resolve("styled.xlsx");
 
@@ -190,28 +180,27 @@ class ExcelExportFormatTest {
       Path file, Map<String, Object> templateConfig, List<Map<String, Object>> rows) {
     ExportDataContext dataCtx =
         new ExportDataContext("t1", "job", "B1", "tpl", templateConfig, Map.of());
-    ExportDataPlugin plugin =
-        new ExportDataPlugin() {
-          @Override
-          public String id() {
-            return "test";
-          }
+    ExportDataPlugin plugin = new ExportDataPlugin() {
+      @Override
+      public String id() {
+        return "test";
+      }
 
-          @Override
-          public Map<String, Object> loadBatch(ExportDataContext context) {
-            return Map.of();
-          }
+      @Override
+      public Map<String, Object> loadBatch(ExportDataContext context) {
+        return Map.of();
+      }
 
-          @Override
-          public DetailPage loadDetailPage(
-              ExportDataContext context, Long batchId, int pageSize, Object cursor) {
-            // 单页返回全部行,cursor=null 表示无后继页(Excel 不续跑)。
-            if (cursor != null) {
-              return DetailPage.empty();
-            }
-            return new DetailPage(rows, null);
-          }
-        };
+      @Override
+      public DetailPage loadDetailPage(
+          ExportDataContext context, Long batchId, int pageSize, Object cursor) {
+        // 单页返回全部行,cursor=null 表示无后继页(Excel 不续跑)。
+        if (cursor != null) {
+          return DetailPage.empty();
+        }
+        return new DetailPage(rows, null);
+      }
+    };
     return ExportFormatContext.builder()
         .batch(Map.of())
         .batchId(1L)

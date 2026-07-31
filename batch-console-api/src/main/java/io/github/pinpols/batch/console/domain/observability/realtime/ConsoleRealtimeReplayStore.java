@@ -33,26 +33,23 @@ public class ConsoleRealtimeReplayStore {
     String key = bufferKey(envelope.tenantId(), envelope.stream());
     String payload = JsonUtils.toJson(envelope);
     long maxEntries = realtimeProperties.getReplayMaxEntries();
-    long ttlSeconds =
-        realtimeProperties.getReplayTtl() != null
-                && !realtimeProperties.getReplayTtl().isZero()
-                && !realtimeProperties.getReplayTtl().isNegative()
-            ? realtimeProperties.getReplayTtl().getSeconds()
-            : 0L;
-    redisTemplate.executePipelined(
-        (RedisCallback<Object>)
-            connection -> {
-              byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-              byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
-              connection.listCommands().rPush(keyBytes, payloadBytes);
-              if (maxEntries > 0) {
-                connection.listCommands().lTrim(keyBytes, -maxEntries, -1);
-              }
-              if (ttlSeconds > 0) {
-                connection.keyCommands().expire(keyBytes, ttlSeconds);
-              }
-              return null;
-            });
+    long ttlSeconds = realtimeProperties.getReplayTtl() != null
+            && !realtimeProperties.getReplayTtl().isZero()
+            && !realtimeProperties.getReplayTtl().isNegative()
+        ? realtimeProperties.getReplayTtl().getSeconds()
+        : 0L;
+    redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+      byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
+      byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+      connection.listCommands().rPush(keyBytes, payloadBytes);
+      if (maxEntries > 0) {
+        connection.listCommands().lTrim(keyBytes, -maxEntries, -1);
+      }
+      if (ttlSeconds > 0) {
+        connection.keyCommands().expire(keyBytes, ttlSeconds);
+      }
+      return null;
+    });
   }
 
   public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {

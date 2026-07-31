@@ -29,15 +29,12 @@ public class ConsoleLineageEvidenceController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<LineageEvidenceResponse> resp =
-        proxyClient()
-            .get()
-            .uri(
-                "/internal/orchestrator/lineage/result-versions/{id}?tenantId={tenantId}",
-                id,
-                resolved)
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<LineageEvidenceResponse> resp = proxyClient()
+        .get()
+        .uri(
+            "/internal/orchestrator/lineage/result-versions/{id}?tenantId={tenantId}", id, resolved)
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -46,16 +43,15 @@ public class ConsoleLineageEvidenceController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<LineageEvidenceResponse> resp =
-        proxyClient()
-            .get()
-            .uri(
-                "/internal/orchestrator/lineage/effective?tenantId={tenantId}"
-                    + "&businessKey={businessKey}",
-                resolved,
-                businessKey)
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<LineageEvidenceResponse> resp = proxyClient()
+        .get()
+        .uri(
+            "/internal/orchestrator/lineage/effective?tenantId={tenantId}"
+                + "&businessKey={businessKey}",
+            resolved,
+            businessKey)
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 

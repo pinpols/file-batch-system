@@ -29,9 +29,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ImportIngressScannerTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
-  @Mock private BatchObjectStore objectStore;
+  @Mock
+  private BatchObjectStore objectStore;
 
   private ImportWorkerConfiguration workerConfiguration;
   private ImportScannerProperties scannerProperties;
@@ -40,17 +42,16 @@ class ImportIngressScannerTest {
 
   @BeforeEach
   void setUp() {
-    workerConfiguration =
-        new ImportWorkerConfiguration(
-            null,
-            "IMPORT",
-            "t1",
-            15000L,
-            "test-topic",
-            "test-group",
-            null,
-            new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500),
-            null);
+    workerConfiguration = new ImportWorkerConfiguration(
+        null,
+        "IMPORT",
+        "t1",
+        15000L,
+        "test-topic",
+        "test-group",
+        null,
+        new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500),
+        null);
 
     scannerProperties = new ImportScannerProperties();
     scannerProperties.setEnabled(true);
@@ -62,14 +63,13 @@ class ImportIngressScannerTest {
     s3StorageProperties = new S3StorageProperties();
     s3StorageProperties.setBucket("batch-dev");
 
-    scanner =
-        new ImportIngressScanner(
-            runtimeRepository,
-            workerConfiguration,
-            scannerProperties,
-            s3StorageProperties,
-            objectStore,
-            new ObjectMapper());
+    scanner = new ImportIngressScanner(
+        runtimeRepository,
+        workerConfiguration,
+        scannerProperties,
+        s3StorageProperties,
+        objectStore,
+        new ObjectMapper());
   }
 
   @Test

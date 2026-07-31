@@ -91,9 +91,8 @@ class MaintenanceModeFilterTest {
     properties.setReadOnly(false);
     refresh();
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                "ops-admin", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            "ops-admin", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
     MockHttpServletRequest post = new MockHttpServletRequest("POST", "/api/console/jobs");
     filter.doFilterInternal(post, response, chain);
@@ -109,9 +108,8 @@ class MaintenanceModeFilterTest {
     properties.setEnabled(true);
     refresh();
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                "viewer", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            "viewer", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))));
 
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
 

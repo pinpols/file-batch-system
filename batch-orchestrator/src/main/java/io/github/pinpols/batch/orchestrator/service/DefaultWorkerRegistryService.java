@@ -57,7 +57,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   private final SystemParameterMapper systemParameterMapper;
   private final WorkerRegistryProperties workerRegistryProperties;
 
-  @Lazy @Autowired private DefaultWorkerRegistryService self;
+  @Lazy
+  @Autowired
+  private DefaultWorkerRegistryService self;
 
   @Override
   @Transactional
@@ -67,56 +69,49 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     rejectOutdatedSdkVersion(request);
     WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
-    String newStatus =
-        resolveIncomingStatus(
-            request,
-            WorkerRegistryStatus.ONLINE.code(),
-            registry == null ? null : registry.status());
+    String newStatus = resolveIncomingStatus(
+        request, WorkerRegistryStatus.ONLINE.code(), registry == null ? null : registry.status());
     Instant heartbeatAt = firstHeartbeat();
-    Integer newLoad =
-        request.currentLoad() != null
-            ? request.currentLoad()
-            : (registry == null ? 0 : registry.currentLoad());
-    JsonbString newTags =
-        request.capabilityTags() != null
-            ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
-            : (registry == null ? null : registry.capabilityTags());
+    Integer newLoad = request.currentLoad() != null
+        ? request.currentLoad()
+        : (registry == null ? 0 : registry.currentLoad());
+    JsonbString newTags = request.capabilityTags() != null
+        ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
+        : (registry == null ? null : registry.capabilityTags());
 
     if (registry == null) {
       // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
       // 幂等重注册已存在的 worker_code 走 else 分支,永不被配额拦截。
       rejectIfTenantWorkerQuotaExceeded(request.tenantId());
-      registry =
-          new WorkerRegistryEntity(
-              null,
-              request.tenantId(),
-              request.workerCode(),
-              request.workerGroup(),
-              newTags,
-              null,
-              newStatus,
-              heartbeatAt,
-              newLoad,
-              null, // maxConcurrent: 走 DB DEFAULT 10 (V87)
-              null,
-              null,
+      registry = new WorkerRegistryEntity(
+          null,
+          request.tenantId(),
+          request.workerCode(),
+          request.workerGroup(),
+          newTags,
+          null,
+          newStatus,
+          heartbeatAt,
+          newLoad,
+          null, // maxConcurrent: 走 DB DEFAULT 10 (V87)
+          null,
+          null,
+          request.hostName(),
+          request.hostIp(),
+          request.processId(),
+          request.buildId(),
+          request.sdkVersion());
+    } else {
+      // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
+      // 保留旧值。
+      registry = registry
+          .withHeartbeat(newStatus, heartbeatAt, newLoad, newTags)
+          .withFingerprint(
               request.hostName(),
               request.hostIp(),
               request.processId(),
               request.buildId(),
               request.sdkVersion());
-    } else {
-      // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
-      // 保留旧值。
-      registry =
-          registry
-              .withHeartbeat(newStatus, heartbeatAt, newLoad, newTags)
-              .withFingerprint(
-                  request.hostName(),
-                  request.hostIp(),
-                  request.processId(),
-                  request.buildId(),
-                  request.sdkVersion());
     }
     WorkerRegistryEntity saved = persist(registry);
     // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
@@ -248,15 +243,14 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       String ctxLabel = "sdk.taskType.descriptor[" + descriptor.code() + "]";
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.defaults(), ctxLabel);
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.inputSchema(), ctxLabel);
-      customTaskTypeRegistryMapper.upsertDeclared(
-          CustomTaskTypeUpsertParam.builder()
-              .tenantId(request.tenantId())
-              .taskTypeCode(descriptor.code())
-              .displayName(descriptor.displayName())
-              .descriptor(JsonUtils.toJson(descriptor))
-              .descriptorVersion(descriptor.version())
-              .declaredByWorkerCode(request.workerCode())
-              .build());
+      customTaskTypeRegistryMapper.upsertDeclared(CustomTaskTypeUpsertParam.builder()
+          .tenantId(request.tenantId())
+          .taskTypeCode(descriptor.code())
+          .displayName(descriptor.displayName())
+          .descriptor(JsonUtils.toJson(descriptor))
+          .descriptorVersion(descriptor.version())
+          .declaredByWorkerCode(request.workerCode())
+          .build());
     }
   }
 
@@ -274,19 +268,17 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     String newStatus = resolveHeartbeatStatus(request, registry.status());
     Integer newLoad =
         request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
-    JsonbString newTags =
-        request.capabilityTags() != null
-            ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
-            : registry.capabilityTags();
+    JsonbString newTags = request.capabilityTags() != null
+        ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
+        : registry.capabilityTags();
     // heartbeat_at 由 mapper xml 直接写为 DB current_timestamp（消除 worker 时钟漂移）。
-    workerRegistryMapper.touchHeartbeat(
-        TouchHeartbeatParam.builder()
-            .tenantId(request.tenantId())
-            .workerCode(workerCode)
-            .nextStatus(newStatus)
-            .currentLoad(newLoad)
-            .capabilityTags(newTags == null ? null : newTags.getValue())
-            .build());
+    workerRegistryMapper.touchHeartbeat(TouchHeartbeatParam.builder()
+        .tenantId(request.tenantId())
+        .workerCode(workerCode)
+        .nextStatus(newStatus)
+        .currentLoad(newLoad)
+        .capabilityTags(newTags == null ? null : newTags.getValue())
+        .build());
     // pipeline stage 行级进度(docs/design/pipeline-stage-progress-display.md):仅 LOAD/GENERATE
     // 在跑时非空,写 in-mem cache(不持久化,5min TTL,FE 经 Console 端点读)
     pipelineStageProgressCache.publish(

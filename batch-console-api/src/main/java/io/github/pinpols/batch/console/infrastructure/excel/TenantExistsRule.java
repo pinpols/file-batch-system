@@ -43,16 +43,15 @@ public final class TenantExistsRule {
       }
     }
     for (String t : missing) {
-      issues.add(
-          new WorkbookIssue(
-              ConfigPackageExcelValidator.JOB_SHEET,
-              0,
-              ConfigPackageExcelValidator.COL_TENANT_ID,
-              "tenant_id '"
-                  + t
-                  + "' is referenced by fixture but missing from batch.tenant "
-                  + "(reconciler/scheduler will skip CRON jobs); insert it via "
-                  + "docs/test-data/sim-e2e-bootstrap.sql or tenant create API"));
+      issues.add(new WorkbookIssue(
+          ConfigPackageExcelValidator.JOB_SHEET,
+          0,
+          ConfigPackageExcelValidator.COL_TENANT_ID,
+          "tenant_id '"
+              + t
+              + "' is referenced by fixture but missing from batch.tenant "
+              + "(reconciler/scheduler will skip CRON jobs); insert it via "
+              + "docs/test-data/sim-e2e-bootstrap.sql or tenant create API"));
     }
     return issues;
   }

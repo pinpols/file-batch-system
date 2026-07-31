@@ -52,13 +52,12 @@ class ConsoleSecurityConfigurationTest {
     Environment environment = Mockito.mock(Environment.class);
     Mockito.when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
     jwtService = new ConsoleJwtService(properties, sessionRegistry, environment);
-    filter =
-        new ConsoleAuthenticationFilter(
-            properties,
-            batchSecurityProperties,
-            jwtService,
-            new ConsoleSecurityResponseWriter(new ObjectMapper()),
-            Mockito.mock(SseTicketService.class));
+    filter = new ConsoleAuthenticationFilter(
+        properties,
+        batchSecurityProperties,
+        jwtService,
+        new ConsoleSecurityResponseWriter(new ObjectMapper()),
+        Mockito.mock(SseTicketService.class));
     SecurityContextHolder.clearContext();
   }
 
@@ -85,19 +84,15 @@ class ConsoleSecurityConfigurationTest {
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-    filter.doFilter(
-        request,
-        response,
-        new FilterChain() {
-          @Override
-          public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
-            chainCalled.set(true);
-            ConsolePrincipal principal =
-                (ConsolePrincipal)
-                    SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-            assertThat(principal.authorities()).contains("ROLE_ADMIN");
-          }
-        });
+    filter.doFilter(request, response, new FilterChain() {
+      @Override
+      public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
+        chainCalled.set(true);
+        ConsolePrincipal principal = (ConsolePrincipal)
+            SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        assertThat(principal.authorities()).contains("ROLE_ADMIN");
+      }
+    });
 
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
     assertThat(chainCalled).isTrue();
@@ -107,7 +102,8 @@ class ConsoleSecurityConfigurationTest {
   @Test
   void shouldAuthenticateWithHttpOnlyCookie() throws Exception {
     // ADR-030 §D7 Stage B 收尾：JWT 通过 HttpOnly cookie batch_console_token 入站
-    String token = jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L).accessToken();
+    String token =
+        jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L).accessToken();
     Mockito.when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
 
     MockHttpServletRequest request = baseRequest();
@@ -115,20 +111,16 @@ class ConsoleSecurityConfigurationTest {
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-    filter.doFilter(
-        request,
-        response,
-        new FilterChain() {
-          @Override
-          public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
-            chainCalled.set(true);
-            ConsolePrincipal principal =
-                (ConsolePrincipal)
-                    SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-            assertThat(principal.username()).isEqualTo("bob");
-            assertThat(principal.tenantId()).isEqualTo("tenant-a");
-          }
-        });
+    filter.doFilter(request, response, new FilterChain() {
+      @Override
+      public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
+        chainCalled.set(true);
+        ConsolePrincipal principal = (ConsolePrincipal)
+            SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        assertThat(principal.username()).isEqualTo("bob");
+        assertThat(principal.tenantId()).isEqualTo("tenant-a");
+      }
+    });
 
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
     assertThat(chainCalled).isTrue();

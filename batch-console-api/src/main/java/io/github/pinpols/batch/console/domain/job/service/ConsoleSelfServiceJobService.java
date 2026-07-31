@@ -29,16 +29,15 @@ public class ConsoleSelfServiceJobService {
     payload.put("bizDate", param.bizDate());
     payload.put("targetInstanceNo", param.targetInstanceNo());
     payload.put("reason", param.reason());
-    SubmitApprovalParam approvalParam =
-        SubmitApprovalParam.builder()
-            .tenantId(tenantId)
-            .actionType("RERUN")
-            .targetType("JOB_INSTANCE")
-            .targetId(param.jobCode())
-            .payloadJson(JsonUtils.toJson(payload))
-            .operator(operator)
-            .idempotencyKey(idempotencyKey)
-            .build();
+    SubmitApprovalParam approvalParam = SubmitApprovalParam.builder()
+        .tenantId(tenantId)
+        .actionType("RERUN")
+        .targetType("JOB_INSTANCE")
+        .targetId(param.jobCode())
+        .payloadJson(JsonUtils.toJson(payload))
+        .operator(operator)
+        .idempotencyKey(idempotencyKey)
+        .build();
     return submitApproval(approvalParam);
   }
 
@@ -52,33 +51,31 @@ public class ConsoleSelfServiceJobService {
     payload.put("compensationType", param.compensationType());
     payload.put("targetInstanceNo", param.targetInstanceNo());
     payload.put("reason", param.reason());
-    SubmitApprovalParam approvalParam =
-        SubmitApprovalParam.builder()
-            .tenantId(tenantId)
-            .actionType("COMPENSATION")
-            .targetType("JOB_INSTANCE")
-            .targetId(param.jobCode())
-            .payloadJson(JsonUtils.toJson(payload))
-            .operator(operator)
-            .idempotencyKey(idempotencyKey)
-            .build();
+    SubmitApprovalParam approvalParam = SubmitApprovalParam.builder()
+        .tenantId(tenantId)
+        .actionType("COMPENSATION")
+        .targetType("JOB_INSTANCE")
+        .targetId(param.jobCode())
+        .payloadJson(JsonUtils.toJson(payload))
+        .operator(operator)
+        .idempotencyKey(idempotencyKey)
+        .build();
     return submitApproval(approvalParam);
   }
 
   private String submitApproval(SubmitApprovalParam param) {
     // 保留本调用方对外可见的错误 key error.approval.submit_failed（前端/i18n 已有映射）。
-    return approvalClient.submitApproval(
-        ApprovalSubmitCommand.builder()
-            .tenantId(param.tenantId())
-            .approvalType("SELF_SERVICE")
-            .actionType(param.actionType())
-            .targetType(param.targetType())
-            .targetId(param.targetId())
-            .payloadJson(param.payloadJson())
-            .requesterId(param.operator())
-            .idempotencyKey(param.idempotencyKey())
-            .emptyResponseMessageKey("error.approval.submit_failed")
-            .build());
+    return approvalClient.submitApproval(ApprovalSubmitCommand.builder()
+        .tenantId(param.tenantId())
+        .approvalType("SELF_SERVICE")
+        .actionType(param.actionType())
+        .targetType(param.targetType())
+        .targetId(param.targetId())
+        .payloadJson(param.payloadJson())
+        .requesterId(param.operator())
+        .idempotencyKey(param.idempotencyKey())
+        .emptyResponseMessageKey("error.approval.submit_failed")
+        .build());
   }
 
   @Builder

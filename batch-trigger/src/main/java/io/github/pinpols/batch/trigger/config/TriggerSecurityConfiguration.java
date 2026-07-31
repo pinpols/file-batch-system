@@ -41,8 +41,8 @@ public class TriggerSecurityConfiguration {
   public SecurityFilterChain triggerSecurityFilterChain(HttpSecurity http) throws Exception {
     http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .authorizeHttpRequests(
-            auth -> auth.requestMatchers("/actuator/**").permitAll().anyRequest().authenticated())
+        .authorizeHttpRequests(auth ->
+            auth.requestMatchers("/actuator/**").permitAll().anyRequest().authenticated())
         .addFilterBefore(
             new InternalSecretFilter(securityProperties),
             UsernamePasswordAuthenticationFilter.class);
@@ -98,9 +98,8 @@ public class TriggerSecurityConfiguration {
       // 必须用非匿名令牌——Spring Security 的 .authenticated() 匹配器通过
       // AuthenticatedAuthorizationManager#isGranted 调用 trustResolver.isAnonymous()，
       // 任何 AnonymousAuthenticationToken 都会被判定未认证而返回 403。
-      var auth =
-          UsernamePasswordAuthenticationToken.authenticated(
-              "internal", null, List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
+      var auth = UsernamePasswordAuthenticationToken.authenticated(
+          "internal", null, List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
       SecurityContextHolder.getContext().setAuthentication(auth);
     }
   }

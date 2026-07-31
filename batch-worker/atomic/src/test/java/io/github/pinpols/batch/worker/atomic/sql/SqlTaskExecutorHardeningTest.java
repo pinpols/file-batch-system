@@ -46,10 +46,8 @@ class SqlTaskExecutorHardeningTest {
     props.setDataSourceBeanName("primaryDs");
     props.setAllowedDataSourceBeans(Set.of("reportingDs"));
 
-    assertThatThrownBy(
-            () ->
-                executor.resolveDataSourceBeanName(
-                    Map.of(SqlTaskExecutor.PARAM_DS_BEAN, "adminDs")))
+    assertThatThrownBy(() ->
+            executor.resolveDataSourceBeanName(Map.of(SqlTaskExecutor.PARAM_DS_BEAN, "adminDs")))
         .isInstanceOf(SqlTaskExecutor.SqlValidationException.class)
         .hasMessageContaining("adminDs")
         .hasMessageContaining("allowedDataSourceBeans");
@@ -71,9 +69,8 @@ class SqlTaskExecutorHardeningTest {
     props.setDataSourceBeanName("primaryDs");
     props.setAllowedDataSourceBeans(Set.of("reportingDs"));
 
-    assertThat(
-            executor.resolveDataSourceBeanName(
-                Map.of(SqlTaskExecutor.PARAM_DS_BEAN, "reportingDs")))
+    assertThat(executor.resolveDataSourceBeanName(
+            Map.of(SqlTaskExecutor.PARAM_DS_BEAN, "reportingDs")))
         .isEqualTo("reportingDs");
   }
 

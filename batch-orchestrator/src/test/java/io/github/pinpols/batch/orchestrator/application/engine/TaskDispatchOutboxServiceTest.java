@@ -44,8 +44,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TaskDispatchOutboxServiceTest {
 
-  @Mock private DomainEventPublisher domainEventPublisher;
-  @Mock private JobTaskMapper jobTaskMapper;
+  @Mock
+  private DomainEventPublisher domainEventPublisher;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
 

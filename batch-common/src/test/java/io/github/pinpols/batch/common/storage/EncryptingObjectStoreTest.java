@@ -103,14 +103,8 @@ class EncryptingObjectStoreTest {
     EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF, 1024);
     byte[] plaintext = new byte[2048];
 
-    assertThatThrownBy(
-            () ->
-                store.put(
-                    BUCKET,
-                    "too-large.bin",
-                    new ByteArrayInputStream(plaintext),
-                    plaintext.length,
-                    "x"))
+    assertThatThrownBy(() -> store.put(
+            BUCKET, "too-large.bin", new ByteArrayInputStream(plaintext), plaintext.length, "x"))
         .isInstanceOf(ObjectStoreException.class)
         .hasMessageContaining("in-memory encryption limit");
     assertThat(raw.exists(BUCKET, "too-large.bin")).isFalse();
@@ -125,10 +119,8 @@ class EncryptingObjectStoreTest {
     EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF, 1024);
     byte[] plaintext = new byte[2048];
 
-    assertThatThrownBy(
-            () ->
-                store.put(
-                    BUCKET, "under-reported.bin", new ByteArrayInputStream(plaintext), 1, "x"))
+    assertThatThrownBy(() ->
+            store.put(BUCKET, "under-reported.bin", new ByteArrayInputStream(plaintext), 1, "x"))
         .isInstanceOf(ObjectStoreException.class)
         .hasMessageContaining("read limit");
     assertThat(raw.exists(BUCKET, "under-reported.bin")).isFalse();

@@ -25,33 +25,36 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleUserAccountControllerTest {
 
-  @Mock private ConsoleUserAccountMapper userAccountMapper;
-  @Mock private ConsolePasswordHasher passwordHasher;
-  @Mock private ConsoleSessionRegistry sessionRegistry;
+  @Mock
+  private ConsoleUserAccountMapper userAccountMapper;
+
+  @Mock
+  private ConsolePasswordHasher passwordHasher;
+
+  @Mock
+  private ConsoleSessionRegistry sessionRegistry;
 
   private ConsoleUserAccountService service;
 
-  private static final Map<String, Object> ACCOUNT =
-      Map.of(
-          "id", 42L,
-          "tenant_id", "tenant-a",
-          "username", "user-a",
-          "display_name", "User A",
-          "authorities_csv", "ROLE_TENANT_USER",
-          "enabled", true,
-          "created_at", "2026-01-01T00:00:00",
-          "updated_at", "2026-01-01T00:00:00");
+  private static final Map<String, Object> ACCOUNT = Map.of(
+      "id", 42L,
+      "tenant_id", "tenant-a",
+      "username", "user-a",
+      "display_name", "User A",
+      "authorities_csv", "ROLE_TENANT_USER",
+      "enabled", true,
+      "created_at", "2026-01-01T00:00:00",
+      "updated_at", "2026-01-01T00:00:00");
 
-  private static final Map<String, Object> DISABLED_ACCOUNT =
-      Map.of(
-          "id", 42L,
-          "tenant_id", "tenant-a",
-          "username", "user-a",
-          "display_name", "User A",
-          "authorities_csv", "ROLE_TENANT_USER",
-          "enabled", false,
-          "created_at", "2026-01-01T00:00:00",
-          "updated_at", "2026-01-01T00:00:00");
+  private static final Map<String, Object> DISABLED_ACCOUNT = Map.of(
+      "id", 42L,
+      "tenant_id", "tenant-a",
+      "username", "user-a",
+      "display_name", "User A",
+      "authorities_csv", "ROLE_TENANT_USER",
+      "enabled", false,
+      "created_at", "2026-01-01T00:00:00",
+      "updated_at", "2026-01-01T00:00:00");
 
   @BeforeEach
   void setUp() {
@@ -76,10 +79,8 @@ class ConsoleUserAccountControllerTest {
     assertThatThrownBy(() -> service.disable(99L))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 不含原文,改用 messageArgs 检查
-        .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getMessageArgs())
-                    .anyMatch(a -> a != null && a.toString().contains("user account not found")));
+        .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs())
+            .anyMatch(a -> a != null && a.toString().contains("user account not found")));
 
     verify(userAccountMapper, never()).updateEnabled(anyLong(), any(Boolean.class));
     verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
@@ -104,10 +105,8 @@ class ConsoleUserAccountControllerTest {
     assertThatThrownBy(() -> service.resetPassword(99L, "newSecurePass"))
         .isInstanceOf(BizException.class)
         // i18n: messageKey 不含原文,改用 messageArgs 检查
-        .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getMessageArgs())
-                    .anyMatch(a -> a != null && a.toString().contains("user account not found")));
+        .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs())
+            .anyMatch(a -> a != null && a.toString().contains("user account not found")));
 
     verify(userAccountMapper, never())
         .updatePasswordHashAndMustChange(anyLong(), anyString(), anyBoolean());

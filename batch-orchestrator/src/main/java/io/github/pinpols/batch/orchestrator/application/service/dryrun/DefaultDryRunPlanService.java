@@ -117,9 +117,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     String type = job.scheduleType();
     String expr = job.scheduleExpr();
     if (!Texts.hasText(type)) {
-      findings.add(
-          DryRunFinding.error(
-              "JOB_SCHEDULE_TYPE_MISSING", SCOPE_JOB, "scheduleType is required", null));
+      findings.add(DryRunFinding.error(
+          "JOB_SCHEDULE_TYPE_MISSING", SCOPE_JOB, "scheduleType is required", null));
       return;
     }
     String upper = type.trim().toUpperCase(Locale.ROOT);
@@ -129,12 +128,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       return;
     }
     if (!Texts.hasText(expr)) {
-      findings.add(
-          DryRunFinding.error(
-              "JOB_SCHEDULE_EXPR_MISSING",
-              SCOPE_JOB,
-              "scheduleExpr is required for " + upper,
-              null));
+      findings.add(DryRunFinding.error(
+          "JOB_SCHEDULE_EXPR_MISSING", SCOPE_JOB, "scheduleExpr is required for " + upper, null));
       return;
     }
     try {
@@ -148,27 +143,21 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       } else if (ScheduleType.FIXED_RATE.code().equals(upper)) {
         Duration d = parseFixedRate(expr);
         if (d == null || d.isZero() || d.isNegative()) {
-          findings.add(
-              DryRunFinding.error(
-                  "JOB_FIXED_RATE_INVALID",
-                  SCOPE_JOB,
-                  "fixed-rate expr unparsable: " + expr,
-                  expr));
+          findings.add(DryRunFinding.error(
+              "JOB_FIXED_RATE_INVALID", SCOPE_JOB, "fixed-rate expr unparsable: " + expr, expr));
         } else {
           findings.add(DryRunFinding.pass("JOB_FIXED_RATE_OK", SCOPE_JOB, "interval=" + d));
         }
       } else {
-        findings.add(
-            DryRunFinding.warn(
-                "JOB_SCHEDULE_TYPE_UNKNOWN", SCOPE_JOB, "unknown scheduleType: " + upper, upper));
+        findings.add(DryRunFinding.warn(
+            "JOB_SCHEDULE_TYPE_UNKNOWN", SCOPE_JOB, "unknown scheduleType: " + upper, upper));
       }
     } catch (RuntimeException ex) {
-      findings.add(
-          DryRunFinding.error(
-              "JOB_SCHEDULE_EXPR_INVALID",
-              SCOPE_JOB,
-              "schedule expression invalid: " + ex.getMessage(),
-              expr));
+      findings.add(DryRunFinding.error(
+          "JOB_SCHEDULE_EXPR_INVALID",
+          SCOPE_JOB,
+          "schedule expression invalid: " + ex.getMessage(),
+          expr));
     }
   }
 
@@ -229,20 +218,18 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     if (edges != null) {
       for (WorkflowEdgeEntity edge : edges) {
         if (!nodeCodes.contains(edge.getFromNodeCode())) {
-          findings.add(
-              DryRunFinding.error(
-                  "WF_EDGE_FROM_DANGLING",
-                  "workflow",
-                  "edge fromNode not in nodes: " + edge.getFromNodeCode(),
-                  edge.getFromNodeCode()));
+          findings.add(DryRunFinding.error(
+              "WF_EDGE_FROM_DANGLING",
+              "workflow",
+              "edge fromNode not in nodes: " + edge.getFromNodeCode(),
+              edge.getFromNodeCode()));
         }
         if (!nodeCodes.contains(edge.getToNodeCode())) {
-          findings.add(
-              DryRunFinding.error(
-                  "WF_EDGE_TO_DANGLING",
-                  "workflow",
-                  "edge toNode not in nodes: " + edge.getToNodeCode(),
-                  edge.getToNodeCode()));
+          findings.add(DryRunFinding.error(
+              "WF_EDGE_TO_DANGLING",
+              "workflow",
+              "edge toNode not in nodes: " + edge.getToNodeCode(),
+              edge.getToNodeCode()));
         }
       }
     }
@@ -250,9 +237,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     summary.put("nodeCount", nodes.size());
     summary.put("edgeCount", edges == null ? 0 : edges.size());
     if (findings.stream().noneMatch(f -> f.severity() == DryRunFinding.Severity.ERROR)) {
-      findings.add(
-          DryRunFinding.pass(
-              "WF_GRAPH_OK", "workflow", "graph nodes/edges resolved without dangling refs"));
+      findings.add(DryRunFinding.pass(
+          "WF_GRAPH_OK", "workflow", "graph nodes/edges resolved without dangling refs"));
     }
   }
 
@@ -271,17 +257,14 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     }
     SchedulePlan plan;
     try {
-      plan =
-          schedulePlanBuilder.build(
-              new SchedulePlanCommand(
-                  request.tenantId(),
-                  request.jobCode(),
-                  request.bizDate().toString(),
-                  request.params() == null ? Map.of() : request.params()));
+      plan = schedulePlanBuilder.build(new SchedulePlanCommand(
+          request.tenantId(),
+          request.jobCode(),
+          request.bizDate().toString(),
+          request.params() == null ? Map.of() : request.params()));
     } catch (RuntimeException ex) {
-      findings.add(
-          DryRunFinding.error(
-              "SCHEDULE_PLAN_FAILED", "schedule", "plan build failed: " + ex.getMessage(), null));
+      findings.add(DryRunFinding.error(
+          "SCHEDULE_PLAN_FAILED", "schedule", "plan build failed: " + ex.getMessage(), null));
       return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
     }
     summary.put("queueCode", plan.getQueueCode());
@@ -290,14 +273,13 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     summary.put("priority", plan.getPriority());
     summary.put("partitionCount", plan.getPartitionCount());
     summary.put("partitions", plan.getPartitions().size());
-    findings.add(
-        DryRunFinding.pass(
-            "SCHEDULE_PLAN_OK",
-            "schedule",
-            "expected 1 instance / "
-                + plan.getPartitions().size()
-                + " partitions on workerGroup="
-                + plan.getWorkerGroup()));
+    findings.add(DryRunFinding.pass(
+        "SCHEDULE_PLAN_OK",
+        "schedule",
+        "expected 1 instance / "
+            + plan.getPartitions().size()
+            + " partitions on workerGroup="
+            + plan.getWorkerGroup()));
     return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
   }
 
@@ -319,11 +301,10 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     summary.put("l3S3Probed", s3Probed);
     summary.put("l3EndpointProbed", endpointProbed);
     if (sqlProbed + s3Probed + endpointProbed == 0) {
-      findings.add(
-          DryRunFinding.pass(
-              "EXEC_PLAN_NO_PROBES_TRIGGERED",
-              SCOPE_EXECUTION,
-              "no SQL / S3 / endpoint params to probe; L3 reduces to L2 result"));
+      findings.add(DryRunFinding.pass(
+          "EXEC_PLAN_NO_PROBES_TRIGGERED",
+          SCOPE_EXECUTION,
+          "no SQL / S3 / endpoint params to probe; L3 reduces to L2 result"));
     }
     return DryRunPlanResult.of(DryRunLevel.EXECUTION_PLAN, findings, summary);
   }
@@ -334,12 +315,11 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     JobDefinitionEntity jobDef =
         configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
     if (jobDef == null) {
-      findings.add(
-          DryRunFinding.error(
-              "JOB_DEFINITION_NOT_FOUND",
-              SCOPE_JOB,
-              "job_definition not found or disabled",
-              request.jobCode()));
+      findings.add(DryRunFinding.error(
+          "JOB_DEFINITION_NOT_FOUND",
+          SCOPE_JOB,
+          "job_definition not found or disabled",
+          request.jobCode()));
     }
     return jobDef;
   }

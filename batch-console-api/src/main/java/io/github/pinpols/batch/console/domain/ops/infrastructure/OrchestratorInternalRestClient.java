@@ -50,20 +50,15 @@ public class OrchestratorInternalRestClient {
   public RestClient build() {
     String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
     String secret = batchSecurityProperties.getInternalSecret();
-    RestClient.Builder builder =
-        restClientBuilderProvider
-            .getObject()
-            .baseUrl(baseUrl)
-            .requestFactory(
-                ClientHttpRequestFactoryBuilder.detect()
-                    .build(
-                        HttpClientSettings.defaults()
-                            .withConnectTimeout(
-                                Duration.ofMillis(
-                                    orchestratorClientProperties.getConnectTimeoutMillis()))
-                            .withReadTimeout(
-                                Duration.ofMillis(
-                                    orchestratorClientProperties.getReadTimeoutMillis()))));
+    RestClient.Builder builder = restClientBuilderProvider
+        .getObject()
+        .baseUrl(baseUrl)
+        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
+            .build(HttpClientSettings.defaults()
+                .withConnectTimeout(
+                    Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis()))
+                .withReadTimeout(
+                    Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis()))));
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }

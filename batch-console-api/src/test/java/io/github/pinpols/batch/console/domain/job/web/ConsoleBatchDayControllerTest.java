@@ -42,11 +42,10 @@ class ConsoleBatchDayControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleBatchDayController(proxy, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayController(proxy, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -60,13 +59,11 @@ class ConsoleBatchDayControllerTest {
             eq("safety")))
         .thenReturn(Map.of("batchDayId", 1, "dayStatus", "FROZEN"));
     mockMvc
-        .perform(
-            post("/api/console/batch-days/operate")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"tenantId\":\"ta\",\"calendarCode\":\"default-calendar\","
-                        + "\"bizDate\":\"2026-05-20\",\"action\":\"FREEZE\","
-                        + "\"operatorId\":\"admin\",\"reason\":\"safety\"}"))
+        .perform(post("/api/console/batch-days/operate")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"calendarCode\":\"default-calendar\","
+                + "\"bizDate\":\"2026-05-20\",\"action\":\"FREEZE\","
+                + "\"operatorId\":\"admin\",\"reason\":\"safety\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.batchDayId").value(1))
         .andExpect(jsonPath("$.data.dayStatus").value("FROZEN"));
@@ -79,22 +76,19 @@ class ConsoleBatchDayControllerTest {
   void operateShouldRejectUnsupportedAction() throws Exception {
     // @Pattern 限制 action 必须是 FREEZE/RELEASE/SKIP/REOPEN/CLOSE 之一
     mockMvc
-        .perform(
-            post("/api/console/batch-days/operate")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"tenantId\":\"ta\",\"calendarCode\":\"c1\",\"bizDate\":\"2026-05-20\","
-                        + "\"action\":\"BAD_ACTION\"}"))
+        .perform(post("/api/console/batch-days/operate")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"calendarCode\":\"c1\",\"bizDate\":\"2026-05-20\","
+                + "\"action\":\"BAD_ACTION\"}"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void operateShouldRejectMissingCalendarCode() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/batch-days/operate")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"bizDate\":\"2026-05-20\",\"action\":\"FREEZE\"}"))
+        .perform(post("/api/console/batch-days/operate")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"bizDate\":\"2026-05-20\",\"action\":\"FREEZE\"}"))
         .andExpect(status().isBadRequest());
   }
 
@@ -103,14 +97,12 @@ class ConsoleBatchDayControllerTest {
     when(proxy.batchDayOperate(any(), any(), any(), any(), any(), any())).thenReturn(Map.of());
     for (String act : new String[] {"FREEZE", "RELEASE", "SKIP", "REOPEN", "CLOSE"}) {
       mockMvc
-          .perform(
-              post("/api/console/batch-days/operate")
-                  .contentType(APPLICATION_JSON)
-                  .content(
-                      "{\"tenantId\":\"ta\",\"calendarCode\":\"c1\","
-                          + "\"bizDate\":\"2026-05-20\",\"action\":\""
-                          + act
-                          + "\"}"))
+          .perform(post("/api/console/batch-days/operate")
+              .contentType(APPLICATION_JSON)
+              .content("{\"tenantId\":\"ta\",\"calendarCode\":\"c1\","
+                  + "\"bizDate\":\"2026-05-20\",\"action\":\""
+                  + act
+                  + "\"}"))
           .andExpect(status().isOk());
     }
   }

@@ -9,15 +9,15 @@ import lombok.Data;
 
 @Data
 public class ResourceQueueCreateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 128)
   @Pattern(
       regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
-      message =
-          "queueCode must start with a letter and contain only letters, digits, underscore or"
-              + " hyphen")
+      message = "queueCode must start with a letter and contain only letters, digits, underscore or"
+          + " hyphen")
   private String queueCode;
 
   @Size(max = 256)

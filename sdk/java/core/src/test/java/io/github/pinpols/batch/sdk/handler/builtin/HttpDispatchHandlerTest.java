@@ -28,14 +28,12 @@ class HttpDispatchHandlerTest {
   @BeforeEach
   void startServer() throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext(
-        "/push",
-        exchange -> {
-          received.incrementAndGet();
-          exchange.getRequestBody().readAllBytes();
-          exchange.sendResponseHeaders(statusToReturn, -1);
-          exchange.close();
-        });
+    server.createContext("/push", exchange -> {
+      received.incrementAndGet();
+      exchange.getRequestBody().readAllBytes();
+      exchange.sendResponseHeaders(statusToReturn, -1);
+      exchange.close();
+    });
     server.start();
   }
 

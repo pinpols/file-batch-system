@@ -23,9 +23,11 @@ class TrailerControlRecordTest {
   @Test
   @DisplayName("present=false 或空模板 → 空记录(不参与校验)")
   void emptyWhenNotPresent() {
-    assertThat(TrailerControlRecord.parse("T,1,2", Map.of("present", false)).isPresent()).isFalse();
+    assertThat(TrailerControlRecord.parse("T,1,2", Map.of("present", false)).isPresent())
+        .isFalse();
     assertThat(TrailerControlRecord.parse("T,1,2", Map.of()).isPresent()).isFalse();
-    assertThat(TrailerControlRecord.parse(null, Map.of("present", true)).isPresent()).isFalse();
+    assertThat(TrailerControlRecord.parse(null, Map.of("present", true)).isPresent())
+        .isFalse();
   }
 
   @Test

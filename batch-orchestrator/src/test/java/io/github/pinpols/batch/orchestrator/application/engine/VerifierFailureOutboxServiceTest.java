@@ -30,14 +30,13 @@ class VerifierFailureOutboxServiceTest {
     failureB.put("code", "EXPORT_HEADER_INVALID");
     failureB.put("message", "missing header");
     failureB.put("evidence", Map.of());
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("t1")
-            .taskId(42L)
-            .workerId("worker-A")
-            .success(true)
-            .verifierFailures(List.of(failureA, failureB))
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(42L)
+        .workerId("worker-A")
+        .success(true)
+        .verifierFailures(List.of(failureA, failureB))
+        .build();
     JobTaskEntity task = new JobTaskEntity();
     task.setJobInstanceId(7L);
 
@@ -62,13 +61,12 @@ class VerifierFailureOutboxServiceTest {
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> a = Map.of("code", "DUP_CODE", "message", "first", "evidence", Map.of());
     Map<String, Object> b = Map.of("code", "DUP_CODE", "message", "second", "evidence", Map.of());
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("t1")
-            .taskId(7L)
-            .success(true)
-            .verifierFailures(List.of(a, b))
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(7L)
+        .success(true)
+        .verifierFailures(List.of(a, b))
+        .build();
     JobTaskEntity task = new JobTaskEntity();
     task.setJobInstanceId(1L);
 
@@ -98,13 +96,12 @@ class VerifierFailureOutboxServiceTest {
   void noopWhenFailuresEmpty() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("t1")
-            .taskId(1L)
-            .success(true)
-            .verifierFailures(List.of())
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .success(true)
+        .verifierFailures(List.of())
+        .build();
 
     int written = service.writeVerifierFailures(command, new JobTaskEntity());
 
@@ -117,13 +114,12 @@ class VerifierFailureOutboxServiceTest {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> good = Map.of("code", "X", "message", "y", "evidence", Map.of());
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("t1")
-            .taskId(1L)
-            .success(true)
-            .verifierFailures(java.util.Arrays.asList(null, good, null))
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .success(true)
+        .verifierFailures(java.util.Arrays.asList(null, good, null))
+        .build();
     JobTaskEntity task = new JobTaskEntity();
     task.setJobInstanceId(99L);
 

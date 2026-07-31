@@ -112,9 +112,8 @@ public class ConsoleLoginKeyPairService {
       Cipher rsa = Cipher.getInstance(RSA_TRANSFORM);
       // 显式指定 MGF1 hash = SHA-256，否则 JDK 默认 MGF1-SHA-1，与 Web Crypto
       // RSA-OAEP(SHA-256) 不匹配，密文解不开。
-      OAEPParameterSpec oaep =
-          new OAEPParameterSpec(
-              "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
+      OAEPParameterSpec oaep = new OAEPParameterSpec(
+          "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
       rsa.init(Cipher.DECRYPT_MODE, privateKey, oaep);
       byte[] aesKeyBytes = rsa.doFinal(wrappedKey);
 

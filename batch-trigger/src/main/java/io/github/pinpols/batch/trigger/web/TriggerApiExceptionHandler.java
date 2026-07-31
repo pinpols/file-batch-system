@@ -38,15 +38,13 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<CommonResponse<Void>> handleMethodArgumentNotValidException(
       MethodArgumentNotValidException exception) {
-    String message =
-        exception.getBindingResult().getFieldErrors().stream()
-            .map(FieldError::getDefaultMessage)
-            .collect(Collectors.joining("; "));
+    String message = exception.getBindingResult().getFieldErrors().stream()
+        .map(FieldError::getDefaultMessage)
+        .collect(Collectors.joining("; "));
     return ResponseEntity.badRequest()
-        .body(
-            CommonResponse.failure(
-                ResultCode.VALIDATION_ERROR,
-                message.isBlank() ? ResultCode.VALIDATION_ERROR.defaultMessage() : message));
+        .body(CommonResponse.failure(
+            ResultCode.VALIDATION_ERROR,
+            message.isBlank() ? ResultCode.VALIDATION_ERROR.defaultMessage() : message));
   }
 
   @ExceptionHandler(ConstraintViolationException.class)

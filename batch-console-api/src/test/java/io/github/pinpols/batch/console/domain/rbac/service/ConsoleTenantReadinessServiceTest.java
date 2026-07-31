@@ -29,15 +29,26 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT) // 各用例只触发部分 mapper,共享 setUp stub
 class ConsoleTenantReadinessServiceTest {
 
-  @Mock private TenantMapper tenantMapper;
-  @Mock private FileTemplateConfigMapper templateMapper;
-  @Mock private FileChannelConfigMapper channelMapper;
-  @Mock private ResourceQueueMapper resourceQueueMapper;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
+  @Mock
+  private TenantMapper tenantMapper;
 
-  @Mock private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
+  @Mock
+  private FileTemplateConfigMapper templateMapper;
 
-  @InjectMocks private ConsoleTenantReadinessService service;
+  @Mock
+  private FileChannelConfigMapper channelMapper;
+
+  @Mock
+  private ResourceQueueMapper resourceQueueMapper;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
+
+  @InjectMocks
+  private ConsoleTenantReadinessService service;
 
   @BeforeEach
   void setUp() {
@@ -82,15 +93,13 @@ class ConsoleTenantReadinessServiceTest {
   @Test
   void shouldBlock_whenEnabledExportTemplateMissingQuerySql() {
     when(templateMapper.selectReadinessRows("t1"))
-        .thenReturn(
-            List.of(
-                row(
-                    "template_code", "exp1",
-                    "template_type", "EXPORT",
-                    "enabled", Boolean.TRUE,
-                    "default_query_sql", null,
-                    "field_mappings", "{\"a\":1}",
-                    "naming_rule", "n")));
+        .thenReturn(List.of(row(
+            "template_code", "exp1",
+            "template_type", "EXPORT",
+            "enabled", Boolean.TRUE,
+            "default_query_sql", null,
+            "field_mappings", "{\"a\":1}",
+            "naming_rule", "n")));
 
     TenantReadinessResponse r = service.check("t1");
 
@@ -108,21 +117,19 @@ class ConsoleTenantReadinessServiceTest {
   @Test
   void shouldWarnNotBlock_whenDisabledTemplateIncomplete() {
     when(templateMapper.selectReadinessRows("t1"))
-        .thenReturn(
-            List.of(
-                row(
-                    "template_code",
-                    "imp1",
-                    "template_type",
-                    "IMPORT",
-                    "enabled",
-                    Boolean.FALSE,
-                    "default_query_sql",
-                    null,
-                    "field_mappings",
-                    null,
-                    "naming_rule",
-                    null)));
+        .thenReturn(List.of(row(
+            "template_code",
+            "imp1",
+            "template_type",
+            "IMPORT",
+            "enabled",
+            Boolean.FALSE,
+            "default_query_sql",
+            null,
+            "field_mappings",
+            null,
+            "naming_rule",
+            null)));
 
     TenantReadinessResponse r = service.check("t1");
 
@@ -134,15 +141,13 @@ class ConsoleTenantReadinessServiceTest {
   @Test
   void shouldBlock_whenEnabledChannelHasEmptyConfigJson() {
     when(channelMapper.selectReadinessRows("t1"))
-        .thenReturn(
-            List.of(
-                row(
-                    "channel_code", "ch1",
-                    "channel_type", "SFTP",
-                    "auth_type", "PASSWORD",
-                    "enabled", Boolean.TRUE,
-                    "config_json", "{}",
-                    "target_endpoint", "sftp://x")));
+        .thenReturn(List.of(row(
+            "channel_code", "ch1",
+            "channel_type", "SFTP",
+            "auth_type", "PASSWORD",
+            "enabled", Boolean.TRUE,
+            "config_json", "{}",
+            "target_endpoint", "sftp://x")));
 
     TenantReadinessResponse r = service.check("t1");
 
@@ -155,15 +160,13 @@ class ConsoleTenantReadinessServiceTest {
   @Test
   void shouldNotBlock_whenChannelAuthNone() {
     when(channelMapper.selectReadinessRows("t1"))
-        .thenReturn(
-            List.of(
-                row(
-                    "channel_code", "ch2",
-                    "channel_type", "LOCAL",
-                    "auth_type", "NONE",
-                    "enabled", Boolean.TRUE,
-                    "config_json", "{}",
-                    "target_endpoint", null)));
+        .thenReturn(List.of(row(
+            "channel_code", "ch2",
+            "channel_type", "LOCAL",
+            "auth_type", "NONE",
+            "enabled", Boolean.TRUE,
+            "config_json", "{}",
+            "target_endpoint", null)));
 
     TenantReadinessResponse r = service.check("t1");
     assertThat(r.ready()).isTrue();

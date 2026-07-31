@@ -39,7 +39,8 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultProcessStageExecutorTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   private static final Long PIPELINE_INSTANCE_ID = 100L;
   private static final Long STEP_RUN_ID = 200L;
@@ -67,13 +68,12 @@ class DefaultProcessStageExecutorTest {
 
   @Test
   void defaultStepDefinitions_useWapBookendsOrder() {
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     List<PipelineStepTemplate> templates = executor.defaultStepDefinitions();
 
@@ -94,21 +94,18 @@ class DefaultProcessStageExecutorTest {
   void execute_runsAll5Stages_inOrder_whenPipelineDeclared() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
-    when(plugin.compute(any()))
-        .thenAnswer(
-            inv -> {
-              ProcessJobContext ctx = inv.getArgument(0);
-              ctx.getAttributes().put("processedCount", 7);
-              return ProcessStageResult.success(ProcessStage.COMPUTE);
-            });
+    when(plugin.compute(any())).thenAnswer(inv -> {
+      ProcessJobContext ctx = inv.getArgument(0);
+      ctx.getAttributes().put("processedCount", 7);
+      return ProcessStageResult.success(ProcessStage.COMPUTE);
+    });
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -144,13 +141,12 @@ class DefaultProcessStageExecutorTest {
     when(plugin.compute(any()))
         .thenReturn(ProcessStageResult.failure(ProcessStage.COMPUTE, "ERR", "boom"));
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -173,19 +169,17 @@ class DefaultProcessStageExecutorTest {
   void execute_returnsBusinessError_whenPluginPrepareThrowsBizException() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
-    willThrow(
-            BizException.of(
-                ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"))
+    willThrow(BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"))
         .given(plugin)
         .prepare(any());
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -216,13 +210,12 @@ class DefaultProcessStageExecutorTest {
     when(plugin.implCode()).thenReturn("p1");
     willThrow(new RuntimeException("io fail")).given(plugin).prepare(any());
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -243,13 +236,12 @@ class DefaultProcessStageExecutorTest {
     when(plugin.implCode()).thenReturn("payloadDriven");
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     // COMPUTE step impl_code 是默认 sentinel(PROCESS_COMPUTE),走 payload 注入的 processImplCode 回退
@@ -266,13 +258,12 @@ class DefaultProcessStageExecutorTest {
 
   @Test
   void execute_runsAll5StagesAsNoOp_whenNoPluginConfigured() {
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -289,13 +280,12 @@ class DefaultProcessStageExecutorTest {
 
   @Test
   void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
@@ -312,13 +302,12 @@ class DefaultProcessStageExecutorTest {
   void execute_failsFastWithPluginNotFound_whenComputeImplCodeNotRegistered() {
     // P2-5:COMPUTE step 显式配了 impl_code "ghostPlugin"(非默认 sentinel),但 plugin 注册表里没有
     // → PrepareStep 应直接返回 PROCESS_COMPUTE_PLUGIN_NOT_FOUND failure,后续 stage 全部跳过。
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -347,14 +336,8 @@ class DefaultProcessStageExecutorTest {
       }
     }
     // executor 构造期会因 buildDefaultStepDefinitions 缺 PREPARE bean 抛 IllegalStateException
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () ->
-                new DefaultProcessStageExecutor(
-                    incomplete,
-                    List.of(),
-                    runtimeRepository,
-                    ProcessMetrics.noop(),
-                    disabledStageSkip()))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> new DefaultProcessStageExecutor(
+            incomplete, List.of(), runtimeRepository, ProcessMetrics.noop(), disabledStageSkip()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("missing process step bean for stage");
   }
@@ -370,13 +353,12 @@ class DefaultProcessStageExecutorTest {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            enabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        enabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -409,13 +391,12 @@ class DefaultProcessStageExecutorTest {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            enabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        enabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -439,13 +420,12 @@ class DefaultProcessStageExecutorTest {
     when(plugin.implCode()).thenReturn("dailySummary");
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            enabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        enabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -467,13 +447,12 @@ class DefaultProcessStageExecutorTest {
     when(plugin.implCode()).thenReturn("dailySummary");
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            disabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -497,13 +476,12 @@ class DefaultProcessStageExecutorTest {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            enabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        enabledStageSkip());
 
     ProcessJobContext context = newContext();
     context
@@ -529,13 +507,12 @@ class DefaultProcessStageExecutorTest {
     when(plugin.implCode()).thenReturn("dailySummary");
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            enabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        enabledStageSkip());
 
     ProcessJobContext context = newContext();
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
@@ -559,13 +536,12 @@ class DefaultProcessStageExecutorTest {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
 
-    DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(
-            allStageStepBeans(),
-            List.of(plugin),
-            runtimeRepository,
-            ProcessMetrics.noop(),
-            enabledStageSkip());
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        runtimeRepository,
+        ProcessMetrics.noop(),
+        enabledStageSkip());
 
     ProcessJobContext context = newContext();
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 1);
@@ -606,29 +582,27 @@ class DefaultProcessStageExecutorTest {
   private List<PipelineStepDefinition> fullPipelineWith(String computeImplCode) {
     List<PipelineStepDefinition> steps = new ArrayList<>();
     int order = 1;
-    for (ProcessStage stage :
-        List.of(
-            ProcessStage.PREPARE,
-            ProcessStage.COMPUTE,
-            ProcessStage.VALIDATE,
-            ProcessStage.COMMIT,
-            ProcessStage.FEEDBACK)) {
+    for (ProcessStage stage : List.of(
+        ProcessStage.PREPARE,
+        ProcessStage.COMPUTE,
+        ProcessStage.VALIDATE,
+        ProcessStage.COMMIT,
+        ProcessStage.FEEDBACK)) {
       String implCode = stage == ProcessStage.COMPUTE ? computeImplCode : "PROCESS_" + stage.name();
-      PipelineStepDefinition step =
-          PipelineStepDefinition.builder()
-              .id((long) order)
-              .pipelineDefinitionId(1L)
-              .stepCode("PROCESS_" + stage.name())
-              .stepName("Process " + stage.name())
-              .stageCode(stage.name())
-              .stepOrder(order++)
-              .implCode(implCode)
-              .stepParams(Map.of())
-              .timeoutSeconds(0)
-              .retryPolicy("NONE")
-              .retryMaxCount(0)
-              .enabled(true)
-              .build();
+      PipelineStepDefinition step = PipelineStepDefinition.builder()
+          .id((long) order)
+          .pipelineDefinitionId(1L)
+          .stepCode("PROCESS_" + stage.name())
+          .stepName("Process " + stage.name())
+          .stageCode(stage.name())
+          .stepOrder(order++)
+          .implCode(implCode)
+          .stepParams(Map.of())
+          .timeoutSeconds(0)
+          .retryPolicy("NONE")
+          .retryMaxCount(0)
+          .enabled(true)
+          .build();
       steps.add(step);
     }
     return steps;

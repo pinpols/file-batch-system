@@ -30,15 +30,14 @@ public class BatchDayOpsController {
 
   @PostMapping("/operate")
   public BatchDayOperateResponse operate(@RequestBody BatchDayOperateRequest request) {
-    BatchDayOperateCommand command =
-        BatchDayOperateCommand.builder()
-            .tenantId(request.tenantId())
-            .calendarCode(request.calendarCode())
-            .bizDate(request.bizDate())
-            .action(BatchDayOperation.valueOf(request.action()))
-            .operatorId(request.operatorId())
-            .reason(request.reason())
-            .build();
+    BatchDayOperateCommand command = BatchDayOperateCommand.builder()
+        .tenantId(request.tenantId())
+        .calendarCode(request.calendarCode())
+        .bizDate(request.bizDate())
+        .action(BatchDayOperation.valueOf(request.action()))
+        .operatorId(request.operatorId())
+        .reason(request.reason())
+        .build();
     BatchDayOperationResult result = batchDayOperationService.operate(command);
     BatchDayInstanceEntity entity = result.batchDay();
     return new BatchDayOperateResponse(

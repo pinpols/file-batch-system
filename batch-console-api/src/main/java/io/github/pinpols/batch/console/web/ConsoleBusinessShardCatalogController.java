@@ -54,18 +54,17 @@ public class ConsoleBusinessShardCatalogController {
       aggregateId = "#request.placementKey")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertShardCatalogRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    catalogService.upsert(
-        BusinessShardCatalogUpsertParam.builder()
-            .placementKey(request.placementKey())
-            .host(request.host())
-            .port(request.port())
-            .dbName(request.dbName())
-            .secretRef(request.secretRef())
-            .poolMaxSize(request.poolMaxSize())
-            .enabled(request.enabled())
-            .description(request.description())
-            .operator(operator)
-            .build());
+    catalogService.upsert(BusinessShardCatalogUpsertParam.builder()
+        .placementKey(request.placementKey())
+        .host(request.host())
+        .port(request.port())
+        .dbName(request.dbName())
+        .secretRef(request.secretRef())
+        .poolMaxSize(request.poolMaxSize())
+        .enabled(request.enabled())
+        .description(request.description())
+        .operator(operator)
+        .build());
     return responseFactory.success(null);
   }
 
@@ -82,7 +81,9 @@ public class ConsoleBusinessShardCatalogController {
 
   /** 只登记位置 + 状态,**禁带账密**(凭据走 secrets,secretRef 仅引用名)。 */
   record UpsertShardCatalogRequest(
-      @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$") String placementKey,
+      @NotBlank @Size(max = 64) @Pattern(regexp = "^[a-z0-9-]+$")
+      String placementKey,
+
       @NotBlank @Size(max = 255) String host,
       @Min(1) @Max(65535) int port,
       @NotBlank @Size(max = 64) String dbName,

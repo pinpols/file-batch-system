@@ -26,16 +26,14 @@ import java.util.Map;
  */
 public final class JsonUtils {
 
-  private static final ObjectMapper MAPPER =
-      new ObjectMapper()
-          .findAndRegisterModules()
-          // 宽容 mapper 默认不开 unknown properties 检查，保持与既有调用兼容
-          .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+  private static final ObjectMapper MAPPER = new ObjectMapper()
+      .findAndRegisterModules()
+      // 宽容 mapper 默认不开 unknown properties 检查，保持与既有调用兼容
+      .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-  private static final ObjectMapper STRICT_MAPPER =
-      new ObjectMapper()
-          .findAndRegisterModules()
-          .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+  private static final ObjectMapper STRICT_MAPPER = new ObjectMapper()
+      .findAndRegisterModules()
+      .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
 
   private JsonUtils() {}
 

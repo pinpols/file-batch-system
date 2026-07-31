@@ -82,9 +82,8 @@ public class ConsoleAuthController {
     }
     boolean required = securityProperties.getLoginEncryption().isRequired();
     if (request.isEncrypted()) {
-      String plaintext =
-          loginKeyPairService.decrypt(
-              request.getEncryptedKey(), request.getIv(), request.getCiphertext());
+      String plaintext = loginKeyPairService.decrypt(
+          request.getEncryptedKey(), request.getIv(), request.getCiphertext());
       ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
       if (decoded == null) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
@@ -110,9 +109,8 @@ public class ConsoleAuthController {
     if (!securityProperties.getLoginEncryption().isEnabled()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.auth.encryption_unavailable");
     }
-    return responseFactory.success(
-        new ConsoleLoginPublicKeyResponse(
-            "RSA-OAEP-256", loginKeyPairService.publicKeyPem(), loginKeyPairService.fingerprint()));
+    return responseFactory.success(new ConsoleLoginPublicKeyResponse(
+        "RSA-OAEP-256", loginKeyPairService.publicKeyPem(), loginKeyPairService.fingerprint()));
   }
 
   /** 为当前已认证用户签发 JWT。 */

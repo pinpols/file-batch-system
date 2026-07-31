@@ -106,16 +106,15 @@ class TwilioSmsProviderTest {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     AtomicReference<String> sentAuth = new AtomicReference<>();
     AtomicReference<String> sentBody = new AtomicReference<>();
-    TwilioSmsProvider provider =
-        new TwilioSmsProvider(properties(), objectMapper) {
-          @Override
-          protected TwilioResponse postForm(String url, String authHeader, String body) {
-            sentUrl.set(url);
-            sentAuth.set(authHeader);
-            sentBody.set(body);
-            return new TwilioResponse(201, "{\"sid\":\"SM123\",\"status\":\"queued\"}");
-          }
-        };
+    TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper) {
+      @Override
+      protected TwilioResponse postForm(String url, String authHeader, String body) {
+        sentUrl.set(url);
+        sentAuth.set(authHeader);
+        sentBody.set(body);
+        return new TwilioResponse(201, "{\"sid\":\"SM123\",\"status\":\"queued\"}");
+      }
+    };
 
     WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
 
@@ -125,10 +124,9 @@ class TwilioSmsProviderTest {
     // Basic 鉴权 = base64(AccountSid:AuthToken),且头里不含 token 明文。
     assertThat(sentAuth.get()).startsWith("Basic ");
     assertThat(sentAuth.get()).doesNotContain(AUTH_TOKEN);
-    String expected =
-        "Basic "
-            + Base64.getEncoder()
-                .encodeToString((ACCOUNT_SID + ":" + AUTH_TOKEN).getBytes(StandardCharsets.UTF_8));
+    String expected = "Basic "
+        + Base64.getEncoder()
+            .encodeToString((ACCOUNT_SID + ":" + AUTH_TOKEN).getBytes(StandardCharsets.UTF_8));
     assertThat(sentAuth.get()).isEqualTo(expected);
     // form body 含 To / From / Body 且 URL 编码(+ 变 %2B)。
     assertThat(sentBody.get()).contains("To=%2B13800138000");
@@ -138,13 +136,12 @@ class TwilioSmsProviderTest {
 
   @Test
   void status4xxFails() {
-    TwilioSmsProvider provider =
-        new TwilioSmsProvider(properties(), objectMapper) {
-          @Override
-          protected TwilioResponse postForm(String url, String authHeader, String body) {
-            return new TwilioResponse(400, "{\"code\":21211,\"message\":\"invalid To\"}");
-          }
-        };
+    TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper) {
+      @Override
+      protected TwilioResponse postForm(String url, String authHeader, String body) {
+        return new TwilioResponse(400, "{\"code\":21211,\"message\":\"invalid To\"}");
+      }
+    };
 
     WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
 
@@ -156,18 +153,17 @@ class TwilioSmsProviderTest {
   @Test
   void multipleNumbersOneFailureFailsWhole() {
     AtomicReference<Integer> calls = new AtomicReference<>(0);
-    TwilioSmsProvider provider =
-        new TwilioSmsProvider(properties(), objectMapper) {
-          @Override
-          protected TwilioResponse postForm(String url, String authHeader, String body) {
-            int n = calls.get() + 1;
-            calls.set(n);
-            // 第一个号成功,第二个号 422 失败 → 整体失败,带首个失败状态。
-            return n == 1
-                ? new TwilioResponse(201, "{\"sid\":\"SM1\"}")
-                : new TwilioResponse(422, "{\"code\":21610}");
-          }
-        };
+    TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper) {
+      @Override
+      protected TwilioResponse postForm(String url, String authHeader, String body) {
+        int n = calls.get() + 1;
+        calls.set(n);
+        // 第一个号成功,第二个号 422 失败 → 整体失败,带首个失败状态。
+        return n == 1
+            ? new TwilioResponse(201, "{\"sid\":\"SM1\"}")
+            : new TwilioResponse(422, "{\"code\":21610}");
+      }
+    };
 
     WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE, PLAIN_PHONE_2), message());
 
@@ -183,13 +179,12 @@ class TwilioSmsProviderTest {
     appender.start();
     logger.addAppender(appender);
     try {
-      TwilioSmsProvider provider =
-          new TwilioSmsProvider(properties(), objectMapper) {
-            @Override
-            protected TwilioResponse postForm(String url, String authHeader, String body) {
-              return new TwilioResponse(401, "{\"code\":20003}");
-            }
-          };
+      TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper) {
+        @Override
+        protected TwilioResponse postForm(String url, String authHeader, String body) {
+          return new TwilioResponse(401, "{\"code\":20003}");
+        }
+      };
       WebhookDeliveryResult result = provider.send(List.of(PLAIN_PHONE), message());
       assertThat(result.success()).isFalse();
       assertThat(appender.messages).isNotEmpty();

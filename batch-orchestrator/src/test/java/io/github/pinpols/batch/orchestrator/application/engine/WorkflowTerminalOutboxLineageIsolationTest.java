@@ -44,9 +44,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ExtendWith(MockitoExtension.class)
 class WorkflowTerminalOutboxLineageIsolationTest {
 
-  @Mock private DomainEventPublisher domainEventPublisher;
+  @Mock
+  private DomainEventPublisher domainEventPublisher;
 
-  @Mock private OpenLineageEmitter openLineageEmitter;
+  @Mock
+  private OpenLineageEmitter openLineageEmitter;
 
   private WorkflowTerminalOutboxService service;
 

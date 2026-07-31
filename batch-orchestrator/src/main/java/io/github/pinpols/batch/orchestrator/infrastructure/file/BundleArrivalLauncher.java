@@ -92,9 +92,8 @@ public class BundleArrivalLauncher {
           && (!exportTemplates.isEmpty() || templateCode != null || targetRef != null)) {
         bindingWithoutJobCode = true;
       }
-      boolean emittedBinding =
-          appendBundleBindings(
-              bundleFiles, toLong(file.get("id")), templateCode, targetRef, exportTemplates);
+      boolean emittedBinding = appendBundleBindings(
+          bundleFiles, toLong(file.get("id")), templateCode, targetRef, exportTemplates);
       if (jobCode != null && !emittedBinding) {
         jobCodedMemberWithoutBinding = true;
       }
@@ -112,11 +111,10 @@ public class BundleArrivalLauncher {
       return jobCode;
     }
     if (!existingJobCode.equals(jobCode)) {
-      throw new IllegalStateException(
-          "bundle arrival group mixes bundleJobCode: tenantId="
-              + tenantId
-              + ", fileGroupCode="
-              + fileGroupCode);
+      throw new IllegalStateException("bundle arrival group mixes bundleJobCode: tenantId="
+          + tenantId
+          + ", fileGroupCode="
+          + fileGroupCode);
     }
     return existingJobCode;
   }
@@ -130,11 +128,10 @@ public class BundleArrivalLauncher {
       return fileBizDate;
     }
     if (!existingBizDate.equals(fileBizDate)) {
-      throw new IllegalStateException(
-          "bundle arrival group mixes bizDate: tenantId="
-              + tenantId
-              + ", fileGroupCode="
-              + fileGroupCode);
+      throw new IllegalStateException("bundle arrival group mixes bizDate: tenantId="
+          + tenantId
+          + ", fileGroupCode="
+          + fileGroupCode);
     }
     return existingBizDate;
   }
@@ -187,11 +184,10 @@ public class BundleArrivalLauncher {
               + candidate.bundleJobCode());
     }
     if (candidate.bizDate() == null) {
-      throw new IllegalStateException(
-          "bundle arrival group missing bizDate: tenantId="
-              + tenantId
-              + ", fileGroupCode="
-              + fileGroupCode);
+      throw new IllegalStateException("bundle arrival group missing bizDate: tenantId="
+          + tenantId
+          + ", fileGroupCode="
+          + fileGroupCode);
     }
     if (candidate.bundleFiles().isEmpty()) {
       throw new IllegalStateException(
@@ -209,16 +205,15 @@ public class BundleArrivalLauncher {
     // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
     String requestId =
         "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + candidate.bizDate();
-    LaunchRequest request =
-        LaunchRequest.builder()
-            .tenantId(tenantId)
-            .jobCode(candidate.bundleJobCode())
-            .bizDate(candidate.bizDate())
-            .triggerType(TriggerType.EVENT)
-            .requestId(requestId)
-            .traceId(IdGenerator.newTraceId())
-            .params(Map.of("bundleFiles", candidate.bundleFiles()))
-            .build();
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(tenantId)
+        .jobCode(candidate.bundleJobCode())
+        .bizDate(candidate.bizDate())
+        .triggerType(TriggerType.EVENT)
+        .requestId(requestId)
+        .traceId(IdGenerator.newTraceId())
+        .params(Map.of("bundleFiles", candidate.bundleFiles()))
+        .build();
     launchServiceProvider.getObject().launch(request);
     log.info(
         "bundle arrival launched: tenantId={}, fileGroupCode={}, jobCode={}, fileCount={},"

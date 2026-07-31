@@ -78,12 +78,10 @@ class ConsoleDryRunPlanControllerTest {
         .thenReturn(
             CommonResponse.success(new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of())));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleDryRunPlanController(
-                    orchestratorInternalRestClient, tenantGuard, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleDryRunPlanController(
+            orchestratorInternalRestClient, tenantGuard, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -92,10 +90,9 @@ class ConsoleDryRunPlanControllerTest {
     when(tenantGuard.resolveTenant("tb")).thenReturn("ta");
 
     mockMvc
-        .perform(
-            post("/api/console/ops/dry-run/plan")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
+        .perform(post("/api/console/ops/dry-run/plan")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.success").value(true));
 
@@ -114,10 +111,9 @@ class ConsoleDryRunPlanControllerTest {
         .when(tenantGuard)
         .resolveTenant("tb");
     mockMvc
-        .perform(
-            post("/api/console/ops/dry-run/plan")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\"}"))
+        .perform(post("/api/console/ops/dry-run/plan")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"tb\",\"jobCode\":\"job-a\"}"))
         .andExpect(status().isForbidden());
     verify(orchestratorInternalRestClient, never()).build();
   }
@@ -129,15 +125,13 @@ class ConsoleDryRunPlanControllerTest {
     // integration-adr-features:18 之前因为双重包装一直断言 success=false。
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
-        .thenReturn(
-            CommonResponse.success(
-                new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of("scheduledJobs", 3))));
+        .thenReturn(CommonResponse.success(
+            new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of("scheduledJobs", 3))));
 
     mockMvc
-        .perform(
-            post("/api/console/ops/dry-run/plan")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
+        .perform(post("/api/console/ops/dry-run/plan")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.level").value("L1"))
@@ -158,10 +152,9 @@ class ConsoleDryRunPlanControllerTest {
         .thenReturn(CommonResponse.failure(ResultCode.BUSINESS_ERROR, "dry-run rejected"));
 
     mockMvc
-        .perform(
-            post("/api/console/ops/dry-run/plan")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
+        .perform(post("/api/console/ops/dry-run/plan")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"jobCode\":\"job-a\",\"level\":\"L1\"}"))
         .andExpect(status().is5xxServerError());
   }
 
@@ -169,10 +162,9 @@ class ConsoleDryRunPlanControllerTest {
   void planShouldHandleNullTenantInBody() throws Exception {
     when(tenantGuard.resolveTenant(null)).thenReturn("ta");
     mockMvc
-        .perform(
-            post("/api/console/ops/dry-run/plan")
-                .contentType(APPLICATION_JSON)
-                .content("{\"jobCode\":\"job-a\"}"))
+        .perform(post("/api/console/ops/dry-run/plan")
+            .contentType(APPLICATION_JSON)
+            .content("{\"jobCode\":\"job-a\"}"))
         .andExpect(status().isOk());
     verify(tenantGuard).resolveTenant(null);
   }
@@ -181,10 +173,9 @@ class ConsoleDryRunPlanControllerTest {
   void planShouldRejectMissingJobCodeWith400() throws Exception {
     // 类型化后的 bean validation 守护:jobCode @NotBlank,缺失直接 400,不触达 orchestrator。
     mockMvc
-        .perform(
-            post("/api/console/ops/dry-run/plan")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\"}"))
+        .perform(post("/api/console/ops/dry-run/plan")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\"}"))
         .andExpect(status().isBadRequest());
     verify(orchestratorInternalRestClient, never()).build();
   }

@@ -47,9 +47,8 @@ class GracefulKafkaShutdownTest {
     lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
     lenient().when(runtimeState.snapshot()).thenReturn(List.of());
 
-    shutdown =
-        new GracefulKafkaShutdown(
-            runtimeState, registryService, kafkaRegistry, leaseRegistry, provider);
+    shutdown = new GracefulKafkaShutdown(
+        runtimeState, registryService, kafkaRegistry, leaseRegistry, provider);
 
     Field f = GracefulKafkaShutdown.class.getDeclaredField("gracefulShutdownTimeoutSeconds");
     f.setAccessible(true);
@@ -60,19 +59,18 @@ class GracefulKafkaShutdownTest {
   void shouldRecordSuccessOutcomeWhenNoActiveLeases() {
     shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
 
-    assertThat(meterRegistry.find("batch.worker.drain.duration_seconds").timer()).isNotNull();
-    assertThat(
-            meterRegistry
-                .find("batch.worker.drain.outcome_total")
-                .tag("outcome", "success")
-                .counter())
+    assertThat(meterRegistry.find("batch.worker.drain.duration_seconds").timer())
         .isNotNull();
-    assertThat(
-            meterRegistry
-                .find("batch.worker.drain.outcome_total")
-                .tag("outcome", "success")
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .find("batch.worker.drain.outcome_total")
+            .tag("outcome", "success")
+            .counter())
+        .isNotNull();
+    assertThat(meterRegistry
+            .find("batch.worker.drain.outcome_total")
+            .tag("outcome", "success")
+            .counter()
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -87,15 +85,17 @@ class GracefulKafkaShutdownTest {
     // 至少等待了 timeout（1s），实际 1~3s 可接受
     assertThat(elapsed).isGreaterThanOrEqualTo(900);
 
-    assertThat(
-            meterRegistry
-                .find("batch.worker.drain.outcome_total")
-                .tag("outcome", "timeout")
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .find("batch.worker.drain.outcome_total")
+            .tag("outcome", "timeout")
+            .counter()
+            .count())
         .isEqualTo(1.0);
     // initialActive=1 → counter 也应该有值
-    assertThat(meterRegistry.find("batch.worker.drain.initial_active_leases").counter().count())
+    assertThat(meterRegistry
+            .find("batch.worker.drain.initial_active_leases")
+            .counter()
+            .count())
         .isEqualTo(1.0);
   }
 

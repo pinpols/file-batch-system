@@ -43,15 +43,14 @@ public class HttpExecutorProperties {
    * 出口域名黑名单。永远拒绝,优先于白名单。默认拒绝 cloud metadata 服务 + localhost(SSRF 防御)。 安全 critical:不要轻易清空,看
    * docs/design/task-spi-design.md §安全。
    */
-  private Set<String> blockedHostPatterns =
-      Set.of(
-          "169.254.169.254", // AWS / GCP metadata
-          "metadata.google.internal",
-          "metadata.azure.com",
-          "localhost",
-          "127.*",
-          "0.0.0.0",
-          "::1");
+  private Set<String> blockedHostPatterns = Set.of(
+      "169.254.169.254", // AWS / GCP metadata
+      "metadata.google.internal",
+      "metadata.azure.com",
+      "localhost",
+      "127.*",
+      "0.0.0.0",
+      "::1");
 
   /** 连接 + 读超时(同一个 Duration,简化)。 */
   private Duration defaultTimeout = Duration.ofSeconds(30);

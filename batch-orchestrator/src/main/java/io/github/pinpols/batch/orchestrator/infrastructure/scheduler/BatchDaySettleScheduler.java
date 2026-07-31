@@ -140,9 +140,8 @@ public class BatchDaySettleScheduler {
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public boolean claimSettling(BatchDayInstanceEntity candidate, Instant now) {
-    BatchDayInstanceMetrics metrics =
-        jobInstanceMapper.selectBatchDayMetrics(
-            candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+    BatchDayInstanceMetrics metrics = jobInstanceMapper.selectBatchDayMetrics(
+        candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
     if (metrics == null) {
       return false;
     }
@@ -208,13 +207,12 @@ public class BatchDaySettleScheduler {
       final BatchDayInstanceEntity finalClaimed = claimed;
       final Instant finalNow = now;
       if (TransactionSynchronizationManager.isSynchronizationActive()) {
-        TransactionSynchronizationManager.registerSynchronization(
-            new TransactionSynchronization() {
-              @Override
-              public void afterCommit() {
-                driveCatchUp(finalClaimed, finalNow);
-              }
-            });
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            driveCatchUp(finalClaimed, finalNow);
+          }
+        });
       } else {
         // 无 tx 上下文(单测 / 手动直调),退化为内联;生产路径不应走这里(@Transactional 保证有 tx)
         log.warn(
@@ -246,31 +244,30 @@ public class BatchDaySettleScheduler {
   private void casUpdate(BatchDayInstanceEntity record) {
     int rows = batchDayInstanceMapper.updateWithCas(record);
     if (rows == 0) {
-      throw new OptimisticLockingFailureException(
-          "batch_day_instance version mismatch: id="
-              + record.id()
-              + ", version="
-              + record.version());
+      throw new OptimisticLockingFailureException("batch_day_instance version mismatch: id="
+          + record.id()
+          + ", version="
+          + record.version());
     }
   }
 
   private void driveCatchUp(BatchDayInstanceEntity batchDay, Instant now) {
-    BusinessCalendarEntity calendar =
-        configCacheService.findEnabledBusinessCalendar(
-            batchDay.tenantId(), batchDay.calendarCode());
+    BusinessCalendarEntity calendar = configCacheService.findEnabledBusinessCalendar(
+        batchDay.tenantId(), batchDay.calendarCode());
     if (calendar == null
         || calendar.catchUpPolicy() == null
         || "NONE".equalsIgnoreCase(calendar.catchUpPolicy())) {
       return;
     }
-    List<JobInstanceEntity> candidates =
-        jobInstanceMapper.selectBatchDayCatchUpCandidates(
-            batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate());
+    List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCatchUpCandidates(
+        batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate());
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
     for (JobInstanceEntity candidate : candidates) {
-      if (candidate == null || candidate.getJobCode() == null || candidate.getJobCode().isBlank()) {
+      if (candidate == null
+          || candidate.getJobCode() == null
+          || candidate.getJobCode().isBlank()) {
         continue;
       }
       String dedupKey = buildCatchUpDedupKey(batchDay, candidate);
@@ -290,16 +287,15 @@ public class BatchDaySettleScheduler {
         triggerRequestMapper.insert(request);
       }
       if ("AUTO".equalsIgnoreCase(calendar.catchUpPolicy()) && isLaunchable(request)) {
-        LaunchRequest launchRequest =
-            LaunchRequest.builder()
-                .tenantId(request.getTenantId())
-                .jobCode(request.getJobCode())
-                .bizDate(request.getBizDate())
-                .triggerType(TriggerType.CATCH_UP)
-                .requestId(request.getRequestId())
-                .traceId(request.getTraceId())
-                .params(buildCatchUpParams(batchDay, candidate, calendar, now))
-                .build();
+        LaunchRequest launchRequest = LaunchRequest.builder()
+            .tenantId(request.getTenantId())
+            .jobCode(request.getJobCode())
+            .bizDate(request.getBizDate())
+            .triggerType(TriggerType.CATCH_UP)
+            .requestId(request.getRequestId())
+            .traceId(request.getTraceId())
+            .params(buildCatchUpParams(batchDay, candidate, calendar, now))
+            .build();
         LaunchResponse response = launchService.launch(launchRequest);
         log.info(
             "batch day catch-up launched: tenantId={}, calendarCode={}, bizDate={},"
@@ -325,21 +321,19 @@ public class BatchDaySettleScheduler {
     audit.setTraceId(null);
     audit.setMessage("BATCH_DAY_INSTANCE_STATUS_CHANGED");
     audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-    audit.setExtraJson(
-        JsonUtils.toJson(
-            new LinkedHashMap<>() {
-              {
-                put("calendarCode", from.calendarCode());
-                put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
-                put("fromDayStatus", from.dayStatus());
-                put("toDayStatus", to.dayStatus());
-                put("reasonCode", reasonCode);
-                put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
-                put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-                put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
-                put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
-              }
-            }));
+    audit.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {
+      {
+        put("calendarCode", from.calendarCode());
+        put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
+        put("fromDayStatus", from.dayStatus());
+        put("toDayStatus", to.dayStatus());
+        put("reasonCode", reasonCode);
+        put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
+        put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+        put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
+        put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
+      }
+    }));
     jobExecutionLogMapper.insert(audit);
   }
 
@@ -375,7 +369,8 @@ public class BatchDaySettleScheduler {
     params.put("batchDayStatus", batchDay.dayStatus());
     params.put("batchDayCalendarCode", batchDay.calendarCode());
     params.put(
-        "batchDayBizDate", batchDay.bizDate() == null ? null : batchDay.bizDate().toString());
+        "batchDayBizDate",
+        batchDay.bizDate() == null ? null : batchDay.bizDate().toString());
     params.put("catchUpPolicy", calendar == null ? null : calendar.catchUpPolicy());
     params.put("catchUpRequestedAt", now.toString());
     params.put("sourceJobInstanceId", candidate == null ? null : candidate.getId());

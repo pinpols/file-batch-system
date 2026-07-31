@@ -66,11 +66,10 @@ public class OrchestratorConfigCacheService {
     this.businessCalendarMapper = businessCalendarMapper;
     this.batchWindowMapper = batchWindowMapper;
     this.tenantQuotaPolicyMapper = tenantQuotaPolicyMapper;
-    this.negativeCache =
-        Caffeine.newBuilder()
-            .expireAfterWrite(NEGATIVE_TTL)
-            .maximumSize(NEGATIVE_CACHE_MAX)
-            .build();
+    this.negativeCache = Caffeine.newBuilder()
+        .expireAfterWrite(NEGATIVE_TTL)
+        .maximumSize(NEGATIVE_CACHE_MAX)
+        .build();
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry != null) {
       registry.gauge(

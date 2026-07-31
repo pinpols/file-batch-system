@@ -54,24 +54,48 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 class DefaultTaskOutcomeServiceTest {
 
-  @Mock JobInstanceMapper jobInstanceMapper;
-  @Mock JobPartitionMapper jobPartitionMapper;
-  @Mock JobTaskMapper jobTaskMapper;
-  @Mock JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock TriggerRequestMapper triggerRequestMapper;
-  @Mock WorkflowNodeMapper workflowNodeMapper;
-  @Mock WorkflowRunMapper workflowRunMapper;
-  @Mock WorkflowNodeRunMapper workflowNodeRunMapper;
-  @Mock RetryGovernanceService retryGovernanceService;
-  @Mock StateMachine<Object> stateMachine;
-  @Mock WorkflowDagService workflowDagService;
-  @Mock WorkflowTerminalOutboxService workflowTerminalOutboxService;
+  @Mock
+  JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  JobTaskMapper jobTaskMapper;
+
+  @Mock
+  JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  RetryGovernanceService retryGovernanceService;
+
+  @Mock
+  StateMachine<Object> stateMachine;
+
+  @Mock
+  WorkflowDagService workflowDagService;
+
+  @Mock
+  WorkflowTerminalOutboxService workflowTerminalOutboxService;
 
   @SuppressWarnings("rawtypes")
   @Mock
   ObjectProvider workflowNodeDispatchServiceProvider;
 
-  @Mock JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler;
+  @Mock
+  JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler;
 
   private DefaultTaskOutcomeService service;
   private SimpleMeterRegistry meterRegistry;
@@ -80,35 +104,32 @@ class DefaultTaskOutcomeServiceTest {
   @SuppressWarnings("unchecked")
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers =
-        new OrchestratorWorkflowMappers(
-            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    DefaultTaskOutcomeCollaborators collaborators =
-        new DefaultTaskOutcomeCollaborators(
-            retryGovernanceService,
-            stateMachine,
-            workflowDagService,
-            workflowNodeDispatchServiceProvider,
-            workflowTerminalOutboxService,
-            mock(
-                io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService
-                    .class),
-            meterRegistry,
-            jobInstanceTerminalChildStateReconciler,
-            mock(ResultVersionWriter.class),
-            mock(BatchDayReplayTerminalReconciler.class),
-            mock(FailureClassifier.class),
-            mock(JobLifecycleMetricsRecorder.class),
-            mock(
-                io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService
-                    .class));
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
+    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
+        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
+    DefaultTaskOutcomeCollaborators collaborators = new DefaultTaskOutcomeCollaborators(
+        retryGovernanceService,
+        stateMachine,
+        workflowDagService,
+        workflowNodeDispatchServiceProvider,
+        workflowTerminalOutboxService,
+        mock(
+            io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService
+                .class),
+        meterRegistry,
+        jobInstanceTerminalChildStateReconciler,
+        mock(ResultVersionWriter.class),
+        mock(BatchDayReplayTerminalReconciler.class),
+        mock(FailureClassifier.class),
+        mock(JobLifecycleMetricsRecorder.class),
+        mock(
+            io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService
+                .class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
@@ -126,7 +147,8 @@ class DefaultTaskOutcomeServiceTest {
   void applyTaskOutcome_nullTenantId_returnsNull() {
     when(jobTaskMapper.selectById(null, 1L)).thenReturn(null);
 
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder().taskId(1L).success(true).build();
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder().taskId(1L).success(true).build();
     var result = service.applyTaskOutcome(command);
     assertThat(result).isNull();
   }
@@ -149,21 +171,18 @@ class DefaultTaskOutcomeServiceTest {
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
 
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("t1")
-            .taskId(1L)
-            .workerId("w1")
-            .success(true)
-            .partitionInvocationId("inv-stale-worker")
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .workerId("w1")
+        .success(true)
+        .partitionInvocationId("inv-stale-worker")
+        .build();
 
     assertThatThrownBy(() -> service.applyTaskOutcome(command))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getMessageKey())
-                    .isEqualTo("error.task.invocation_mismatch"));
+        .satisfies(ex -> assertThat(((BizException) ex).getMessageKey())
+            .isEqualTo("error.task.invocation_mismatch"));
   }
 
   @Test
@@ -225,8 +244,12 @@ class DefaultTaskOutcomeServiceTest {
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
 
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder().tenantId("t1").taskId(1L).workerId("w1").success(true).build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .workerId("w1")
+        .success(true)
+        .build();
 
     service.applyTaskOutcome(command);
 
@@ -235,6 +258,7 @@ class DefaultTaskOutcomeServiceTest {
     inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock(eq("t1"), eq(10L));
     inOrder.verify(jobPartitionMapper).markStatus(any());
     // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
-    assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count()).isEqualTo(1L);
+    assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
+        .isEqualTo(1L);
   }
 }

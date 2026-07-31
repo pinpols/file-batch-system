@@ -145,16 +145,15 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
         summaryRealtimeStream.publishSnapshot(envelope.tenantId());
         return;
       }
-      realtimeEventHub.publish(
-          new ConsoleSseEvent(
-              envelope.tenantId(),
-              envelope.stream(),
-              envelope.eventType(),
-              envelope.cursor(),
-              envelope.dataJson() == null || envelope.dataJson().isBlank()
-                  ? null
-                  : JsonUtils.fromJson(envelope.dataJson(), Object.class),
-              envelope.emittedAt() == null ? BatchDateTimeSupport.utcNow() : envelope.emittedAt()));
+      realtimeEventHub.publish(new ConsoleSseEvent(
+          envelope.tenantId(),
+          envelope.stream(),
+          envelope.eventType(),
+          envelope.cursor(),
+          envelope.dataJson() == null || envelope.dataJson().isBlank()
+              ? null
+              : JsonUtils.fromJson(envelope.dataJson(), Object.class),
+          envelope.emittedAt() == null ? BatchDateTimeSupport.utcNow() : envelope.emittedAt()));
     } catch (Exception exception) {
       realtimeMetrics.recordPubSubHandleFailure(envelope.stream(), envelope.eventType());
       log.warn(

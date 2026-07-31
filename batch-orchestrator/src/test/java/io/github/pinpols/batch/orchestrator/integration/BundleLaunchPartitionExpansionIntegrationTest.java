@@ -36,26 +36,29 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private LaunchService launchService;
-  @Autowired private JobInstanceMapper jobInstanceMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   private List<Map<String, Object>> launchBundleAndReadPartitions(
       String bundleJobType, String workerGroup, List<Map<String, Object>> bundleFiles) {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
-            jdbcTemplate, TENANT, bundleJobType, workerGroup);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, bundleJobType, workerGroup);
 
-    LaunchRequest request =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.EVENT)
-            .requestId(seed.requestId())
-            .traceId("trace-bundle-" + seed.requestId())
-            .params(Map.of("bundleFiles", bundleFiles))
-            .build();
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-bundle-" + seed.requestId())
+        .params(Map.of("bundleFiles", bundleFiles))
+        .build();
     LaunchResponse response = launchService.launch(request);
     assertThat(response.instanceNo()).isNotBlank();
 
@@ -73,13 +76,12 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
 
   @Test
   void bundleImport_expandsIntoBoundHeterogeneousPartitions() {
-    List<Map<String, Object>> partitions =
-        launchBundleAndReadPartitions(
-            "BUNDLE_IMPORT",
-            "IMPORT",
-            List.of(
-                Map.of("sourceFileId", 1001, "templateCode", "TPL_ORDER"),
-                Map.of("sourceFileId", 1002, "templateCode", "TPL_CUST")));
+    List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
+        "BUNDLE_IMPORT",
+        "IMPORT",
+        List.of(
+            Map.of("sourceFileId", 1001, "templateCode", "TPL_ORDER"),
+            Map.of("sourceFileId", 1002, "templateCode", "TPL_CUST")));
 
     assertThat(partitions).hasSize(2);
     assertThat(partitions.get(0).get("source_file_id")).isEqualTo(1001L);
@@ -90,11 +92,10 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
 
   @Test
   void bundleExport_expandsByTemplateWithoutSourceFile() {
-    List<Map<String, Object>> partitions =
-        launchBundleAndReadPartitions(
-            "BUNDLE_EXPORT",
-            "EXPORT",
-            List.of(Map.of("templateCode", "EXP_RISK"), Map.of("templateCode", "EXP_TRADE")));
+    List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
+        "BUNDLE_EXPORT",
+        "EXPORT",
+        List.of(Map.of("templateCode", "EXP_RISK"), Map.of("templateCode", "EXP_TRADE")));
 
     assertThat(partitions).hasSize(2);
     assertThat(partitions.get(0).get("source_file_id")).isNull();
@@ -104,13 +105,12 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
 
   @Test
   void bundleDispatch_expandsByFileAndChannelWithoutTemplate() {
-    List<Map<String, Object>> partitions =
-        launchBundleAndReadPartitions(
-            "BUNDLE_DISPATCH",
-            "DISPATCH",
-            List.of(
-                Map.of("sourceFileId", 2001, "targetRef", "CH_SFTP_A"),
-                Map.of("sourceFileId", 2002, "targetRef", "CH_OSS_B")));
+    List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
+        "BUNDLE_DISPATCH",
+        "DISPATCH",
+        List.of(
+            Map.of("sourceFileId", 2001, "targetRef", "CH_SFTP_A"),
+            Map.of("sourceFileId", 2002, "targetRef", "CH_OSS_B")));
 
     assertThat(partitions).hasSize(2);
     assertThat(partitions.get(0).get("source_file_id")).isEqualTo(2001L);

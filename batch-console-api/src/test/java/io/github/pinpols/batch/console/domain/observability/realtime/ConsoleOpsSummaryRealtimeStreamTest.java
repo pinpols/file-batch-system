@@ -31,11 +31,21 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleOpsSummaryRealtimeStreamTest {
 
-  @Mock private ConsoleOpsApplicationService opsApplicationService;
-  @Mock private ConsoleRealtimeEventHub realtimeEventHub;
-  @Mock private ConsoleRealtimeRedisPublisher redisPublisher;
-  @Mock private ConsoleRealtimeCursorFactory cursorFactory;
-  @Mock private ConsoleTenantGuard tenantGuard;
+  @Mock
+  private ConsoleOpsApplicationService opsApplicationService;
+
+  @Mock
+  private ConsoleRealtimeEventHub realtimeEventHub;
+
+  @Mock
+  private ConsoleRealtimeRedisPublisher redisPublisher;
+
+  @Mock
+  private ConsoleRealtimeCursorFactory cursorFactory;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
   private ConsoleOpsSummaryRealtimeStream stream;
 
   @BeforeEach
@@ -44,15 +54,14 @@ class ConsoleOpsSummaryRealtimeStreamTest {
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("console-realtime-test-");
     scheduler.initialize();
-    stream =
-        new ConsoleOpsSummaryRealtimeStream(
-            opsApplicationService,
-            realtimeEventHub,
-            redisPublisher,
-            cursorFactory,
-            tenantGuard,
-            dateTimeSupport(),
-            scheduler);
+    stream = new ConsoleOpsSummaryRealtimeStream(
+        opsApplicationService,
+        realtimeEventHub,
+        redisPublisher,
+        cursorFactory,
+        tenantGuard,
+        dateTimeSupport(),
+        scheduler);
     when(tenantGuard.resolveTenant(anyString()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(cursorFactory.nextCursor()).thenReturn("cursor-1");

@@ -20,18 +20,17 @@ class SdkAbstractAtomicHandlerTest {
   @DisplayName("doInvoke 返回值 → execute success + output {result: ...}")
   void shouldWrapReturnValueAsOutput_whenInvokeReturnsValue() {
     // 准备
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            return "hello";
-          }
-        };
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        return "hello";
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -47,18 +46,17 @@ class SdkAbstractAtomicHandlerTest {
   @DisplayName("doInvoke 返回 null → output 空 Map 但 success=true")
   void shouldReturnEmptyOutput_whenInvokeReturnsNull() {
     // 准备
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            return null;
-          }
-        };
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        return null;
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -73,18 +71,17 @@ class SdkAbstractAtomicHandlerTest {
   void shouldFailAndPropagateError_whenInvokeThrows() {
     // 准备
     var boom = new IllegalStateException("boom");
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            throw boom;
-          }
-        };
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        throw boom;
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -99,23 +96,22 @@ class SdkAbstractAtomicHandlerTest {
   @DisplayName("子类覆盖 asOutput → output 用子类映射")
   void shouldUseCustomOutput_whenAsOutputOverridden() {
     // 准备
-    var handler =
-        new SdkAbstractAtomicHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected Integer doInvoke(SdkTaskContext c) {
-            return 42;
-          }
+      @Override
+      protected Integer doInvoke(SdkTaskContext c) {
+        return 42;
+      }
 
-          @Override
-          protected Map<String, Object> asOutput(Integer r) {
-            return Map.of("count", r, "kind", "custom");
-          }
-        };
+      @Override
+      protected Map<String, Object> asOutput(Integer r) {
+        return Map.of("count", r, "kind", "custom");
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -132,24 +128,23 @@ class SdkAbstractAtomicHandlerTest {
     // 准备
     var invoked = new AtomicBoolean(false);
     var validationError = new IllegalArgumentException("bad param");
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected void validate(SdkTaskContext c) {
-            throw validationError;
-          }
+      @Override
+      protected void validate(SdkTaskContext c) {
+        throw validationError;
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            invoked.set(true);
-            return "should-not-run";
-          }
-        };
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        invoked.set(true);
+        return "should-not-run";
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -165,23 +160,22 @@ class SdkAbstractAtomicHandlerTest {
   void shouldRunCleanup_whenInvokeThrows() {
     // 准备
     var cleaned = new AtomicBoolean(false);
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            throw new IllegalStateException("boom");
-          }
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        throw new IllegalStateException("boom");
+      }
 
-          @Override
-          protected void cleanup(SdkTaskContext c) {
-            cleaned.set(true);
-          }
-        };
+      @Override
+      protected void cleanup(SdkTaskContext c) {
+        cleaned.set(true);
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -196,23 +190,22 @@ class SdkAbstractAtomicHandlerTest {
   void shouldRunCleanup_whenInvokeSucceeds() {
     // 准备
     var cleaned = new AtomicBoolean(false);
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tt";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            return "ok";
-          }
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        return "ok";
+      }
 
-          @Override
-          protected void cleanup(SdkTaskContext c) {
-            cleaned.set(true);
-          }
-        };
+      @Override
+      protected void cleanup(SdkTaskContext c) {
+        cleaned.set(true);
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -226,18 +219,17 @@ class SdkAbstractAtomicHandlerTest {
   @DisplayName("taskType 由具体子类提供")
   void shouldExposeTaskType_fromConcreteSubclass() {
     // 准备
-    var handler =
-        new SdkAbstractAtomicHandler<String>() {
-          @Override
-          public String taskType() {
-            return "tenant_atomic_shell";
-          }
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tenant_atomic_shell";
+      }
 
-          @Override
-          protected String doInvoke(SdkTaskContext c) {
-            return "x";
-          }
-        };
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        return "x";
+      }
+    };
 
     // 断言
     assertThat(handler.taskType()).isEqualTo("tenant_atomic_shell");

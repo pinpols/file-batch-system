@@ -120,27 +120,25 @@ public class AuditFieldsInterceptor implements Interceptor {
   }
 
   private Map<String, Field> resolveFields(Class<?> clazz) {
-    return FIELD_CACHE.computeIfAbsent(
-        clazz,
-        c -> {
-          Map<String, Field> map = new ConcurrentHashMap<>(8);
-          Class<?> cursor = c;
-          while (cursor != null && cursor != Object.class) {
-            for (Field f : cursor.getDeclaredFields()) {
-              String name = f.getName();
-              if (FIELD_CREATED_AT.equals(name)
-                  || FIELD_UPDATED_AT.equals(name)
-                  || FIELD_CREATED_BY.equals(name)
-                  || FIELD_UPDATED_BY.equals(name)
-                  || FIELD_TENANT_ID.equals(name)) {
-                f.setAccessible(true);
-                map.putIfAbsent(name, f);
-              }
-            }
-            cursor = cursor.getSuperclass();
+    return FIELD_CACHE.computeIfAbsent(clazz, c -> {
+      Map<String, Field> map = new ConcurrentHashMap<>(8);
+      Class<?> cursor = c;
+      while (cursor != null && cursor != Object.class) {
+        for (Field f : cursor.getDeclaredFields()) {
+          String name = f.getName();
+          if (FIELD_CREATED_AT.equals(name)
+              || FIELD_UPDATED_AT.equals(name)
+              || FIELD_CREATED_BY.equals(name)
+              || FIELD_UPDATED_BY.equals(name)
+              || FIELD_TENANT_ID.equals(name)) {
+            f.setAccessible(true);
+            map.putIfAbsent(name, f);
           }
-          return map;
-        });
+        }
+        cursor = cursor.getSuperclass();
+      }
+      return map;
+    });
   }
 
   private void setIfNull(Object entity, Field f, Instant value) {

@@ -18,10 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleSdkCatalogControllerTest {
 
-  @Mock private ConsoleSdkCatalogService catalogService;
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleSdkCatalogService catalogService;
 
-  @InjectMocks private ConsoleSdkCatalogController controller;
+  @Mock
+  private ConsoleResponseFactory responseFactory;
+
+  @InjectMocks
+  private ConsoleSdkCatalogController controller;
 
   @Test
   void catalogReturnsWrappedServiceOutput() {

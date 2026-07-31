@@ -25,7 +25,8 @@ import org.mockito.MockitoAnnotations;
  */
 class TriggerOutboxDomainEventPublisherTest {
 
-  @Mock private TriggerOutboxEventMapper triggerOutboxEventMapper;
+  @Mock
+  private TriggerOutboxEventMapper triggerOutboxEventMapper;
 
   private TriggerOutboxDomainEventPublisher publisher;
 
@@ -38,21 +39,18 @@ class TriggerOutboxDomainEventPublisherTest {
   @Test
   @DisplayName("DomainEvent 字段适配落 trigger_outbox_event 行 — 全字段对齐")
   void mapsDomainEventToEntity() {
-    when(triggerOutboxEventMapper.insert(any()))
-        .thenAnswer(
-            inv -> {
-              ((TriggerOutboxEventEntity) inv.getArgument(0)).setId(42L);
-              return 1;
-            });
+    when(triggerOutboxEventMapper.insert(any())).thenAnswer(inv -> {
+      ((TriggerOutboxEventEntity) inv.getArgument(0)).setId(42L);
+      return 1;
+    });
 
-    DomainEvent event =
-        DomainEvent.builder("tenant-A")
-            .aggregate("TRIGGER_REQUEST", 100L)
-            .type("trigger.launch.v1")
-            .key("req-abc-123")
-            .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
-            .traceId("trace-xyz")
-            .build();
+    DomainEvent event = DomainEvent.builder("tenant-A")
+        .aggregate("TRIGGER_REQUEST", 100L)
+        .type("trigger.launch.v1")
+        .key("req-abc-123")
+        .payloadEntry("launchRequest", Map.of("jobCode", "JOB_X"))
+        .traceId("trace-xyz")
+        .build();
 
     Long id = publisher.publish(event);
 

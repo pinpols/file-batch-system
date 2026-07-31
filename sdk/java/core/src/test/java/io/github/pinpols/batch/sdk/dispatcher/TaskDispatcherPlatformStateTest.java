@@ -22,16 +22,15 @@ import org.junit.jupiter.api.Test;
 /** SDK Phase 2 §2.4:心跳指令驱动 4 态状态机 + onMessage 门控。 */
 class TaskDispatcherPlatformStateTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("p.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("p.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
 
@@ -77,30 +76,26 @@ class TaskDispatcherPlatformStateTest {
   void onMessageSkippedWhenPaused() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<SdkTaskContext> seen = new AtomicReference<>();
-    dispatcher =
-        new TaskDispatcher(
-            config,
-            Map.of(
-                "tt",
-                new SdkTaskHandler() {
-                  @Override
-                  public String taskType() {
-                    return "tt";
-                  }
+    dispatcher = new TaskDispatcher(
+        config,
+        Map.of("tt", new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
 
-                  @Override
-                  public SdkTaskResult execute(SdkTaskContext ctx) {
-                    seen.set(ctx);
-                    return SdkTaskResult.ok();
-                  }
-                }),
-            http);
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            seen.set(ctx);
+            return SdkTaskResult.ok();
+          }
+        }),
+        http);
 
     dispatcher.applyPlatformDirective(
         new HeartbeatDirective("PAUSED", null, false, List.of(), null));
-    TaskDispatcher.DispatchDecision decision =
-        dispatcher.onMessage(
-            new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(
+        new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
 
     // PAUSED → 不 claim、不进 handler
     assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);

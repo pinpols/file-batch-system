@@ -23,12 +23,11 @@ class BizMessageResolverTest {
 
   @Test
   void resolveDispatchBusinessErrorRendersCodeAndHumanMessage() {
-    BizException ex =
-        BizException.of(
-            ResultCode.BUSINESS_ERROR,
-            "error.partition.dispatch_business_error",
-            "POOL_EXHAUSTED",
-            "worker pool exhausted");
+    BizException ex = BizException.of(
+        ResultCode.BUSINESS_ERROR,
+        "error.partition.dispatch_business_error",
+        "POOL_EXHAUSTED",
+        "worker pool exhausted");
 
     assertThat(resolver.resolve(ex, Locale.SIMPLIFIED_CHINESE))
         .isEqualTo("[POOL_EXHAUSTED] worker pool exhausted");

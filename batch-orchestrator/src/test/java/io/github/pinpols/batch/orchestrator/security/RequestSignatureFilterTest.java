@@ -22,8 +22,11 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @ExtendWith(MockitoExtension.class)
 class RequestSignatureFilterTest {
 
-  @Mock private RequestSignatureVerifier verifier;
-  @Mock private FilterChain chain;
+  @Mock
+  private RequestSignatureVerifier verifier;
+
+  @Mock
+  private FilterChain chain;
 
   private RequestSignatureFilter newFilter(boolean enabled) {
     RequestSigningProperties props = new RequestSigningProperties();
@@ -92,18 +95,17 @@ class RequestSignatureFilterTest {
   @Test
   @DisplayName("启用+api_key+chunked 超大 body → 413,不验签")
   void oversizedChunkedBodyRejectedBeforeVerify() throws Exception {
-    MockHttpServletRequest req =
-        new MockHttpServletRequest("POST", "/internal/tasks/10/report") {
-          @Override
-          public int getContentLength() {
-            return -1;
-          }
+    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report") {
+      @Override
+      public int getContentLength() {
+        return -1;
+      }
 
-          @Override
-          public long getContentLengthLong() {
-            return -1L;
-          }
-        };
+      @Override
+      public long getContentLengthLong() {
+        return -1L;
+      }
+    };
     req.setContent(new byte[2048]);
     req.addHeader("X-Batch-Api-Key", "key-1");
     MockHttpServletResponse resp = new MockHttpServletResponse();

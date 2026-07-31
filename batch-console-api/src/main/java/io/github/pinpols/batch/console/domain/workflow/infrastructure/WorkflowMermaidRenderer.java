@@ -75,9 +75,9 @@ public final class WorkflowMermaidRenderer {
     String type = e.edgeType() == null ? "" : e.edgeType().toUpperCase(Locale.ROOT);
     return switch (type) {
       case "CONDITION" ->
-          " -- \""
-              + escapeLabel(Texts.hasText(e.conditionExpr()) ? e.conditionExpr() : "?")
-              + "\" --> ";
+        " -- \""
+            + escapeLabel(Texts.hasText(e.conditionExpr()) ? e.conditionExpr() : "?")
+            + "\" --> ";
       case "FAILURE" -> " -. failure .-> ";
       case "SUCCESS" -> " -- success --> ";
       case "ALWAYS" -> " --> ";

@@ -23,14 +23,13 @@ class ObservabilityMapResponseJacksonTest {
     Map<String, Object> byStatus = new LinkedHashMap<>();
     byStatus.put("SUCCESS", 8L);
     byStatus.put("FAILED", 2L);
-    Map<String, Object> row =
-        Map.of(
-            "byStatus",
-            byStatus,
-            "total",
-            10L,
-            "dailyTrend",
-            List.of(Map.of("day", "2026-07-11", "status", "SUCCESS", "count", 8L)));
+    Map<String, Object> row = Map.of(
+        "byStatus",
+        byStatus,
+        "total",
+        10L,
+        "dailyTrend",
+        List.of(Map.of("day", "2026-07-11", "status", "SUCCESS", "count", 8L)));
 
     Map<String, Object> back = roundTrip(ConsoleJobStatsResponse.from(row));
 

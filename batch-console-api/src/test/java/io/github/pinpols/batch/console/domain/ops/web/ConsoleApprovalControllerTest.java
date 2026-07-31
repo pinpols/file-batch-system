@@ -50,23 +50,19 @@ class ConsoleApprovalControllerTest {
         mock(io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleApprovalController(
-                    approvalApplicationService, responseFactory, tenantGuard))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleApprovalController(approvalApplicationService, responseFactory, tenantGuard))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/approvals/appr-001/approve")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/approvals/appr-001/approve")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
         .andExpect(status().isBadRequest())
@@ -81,12 +77,10 @@ class ConsoleApprovalControllerTest {
         .thenReturn("OK");
 
     mockMvc
-        .perform(
-            post("/api/console/approvals/appr-001/approve")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/approvals/appr-001/approve")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","operatorId":"u1","reason":"ok"}
                     """))
         .andExpect(status().isOk())
@@ -99,12 +93,10 @@ class ConsoleApprovalControllerTest {
   @Test
   void shouldReturn400WhenRequestBodyInvalid() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/approvals/appr-001/reject")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/approvals/appr-001/reject")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"","operatorId":"","reason":"ok"}
                     """))
         .andExpect(status().isBadRequest())

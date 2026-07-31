@@ -52,12 +52,11 @@ class RlsTenantIsolationIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() throws Exception {
-    POSTGRES =
-        new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-            .withDatabaseName("batch_business")
-            .withUsername("batch_user")
-            .withPassword("batch_pass_123")
-            .withUrlParam("sslmode", "disable");
+    POSTGRES = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+        .withDatabaseName("batch_business")
+        .withUsername("batch_user")
+        .withPassword("batch_pass_123")
+        .withUrlParam("sslmode", "disable");
     POSTGRES.start();
 
     HikariConfig cfg = new HikariConfig();
@@ -73,8 +72,7 @@ class RlsTenantIsolationIntegrationTest {
     // 1) biz schema + customer_account 表 + ta/tb 种子
     JDBC.execute("CREATE SCHEMA IF NOT EXISTS biz");
     JDBC.execute("CREATE SCHEMA IF NOT EXISTS batch");
-    JDBC.execute(
-        """
+    JDBC.execute("""
         CREATE TABLE IF NOT EXISTS biz.customer_account (
           id BIGSERIAL PRIMARY KEY,
           tenant_id VARCHAR(64) NOT NULL,
@@ -94,8 +92,7 @@ class RlsTenantIsolationIntegrationTest {
     JDBC.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA biz TO rls_app_user");
     JDBC.execute("ALTER TABLE biz.customer_account ENABLE ROW LEVEL SECURITY");
     JDBC.execute("ALTER TABLE biz.customer_account FORCE ROW LEVEL SECURITY");
-    JDBC.execute(
-        """
+    JDBC.execute("""
         CREATE POLICY tenant_isolation_strict ON biz.customer_account
           AS PERMISSIVE
           FOR ALL
@@ -147,51 +144,43 @@ class RlsTenantIsolationIntegrationTest {
   @DisplayName("安全性 1:未 SET app.tenant_id(strict)→ 返 0 行(DB 层拒绝全表读取)")
   void selectWithoutTenantContext_returnsNoRows() {
     // 新 tx,未 SET LOCAL
-    Long total =
-        TX.execute(
-            status -> {
-              JDBC.execute("SET LOCAL ROLE rls_app_user");
-              return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
-            });
+    Long total = TX.execute(status -> {
+      JDBC.execute("SET LOCAL ROLE rls_app_user");
+      return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+    });
     assertThat(total).isEqualTo(0L);
   }
 
   @Test
   @DisplayName("反例 2:SET app.tenant_id='ta' → SELECT 只返 ta 的 3 行")
   void selectWithTenantTa_returnsOnlyTaRows() {
-    List<String> noList =
-        TX.execute(
-            status -> {
-              JDBC.execute("SET LOCAL ROLE rls_app_user");
-              JDBC.execute("SET LOCAL app.tenant_id = 'ta'");
-              List<String> out = new ArrayList<>();
-              JDBC.query(
-                  "SELECT customer_no FROM biz.customer_account ORDER BY customer_no",
-                  (ResultSet rs) -> {
-                    out.add(rs.getString(1));
-                  });
-              return out;
-            });
+    List<String> noList = TX.execute(status -> {
+      JDBC.execute("SET LOCAL ROLE rls_app_user");
+      JDBC.execute("SET LOCAL app.tenant_id = 'ta'");
+      List<String> out = new ArrayList<>();
+      JDBC.query(
+          "SELECT customer_no FROM biz.customer_account ORDER BY customer_no", (ResultSet rs) -> {
+            out.add(rs.getString(1));
+          });
+      return out;
+    });
     assertThat(noList).containsExactly("ta-001", "ta-002", "ta-003");
   }
 
   @Test
   @DisplayName("反例 3:SET app.tenant_id='ta' 后 INSERT tenant_id='tb' → POLICY 拒绝(WITH CHECK 触发)")
   void insertCrossTenant_isRejectedByPolicy() {
-    assertThatThrownBy(
-            () ->
-                TX.execute(
-                    status -> {
-                      JDBC.execute("SET LOCAL ROLE rls_app_user");
-                      JDBC.execute("SET LOCAL app.tenant_id = 'ta'");
-                      JDBC.update(
-                          "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name)"
-                              + " VALUES (?,?,?)",
-                          "tb",
-                          "tb-cross-001",
-                          "Cross Insert");
-                      return null;
-                    }))
+    assertThatThrownBy(() -> TX.execute(status -> {
+          JDBC.execute("SET LOCAL ROLE rls_app_user");
+          JDBC.execute("SET LOCAL app.tenant_id = 'ta'");
+          JDBC.update(
+              "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name)"
+                  + " VALUES (?,?,?)",
+              "tb",
+              "tb-cross-001",
+              "Cross Insert");
+          return null;
+        }))
         .rootCause()
         .hasMessageContaining("row-level security")
         .hasMessageContaining("violates");
@@ -200,30 +189,24 @@ class RlsTenantIsolationIntegrationTest {
   @Test
   @DisplayName("安全性 4:SET app.tenant_id='' 空串(strict)→ 返 0 行")
   void selectWithEmptyTenantContext_returnsNoRows() {
-    Long total =
-        TX.execute(
-            status -> {
-              JDBC.execute("SET LOCAL ROLE rls_app_user");
-              JDBC.execute("SET LOCAL app.tenant_id = ''");
-              return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
-            });
+    Long total = TX.execute(status -> {
+      JDBC.execute("SET LOCAL ROLE rls_app_user");
+      JDBC.execute("SET LOCAL app.tenant_id = ''");
+      return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+    });
     assertThat(total).isEqualTo(0L);
   }
 
   @Test
   @DisplayName("集成:RlsTenantContextHolder + RlsTenantSessionSupport.applyIfPresent → 等价 SET LOCAL")
   void contextHolderIntegration_appliesSessionVar() {
-    Long total =
-        RlsTenantContextHolder.runWithTenant(
-            "tb",
-            () ->
-                TX.execute(
-                    status -> {
-                      JDBC.execute("SET LOCAL ROLE rls_app_user");
-                      RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
-                      return JDBC.queryForObject(
-                          "SELECT count(*) FROM biz.customer_account", Long.class);
-                    }));
+    Long total = RlsTenantContextHolder.runWithTenant(
+        "tb",
+        () -> TX.execute(status -> {
+          JDBC.execute("SET LOCAL ROLE rls_app_user");
+          RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
+          return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+        }));
     // tb 只 2 条
     assertThat(total).isEqualTo(2L);
   }

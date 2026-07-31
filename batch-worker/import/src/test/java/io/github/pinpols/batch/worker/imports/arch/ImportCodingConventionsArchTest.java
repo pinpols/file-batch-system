@@ -14,10 +14,9 @@ import org.junit.jupiter.api.Test;
  */
 class ImportCodingConventionsArchTest {
 
-  private static final JavaClasses CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-          .importPackages("io.github.pinpols.batch.worker.imports..");
+  private static final JavaClasses CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+      .importPackages("io.github.pinpols.batch.worker.imports..");
 
   @Test
   void noTransactionalOnEventListener() {

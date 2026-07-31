@@ -76,12 +76,11 @@ public class HeartbeatScheduler implements AutoCloseable {
   }
 
   private static ScheduledExecutorService defaultScheduler() {
-    return Executors.newSingleThreadScheduledExecutor(
-        r -> {
-          Thread t = new Thread(r, "batch-sdk-heartbeat");
-          t.setDaemon(true);
-          return t;
-        });
+    return Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "batch-sdk-heartbeat");
+      t.setDaemon(true);
+      return t;
+    });
   }
 
   public void start() {

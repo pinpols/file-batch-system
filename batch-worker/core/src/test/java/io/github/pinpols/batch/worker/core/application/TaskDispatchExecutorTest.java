@@ -51,40 +51,39 @@ class TaskDispatchExecutorTest {
   @Test
   void shouldReadBusinessFieldsFromClaimAndKeysFromMessage() {
     TaskDispatchMessage message = sampleMessage();
-    EffectiveTaskConfig fresh =
-        new EffectiveTaskConfig(
-            "t1",
-            42L,
-            100L,
-            200L,
-            "INST-1",
-            "FRESH_JOB",
-            "FRESH_TYPE",
-            99,
-            "FRESH_TYPE",
-            "HIGH",
-            "fresh-biz",
-            "fresh-idem",
-            "FRESH_PAYLOAD",
-            "fresh-trace",
-            "INCREMENTAL",
-            "update_time",
-            "fresh-watermark",
-            "EXPONENTIAL",
-            5,
-            600,
-            1,
-            1,
-            "FRESH_JOB:2026-05-01:1",
-            1,
-            0,
-            1,
-            0L,
-            100L,
-            100L,
-            null,
-            null,
-            "inv-fresh");
+    EffectiveTaskConfig fresh = new EffectiveTaskConfig(
+        "t1",
+        42L,
+        100L,
+        200L,
+        "INST-1",
+        "FRESH_JOB",
+        "FRESH_TYPE",
+        99,
+        "FRESH_TYPE",
+        "HIGH",
+        "fresh-biz",
+        "fresh-idem",
+        "FRESH_PAYLOAD",
+        "fresh-trace",
+        "INCREMENTAL",
+        "update_time",
+        "fresh-watermark",
+        "EXPONENTIAL",
+        5,
+        600,
+        1,
+        1,
+        "FRESH_JOB:2026-05-01:1",
+        1,
+        0,
+        1,
+        0L,
+        100L,
+        100L,
+        null,
+        null,
+        "inv-fresh");
     when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.of(fresh));
     when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 
@@ -131,9 +130,8 @@ class TaskDispatchExecutorTest {
     TaskDispatchMessage m2 = messageWithTaskId(2L);
     // claim-batch:taskId 1 领到(含 config),taskId 2 没领到
     when(workerRuntimeFacade.claimBatch(any()))
-        .thenReturn(
-            List.of(
-                new TaskClaimResult(1L, true, freshCfg(1L)), new TaskClaimResult(2L, false, null)));
+        .thenReturn(List.of(
+            new TaskClaimResult(1L, true, freshCfg(1L)), new TaskClaimResult(2L, false, null)));
     when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("1", true, ""));
 
     List<WorkerExecutionResult> results = executor.executeBatch(List.of(m1, m2), "w1");

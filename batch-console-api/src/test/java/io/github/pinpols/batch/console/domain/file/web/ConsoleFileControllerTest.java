@@ -47,22 +47,18 @@ class ConsoleFileControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleFileController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleFileController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
-            post("/api/console/files/archive")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+            post("/api/console/files/archive").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","fileId":1,"reason":"ok"}
                     """))
         .andExpect(status().isBadRequest())
@@ -77,12 +73,10 @@ class ConsoleFileControllerTest {
         .thenReturn(new ConsoleFileOperationResponse("OK"));
 
     mockMvc
-        .perform(
-            post("/api/console/files/archive")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/files/archive")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","fileId":1,"reason":"ok"}
                     """))
         .andExpect(status().isOk())
@@ -96,12 +90,10 @@ class ConsoleFileControllerTest {
         .thenReturn(new ConsolePresignDownloadResponse("appr-001", null));
 
     mockMvc
-        .perform(
-            post("/api/console/files/presign-download")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/files/presign-download")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","fileId":1,"reason":"ok"}
                     """))
         .andExpect(status().isOk())
@@ -117,16 +109,14 @@ class ConsoleFileControllerTest {
         new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
 
     mockMvc
-        .perform(
-            multipart("/api/console/files/{fileId}/content", 1L)
-                .file(file)
-                .param("tenantId", "t1")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
-                .with(
-                    request -> {
-                      request.setMethod("PUT");
-                      return request;
-                    }))
+        .perform(multipart("/api/console/files/{fileId}/content", 1L)
+            .file(file)
+            .param("tenantId", "t1")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
+            .with(request -> {
+              request.setMethod("PUT");
+              return request;
+            }))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.status").value("UPLOADED"));

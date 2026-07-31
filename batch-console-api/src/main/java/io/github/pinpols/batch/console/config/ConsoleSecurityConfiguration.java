@@ -101,10 +101,8 @@ public class ConsoleSecurityConfiguration {
     // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
     // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
     // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
-    http.csrf(
-        csrf ->
-            csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                .ignoringRequestMatchers(csrfIgnoredMatchers()));
+    http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+        .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))
@@ -113,52 +111,48 @@ public class ConsoleSecurityConfiguration {
         // WWW-Authenticate: Basic realm=...，浏览器弹原生登录框 + 还允许 Authorization: Basic
         // 直接绕过 cookie filter 链。生产环境不可暴露。
         .httpBasic(AbstractHttpConfigurer::disable)
-        .exceptionHandling(
-            exceptionHandling ->
-                exceptionHandling
-                    .authenticationEntryPoint(authenticationEntryPoint(responseWriter))
-                    .accessDeniedHandler(accessDeniedHandler(responseWriter)))
-        .authorizeHttpRequests(
-            authorize ->
-                authorize
-                    .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
-                    .permitAll()
-                    // Alertmanager 出口内网端点:AM 够不到 console cookie/JWT(ADR-030 §D7),
-                    // 由 AlertmanagerNotifyController 用共享密钥 bearer token 自校验(fail-closed)。
-                    .requestMatchers("/internal/am-notify/**")
-                    .permitAll()
-                    .requestMatchers(
-                        "/api/console/auth/login",
-                        "/api/console/auth/logout",
-                        "/api/console/auth/public-key",
-                        // 验证码 config / challenge 登录前即需访问(无认证态),仅下发公开 provider/siteKey。
-                        "/api/console/captcha/config",
-                        "/api/console/captcha/challenge",
-                        "/api/console/push/vapid-public-key",
-                        "/api/console/system/maintenance",
-                        "/api/console/system/cron-preview",
-                        // FS 后端 presign 代下端点：URL 自带 HMAC 令牌即授权（见
-                        // ConsoleFilesystemPresignDownloadController），无登录态；S3 后端
-                        // ConditionalOnProperty 不装
-                        // controller，permitAll 仅是路径白名单不会引入新攻击面。
-                        "/api/console/files/fs-download",
-                        "/console-login.html",
-                        "/favicon.ico")
-                    .permitAll()
-                    .requestMatchers("/actuator/loggers/**")
-                    .hasAuthority(ConsoleRoles.ADMIN)
-                    // P0-1 回退（ADR audit 2026-05-14）：/api/console/** 默认要求至少一个有效角色，
-                    // 避免新加 controller 漏加 @PreAuthorize 时被无角色账号访问。
-                    // 高危端点已在 controller 上叠加更严格的 @PreAuthorize。
-                    .requestMatchers("/api/console/**")
-                    .hasAnyAuthority(
-                        ConsoleRoles.ADMIN,
-                        ConsoleRoles.TENANT_ADMIN,
-                        ConsoleRoles.AUDITOR,
-                        ConsoleRoles.TENANT_USER,
-                        ConsoleRoles.USER)
-                    .anyRequest()
-                    .authenticated())
+        .exceptionHandling(exceptionHandling -> exceptionHandling
+            .authenticationEntryPoint(authenticationEntryPoint(responseWriter))
+            .accessDeniedHandler(accessDeniedHandler(responseWriter)))
+        .authorizeHttpRequests(authorize -> authorize
+            .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
+            .permitAll()
+            // Alertmanager 出口内网端点:AM 够不到 console cookie/JWT(ADR-030 §D7),
+            // 由 AlertmanagerNotifyController 用共享密钥 bearer token 自校验(fail-closed)。
+            .requestMatchers("/internal/am-notify/**")
+            .permitAll()
+            .requestMatchers(
+                "/api/console/auth/login",
+                "/api/console/auth/logout",
+                "/api/console/auth/public-key",
+                // 验证码 config / challenge 登录前即需访问(无认证态),仅下发公开 provider/siteKey。
+                "/api/console/captcha/config",
+                "/api/console/captcha/challenge",
+                "/api/console/push/vapid-public-key",
+                "/api/console/system/maintenance",
+                "/api/console/system/cron-preview",
+                // FS 后端 presign 代下端点：URL 自带 HMAC 令牌即授权（见
+                // ConsoleFilesystemPresignDownloadController），无登录态；S3 后端
+                // ConditionalOnProperty 不装
+                // controller，permitAll 仅是路径白名单不会引入新攻击面。
+                "/api/console/files/fs-download",
+                "/console-login.html",
+                "/favicon.ico")
+            .permitAll()
+            .requestMatchers("/actuator/loggers/**")
+            .hasAuthority(ConsoleRoles.ADMIN)
+            // P0-1 回退（ADR audit 2026-05-14）：/api/console/** 默认要求至少一个有效角色，
+            // 避免新加 controller 漏加 @PreAuthorize 时被无角色账号访问。
+            // 高危端点已在 controller 上叠加更严格的 @PreAuthorize。
+            .requestMatchers("/api/console/**")
+            .hasAnyAuthority(
+                ConsoleRoles.ADMIN,
+                ConsoleRoles.TENANT_ADMIN,
+                ConsoleRoles.AUDITOR,
+                ConsoleRoles.TENANT_USER,
+                ConsoleRoles.USER)
+            .anyRequest()
+            .authenticated())
         // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；
         // rate limit 仍放在维护拦截之后，维护期被挡请求不消耗限流窗口。
         .addFilterAfter(new CsrfCookieMaterializeFilter(), CsrfFilter.class)
@@ -178,21 +172,16 @@ public class ConsoleSecurityConfiguration {
 
   private AuthenticationEntryPoint authenticationEntryPoint(
       ConsoleSecurityResponseWriter responseWriter) {
-    return (request, response, authException) ->
-        responseWriter.write(
-            response,
-            HttpStatus.UNAUTHORIZED,
-            ResultCode.UNAUTHORIZED,
-            CommonErrorMessages.AUTHENTICATION_REQUIRED);
+    return (request, response, authException) -> responseWriter.write(
+        response,
+        HttpStatus.UNAUTHORIZED,
+        ResultCode.UNAUTHORIZED,
+        CommonErrorMessages.AUTHENTICATION_REQUIRED);
   }
 
   private AccessDeniedHandler accessDeniedHandler(ConsoleSecurityResponseWriter responseWriter) {
-    return (request, response, accessDeniedException) ->
-        responseWriter.write(
-            response,
-            HttpStatus.FORBIDDEN,
-            ResultCode.FORBIDDEN,
-            CommonErrorMessages.ACCESS_DENIED);
+    return (request, response, accessDeniedException) -> responseWriter.write(
+        response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED);
   }
 
   /**

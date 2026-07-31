@@ -60,9 +60,8 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("VerifyResult=true → 通过,且 postJson 调一次")
   void verifyResultTrue_passes() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
+    StubVerifier verifier = new StubVerifier(
+        properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
 
     CaptchaResult result = verifier.verify("good-token", "1.2.3.4");
 
@@ -73,10 +72,9 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("VerifyResult=false → 失败")
   void verifyResultFalse_fails() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties,
-            "{\"Body\":{\"Result\":{\"VerifyResult\":false},\"Success\":true,\"Code\":\"Verify.Fail\"}}");
+    StubVerifier verifier = new StubVerifier(
+        properties,
+        "{\"Body\":{\"Result\":{\"VerifyResult\":false},\"Success\":true,\"Code\":\"Verify.Fail\"}}");
 
     CaptchaResult result = verifier.verify("bad-token", "1.2.3.4");
 
@@ -87,9 +85,8 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("空 / null token → 失败,且不调 postJson(不走网络)")
   void blankToken_failsWithoutNetwork() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
+    StubVerifier verifier = new StubVerifier(
+        properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
 
     assertThat(verifier.verify(null, "1.2.3.4").success()).isFalse();
     assertThat(verifier.verify("", "1.2.3.4").success()).isFalse();
@@ -101,13 +98,12 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("postJson 异常 → 保守判失败")
   void postJsonThrows_fails() {
-    AliyunCaptchaVerifier verifier =
-        new AliyunCaptchaVerifier(properties, new ObjectMapper()) {
-          @Override
-          protected String postJson(String url, Map<String, String> headers, String body) {
-            throw new RuntimeException("network down");
-          }
-        };
+    AliyunCaptchaVerifier verifier = new AliyunCaptchaVerifier(properties, new ObjectMapper()) {
+      @Override
+      protected String postJson(String url, Map<String, String> headers, String body) {
+        throw new RuntimeException("network down");
+      }
+    };
 
     CaptchaResult result = verifier.verify("any-token", "1.2.3.4");
 
@@ -118,9 +114,8 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("发送请求带齐 ACS3 签名头(Authorization + x-acs-* + body 含 SceneId)")
   void sendsSignedHeaders() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
+    StubVerifier verifier = new StubVerifier(
+        properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
 
     verifier.verify("tok-abc", "1.2.3.4");
 
@@ -142,9 +137,8 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("provider 标识 = aliyun")
   void providerName() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
+    StubVerifier verifier = new StubVerifier(
+        properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
     assertThat(verifier.provider()).isEqualTo("aliyun");
   }
 
@@ -177,33 +171,30 @@ class AliyunCaptchaVerifierTest {
     canonicalHeaders.put("x-acs-signature-nonce", "fixednonce");
     canonicalHeaders.put("x-acs-version", "2023-03-05");
 
-    String auth1 =
-        AliyunCaptchaVerifier.buildAuthorization(
-            "POST",
-            "/",
-            "",
-            new TreeMap<>(canonicalHeaders),
-            canonicalHeaders.get("x-acs-content-sha256"),
-            "ak-id",
-            "ak-secret");
-    String auth2 =
-        AliyunCaptchaVerifier.buildAuthorization(
-            "POST",
-            "/",
-            "",
-            new TreeMap<>(canonicalHeaders),
-            canonicalHeaders.get("x-acs-content-sha256"),
-            "ak-id",
-            "ak-secret");
+    String auth1 = AliyunCaptchaVerifier.buildAuthorization(
+        "POST",
+        "/",
+        "",
+        new TreeMap<>(canonicalHeaders),
+        canonicalHeaders.get("x-acs-content-sha256"),
+        "ak-id",
+        "ak-secret");
+    String auth2 = AliyunCaptchaVerifier.buildAuthorization(
+        "POST",
+        "/",
+        "",
+        new TreeMap<>(canonicalHeaders),
+        canonicalHeaders.get("x-acs-content-sha256"),
+        "ak-id",
+        "ak-secret");
 
     // 确定性
     assertThat(auth1).isEqualTo(auth2);
     // 结构
     assertThat(auth1)
         .startsWith("ACS3-HMAC-SHA256 Credential=ak-id,SignedHeaders=")
-        .contains(
-            "SignedHeaders=host;x-acs-action;x-acs-content-sha256;x-acs-date;"
-                + "x-acs-signature-nonce;x-acs-version")
+        .contains("SignedHeaders=host;x-acs-action;x-acs-content-sha256;x-acs-date;"
+            + "x-acs-signature-nonce;x-acs-version")
         .contains(",Signature=");
     // signature 段为 64 位小写 hex
     String signature = auth1.substring(auth1.indexOf(",Signature=") + ",Signature=".length());
@@ -218,12 +209,10 @@ class AliyunCaptchaVerifierTest {
     h.put("x-acs-action", "VerifyIntelligentCaptcha");
     String payload = CaptchaCrypto.sha256Hex("{}");
 
-    String a =
-        AliyunCaptchaVerifier.buildAuthorization(
-            "POST", "/", "", new TreeMap<>(h), payload, "ak", "secret-A");
-    String b =
-        AliyunCaptchaVerifier.buildAuthorization(
-            "POST", "/", "", new TreeMap<>(h), payload, "ak", "secret-B");
+    String a = AliyunCaptchaVerifier.buildAuthorization(
+        "POST", "/", "", new TreeMap<>(h), payload, "ak", "secret-A");
+    String b = AliyunCaptchaVerifier.buildAuthorization(
+        "POST", "/", "", new TreeMap<>(h), payload, "ak", "secret-B");
 
     assertThat(a).isNotEqualTo(b);
   }

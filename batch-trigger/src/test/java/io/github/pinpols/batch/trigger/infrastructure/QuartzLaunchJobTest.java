@@ -34,12 +34,23 @@ import org.quartz.Trigger;
 @ExtendWith(MockitoExtension.class)
 class QuartzLaunchJobTest {
 
-  @Mock private TriggerService triggerService;
-  @Mock private MisfireHandler misfireHandler;
-  @Mock private TriggerRegistrationService triggerRegistrationService;
-  @Mock private JobExecutionContext context;
-  @Mock private Scheduler scheduler;
-  @Mock private JobDetail jobDetail;
+  @Mock
+  private TriggerService triggerService;
+
+  @Mock
+  private MisfireHandler misfireHandler;
+
+  @Mock
+  private TriggerRegistrationService triggerRegistrationService;
+
+  @Mock
+  private JobExecutionContext context;
+
+  @Mock
+  private Scheduler scheduler;
+
+  @Mock
+  private JobDetail jobDetail;
 
   private QuartzLaunchJob job;
 
@@ -47,13 +58,12 @@ class QuartzLaunchJobTest {
   void setUp() {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setMisfireCatchUpThresholdSeconds(60L);
-    job =
-        new QuartzLaunchJob(
-            triggerService,
-            misfireHandler,
-            properties,
-            triggerRegistrationService,
-            new SimpleMeterRegistry());
+    job = new QuartzLaunchJob(
+        triggerService,
+        misfireHandler,
+        properties,
+        triggerRegistrationService,
+        new SimpleMeterRegistry());
   }
 
   @Test

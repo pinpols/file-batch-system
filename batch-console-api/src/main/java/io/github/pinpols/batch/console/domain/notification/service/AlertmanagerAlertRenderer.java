@@ -32,18 +32,17 @@ public class AlertmanagerAlertRenderer {
     String alertname = commonAlertname(payload);
     String severity = value(payload.commonLabels(), LABEL_SEVERITY);
 
-    String title =
-        "["
-            + status
-            + "] "
-            + receiver
-            + " · "
-            + alertname
-            + " ("
-            + alerts.size()
-            + " alert"
-            + (alerts.size() == 1 ? "" : "s")
-            + ")";
+    String title = "["
+        + status
+        + "] "
+        + receiver
+        + " · "
+        + alertname
+        + " ("
+        + alerts.size()
+        + " alert"
+        + (alerts.size() == 1 ? "" : "s")
+        + ")";
 
     StringBuilder body = new StringBuilder(title).append('\n');
     int shown = Math.min(alerts.size(), Math.max(0, maxAlerts));

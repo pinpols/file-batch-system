@@ -23,28 +23,27 @@ class JobMapResponseJacksonTest {
   @Test
   void batchWindowShouldSerializeSnakeCaseKeysMatchingMapperRow() throws Exception {
     // mapper `select *` 返回 snake_case 键 + TIME/timestamptz 列。
-    Map<String, Object> row =
-        Map.of(
-            "id",
-            5L,
-            "tenant_id",
-            "ta",
-            "window_code",
-            "nightly",
-            "window_name",
-            "夜间窗口",
-            "timezone",
-            "Asia/Shanghai",
-            "start_time",
-            Time.valueOf("02:00:00"),
-            "end_time",
-            Time.valueOf("04:00:00"),
-            "end_strategy",
-            "FINISH_RUNNING",
-            "allow_cross_day",
-            false,
-            "enabled",
-            true);
+    Map<String, Object> row = Map.of(
+        "id",
+        5L,
+        "tenant_id",
+        "ta",
+        "window_code",
+        "nightly",
+        "window_name",
+        "夜间窗口",
+        "timezone",
+        "Asia/Shanghai",
+        "start_time",
+        Time.valueOf("02:00:00"),
+        "end_time",
+        Time.valueOf("04:00:00"),
+        "end_strategy",
+        "FINISH_RUNNING",
+        "allow_cross_day",
+        false,
+        "enabled",
+        true);
 
     String json = mapper.writeValueAsString(ConsoleBatchWindowResponse.from(row));
     Map<String, Object> back = mapper.readValue(json, new TypeReference<>() {});
@@ -69,46 +68,33 @@ class JobMapResponseJacksonTest {
   @Test
   void instanceActionShouldOmitCancelRequestedTasksWhenNull() throws Exception {
     // terminate/pause/resume 无 cancelRequestedTasks —— 历史 Map 不含该键,NON_NULL 必须省略。
-    String terminate =
-        mapper.writeValueAsString(
-            ConsoleInstanceActionResponse.from(
-                Map.of("id", 9L, "instanceNo", "INS-9", "status", "TERMINATED")));
+    String terminate = mapper.writeValueAsString(ConsoleInstanceActionResponse.from(
+        Map.of("id", 9L, "instanceNo", "INS-9", "status", "TERMINATED")));
     Map<String, Object> terminateBack = mapper.readValue(terminate, new TypeReference<>() {});
     assertThat(terminateBack).containsOnlyKeys("id", "instanceNo", "status");
 
     // cancel RUNNING 实例时携带该键。
-    String cancel =
-        mapper.writeValueAsString(
-            ConsoleInstanceActionResponse.from(
-                Map.of(
-                    "id",
-                    9L,
-                    "instanceNo",
-                    "INS-9",
-                    "status",
-                    "CANCEL_REQUESTED",
-                    "cancelRequestedTasks",
-                    3)));
+    String cancel = mapper.writeValueAsString(ConsoleInstanceActionResponse.from(Map.of(
+        "id", 9L, "instanceNo", "INS-9", "status", "CANCEL_REQUESTED", "cancelRequestedTasks", 3)));
     Map<String, Object> cancelBack = mapper.readValue(cancel, new TypeReference<>() {});
     assertThat(cancelBack).containsEntry("cancelRequestedTasks", 3);
   }
 
   @Test
   void retryFailedPartitionsShouldPreserveNestedPartitionIds() throws Exception {
-    Map<String, Object> row =
-        Map.of(
-            "id",
-            12L,
-            "instanceNo",
-            "INS-12",
-            "requested",
-            2,
-            "retried",
-            1,
-            "conflicts",
-            1,
-            "partitionIds",
-            List.of(101L, 102L));
+    Map<String, Object> row = Map.of(
+        "id",
+        12L,
+        "instanceNo",
+        "INS-12",
+        "requested",
+        2,
+        "retried",
+        1,
+        "conflicts",
+        1,
+        "partitionIds",
+        List.of(101L, 102L));
 
     String json = mapper.writeValueAsString(ConsoleRetryFailedPartitionsResponse.from(row));
     Map<String, Object> back = mapper.readValue(json, new TypeReference<>() {});
@@ -121,19 +107,17 @@ class JobMapResponseJacksonTest {
   @Test
   void calendarShouldNormalizeTimestampAndCamelKeys() throws Exception {
     Instant updatedAt = Instant.parse("2026-07-11T04:00:00Z");
-    ConsoleCalendarResponse response =
-        ConsoleCalendarResponse.from(
-            Map.of(
-                "id",
-                1L,
-                "tenantId",
-                "ta",
-                "calendarCode",
-                "cn",
-                "enabled",
-                true,
-                "updatedAt",
-                Timestamp.from(updatedAt)));
+    ConsoleCalendarResponse response = ConsoleCalendarResponse.from(Map.of(
+        "id",
+        1L,
+        "tenantId",
+        "ta",
+        "calendarCode",
+        "cn",
+        "enabled",
+        true,
+        "updatedAt",
+        Timestamp.from(updatedAt)));
     assertThat(response.calendarCode()).isEqualTo("cn");
     assertThat(response.updatedAt()).isEqualTo(updatedAt);
 
@@ -146,17 +130,8 @@ class JobMapResponseJacksonTest {
 
   @Test
   void holidayShouldOmitNullColumnsLikeMapperRow() throws Exception {
-    ConsoleHolidayResponse response =
-        ConsoleHolidayResponse.from(
-            Map.of(
-                "id",
-                5L,
-                "calendarId",
-                3L,
-                "bizDate",
-                Date.valueOf("2026-05-20"),
-                "dayType",
-                "HOLIDAY"));
+    ConsoleHolidayResponse response = ConsoleHolidayResponse.from(Map.of(
+        "id", 5L, "calendarId", 3L, "bizDate", Date.valueOf("2026-05-20"), "dayType", "HOLIDAY"));
 
     String json = mapper.writeValueAsString(response);
     Map<String, Object> back = mapper.readValue(json, new TypeReference<>() {});

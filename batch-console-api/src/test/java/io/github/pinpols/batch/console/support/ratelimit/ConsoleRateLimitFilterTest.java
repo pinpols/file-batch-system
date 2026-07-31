@@ -32,11 +32,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @ExtendWith(MockitoExtension.class)
 class ConsoleRateLimitFilterTest {
 
-  @Mock private SlidingWindowRateLimiter rateLimiter;
+  @Mock
+  private SlidingWindowRateLimiter rateLimiter;
 
-  @Mock private FilterChain filterChain;
+  @Mock
+  private FilterChain filterChain;
 
-  @Mock private ConsoleSecurityResponseWriter responseWriter;
+  @Mock
+  private ConsoleSecurityResponseWriter responseWriter;
 
   private ConsoleRateLimitFilter filter;
 
@@ -45,9 +48,8 @@ class ConsoleRateLimitFilterTest {
     ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
     props.setLoginIpLimitPerMinute(3);
     props.setSensitiveOpUserLimitPerMinute(5);
-    filter =
-        new ConsoleRateLimitFilter(
-            rateLimiter, props, responseWriter, new ConsoleSecurityProperties());
+    filter = new ConsoleRateLimitFilter(
+        rateLimiter, props, responseWriter, new ConsoleSecurityProperties());
   }
 
   // ── disabled ──────────────────────────────────────────────────────────────
@@ -56,9 +58,8 @@ class ConsoleRateLimitFilterTest {
   void shouldPassThroughWhenDisabled() throws Exception {
     ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
     disabledProps.setEnabled(false);
-    ConsoleRateLimitFilter disabledFilter =
-        new ConsoleRateLimitFilter(
-            rateLimiter, disabledProps, responseWriter, new ConsoleSecurityProperties());
+    ConsoleRateLimitFilter disabledFilter = new ConsoleRateLimitFilter(
+        rateLimiter, disabledProps, responseWriter, new ConsoleSecurityProperties());
 
     MockHttpServletRequest request = loginRequest("1.2.3.4");
     MockHttpServletResponse response = new MockHttpServletResponse();

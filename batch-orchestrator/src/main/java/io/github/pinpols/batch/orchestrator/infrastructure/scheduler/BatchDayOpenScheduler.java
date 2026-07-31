@@ -102,20 +102,17 @@ public class BatchDayOpenScheduler {
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
     ZonedDateTime localNow = now.atZone(zoneId);
-    LocalDate bizDate =
-        localNow.toLocalTime().isBefore(cutoffTime)
-            ? localNow.toLocalDate().minusDays(1)
-            : localNow.toLocalDate();
-    BatchDayInstanceEntity existing =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            calendar.tenantId(), calendar.calendarCode(), bizDate);
+    LocalDate bizDate = localNow.toLocalTime().isBefore(cutoffTime)
+        ? localNow.toLocalDate().minusDays(1)
+        : localNow.toLocalDate();
+    BatchDayInstanceEntity existing = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+        calendar.tenantId(), calendar.calendarCode(), bizDate);
     if (existing != null) {
       return;
     }
     // ADR-023 Stage 4: disaster_day_override 优先级最高 — 命中即按 action 处理后退出
-    DisasterDayOverrideEntity disaster =
-        disasterDayOverrideMapper.selectActiveByCalendarBizDate(
-            calendar.tenantId(), calendar.calendarCode(), bizDate, now);
+    DisasterDayOverrideEntity disaster = disasterDayOverrideMapper.selectActiveByCalendarBizDate(
+        calendar.tenantId(), calendar.calendarCode(), bizDate, now);
     if (disaster != null) {
       handleDisasterOverride(calendar, bizDate, disaster, now);
       return;
@@ -134,24 +131,23 @@ public class BatchDayOpenScheduler {
     }
     Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
     Instant slaDeadlineAt = resolveSlaDeadlineAt(calendar, cutoffAt);
-    BatchDayInstanceEntity toInsert =
-        BatchDayInstanceEntity.builder()
-            .tenantId(calendar.tenantId())
-            .calendarCode(calendar.calendarCode())
-            .bizDate(bizDate)
-            .dayStatus("OPEN")
-            .openAt(now)
-            .cutoffAt(cutoffAt)
-            .slaDeadlineAt(slaDeadlineAt)
-            .lateCount(0)
-            .catchupCount(0)
-            .timezoneSnapshot(zoneId.getId())
-            .dstPolicySnapshot(timePolicyResolver.snapshot(calendar))
-            .frozen(false)
-            .version(0L)
-            .createdAt(now)
-            .updatedAt(now)
-            .build();
+    BatchDayInstanceEntity toInsert = BatchDayInstanceEntity.builder()
+        .tenantId(calendar.tenantId())
+        .calendarCode(calendar.calendarCode())
+        .bizDate(bizDate)
+        .dayStatus("OPEN")
+        .openAt(now)
+        .cutoffAt(cutoffAt)
+        .slaDeadlineAt(slaDeadlineAt)
+        .lateCount(0)
+        .catchupCount(0)
+        .timezoneSnapshot(zoneId.getId())
+        .dstPolicySnapshot(timePolicyResolver.snapshot(calendar))
+        .frozen(false)
+        .version(0L)
+        .createdAt(now)
+        .updatedAt(now)
+        .build();
     int rows = batchDayInstanceMapper.insert(toInsert);
     if (rows <= 0) {
       return;
@@ -170,9 +166,8 @@ public class BatchDayOpenScheduler {
    * null 表示 通过。
    */
   private String checkCalendarDependencies(BusinessCalendarEntity calendar, LocalDate bizDate) {
-    List<CalendarDependencyEntity> deps =
-        calendarDependencyMapper.selectEnabledByDownstream(
-            calendar.tenantId(), calendar.calendarCode());
+    List<CalendarDependencyEntity> deps = calendarDependencyMapper.selectEnabledByDownstream(
+        calendar.tenantId(), calendar.calendarCode());
     if (deps == null || deps.isEmpty()) {
       return null;
     }
@@ -183,9 +178,8 @@ public class BatchDayOpenScheduler {
         // v1 占位：不阻塞
         continue;
       }
-      BatchDayInstanceEntity upstream =
-          batchDayInstanceMapper.selectByTenantCalendarBizDate(
-              calendar.tenantId(), dep.upstreamCode(), bizDate);
+      BatchDayInstanceEntity upstream = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+          calendar.tenantId(), dep.upstreamCode(), bizDate);
       if (upstream == null) {
         return "BLOCKED_BY_UPSTREAM_CALENDAR:upstream=" + dep.upstreamCode() + ":missing";
       }
@@ -217,27 +211,27 @@ public class BatchDayOpenScheduler {
       Instant now) {
     if (DisasterDayOverrideEntity.ACTION_SKIP.equals(disaster.action())) {
       Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
-      BatchDayInstanceEntity skipped =
-          BatchDayInstanceEntity.builder()
-              .tenantId(calendar.tenantId())
-              .calendarCode(calendar.calendarCode())
-              .bizDate(bizDate)
-              .dayStatus("SKIPPED")
-              .openAt(now)
-              .cutoffAt(cutoffAt)
-              .settledAt(now)
-              .lateCount(0)
-              .catchupCount(0)
-              .timezoneSnapshot(timezoneProvider.resolveOrDefault(calendar.timezone()).getId())
-              .dstPolicySnapshot(timePolicyResolver.snapshot(calendar))
-              .frozen(false)
-              .operationReason("DISASTER_DAY_SKIP:" + disaster.reason())
-              .operatedBy(disaster.approvedBy())
-              .operatedAt(now)
-              .version(0L)
-              .createdAt(now)
-              .updatedAt(now)
-              .build();
+      BatchDayInstanceEntity skipped = BatchDayInstanceEntity.builder()
+          .tenantId(calendar.tenantId())
+          .calendarCode(calendar.calendarCode())
+          .bizDate(bizDate)
+          .dayStatus("SKIPPED")
+          .openAt(now)
+          .cutoffAt(cutoffAt)
+          .settledAt(now)
+          .lateCount(0)
+          .catchupCount(0)
+          .timezoneSnapshot(
+              timezoneProvider.resolveOrDefault(calendar.timezone()).getId())
+          .dstPolicySnapshot(timePolicyResolver.snapshot(calendar))
+          .frozen(false)
+          .operationReason("DISASTER_DAY_SKIP:" + disaster.reason())
+          .operatedBy(disaster.approvedBy())
+          .operatedAt(now)
+          .version(0L)
+          .createdAt(now)
+          .updatedAt(now)
+          .build();
       int rows = batchDayInstanceMapper.insert(skipped);
       if (rows > 0) {
         appendAuditLog(skipped, now);
@@ -290,7 +284,8 @@ public class BatchDayOpenScheduler {
     extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
     extra.put("cutoffAt", opened.cutoffAt() == null ? null : opened.cutoffAt().toString());
     extra.put(
-        "slaDeadlineAt", opened.slaDeadlineAt() == null ? null : opened.slaDeadlineAt().toString());
+        "slaDeadlineAt",
+        opened.slaDeadlineAt() == null ? null : opened.slaDeadlineAt().toString());
     extra.put("timezoneSnapshot", opened.timezoneSnapshot());
     extra.put("at", now.toString());
     logEntity.setExtraJson(JsonUtils.toJson(extra));

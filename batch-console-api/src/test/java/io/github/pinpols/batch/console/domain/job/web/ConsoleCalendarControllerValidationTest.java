@@ -47,11 +47,11 @@ class ConsoleCalendarControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleCalendarController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleCalendarController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String body(String calendarCode) {

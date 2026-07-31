@@ -43,10 +43,17 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultScheduleForwarderSetBasedTest {
 
-  @Mock private OutboxEventMapper outboxEventMapper;
-  @Mock private EventOutboxRetryMapper eventOutboxRetryMapper;
-  @Mock private OutboxPublisher outboxPublisher;
-  @Mock private BatchOrchestratorGovernanceProperties governance;
+  @Mock
+  private OutboxEventMapper outboxEventMapper;
+
+  @Mock
+  private EventOutboxRetryMapper eventOutboxRetryMapper;
+
+  @Mock
+  private OutboxPublisher outboxPublisher;
+
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
 
   private DefaultScheduleForwarder forwarder;
   private SimpleMeterRegistry meterRegistry;
@@ -56,9 +63,8 @@ class DefaultScheduleForwarderSetBasedTest {
   void setUp() {
     when(governance.outbox()).thenReturn(outboxProperties);
     meterRegistry = new SimpleMeterRegistry();
-    forwarder =
-        new DefaultScheduleForwarder(
-            outboxEventMapper, eventOutboxRetryMapper, outboxPublisher, governance, meterRegistry);
+    forwarder = new DefaultScheduleForwarder(
+        outboxEventMapper, eventOutboxRetryMapper, outboxPublisher, governance, meterRegistry);
     forwarder.initMetrics();
   }
 
@@ -189,7 +195,8 @@ class DefaultScheduleForwarderSetBasedTest {
         .isEqualTo(2.0d);
     assertThat(meterRegistry.get("batch.outbox.forward.succeeded").summary().totalAmount())
         .isEqualTo(1.0d);
-    assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().count()).isEqualTo(1L);
+    assertThat(meterRegistry.get("batch.outbox.forward.attempted").summary().count())
+        .isEqualTo(1L);
   }
 
   @Test

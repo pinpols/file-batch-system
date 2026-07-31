@@ -22,11 +22,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("告警升级 sweep")
 class DefaultAlertEventServiceEscalationTest {
 
-  @Mock private AlertEventMapper alertEventMapper;
+  @Mock
+  private AlertEventMapper alertEventMapper;
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-  @Mock private AlertmanagerEmitPublisher alertmanagerEmitPublisher;
+  @Mock
+  private AlertmanagerEmitPublisher alertmanagerEmitPublisher;
 
   private DefaultAlertEventService service() {
     return new DefaultAlertEventService(alertEventMapper, meterRegistry, alertmanagerEmitPublisher);

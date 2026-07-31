@@ -14,28 +14,27 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_acceptsNestedSqlTransformComputeSpec() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, account_id, amount from biz.order_event where tenant_id ="
-                    + " :tenantId",
-                "targetSchema",
-                "biz",
-                "targetTable",
-                "daily_summary",
-                "writeMode",
-                "UPSERT",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "account_id", "target", "account_id"),
-                    Map.of("source", "amount", "target", "total_amount")),
-                "conflictColumns",
-                List.of("tenant_id", "account_id"),
-                "watermarkColumn",
-                "event_id"));
+            "sourceSql",
+            "select tenant_id, account_id, amount from biz.order_event where tenant_id ="
+                + " :tenantId",
+            "targetSchema",
+            "biz",
+            "targetTable",
+            "daily_summary",
+            "writeMode",
+            "UPSERT",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "account_id", "target", "account_id"),
+                Map.of("source", "amount", "target", "total_amount")),
+            "conflictColumns",
+            List.of("tenant_id", "account_id"),
+            "watermarkColumn",
+            "event_id"));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -56,29 +55,27 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_acceptsValidationRules() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "daily_summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "validations",
-                List.of(
-                    Map.of(
-                        "name",
-                        "amount_non_negative",
-                        "checkSql",
-                        "select bool_and((payload->>'amount')::numeric >= 0) AS pass,"
-                            + " 'has negative amounts' AS message"
-                            + " from batch.process_staging where batch_key = :batchKey"))));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "daily_summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "validations",
+            List.of(Map.of(
+                "name",
+                "amount_non_negative",
+                "checkSql",
+                "select bool_and((payload->>'amount')::numeric >= 0) AS pass,"
+                    + " 'has negative amounts' AS message"
+                    + " from batch.process_staging where batch_key = :batchKey"))));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -89,14 +86,13 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsMissingColumns() {
-    Map<String, Object> stepParams =
-        Map.of(
-            "sourceSql",
-            "select tenant_id from biz.order_event",
-            "targetSchema",
-            "biz",
-            "targetTable",
-            "daily_summary");
+    Map<String, Object> stepParams = Map.of(
+        "sourceSql",
+        "select tenant_id from biz.order_event",
+        "targetSchema",
+        "biz",
+        "targetTable",
+        "daily_summary");
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -105,22 +101,21 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsParamsOverridingReservedRuntimeNames() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src where tenant_id = :tenantId",
-                "targetTable",
-                "daily_summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "params",
-                Map.of("tenantId", "evil-tenant")));
+            "sourceSql",
+            "select tenant_id, amount from biz.src where tenant_id = :tenantId",
+            "targetTable",
+            "daily_summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "params",
+            Map.of("tenantId", "evil-tenant")));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -129,22 +124,21 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsParamsOverridingBizDate() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src where biz_date = cast(:bizDate as date)",
-                "targetTable",
-                "daily_summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "params",
-                Map.of("bizDate", "1970-01-01")));
+            "sourceSql",
+            "select tenant_id, amount from biz.src where biz_date = cast(:bizDate as date)",
+            "targetTable",
+            "daily_summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "params",
+            Map.of("bizDate", "1970-01-01")));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -153,22 +147,21 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsParamsUsingMetadataPrefix() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src where x = :metadata_customer",
-                "targetTable",
-                "daily_summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "params",
-                Map.of("metadata_customer", "X")));
+            "sourceSql",
+            "select tenant_id, amount from biz.src where x = :metadata_customer",
+            "targetTable",
+            "daily_summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "params",
+            Map.of("metadata_customer", "X")));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -177,22 +170,21 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_acceptsEmptyResultPolicySuccess() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "daily_summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "emptyResultPolicy",
-                "SUCCESS"));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "daily_summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "emptyResultPolicy",
+            "SUCCESS"));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -202,20 +194,19 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_defaultsMaxStagedRows() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id")));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id")));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -224,22 +215,21 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_acceptsCustomMaxStagedRows() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "summary",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "maxStagedRows",
-                500));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "summary",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "maxStagedRows",
+            500));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -248,22 +238,21 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_acceptsDirectStagingMode() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "summary",
-                "stagingMode",
-                "DIRECT",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id")));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "summary",
+            "stagingMode",
+            "DIRECT",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id")));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -272,29 +261,27 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsDirectModeWithStagingValidations() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "summary",
-                "stagingMode",
-                "DIRECT",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "validations",
-                List.of(
-                    Map.of(
-                        "name",
-                        "staged_rows_present",
-                        "checkSql",
-                        "select count(*) > 0 as pass from batch.process_staging"))));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "summary",
+            "stagingMode",
+            "DIRECT",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "validations",
+            List.of(Map.of(
+                "name",
+                "staged_rows_present",
+                "checkSql",
+                "select count(*) > 0 as pass from batch.process_staging"))));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -304,24 +291,23 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsDirectModeWithFailEmptyResultPolicy() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "summary",
-                "stagingMode",
-                "DIRECT",
-                "emptyResultPolicy",
-                "FAIL",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount")),
-                "conflictColumns",
-                List.of("tenant_id")));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "summary",
+            "stagingMode",
+            "DIRECT",
+            "emptyResultPolicy",
+            "FAIL",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount")),
+            "conflictColumns",
+            List.of("tenant_id")));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -333,20 +319,19 @@ class SqlTransformComputeSpecTest {
   void parse_rejectsMissingConflictColumnsForInsertMode() {
     // PROCESS at-least-once 安全:即使 writeMode=INSERT 也必须提供 conflictColumns
     // (否则重放双写)。验证空 conflictColumns 一律被拒,不再因 writeMode 网开一面。
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id, amount from biz.src",
-                "targetTable",
-                "daily_summary",
-                "writeMode",
-                "INSERT",
-                "columns",
-                List.of(
-                    Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount"))));
+            "sourceSql",
+            "select tenant_id, amount from biz.src",
+            "targetTable",
+            "daily_summary",
+            "writeMode",
+            "INSERT",
+            "columns",
+            List.of(
+                Map.of("source", "tenant_id", "target", "tenant_id"),
+                Map.of("source", "amount", "target", "amount"))));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -355,20 +340,19 @@ class SqlTransformComputeSpecTest {
 
   @Test
   void parse_rejectsInvalidMaxStagedRows() {
-    Map<String, Object> stepParams =
+    Map<String, Object> stepParams = Map.of(
+        "sqlTransformCompute",
         Map.of(
-            "sqlTransformCompute",
-            Map.of(
-                "sourceSql",
-                "select tenant_id from biz.src",
-                "targetTable",
-                "summary",
-                "columns",
-                List.of(Map.of("source", "tenant_id", "target", "tenant_id")),
-                "conflictColumns",
-                List.of("tenant_id"),
-                "maxStagedRows",
-                0));
+            "sourceSql",
+            "select tenant_id from biz.src",
+            "targetTable",
+            "summary",
+            "columns",
+            List.of(Map.of("source", "tenant_id", "target", "tenant_id")),
+            "conflictColumns",
+            List.of("tenant_id"),
+            "maxStagedRows",
+            0));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)

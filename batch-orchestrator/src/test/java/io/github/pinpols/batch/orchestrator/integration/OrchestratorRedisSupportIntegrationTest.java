@@ -27,9 +27,11 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
   @Import({BatchClockConfig.class, OrchestratorRedisSupport.class})
   static class TestApplication {}
 
-  @Autowired private OrchestratorRedisSupport redis;
+  @Autowired
+  private OrchestratorRedisSupport redis;
 
-  @Autowired private StringRedisTemplate redisTemplate;
+  @Autowired
+  private StringRedisTemplate redisTemplate;
 
   @Test
   void setJsonAndGetJsonRoundTrip() {

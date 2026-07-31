@@ -120,12 +120,11 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
         coordinationHealthy.set(false);
         return lastKnown.get();
       }
-      String[] members =
-          tuples.stream()
-              .map(ZSetOperations.TypedTuple::getValue)
-              .filter(v -> v != null && !v.isBlank())
-              .sorted()
-              .toArray(String[]::new);
+      String[] members = tuples.stream()
+          .map(ZSetOperations.TypedTuple::getValue)
+          .filter(v -> v != null && !v.isBlank())
+          .sorted()
+          .toArray(String[]::new);
 
       int total = members.length;
       int index = -1;

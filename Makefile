@@ -180,7 +180,7 @@ bump-version:
 pmd:
 	mvn pmd:check -fae
 
-# 格式检查（Google Java Format）
+# 格式检查（Palantir Java Format，120 列）
 spotless:
 	mvn spotless:check -fae
 

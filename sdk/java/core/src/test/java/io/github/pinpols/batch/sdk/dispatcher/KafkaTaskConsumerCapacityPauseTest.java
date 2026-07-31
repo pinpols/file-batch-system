@@ -30,16 +30,15 @@ class KafkaTaskConsumerCapacityPauseTest {
     dispatcher = mock(TaskDispatcher.class);
   }
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("kafka:9092")
-          .kafkaTopicPattern("batch.task.dispatch.tx.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("kafka:9092")
+      .kafkaTopicPattern("batch.task.dispatch.tx.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private final TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
 
@@ -124,16 +123,15 @@ class KafkaTaskConsumerCapacityPauseTest {
    */
   @Test
   void keepsPausedUntilInFlightDropsBelowHalfMaxHysteresis() {
-    BatchPlatformClientConfig bigConfig =
-        BatchPlatformClientConfig.builder()
-            .baseUrl("http://localhost:0")
-            .tenantId("tx")
-            .workerCode("w-1")
-            .kafkaBootstrap("kafka:9092")
-            .kafkaTopicPattern("batch.task.dispatch.tx.*")
-            .kafkaGroupId("g")
-            .maxConcurrentTasks(10)
-            .build();
+    BatchPlatformClientConfig bigConfig = BatchPlatformClientConfig.builder()
+        .baseUrl("http://localhost:0")
+        .tenantId("tx")
+        .workerCode("w-1")
+        .kafkaBootstrap("kafka:9092")
+        .kafkaTopicPattern("batch.task.dispatch.tx.*")
+        .kafkaGroupId("g")
+        .maxConcurrentTasks(10)
+        .build();
     when(dispatcher.submittedCount()).thenReturn(10, 6, 5, 4);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
@@ -177,9 +175,8 @@ class KafkaTaskConsumerCapacityPauseTest {
             ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
                     + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
                 .getBytes(StandardCharsets.UTF_8);
-        boolean keepGoing =
-            consumer.handleRecordAndMaybeCommit(
-                new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+        boolean keepGoing = consumer.handleRecordAndMaybeCommit(
+            new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
         assertThat(keepGoing).isTrue();
         assertThat(mockConsumer.paused()).isEmpty();
 

@@ -36,31 +36,28 @@ final class LocalOutboxDispatchSupport {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "NONE"));
-      String externalRequestId =
-          command.payload().externalRequestId() != null
-                  && !command.payload().externalRequestId().isBlank()
-              ? command.payload().externalRequestId()
-              : UUID.randomUUID().toString();
-      String receiptCode =
-          command.payload().receiptCode() != null && !command.payload().receiptCode().isBlank()
-              ? command.payload().receiptCode()
-              : "R-" + externalRequestId;
+      String externalRequestId = command.payload().externalRequestId() != null
+              && !command.payload().externalRequestId().isBlank()
+          ? command.payload().externalRequestId()
+          : UUID.randomUUID().toString();
+      String receiptCode = command.payload().receiptCode() != null
+              && !command.payload().receiptCode().isBlank()
+          ? command.payload().receiptCode()
+          : "R-" + externalRequestId;
       boolean acknowledged =
           "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
       boolean pending =
           "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
-      String endpoint =
-          channelConfig.get("target_endpoint") == null
-              ? null
-              : String.valueOf(channelConfig.get("target_endpoint"));
+      String endpoint = channelConfig.get("target_endpoint") == null
+          ? null
+          : String.valueOf(channelConfig.get("target_endpoint"));
       if (endpoint == null || endpoint.isBlank()) {
         endpoint = System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox";
       }
       Path directory = resolveLocalDirectory(endpoint, properties);
-      String channelCode =
-          sanitizeFileSegment(
-              String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE)));
+      String channelCode = sanitizeFileSegment(
+          String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE)));
       Path envelopePath = directory.resolve(channelCode + "-" + externalRequestId + ".json");
 
       Map<String, Object> envelope = new LinkedHashMap<>();
@@ -83,25 +80,22 @@ final class LocalOutboxDispatchSupport {
       Files.write(envelopePath, envelopeBytes);
       DispatchManifestSupport.ManifestPayload manifest = null;
       if (DispatchManifestSupport.enabled(channelConfig)) {
-        Path manifestPath =
-            directory.resolve(
-                envelopePath.getFileName() + DispatchManifestSupport.suffix(channelConfig));
-        manifest =
-            DispatchManifestSupport.manifestPayload(
-                command,
-                envelopePath.toString(),
-                envelopePath.getFileName().toString(),
-                externalRequestId,
-                receiptCode,
-                DispatchManifestSupport.digest(envelopeBytes),
-                manifestPath.toString());
+        Path manifestPath = directory.resolve(
+            envelopePath.getFileName() + DispatchManifestSupport.suffix(channelConfig));
+        manifest = DispatchManifestSupport.manifestPayload(
+            command,
+            envelopePath.toString(),
+            envelopePath.getFileName().toString(),
+            externalRequestId,
+            receiptCode,
+            DispatchManifestSupport.digest(envelopeBytes),
+            manifestPath.toString());
         Files.write(manifestPath, manifest.bytes());
       }
 
-      String message =
-          transportStub
-              ? "transport stub: filesystem outbox only — " + (stubDetail == null ? "" : stubDetail)
-              : "dispatched via local filesystem outbox";
+      String message = transportStub
+          ? "transport stub: filesystem outbox only — " + (stubDetail == null ? "" : stubDetail)
+          : "dispatched via local filesystem outbox";
       return new DispatchResult(
           true,
           externalRequestId,
@@ -127,11 +121,10 @@ final class LocalOutboxDispatchSupport {
     if (Texts.hasText(sandboxRootRaw)) {
       Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
       if (!realDirectory.startsWith(sandboxRoot)) {
-        throw new SecurityException(
-            "LOCAL dispatch target_endpoint escapes sandbox root: real="
-                + realDirectory
-                + ", sandboxRoot="
-                + sandboxRoot);
+        throw new SecurityException("LOCAL dispatch target_endpoint escapes sandbox root: real="
+            + realDirectory
+            + ", sandboxRoot="
+            + sandboxRoot);
       }
     }
     return realDirectory;

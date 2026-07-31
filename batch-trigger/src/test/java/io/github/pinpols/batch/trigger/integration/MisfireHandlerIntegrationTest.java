@@ -22,9 +22,11 @@ import org.springframework.boot.test.context.SpringBootTest;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class MisfireHandlerIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired MisfireHandler misfireHandler;
+  @Autowired
+  MisfireHandler misfireHandler;
 
-  @Autowired QuartzLaunchJob quartzLaunchJob;
+  @Autowired
+  QuartzLaunchJob quartzLaunchJob;
 
   @Test
   void shouldWireMisfireHandlerBean() {

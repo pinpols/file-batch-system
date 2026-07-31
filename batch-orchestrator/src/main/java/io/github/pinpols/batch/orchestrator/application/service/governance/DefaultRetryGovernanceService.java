@@ -77,34 +77,35 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
    * 自动重放调度必须经代理调用 {@link #replayDeadLetter}，否则同类自调用会跳过 {@code REQUIRES_NEW}， Outbox 写入（{@code
    * MANDATORY}）无事务。纯单测无容器时可为 null，退化为 {@code this}.
    */
-  @Lazy @Autowired private DefaultRetryGovernanceService replayTransactionalSelf;
+  @Lazy
+  @Autowired
+  private DefaultRetryGovernanceService replayTransactionalSelf;
 
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff
    * 只会把 dead_letter_task 灌满。
    */
-  private static final Set<String> NON_RETRYABLE_ERROR_CODES =
-      Set.of(
-          "DISPATCH_PREPARE_FILE_MISSING",
-          "DISPATCH_PREPARE_FILE_NOT_FOUND",
-          "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
-          "DISPATCH_PREPARE_INVALID",
-          "DISPATCH_PREPARE_PARSE_FAILED",
-          "EXPORT_GENERATE_NO_PAYLOAD",
-          // Worker WorkerConfigException → 模板/参数配置缺字段, 等多久也不自愈
-          "IMPORT_LOAD_CONFIG_INVALID",
-          "EXPORT_GENERATE_CONFIG_INVALID",
-          "STEP_NOT_FOUND",
-          // 永久性输入/数据错:畸形文件(XML/定长/分隔符)、空文件、坏 SQL/缺表 —— 同一输入重放永不自愈,
-          // 自动重试只会让永久失败的任务在 dead_letter 无限循环(实测 3 个夹具 → 653 行死信、replay_count 恒 1)。
-          // IMPORT_LOAD_FAILED 也含"load 时 DB 死锁"这类瞬时错,但那在 TaskController @Retryable 阶段已重试过,
-          // 到死信层仍失败即视为永久,不再自动重试(与上面 TIMEOUT 同理:重放不自愈)。
-          "IMPORT_PARSE_FAILED",
-          "IMPORT_PARSE_EMPTY",
-          "IMPORT_LOAD_FAILED",
-          // 同一 payload / SQL 在相同 statement_timeout 下重放不会自愈；自动重试只会形成风暴。
-          "TIMEOUT",
-          "WORKER_EXECUTION_TIMEOUT");
+  private static final Set<String> NON_RETRYABLE_ERROR_CODES = Set.of(
+      "DISPATCH_PREPARE_FILE_MISSING",
+      "DISPATCH_PREPARE_FILE_NOT_FOUND",
+      "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
+      "DISPATCH_PREPARE_INVALID",
+      "DISPATCH_PREPARE_PARSE_FAILED",
+      "EXPORT_GENERATE_NO_PAYLOAD",
+      // Worker WorkerConfigException → 模板/参数配置缺字段, 等多久也不自愈
+      "IMPORT_LOAD_CONFIG_INVALID",
+      "EXPORT_GENERATE_CONFIG_INVALID",
+      "STEP_NOT_FOUND",
+      // 永久性输入/数据错:畸形文件(XML/定长/分隔符)、空文件、坏 SQL/缺表 —— 同一输入重放永不自愈,
+      // 自动重试只会让永久失败的任务在 dead_letter 无限循环(实测 3 个夹具 → 653 行死信、replay_count 恒 1)。
+      // IMPORT_LOAD_FAILED 也含"load 时 DB 死锁"这类瞬时错,但那在 TaskController @Retryable 阶段已重试过,
+      // 到死信层仍失败即视为永久,不再自动重试(与上面 TIMEOUT 同理:重放不自愈)。
+      "IMPORT_PARSE_FAILED",
+      "IMPORT_PARSE_EMPTY",
+      "IMPORT_LOAD_FAILED",
+      // 同一 payload / SQL 在相同 statement_timeout 下重放不会自愈；自动重试只会形成风暴。
+      "TIMEOUT",
+      "WORKER_EXECUTION_TIMEOUT");
 
   private final RetryScheduleMapper retryScheduleMapper;
   private final DeadLetterTaskMapper deadLetterTaskMapper;
@@ -206,13 +207,11 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     // 2) 每条独立 tx 走 requeueOne：markRunning + requeuePartition + markSuccess 同事务，
     //    抛 TransientConflictException → 整 tx 回滚 → markRunning 也撤销 → 状态自动留 WAITING 等下轮
     // 3) 非 transient 异常 → 在独立 tx 内 markFailed
-    List<RetryScheduleEntity> dueRetries =
-        retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(
-                null,
-                RetryScheduleStatus.WAITING.code(),
-                BatchDateTimeSupport.utcNow(),
-                governance.retry().getBatchSize()));
+    List<RetryScheduleEntity> dueRetries = retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
+        null,
+        RetryScheduleStatus.WAITING.code(),
+        BatchDateTimeSupport.utcNow(),
+        governance.retry().getBatchSize()));
     for (RetryScheduleEntity retrySchedule : dueRetries) {
       try {
         replayTransactionalShell().requeueOneRetry(retrySchedule);
@@ -511,10 +510,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
               "dead letter source missing for replay: partition or job_instance deleted");
         }
         // V90: 失败时按指数退避算下次自动重放时间; BUSINESS / 已无自动重放预算的记录不安排（next_replay_at=null）
-        Instant nextAuto =
-            shouldScheduleAutoRetry(deadLetterTask, replayCount)
-                ? calculateNextRetryAt(RetryPolicyType.EXPONENTIAL.code(), replayCount)
-                : null;
+        Instant nextAuto = shouldScheduleAutoRetry(deadLetterTask, replayCount)
+            ? calculateNextRetryAt(RetryPolicyType.EXPONENTIAL.code(), replayCount)
+            : null;
         deadLetterTaskMapper.markReplayFailure(
             tenantId,
             deadLetterTaskId,
@@ -561,19 +559,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
     }
     try {
-      List<JobTaskEntity> tasks =
-          jobTaskMapper.selectByQuery(
-              new JobTaskQuery(tenantId, jobInstance.getId(), partition.getId(), null, null));
-      JobTaskEntity task =
-          tasks.stream()
-              .sorted(
-                  (left, right) ->
-                      Integer.compare(
-                          left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
-                          right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
-              .findFirst()
-              .orElseThrow(
-                  () -> BizException.of(ResultCode.NOT_FOUND, "error.task.retry_not_found"));
+      List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+          new JobTaskQuery(tenantId, jobInstance.getId(), partition.getId(), null, null));
+      JobTaskEntity task = tasks.stream()
+          .sorted((left, right) -> Integer.compare(
+              left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
+              right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
+          .findFirst()
+          .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.task.retry_not_found"));
 
       JobStepInstanceEntity stepInstance =
           jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());

@@ -119,7 +119,9 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   public List<ConsoleHolidayResponse> holidays(Long id, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
-    return holidayMapper.selectByCalendarId(id).stream().map(ConsoleHolidayResponse::from).toList();
+    return holidayMapper.selectByCalendarId(id).stream()
+        .map(ConsoleHolidayResponse::from)
+        .toList();
   }
 
   @Override
@@ -127,23 +129,21 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> calendar =
         Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
-    List<Map<String, Object>> list =
-        request.getItems().stream()
-            .map(
-                item -> {
-                  Map<String, Object> m = new HashMap<>();
-                  // P0-2(2026-05-16): V92 后 calendar_holiday.tenant_id NOT NULL;
-                  // batchInsert 取 #{item.tenantId},此前 map 漏写整条 INSERT 抛
-                  // NOT NULL 违反,日历节假日导入 API 不可用。
-                  m.put("tenantId", tenantId);
-                  m.put("calendarId", id);
-                  m.put("bizDate", item.getBizDate());
-                  m.put("dayType", item.getDayType());
-                  m.put("holidayName", item.getHolidayName());
-                  m.put("description", item.getDescription());
-                  return m;
-                })
-            .collect(Collectors.toList());
+    List<Map<String, Object>> list = request.getItems().stream()
+        .map(item -> {
+          Map<String, Object> m = new HashMap<>();
+          // P0-2(2026-05-16): V92 后 calendar_holiday.tenant_id NOT NULL;
+          // batchInsert 取 #{item.tenantId},此前 map 漏写整条 INSERT 抛
+          // NOT NULL 违反,日历节假日导入 API 不可用。
+          m.put("tenantId", tenantId);
+          m.put("calendarId", id);
+          m.put("bizDate", item.getBizDate());
+          m.put("dayType", item.getDayType());
+          m.put("holidayName", item.getHolidayName());
+          m.put("description", item.getDescription());
+          return m;
+        })
+        .collect(Collectors.toList());
     holidayMapper.batchInsert(list);
     cacheInvalidationService.evictBusinessCalendar(
         tenantId, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
@@ -154,9 +154,8 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> calendar =
         Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
-    Map<String, Object> existing =
-        Guard.requireFound(
-            holidayMapper.selectByCalendarIdAndId(id, holidayId), "holiday not found");
+    Map<String, Object> existing = Guard.requireFound(
+        holidayMapper.selectByCalendarIdAndId(id, holidayId), "holiday not found");
     // Mapper 层也带 parent calendar 条件，避免未来调用方绕过 service owner-check。
     requireHolidayBelongsToCalendar(existing, id);
     Map<String, Object> params = new HashMap<>();
@@ -177,9 +176,8 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> calendar =
         Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
-    Map<String, Object> existing =
-        Guard.requireFound(
-            holidayMapper.selectByCalendarIdAndId(id, holidayId), "holiday not found");
+    Map<String, Object> existing = Guard.requireFound(
+        holidayMapper.selectByCalendarIdAndId(id, holidayId), "holiday not found");
     requireHolidayBelongsToCalendar(existing, id);
     int rows = holidayMapper.deleteByCalendarIdAndId(id, holidayId);
     if (rows == 0) {

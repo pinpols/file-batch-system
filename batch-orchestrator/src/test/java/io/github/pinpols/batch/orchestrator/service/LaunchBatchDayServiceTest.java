@@ -46,43 +46,66 @@ import org.springframework.beans.factory.ObjectProvider;
  */
 class LaunchBatchDayServiceTest {
 
-  @Mock private OrchestratorConfigCacheService configCacheService;
-  @Mock private BatchDayInstanceMapper batchDayInstanceMapper;
-  @Mock private JobExecutionLogMapper jobExecutionLogMapper;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private BatchTimezoneProvider timezoneProvider;
-  @Mock private BatchDayTimePolicyResolver timePolicyResolver;
-  @Mock private ObjectProvider<LaunchBatchDayService> selfProvider;
-  @Mock private BatchDateTimeSupport dateTimeSupport;
-  @Mock private AlertEventService alertEventService;
+  @Mock
+  private OrchestratorConfigCacheService configCacheService;
+
+  @Mock
+  private BatchDayInstanceMapper batchDayInstanceMapper;
+
+  @Mock
+  private JobExecutionLogMapper jobExecutionLogMapper;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private BatchTimezoneProvider timezoneProvider;
+
+  @Mock
+  private BatchDayTimePolicyResolver timePolicyResolver;
+
+  @Mock
+  private ObjectProvider<LaunchBatchDayService> selfProvider;
+
+  @Mock
+  private BatchDateTimeSupport dateTimeSupport;
+
+  @Mock
+  private AlertEventService alertEventService;
 
   private LaunchBatchDayService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
-    service =
-        new LaunchBatchDayService(
-            configCacheService,
-            batchDayInstanceMapper,
-            jobExecutionLogMapper,
-            jobMappers,
-            timezoneProvider,
-            timePolicyResolver,
-            selfProvider,
-            dateTimeSupport,
-            alertEventService);
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
+    service = new LaunchBatchDayService(
+        configCacheService,
+        batchDayInstanceMapper,
+        jobExecutionLogMapper,
+        jobMappers,
+        timezoneProvider,
+        timePolicyResolver,
+        selfProvider,
+        dateTimeSupport,
+        alertEventService);
     when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-05-20T10:00:00Z"));
   }
 
@@ -145,11 +168,14 @@ class LaunchBatchDayServiceTest {
   @Test
   @DisplayName("isCatchUpLaunch: 仅 CATCH_UP 视为补跑;其他 trigger 返 false")
   void catchUpLaunchOnlyForCatchUpTrigger() {
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.CATCH_UP))).isTrue();
+    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.CATCH_UP)))
+        .isTrue();
     assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.SCHEDULED)))
         .isFalse();
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.MANUAL))).isFalse();
-    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.RERUN))).isFalse();
+    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.MANUAL)))
+        .isFalse();
+    assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.RERUN)))
+        .isFalse();
     assertThat(service.isCatchUpLaunch(null)).isFalse();
   }
 

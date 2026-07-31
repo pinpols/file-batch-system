@@ -49,9 +49,8 @@ public class OutboxOpsController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
       @RequestBody RepublishRequest request) {
-    int affected =
-        outboxOpsApplicationService.republish(
-            tenantId, request.ids(), dryRun, request.operatorId(), request.reason());
+    int affected = outboxOpsApplicationService.republish(
+        tenantId, request.ids(), dryRun, request.operatorId(), request.reason());
     return Map.of(
         "requested", request.ids() == null ? 0 : request.ids().size(),
         "reset", affected,

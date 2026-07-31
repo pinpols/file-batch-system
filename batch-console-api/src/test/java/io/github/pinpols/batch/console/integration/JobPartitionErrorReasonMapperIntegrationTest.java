@@ -27,8 +27,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private JobPartitionMapper jobPartitionMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   private final AtomicInteger taskSeq = new AtomicInteger(0);
 
@@ -75,8 +78,10 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
     assertThat(failed.getErrorCode()).isEqualTo("DOWNSTREAM_5XX");
     assertThat(failed.getErrorMessage()).isEqualTo("下游 502");
 
-    JobPartitionEntity success =
-        rows.stream().filter(r -> r.getId().equals(successPartition)).findFirst().orElseThrow();
+    JobPartitionEntity success = rows.stream()
+        .filter(r -> r.getId().equals(successPartition))
+        .findFirst()
+        .orElseThrow();
     assertThat(success.getErrorCode()).isNull();
     assertThat(success.getErrorMessage()).isNull();
   }
@@ -86,17 +91,12 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
   private long insertJobInstance(String tenantId) {
     String jobCode = "JOB_" + BatchDateTimeSupport.utcEpochMillis();
     long jobDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_definition
               (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
             VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
             RETURNING id
-            """,
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode + "-name");
+            """, Long.class, tenantId, jobCode, jobCode + "-name");
     String instanceNo = "INST-" + BatchDateTimeSupport.utcEpochMillis();
     return jdbcTemplate.queryForObject(
         """
@@ -123,12 +123,7 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
           (tenant_id, job_instance_id, partition_no, partition_status, created_at, updated_at)
         VALUES (?, ?, ?, ?, now(), now())
         RETURNING id
-        """,
-        Long.class,
-        tenantId,
-        jobInstanceId,
-        partitionNo,
-        status);
+        """, Long.class, tenantId, jobInstanceId, partitionNo, status);
   }
 
   private void insertTask(

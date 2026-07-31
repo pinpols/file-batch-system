@@ -15,7 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DatabaseIdempotencyGuardTest {
 
-  @Mock private IdempotencyRecordMapper mapper;
+  @Mock
+  private IdempotencyRecordMapper mapper;
 
   private DatabaseIdempotencyGuard guard;
 

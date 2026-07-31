@@ -51,10 +51,17 @@ class LoadStepCheckpointPrecheckTest {
   private static final String TENANT = "tenant-A";
   private static final long PIPELINE_INSTANCE_ID = 8002L;
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ImportLoadPlugin plugin;
-  @Mock private GenericJdbcMappedImportLoadPlugin jdbcMappedPlugin;
-  @Mock private ProcessingPositionStore positionStore;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ImportLoadPlugin plugin;
+
+  @Mock
+  private GenericJdbcMappedImportLoadPlugin jdbcMappedPlugin;
+
+  @Mock
+  private ProcessingPositionStore positionStore;
 
   private ImportLoadPluginRegistry registry;
   private ImportWorkerConfiguration workerConfig;
@@ -62,34 +69,29 @@ class LoadStepCheckpointPrecheckTest {
   private WorkerCheckpointProperties checkpointProps;
   private LoadStep loadStep;
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
+
   private final List<Path> tempPaths = new ArrayList<>();
 
   @BeforeEach
   void setUp() {
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
-    workerConfig =
-        new ImportWorkerConfiguration(
-            "wc",
-            "wt",
-            "tenant",
-            5_000L,
-            "topic",
-            "cg",
-            List.of(),
-            new FileProcessing(true, 1000, 1000, 2),
-            Boolean.FALSE);
+    workerConfig = new ImportWorkerConfiguration(
+        "wc",
+        "wt",
+        "tenant",
+        5_000L,
+        "topic",
+        "cg",
+        List.of(),
+        new FileProcessing(true, 1000, 1000, 2),
+        Boolean.FALSE);
     objectMapper = new ObjectMapper();
     checkpointProps = new WorkerCheckpointProperties();
-    loadStep =
-        new LoadStep(
-            registry,
-            runtimeRepository,
-            workerConfig,
-            objectMapper,
-            checkpointProps,
-            positionStore);
+    loadStep = new LoadStep(
+        registry, runtimeRepository, workerConfig, objectMapper, checkpointProps, positionStore);
   }
 
   @AfterEach
@@ -164,14 +166,8 @@ class LoadStepCheckpointPrecheckTest {
     when(jdbcMappedPlugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     when(jdbcMappedPlugin.isPartitionReplaceCopy(any())).thenReturn(true);
     registry = new ImportLoadPluginRegistry(List.of(jdbcMappedPlugin));
-    loadStep =
-        new LoadStep(
-            registry,
-            runtimeRepository,
-            workerConfig,
-            objectMapper,
-            checkpointProps,
-            positionStore);
+    loadStep = new LoadStep(
+        registry, runtimeRepository, workerConfig, objectMapper, checkpointProps, positionStore);
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);
@@ -193,14 +189,8 @@ class LoadStepCheckpointPrecheckTest {
     when(jdbcMappedPlugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     when(jdbcMappedPlugin.isPartitionReplaceCopy(any())).thenReturn(true);
     registry = new ImportLoadPluginRegistry(List.of(jdbcMappedPlugin));
-    loadStep =
-        new LoadStep(
-            registry,
-            runtimeRepository,
-            workerConfig,
-            objectMapper,
-            checkpointProps,
-            positionStore);
+    loadStep = new LoadStep(
+        registry, runtimeRepository, workerConfig, objectMapper, checkpointProps, positionStore);
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);

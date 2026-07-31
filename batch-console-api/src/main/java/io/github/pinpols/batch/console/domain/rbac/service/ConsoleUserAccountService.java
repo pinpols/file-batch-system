@@ -119,11 +119,10 @@ public class ConsoleUserAccountService {
     Guard.require(
         currentPassword != null && !currentPassword.isBlank(), "current password is required");
     Guard.require(newPassword != null && !newPassword.isBlank(), "new password is required");
-    ConsoleUserAccountEntity account =
-        userAccountMapper
-            .findByUsernameIgnoreCase(username)
-            .orElseThrow(
-                () -> BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", username));
+    ConsoleUserAccountEntity account = userAccountMapper
+        .findByUsernameIgnoreCase(username)
+        .orElseThrow(
+            () -> BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", username));
     String storedHash = account.getPasswordHash();
     if (!passwordHasher.matches(currentPassword, storedHash)) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
@@ -203,11 +202,10 @@ public class ConsoleUserAccountService {
     ConsolePrincipal principal = currentPrincipal();
     if (principal == null) return;
     if (isGlobalCaller(principal)) return;
-    Set<String> requested =
-        Arrays.stream(authoritiesCsv.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .collect(Collectors.toSet());
+    Set<String> requested = Arrays.stream(authoritiesCsv.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toSet());
     for (String authority : requested) {
       if (!TENANT_ADMIN_GRANTABLE_ROLES.contains(authority)) {
         throw BizException.of(ResultCode.FORBIDDEN, "error.account.role_grant_denied", authority);

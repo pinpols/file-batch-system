@@ -46,14 +46,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class LoadStepTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ImportLoadPlugin plugin;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ImportLoadPlugin plugin;
 
   private ImportLoadPluginRegistry registry;
   private ImportWorkerConfiguration workerConfig;
   private ObjectMapper objectMapper;
   private LoadStep loadStep;
-  @TempDir Path tempDir;
+
+  @TempDir
+  Path tempDir;
 
   private final List<Path> tempPaths = new ArrayList<>();
 
@@ -61,21 +66,19 @@ class LoadStepTest {
   void setUp() {
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
-    workerConfig =
-        new ImportWorkerConfiguration(
-            "wc",
-            "wt",
-            "tenant",
-            5_000L,
-            "topic",
-            "cg",
-            List.of(),
-            new FileProcessing(true, 1000, 1000, 2),
-            Boolean.FALSE);
+    workerConfig = new ImportWorkerConfiguration(
+        "wc",
+        "wt",
+        "tenant",
+        5_000L,
+        "topic",
+        "cg",
+        List.of(),
+        new FileProcessing(true, 1000, 1000, 2),
+        Boolean.FALSE);
     objectMapper = new ObjectMapper();
-    loadStep =
-        new LoadStep(
-            registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
+    loadStep = new LoadStep(
+        registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
   }
 
   @AfterEach
@@ -226,9 +229,8 @@ class LoadStepTest {
     when(custom.id()).thenReturn("custom_plugin");
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
-    loadStep =
-        new LoadStep(
-            registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
+    loadStep = new LoadStep(
+        registry, runtimeRepository, workerConfig, objectMapper, disabledCheckpoint(), null);
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);

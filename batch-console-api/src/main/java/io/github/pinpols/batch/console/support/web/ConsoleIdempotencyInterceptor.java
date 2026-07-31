@@ -43,25 +43,21 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   private static final String PENDING = "PENDING";
   private static final String DONE = "DONE";
   // C-2.10: 区分 DONE / PENDING 两种 CONFLICT 场景，便于前端决定是"提示已处理"还是"稍后重试"
-  private static final String CONFLICT_DONE_BODY =
-      "{\"code\":\""
-          + ResultCode.CONFLICT.code()
-          + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\"}";
-  private static final String CONFLICT_PENDING_BODY =
-      "{\"code\":\""
-          + ResultCode.CONFLICT.code()
-          + "\",\"message\":\"request currently being processed, retry after 30s with same"
-          + " Idempotency-Key\"}";
+  private static final String CONFLICT_DONE_BODY = "{\"code\":\""
+      + ResultCode.CONFLICT.code()
+      + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\"}";
+  private static final String CONFLICT_PENDING_BODY = "{\"code\":\""
+      + ResultCode.CONFLICT.code()
+      + "\",\"message\":\"request currently being processed, retry after 30s with same"
+      + " Idempotency-Key\"}";
   // R-4.1：Redis 不可达时幂等采用 fail-closed（返回 503），宁可拒绝也不双写。
   // 与限流的 fail-open 形成对照——前者保可用，后者保安全。
-  private static final String REDIS_UNAVAILABLE_BODY =
-      "{\"code\":\""
-          + ResultCode.SERVICE_UNAVAILABLE.code()
-          + "\",\"message\":\"idempotency store temporarily unavailable, safe to retry later\"}";
-  private static final String MISSING_KEY_BODY =
-      "{\"code\":\""
-          + ResultCode.MISSING_IDEMPOTENCY_KEY.code()
-          + "\",\"message\":\"this endpoint requires Idempotency-Key header\"}";
+  private static final String REDIS_UNAVAILABLE_BODY = "{\"code\":\""
+      + ResultCode.SERVICE_UNAVAILABLE.code()
+      + "\",\"message\":\"idempotency store temporarily unavailable, safe to retry later\"}";
+  private static final String MISSING_KEY_BODY = "{\"code\":\""
+      + ResultCode.MISSING_IDEMPOTENCY_KEY.code()
+      + "\",\"message\":\"this endpoint requires Idempotency-Key header\"}";
 
   /** Request attribute：记录本次请求使用的 Redis key，afterCompletion 时读取。 */
   private static final String ATTR_REDIS_KEY = "console.idempotency.redisKey";
@@ -97,15 +93,14 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
 
     String tenantId = resolveTenantId(request);
-    String redisKey =
-        KEY_PREFIX
-            + tenantId
-            + ":"
-            + method
-            + ":"
-            + request.getRequestURI()
-            + ":"
-            + idempotencyKey.trim();
+    String redisKey = KEY_PREFIX
+        + tenantId
+        + ":"
+        + method
+        + ":"
+        + request.getRequestURI()
+        + ":"
+        + idempotencyKey.trim();
 
     String existing;
     try {

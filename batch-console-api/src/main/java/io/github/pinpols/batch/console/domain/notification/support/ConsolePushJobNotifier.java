@@ -49,13 +49,11 @@ public class ConsolePushJobNotifier {
           "[push] ConsolePushJobNotifier disabled (push.enabled or job-notify.enabled = false)");
       return;
     }
-    scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "push-job-notifier");
-              t.setDaemon(true);
-              return t;
-            });
+    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "push-job-notifier");
+      t.setDaemon(true);
+      return t;
+    });
     long intervalMillis = properties.getJobNotify().getPollIntervalMillis();
     scheduler.scheduleWithFixedDelay(
         this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
@@ -105,10 +103,9 @@ public class ConsolePushJobNotifier {
     if (stopping.get()) {
       return;
     }
-    List<PendingJobNotification> pending =
-        notificationMapper.findPending(
-            properties.getJobNotify().getLookbackMinutes(),
-            properties.getJobNotify().getBatchSize());
+    List<PendingJobNotification> pending = notificationMapper.findPending(
+        properties.getJobNotify().getLookbackMinutes(),
+        properties.getJobNotify().getBatchSize());
     if (pending.isEmpty()) {
       return;
     }
@@ -131,9 +128,8 @@ public class ConsolePushJobNotifier {
   private static PushPayload buildPayload(PendingJobNotification p) {
     String statusLabel = statusLabel(p.getInstanceStatus());
     String title = String.format("任务 %s %s", p.getJobCode(), statusLabel);
-    String body =
-        String.format(
-            Locale.ROOT, "tenant=%s · instance #%d", p.getTenantId(), p.getJobInstanceId());
+    String body = String.format(
+        Locale.ROOT, "tenant=%s · instance #%d", p.getTenantId(), p.getJobInstanceId());
     String tag = "job-instance-" + p.getJobInstanceId();
     String url = "/m/jobs/" + p.getJobInstanceId();
     return new PushPayload(title, body, tag, url);

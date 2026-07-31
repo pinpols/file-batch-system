@@ -42,9 +42,8 @@ class RedisQuotaRuntimeStateServiceTest {
     SetOperations<String, String> setOps = mock(SetOperations.class);
     lenient().when(redis.redisTemplate()).thenReturn(redisTemplate);
     lenient().when(redisTemplate.opsForSet()).thenReturn(setOps);
-    service =
-        new RedisQuotaRuntimeStateService(
-            redis, new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    service = new RedisQuotaRuntimeStateService(
+        redis, new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   // ── 守卫条件：缺字段 / baseCap<=0 → 直通放行（不应触达 Redis）
@@ -52,13 +51,12 @@ class RedisQuotaRuntimeStateServiceTest {
   @Test
   void shouldAllowWhenTenantIdBlankWithoutTouchingRedis() {
     ResourceCheck result =
-        service.evaluateAndReserve(
-            new QuotaRuntimeStateService.QuotaReservationRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("", "JOB", "j1"),
-                new QuotaRuntimeStateService.QuotaReservationPolicy("SLIDING_WINDOW", 10, 5, 2),
-                0,
-                1,
-                new QuotaRuntimeStateService.QuotaReservationReason("OVER", "over")));
+        service.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("", "JOB", "j1"),
+            new QuotaRuntimeStateService.QuotaReservationPolicy("SLIDING_WINDOW", 10, 5, 2),
+            0,
+            1,
+            new QuotaRuntimeStateService.QuotaReservationReason("OVER", "over")));
     assertThat(result.allowed()).isTrue();
     verify(redis, never())
         .evalList(
@@ -164,9 +162,8 @@ class RedisQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldFailOpenOnlyWhenExplicitlyConfigured() {
-    RedisQuotaRuntimeStateService failOpenService =
-        new RedisQuotaRuntimeStateService(
-            redis, new BatchTimezoneProvider(new BatchTimezoneProperties()), "FAIL_OPEN");
+    RedisQuotaRuntimeStateService failOpenService = new RedisQuotaRuntimeStateService(
+        redis, new BatchTimezoneProvider(new BatchTimezoneProperties()), "FAIL_OPEN");
     when(redis.evalList(
             anyString(),
             anyString(),
@@ -180,10 +177,9 @@ class RedisQuotaRuntimeStateServiceTest {
             anyString(),
             anyString()))
         .thenThrow(new QueryTimeoutException("redis down"));
-    assertThat(
-            failOpenService
-                .evaluateAndReserve(reservation("t1", "JOB", "j1", "SLIDING_WINDOW", 5, 3, 8))
-                .allowed())
+    assertThat(failOpenService
+            .evaluateAndReserve(reservation("t1", "JOB", "j1", "SLIDING_WINDOW", 5, 3, 8))
+            .allowed())
         .isTrue();
   }
 
@@ -193,12 +189,11 @@ class RedisQuotaRuntimeStateServiceTest {
   void shouldReturnDefaultSnapshotWhenRedisHashIsEmpty() {
     when(redis.entries(anyString())).thenReturn(Map.of());
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
-                "SLIDING_WINDOW",
-                10,
-                2));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
+            "SLIDING_WINDOW",
+            10,
+            2));
     assertThat(snap.peakBorrowedCount()).isZero();
     assertThat(snap.remainingBurst()).isEqualTo(10);
   }
@@ -211,12 +206,11 @@ class RedisQuotaRuntimeStateServiceTest {
     entries.put("windowExpiresAt", String.valueOf(BatchDateTimeSupport.utcEpochMillis() + 60_000));
     when(redis.entries(anyString())).thenReturn(entries);
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
-                "SLIDING_WINDOW",
-                10,
-                2));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
+            "SLIDING_WINDOW",
+            10,
+            2));
     assertThat(snap.peakBorrowedCount()).isEqualTo(4);
     assertThat(snap.remainingBurst()).isEqualTo(6);
   }
@@ -229,12 +223,11 @@ class RedisQuotaRuntimeStateServiceTest {
     entries.put("windowExpiresAt", String.valueOf(BatchDateTimeSupport.utcEpochMillis() - 60_000));
     when(redis.entries(anyString())).thenReturn(entries);
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
-                "SLIDING_WINDOW",
-                10,
-                2));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
+            "SLIDING_WINDOW",
+            10,
+            2));
     assertThat(snap.peakBorrowedCount()).isZero();
     assertThat(snap.remainingBurst()).isEqualTo(10);
   }
@@ -243,12 +236,11 @@ class RedisQuotaRuntimeStateServiceTest {
   void shouldReturnDefaultSnapshotWhenRedisDescribeThrows() {
     when(redis.entries(anyString())).thenThrow(new QueryTimeoutException("down"));
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        service.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
-                "SLIDING_WINDOW",
-                10,
-                2));
+        service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "j1"),
+            "SLIDING_WINDOW",
+            10,
+            2));
     assertThat(snap.peakBorrowedCount()).isZero();
   }
 

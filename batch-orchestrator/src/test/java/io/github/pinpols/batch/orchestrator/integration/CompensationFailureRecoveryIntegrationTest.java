@@ -28,10 +28,14 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
   private static final String TENANT = "it-comp";
   private static final Long PARTITION_ID = 880001L;
 
-  @Autowired private CompensationService compensationService;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private CompensationService compensationService;
 
-  @MockitoBean private RetryGovernanceService retryGovernanceService;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @MockitoBean
+  private RetryGovernanceService retryGovernanceService;
 
   @Test
   void failedCompensationCommandIsPersistedAndSameTargetCanRecoverOnNextSubmit() {
@@ -59,16 +63,11 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
     Map<String, Object> recovered = latestCommand();
     assertThat(recovered.get("command_no")).isEqualTo(recoveredCommandNo);
     assertThat(recovered.get("command_status")).isEqualTo(CompensationCommandStatus.SUCCESS.code());
-    assertThat(
-            jdbcTemplate.queryForObject(
-                """
+    assertThat(jdbcTemplate.queryForObject("""
                 select count(*)::int
                 from batch.compensation_command
                 where tenant_id = ? and compensation_type = 'PARTITION' and target_id = ?
-                """,
-                Integer.class,
-                TENANT,
-                PARTITION_ID))
+                """, Integer.class, TENANT, PARTITION_ID))
         .isEqualTo(2);
   }
 
@@ -84,15 +83,12 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
   }
 
   private Map<String, Object> latestCommand() {
-    return jdbcTemplate.queryForMap(
-        """
+    return jdbcTemplate.queryForMap("""
         select command_no, command_status, error_message
         from batch.compensation_command
         where tenant_id = ? and compensation_type = 'PARTITION' and target_id = ?
         order by id desc
         limit 1
-        """,
-        TENANT,
-        PARTITION_ID);
+        """, TENANT, PARTITION_ID);
   }
 }

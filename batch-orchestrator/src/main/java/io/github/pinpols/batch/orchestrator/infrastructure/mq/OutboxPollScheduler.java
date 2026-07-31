@@ -115,12 +115,10 @@ public class OutboxPollScheduler {
     this.outboxEventMapper = outboxEventMapper;
     this.shardAssignmentProvider = shardAssignmentProvider;
     this.executor = executor;
-    this.circuitSkippedPollsCounter =
-        Counter.builder("batch.outbox.circuit.skipped_polls.total")
-            .description(
-                "Outbox poll rounds skipped because the cluster circuit breaker was open"
-                    + " (cooldown). Non-zero rate mirrors batch.outbox.circuit.open=1.")
-            .register(meterRegistry);
+    this.circuitSkippedPollsCounter = Counter.builder("batch.outbox.circuit.skipped_polls.total")
+        .description("Outbox poll rounds skipped because the cluster circuit breaker was open"
+            + " (cooldown). Non-zero rate mirrors batch.outbox.circuit.open=1.")
+        .register(meterRegistry);
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -129,12 +127,11 @@ public class OutboxPollScheduler {
     // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
     if (outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
         && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal())) {
-      throw new IllegalStateException(
-          "Outbox 分片配置非法：shardIndex="
-              + outbox.getShardIndex()
-              + " 必须在 [0, shardTotal="
-              + outbox.getShardTotal()
-              + ") 范围内");
+      throw new IllegalStateException("Outbox 分片配置非法：shardIndex="
+          + outbox.getShardIndex()
+          + " 必须在 [0, shardTotal="
+          + outbox.getShardTotal()
+          + ") 范围内");
     }
     if (!pollingLoopStarted.compareAndSet(false, true)) {
       return;
@@ -255,11 +252,10 @@ public class OutboxPollScheduler {
 
   private void resetStalePublishingEvents(OutboxProperties outbox) {
     try {
-      int reset =
-          outboxEventMapper.resetStalePublishing(
-              OutboxPublishStatus.PUBLISHING.code(),
-              OutboxPublishStatus.FAILED.code(),
-              outbox.getPublishingTimeoutSeconds());
+      int reset = outboxEventMapper.resetStalePublishing(
+          OutboxPublishStatus.PUBLISHING.code(),
+          OutboxPublishStatus.FAILED.code(),
+          outbox.getPublishingTimeoutSeconds());
       if (reset > 0) {
         log.warn("重置 {} 条滞留 PUBLISHING 状态的 outbox 事件为 FAILED", reset);
       }
@@ -327,14 +323,12 @@ public class OutboxPollScheduler {
    * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计回退。
    */
   private LockConfiguration lockConfig(ShardAssignment assignment) {
-    String lockName =
-        assignment.shardTotal() > 1
-            ? "outbox_poll_shard_" + assignment.shardIndex()
-            : "outbox_poll";
+    String lockName = assignment.shardTotal() > 1
+        ? "outbox_poll_shard_" + assignment.shardIndex()
+        : "outbox_poll";
     Instant now = BatchDateTimeSupport.utcNow();
-    Duration lockAtMost =
-        Duration.ofSeconds(governance.outbox().getPublishingTimeoutSeconds())
-            .plus(LOCK_AT_MOST_BUFFER);
+    Duration lockAtMost = Duration.ofSeconds(governance.outbox().getPublishingTimeoutSeconds())
+        .plus(LOCK_AT_MOST_BUFFER);
     return new LockConfiguration(now, lockName, lockAtMost, LOCK_AT_LEAST);
   }
 }

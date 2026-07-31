@@ -42,17 +42,16 @@ public class ConsoleResultVersionController {
       @RequestParam("businessKey") String businessKey,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<List<ConsoleResultVersionResponse>> resp =
-        proxyClient()
-            .get()
-            .uri(
-                "/internal/orchestrator/result-versions?tenantId={tenantId}"
-                    + "&businessKey={businessKey}&limit={limit}",
-                resolved,
-                businessKey,
-                limit)
-            .retrieve()
-            .body(new ParameterizedTypeReference<>() {});
+    CommonResponse<List<ConsoleResultVersionResponse>> resp = proxyClient()
+        .get()
+        .uri(
+            "/internal/orchestrator/result-versions?tenantId={tenantId}"
+                + "&businessKey={businessKey}&limit={limit}",
+            resolved,
+            businessKey,
+            limit)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -61,16 +60,15 @@ public class ConsoleResultVersionController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        proxyClient()
-            .get()
-            .uri(
-                "/internal/orchestrator/result-versions/effective?tenantId={tenantId}"
-                    + "&businessKey={businessKey}",
-                resolved,
-                businessKey)
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+        .get()
+        .uri(
+            "/internal/orchestrator/result-versions/effective?tenantId={tenantId}"
+                + "&businessKey={businessKey}",
+            resolved,
+            businessKey)
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -79,12 +77,11 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        proxyClient()
-            .get()
-            .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+        .get()
+        .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -97,15 +94,12 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        proxyClient()
-            .post()
-            .uri(
-                "/internal/orchestrator/result-versions/{id}/promote?tenantId={tenantId}",
-                id,
-                resolved)
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+        .post()
+        .uri(
+            "/internal/orchestrator/result-versions/{id}/promote?tenantId={tenantId}", id, resolved)
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -117,15 +111,11 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp =
-        proxyClient()
-            .post()
-            .uri(
-                "/internal/orchestrator/result-versions/{id}/reject?tenantId={tenantId}",
-                id,
-                resolved)
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+        .post()
+        .uri("/internal/orchestrator/result-versions/{id}/reject?tenantId={tenantId}", id, resolved)
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 

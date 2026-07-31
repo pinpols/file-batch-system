@@ -43,22 +43,19 @@ public class DelimitedFormatParser implements FormatParser {
     }
     ImportPayload importPayload = request.importPayload();
     Object templateConfig = request.templateConfig();
-    int footerRows =
-        support.resolveInt(
-            importPayload == null ? null : importPayload.footerRows(),
-            templateConfig,
-            "footer_rows",
-            0);
-    int headerRows =
-        support.resolveInt(
-            importPayload == null ? null : importPayload.headerRows(),
-            templateConfig,
-            "header_rows",
-            0);
-    boolean withHeader =
-        importPayload != null && importPayload.withHeader() != null
-            ? importPayload.withHeader()
-            : headerRows > 0;
+    int footerRows = support.resolveInt(
+        importPayload == null ? null : importPayload.footerRows(),
+        templateConfig,
+        "footer_rows",
+        0);
+    int headerRows = support.resolveInt(
+        importPayload == null ? null : importPayload.headerRows(),
+        templateConfig,
+        "header_rows",
+        0);
+    boolean withHeader = importPayload != null && importPayload.withHeader() != null
+        ? importPayload.withHeader()
+        : headerRows > 0;
     String delimiter = resolveDelimiter(importPayload, templateConfig);
 
     CsvParser parser = new CsvParser(buildSettings(delimiter));

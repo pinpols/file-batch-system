@@ -37,11 +37,11 @@ class PipelineProgressMapperIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName("batch_ckpt_it")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName("batch_ckpt_it")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123");
 
   private static SingleConnectionDataSource dataSource;
   private static SqlSessionFactory sqlSessionFactory;
@@ -49,13 +49,11 @@ class PipelineProgressMapperIntegrationTest {
 
   @BeforeAll
   static void setUp() throws Exception {
-    dataSource =
-        new SingleConnectionDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+    dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     jdbc = new JdbcTemplate(dataSource);
     jdbc.execute("CREATE SCHEMA IF NOT EXISTS batch");
-    jdbc.execute(
-        """
+    jdbc.execute("""
         CREATE TABLE batch.pipeline_progress (
           id                   BIGSERIAL   PRIMARY KEY,
           tenant_id            VARCHAR(64) NOT NULL,
@@ -148,10 +146,9 @@ class PipelineProgressMapperIntegrationTest {
     List<String> ids =
         List.of("findByInstanceAndStage", "advance", "markCompleted", "deleteByInstance");
     for (String id : ids) {
-      assertThat(
-              sqlSessionFactory
-                  .getConfiguration()
-                  .hasStatement(PipelineProgressMapper.class.getName() + "." + id))
+      assertThat(sqlSessionFactory
+              .getConfiguration()
+              .hasStatement(PipelineProgressMapper.class.getName() + "." + id))
           .as(id)
           .isTrue();
     }

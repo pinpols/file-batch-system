@@ -21,16 +21,15 @@ import org.junit.jupiter.api.Test;
  */
 class TaskDispatcherTenantMismatchTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tenant-a")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("p.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tenant-a")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("p.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
 
@@ -46,9 +45,8 @@ class TaskDispatcherTenantMismatchTest {
     dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
 
     // 准备: 构造一条 tenantId != config.tenantId 的合法消息
-    TaskDispatchMessage foreign =
-        new TaskDispatchMessage(
-            42L, "tenant-b", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
+    TaskDispatchMessage foreign = new TaskDispatchMessage(
+        42L, "tenant-b", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
 
     // 执行
     TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(foreign);
@@ -68,9 +66,8 @@ class TaskDispatcherTenantMismatchTest {
     SdkTaskHandler handler = mock(SdkTaskHandler.class);
     dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
 
-    TaskDispatchMessage own =
-        new TaskDispatchMessage(
-            42L, "tenant-a", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
+    TaskDispatchMessage own = new TaskDispatchMessage(
+        42L, "tenant-a", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
 
     dispatcher.onMessage(own);
 

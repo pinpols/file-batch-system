@@ -11,10 +11,9 @@ import org.junit.jupiter.api.Test;
  */
 class CodingConventionsArchTest {
 
-  private static final JavaClasses CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-          .importPackages("io.github.pinpols.batch.common..");
+  private static final JavaClasses CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+      .importPackages("io.github.pinpols.batch.common..");
 
   @Test
   void zoneIdSystemDefault() {

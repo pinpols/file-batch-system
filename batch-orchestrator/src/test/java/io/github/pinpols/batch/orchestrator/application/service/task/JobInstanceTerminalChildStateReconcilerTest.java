@@ -31,8 +31,11 @@ import org.mockito.MockitoAnnotations;
  */
 class JobInstanceTerminalChildStateReconcilerTest {
 
-  @Mock private JobPartitionMapper partitionMapper;
-  @Mock private JobTaskMapper taskMapper;
+  @Mock
+  private JobPartitionMapper partitionMapper;
+
+  @Mock
+  private JobTaskMapper taskMapper;
 
   private JobInstanceTerminalChildStateReconciler reconciler;
 

@@ -73,12 +73,11 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
   /** 执行 application/x-www-form-urlencoded POST,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
   protected String postForm(String url, String body) throws Exception {
-    HttpRequest request =
-        HttpRequest.newBuilder(URI.create(url))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .timeout(REQUEST_TIMEOUT)
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-            .build();
+    HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .timeout(REQUEST_TIMEOUT)
+        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+        .build();
     HttpResponse<String> response =
         httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     return response.body();

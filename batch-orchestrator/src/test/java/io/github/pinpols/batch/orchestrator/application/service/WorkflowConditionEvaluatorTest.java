@@ -36,19 +36,24 @@ class WorkflowConditionEvaluatorTest {
 
   @Test
   void shouldMatchEqualityWithEqualsOperator() {
-    assertThat(evaluator.matches("status = 'SUCCESS'", "{\"status\":\"SUCCESS\"}")).isTrue();
-    assertThat(evaluator.matches("status = 'SUCCESS'", "{\"status\":\"FAILED\"}")).isFalse();
+    assertThat(evaluator.matches("status = 'SUCCESS'", "{\"status\":\"SUCCESS\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("status = 'SUCCESS'", "{\"status\":\"FAILED\"}"))
+        .isFalse();
   }
 
   @Test
   void shouldMatchEqualityWithDoubleEquals() {
-    assertThat(evaluator.matches("status == 'SUCCESS'", "{\"status\":\"SUCCESS\"}")).isTrue();
+    assertThat(evaluator.matches("status == 'SUCCESS'", "{\"status\":\"SUCCESS\"}"))
+        .isTrue();
   }
 
   @Test
   void shouldMatchNotEquals() {
-    assertThat(evaluator.matches("status != 'FAILED'", "{\"status\":\"SUCCESS\"}")).isTrue();
-    assertThat(evaluator.matches("status != 'FAILED'", "{\"status\":\"FAILED\"}")).isFalse();
+    assertThat(evaluator.matches("status != 'FAILED'", "{\"status\":\"SUCCESS\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("status != 'FAILED'", "{\"status\":\"FAILED\"}"))
+        .isFalse();
   }
 
   // --- numeric comparison ---
@@ -81,28 +86,21 @@ class WorkflowConditionEvaluatorTest {
 
   @Test
   void shouldMatchAndCondition() {
-    assertThat(
-            evaluator.matches(
-                "status = 'SUCCESS' && code = 'JOB1'",
-                "{\"status\":\"SUCCESS\",\"code\":\"JOB1\"}"))
+    assertThat(evaluator.matches(
+            "status = 'SUCCESS' && code = 'JOB1'", "{\"status\":\"SUCCESS\",\"code\":\"JOB1\"}"))
         .isTrue();
-    assertThat(
-            evaluator.matches(
-                "status = 'SUCCESS' && code = 'JOB1'",
-                "{\"status\":\"SUCCESS\",\"code\":\"JOB2\"}"))
+    assertThat(evaluator.matches(
+            "status = 'SUCCESS' && code = 'JOB1'", "{\"status\":\"SUCCESS\",\"code\":\"JOB2\"}"))
         .isFalse();
   }
 
   @Test
   void shouldMatchOrCondition() {
-    assertThat(
-            evaluator.matches(
-                "status = 'SUCCESS' || status = 'PARTIAL_FAILED'",
-                "{\"status\":\"PARTIAL_FAILED\"}"))
+    assertThat(evaluator.matches(
+            "status = 'SUCCESS' || status = 'PARTIAL_FAILED'", "{\"status\":\"PARTIAL_FAILED\"}"))
         .isTrue();
-    assertThat(
-            evaluator.matches(
-                "status = 'SUCCESS' || status = 'PARTIAL_FAILED'", "{\"status\":\"FAILED\"}"))
+    assertThat(evaluator.matches(
+            "status = 'SUCCESS' || status = 'PARTIAL_FAILED'", "{\"status\":\"FAILED\"}"))
         .isFalse();
   }
 
@@ -137,9 +135,8 @@ class WorkflowConditionEvaluatorTest {
 
   @Test
   void shouldMatchContainsOnString() {
-    assertThat(
-            evaluator.matches(
-                "message contains 'error'", "{\"message\":\"file parse error occurred\"}"))
+    assertThat(evaluator.matches(
+            "message contains 'error'", "{\"message\":\"file parse error occurred\"}"))
         .isTrue();
     assertThat(evaluator.matches("message contains 'error'", "{\"message\":\"all good\"}"))
         .isFalse();
@@ -147,8 +144,10 @@ class WorkflowConditionEvaluatorTest {
 
   @Test
   void shouldMatchStartsWith() {
-    assertThat(evaluator.matches("code startsWith 'JOB'", "{\"code\":\"JOB_001\"}")).isTrue();
-    assertThat(evaluator.matches("code startsWith 'JOB'", "{\"code\":\"TASK_001\"}")).isFalse();
+    assertThat(evaluator.matches("code startsWith 'JOB'", "{\"code\":\"JOB_001\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("code startsWith 'JOB'", "{\"code\":\"TASK_001\"}"))
+        .isFalse();
   }
 
   @Test
@@ -176,7 +175,8 @@ class WorkflowConditionEvaluatorTest {
     String expr = "(status = 'SUCCESS' || status = 'PARTIAL_FAILED') && retryCount < 3";
     assertThat(evaluator.matches(expr, "{\"status\":\"PARTIAL_FAILED\",\"retryCount\":2}"))
         .isTrue();
-    assertThat(evaluator.matches(expr, "{\"status\":\"FAILED\",\"retryCount\":2}")).isFalse();
+    assertThat(evaluator.matches(expr, "{\"status\":\"FAILED\",\"retryCount\":2}"))
+        .isFalse();
   }
 
   // --- literal boolean and null ---

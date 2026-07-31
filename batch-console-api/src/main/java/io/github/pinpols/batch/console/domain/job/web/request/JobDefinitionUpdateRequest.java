@@ -7,14 +7,14 @@ import lombok.Data;
 
 @Data
 public class JobDefinitionUpdateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 64)
   @Pattern(
       regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-      message =
-          "dependsOnJobCode must start with a letter and contain only letters, digits,"
-              + " underscore or hyphen")
+      message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
+          + " underscore or hyphen")
   private String dependsOnJobCode;
 
   @Size(max = 256)

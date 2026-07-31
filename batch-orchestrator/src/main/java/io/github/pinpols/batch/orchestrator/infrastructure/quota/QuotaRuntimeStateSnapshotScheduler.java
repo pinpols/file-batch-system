@@ -49,7 +49,9 @@ public class QuotaRuntimeStateSnapshotScheduler {
   private final QuotaProperties quotaProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Lazy @Autowired private QuotaRuntimeStateSnapshotScheduler self;
+  @Lazy
+  @Autowired
+  private QuotaRuntimeStateSnapshotScheduler self;
 
   @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
   @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
@@ -91,29 +93,26 @@ public class QuotaRuntimeStateSnapshotScheduler {
     int written = 0;
     for (TenantQuotaPolicyEntity p :
         tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
-      written +=
-          self.writeIfActive(
-              tenantId,
-              "TENANT_JOBS",
-              tenantId,
-              p.quotaResetPolicy(),
-              p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
-      written +=
-          self.writeIfActive(
-              tenantId,
-              "TENANT_PARTITIONS",
-              tenantId,
-              p.quotaResetPolicy(),
-              p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
+      written += self.writeIfActive(
+          tenantId,
+          "TENANT_JOBS",
+          tenantId,
+          p.quotaResetPolicy(),
+          p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
+      written += self.writeIfActive(
+          tenantId,
+          "TENANT_PARTITIONS",
+          tenantId,
+          p.quotaResetPolicy(),
+          p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
     }
     for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
       written +=
           self.writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
-      written +=
-          self.writeIfActive(
-              tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
+      written += self.writeIfActive(
+          tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
     }
     return written;
   }
@@ -126,12 +125,11 @@ public class QuotaRuntimeStateSnapshotScheduler {
       return 0;
     }
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        quotaRuntimeStateService.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode),
-                policy,
-                burstLimit,
-                quotaProperties.getSnapshot() == null ? 24 : 24));
+        quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode),
+            policy,
+            burstLimit,
+            quotaProperties.getSnapshot() == null ? 24 : 24));
     if (snap == null
         || snap.peakBorrowedCount() == null
         || snap.peakBorrowedCount() == 0
@@ -142,30 +140,28 @@ public class QuotaRuntimeStateSnapshotScheduler {
     QuotaRuntimeStateEntity existing =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
     if (existing == null) {
-      QuotaRuntimeStateEntity toInsert =
-          new QuotaRuntimeStateEntity(
-              null,
-              tenantId,
-              scope,
-              ownerCode,
-              snap.quotaResetPolicy(),
-              snap.windowStartedAt(),
-              snap.windowExpiresAt(),
-              snap.peakBorrowedCount(),
-              snap.lastResetAt(),
-              now,
-              now,
-              null);
+      QuotaRuntimeStateEntity toInsert = new QuotaRuntimeStateEntity(
+          null,
+          tenantId,
+          scope,
+          ownerCode,
+          snap.quotaResetPolicy(),
+          snap.windowStartedAt(),
+          snap.windowExpiresAt(),
+          snap.peakBorrowedCount(),
+          snap.lastResetAt(),
+          now,
+          now,
+          null);
       quotaRuntimeStateMapper.insert(toInsert);
       return 1;
     }
-    QuotaRuntimeStateEntity toUpdate =
-        existing.withRefresh(
-            snap.quotaResetPolicy(),
-            snap.windowStartedAt(),
-            snap.windowExpiresAt(),
-            snap.peakBorrowedCount(),
-            snap.lastResetAt());
+    QuotaRuntimeStateEntity toUpdate = existing.withRefresh(
+        snap.quotaResetPolicy(),
+        snap.windowStartedAt(),
+        snap.windowExpiresAt(),
+        snap.peakBorrowedCount(),
+        snap.lastResetAt());
     int rows = quotaRuntimeStateMapper.updateWithCas(toUpdate);
     if (rows == 0) {
       // 并发节点抢先 update 把 version 推走了；下一轮 snapshot 自然会读到新 version 重试

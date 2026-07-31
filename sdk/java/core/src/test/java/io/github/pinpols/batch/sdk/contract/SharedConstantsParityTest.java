@@ -66,10 +66,9 @@ class SharedConstantsParityTest {
 
   @Test
   void workerRuntimeStates_match() throws IOException {
-    Set<String> java =
-        Arrays.stream(WorkerRuntimeState.values())
-            .map(Enum::name)
-            .collect(Collectors.toCollection(LinkedHashSet::new));
+    Set<String> java = Arrays.stream(WorkerRuntimeState.values())
+        .map(Enum::name)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     Set<String> yaml = readList("worker_runtime_states");
     assertParity("worker_runtime_states", java, yaml);
   }
@@ -88,10 +87,9 @@ class SharedConstantsParityTest {
 
   @Test
   void taskStatuses_match() throws IOException {
-    Set<String> java =
-        Arrays.stream(TaskStatus.values())
-            .map(Enum::name)
-            .collect(Collectors.toCollection(LinkedHashSet::new));
+    Set<String> java = Arrays.stream(TaskStatus.values())
+        .map(Enum::name)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     Set<String> yaml = readList("task_statuses");
     assertParity("task_statuses", java, yaml);
   }

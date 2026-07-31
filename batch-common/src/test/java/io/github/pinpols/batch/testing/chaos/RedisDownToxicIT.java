@@ -42,9 +42,9 @@ class RedisDownToxicIT extends AbstractChaosIntegrationTest {
 
       withDown(
           ProxyTarget.REDIS,
-          () ->
-              assertThatThrownBy(() -> template.getConnectionFactory().getConnection().ping())
-                  .isInstanceOf(DataAccessException.class));
+          () -> assertThatThrownBy(
+                  () -> template.getConnectionFactory().getConnection().ping())
+              .isInstanceOf(DataAccessException.class));
     } finally {
       factory.destroy();
     }
@@ -56,12 +56,11 @@ class RedisDownToxicIT extends AbstractChaosIntegrationTest {
     LettuceConnectionFactory factory = newLettuceFactory();
     try {
       LockProvider provider = ShedLockProviderFactory.redisLockProvider(factory, "chaos");
-      LockConfiguration cfg =
-          new LockConfiguration(
-              BatchDateTimeSupport.utcNow(),
-              "chaos-redis-down-" + System.nanoTime(),
-              Duration.ofSeconds(30),
-              Duration.ZERO);
+      LockConfiguration cfg = new LockConfiguration(
+          BatchDateTimeSupport.utcNow(),
+          "chaos-redis-down-" + System.nanoTime(),
+          Duration.ofSeconds(30),
+          Duration.ZERO);
 
       // 故障前:lock 正常
       SimpleLock pre = provider.lock(cfg).orElseThrow();
@@ -100,11 +99,10 @@ class RedisDownToxicIT extends AbstractChaosIntegrationTest {
   private LettuceConnectionFactory newLettuceFactory() {
     RedisStandaloneConfiguration cfg =
         new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
-    LettuceClientConfiguration clientCfg =
-        LettuceClientConfiguration.builder()
-            .commandTimeout(Duration.ofSeconds(2))
-            .shutdownTimeout(Duration.ZERO)
-            .build();
+    LettuceClientConfiguration clientCfg = LettuceClientConfiguration.builder()
+        .commandTimeout(Duration.ofSeconds(2))
+        .shutdownTimeout(Duration.ZERO)
+        .build();
     LettuceConnectionFactory factory = new LettuceConnectionFactory(cfg, clientCfg);
     factory.afterPropertiesSet();
     return factory;

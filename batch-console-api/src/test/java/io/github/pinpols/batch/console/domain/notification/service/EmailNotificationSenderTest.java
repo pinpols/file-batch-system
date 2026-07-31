@@ -25,7 +25,8 @@ import org.springframework.mail.javamail.JavaMailSender;
 @ExtendWith(MockitoExtension.class)
 class EmailNotificationSenderTest {
 
-  @Mock private JavaMailSender mailSender;
+  @Mock
+  private JavaMailSender mailSender;
 
   @SuppressWarnings("unchecked")
   @Mock
@@ -90,9 +91,8 @@ class EmailNotificationSenderTest {
     when(mailSenderProvider.getIfAvailable()).thenReturn(mailSender);
 
     // act
-    WebhookDeliveryResult result =
-        sender.send(
-            message("{\"to\":\"a@x.com, b@x.com\",\"subject\":\"Alert\",\"from\":\"ops@x.com\"}"));
+    WebhookDeliveryResult result = sender.send(
+        message("{\"to\":\"a@x.com, b@x.com\",\"subject\":\"Alert\",\"from\":\"ops@x.com\"}"));
 
     // assert
     assertThat(result.success()).isTrue();

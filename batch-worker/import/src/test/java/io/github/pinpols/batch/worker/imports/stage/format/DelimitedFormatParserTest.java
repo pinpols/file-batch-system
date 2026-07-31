@@ -21,7 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DelimitedFormatParserTest {
 
-  @Mock private ImportRecordGovernanceService governanceService;
+  @Mock
+  private ImportRecordGovernanceService governanceService;
 
   private DelimitedFormatParser parser;
 
@@ -63,15 +64,14 @@ class DelimitedFormatParserTest {
   @Test
   void headeredFailsFastWhenRequiredColumnMissingFromHeader() {
     String csv = "customerNo,customerName\nC001,Alice\n";
-    Map<String, Object> tpl =
-        Map.of(
-            "header_rows",
-            1,
-            "field_mappings",
-            List.of(
-                Map.of("name", "customerNo", "required", true),
-                // email 必填,但文件表头里没有 → PARSE 期 fail-fast
-                Map.of("name", "email", "required", true)));
+    Map<String, Object> tpl = Map.of(
+        "header_rows",
+        1,
+        "field_mappings",
+        List.of(
+            Map.of("name", "customerNo", "required", true),
+            // email 必填,但文件表头里没有 → PARSE 期 fail-fast
+            Map.of("name", "email", "required", true)));
     StringWriter sink = new StringWriter();
 
     assertThatThrownBy(() -> parser.parse(context(), request(csv, tpl), new BufferedWriter(sink)))
@@ -82,15 +82,14 @@ class DelimitedFormatParserTest {
   @Test
   void headeredAllowsOptionalColumnAbsent() throws Exception {
     String csv = "customerNo\nC001\n";
-    Map<String, Object> tpl =
-        Map.of(
-            "header_rows",
-            1,
-            "field_mappings",
-            List.of(
-                Map.of("name", "customerNo", "required", true),
-                // email 非必填 → 表头缺失允许
-                Map.of("name", "email")));
+    Map<String, Object> tpl = Map.of(
+        "header_rows",
+        1,
+        "field_mappings",
+        List.of(
+            Map.of("name", "customerNo", "required", true),
+            // email 非必填 → 表头缺失允许
+            Map.of("name", "email")));
     StringWriter sink = new StringWriter();
 
     long count = parser.parse(context(), request(csv, tpl), new BufferedWriter(sink));
@@ -102,14 +101,13 @@ class DelimitedFormatParserTest {
   void headeredToleratesCaseAndUnderscoreOnRequiredHeader() throws Exception {
     // 文件表头 CUSTOMER_NO / Customer_Name 与 field_mappings 的 customerNo / customerName 仅写法不同
     String csv = "CUSTOMER_NO,Customer_Name\nC001,Alice\n";
-    Map<String, Object> tpl =
-        Map.of(
-            "header_rows",
-            1,
-            "field_mappings",
-            List.of(
-                Map.of("name", "customerNo", "required", true),
-                Map.of("name", "customerName", "required", true)));
+    Map<String, Object> tpl = Map.of(
+        "header_rows",
+        1,
+        "field_mappings",
+        List.of(
+            Map.of("name", "customerNo", "required", true),
+            Map.of("name", "customerName", "required", true)));
     StringWriter sink = new StringWriter();
 
     long count = parser.parse(context(), request(csv, tpl), new BufferedWriter(sink));

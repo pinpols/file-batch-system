@@ -98,34 +98,31 @@ public class DatasetRuleEvaluator {
       if (fromManifest) {
         details.put("source", "manifest");
       }
-      datasetIssues.add(
-          new ValidationIssue(
-              null,
-              "IMPORT_VALIDATE_ROW_COUNT",
-              "row count mismatch, expected="
-                  + exactCount
-                  + (fromManifest ? " (manifest)" : "")
-                  + MSG_ACTUAL_SUFFIX
-                  + actualCount,
-              Map.copyOf(details)));
+      datasetIssues.add(new ValidationIssue(
+          null,
+          "IMPORT_VALIDATE_ROW_COUNT",
+          "row count mismatch, expected="
+              + exactCount
+              + (fromManifest ? " (manifest)" : "")
+              + MSG_ACTUAL_SUFFIX
+              + actualCount,
+          Map.copyOf(details)));
       return;
     }
     if (minCount != null && actualCount < minCount) {
-      datasetIssues.add(
-          new ValidationIssue(
-              null,
-              "IMPORT_VALIDATE_ROW_COUNT",
-              "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
-              Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
+      datasetIssues.add(new ValidationIssue(
+          null,
+          "IMPORT_VALIDATE_ROW_COUNT",
+          "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
+          Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
       return;
     }
     if (maxCount != null && actualCount > maxCount) {
-      datasetIssues.add(
-          new ValidationIssue(
-              null,
-              "IMPORT_VALIDATE_ROW_COUNT",
-              "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
-              Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
+      datasetIssues.add(new ValidationIssue(
+          null,
+          "IMPORT_VALIDATE_ROW_COUNT",
+          "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
+          Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
     }
   }
 
@@ -157,15 +154,14 @@ public class DatasetRuleEvaluator {
     if (booleanValue(rule.get("blocker"), false)) {
       session
           .datasetIssues()
-          .add(
-              new ValidationIssue(
-                  null,
-                  "IMPORT_VALIDATE_CONTROL_RECORD",
-                  "control-record count mismatch, declared="
-                      + declaredCount
-                      + MSG_ACTUAL_SUFFIX
-                      + actualCount,
-                  Map.of("declared", declaredCount, KEY_ACTUAL, actualCount)));
+          .add(new ValidationIssue(
+              null,
+              "IMPORT_VALIDATE_CONTROL_RECORD",
+              "control-record count mismatch, declared="
+                  + declaredCount
+                  + MSG_ACTUAL_SUFFIX
+                  + actualCount,
+              Map.of("declared", declaredCount, KEY_ACTUAL, actualCount)));
       return;
     }
     log.warn(
@@ -187,43 +183,30 @@ public class DatasetRuleEvaluator {
     if (rule.isEmpty() || !enabled(rule)) {
       return;
     }
-    String configuredAlgorithm =
-        stringValue(
-            firstNonNull(
-                rule.get("algorithm"),
-                rule.get("checksumType"),
-                importPayload == null ? null : importPayload.checksumType()));
+    String configuredAlgorithm = stringValue(firstNonNull(
+        rule.get("algorithm"),
+        rule.get("checksumType"),
+        importPayload == null ? null : importPayload.checksumType()));
     String algorithm =
         !Texts.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
             ? "SHA-256"
             : configuredAlgorithm;
-    String expectedChecksum =
-        stringValue(
-            firstNonNull(
-                rule.get("expected"),
-                rule.get("expectedValue"),
-                importPayload == null ? null : importPayload.checksumValue()));
+    String expectedChecksum = stringValue(firstNonNull(
+        rule.get("expected"),
+        rule.get("expectedValue"),
+        importPayload == null ? null : importPayload.checksumValue()));
     if (!Texts.hasText(expectedChecksum) || normalizedPayload == null) {
       return;
     }
     appliedChecks.add("checksum_check");
     String actualChecksum = digest(algorithm, normalizedPayload);
     if (!expectedChecksum.equalsIgnoreCase(actualChecksum)) {
-      datasetIssues.add(
-          new ValidationIssue(
-              null,
-              "IMPORT_VALIDATE_CHECKSUM",
-              "checksum mismatch, expected="
-                  + expectedChecksum
-                  + MSG_ACTUAL_SUFFIX
-                  + actualChecksum,
-              Map.of(
-                  "algorithm",
-                  algorithm,
-                  "expected",
-                  expectedChecksum,
-                  KEY_ACTUAL,
-                  actualChecksum)));
+      datasetIssues.add(new ValidationIssue(
+          null,
+          "IMPORT_VALIDATE_CHECKSUM",
+          "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum,
+          Map.of(
+              "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum)));
     }
   }
 
@@ -257,12 +240,11 @@ public class DatasetRuleEvaluator {
       }
     }
     if (!missingFields.isEmpty()) {
-      datasetIssues.add(
-          new ValidationIssue(
-              null,
-              "IMPORT_VALIDATE_SCHEMA",
-              "schema missing required fields: " + String.join(",", missingFields),
-              Map.of("requiredFields", requiredFields, "actualFields", schemaFields)));
+      datasetIssues.add(new ValidationIssue(
+          null,
+          "IMPORT_VALIDATE_SCHEMA",
+          "schema missing required fields: " + String.join(",", missingFields),
+          Map.of("requiredFields", requiredFields, "actualFields", schemaFields)));
       return;
     }
     if (!allowedFields.isEmpty()) {
@@ -274,12 +256,11 @@ public class DatasetRuleEvaluator {
         }
       }
       if (!unexpectedFields.isEmpty()) {
-        datasetIssues.add(
-            new ValidationIssue(
-                null,
-                "IMPORT_VALIDATE_SCHEMA",
-                "schema contains unexpected fields: " + String.join(",", unexpectedFields),
-                Map.of("allowedFields", allowedFields, "actualFields", schemaFields)));
+        datasetIssues.add(new ValidationIssue(
+            null,
+            "IMPORT_VALIDATE_SCHEMA",
+            "schema contains unexpected fields: " + String.join(",", unexpectedFields),
+            Map.of("allowedFields", allowedFields, "actualFields", schemaFields)));
       }
     }
   }

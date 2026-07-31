@@ -110,9 +110,8 @@ public class ConsoleAiKnowledgeBase {
     List<Chunk> chunks = new ArrayList<>(documents.size());
     for (int i = 0; i < documents.size() && i < vectors.size(); i++) {
       Object source = documents.get(i).getMetadata().get("source");
-      chunks.add(
-          new Chunk(
-              source == null ? "knowledge" : source.toString(), texts.get(i), vectors.get(i)));
+      chunks.add(new Chunk(
+          source == null ? "knowledge" : source.toString(), texts.get(i), vectors.get(i)));
     }
     log.info(
         "console AI RAG: knowledge base built, {} chunk(s) from {} location(s)",

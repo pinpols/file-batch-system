@@ -42,16 +42,34 @@ import org.springframework.beans.factory.ObjectProvider;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class SensorStateMachineTest {
 
-  @Mock private SensorPolicyRegistry registry;
-  @Mock private WorkflowNodeRunMapper nodeRunMapper;
-  @Mock private WorkflowNodeMapper nodeMapper;
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private TaskOutcomeService taskOutcomeService;
+  @Mock
+  private SensorPolicyRegistry registry;
+
+  @Mock
+  private WorkflowNodeRunMapper nodeRunMapper;
+
+  @Mock
+  private WorkflowNodeMapper nodeMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private TaskOutcomeService taskOutcomeService;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
-  @Mock private SensorPolicy filePolicy;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private WorkflowDagService workflowDagService;
-  @Mock private WorkflowNodeDispatchService dispatchService;
+
+  @Mock
+  private SensorPolicy filePolicy;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private WorkflowDagService workflowDagService;
+
+  @Mock
+  private WorkflowNodeDispatchService dispatchService;
 
   private SensorStateMachine sm;
   private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");
@@ -65,17 +83,16 @@ class SensorStateMachineTest {
     ObjectProvider<WorkflowNodeDispatchService> dispatchProvider =
         Mockito.mock(ObjectProvider.class);
     when(dispatchProvider.getObject()).thenReturn(dispatchService);
-    sm =
-        new SensorStateMachine(
-            registry,
-            nodeRunMapper,
-            nodeMapper,
-            workflowRunMapper,
-            taskOutcomeService,
-            objectMapper,
-            jobMappers,
-            workflowDagService,
-            dispatchProvider);
+    sm = new SensorStateMachine(
+        registry,
+        nodeRunMapper,
+        nodeMapper,
+        workflowRunMapper,
+        taskOutcomeService,
+        objectMapper,
+        jobMappers,
+        workflowDagService,
+        dispatchProvider);
     when(filePolicy.type()).thenReturn(SensorType.FILE_ARRIVAL);
     when(registry.resolve(SensorType.FILE_ARRIVAL)).thenReturn(filePolicy);
   }
@@ -136,9 +153,8 @@ class SensorStateMachineTest {
   void error_atThreshold_triggersFailure() {
     seedHappyPath();
     when(filePolicy.probe(any()))
-        .thenReturn(
-            SensorProbeResult.error(
-                "error.workflow.sensor_probe_failed", java.util.List.of("FILE_ARRIVAL", "boom")));
+        .thenReturn(SensorProbeResult.error(
+            "error.workflow.sensor_probe_failed", java.util.List.of("FILE_ARRIVAL", "boom")));
 
     // already 2 consecutive errors; this would be 3rd → fail
     sm.probeAndAdvance(nodeRun(2, 2), NOW);
@@ -193,9 +209,8 @@ class SensorStateMachineTest {
     when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
     WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
     wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams(
-        "{\"sensor_type\":\"BOGUS\",\"sensor_spec\":{},\"timeout_seconds\":120,"
-            + "\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    wfNode.setNodeParams("{\"sensor_type\":\"BOGUS\",\"sensor_spec\":{},\"timeout_seconds\":120,"
+        + "\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
 
     sm.probeAndAdvance(nodeRun(0, 0), NOW);
@@ -294,12 +309,11 @@ class SensorStateMachineTest {
     when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
     WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
     wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams(
-        "{\"sensor_type\":\"FILE_ARRIVAL\","
-            + "\"sensor_spec\":{\"pattern\":\"x-*\",\"maxAgeSeconds\":3600},"
-            + "\"timeout_seconds\":120,"
-            + "\"poll_interval_seconds\":30,"
-            + "\"on_timeout\":\"FAIL\"}");
+    wfNode.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\","
+        + "\"sensor_spec\":{\"pattern\":\"x-*\",\"maxAgeSeconds\":3600},"
+        + "\"timeout_seconds\":120,"
+        + "\"poll_interval_seconds\":30,"
+        + "\"on_timeout\":\"FAIL\"}");
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
   }
 

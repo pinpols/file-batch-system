@@ -56,11 +56,10 @@ class ImportPreprocessPipelineRsaTest {
 
   @Test
   void shouldPassVerification_withValidRsaSignature() {
-    Map<String, Object> step =
-        Map.of(
-            "type", "VERIFY_RSA_SHA256",
-            "publicKeyPem", publicKeyPem,
-            "signatureBase64", validSignatureB64);
+    Map<String, Object> step = Map.of(
+        "type", "VERIFY_RSA_SHA256",
+        "publicKeyPem", publicKeyPem,
+        "signatureBase64", validSignatureB64);
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template);
@@ -75,11 +74,10 @@ class ImportPreprocessPipelineRsaTest {
     byte[] tamperedPayload =
         "customerNo,customerName\nC001,Eve Test\n".getBytes(StandardCharsets.UTF_8);
 
-    Map<String, Object> step =
-        Map.of(
-            "type", "VERIFY_RSA_SHA256",
-            "publicKeyPem", publicKeyPem,
-            "signatureBase64", validSignatureB64);
+    Map<String, Object> step = Map.of(
+        "type", "VERIFY_RSA_SHA256",
+        "publicKeyPem", publicKeyPem,
+        "signatureBase64", validSignatureB64);
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     assertThatThrownBy(() -> ImportPreprocessPipeline.run(tamperedPayload, null, template))
@@ -91,11 +89,10 @@ class ImportPreprocessPipelineRsaTest {
 
   @Test
   void shouldFail_whenPublicKeyPemMissing() {
-    Map<String, Object> step =
-        Map.of(
-            "type", "VERIFY_RSA_SHA256", "signatureBase64", validSignatureB64
-            // 未提供 publicKeyPem
-            );
+    Map<String, Object> step = Map.of(
+        "type", "VERIFY_RSA_SHA256", "signatureBase64", validSignatureB64
+        // 未提供 publicKeyPem
+        );
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     assertThatThrownBy(() -> ImportPreprocessPipeline.run(PAYLOAD, null, template))
@@ -107,37 +104,35 @@ class ImportPreprocessPipelineRsaTest {
 
   @Test
   void shouldPassVerification_signatureViaPayloadMetadata() {
-    ImportPayload payload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            "JSON",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Map.of("signatureBase64", validSignatureB64));
+    ImportPayload payload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        "JSON",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        Map.of("signatureBase64", validSignatureB64));
 
-    Map<String, Object> step =
-        Map.of(
-            "type", "VERIFY_RSA_SHA256", "publicKeyPem", publicKeyPem
-            // signatureBase64 不在 step 中 — 通过 metadata 提供
-            );
+    Map<String, Object> step = Map.of(
+        "type", "VERIFY_RSA_SHA256", "publicKeyPem", publicKeyPem
+        // signatureBase64 不在 step 中 — 通过 metadata 提供
+        );
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     byte[] result = ImportPreprocessPipeline.run(PAYLOAD, payload, template);
@@ -149,11 +144,10 @@ class ImportPreprocessPipelineRsaTest {
 
   @Test
   void shouldBypassRsaVerification_whenTestingOpen() {
-    Map<String, Object> step =
-        Map.of(
-            "type", "VERIFY_RSA_SHA256",
-            "publicKeyPem", publicKeyPem,
-            "signatureBase64", "INVALID_BASE64_GARBAGE");
+    Map<String, Object> step = Map.of(
+        "type", "VERIFY_RSA_SHA256",
+        "publicKeyPem", publicKeyPem,
+        "signatureBase64", "INVALID_BASE64_GARBAGE");
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     // bypassMode=true 时完全跳过 RSA 校验
@@ -178,10 +172,9 @@ class ImportPreprocessPipelineRsaTest {
    * -topk8 -nocrypt -in test-rsa-private.pem -out test-rsa-private-pkcs8.pem
    */
   private static PrivateKey parsePkcs8PrivateKey(String pem) throws Exception {
-    String base64 =
-        pem.replaceAll("-----BEGIN PRIVATE KEY-----", "")
-            .replaceAll("-----END PRIVATE KEY-----", "")
-            .replaceAll("\\s", "");
+    String base64 = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "")
+        .replaceAll("-----END PRIVATE KEY-----", "")
+        .replaceAll("\\s", "");
     byte[] der = Base64.getDecoder().decode(base64);
     return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
   }

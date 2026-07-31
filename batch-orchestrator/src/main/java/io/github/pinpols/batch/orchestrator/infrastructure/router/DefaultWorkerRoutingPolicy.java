@@ -22,9 +22,8 @@ public class DefaultWorkerRoutingPolicy implements WorkerRoutingPolicy {
     }
     return candidates.stream()
         .filter(candidate -> Boolean.TRUE.equals(candidate.getAvailable()))
-        .max(
-            Comparator.comparingInt(
-                candidate -> candidate.getPriority() == null ? 0 : candidate.getPriority()))
+        .max(Comparator.comparingInt(
+            candidate -> candidate.getPriority() == null ? 0 : candidate.getPriority()))
         .orElse(candidates.get(0));
   }
 }

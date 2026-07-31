@@ -50,13 +50,12 @@ public class ConsoleAdminMaintenanceController {
       @Valid @RequestBody UpdateMaintenanceRequest request) {
     List<String> affected =
         request.getAffectedServices() == null ? List.of() : request.getAffectedServices();
-    MaintenanceState next =
-        new MaintenanceState(
-            request.isEnabled(),
-            request.isReadOnly(),
-            request.getMessage(),
-            request.getEtaAt(),
-            affected);
+    MaintenanceState next = new MaintenanceState(
+        request.isEnabled(),
+        request.isReadOnly(),
+        request.getMessage(),
+        request.getEtaAt(),
+        affected);
     MaintenanceState applied = stateHolder.update(next);
     return responseFactory.success(toResponse(applied));
   }

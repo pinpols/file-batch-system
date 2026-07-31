@@ -45,9 +45,8 @@ public class RuntimeConsistencyMetricsScheduler {
   }
 
   @Scheduled(
-      fixedDelayString =
-          "${batch.metrics.runtime-consistency.poll-interval-millis:"
-              + "${batch.metrics.worker-registry.poll-interval-millis:30000}}")
+      fixedDelayString = "${batch.metrics.runtime-consistency.poll-interval-millis:"
+          + "${batch.metrics.worker-registry.poll-interval-millis:30000}}")
   @SchedulerLock(
       name = "runtime_consistency_metrics",
       lockAtMostFor = "PT1M",
@@ -57,9 +56,8 @@ public class RuntimeConsistencyMetricsScheduler {
       return;
     }
     try {
-      long effectiveSeconds =
-          (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
-              + workerDrainProperties.getHeartbeatGraceSeconds();
+      long effectiveSeconds = (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
+          + workerDrainProperties.getHeartbeatGraceSeconds();
       staleOnlineWorkers.set(workerRegistryMapper.countStaleOnline(effectiveSeconds));
       drainingPastDeadlineWorkers.set(workerRegistryMapper.countDrainingPastDeadline());
       decommissionedWorkersWithActiveTasks.set(

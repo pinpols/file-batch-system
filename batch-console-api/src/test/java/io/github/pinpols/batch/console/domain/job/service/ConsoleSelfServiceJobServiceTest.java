@@ -79,9 +79,8 @@ class ConsoleSelfServiceJobServiceTest {
     when(responseSpec.body(ApprovalSubmitResponse.class))
         .thenReturn(new ApprovalSubmitResponse("APR-002"));
 
-    CompensationParam param =
-        new CompensationParam(
-            "tenant-a", "JOB-02", "2026-04-10", "FULL", "INST-002", "test compensation");
+    CompensationParam param = new CompensationParam(
+        "tenant-a", "JOB-02", "2026-04-10", "FULL", "INST-002", "test compensation");
     String approvalNo = service.requestCompensation(param, "operator-2", "idem-key-2");
 
     assertThat(approvalNo).isEqualTo("APR-002");

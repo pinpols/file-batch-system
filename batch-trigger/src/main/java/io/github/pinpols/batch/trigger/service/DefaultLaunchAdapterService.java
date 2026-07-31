@@ -45,19 +45,18 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
     var request = command.request();
     // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(request.getTenantId())
-            .jobCode(request.getJobCode())
-            .bizDate(request.getBizDate())
-            .triggerType(resolveTriggerType(command))
-            .requestId(command.requestId())
-            .traceId(command.traceId())
-            .params(request.getParams())
-            .dataIntervalStart(request.getDataIntervalStart())
-            .dataIntervalEnd(request.getDataIntervalEnd())
-            .dryRun(Boolean.TRUE.equals(request.getDryRun()))
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(request.getTenantId())
+        .jobCode(request.getJobCode())
+        .bizDate(request.getBizDate())
+        .triggerType(resolveTriggerType(command))
+        .requestId(command.requestId())
+        .traceId(command.traceId())
+        .params(request.getParams())
+        .dataIntervalStart(request.getDataIntervalStart())
+        .dataIntervalEnd(request.getDataIntervalEnd())
+        .dryRun(Boolean.TRUE.equals(request.getDryRun()))
+        .build();
     return launchRequest;
   }
 
@@ -87,24 +86,22 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy()));
     // V94: 计算 [thisFireAt, nextFireAt) 半开区间, 业务可拼 SQL WHERE update_time >= :start AND update_time <
     // :end
-    Instant nextFireAt =
-        resolveNextFireAt(
-            descriptor.getScheduleType(),
-            descriptor.getScheduleExpression(),
-            zoneId,
-            command.fireTime());
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(descriptor.getTenantId())
-            .jobCode(descriptor.getJobCode())
-            .bizDate(bizDate)
-            .triggerType(triggerType)
-            .requestId(command.requestId())
-            .traceId(command.traceId())
-            .params(params)
-            .dataIntervalStart(command.fireTime())
-            .dataIntervalEnd(nextFireAt)
-            .build();
+    Instant nextFireAt = resolveNextFireAt(
+        descriptor.getScheduleType(),
+        descriptor.getScheduleExpression(),
+        zoneId,
+        command.fireTime());
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(descriptor.getTenantId())
+        .jobCode(descriptor.getJobCode())
+        .bizDate(bizDate)
+        .triggerType(triggerType)
+        .requestId(command.requestId())
+        .traceId(command.traceId())
+        .params(params)
+        .dataIntervalStart(command.fireTime())
+        .dataIntervalEnd(nextFireAt)
+        .build();
     return launchRequest;
   }
 

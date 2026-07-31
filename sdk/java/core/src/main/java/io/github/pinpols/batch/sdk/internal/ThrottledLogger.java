@@ -58,25 +58,23 @@ public final class ThrottledLogger {
     Instant now = Instant.now();
     long windowMillis = throttleWindow.toMillis();
     long[] decisionHolder = new long[] {-1L}; // [0] = -1 抑制,≥0 放行(数值为本轮 suppressed 计数)
-    states.compute(
-        key,
-        (k, state) -> {
-          if (state == null) {
-            State fresh = new State();
-            fresh.lastEmittedEpochMillis = now.toEpochMilli();
-            decisionHolder[0] = 0L; // 首次放行,无 suppressed
-            return fresh;
-          }
-          long elapsed = now.toEpochMilli() - state.lastEmittedEpochMillis;
-          if (elapsed >= windowMillis) {
-            decisionHolder[0] = state.suppressed.getAndSet(0L);
-            state.lastEmittedEpochMillis = now.toEpochMilli();
-          } else {
-            state.suppressed.incrementAndGet();
-            decisionHolder[0] = -1L;
-          }
-          return state;
-        });
+    states.compute(key, (k, state) -> {
+      if (state == null) {
+        State fresh = new State();
+        fresh.lastEmittedEpochMillis = now.toEpochMilli();
+        decisionHolder[0] = 0L; // 首次放行,无 suppressed
+        return fresh;
+      }
+      long elapsed = now.toEpochMilli() - state.lastEmittedEpochMillis;
+      if (elapsed >= windowMillis) {
+        decisionHolder[0] = state.suppressed.getAndSet(0L);
+        state.lastEmittedEpochMillis = now.toEpochMilli();
+      } else {
+        state.suppressed.incrementAndGet();
+        decisionHolder[0] = -1L;
+      }
+      return state;
+    });
     long suppressed = decisionHolder[0];
     if (suppressed < 0) {
       // 被抑制 — 不输出,仅累加计数

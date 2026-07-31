@@ -36,8 +36,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OperationAuditQueryServiceTenantGuardTest {
 
-  @Mock private OperationAuditMapper mapper;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private OperationAuditMapper mapper;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private ConsoleTenantGuard tenantGuard;
   private OperationAuditQueryService service;
 
@@ -75,9 +79,8 @@ class OperationAuditQueryServiceTenantGuardTest {
   void shouldOverrideRequestTenantIdWithJwtTenantForTenantRole() {
     // 租户角色,JWT tenantId=ta;请求传 tb(越权尝试)→ FORBIDDEN
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
     OperationAuditQueryRequest req = new OperationAuditQueryRequest();
     req.setPageNo(1);
     req.setPageSize(10);
@@ -88,9 +91,8 @@ class OperationAuditQueryServiceTenantGuardTest {
   @Test
   void shouldPassResolvedTenantIdToMapperForTenantUser() {
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
     OperationAuditQueryRequest req = new OperationAuditQueryRequest();
     req.setPageNo(1);
     req.setPageSize(10);
@@ -106,9 +108,8 @@ class OperationAuditQueryServiceTenantGuardTest {
   void shouldRequireTenantIdForGlobalAdmin() {
     // 全局角色 ROLE_ADMIN 但未指定 tenantId → 必须明确目标租户
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
     OperationAuditQueryRequest req = new OperationAuditQueryRequest();
     req.setPageNo(1);
     req.setPageSize(10);
@@ -119,9 +120,8 @@ class OperationAuditQueryServiceTenantGuardTest {
   @Test
   void shouldAllowGlobalAdminToQueryAnyTenantExplicitly() {
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
     OperationAuditQueryRequest req = new OperationAuditQueryRequest();
     req.setPageNo(1);
     req.setPageSize(10);

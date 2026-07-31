@@ -65,15 +65,14 @@ class DefaultTaskExecutionWrapperTest {
     watchdogScheduler.setThreadNamePrefix("worker-task-cancel-watchdog-");
     watchdogScheduler.setDaemon(true);
     watchdogScheduler.initialize();
-    wrapper =
-        new DefaultTaskExecutionWrapper(
-            stepExecutionAdapter,
-            taskExecutionClient,
-            activeTaskLeaseRegistry,
-            executionPool,
-            timeoutProperties,
-            provider,
-            watchdogScheduler);
+    wrapper = new DefaultTaskExecutionWrapper(
+        stepExecutionAdapter,
+        taskExecutionClient,
+        activeTaskLeaseRegistry,
+        executionPool,
+        timeoutProperties,
+        provider,
+        watchdogScheduler);
   }
 
   @AfterEach
@@ -85,40 +84,39 @@ class DefaultTaskExecutionWrapperTest {
 
   @Test
   void shouldDelegateClaimToTaskExecutionClient() {
-    EffectiveTaskConfig sample =
-        new EffectiveTaskConfig(
-            "t1",
-            42L,
-            100L,
-            200L,
-            "INST-1",
-            "JOB",
-            "IMPORT",
-            1,
-            "IMPORT",
-            "HIGH",
-            "biz",
-            "idem",
-            "{}",
-            "trace",
-            "FULL",
-            null,
-            null,
-            "NONE",
-            0,
-            60,
-            1,
-            1,
-            "JOB:2026-05-01:1",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null);
+    EffectiveTaskConfig sample = new EffectiveTaskConfig(
+        "t1",
+        42L,
+        100L,
+        200L,
+        "INST-1",
+        "JOB",
+        "IMPORT",
+        1,
+        "IMPORT",
+        "HIGH",
+        "biz",
+        "idem",
+        "{}",
+        "trace",
+        "FULL",
+        null,
+        null,
+        "NONE",
+        0,
+        60,
+        1,
+        1,
+        "JOB:2026-05-01:1",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
     when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.of(sample));
 
     Optional<EffectiveTaskConfig> result = wrapper.claim("t1", 42L, "w1");
@@ -162,13 +160,10 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(result.success()).isFalse();
     assertThat(result.message()).isEqualTo("parse failed");
     verify(taskExecutionClient)
-        .report(
-            argThat(
-                report ->
-                    "ERR_PARSE".equals(report.getCode())
-                        && "parse failed".equals(report.getMessage())
-                        && "ERR_PARSE".equals(report.getErrorCode())
-                        && "parse failed".equals(report.getErrorMessage())));
+        .report(argThat(report -> "ERR_PARSE".equals(report.getCode())
+            && "parse failed".equals(report.getMessage())
+            && "ERR_PARSE".equals(report.getErrorCode())
+            && "parse failed".equals(report.getErrorMessage())));
     verify(activeTaskLeaseRegistry).remove("1002");
   }
 
@@ -225,11 +220,8 @@ class DefaultTaskExecutionWrapperTest {
     verify(activeTaskLeaseRegistry).register("1003", "t1", "w1", null);
     verify(activeTaskLeaseRegistry).remove("1003");
     verify(taskExecutionClient)
-        .report(
-            argThat(
-                report ->
-                    "WORKER_EXECUTION_ERROR".equals(report.getCode())
-                        && report.getMessage().contains("unexpected")));
+        .report(argThat(report -> "WORKER_EXECUTION_ERROR".equals(report.getCode())
+            && report.getMessage().contains("unexpected")));
   }
 
   @Test
@@ -251,13 +243,11 @@ class DefaultTaskExecutionWrapperTest {
     PulledTask task = sampleTask("1004", "t1", "w1");
     task.setJobCode("MY_JOB");
 
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              StepExecutionRequest req = invocation.getArgument(0);
-              assertThat(req.jobCode()).isEqualTo("MY_JOB");
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest req = invocation.getArgument(0);
+      assertThat(req.jobCode()).isEqualTo("MY_JOB");
+      return StepExecutionResponse.successResponse();
+    });
 
     wrapper.execute(task);
   }
@@ -267,13 +257,11 @@ class DefaultTaskExecutionWrapperTest {
     PulledTask task = sampleTask("1005", "t1", "w1");
     task.setPayload("{\"run_mode\":\"RETRY\"}");
 
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              StepExecutionRequest req = invocation.getArgument(0);
-              assertThat(req.context()).containsEntry(PipelineRuntimeKeys.RUN_MODE, "RETRY");
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest req = invocation.getArgument(0);
+      assertThat(req.context()).containsEntry(PipelineRuntimeKeys.RUN_MODE, "RETRY");
+      return StepExecutionResponse.successResponse();
+    });
 
     wrapper.execute(task);
   }
@@ -284,13 +272,11 @@ class DefaultTaskExecutionWrapperTest {
     PulledTask task = sampleTask("1006", "t1", "w1");
     task.setPayload("{\"bundleSourceFileId\":42,\"templateCode\":\"RISK_IMPORT_V2\"}");
 
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              StepExecutionRequest req = invocation.getArgument(0);
-              assertThat(req.context()).containsEntry(PipelineRuntimeKeys.FILE_ID, 42);
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest req = invocation.getArgument(0);
+      assertThat(req.context()).containsEntry(PipelineRuntimeKeys.FILE_ID, 42);
+      return StepExecutionResponse.successResponse();
+    });
 
     wrapper.execute(task);
   }
@@ -301,13 +287,11 @@ class DefaultTaskExecutionWrapperTest {
     PulledTask task = sampleTask("1007", "t1", "w1");
     task.setPayload("{\"templateCode\":\"PLAIN_IMPORT\"}");
 
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              StepExecutionRequest req = invocation.getArgument(0);
-              assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest req = invocation.getArgument(0);
+      assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
+      return StepExecutionResponse.successResponse();
+    });
 
     wrapper.execute(task);
   }
@@ -321,13 +305,11 @@ class DefaultTaskExecutionWrapperTest {
     PulledTask task = sampleTask("1008", "t1", "w1");
     task.setPayload("{\"sourceFileId\":99,\"templateCode\":\"PLAIN_IMPORT\"}");
 
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              StepExecutionRequest req = invocation.getArgument(0);
-              assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest req = invocation.getArgument(0);
+      assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
+      return StepExecutionResponse.successResponse();
+    });
 
     wrapper.execute(task);
   }
@@ -342,19 +324,17 @@ class DefaultTaskExecutionWrapperTest {
     task.setRangeEndExclusive(750L);
     task.setExpectedRows(250L);
 
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              StepExecutionRequest req = invocation.getArgument(0);
-              assertThat(req.context())
-                  .containsEntry(PipelineRuntimeKeys.PARTITION_PLAN_VERSION, 1)
-                  .containsEntry(PipelineRuntimeKeys.SHARD_INDEX, 2)
-                  .containsEntry(PipelineRuntimeKeys.SHARD_TOTAL, 4)
-                  .containsEntry(PipelineRuntimeKeys.RANGE_START_INCLUSIVE, 500L)
-                  .containsEntry(PipelineRuntimeKeys.RANGE_END_EXCLUSIVE, 750L)
-                  .containsEntry(PipelineRuntimeKeys.EXPECTED_ROWS, 250L);
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest req = invocation.getArgument(0);
+      assertThat(req.context())
+          .containsEntry(PipelineRuntimeKeys.PARTITION_PLAN_VERSION, 1)
+          .containsEntry(PipelineRuntimeKeys.SHARD_INDEX, 2)
+          .containsEntry(PipelineRuntimeKeys.SHARD_TOTAL, 4)
+          .containsEntry(PipelineRuntimeKeys.RANGE_START_INCLUSIVE, 500L)
+          .containsEntry(PipelineRuntimeKeys.RANGE_END_EXCLUSIVE, 750L)
+          .containsEntry(PipelineRuntimeKeys.EXPECTED_ROWS, 250L);
+      return StepExecutionResponse.successResponse();
+    });
 
     wrapper.execute(task);
   }
@@ -369,18 +349,16 @@ class DefaultTaskExecutionWrapperTest {
     task.setTimeoutSeconds(1); // 1 秒超时
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch released = new CountDownLatch(1);
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              started.countDown();
-              try {
-                Thread.sleep(10_000); // 远超超时
-              } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                released.countDown();
-              }
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      started.countDown();
+      try {
+        Thread.sleep(10_000); // 远超超时
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        released.countDown();
+      }
+      return StepExecutionResponse.successResponse();
+    });
 
     long start = BatchDateTimeSupport.utcEpochMillis();
     WorkerExecutionResult result = wrapper.execute(task);
@@ -391,11 +369,8 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(released.await(3, TimeUnit.SECONDS)).isTrue(); // pool 线程被 interrupt 后退出
     assertThat(result.success()).isFalse();
     verify(taskExecutionClient)
-        .report(
-            argThat(
-                report ->
-                    "WORKER_EXECUTION_TIMEOUT".equals(report.getCode())
-                        && report.getErrorMessage().contains("1s")));
+        .report(argThat(report -> "WORKER_EXECUTION_TIMEOUT".equals(report.getCode())
+            && report.getErrorMessage().contains("1s")));
     assertThat(registry.counter("worker.task.execution.timeout.total").count()).isEqualTo(1.0);
   }
 
@@ -406,26 +381,23 @@ class DefaultTaskExecutionWrapperTest {
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch interrupted = new CountDownLatch(1);
     AtomicReference<Runnable> cancellationCallback = new AtomicReference<>();
-    doAnswer(
-            invocation -> {
-              cancellationCallback.set(invocation.getArgument(1));
-              return null;
-            })
+    doAnswer(invocation -> {
+          cancellationCallback.set(invocation.getArgument(1));
+          return null;
+        })
         .when(activeTaskLeaseRegistry)
         .registerCancellationCallback(any(), any());
     when(activeTaskLeaseRegistry.isCancellationRequested("1013")).thenReturn(true);
-    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              started.countDown();
-              try {
-                Thread.sleep(30_000);
-              } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                interrupted.countDown();
-              }
-              return StepExecutionResponse.successResponse();
-            });
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      started.countDown();
+      try {
+        Thread.sleep(30_000);
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        interrupted.countDown();
+      }
+      return StepExecutionResponse.successResponse();
+    });
 
     CompletableFuture<WorkerExecutionResult> resultFuture =
         CompletableFuture.supplyAsync(() -> wrapper.execute(task));
@@ -438,10 +410,8 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(interrupted.await(2, TimeUnit.SECONDS)).isTrue();
     assertThat(result.success()).isFalse();
     verify(taskExecutionClient)
-        .report(
-            argThat(
-                report ->
-                    DefaultTaskExecutionWrapper.CANCELLED_ERROR_CODE.equals(report.getCode())));
+        .report(argThat(
+            report -> DefaultTaskExecutionWrapper.CANCELLED_ERROR_CODE.equals(report.getCode())));
   }
 
   /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 长期停滞 2 小时以上. */

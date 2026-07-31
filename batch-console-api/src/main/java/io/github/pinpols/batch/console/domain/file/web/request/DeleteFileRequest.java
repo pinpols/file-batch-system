@@ -8,8 +8,11 @@ import lombok.Data;
 @Data
 public class DeleteFileRequest {
 
-  @ValidTenantId private String tenantId;
-  @NotNull private Long fileId;
+  @ValidTenantId
+  private String tenantId;
+
+  @NotNull
+  private Long fileId;
 
   @Size(max = 512, message = "reason too long (max 512)")
   private String reason;

@@ -15,12 +15,14 @@ class DispatchReceiptPresentVerifierTest {
 
   @Test
   void passesWhenReceiptCodePresent() {
-    assertThat(verifier.verify(contextWith(Map.of("receiptCode", "RCP-001"))).passed()).isTrue();
+    assertThat(verifier.verify(contextWith(Map.of("receiptCode", "RCP-001"))).passed())
+        .isTrue();
   }
 
   @Test
   void passesWhenOnlyExternalRequestIdPresent() {
-    assertThat(verifier.verify(contextWith(Map.of("externalRequestId", "ext-xyz"))).passed())
+    assertThat(
+            verifier.verify(contextWith(Map.of("externalRequestId", "ext-xyz"))).passed())
         .isTrue();
   }
 

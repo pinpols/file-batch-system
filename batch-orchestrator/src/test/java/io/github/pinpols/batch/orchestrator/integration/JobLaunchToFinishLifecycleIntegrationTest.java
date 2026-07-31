@@ -48,15 +48,20 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private TaskExecutionService taskExecutionService;
+  @Autowired
+  private TaskExecutionService taskExecutionService;
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired private JobTaskMapper jobTaskMapper;
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void refreshWorkersForClaim() {
@@ -65,21 +70,19 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
   @Test
   void launchThenClaimThenReport_jobInstanceReachesSuccess() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     // 1) Launch
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-lifecycle-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-lifecycle-" + seed.requestId())
+        .params(Map.of())
+        .build();
     LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
@@ -94,9 +97,8 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
             JobInstanceStatus.WAITING.code());
 
     // 2) Claim the task
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+        new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
@@ -108,19 +110,17 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     // 3) Report success —— 镜像生产:worker CLAIM 时确立的 invocationId 必须随 report 回填。
     // 服务端 assignWorker 在 CLAIM 时把 current_invocation_id 写进 partition;真 worker 持此值并在 report
     // 携带。测试从 partition 读回该值填入命令,复现生产回填(否则触发 R3-P1-10 report invocation fence)。
-    String invocationId =
-        jdbcTemplate.queryForObject(
-            "select current_invocation_id from batch.job_partition where id = ?",
-            String.class,
-            claimed.getJobPartitionId());
-    TaskOutcomeCommand successOutcome =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(claimed.getId())
-            .success(true)
-            .resultSummary("{\"status\":\"processed ok\"}")
-            .partitionInvocationId(invocationId)
-            .build();
+    String invocationId = jdbcTemplate.queryForObject(
+        "select current_invocation_id from batch.job_partition where id = ?",
+        String.class,
+        claimed.getJobPartitionId());
+    TaskOutcomeCommand successOutcome = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(claimed.getId())
+        .success(true)
+        .resultSummary("{\"status\":\"processed ok\"}")
+        .partitionInvocationId(invocationId)
+        .build();
     taskExecutionService.applyTaskOutcome(successOutcome);
 
     // 4) Verify final task status
@@ -138,20 +138,18 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   @org.junit.jupiter.api.Disabled("flaky: outbox/worker race, 根因待定位; 见 commit bc2b32f8")
   @Test
   void launchThenClaimThenReport_failureTransitionsTaskToFailed() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-fail-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-fail-" + seed.requestId())
+        .params(Map.of())
+        .build();
     LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
@@ -160,9 +158,8 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
     assertThat(jobInstance).isNotNull();
 
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+        new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
@@ -172,14 +169,13 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
 
     // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
-    TaskOutcomeCommand failureOutcome =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(claimed.getId())
-            .success(false)
-            .errorCode("TEST_FAILURE")
-            .errorMessage("simulated error")
-            .build();
+    TaskOutcomeCommand failureOutcome = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(claimed.getId())
+        .success(false)
+        .errorCode("TEST_FAILURE")
+        .errorMessage("simulated error")
+        .build();
     taskExecutionService.applyTaskOutcome(failureOutcome);
 
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, claimed.getId());

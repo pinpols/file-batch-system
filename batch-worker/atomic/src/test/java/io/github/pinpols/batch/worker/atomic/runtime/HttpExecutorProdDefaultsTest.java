@@ -22,7 +22,8 @@ import org.springframework.mock.env.MockEnvironment;
 @ExtendWith(MockitoExtension.class)
 class HttpExecutorProdDefaultsTest {
 
-  @Mock private ObjectProvider<HttpExecutorProperties> httpProvider;
+  @Mock
+  private ObjectProvider<HttpExecutorProperties> httpProvider;
 
   private MockEnvironment env;
   private ListAppender<ILoggingEvent> logAppender;
@@ -99,15 +100,13 @@ class HttpExecutorProdDefaultsTest {
 
     newDefaults().applyProdDefaults();
 
-    assertThat(logAppender.list)
-        .anySatisfy(
-            event -> {
-              assertThat(event.getLevel()).isEqualTo(Level.INFO);
-              assertThat(event.getFormattedMessage())
-                  .contains("ADR-029 prod hardening")
-                  .contains("enforce-allowlist auto-enabled")
-                  .contains("was=false");
-            });
+    assertThat(logAppender.list).anySatisfy(event -> {
+      assertThat(event.getLevel()).isEqualTo(Level.INFO);
+      assertThat(event.getFormattedMessage())
+          .contains("ADR-029 prod hardening")
+          .contains("enforce-allowlist auto-enabled")
+          .contains("was=false");
+    });
   }
 
   /** Round-3 #8:显式配置时也打 INFO,声明 effective 值与来源,便于排查。 */
@@ -120,11 +119,9 @@ class HttpExecutorProdDefaultsTest {
 
     newDefaults().applyProdDefaults();
 
-    assertThat(logAppender.list)
-        .anySatisfy(
-            event -> {
-              assertThat(event.getLevel()).isEqualTo(Level.INFO);
-              assertThat(event.getFormattedMessage()).contains("explicitly configured");
-            });
+    assertThat(logAppender.list).anySatisfy(event -> {
+      assertThat(event.getLevel()).isEqualTo(Level.INFO);
+      assertThat(event.getFormattedMessage()).contains("explicitly configured");
+    });
   }
 }

@@ -17,13 +17,15 @@ import lombok.Data;
 @Data
 public class BatchDayOperateRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 128)
   private String calendarCode;
 
-  @NotNull private LocalDate bizDate;
+  @NotNull
+  private LocalDate bizDate;
 
   /** FREEZE / RELEASE / SKIP / REOPEN / CLOSE。 */
   @NotBlank

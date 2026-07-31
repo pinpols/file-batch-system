@@ -38,25 +38,21 @@ public class S3AutoConfiguration {
   @ConditionalOnMissingBean
   public S3Client s3Client(S3StorageProperties p, Environment environment) {
     validateCredentialsInProduction(p, environment);
-    ApacheHttpClient.Builder http =
-        ApacheHttpClient.builder()
-            .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
-            .socketTimeout(Duration.ofMillis(p.getReadTimeoutMs()));
-    S3ClientBuilder b =
-        S3Client.builder()
-            .endpointOverride(URI.create(p.getEndpoint()))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
-            .forcePathStyle(true)
-            // 关掉 AWS SDK v2 ≥2.30 默认的 WHEN_SUPPORTED 请求校验和（CRC32 + aws-chunked trailer）：
-            // 阿里 OSS / 腾讯 COS / GCS 等非 AWS 后端多不识别该 trailer，会回 501/签名错误。
-            // WHEN_REQUIRED 恢复旧 MinIO SDK 行为（仅在 API 强制要求时才算 checksum）。
-            .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
-            .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
-            .httpClientBuilder(http)
-            .region(
-                StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
+    ApacheHttpClient.Builder http = ApacheHttpClient.builder()
+        .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
+        .socketTimeout(Duration.ofMillis(p.getReadTimeoutMs()));
+    S3ClientBuilder b = S3Client.builder()
+        .endpointOverride(URI.create(p.getEndpoint()))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
+        .forcePathStyle(true)
+        // 关掉 AWS SDK v2 ≥2.30 默认的 WHEN_SUPPORTED 请求校验和（CRC32 + aws-chunked trailer）：
+        // 阿里 OSS / 腾讯 COS / GCS 等非 AWS 后端多不识别该 trailer，会回 501/签名错误。
+        // WHEN_REQUIRED 恢复旧 MinIO SDK 行为（仅在 API 强制要求时才算 checksum）。
+        .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
+        .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
+        .httpClientBuilder(http)
+        .region(StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
     RetryStrategy retryStrategy = buildRetryStrategy(p);
     if (retryStrategy != null) {
       b.overrideConfiguration(
@@ -73,10 +69,9 @@ public class S3AutoConfiguration {
     if (p.getMaxAttempts() <= 0 && !p.isAdaptiveRetry()) {
       return null;
     }
-    RetryStrategy base =
-        p.isAdaptiveRetry()
-            ? AwsRetryStrategy.adaptiveRetryStrategy()
-            : AwsRetryStrategy.standardRetryStrategy();
+    RetryStrategy base = p.isAdaptiveRetry()
+        ? AwsRetryStrategy.adaptiveRetryStrategy()
+        : AwsRetryStrategy.standardRetryStrategy();
     if (p.getMaxAttempts() > 0) {
       return base.toBuilder().maxAttempts(p.getMaxAttempts()).build();
     }
@@ -88,10 +83,10 @@ public class S3AutoConfiguration {
   public S3Presigner s3Presigner(S3StorageProperties p) {
     return S3Presigner.builder()
         .endpointOverride(URI.create(p.getEndpoint()))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
+        .serviceConfiguration(
+            S3Configuration.builder().pathStyleAccessEnabled(true).build())
         .region(StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
         .build();
   }
@@ -101,8 +96,10 @@ public class S3AutoConfiguration {
     if (!BatchProfileSupport.isProductionProfile(environment)) {
       return;
     }
-    String accessKey = properties.getAccessKey() == null ? "" : properties.getAccessKey().trim();
-    String secretKey = properties.getSecretKey() == null ? "" : properties.getSecretKey().trim();
+    String accessKey =
+        properties.getAccessKey() == null ? "" : properties.getAccessKey().trim();
+    String secretKey =
+        properties.getSecretKey() == null ? "" : properties.getSecretKey().trim();
     if (accessKey.isEmpty() || secretKey.isEmpty()) {
       throw new IllegalStateException(
           "FATAL: 生产环境对象存储凭据未配置，请通过 BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY 注入");

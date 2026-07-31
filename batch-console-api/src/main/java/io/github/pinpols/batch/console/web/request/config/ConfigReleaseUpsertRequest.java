@@ -9,7 +9,8 @@ import lombok.Data;
 @Data
 public class ConfigReleaseUpsertRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 64, message = "configType too long (max 64)")

@@ -27,11 +27,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class QuotaRuntimeStateSnapshotSchedulerTest {
 
-  @Mock private QuotaRuntimeStateService quotaRuntimeStateService;
-  @Mock private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
-  @Mock private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
-  @Mock private ResourceQueueMapper resourceQueueMapper;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private QuotaRuntimeStateService quotaRuntimeStateService;
+
+  @Mock
+  private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+
+  @Mock
+  private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+
+  @Mock
+  private ResourceQueueMapper resourceQueueMapper;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private QuotaRuntimeStateSnapshotScheduler scheduler(boolean snapshotEnabled) {
     QuotaProperties quotaProperties = new QuotaProperties();

@@ -9,7 +9,8 @@ import lombok.Data;
 @Data
 public class ConsoleCatchUpApprovalRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 128, message = "requestId too long (max 128)")
@@ -20,7 +21,9 @@ public class ConsoleCatchUpApprovalRequest {
   /** 用于解析补跑目标的业务作业标识。 */
   private String jobCode;
 
-  @NotBlank @ValidBizDate private String bizDate;
+  @NotBlank
+  @ValidBizDate
+  private String bizDate;
 
   @Size(max = 64, message = "scheduledAt too long (max 64)")
   private String scheduledAt;

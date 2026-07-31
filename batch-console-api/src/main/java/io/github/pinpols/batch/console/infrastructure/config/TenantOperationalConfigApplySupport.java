@@ -106,9 +106,8 @@ final class TenantOperationalConfigApplySupport {
     if (spec.getHolidays() == null || spec.getHolidays().isEmpty()) {
       return;
     }
-    Map<String, Object> saved =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-            tenantId, spec.getCalendarCode());
+    Map<String, Object> saved = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+        tenantId, spec.getCalendarCode());
     if (saved == null) {
       return;
     }
@@ -133,17 +132,16 @@ final class TenantOperationalConfigApplySupport {
   }
 
   void upsertQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
-    TenantQuotaPolicyUpsertParam param =
-        TenantQuotaPolicyUpsertParam.builder()
-            .tenantId(tenantId)
-            .policyCode(spec.getPolicyCode())
-            .maxRunningJobsPerTenant(spec.getMaxRunningJobsPerTenant())
-            .maxPartitionsPerTenant(spec.getMaxPartitionsPerTenant())
-            .maxQpsPerTenant(spec.getMaxQpsPerTenant())
-            .fairShareWeight(spec.getFairShareWeight())
-            .enabled(Nullables.coalesce(spec.getEnabled(), true))
-            .description(spec.getDescription())
-            .build();
+    TenantQuotaPolicyUpsertParam param = TenantQuotaPolicyUpsertParam.builder()
+        .tenantId(tenantId)
+        .policyCode(spec.getPolicyCode())
+        .maxRunningJobsPerTenant(spec.getMaxRunningJobsPerTenant())
+        .maxPartitionsPerTenant(spec.getMaxPartitionsPerTenant())
+        .maxQpsPerTenant(spec.getMaxQpsPerTenant())
+        .fairShareWeight(spec.getFairShareWeight())
+        .enabled(Nullables.coalesce(spec.getEnabled(), true))
+        .description(spec.getDescription())
+        .build();
     tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(param);
   }
 

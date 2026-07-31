@@ -54,10 +54,8 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
     lenient().when(siloDs.getConnection()).thenReturn(cs);
     HashAndSiloPlacementResolver resolver =
         new HashAndSiloPlacementResolver(2, Map.of("big", "silo-big"));
-    DataSource routing =
-        BusinessRoutingDataSourceFactory.multiShard(
-            Map.of("shard-0", ds0, "shard-1", mock(DataSource.class), "silo-big", siloDs),
-            resolver);
+    DataSource routing = BusinessRoutingDataSourceFactory.multiShard(
+        Map.of("shard-0", ds0, "shard-1", mock(DataSource.class), "silo-big", siloDs), resolver);
     RlsTenantContextHolder.set("big");
     assertThat(routing.getConnection()).isSameAs(cs);
   }
@@ -65,11 +63,9 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
   @Test
   @DisplayName("shards 缺 default key(shard-0)拒绝")
   void rejectsMissingDefaultKey() {
-    assertThatThrownBy(
-            () ->
-                BusinessRoutingDataSourceFactory.multiShard(
-                    Map.of("shard-1", mock(DataSource.class)),
-                    new HashAndSiloPlacementResolver(2, Map.of())))
+    assertThatThrownBy(() -> BusinessRoutingDataSourceFactory.multiShard(
+            Map.of("shard-1", mock(DataSource.class)),
+            new HashAndSiloPlacementResolver(2, Map.of())))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

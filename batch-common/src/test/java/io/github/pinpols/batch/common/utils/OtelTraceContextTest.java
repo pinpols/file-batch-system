@@ -34,9 +34,8 @@ class OtelTraceContextTest {
 
   @Test
   void validSpanContextExposesTraceId() {
-    SpanContext valid =
-        SpanContext.create(
-            VALID_TRACE_ID, VALID_SPAN_ID, TraceFlags.getSampled(), TraceState.getDefault());
+    SpanContext valid = SpanContext.create(
+        VALID_TRACE_ID, VALID_SPAN_ID, TraceFlags.getSampled(), TraceState.getDefault());
     Span span = Span.wrap(valid);
     try (Scope ignored = Context.current().with(span).makeCurrent()) {
       assertThat(OtelTraceContext.currentTraceIdOrNull()).isEqualTo(VALID_TRACE_ID);
@@ -47,12 +46,11 @@ class OtelTraceContextTest {
 
   @Test
   void invalidSpanContextReturnsNull() {
-    SpanContext invalid =
-        SpanContext.create(
-            "00000000000000000000000000000000",
-            "0000000000000000",
-            TraceFlags.getDefault(),
-            TraceState.getDefault());
+    SpanContext invalid = SpanContext.create(
+        "00000000000000000000000000000000",
+        "0000000000000000",
+        TraceFlags.getDefault(),
+        TraceState.getDefault());
     Span invalidSpan = Span.wrap(invalid);
     try (Scope ignored = Context.current().with(invalidSpan).makeCurrent()) {
       assertThat(OtelTraceContext.currentTraceIdOrNull()).isNull();

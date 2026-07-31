@@ -174,30 +174,29 @@ public class ImportIngressScanner {
     metadata.put("bundleExportTemplates", manifest.exportTemplateCodes());
     // 自完整到达组:requiredFileSet = 本 trigger 记录自身文件名 → 组(大小 1)立即满足条件触发
     putArrivalMetadata(metadata, manifest.fileGroupCode(), fileName);
-    runtimeRepository.createFileRecord(
-        FileRecordParam.builder()
-            .tenantId(resolvedTenant)
-            .fileCode(null)
-            .bizType(scannerProperties.getDefaultBizType())
-            .fileCategory("EXPORT_TRIGGER")
-            .fileName(fileName)
-            .originalFileName(fileName)
-            .fileFormatType(resolveFileFormatType(fileName))
-            .charset(StandardCharsets.UTF_8.name())
-            .fileSizeBytes(snapshot.size())
-            .checksumType("NONE")
-            .checksumValue(null)
-            .storageType("S3")
-            .storagePath(snapshot.objectName())
-            .storageBucket(s3StorageProperties.getBucket())
-            .fileVersion(null)
-            .bizDate(bizDate)
-            .sourceType(scannerProperties.getSourceType())
-            .sourceRef(snapshot.objectName())
-            .fileStatus("RECEIVED")
-            .traceId("export-trigger-" + sanitizeTrace(fileName))
-            .metadata(metadata)
-            .build());
+    runtimeRepository.createFileRecord(FileRecordParam.builder()
+        .tenantId(resolvedTenant)
+        .fileCode(null)
+        .bizType(scannerProperties.getDefaultBizType())
+        .fileCategory("EXPORT_TRIGGER")
+        .fileName(fileName)
+        .originalFileName(fileName)
+        .fileFormatType(resolveFileFormatType(fileName))
+        .charset(StandardCharsets.UTF_8.name())
+        .fileSizeBytes(snapshot.size())
+        .checksumType("NONE")
+        .checksumValue(null)
+        .storageType("S3")
+        .storagePath(snapshot.objectName())
+        .storageBucket(s3StorageProperties.getBucket())
+        .fileVersion(null)
+        .bizDate(bizDate)
+        .sourceType(scannerProperties.getSourceType())
+        .sourceRef(snapshot.objectName())
+        .fileStatus("RECEIVED")
+        .traceId("export-trigger-" + sanitizeTrace(fileName))
+        .metadata(metadata)
+        .build());
     log.info(
         "export bundle trigger registered: tenant={}, group={}, jobCode={}, templateCount={},"
             + " bizDate={}",
@@ -229,10 +228,9 @@ public class ImportIngressScanner {
     if (objectName == null) {
       return "";
     }
-    String key =
-        Texts.hasText(prefix) && objectName.startsWith(prefix)
-            ? objectName.substring(prefix.length())
-            : objectName;
+    String key = Texts.hasText(prefix) && objectName.startsWith(prefix)
+        ? objectName.substring(prefix.length())
+        : objectName;
     int slash = key.indexOf('/');
     if (slash <= 0) {
       return "";
@@ -324,66 +322,61 @@ public class ImportIngressScanner {
     if (matchedBatch != null) {
       putBundleMetadata(metadata, matchedBatch, fileName);
     }
-    Long fileId =
-        runtimeRepository.createFileRecord(
-            FileRecordParam.builder()
-                .tenantId(resolvedTenant)
-                .fileCode(null)
-                .bizType(scannerProperties.getDefaultBizType())
-                .fileCategory("INPUT")
-                .fileName(fileName)
-                .originalFileName(fileName)
-                .fileFormatType(resolveFileFormatType(fileName))
-                .charset(StandardCharsets.UTF_8.name())
-                .fileSizeBytes(snapshot.size())
-                .checksumType(
-                    manifest != null && Texts.hasText(manifest.checksumType())
-                        ? manifest.checksumType()
-                        : "NONE")
-                .checksumValue(manifest == null ? null : manifest.checksumValue())
-                .storageType("S3")
-                .storagePath(snapshot.objectName())
-                .storageBucket(s3StorageProperties.getBucket())
-                .fileVersion(null)
-                .bizDate(bizDate)
-                .sourceType(scannerProperties.getSourceType())
-                .sourceRef(snapshot.objectName())
-                .fileStatus("RECEIVED")
-                .traceId("import-scan-" + sanitizeTrace(fileName))
-                .metadata(metadata)
-                .build());
+    Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+        .tenantId(resolvedTenant)
+        .fileCode(null)
+        .bizType(scannerProperties.getDefaultBizType())
+        .fileCategory("INPUT")
+        .fileName(fileName)
+        .originalFileName(fileName)
+        .fileFormatType(resolveFileFormatType(fileName))
+        .charset(StandardCharsets.UTF_8.name())
+        .fileSizeBytes(snapshot.size())
+        .checksumType(
+            manifest != null && Texts.hasText(manifest.checksumType())
+                ? manifest.checksumType()
+                : "NONE")
+        .checksumValue(manifest == null ? null : manifest.checksumValue())
+        .storageType("S3")
+        .storagePath(snapshot.objectName())
+        .storageBucket(s3StorageProperties.getBucket())
+        .fileVersion(null)
+        .bizDate(bizDate)
+        .sourceType(scannerProperties.getSourceType())
+        .sourceRef(snapshot.objectName())
+        .fileStatus("RECEIVED")
+        .traceId("import-scan-" + sanitizeTrace(fileName))
+        .metadata(metadata)
+        .build());
     if (scannerProperties.getArrival().isEnabled()
         && Texts.hasText(effectiveGroupCode)
         && Texts.hasText(effectiveRequiredFileSet)) {
-      runtimeRepository.appendAudit(
-          FileAuditParam.builder()
-              .fileId(fileId)
-              .tenantId(resolvedTenant)
-              .operationType("ARRIVAL_REGISTER")
-              .operationResult("SUCCESS")
-              .operatorType("SYSTEM")
-              .operatorId("import-ingress-scanner")
-              .traceId("arrival-" + sanitizeTrace(fileName))
-              .evidenceRef(snapshot.objectName())
-              .detailSummary(
-                  Map.of(
-                      "fileGroupCode", effectiveGroupCode,
-                      "requiredFileSet", effectiveRequiredFileSet,
-                      "arrivalState", "WAITING_ARRIVAL"))
-              .build());
+      runtimeRepository.appendAudit(FileAuditParam.builder()
+          .fileId(fileId)
+          .tenantId(resolvedTenant)
+          .operationType("ARRIVAL_REGISTER")
+          .operationResult("SUCCESS")
+          .operatorType("SYSTEM")
+          .operatorId("import-ingress-scanner")
+          .traceId("arrival-" + sanitizeTrace(fileName))
+          .evidenceRef(snapshot.objectName())
+          .detailSummary(Map.of(
+              "fileGroupCode", effectiveGroupCode,
+              "requiredFileSet", effectiveRequiredFileSet,
+              "arrivalState", "WAITING_ARRIVAL"))
+          .build());
     }
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(resolvedTenant)
-            .operationType("RECEIVE_SCAN")
-            .operationResult("SUCCESS")
-            .operatorType("SYSTEM")
-            .operatorId("import-ingress-scanner")
-            .traceId("import-scan-" + sanitizeTrace(fileName))
-            .evidenceRef(snapshot.objectName())
-            .detailSummary(metadata)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(resolvedTenant)
+        .operationType("RECEIVE_SCAN")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .operatorId("import-ingress-scanner")
+        .traceId("import-scan-" + sanitizeTrace(fileName))
+        .evidenceRef(snapshot.objectName())
+        .detailSummary(metadata)
+        .build());
     log.info(
         "import file registered by scanner: tenantId={}, fileId={}, objectName={}",
         resolvedTenant,
@@ -398,17 +391,14 @@ public class ImportIngressScanner {
     Instant now = BatchDateTimeSupport.utcNow();
     // P2：用 ConcurrentHashMap.compute 原子化 check-and-update，即便 ShedLock
     // 异常过期时也不会有 get+put 之间的 TOCTOU；返回更新后的 state，稳定性判断在外部做
-    ObservedObjectState state =
-        observedObjects.compute(
-            snapshot.objectName(),
-            (k, existing) -> {
-              if (existing == null
-                  || existing.size() != snapshot.size()
-                  || !Objects.equals(existing.etag(), snapshot.etag())) {
-                return new ObservedObjectState(snapshot.size(), snapshot.etag(), now);
-              }
-              return existing;
-            });
+    ObservedObjectState state = observedObjects.compute(snapshot.objectName(), (k, existing) -> {
+      if (existing == null
+          || existing.size() != snapshot.size()
+          || !Objects.equals(existing.etag(), snapshot.etag())) {
+        return new ObservedObjectState(snapshot.size(), snapshot.etag(), now);
+      }
+      return existing;
+    });
     // 刚被替换（或首次观察）→ 还未稳定；否则看 firstObservedAt + stabilityWindow 是否已过
     if (state.firstObservedAt().equals(now)) {
       return false;
@@ -611,9 +601,8 @@ public class ImportIngressScanner {
     if (matched == null) {
       return;
     }
-    Map<String, Object> record =
-        runtimeRepository.loadFileRecordByStoragePath(
-            tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
+    Map<String, Object> record = runtimeRepository.loadFileRecordByStoragePath(
+        tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
     if (record == null || record.isEmpty()) {
       return;
     }
@@ -665,24 +654,12 @@ public class ImportIngressScanner {
     }
     matchedBatch
         .templateCodeFor(fileName)
-        .ifPresent(
-            templateCode ->
-                putMetadataValue(
-                    metadata,
-                    existingMetadata,
-                    "bundleTemplateCode",
-                    templateCode,
-                    onlyMissingOrChanged));
+        .ifPresent(templateCode -> putMetadataValue(
+            metadata, existingMetadata, "bundleTemplateCode", templateCode, onlyMissingOrChanged));
     matchedBatch
         .targetRefFor(fileName)
-        .ifPresent(
-            targetRef ->
-                putMetadataValue(
-                    metadata,
-                    existingMetadata,
-                    "bundleTargetRef",
-                    targetRef,
-                    onlyMissingOrChanged));
+        .ifPresent(targetRef -> putMetadataValue(
+            metadata, existingMetadata, "bundleTargetRef", targetRef, onlyMissingOrChanged));
     if (Texts.hasText(matchedBatch.jobCode())) {
       putMetadataValue(
           metadata,
@@ -765,12 +742,11 @@ public class ImportIngressScanner {
     // ExcelFormatParser 走纯 OOXML 的 OPCPackage.open(),喂 OLE2 字节必崩当坏文件。
     // .xls 落 BINARY,真正解析时由 ExcelFormatParser/上游格式路由给出明确报错(转 .xlsx 提示),
     // 而非在 PARSE 阶段静默产出坏数据。详见 ExcelFormatParser 的 OLE2 fail-fast。
-    Map<String, String> formatMap =
-        Map.ofEntries(
-            Map.entry(".csv", "DELIMITED"),
-            Map.entry(".xlsx", "EXCEL"),
-            Map.entry(".xml", "XML"),
-            Map.entry(".json", "JSON"));
+    Map<String, String> formatMap = Map.ofEntries(
+        Map.entry(".csv", "DELIMITED"),
+        Map.entry(".xlsx", "EXCEL"),
+        Map.entry(".xml", "XML"),
+        Map.entry(".json", "JSON"));
     return formatMap.entrySet().stream()
         .filter(e -> lower.endsWith(e.getKey()))
         .map(Map.Entry::getValue)

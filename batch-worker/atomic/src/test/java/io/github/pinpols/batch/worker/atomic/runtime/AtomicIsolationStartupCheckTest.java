@@ -27,12 +27,23 @@ import org.springframework.core.env.Environment;
 @ExtendWith(MockitoExtension.class)
 class AtomicIsolationStartupCheckTest {
 
-  @Mock private ObjectProvider<ShellExecutorProperties> shellProvider;
-  @Mock private ObjectProvider<SqlExecutorProperties> sqlProvider;
-  @Mock private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
-  @Mock private ObjectProvider<HttpExecutorProperties> httpProvider;
-  @Mock private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
-  @Mock private Environment environment;
+  @Mock
+  private ObjectProvider<ShellExecutorProperties> shellProvider;
+
+  @Mock
+  private ObjectProvider<SqlExecutorProperties> sqlProvider;
+
+  @Mock
+  private ObjectProvider<StoredProcExecutorProperties> storedProcProvider;
+
+  @Mock
+  private ObjectProvider<HttpExecutorProperties> httpProvider;
+
+  @Mock
+  private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
+
+  @Mock
+  private Environment environment;
 
   private AtomicIsolationStartupCheck newCheck() {
     return new AtomicIsolationStartupCheck(
@@ -74,14 +85,12 @@ class AtomicIsolationStartupCheckTest {
 
   private void stubFlags(boolean requireIsolation, boolean acknowledged) {
     lenient()
-        .when(
-            environment.getProperty(
-                AtomicIsolationStartupCheck.PROP_REQUIRE_ISOLATION, Boolean.class, false))
+        .when(environment.getProperty(
+            AtomicIsolationStartupCheck.PROP_REQUIRE_ISOLATION, Boolean.class, false))
         .thenReturn(requireIsolation);
     lenient()
-        .when(
-            environment.getProperty(
-                AtomicIsolationStartupCheck.PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false))
+        .when(environment.getProperty(
+            AtomicIsolationStartupCheck.PROP_ISOLATION_ACKNOWLEDGED, Boolean.class, false))
         .thenReturn(acknowledged);
   }
 

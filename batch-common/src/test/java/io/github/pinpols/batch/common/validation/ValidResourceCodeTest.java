@@ -41,7 +41,8 @@ class ValidResourceCodeTest {
   @AllArgsConstructor
   @Setter
   static class Holder {
-    @ValidResourceCode private String code;
+    @ValidResourceCode
+    private String code;
   }
 
   private Set<ConstraintViolation<Holder>> violations(String value) {

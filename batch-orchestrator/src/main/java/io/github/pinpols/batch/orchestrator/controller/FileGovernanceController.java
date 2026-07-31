@@ -50,14 +50,13 @@ public class FileGovernanceController {
 
   @PostMapping("/presign-upload")
   public Map<String, Object> presignUpload(@RequestBody FileUploadRequest request) {
-    return fileGovernanceService.createUploadSession(
-        FileUploadSessionCommand.builder()
-            .tenantId(request.tenantId())
-            .channelCode(request.channelCode())
-            .fileName(request.fileName())
-            .operatorId(request.operatorId())
-            .traceId(request.traceId())
-            .build());
+    return fileGovernanceService.createUploadSession(FileUploadSessionCommand.builder()
+        .tenantId(request.tenantId())
+        .channelCode(request.channelCode())
+        .fileName(request.fileName())
+        .operatorId(request.operatorId())
+        .traceId(request.traceId())
+        .build());
   }
 
   @PostMapping("/{fileId}/confirm-arrival")
@@ -77,17 +76,16 @@ public class FileGovernanceController {
   @PostMapping("/arrival-groups/{fileGroupCode}/actions")
   public FileOperationResponse operateArrivalGroup(
       @PathVariable String fileGroupCode, @RequestBody ArrivalGroupOperationRequest request) {
-    ArrivalGroupGovernanceCommand command =
-        ArrivalGroupGovernanceCommand.builder()
-            .tenantId(request.tenantId())
-            .fileGroupCode(fileGroupCode)
-            .bizDate(request.bizDate())
-            .action(request.action())
-            .operatorId(request.operatorId())
-            .traceId(request.traceId())
-            .reason(request.reason())
-            .extendWaitSeconds(request.extendWaitSeconds())
-            .build();
+    ArrivalGroupGovernanceCommand command = ArrivalGroupGovernanceCommand.builder()
+        .tenantId(request.tenantId())
+        .fileGroupCode(fileGroupCode)
+        .bizDate(request.bizDate())
+        .action(request.action())
+        .operatorId(request.operatorId())
+        .traceId(request.traceId())
+        .reason(request.reason())
+        .extendWaitSeconds(request.extendWaitSeconds())
+        .build();
     String result = fileGovernanceService.operateArrivalGroup(command);
     return new FileOperationResponse(result);
   }

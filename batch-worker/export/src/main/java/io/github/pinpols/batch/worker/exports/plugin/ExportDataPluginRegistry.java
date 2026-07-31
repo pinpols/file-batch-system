@@ -19,14 +19,13 @@ public class ExportDataPluginRegistry {
       String id = plugin.id().toLowerCase(Locale.ROOT);
       ExportDataPlugin previous = resolved.putIfAbsent(id, plugin);
       if (previous != null) {
-        throw new IllegalStateException(
-            "duplicate ExportDataPlugin id: "
-                + id
-                + " ("
-                + previous.getClass().getName()
-                + ", "
-                + plugin.getClass().getName()
-                + ")");
+        throw new IllegalStateException("duplicate ExportDataPlugin id: "
+            + id
+            + " ("
+            + previous.getClass().getName()
+            + ", "
+            + plugin.getClass().getName()
+            + ")");
       }
     }
     this.byId = Map.copyOf(resolved);

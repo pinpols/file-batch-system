@@ -50,38 +50,35 @@ class ConsoleAssetFreshnessPolicyControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAssetFreshnessPolicyController(policyService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAssetFreshnessPolicyController(policyService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldListPolicies() throws Exception {
-    AssetFreshnessPolicyEntity entity =
-        new AssetFreshnessPolicyEntity(
-            1L,
-            "t1",
-            "JOB_A",
-            "JOB",
-            LocalTime.of(2, 0),
-            "Asia/Shanghai",
-            300,
-            2,
-            "WARN",
-            true,
-            null,
-            null);
+    AssetFreshnessPolicyEntity entity = new AssetFreshnessPolicyEntity(
+        1L,
+        "t1",
+        "JOB_A",
+        "JOB",
+        LocalTime.of(2, 0),
+        "Asia/Shanghai",
+        300,
+        2,
+        "WARN",
+        true,
+        null,
+        null);
     when(policyService.list("t1", "JOB_A", true, 100)).thenReturn(List.of(entity));
 
     mockMvc
-        .perform(
-            get("/api/console/asset-freshness-policies")
-                .param("tenantId", "t1")
-                .param("assetCode", "JOB_A")
-                .param("enabled", "true"))
+        .perform(get("/api/console/asset-freshness-policies")
+            .param("tenantId", "t1")
+            .param("assetCode", "JOB_A")
+            .param("enabled", "true"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].assetCode").value("JOB_A"))
@@ -91,12 +88,10 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   @Test
   void shouldCreatePolicy() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/asset-freshness-policies")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/asset-freshness-policies")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "assetCode":"JOB_A",
                       "expectedByLocalTime":"02:00:00",
@@ -111,28 +106,25 @@ class ConsoleAssetFreshnessPolicyControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
     verify(policyService)
-        .upsert(
-            AssetFreshnessPolicyUpsertParam.builder()
-                .tenantId("t1")
-                .assetCode("JOB_A")
-                .expectedByLocalTime(LocalTime.of(2, 0))
-                .timezone("Asia/Shanghai")
-                .staleAfterSeconds(300)
-                .lookbackDays(2)
-                .severity("WARN")
-                .enabled(true)
-                .build());
+        .upsert(AssetFreshnessPolicyUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .expectedByLocalTime(LocalTime.of(2, 0))
+            .timezone("Asia/Shanghai")
+            .staleAfterSeconds(300)
+            .lookbackDays(2)
+            .severity("WARN")
+            .enabled(true)
+            .build());
   }
 
   @Test
   void create_returns400_whenLookbackDaysOutOfRange() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/asset-freshness-policies")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/asset-freshness-policies")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "assetCode":"JOB_A",
                       "expectedByLocalTime":"02:00:00",
@@ -149,12 +141,10 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   @Test
   void create_returns400_whenAssetCodeBlank() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/asset-freshness-policies")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/asset-freshness-policies")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "assetCode":"",
                       "expectedByLocalTime":"02:00:00",
@@ -171,11 +161,10 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   @Test
   void shouldTogglePolicy() throws Exception {
     mockMvc
-        .perform(
-            patch("/api/console/asset-freshness-policies/9/enabled")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"enabled\":false}"))
+        .perform(patch("/api/console/asset-freshness-policies/9/enabled")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"enabled\":false}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 

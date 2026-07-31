@@ -34,8 +34,11 @@ import org.springframework.web.server.ResponseStatusException;
  */
 class LaunchApplicationServiceTest {
 
-  @Mock private LaunchService launchService;
-  @Mock private TenantActionRateLimiter rateLimiter;
+  @Mock
+  private LaunchService launchService;
+
+  @Mock
+  private TenantActionRateLimiter rateLimiter;
 
   private LaunchApplicationService service;
 

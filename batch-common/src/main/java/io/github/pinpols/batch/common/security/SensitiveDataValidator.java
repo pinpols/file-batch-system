@@ -25,21 +25,20 @@ import java.util.Set;
 public final class SensitiveDataValidator {
 
   /** 命中即拒的关键字(全部小写,匹配规则:key.toLowerCase().contains(keyword))。 */
-  static final List<String> SENSITIVE_KEYWORDS =
-      List.of(
-          "password",
-          "passwd",
-          "secret",
-          "apikey",
-          "api_key",
-          "token",
-          "credential",
-          "accesskey",
-          "access_key",
-          "privatekey",
-          "private_key",
-          "clientsecret",
-          "client_secret");
+  static final List<String> SENSITIVE_KEYWORDS = List.of(
+      "password",
+      "passwd",
+      "secret",
+      "apikey",
+      "api_key",
+      "token",
+      "credential",
+      "accesskey",
+      "access_key",
+      "privatekey",
+      "private_key",
+      "clientsecret",
+      "client_secret");
 
   private SensitiveDataValidator() {}
 

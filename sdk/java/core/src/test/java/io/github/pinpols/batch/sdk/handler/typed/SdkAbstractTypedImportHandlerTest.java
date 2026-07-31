@@ -85,13 +85,12 @@ class SdkAbstractTypedImportHandlerTest {
   @DisplayName("summarize 返 null → 走计数器 output")
   void shouldFallBackToCountsOutput_whenSummarizeNull() {
     // 准备
-    RecordingTypedImport handler =
-        new RecordingTypedImport(50) {
-          @Override
-          protected ImportResult summarize(ImportRequest input, SdkRowResult counts) {
-            return null;
-          }
-        };
+    RecordingTypedImport handler = new RecordingTypedImport(50) {
+      @Override
+      protected ImportResult summarize(ImportRequest input, SdkRowResult counts) {
+        return null;
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("sourcePath", "/x", "rows", 10)));
@@ -121,13 +120,12 @@ class SdkAbstractTypedImportHandlerTest {
   @DisplayName("loadBatch 抛异常 → fail 且行流仍 close()")
   void shouldFailAndCloseStream_whenLoadBatchThrows() {
     // 准备
-    RecordingTypedImport handler =
-        new RecordingTypedImport(30) {
-          @Override
-          protected void loadBatch(ImportRequest input, SdkTaskContext ctx, List<Integer> batch) {
-            throw new IllegalStateException("loadBatch boom");
-          }
-        };
+    RecordingTypedImport handler = new RecordingTypedImport(30) {
+      @Override
+      protected void loadBatch(ImportRequest input, SdkTaskContext ctx, List<Integer> batch) {
+        throw new IllegalStateException("loadBatch boom");
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("sourcePath", "/x", "rows", 100)));

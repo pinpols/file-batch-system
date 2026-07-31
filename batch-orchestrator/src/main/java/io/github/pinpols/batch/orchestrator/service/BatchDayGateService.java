@@ -62,9 +62,8 @@ public class BatchDayGateService {
     }
     // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
     if (!isFrozenBypassTrigger(request.triggerType())) {
-      BatchDayInstanceEntity currentDay =
-          batchDayInstanceMapper.selectByTenantCalendarBizDate(
-              request.tenantId(), job.calendarCode(), request.bizDate());
+      BatchDayInstanceEntity currentDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+          request.tenantId(), job.calendarCode(), request.bizDate());
       if (currentDay != null && Boolean.TRUE.equals(currentDay.frozen())) {
         String reason = "BATCH_DAY_FROZEN";
         reject(request, currentDay, reason);
@@ -77,18 +76,15 @@ public class BatchDayGateService {
     }
     BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(request.tenantId(), job.calendarCode());
-    String policy =
-        "INHERIT".equals(scope)
-            ? normalize(
-                calendar == null ? null : calendar.dayRolloverPolicy(), POLICY_ALLOW_OVERLAP)
-            : POLICY_WAIT_PREVIOUS_DAY;
+    String policy = "INHERIT".equals(scope)
+        ? normalize(calendar == null ? null : calendar.dayRolloverPolicy(), POLICY_ALLOW_OVERLAP)
+        : POLICY_WAIT_PREVIOUS_DAY;
     if (POLICY_ALLOW_OVERLAP.equals(policy)) {
       return GateDecision.allow();
     }
     LocalDate prevBizDate = request.bizDate().minusDays(1);
-    BatchDayInstanceEntity previous =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            request.tenantId(), job.calendarCode(), prevBizDate);
+    BatchDayInstanceEntity previous = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+        request.tenantId(), job.calendarCode(), prevBizDate);
     // SAME_JOB / SAME_JOB_GROUP 细粒度: 在 batch_day_instance 之外, 还要看
     // job_instance 维度的实际终态(防止 calendar 已 SETTLED 但同组某 job 上一日还在 RUNNING)。
     if ("SAME_JOB".equals(scope) || "SAME_JOB_GROUP".equals(scope)) {
@@ -125,15 +121,13 @@ public class BatchDayGateService {
   private String checkFineGrainedDependency(
       String scope, LaunchRequest request, JobDefinitionEntity job, LocalDate prevBizDate) {
     if ("SAME_JOB_GROUP".equals(scope) && Texts.hasText(job.jobGroupCode())) {
-      int active =
-          jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
-              request.tenantId(), job.jobGroupCode(), prevBizDate);
+      int active = jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
+          request.tenantId(), job.jobGroupCode(), prevBizDate);
       return active > 0 ? "PREVIOUS_JOB_GROUP_NOT_CLOSED" : null;
     }
     // SAME_JOB, 或 SAME_JOB_GROUP 但未配组(降级为 SAME_JOB)
-    int active =
-        jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
-            request.tenantId(), request.jobCode(), prevBizDate);
+    int active = jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
+        request.tenantId(), request.jobCode(), prevBizDate);
     return active > 0 ? "PREVIOUS_JOB_NOT_CLOSED" : null;
   }
 
@@ -153,25 +147,24 @@ public class BatchDayGateService {
       String reason) {
     Instant now = dateTimeSupport.nowInstant();
     String payload = buildLaunchPayload(request, effectiveParams);
-    BatchDayWaitingLaunchEntity waiting =
-        BatchDayWaitingLaunchEntity.builder()
-            .tenantId(request.tenantId())
-            .calendarCode(previous.calendarCode())
-            .jobCode(request.jobCode())
-            .bizDate(request.bizDate())
-            .requestId(request.requestId())
-            .traceId(traceId)
-            .triggerType(request.triggerType() == null ? null : request.triggerType().code())
-            .waitReason(reason)
-            .launchPayload(payload)
-            .waitStatus(BatchStatusConstants.WAITING)
-            .createdAt(now)
-            .updatedAt(now)
-            .build();
+    BatchDayWaitingLaunchEntity waiting = BatchDayWaitingLaunchEntity.builder()
+        .tenantId(request.tenantId())
+        .calendarCode(previous.calendarCode())
+        .jobCode(request.jobCode())
+        .bizDate(request.bizDate())
+        .requestId(request.requestId())
+        .traceId(traceId)
+        .triggerType(
+            request.triggerType() == null ? null : request.triggerType().code())
+        .waitReason(reason)
+        .launchPayload(payload)
+        .waitStatus(BatchStatusConstants.WAITING)
+        .createdAt(now)
+        .updatedAt(now)
+        .build();
     waitingLaunchMapper.insert(waiting);
-    int updated =
-        triggerRequestMapper.updateAcceptance(
-            request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
+    int updated = triggerRequestMapper.updateAcceptance(
+        request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
     if (updated == 0) {
       log.warn(
           "updateAcceptance(WAITING) 0 行受影响,行已是终态: tenantId={} requestId={}",
@@ -183,9 +176,8 @@ public class BatchDayGateService {
   }
 
   private void reject(LaunchRequest request, BatchDayInstanceEntity previous, String reason) {
-    int updated =
-        triggerRequestMapper.updateAcceptance(
-            request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+    int updated = triggerRequestMapper.updateAcceptance(
+        request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
     if (updated == 0) {
       log.warn(
           "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
@@ -208,32 +200,33 @@ public class BatchDayGateService {
     detail.put("jobCode", request.jobCode());
     detail.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
     detail.put("requestId", request.requestId());
-    detail.put("triggerType", request.triggerType() == null ? null : request.triggerType().code());
+    detail.put(
+        "triggerType",
+        request.triggerType() == null ? null : request.triggerType().code());
     detail.put("reasonCode", reason);
     if (previous != null) {
       detail.put("calendarCode", previous.calendarCode());
       detail.put(
-          "previousBizDate", previous.bizDate() == null ? null : previous.bizDate().toString());
+          "previousBizDate",
+          previous.bizDate() == null ? null : previous.bizDate().toString());
       detail.put("previousDayStatus", previous.dayStatus());
     }
-    String resourceKey =
-        request.tenantId()
-            + ":"
-            + (previous == null ? "" : previous.calendarCode() + ":")
-            + request.jobCode()
-            + ":"
-            + (request.bizDate() == null ? "" : request.bizDate());
-    AlertEmitRequest emitRequest =
-        AlertEmitRequest.builder()
-            .tenantId(request.tenantId())
-            .serviceName("batch-orchestrator")
-            .alertType(alertType)
-            .severity(severity)
-            .title("batch day gate " + alertType.toLowerCase(Locale.ROOT) + ": " + reason)
-            .detailJson(JsonUtils.toJson(detail))
-            .resourceKey(resourceKey)
-            .traceId(traceId)
-            .build();
+    String resourceKey = request.tenantId()
+        + ":"
+        + (previous == null ? "" : previous.calendarCode() + ":")
+        + request.jobCode()
+        + ":"
+        + (request.bizDate() == null ? "" : request.bizDate());
+    AlertEmitRequest emitRequest = AlertEmitRequest.builder()
+        .tenantId(request.tenantId())
+        .serviceName("batch-orchestrator")
+        .alertType(alertType)
+        .severity(severity)
+        .title("batch day gate " + alertType.toLowerCase(Locale.ROOT) + ": " + reason)
+        .detailJson(JsonUtils.toJson(detail))
+        .resourceKey(resourceKey)
+        .traceId(traceId)
+        .build();
     alertEventService.emit(emitRequest);
   }
 
@@ -242,7 +235,9 @@ public class BatchDayGateService {
     payload.put("tenantId", request.tenantId());
     payload.put("jobCode", request.jobCode());
     payload.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    payload.put("triggerType", request.triggerType() == null ? null : request.triggerType().code());
+    payload.put(
+        "triggerType",
+        request.triggerType() == null ? null : request.triggerType().code());
     payload.put("requestId", request.requestId());
     payload.put("traceId", request.traceId());
     payload.put("params", request.params());
@@ -274,7 +269,9 @@ public class BatchDayGateService {
     Map<String, Object> extra = new LinkedHashMap<>();
     extra.put("jobCode", request.jobCode());
     extra.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    extra.put("previousBizDate", previous.bizDate() == null ? null : previous.bizDate().toString());
+    extra.put(
+        "previousBizDate",
+        previous.bizDate() == null ? null : previous.bizDate().toString());
     extra.put("calendarCode", previous.calendarCode());
     extra.put("previousDayStatus", previous.dayStatus());
     extra.put("reasonCode", reason);

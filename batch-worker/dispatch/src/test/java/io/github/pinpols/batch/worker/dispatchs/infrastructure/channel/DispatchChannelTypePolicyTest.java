@@ -50,10 +50,8 @@ class DispatchChannelTypePolicyTest {
   void requireFullCoverage_passes_whenProfilesExactlyMatchOfficialTypes() {
     Set<String> officialTypes = new HashSet<>(DispatchChannelTypePolicy.allowedTypes());
 
-    assertThatCode(
-            () ->
-                DispatchChannelTypePolicy.requireFullCoverage(
-                    new HashSet<>(officialTypes), officialTypes))
+    assertThatCode(() -> DispatchChannelTypePolicy.requireFullCoverage(
+            new HashSet<>(officialTypes), officialTypes))
         .doesNotThrowAnyException();
   }
 

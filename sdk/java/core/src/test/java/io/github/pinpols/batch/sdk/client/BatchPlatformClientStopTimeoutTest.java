@@ -74,18 +74,17 @@ class BatchPlatformClientStopTimeoutTest {
   @Test
   void dispatcherStopReturnsWithinTimeoutAndWarnsAboutInFlightTasks() throws Exception {
     attachWarnCapture();
-    SdkTaskHandler dummy =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "noop";
-          }
+    SdkTaskHandler dummy = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "noop";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return SdkTaskResult.ok("noop");
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return SdkTaskResult.ok("noop");
+      }
+    };
     TaskDispatcher dispatcher =
         new TaskDispatcher(cfg(), Map.of("noop", dummy), mock(PlatformHttpClient.class));
     // 把一个慢 task 注入 in-flight + executor —— 模拟 handler 还没跑完
@@ -107,7 +106,8 @@ class BatchPlatformClientStopTimeoutTest {
         .as("stop should return close to 200ms timeout, not wait full 1s")
         .isLessThan(900L);
     assertThat(warnMessages())
-        .anySatisfy(m -> assertThat(m).contains("drain timeout").contains("9001").contains("9002"));
+        .anySatisfy(
+            m -> assertThat(m).contains("drain timeout").contains("9001").contains("9002"));
   }
 
   /** BatchPlatformClient.stop(Duration) 端到端:与 stop() 走同一顺序,且把超时透传给 dispatcher。 */
@@ -151,18 +151,17 @@ class BatchPlatformClientStopTimeoutTest {
   @Test
   void dispatcherStopReturnsEarlyWhenInFlightDrainsBeforeTimeout() throws Exception {
     attachWarnCapture();
-    SdkTaskHandler dummy =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "noop";
-          }
+    SdkTaskHandler dummy = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "noop";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            return SdkTaskResult.ok("noop");
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        return SdkTaskResult.ok("noop");
+      }
+    };
     TaskDispatcher dispatcher =
         new TaskDispatcher(cfg(), Map.of("noop", dummy), mock(PlatformHttpClient.class));
     CountDownLatch started = new CountDownLatch(1);
@@ -211,16 +210,15 @@ class BatchPlatformClientStopTimeoutTest {
     Field f = TaskDispatcher.class.getDeclaredField("executor");
     f.setAccessible(true);
     ExecutorService executor = (ExecutorService) f.get(dispatcher);
-    executor.execute(
-        () -> {
-          started.countDown();
-          try {
-            Thread.sleep(sleepMs);
-          } catch (InterruptedException ie) {
-            interrupted.set(true);
-            Thread.currentThread().interrupt();
-          }
-        });
+    executor.execute(() -> {
+      started.countDown();
+      try {
+        Thread.sleep(sleepMs);
+      } catch (InterruptedException ie) {
+        interrupted.set(true);
+        Thread.currentThread().interrupt();
+      }
+    });
   }
 
   @SuppressWarnings("unchecked")

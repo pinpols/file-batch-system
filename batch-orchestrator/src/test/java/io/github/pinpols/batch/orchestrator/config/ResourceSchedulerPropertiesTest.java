@@ -27,10 +27,8 @@ class ResourceSchedulerPropertiesTest {
   }
 
   private static ResourceSchedulerProperties bind(String strategy) {
-    Binder binder =
-        new Binder(
-            new MapConfigurationPropertySource(
-                Map.of("batch.resource-scheduler.default-exceeded-strategy", strategy)));
+    Binder binder = new Binder(new MapConfigurationPropertySource(
+        Map.of("batch.resource-scheduler.default-exceeded-strategy", strategy)));
     return binder
         .bind("batch.resource-scheduler", Bindable.of(ResourceSchedulerProperties.class))
         .get();

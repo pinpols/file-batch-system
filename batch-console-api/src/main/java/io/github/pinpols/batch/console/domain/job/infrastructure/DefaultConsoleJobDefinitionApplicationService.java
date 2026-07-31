@@ -54,9 +54,8 @@ public class DefaultConsoleJobDefinitionApplicationService
   @Override
   public ConsoleJobDefinitionResponse detail(Long id, String tenantId) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-    JobDefinitionEntity entity =
-        Guard.requireFound(
-            jobDefinitionMapper.selectById(resolvedTenant, id), "job definition not found");
+    JobDefinitionEntity entity = Guard.requireFound(
+        jobDefinitionMapper.selectById(resolvedTenant, id), "job definition not found");
     return toResponse(entity);
   }
 
@@ -119,9 +118,8 @@ public class DefaultConsoleJobDefinitionApplicationService
   @Override
   public ConsoleJobDefinitionResponse update(Long id, JobDefinitionUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    JobDefinitionEntity existing =
-        Guard.requireFound(
-            jobDefinitionMapper.selectById(tenantId, id), "job definition not found");
+    JobDefinitionEntity existing = Guard.requireFound(
+        jobDefinitionMapper.selectById(tenantId, id), "job definition not found");
     String operator = requestMetadataResolver.current().operatorId();
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(tenantId);
@@ -212,10 +210,9 @@ public class DefaultConsoleJobDefinitionApplicationService
     }
     String operator = requestMetadataResolver.current().operatorId();
     jobDefinitionMapper.copyJobDefinition(resolved, id, newJobCode, operator);
-    JobDefinitionEntity copied =
-        Guard.requireFound(
-            jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode),
-            "source job definition not found");
+    JobDefinitionEntity copied = Guard.requireFound(
+        jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode),
+        "source job definition not found");
     cacheInvalidationService.evictJobDefinition(resolved, newJobCode);
     return toResponse(copied);
   }
@@ -233,10 +230,9 @@ public class DefaultConsoleJobDefinitionApplicationService
     }
     String operator = requestMetadataResolver.current().operatorId();
     jobDefinitionMapper.copyJobDefinition(resolved, id, request.getNewJobCode(), operator);
-    JobDefinitionEntity copied =
-        Guard.requireFound(
-            jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()),
-            "source job definition not found");
+    JobDefinitionEntity copied = Guard.requireFound(
+        jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()),
+        "source job definition not found");
     // Apply overrides
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(resolved);

@@ -16,7 +16,10 @@ public record WorkflowEdgeQuery(
 
   /** 按 workflowDefinitionId 查询全部边，不带其他过滤条件。 */
   public static WorkflowEdgeQuery ofDefinition(Long workflowDefinitionId, PageRequest pageRequest) {
-    return builder().workflowDefinitionId(workflowDefinitionId).pageRequest(pageRequest).build();
+    return builder()
+        .workflowDefinitionId(workflowDefinitionId)
+        .pageRequest(pageRequest)
+        .build();
   }
 
   /** 按租户 + workflowDefinitionId 查询全部边。 */

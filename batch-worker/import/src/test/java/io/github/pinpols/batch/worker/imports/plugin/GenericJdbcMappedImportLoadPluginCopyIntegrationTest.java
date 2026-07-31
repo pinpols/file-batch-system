@@ -26,12 +26,12 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-          .withDatabaseName("batch_business")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123")
-          .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse(TestContainerImages.POSTGRES))
+      .withDatabaseName("batch_business")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123")
+      .withUrlParam("sslmode", "disable");
 
   private DriverManagerDataSource dataSource;
   private JdbcTemplate jdbcTemplate;
@@ -52,8 +52,7 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
 
     jdbcTemplate.execute("DROP SCHEMA IF EXISTS biz CASCADE");
     jdbcTemplate.execute("CREATE SCHEMA biz");
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         CREATE TABLE biz.copy_import_customer (
           tenant_id text NOT NULL,
           biz_date date NOT NULL,
@@ -64,8 +63,7 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
           PRIMARY KEY (tenant_id, biz_date, customer_no)
         )
         """);
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         CREATE TABLE biz.copy_import_customer_part (
           tenant_id text NOT NULL,
           biz_date date NOT NULL,
@@ -76,8 +74,7 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
           PRIMARY KEY (tenant_id, biz_date, customer_no)
         ) PARTITION BY RANGE (biz_date)
         """);
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         CREATE TABLE biz.copy_import_customer_part_20260607
         PARTITION OF biz.copy_import_customer_part
         FOR VALUES FROM ('2026-06-07') TO ('2026-06-08')
@@ -123,70 +120,52 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
 
   @Test
   void partitionReplaceCopyDeletesOnlyTargetPartitionThenCopiesRows() throws Exception {
-    ImportLoadContext context =
-        new ImportLoadContext(
-            "t1",
-            "IMPORT_CUSTOMER",
-            "trace-1",
-            "worker-1",
-            "customers.csv",
-            "BATCH-1",
-            "2026-06-07",
-            "CUSTOMER",
-            null,
-            "TPL-COPY",
-            templateConfig());
+    ImportLoadContext context = new ImportLoadContext(
+        "t1",
+        "IMPORT_CUSTOMER",
+        "trace-1",
+        "worker-1",
+        "customers.csv",
+        "BATCH-1",
+        "2026-06-07",
+        "CUSTOMER",
+        null,
+        "TPL-COPY",
+        templateConfig());
 
     plugin.preparePartitionReplace(context);
-    int copied =
-        plugin.loadChunk(
-            context,
-            List.of(
-                Map.of(
-                    "customerNo",
-                    "C001",
-                    "customerName",
-                    "Alice, Inc.",
-                    "amount",
-                    "10.50",
-                    "note",
-                    "quoted \"note\""),
-                rowWithNullNote()));
+    int copied = plugin.loadChunk(
+        context,
+        List.of(
+            Map.of(
+                "customerNo",
+                "C001",
+                "customerName",
+                "Alice, Inc.",
+                "amount",
+                "10.50",
+                "note",
+                "quoted \"note\""),
+            rowWithNullNote()));
 
     assertThat(copied).isEqualTo(2);
-    assertThat(
-            jdbcTemplate.queryForObject(
-                """
+    assertThat(jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM biz.copy_import_customer
                 WHERE tenant_id='t1' AND biz_date='2026-06-07'
-                """,
-                Integer.class))
-        .isEqualTo(2);
-    assertThat(
-            jdbcTemplate.queryForList(
-                """
+                """, Integer.class)).isEqualTo(2);
+    assertThat(jdbcTemplate.queryForList("""
                 SELECT customer_no FROM biz.copy_import_customer
                 WHERE tenant_id='t1' AND biz_date='2026-06-07'
                 ORDER BY customer_no
-                """,
-                String.class))
-        .containsExactly("C001", "C002");
-    assertThat(
-            jdbcTemplate.queryForObject(
-                """
+                """, String.class)).containsExactly("C001", "C002");
+    assertThat(jdbcTemplate.queryForObject("""
                 SELECT note FROM biz.copy_import_customer
                 WHERE tenant_id='t1' AND biz_date='2026-06-07' AND customer_no='C001'
-                """,
-                String.class))
-        .isEqualTo("quoted \"note\"");
-    assertThat(
-            jdbcTemplate.queryForObject(
-                """
+                """, String.class)).isEqualTo("quoted \"note\"");
+    assertThat(jdbcTemplate.queryForObject("""
                 SELECT note FROM biz.copy_import_customer
                 WHERE tenant_id='t1' AND biz_date='2026-06-07' AND customer_no='C002'
-                """,
-                String.class))
-        .isNull();
+                """, String.class)).isNull();
     assertThat(rowExists("t1", "2026-06-06", "keep-date")).isTrue();
     assertThat(rowExists("t2", "2026-06-07", "keep-tenant")).isTrue();
     assertThat(rowExists("t1", "2026-06-07", "old-target")).isFalse();
@@ -194,67 +173,52 @@ class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
 
   @Test
   void partitionStageSwapCopyLoadsStagingThenSwapsPhysicalPartition() throws Exception {
-    ImportLoadContext context =
-        new ImportLoadContext(
-            "t1",
-            "IMPORT_CUSTOMER",
-            "trace-stage-swap",
-            "worker-1",
-            "customers.csv",
-            "BATCH-1",
-            "2026-06-07",
-            "CUSTOMER",
-            null,
-            "TPL-STAGE-SWAP",
-            stageSwapTemplateConfig());
+    ImportLoadContext context = new ImportLoadContext(
+        "t1",
+        "IMPORT_CUSTOMER",
+        "trace-stage-swap",
+        "worker-1",
+        "customers.csv",
+        "BATCH-1",
+        "2026-06-07",
+        "CUSTOMER",
+        null,
+        "TPL-STAGE-SWAP",
+        stageSwapTemplateConfig());
 
     plugin.preparePartitionReplace(context);
-    int copied =
-        plugin.loadChunk(
-            context,
-            List.of(
-                Map.of(
-                    "customerNo",
-                    "C101",
-                    "customerName",
-                    "Stage Alice",
-                    "amount",
-                    "110.50",
-                    "note",
-                    "fresh"),
-                rowWithNullNote("C102")));
+    int copied = plugin.loadChunk(
+        context,
+        List.of(
+            Map.of(
+                "customerNo",
+                "C101",
+                "customerName",
+                "Stage Alice",
+                "amount",
+                "110.50",
+                "note",
+                "fresh"),
+            rowWithNullNote("C102")));
     plugin.finishPartitionStageSwap(context);
 
     assertThat(copied).isEqualTo(2);
-    assertThat(
-            jdbcTemplate.queryForList(
-                """
+    assertThat(jdbcTemplate.queryForList("""
                 SELECT customer_no FROM biz.copy_import_customer_part
                 WHERE tenant_id='t1' AND biz_date='2026-06-07'
                 ORDER BY customer_no
-                """,
-                String.class))
-        .containsExactly("C101", "C102");
-    assertThat(
-            jdbcTemplate.queryForObject(
-                """
+                """, String.class)).containsExactly("C101", "C102");
+    assertThat(jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM biz.copy_import_customer_part_20260607
-                """,
-                Integer.class))
-        .isEqualTo(2);
+                """, Integer.class)).isEqualTo(2);
   }
 
   private boolean rowExists(String tenantId, String bizDate, String customerNo) {
-    Integer count =
-        jdbcTemplate.queryForObject(
-            """
+    Integer count = jdbcTemplate.queryForObject(
+        """
             SELECT count(*) FROM biz.copy_import_customer
             WHERE tenant_id=? AND biz_date=? AND customer_no=?
-            """,
-            Integer.class,
-            tenantId,
-            Date.valueOf(bizDate),
-            customerNo);
+            """, Integer.class, tenantId, Date.valueOf(bizDate), customerNo);
     return count != null && count > 0;
   }
 

@@ -71,9 +71,8 @@ class ImportScannerPropertiesTest {
   }
 
   private static ImportScannerProperties bindDoneFileFormat(String value) {
-    MapConfigurationPropertySource source =
-        new MapConfigurationPropertySource(
-            Map.of("batch.worker.import.scanner.done-file-format", value));
+    MapConfigurationPropertySource source = new MapConfigurationPropertySource(
+        Map.of("batch.worker.import.scanner.done-file-format", value));
     return new Binder(source)
         .bind("batch.worker.import.scanner", Bindable.of(ImportScannerProperties.class))
         .orElseThrow(() -> new AssertionError("import scanner properties were not bound"));

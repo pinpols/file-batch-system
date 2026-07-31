@@ -58,21 +58,16 @@ public class ImportDataQualityService {
 
   public ValidationSession beginValidation(
       ImportJobContext context, long totalCount, List<String> schemaFields) {
-    Map<String, Object> ruleSet =
-        ruleSetMerger.merge(
-            context == null
-                ? null
-                : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-    ImportPayload importPayload =
-        context != null
-                && context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD)
-                    instanceof ImportPayload payload
-            ? payload
-            : null;
-    String normalizedPayload =
-        context == null
-            ? null
-            : asString(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD));
+    Map<String, Object> ruleSet = ruleSetMerger.merge(
+        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+    ImportPayload importPayload = context != null
+            && context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD)
+                instanceof ImportPayload payload
+        ? payload
+        : null;
+    String normalizedPayload = context == null
+        ? null
+        : asString(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD));
     return new ValidationSession(
         context,
         ruleSet,
@@ -121,10 +116,9 @@ public class ImportDataQualityService {
   }
 
   private List<String> stringList(ImportJobContext context) {
-    Object value =
-        context == null
-            ? null
-            : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS);
+    Object value = context == null
+        ? null
+        : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS);
     if (value instanceof List<?> list) {
       List<String> items = new ArrayList<>();
       for (Object item : list) {

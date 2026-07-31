@@ -13,16 +13,17 @@ import org.springframework.scheduling.support.CronExpression;
 
 @Data
 public class JobDefinitionCreateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String jobCode;
+  @ValidResourceCode
+  private String jobCode;
 
   @Size(max = 64)
   @Pattern(
       regexp = "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-      message =
-          "dependsOnJobCode must start with a letter and contain only letters, digits,"
-              + " underscore or hyphen")
+      message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
+          + " underscore or hyphen")
   private String dependsOnJobCode;
 
   @Size(max = 256)

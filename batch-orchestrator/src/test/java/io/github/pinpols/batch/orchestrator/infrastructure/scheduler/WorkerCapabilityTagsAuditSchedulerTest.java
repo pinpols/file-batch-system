@@ -23,8 +23,11 @@ class WorkerCapabilityTagsAuditSchedulerTest {
 
   private static final String METRIC = "batch.worker.capability_tags.invalid.count";
 
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private WorkerRegistryMapper workerRegistryMapper;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private SimpleMeterRegistry meterRegistry;
   private WorkerCapabilityTagsAuditScheduler scheduler;
@@ -32,9 +35,8 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   @BeforeEach
   void setUp() throws Exception {
     meterRegistry = new SimpleMeterRegistry();
-    scheduler =
-        new WorkerCapabilityTagsAuditScheduler(
-            workerRegistryMapper, gracefulShutdown, meterRegistry);
+    scheduler = new WorkerCapabilityTagsAuditScheduler(
+        workerRegistryMapper, gracefulShutdown, meterRegistry);
     setLogSampleLimit(scheduler, 10);
     scheduler.initializeMeters();
   }
@@ -86,12 +88,11 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   void mixedBatchCountsOnlyConfirmedInvalid() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
-        .thenReturn(
-            List.of(
-                new InvalidCapabilityTagsParam("ta", "w-ok", "[\"ingest\"]"),
-                new InvalidCapabilityTagsParam("ta", "w-obj", "{\"a\":1}"),
-                new InvalidCapabilityTagsParam("tb", "w-scalar", "\"ingest\""),
-                new InvalidCapabilityTagsParam("tb", "w-num-elem", "[\"a\", 1]")));
+        .thenReturn(List.of(
+            new InvalidCapabilityTagsParam("ta", "w-ok", "[\"ingest\"]"),
+            new InvalidCapabilityTagsParam("ta", "w-obj", "{\"a\":1}"),
+            new InvalidCapabilityTagsParam("tb", "w-scalar", "\"ingest\""),
+            new InvalidCapabilityTagsParam("tb", "w-num-elem", "[\"a\", 1]")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isEqualTo(3d);
   }
@@ -100,10 +101,9 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   void nullOrBlankRawValueIsNotCountedInvalid() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
-        .thenReturn(
-            List.of(
-                new InvalidCapabilityTagsParam("ta", "w-null", null),
-                new InvalidCapabilityTagsParam("ta", "w-blank", "  ")));
+        .thenReturn(List.of(
+            new InvalidCapabilityTagsParam("ta", "w-null", null),
+            new InvalidCapabilityTagsParam("ta", "w-blank", "  ")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isZero();
   }

@@ -46,34 +46,31 @@ class ConsoleConfigApprovalControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleConfigApprovalController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleConfigApprovalController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void submitApprovalShouldPassReleaseIdAndForwardBody() throws Exception {
     // 键与真实 detail() 输出一致：releaseId/tenantId/configType/configKey/configStatus/approval。
     when(service.submit(eq(7L), any(ConfigReleaseApprovalSubmitRequest.class)))
-        .thenReturn(
-            Map.of(
-                "releaseId",
-                7L,
-                "tenantId",
-                "ta",
-                "configStatus",
-                "PENDING_APPROVAL",
-                "approval",
-                Map.of("id", 100L, "approvalStatus", "PENDING")));
+        .thenReturn(Map.of(
+            "releaseId",
+            7L,
+            "tenantId",
+            "ta",
+            "configStatus",
+            "PENDING_APPROVAL",
+            "approval",
+            Map.of("id", 100L, "approvalStatus", "PENDING")));
     mockMvc
-        .perform(
-            post("/api/console/config/releases/7/submit-approval")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"go\"}"))
+        .perform(post("/api/console/config/releases/7/submit-approval")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"go\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.releaseId").value(7))
         .andExpect(jsonPath("$.data.configStatus").value("PENDING_APPROVAL"))
@@ -84,16 +81,15 @@ class ConsoleConfigApprovalControllerTest {
   @Test
   void approvalDetailShouldPassReleaseIdAndTenant() throws Exception {
     when(service.detail("ta", 7L))
-        .thenReturn(
-            Map.of(
-                "releaseId",
-                7L,
-                "tenantId",
-                "ta",
-                "configStatus",
-                "PENDING_APPROVAL",
-                "approval",
-                Map.of("id", 100L, "approvalStatus", "PENDING")));
+        .thenReturn(Map.of(
+            "releaseId",
+            7L,
+            "tenantId",
+            "ta",
+            "configStatus",
+            "PENDING_APPROVAL",
+            "approval",
+            Map.of("id", 100L, "approvalStatus", "PENDING")));
     mockMvc
         .perform(get("/api/console/config/releases/7/approval").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -105,20 +101,18 @@ class ConsoleConfigApprovalControllerTest {
   @Test
   void approveShouldPassApprovalIdAndBody() throws Exception {
     when(service.approve(eq(100L), any(ConfigApprovalActionRequest.class)))
-        .thenReturn(
-            Map.of(
-                "releaseId",
-                7L,
-                "configStatus",
-                "PUBLISHED",
-                "approval",
-                Map.of("id", 100L, "approvalStatus", "APPROVED")));
+        .thenReturn(Map.of(
+            "releaseId",
+            7L,
+            "configStatus",
+            "PUBLISHED",
+            "approval",
+            Map.of("id", 100L, "approvalStatus", "APPROVED")));
     mockMvc
-        .perform(
-            post("/api/console/config/approvals/100/approve")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"ok\"}"))
+        .perform(post("/api/console/config/approvals/100/approve")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"ok\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.configStatus").value("PUBLISHED"))
         .andExpect(jsonPath("$.data.approval.approvalStatus").value("APPROVED"));
@@ -128,20 +122,18 @@ class ConsoleConfigApprovalControllerTest {
   @Test
   void rejectShouldPassApprovalIdAndBody() throws Exception {
     when(service.reject(eq(100L), any(ConfigApprovalActionRequest.class)))
-        .thenReturn(
-            Map.of(
-                "releaseId",
-                7L,
-                "configStatus",
-                "DRAFT",
-                "approval",
-                Map.of("id", 100L, "approvalStatus", "REJECTED")));
+        .thenReturn(Map.of(
+            "releaseId",
+            7L,
+            "configStatus",
+            "DRAFT",
+            "approval",
+            Map.of("id", 100L, "approvalStatus", "REJECTED")));
     mockMvc
-        .perform(
-            post("/api/console/config/approvals/100/reject")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"no\"}"))
+        .perform(post("/api/console/config/approvals/100/reject")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"no\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.configStatus").value("DRAFT"))
         .andExpect(jsonPath("$.data.approval.approvalStatus").value("REJECTED"));
@@ -152,11 +144,10 @@ class ConsoleConfigApprovalControllerTest {
   void approveShouldRejectMissingOperatorId() throws Exception {
     // @NotBlank operatorId
     mockMvc
-        .perform(
-            post("/api/console/config/approvals/100/approve")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"ta\"}"))
+        .perform(post("/api/console/config/approvals/100/approve")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\"}"))
         .andExpect(status().isBadRequest());
   }
 }

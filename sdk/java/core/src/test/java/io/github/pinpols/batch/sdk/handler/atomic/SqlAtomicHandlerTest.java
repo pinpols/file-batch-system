@@ -91,9 +91,8 @@ class SqlAtomicHandlerTest {
     when(statement.getUpdateCount()).thenReturn(7);
 
     // 执行
-    SdkTaskResult result =
-        new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource)
-            .execute(ctx("UPDATE t SET x=1"));
+    SdkTaskResult result = new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource)
+        .execute(ctx("UPDATE t SET x=1"));
 
     // 断言
     assertThat(result.success()).isTrue();
@@ -204,9 +203,8 @@ class SqlAtomicHandlerTest {
   @DisplayName("超 maxStatementsPerJob → fail(不连 DB)")
   void shouldRejectTooManyStatements_whenExceedMax() {
     var cfg = new SqlAtomicConfig("sql", 30, 10000, 2, false, true);
-    SdkTaskResult result =
-        new SqlAtomicHandler(cfg, dataSource)
-            .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2; UPDATE c SET z=3;"));
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource)
+        .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2; UPDATE c SET z=3;"));
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("too many statements");
   }
@@ -227,9 +225,8 @@ class SqlAtomicHandlerTest {
     when(st2.getUpdateCount()).thenReturn(4);
     when(connection.createStatement()).thenReturn(probe).thenReturn(st1).thenReturn(st2);
 
-    SdkTaskResult result =
-        new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource)
-            .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2;"));
+    SdkTaskResult result = new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource)
+        .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2;"));
 
     assertThat(result.success()).isTrue();
     assertThat(result.output())

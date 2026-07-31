@@ -70,14 +70,13 @@ class ConsoleUserAccountServiceTest {
   private void asPrincipal(String tenantId, String... authorities) {
     Set<String> authSet = Set.of(authorities);
     ConsolePrincipal principal = new ConsolePrincipal("u-test", tenantId, authSet);
-    var token =
-        new UsernamePasswordAuthenticationToken(
-            principal,
-            null,
-            authSet.stream()
-                .map(SimpleGrantedAuthority::new)
-                .map(a -> (org.springframework.security.core.GrantedAuthority) a)
-                .toList());
+    var token = new UsernamePasswordAuthenticationToken(
+        principal,
+        null,
+        authSet.stream()
+            .map(SimpleGrantedAuthority::new)
+            .map(a -> (org.springframework.security.core.GrantedAuthority) a)
+            .toList());
     SecurityContextHolder.getContext().setAuthentication(token);
   }
 

@@ -32,10 +32,9 @@ public class BatchObjectCryptoAutoConfiguration {
     }
     for (Map.Entry<String, String> entry : kmsProperties.getKeys().entrySet()) {
       if (isWeakKey(entry.getValue())) {
-        throw new IllegalStateException(
-            "FATAL: 生产环境 batch.security.kms.keys."
-                + entry.getKey()
-                + " 为弱/占位密钥(空或全零),请通过 BATCH_SECURITY_KMS_KEYS_* 环境变量注入真实密钥");
+        throw new IllegalStateException("FATAL: 生产环境 batch.security.kms.keys."
+            + entry.getKey()
+            + " 为弱/占位密钥(空或全零),请通过 BATCH_SECURITY_KMS_KEYS_* 环境变量注入真实密钥");
       }
     }
   }

@@ -87,13 +87,11 @@ final class ObservabilityResponseFieldReader {
     }
     Map<String, Long> result = new LinkedHashMap<>();
     ((Map<String, ?>) value)
-        .forEach(
-            (k, v) ->
-                result.put(
-                    k,
-                    v instanceof Number number
-                        ? number.longValue()
-                        : v == null ? null : Long.valueOf(v.toString())));
+        .forEach((k, v) -> result.put(
+            k,
+            v instanceof Number number
+                ? number.longValue()
+                : v == null ? null : Long.valueOf(v.toString())));
     return result;
   }
 

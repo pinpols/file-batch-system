@@ -21,14 +21,14 @@ class WorkflowFanOutSupportTest {
   void parseSpec_nullWhenNoFanOut() {
     assertThat(WorkflowFanOutSupport.parseSpec(node(null))).isNull();
     assertThat(WorkflowFanOutSupport.parseSpec(node("{}"))).isNull();
-    assertThat(WorkflowFanOutSupport.parseSpec(node("{\"channelCode\":\"C1\"}"))).isNull();
+    assertThat(WorkflowFanOutSupport.parseSpec(node("{\"channelCode\":\"C1\"}")))
+        .isNull();
   }
 
   @Test
   void parseSpec_readsExprWithDefaults() {
-    WorkflowFanOutSupport.FanOutSpec spec =
-        WorkflowFanOutSupport.parseSpec(
-            node("{\"fanOut\":{\"itemsExpr\":\"$.nodes.SPLIT.output.shards\"}}"));
+    WorkflowFanOutSupport.FanOutSpec spec = WorkflowFanOutSupport.parseSpec(
+        node("{\"fanOut\":{\"itemsExpr\":\"$.nodes.SPLIT.output.shards\"}}"));
     assertThat(spec).isNotNull();
     assertThat(spec.itemsExpr()).isEqualTo("$.nodes.SPLIT.output.shards");
     assertThat(spec.itemParam()).isEqualTo("fanOutItem");
@@ -37,17 +37,17 @@ class WorkflowFanOutSupportTest {
 
   @Test
   void parseSpec_honorsCustomItemParamAndMax() {
-    WorkflowFanOutSupport.FanOutSpec spec =
-        WorkflowFanOutSupport.parseSpec(
-            node(
-                "{\"fanOut\":{\"itemsExpr\":\"$.nodes.A.output.x\",\"itemParam\":\"shard\",\"maxFanOut\":5}}"));
+    WorkflowFanOutSupport.FanOutSpec spec = WorkflowFanOutSupport.parseSpec(
+        node(
+            "{\"fanOut\":{\"itemsExpr\":\"$.nodes.A.output.x\",\"itemParam\":\"shard\",\"maxFanOut\":5}}"));
     assertThat(spec.itemParam()).isEqualTo("shard");
     assertThat(spec.maxFanOut()).isEqualTo(5);
   }
 
   @Test
   void parseSpec_nullWhenItemsExprBlank() {
-    assertThat(WorkflowFanOutSupport.parseSpec(node("{\"fanOut\":{\"itemsExpr\":\"\"}}"))).isNull();
+    assertThat(WorkflowFanOutSupport.parseSpec(node("{\"fanOut\":{\"itemsExpr\":\"\"}}")))
+        .isNull();
   }
 
   @Test
@@ -65,13 +65,11 @@ class WorkflowFanOutSupportTest {
     assertThat(expanded.get(0).getShardTotal()).isEqualTo(3);
     assertThat(expanded.get(2).getShardIndex()).isEqualTo(2);
     assertThat(expanded.get(2).getShardTotal()).isEqualTo(3);
-    assertThat(expanded)
-        .allSatisfy(
-            p -> {
-              assertThat(p.getPartitionKey()).isEqualTo("base");
-              assertThat(p.getBusinessKey()).isEqualTo("biz");
-              assertThat(p.getPartitionStatus()).isEqualTo("CREATED");
-            });
+    assertThat(expanded).allSatisfy(p -> {
+      assertThat(p.getPartitionKey()).isEqualTo("base");
+      assertThat(p.getBusinessKey()).isEqualTo("biz");
+      assertThat(p.getPartitionStatus()).isEqualTo("CREATED");
+    });
   }
 
   @Test

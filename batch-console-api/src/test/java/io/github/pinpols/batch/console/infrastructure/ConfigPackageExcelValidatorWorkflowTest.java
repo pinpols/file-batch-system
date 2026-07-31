@@ -29,11 +29,10 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void happyPathChainWorkflowHasNoTopologyIssues() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(node("START_0", "START"), node("TASK_1", "TASK"), node("END_0", "END")),
-            List.of(edge("START_0", "TASK_1", "ALWAYS"), edge("TASK_1", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(node("START_0", "START"), node("TASK_1", "TASK"), node("END_0", "END")),
+        List.of(edge("START_0", "TASK_1", "ALWAYS"), edge("TASK_1", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -44,11 +43,10 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void missingStartNodeFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(node("TASK_1", "TASK"), node("END_0", "END")),
-            List.of(edge("TASK_1", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(node("TASK_1", "TASK"), node("END_0", "END")),
+        List.of(edge("TASK_1", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -58,18 +56,17 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void multipleStartNodesFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(
-                node("START_A", "START"),
-                node("START_B", "START"),
-                node("TASK_1", "TASK"),
-                node("END_0", "END")),
-            List.of(
-                edge("START_A", "TASK_1", "ALWAYS"),
-                edge("START_B", "TASK_1", "ALWAYS"),
-                edge("TASK_1", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(
+            node("START_A", "START"),
+            node("START_B", "START"),
+            node("TASK_1", "TASK"),
+            node("END_0", "END")),
+        List.of(
+            edge("START_A", "TASK_1", "ALWAYS"),
+            edge("START_B", "TASK_1", "ALWAYS"),
+            edge("TASK_1", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -79,11 +76,10 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void missingEndNodeFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(node("START_0", "START"), node("TASK_1", "TASK")),
-            List.of(edge("START_0", "TASK_1", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(node("START_0", "START"), node("TASK_1", "TASK")),
+        List.of(edge("START_0", "TASK_1", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -93,21 +89,20 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void cycleInGraphFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(
-                node("START_0", "START"),
-                node("A", "TASK"),
-                node("B", "TASK"),
-                node("C", "TASK"),
-                node("END_0", "END")),
-            List.of(
-                edge("START_0", "A", "ALWAYS"),
-                edge("A", "B", "ALWAYS"),
-                edge("B", "C", "ALWAYS"),
-                edge("C", "A", "ALWAYS"), // cycle
-                edge("C", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(
+            node("START_0", "START"),
+            node("A", "TASK"),
+            node("B", "TASK"),
+            node("C", "TASK"),
+            node("END_0", "END")),
+        List.of(
+            edge("START_0", "A", "ALWAYS"),
+            edge("A", "B", "ALWAYS"),
+            edge("B", "C", "ALWAYS"),
+            edge("C", "A", "ALWAYS"), // cycle
+            edge("C", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -117,14 +112,13 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void selfLoopFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(node("START_0", "START"), node("A", "TASK"), node("END_0", "END")),
-            List.of(
-                edge("START_0", "A", "ALWAYS"),
-                edge("A", "A", "ALWAYS"), // self-loop
-                edge("A", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(node("START_0", "START"), node("A", "TASK"), node("END_0", "END")),
+        List.of(
+            edge("START_0", "A", "ALWAYS"),
+            edge("A", "A", "ALWAYS"), // self-loop
+            edge("A", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -134,15 +128,14 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void nodeUnreachableFromStartFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(
-                node("START_0", "START"),
-                node("A", "TASK"),
-                node("ORPHAN", "TASK"),
-                node("END_0", "END")),
-            List.of(edge("START_0", "A", "ALWAYS"), edge("A", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(
+            node("START_0", "START"),
+            node("A", "TASK"),
+            node("ORPHAN", "TASK"),
+            node("END_0", "END")),
+        List.of(edge("START_0", "A", "ALWAYS"), edge("A", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -153,18 +146,17 @@ class ConfigPackageExcelValidatorWorkflowTest {
 
   @Test
   void nodeCannotReachAnyEndFails() {
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(
-                node("START_0", "START"),
-                node("A", "TASK"),
-                node("DEADEND", "TASK"),
-                node("END_0", "END")),
-            List.of(
-                edge("START_0", "A", "ALWAYS"),
-                edge("START_0", "DEADEND", "ALWAYS"),
-                edge("A", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(
+            node("START_0", "START"),
+            node("A", "TASK"),
+            node("DEADEND", "TASK"),
+            node("END_0", "END")),
+        List.of(
+            edge("START_0", "A", "ALWAYS"),
+            edge("START_0", "DEADEND", "ALWAYS"),
+            edge("A", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
@@ -177,48 +169,42 @@ class ConfigPackageExcelValidatorWorkflowTest {
   void conditionEdgeWithoutExpressionFails() {
     Map<String, String> condEdge = edge("GW", "A", "CONDITION");
     condEdge.put("condition_expr", ""); // 显式空
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(
-                node("START_0", "START"),
-                node("GW", "GATEWAY"),
-                node("A", "TASK"),
-                node("END_0", "END")),
-            List.of(
-                edge("START_0", "GW", "ALWAYS"),
-                condEdge,
-                edge("GW", "END_0", "ALWAYS"),
-                edge("A", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(
+            node("START_0", "START"),
+            node("GW", "GATEWAY"),
+            node("A", "TASK"),
+            node("END_0", "END")),
+        List.of(
+            edge("START_0", "GW", "ALWAYS"),
+            condEdge,
+            edge("GW", "END_0", "ALWAYS"),
+            edge("A", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
     assertThat(result.crossRefIssues())
-        .anySatisfy(
-            i ->
-                assertThat(i.message())
-                    .contains("CONDITION edge")
-                    .contains("non-empty condition_expr"));
+        .anySatisfy(i -> assertThat(i.message())
+            .contains("CONDITION edge")
+            .contains("non-empty condition_expr"));
   }
 
   @Test
   void dslReferenceToMissingNodeFails() {
     Map<String, String> n = node("DOWN", "TASK");
     n.put("node_params", "{\"src\":\"$.nodes.MISSING_NODE.output.fileId\"}");
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(node("START_0", "START"), n, node("END_0", "END")),
-            List.of(edge("START_0", "DOWN", "ALWAYS"), edge("DOWN", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(node("START_0", "START"), n, node("END_0", "END")),
+        List.of(edge("START_0", "DOWN", "ALWAYS"), edge("DOWN", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
     assertThat(result.crossRefIssues())
-        .anySatisfy(
-            i ->
-                assertThat(i.message())
-                    .contains("DSL references missing node")
-                    .contains("MISSING_NODE"));
+        .anySatisfy(i -> assertThat(i.message())
+            .contains("DSL references missing node")
+            .contains("MISSING_NODE"));
   }
 
   @Test
@@ -226,24 +212,21 @@ class ConfigPackageExcelValidatorWorkflowTest {
     // A 和 B 是 START 的两个独立分支,A 试图引用 B 的输出 → B 不是 A 的祖先 → 拒绝
     Map<String, String> a = node("A", "TASK");
     a.put("node_params", "{\"src\":\"$.nodes.B.output.fileId\"}");
-    PackageExcelSession session =
-        wfSession(
-            List.of(wfDef()),
-            List.of(node("START_0", "START"), a, node("B", "TASK"), node("END_0", "END")),
-            List.of(
-                edge("START_0", "A", "ALWAYS"),
-                edge("START_0", "B", "ALWAYS"),
-                edge("A", "END_0", "ALWAYS"),
-                edge("B", "END_0", "ALWAYS")));
+    PackageExcelSession session = wfSession(
+        List.of(wfDef()),
+        List.of(node("START_0", "START"), a, node("B", "TASK"), node("END_0", "END")),
+        List.of(
+            edge("START_0", "A", "ALWAYS"),
+            edge("START_0", "B", "ALWAYS"),
+            edge("A", "END_0", "ALWAYS"),
+            edge("B", "END_0", "ALWAYS")));
 
     var result = validator().validate(session);
 
     assertThat(result.crossRefIssues())
-        .anySatisfy(
-            i ->
-                assertThat(i.message())
-                    .contains("can only reference upstream nodes")
-                    .contains("'B'"));
+        .anySatisfy(i -> assertThat(i.message())
+            .contains("can only reference upstream nodes")
+            .contains("'B'"));
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

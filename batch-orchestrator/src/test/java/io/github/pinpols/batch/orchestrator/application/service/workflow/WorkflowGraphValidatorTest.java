@@ -58,12 +58,10 @@ class WorkflowGraphValidatorTest {
   void unreachableNodeReportsV2() {
     seed(nodes("START", "A", "ORPHAN", "END"), edges(edge("START", "A"), edge("A", "END")));
     var result = validator.validate(1L);
-    assertThat(result.errors())
-        .anySatisfy(
-            i -> {
-              assertThat(i.code()).isEqualTo("V2");
-              assertThat(i.nodeCode()).isEqualTo("ORPHAN");
-            });
+    assertThat(result.errors()).anySatisfy(i -> {
+      assertThat(i.code()).isEqualTo("V2");
+      assertThat(i.nodeCode()).isEqualTo("ORPHAN");
+    });
   }
 
   @Test
@@ -267,10 +265,9 @@ class WorkflowGraphValidatorTest {
   @Test
   void waitNodeWithValidSensorSpec_clean() {
     WorkflowNodeEntity wait = node("WAIT1", "WAIT");
-    wait.setNodeParams(
-        "{\"sensor_type\":\"FILE_ARRIVAL\","
-            + "\"sensor_spec\":{\"pattern\":\"x-*\",\"maxAgeSeconds\":3600},"
-            + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    wait.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\","
+        + "\"sensor_spec\":{\"pattern\":\"x-*\",\"maxAgeSeconds\":3600},"
+        + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
     seed(
         List.of(node("START", "START"), wait, node("END", "END")),
         edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
@@ -317,28 +314,24 @@ class WorkflowGraphValidatorTest {
   @Test
   void waitNodeTimeoutNotGreaterThanPoll_V16d() {
     WorkflowNodeEntity wait = node("WAIT1", "WAIT");
-    wait.setNodeParams(
-        "{\"sensor_type\":\"FILE_ARRIVAL\","
-            + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":60},"
-            + "\"timeout_seconds\":30,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    wait.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\","
+        + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":60},"
+        + "\"timeout_seconds\":30,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
     seed(
         List.of(node("START", "START"), wait, node("END", "END")),
         edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
     var result = validator.validate(1L);
     assertThat(result.errors())
-        .anySatisfy(
-            i ->
-                assertThat(i.message())
-                    .contains("timeout_seconds must be greater than poll_interval_seconds"));
+        .anySatisfy(i -> assertThat(i.message())
+            .contains("timeout_seconds must be greater than poll_interval_seconds"));
   }
 
   @Test
   void waitNodeInvalidOnTimeout_V16e() {
     WorkflowNodeEntity wait = node("WAIT1", "WAIT");
-    wait.setNodeParams(
-        "{\"sensor_type\":\"FILE_ARRIVAL\","
-            + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":60},"
-            + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"BOGUS\"}");
+    wait.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\","
+        + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":60},"
+        + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"BOGUS\"}");
     seed(
         List.of(node("START", "START"), wait, node("END", "END")),
         edges(edge("START", "WAIT1"), edge("WAIT1", "END")));

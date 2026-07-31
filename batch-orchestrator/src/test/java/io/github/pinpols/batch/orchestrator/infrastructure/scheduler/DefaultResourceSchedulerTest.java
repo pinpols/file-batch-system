@@ -45,16 +45,36 @@ import org.mockito.MockitoAnnotations;
  */
 class DefaultResourceSchedulerTest {
 
-  @Mock private ResourceQueueManager queueManager;
-  @Mock private ConcurrencyLimiter concurrencyLimiter;
-  @Mock private PartitionThrottle partitionThrottle;
-  @Mock private WorkerSelector workerSelector;
-  @Mock private PriorityScheduler priorityScheduler;
-  @Mock private OrchestratorConfigCacheService configCacheService;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private BatchTimezoneProvider timezoneProvider;
-  @Mock private BatchDateTimeSupport dateTimeSupport;
+  @Mock
+  private ResourceQueueManager queueManager;
+
+  @Mock
+  private ConcurrencyLimiter concurrencyLimiter;
+
+  @Mock
+  private PartitionThrottle partitionThrottle;
+
+  @Mock
+  private WorkerSelector workerSelector;
+
+  @Mock
+  private PriorityScheduler priorityScheduler;
+
+  @Mock
+  private OrchestratorConfigCacheService configCacheService;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private BatchTimezoneProvider timezoneProvider;
+
+  @Mock
+  private BatchDateTimeSupport dateTimeSupport;
+
   private ResourceSchedulerProperties resourceSchedulerProperties;
 
   private DefaultResourceScheduler scheduler;
@@ -63,19 +83,18 @@ class DefaultResourceSchedulerTest {
   void setUp() {
     MockitoAnnotations.openMocks(this);
     resourceSchedulerProperties = new ResourceSchedulerProperties();
-    scheduler =
-        new DefaultResourceScheduler(
-            queueManager,
-            concurrencyLimiter,
-            partitionThrottle,
-            workerSelector,
-            priorityScheduler,
-            configCacheService,
-            jobInstanceMapper,
-            jobPartitionMapper,
-            timezoneProvider,
-            dateTimeSupport,
-            resourceSchedulerProperties);
+    scheduler = new DefaultResourceScheduler(
+        queueManager,
+        concurrencyLimiter,
+        partitionThrottle,
+        workerSelector,
+        priorityScheduler,
+        configCacheService,
+        jobInstanceMapper,
+        jobPartitionMapper,
+        timezoneProvider,
+        dateTimeSupport,
+        resourceSchedulerProperties);
 
     when(queueManager.resolveQueue(any())).thenReturn(null);
     when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);

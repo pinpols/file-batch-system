@@ -42,11 +42,14 @@ import org.springframework.web.client.RestClient;
 @Import(TriggerServiceIntegrationTest.TestConfig.class)
 class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private TriggerService triggerService;
+  @Autowired
+  private TriggerService triggerService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @MockitoBean private RestClient orchestratorRestClient;
+  @MockitoBean
+  private RestClient orchestratorRestClient;
 
   @BeforeEach
   void cleanUp() {
@@ -69,30 +72,27 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     triggerService.launch(command);
     triggerService.launch(command);
 
-    Integer count =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
-            Integer.class,
-            "t1",
-            "idem-001");
-    String status =
-        jdbcTemplate.queryForObject(
-            "select request_status from batch.trigger_request where tenant_id = ? and request_id ="
-                + " ?",
-            String.class,
-            "t1",
-            "req-001");
+    Integer count = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
+        Integer.class,
+        "t1",
+        "idem-001");
+    String status = jdbcTemplate.queryForObject(
+        "select request_status from batch.trigger_request where tenant_id = ? and request_id ="
+            + " ?",
+        String.class,
+        "t1",
+        "req-001");
 
     assertThat(count).isEqualTo(1);
     assertThat(status).isEqualTo("ACCEPTED");
     // ADR-010: 异步路径写 trigger_outbox_event，不调 adapter
-    Integer outboxCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
-                + " ?",
-            Integer.class,
-            "t1",
-            "req-001");
+    Integer outboxCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
+            + " ?",
+        Integer.class,
+        "t1",
+        "req-001");
     assertThat(outboxCount).isEqualTo(1);
   }
 
@@ -119,25 +119,23 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
     LaunchResponse response = triggerService.approvePendingCatchUp(command);
 
-    String status =
-        jdbcTemplate.queryForObject(
-            "select request_status from batch.trigger_request where tenant_id = ? and request_id ="
-                + " ?",
-            String.class,
-            "t1",
-            "pending-001");
+    String status = jdbcTemplate.queryForObject(
+        "select request_status from batch.trigger_request where tenant_id = ? and request_id ="
+            + " ?",
+        String.class,
+        "t1",
+        "pending-001");
 
     // ADR-010：审批走 outbox。trigger_request 标 LAUNCHED 后立刻返回，trigger_outbox_event 同事务写入数据库。
     assertThat(response.instanceNo()).isEqualTo("pending-001");
     assertThat(response.traceId()).isEqualTo("trace-pending-001");
     assertThat(status).isEqualTo("LAUNCHED");
-    Long outboxCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
-                + " ?",
-            Long.class,
-            "t1",
-            "pending-001");
+    Long outboxCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
+            + " ?",
+        Long.class,
+        "t1",
+        "pending-001");
     assertThat(outboxCount).isEqualTo(1L);
     verify(orchestratorRestClient, never()).post();
   }

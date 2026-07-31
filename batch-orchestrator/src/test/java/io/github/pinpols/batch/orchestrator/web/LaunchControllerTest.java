@@ -32,9 +32,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class LaunchControllerTest {
 
-  @Mock private LaunchService launchService;
-  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private LaunchService launchService;
+
+  @Mock
+  private TenantActionRateLimiter tenantActionRateLimiter;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private MockMvc mockMvc;
 
@@ -42,11 +47,10 @@ class LaunchControllerTest {
   void setUp() {
     LaunchApplicationService launchApplicationService =
         new LaunchApplicationService(launchService, tenantActionRateLimiter);
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new LaunchController(launchApplicationService, gracefulShutdown))
-            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new LaunchController(launchApplicationService, gracefulShutdown))
+        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+        .build();
   }
 
   @Test
@@ -56,10 +60,7 @@ class LaunchControllerTest {
 
     mockMvc
         .perform(
-            post("/internal/orchestrator/launch")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+            post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("""
                     {
                       "tenantId": "t1",
                       "jobCode": "IMPORT_JOB",
@@ -80,12 +81,10 @@ class LaunchControllerTest {
     // arrange: filter 解析出 API-Key 真实租户 t-real,但 body 声明的是 t-fake
     // act + assert: 租户边界守卫拒绝,不应落到 launch
     mockMvc
-        .perform(
-            post("/internal/orchestrator/launch")
-                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/orchestrator/launch")
+            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId": "t-fake",
                       "jobCode": "IMPORT_JOB",
@@ -108,12 +107,10 @@ class LaunchControllerTest {
 
     // act: launch 应使用解析出的 t-real,而非 body 里的 null
     mockMvc
-        .perform(
-            post("/internal/orchestrator/launch")
-                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/orchestrator/launch")
+            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t-real")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "jobCode": "IMPORT_JOB",
                       "bizDate": "2026-03-27",
@@ -135,12 +132,12 @@ class LaunchControllerTest {
   void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
     when(launchService.launch(any()))
-        .thenThrow(
-            BizException.of(
-                ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad request"));
+        .thenThrow(BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad request"));
 
     mockMvc
-        .perform(post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("{}"))
+        .perform(
+            post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("{}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ResultCode.INVALID_ARGUMENT.name()))
         .andExpect(jsonPath("$.message").value("error.common.invalid_argument"));

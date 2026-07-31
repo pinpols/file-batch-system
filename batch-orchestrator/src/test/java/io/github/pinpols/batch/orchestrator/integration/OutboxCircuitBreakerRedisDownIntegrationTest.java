@@ -52,22 +52,19 @@ class OutboxCircuitBreakerRedisDownIntegrationTest extends AbstractChaosIntegrat
 
       StringRedisTemplate template = new StringRedisTemplate(factory);
       OrchestratorRedisSupport redis = new OrchestratorRedisSupport(template, new ObjectMapper());
-      OutboxPublishCircuitBreaker breaker =
-          new OutboxPublishCircuitBreaker(
-              governance, redis, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+      OutboxPublishCircuitBreaker breaker = new OutboxPublishCircuitBreaker(
+          governance, redis, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
       // 预热:Redis 正常时 allowNow 走通(闭合 → 放行)
       assertThat(breaker.allowNow()).isTrue();
 
-      withDown(
-          ProxyTarget.REDIS,
-          () -> {
-            // Redis 断:allowNow 不得抛,且 fail-open 放行(outbox 投递继续)
-            assertThatCode(breaker::allowNow).doesNotThrowAnyException();
-            assertThat(breaker.allowNow()).isTrue();
-            // onAdvanceResult 不得把 Redis 异常抛回 OutboxPollScheduler
-            assertThatCode(() -> breaker.onAdvanceResult(1)).doesNotThrowAnyException();
-          });
+      withDown(ProxyTarget.REDIS, () -> {
+        // Redis 断:allowNow 不得抛,且 fail-open 放行(outbox 投递继续)
+        assertThatCode(breaker::allowNow).doesNotThrowAnyException();
+        assertThat(breaker.allowNow()).isTrue();
+        // onAdvanceResult 不得把 Redis 异常抛回 OutboxPollScheduler
+        assertThatCode(() -> breaker.onAdvanceResult(1)).doesNotThrowAnyException();
+      });
 
       // 恢复后仍可正常查询(不残留坏状态)
       assertThat(breaker.allowNow()).isTrue();
@@ -79,11 +76,10 @@ class OutboxCircuitBreakerRedisDownIntegrationTest extends AbstractChaosIntegrat
   private LettuceConnectionFactory newLettuceFactory() {
     RedisStandaloneConfiguration cfg =
         new RedisStandaloneConfiguration(redisProxiedHost(), redisProxiedPort());
-    LettuceClientConfiguration clientCfg =
-        LettuceClientConfiguration.builder()
-            .commandTimeout(Duration.ofSeconds(2))
-            .shutdownTimeout(Duration.ZERO)
-            .build();
+    LettuceClientConfiguration clientCfg = LettuceClientConfiguration.builder()
+        .commandTimeout(Duration.ofSeconds(2))
+        .shutdownTimeout(Duration.ZERO)
+        .build();
     LettuceConnectionFactory factory = new LettuceConnectionFactory(cfg, clientCfg);
     factory.afterPropertiesSet();
     return factory;

@@ -44,10 +44,8 @@ class FileStateMachineTest {
 
   @Test
   void shouldRejectIllegalTransition() {
-    assertThatThrownBy(
-            () ->
-                FileStateMachine.assertTransition(
-                    FileStatus.RECEIVED.name(), FileStatus.LOADED.name()))
+    assertThatThrownBy(() ->
+            FileStateMachine.assertTransition(FileStatus.RECEIVED.name(), FileStatus.LOADED.name()))
         .isInstanceOf(BizException.class)
         .extracting(BizException.class::cast)
         .extracting(BizException::getCode)

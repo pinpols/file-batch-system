@@ -53,9 +53,8 @@ public class TenantSchedulerSnapshotRecorder {
     }
     // 一次 GROUP BY 查所有租户的 ONLINE worker 数,取代 N 次 countByTenantAndStatus
     Map<String, Long> onlineByTenant = new HashMap<>();
-    for (Map<String, Object> row :
-        workerRegistryMapper.countByTenantsAndStatus(
-            tenantIds, WorkerRegistryStatus.ONLINE.code())) {
+    for (Map<String, Object> row : workerRegistryMapper.countByTenantsAndStatus(
+        tenantIds, WorkerRegistryStatus.ONLINE.code())) {
       String tid = String.valueOf(row.get("tenant_id"));
       Object cnt = row.get("cnt");
       onlineByTenant.put(tid, cnt instanceof Number n ? n.longValue() : 0L);
@@ -73,23 +72,22 @@ public class TenantSchedulerSnapshotRecorder {
       }
       SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
       long online = onlineByTenant.getOrDefault(tenantId, 0L);
-      rows.add(
-          new TenantSchedulerSnapshotEntity(
-              null,
-              tenantId,
-              snap.generatedAt(),
-              p.fairShareGroup(),
-              p.policyCode(),
-              (int) Math.min(Integer.MAX_VALUE, p.activeJobs()),
-              (int) Math.min(Integer.MAX_VALUE, p.activePartitions()),
-              p.maxRunningJobsPerTenant(),
-              p.burstLimit(),
-              p.effectiveTenantJobCap(),
-              (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
-              p.groupSharedMaxRunningJobs(),
-              p.quotaResetPolicy(),
-              (int) Math.min(Integer.MAX_VALUE, online),
-              JsonbString.of(JsonUtils.toJson(snap))));
+      rows.add(new TenantSchedulerSnapshotEntity(
+          null,
+          tenantId,
+          snap.generatedAt(),
+          p.fairShareGroup(),
+          p.policyCode(),
+          (int) Math.min(Integer.MAX_VALUE, p.activeJobs()),
+          (int) Math.min(Integer.MAX_VALUE, p.activePartitions()),
+          p.maxRunningJobsPerTenant(),
+          p.burstLimit(),
+          p.effectiveTenantJobCap(),
+          (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
+          p.groupSharedMaxRunningJobs(),
+          p.quotaResetPolicy(),
+          (int) Math.min(Integer.MAX_VALUE, online),
+          JsonbString.of(JsonUtils.toJson(snap))));
     }
     if (!rows.isEmpty()) {
       // 批量 INSERT:单条 SQL 多 VALUES,N 次 round-trip 降为 1 次

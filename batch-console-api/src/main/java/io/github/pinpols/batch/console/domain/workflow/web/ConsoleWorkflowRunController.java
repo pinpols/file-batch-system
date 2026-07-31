@@ -31,9 +31,8 @@ public class ConsoleWorkflowRunController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleWorkflowRunActionResponse> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleWorkflowRunActionResponse.from(
-            orchestratorProxyService.workflowRunAction(id, tenantId, "cancel")));
+    return responseFactory.success(ConsoleWorkflowRunActionResponse.from(
+        orchestratorProxyService.workflowRunAction(id, tenantId, "cancel")));
   }
 
   @PostMapping("/{id}/terminate")
@@ -44,9 +43,8 @@ public class ConsoleWorkflowRunController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleWorkflowRunActionResponse> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleWorkflowRunActionResponse.from(
-            orchestratorProxyService.workflowRunAction(id, tenantId, "terminate")));
+    return responseFactory.success(ConsoleWorkflowRunActionResponse.from(
+        orchestratorProxyService.workflowRunAction(id, tenantId, "terminate")));
   }
 
   @PostMapping("/{id}/pause")
@@ -57,9 +55,8 @@ public class ConsoleWorkflowRunController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleWorkflowRunActionResponse> pause(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleWorkflowRunActionResponse.from(
-            orchestratorProxyService.workflowRunAction(id, tenantId, "pause")));
+    return responseFactory.success(ConsoleWorkflowRunActionResponse.from(
+        orchestratorProxyService.workflowRunAction(id, tenantId, "pause")));
   }
 
   @PostMapping("/{id}/resume")
@@ -70,9 +67,8 @@ public class ConsoleWorkflowRunController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleWorkflowRunActionResponse> resume(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleWorkflowRunActionResponse.from(
-            orchestratorProxyService.workflowRunAction(id, tenantId, "resume")));
+    return responseFactory.success(ConsoleWorkflowRunActionResponse.from(
+        orchestratorProxyService.workflowRunAction(id, tenantId, "resume")));
   }
 
   @PostMapping("/{id}/skip-node")
@@ -85,8 +81,7 @@ public class ConsoleWorkflowRunController {
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("nodeCode") String nodeCode) {
-    return responseFactory.success(
-        ConsoleWorkflowRunSkipNodeResponse.from(
-            orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode)));
+    return responseFactory.success(ConsoleWorkflowRunSkipNodeResponse.from(
+        orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode)));
   }
 }

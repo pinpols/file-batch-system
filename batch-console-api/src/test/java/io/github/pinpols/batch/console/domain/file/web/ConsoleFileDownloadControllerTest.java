@@ -27,7 +27,8 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleFileDownloadControllerTest {
 
-  @Mock private ConsoleFileDownloadApplicationService applicationService;
+  @Mock
+  private ConsoleFileDownloadApplicationService applicationService;
 
   private MockMvc mockMvc;
 
@@ -36,23 +37,22 @@ class ConsoleFileDownloadControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleFileDownloadController(applicationService))
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleFileDownloadController(applicationService))
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn200WithStreamWhenDownloadSucceeds() throws Exception {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-    headers.setContentDisposition(ContentDisposition.attachment().filename("test.csv").build());
+    headers.setContentDisposition(
+        ContentDisposition.attachment().filename("test.csv").build());
 
     when(applicationService.download(anyString(), anyLong(), any()))
-        .thenReturn(
-            ResponseEntity.ok()
-                .headers(headers)
-                .body(new InputStreamResource(new ByteArrayInputStream("data".getBytes()))));
+        .thenReturn(ResponseEntity.ok()
+            .headers(headers)
+            .body(new InputStreamResource(new ByteArrayInputStream("data".getBytes()))));
 
     mockMvc
         .perform(get("/api/console/files/1/download").param("tenantId", "t1"))

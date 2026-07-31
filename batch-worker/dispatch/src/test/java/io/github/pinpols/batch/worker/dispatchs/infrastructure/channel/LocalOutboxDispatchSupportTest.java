@@ -20,9 +20,8 @@ class LocalOutboxDispatchSupportTest {
     Files.createDirectories(sandbox);
     DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
-    DispatchResult result =
-        LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-            command(target), false, null, properties);
+    DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+        command(target), false, null, properties);
 
     assertThat(result.success()).isTrue();
     assertThat(result.manifestRef()).isNotNull();
@@ -45,9 +44,8 @@ class LocalOutboxDispatchSupportTest {
     Files.createDirectories(outside);
     DispatchRuntimeProperties properties = runtimeProperties(sandbox);
 
-    DispatchResult result =
-        LocalOutboxDispatchSupport.writeFilesystemEnvelope(
-            command(outside), false, null, properties);
+    DispatchResult result = LocalOutboxDispatchSupport.writeFilesystemEnvelope(
+        command(outside), false, null, properties);
 
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("escapes sandbox root");
@@ -60,18 +58,17 @@ class LocalOutboxDispatchSupportTest {
   }
 
   private static DispatchCommand command(Path target) {
-    DispatchPayload payload =
-        new DispatchPayload(
-            "file-1",
-            "FILE_A",
-            "LOCAL_CH",
-            "target",
-            "req-1",
-            "rcpt-1",
-            true,
-            false,
-            "NORMAL",
-            Map.of());
+    DispatchPayload payload = new DispatchPayload(
+        "file-1",
+        "FILE_A",
+        "LOCAL_CH",
+        "target",
+        "req-1",
+        "rcpt-1",
+        true,
+        false,
+        "NORMAL",
+        Map.of());
     return new DispatchCommand(
         "t1",
         "trace-1",

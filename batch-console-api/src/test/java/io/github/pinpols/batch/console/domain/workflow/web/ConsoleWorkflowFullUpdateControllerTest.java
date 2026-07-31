@@ -46,9 +46,14 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @DisplayName("ConsoleWorkflowFullUpdate Controller")
 class ConsoleWorkflowFullUpdateControllerTest {
 
-  @Mock private ConsoleWorkflowDefinitionApplicationService service;
-  @Mock private WorkflowDesignLockService lockService;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private ConsoleWorkflowDefinitionApplicationService service;
+
+  @Mock
+  private WorkflowDesignLockService lockService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -66,19 +71,17 @@ class ConsoleWorkflowFullUpdateControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
 
     // SecurityContext 注入 ConsolePrincipal,controller currentUsername() 读取
     ConsolePrincipal principal =
         new ConsolePrincipal(USER_ALICE, "ta", Set.of("ROLE_TENANT_ADMIN"));
-    UsernamePasswordAuthenticationToken auth =
-        new UsernamePasswordAuthenticationToken(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_ADMIN")));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        principal, null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_ADMIN")));
     SecurityContextHolder.getContext().setAuthentication(auth);
   }
 
@@ -96,10 +99,9 @@ class ConsoleWorkflowFullUpdateControllerTest {
 
     String body = validBody();
     mockMvc
-        .perform(
-            put("/api/console/workflow-definitions/42/full")
-                .contentType(APPLICATION_JSON)
-                .content(body))
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).fullUpdate(eq(42L), any(), eq(USER_ALICE));
@@ -109,15 +111,13 @@ class ConsoleWorkflowFullUpdateControllerTest {
   @DisplayName("锁不归属当前 user:service 抛 CONFLICT → 409 带 lockedBy")
   void shouldReturnConflict_whenLockHeldByOther() throws Exception {
     when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
-        .thenThrow(
-            BizException.of(
-                ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", "bob"));
+        .thenThrow(BizException.of(
+            ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", "bob"));
 
     mockMvc
-        .perform(
-            put("/api/console/workflow-definitions/42/full")
-                .contentType(APPLICATION_JSON)
-                .content(validBody()))
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(validBody()))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CONFLICT"));
   }
@@ -130,10 +130,9 @@ class ConsoleWorkflowFullUpdateControllerTest {
             BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected", "a"));
 
     mockMvc
-        .perform(
-            put("/api/console/workflow-definitions/42/full")
-                .contentType(APPLICATION_JSON)
-                .content(validBody()))
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(validBody()))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -143,18 +142,16 @@ class ConsoleWorkflowFullUpdateControllerTest {
       "FILE_STEP pipelineCode 不存在:service 抛 VALIDATION_ERROR → 400 file_step_pipeline_not_found")
   void shouldReturnBadRequest_whenFileStepPipelineNotFound() throws Exception {
     when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
-        .thenThrow(
-            BizException.of(
-                ResultCode.VALIDATION_ERROR,
-                "error.workflow.dag.file_step_pipeline_not_found",
-                "fs",
-                "ghost_pipeline"));
+        .thenThrow(BizException.of(
+            ResultCode.VALIDATION_ERROR,
+            "error.workflow.dag.file_step_pipeline_not_found",
+            "fs",
+            "ghost_pipeline"));
 
     mockMvc
-        .perform(
-            put("/api/console/workflow-definitions/42/full")
-                .contentType(APPLICATION_JSON)
-                .content(validBody()))
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(validBody()))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -162,17 +159,15 @@ class ConsoleWorkflowFullUpdateControllerTest {
   @Test
   @DisplayName("嵌套 @Valid 失败:nodeCode 含空格 → 400 VALIDATION_ERROR,不调 service")
   void shouldRejectValidation_whenNestedNodeCodeInvalid() throws Exception {
-    String body =
-        "{\"definition\":{"
-            + "\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-            + "\"workflowType\":\"DAG\","
-            + "\"nodes\":[{\"nodeCode\":\"bad code\",\"nodeType\":\"TASK\"}],\"edges\":[]"
-            + "},\"expectedVersion\":1}";
+    String body = "{\"definition\":{"
+        + "\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
+        + "\"workflowType\":\"DAG\","
+        + "\"nodes\":[{\"nodeCode\":\"bad code\",\"nodeType\":\"TASK\"}],\"edges\":[]"
+        + "},\"expectedVersion\":1}";
     mockMvc
-        .perform(
-            put("/api/console/workflow-definitions/42/full")
-                .contentType(APPLICATION_JSON)
-                .content(body))
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     verify(service, never()).fullUpdate(any(Long.class), any(), any());

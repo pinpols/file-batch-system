@@ -58,9 +58,8 @@ public class ConsoleClusterDiagnosticController {
   @GetMapping("/terminal-children")
   public CommonResponse<ConsoleTerminalChildrenHealthResponse> terminalChildrenHealth(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleTerminalChildrenHealthResponse.from(
-            diagnosticService.terminalChildrenHealth(tenantId)));
+    return responseFactory.success(ConsoleTerminalChildrenHealthResponse.from(
+        diagnosticService.terminalChildrenHealth(tenantId)));
   }
 
   @GetMapping("/instances/{id}")

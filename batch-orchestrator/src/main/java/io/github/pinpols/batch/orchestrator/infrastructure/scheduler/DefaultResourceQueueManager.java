@@ -47,19 +47,16 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
     }
     return queues.stream()
         .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
-        .sorted(
-            Comparator.comparing(
-                    (ResourceQueueEntity queue) -> "MIXED".equalsIgnoreCase(queue.queueType()))
-                .thenComparing(
-                    queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
-                .thenComparing(
-                    queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
-                .thenComparing(
-                    queue -> normalizedWeight(queue.maxRunningPartitions()),
-                    Comparator.reverseOrder())
-                .thenComparing(
-                    ResourceQueueEntity::queueCode,
-                    Comparator.nullsLast(String::compareToIgnoreCase)))
+        .sorted(Comparator.comparing(
+                (ResourceQueueEntity queue) -> "MIXED".equalsIgnoreCase(queue.queueType()))
+            .thenComparing(
+                queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
+            .thenComparing(
+                queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
+            .thenComparing(
+                queue -> normalizedWeight(queue.maxRunningPartitions()), Comparator.reverseOrder())
+            .thenComparing(
+                ResourceQueueEntity::queueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
         .findFirst()
         .orElse(null);
   }

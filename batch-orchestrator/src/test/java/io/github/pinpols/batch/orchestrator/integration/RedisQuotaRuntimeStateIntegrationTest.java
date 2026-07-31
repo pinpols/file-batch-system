@@ -27,7 +27,8 @@ import org.springframework.test.context.TestPropertySource;
     })
 class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private QuotaRuntimeStateService quotaRuntimeStateService;
+  @Autowired
+  private QuotaRuntimeStateService quotaRuntimeStateService;
 
   // ── SLIDING_WINDOW: borrowed within burst → allow + peak 抬升
 
@@ -82,7 +83,8 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     assertThat(snap.peakBorrowedCount()).isEqualTo(3);
     assertThat(snap.windowStartedAt()).isNotNull();
     assertThat(snap.windowExpiresAt()).isNotNull();
-    long windowSpan = snap.windowExpiresAt().toEpochMilli() - snap.windowStartedAt().toEpochMilli();
+    long windowSpan =
+        snap.windowExpiresAt().toEpochMilli() - snap.windowStartedAt().toEpochMilli();
     assertThat(windowSpan).isEqualTo(24L * 3600 * 1000);
   }
 
@@ -98,10 +100,8 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void describeReturnsDefaultSnapshotForUnknownOwner() {
-    QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        quotaRuntimeStateService.describe(
-            describe(
-                "unknown-owner-" + BatchDateTimeSupport.utcEpochMillis(), "SLIDING_WINDOW", 5));
+    QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = quotaRuntimeStateService.describe(
+        describe("unknown-owner-" + BatchDateTimeSupport.utcEpochMillis(), "SLIDING_WINDOW", 5));
     assertThat(snap.peakBorrowedCount()).isZero();
     assertThat(snap.remainingBurst()).isEqualTo(5);
   }

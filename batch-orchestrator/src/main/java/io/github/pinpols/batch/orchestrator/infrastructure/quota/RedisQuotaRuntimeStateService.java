@@ -55,8 +55,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
 
   // Lua 脚本：evaluateAndReserve 的原子实现
   // 返回值: [allowed(1/0), peakBorrowedCount, windowStartedAtMillis, windowExpiresAtMillis]
-  private static final String EVAL_RESERVE_SCRIPT =
-      """
+  private static final String EVAL_RESERVE_SCRIPT = """
       local nowMillis = tonumber(ARGV[1])
       local baseCap = tonumber(ARGV[2])
       local burst = tonumber(ARGV[3])
@@ -190,25 +189,25 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     }
     int slidingHours = Math.max(1, request.policy().slidingWindowHours());
 
-    String key =
-        BatchRedisKeys.quotaState(
-            request.owner().tenantId(), request.owner().quotaScope(), request.owner().ownerCode());
+    String key = BatchRedisKeys.quotaState(
+        request.owner().tenantId(),
+        request.owner().quotaScope(),
+        request.owner().ownerCode());
 
     List<Object> result;
     try {
-      result =
-          redis.evalList(
-              EVAL_RESERVE_SCRIPT,
-              key,
-              Long.toString(nowMillis),
-              Integer.toString(request.policy().baseCap()),
-              Integer.toString(normalizedBurst),
-              Integer.toString(normalizedRequested),
-              Long.toString(request.currentActiveCount()),
-              policy.name(),
-              Long.toString(calendarStartMillis),
-              Long.toString(calendarEndMillis),
-              Integer.toString(slidingHours));
+      result = redis.evalList(
+          EVAL_RESERVE_SCRIPT,
+          key,
+          Long.toString(nowMillis),
+          Integer.toString(request.policy().baseCap()),
+          Integer.toString(normalizedBurst),
+          Integer.toString(normalizedRequested),
+          Long.toString(request.currentActiveCount()),
+          policy.name(),
+          Long.toString(calendarStartMillis),
+          Long.toString(calendarEndMillis),
+          Integer.toString(slidingHours));
     } catch (DataAccessException ex) {
       log.warn(
           "redis quota evaluateAndReserve failed; failureMode={}, tenant={}, scope={}, owner={},"
@@ -221,14 +220,13 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
         return ResourceCheck.allow();
       }
-      return waitForCapacity(
-          new QuotaReservationRequest(
-              request.owner(),
-              request.policy(),
-              request.currentActiveCount(),
-              request.requestedCount(),
-              new QuotaReservationReason(
-                  "QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable")));
+      return waitForCapacity(new QuotaReservationRequest(
+          request.owner(),
+          request.policy(),
+          request.currentActiveCount(),
+          request.requestedCount(),
+          new QuotaReservationReason(
+              "QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable")));
     }
 
     if (result == null || result.isEmpty()) {

@@ -83,10 +83,9 @@ public class ConsoleRealtimeEventHub {
           String.valueOf(max));
     }
     String resolvedStream = normalizeStream(stream);
-    long emitterTimeoutMillis =
-        realtimeProperties.getEmitterTimeout() != null
-            ? realtimeProperties.getEmitterTimeout().toMillis()
-            : 0L;
+    long emitterTimeoutMillis = realtimeProperties.getEmitterTimeout() != null
+        ? realtimeProperties.getEmitterTimeout().toMillis()
+        : 0L;
     SseEmitter emitter = new SseEmitter(emitterTimeoutMillis);
     Subscription subscription =
         new Subscription(tenantId, resolvedStream, normalizeFilter(eventType), cursor, emitter);
@@ -95,11 +94,10 @@ public class ConsoleRealtimeEventHub {
     registerLifecycle(subscription);
 
     long interval = resolveHeartbeatInterval(heartbeatMillis);
-    subscription.heartbeatFuture =
-        scheduler.scheduleAtFixedRate(
-            () -> sendHeartbeat(subscription),
-            Instant.now().plusMillis(interval),
-            Duration.ofMillis(interval));
+    subscription.heartbeatFuture = scheduler.scheduleAtFixedRate(
+        () -> sendHeartbeat(subscription),
+        Instant.now().plusMillis(interval),
+        Duration.ofMillis(interval));
 
     // 订阅建立后立即回一个 ready 事件，前端可据此确认流已连通并拿到当前 cursor/stream。
     sendLifecycleEvent(
@@ -117,14 +115,13 @@ public class ConsoleRealtimeEventHub {
 
   public void publishAfterCommit(ConsoleSseEvent event) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              // 只在事务提交后向前端广播，避免把最终会回滚的数据状态提前暴露出去。
-              publish(event);
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          // 只在事务提交后向前端广播，避免把最终会回滚的数据状态提前暴露出去。
+          publish(event);
+        }
+      });
       return;
     }
     publish(event);
@@ -220,12 +217,8 @@ public class ConsoleRealtimeEventHub {
     if (subscription.cursor == null || subscription.cursor.isBlank()) {
       return;
     }
-    ConsoleRealtimeReplayStore.ReplayBatch replayBatch =
-        replayStore.replay(
-            subscription.tenantId,
-            subscription.stream,
-            subscription.cursor,
-            subscription.eventType);
+    ConsoleRealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
+        subscription.tenantId, subscription.stream, subscription.cursor, subscription.eventType);
     if (!replayBatch.cursorFound()) {
       realtimeMetrics.recordReplayCursorMiss(subscription.stream);
       sendLifecycleEvent(
@@ -253,7 +246,8 @@ public class ConsoleRealtimeEventHub {
                 event.emittedAt() != null ? event.emittedAt() : BatchDateTimeSupport.utcNow()));
       }
     }
-    realtimeMetrics.recordReplayDelivered(subscription.stream, replayBatch.events().size());
+    realtimeMetrics.recordReplayDelivered(
+        subscription.stream, replayBatch.events().size());
   }
 
   private void registerLifecycle(Subscription subscription) {

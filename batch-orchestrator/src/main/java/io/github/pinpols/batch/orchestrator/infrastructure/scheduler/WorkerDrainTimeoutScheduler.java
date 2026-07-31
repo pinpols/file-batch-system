@@ -59,9 +59,8 @@ public class WorkerDrainTimeoutScheduler {
         // 全链路 mapper 需要绑定 worker 所属 tenant。
         RlsTenantContextHolder.runWithTenant(
             tenantId,
-            () ->
-                workerDrainGovernanceService.takeoverAfterDrainTimeout(
-                    worker.tenantId(), worker.workerCode()));
+            () -> workerDrainGovernanceService.takeoverAfterDrainTimeout(
+                worker.tenantId(), worker.workerCode()));
       }
     }
   }

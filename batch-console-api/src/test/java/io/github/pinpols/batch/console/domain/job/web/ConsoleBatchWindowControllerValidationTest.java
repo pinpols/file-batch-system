@@ -49,11 +49,11 @@ class ConsoleBatchWindowControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleBatchWindowController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleBatchWindowController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String body(String windowCode) {
@@ -100,7 +100,8 @@ class ConsoleBatchWindowControllerValidationTest {
   @Test
   void rejects_windowCode_blank() throws Exception {
     mockMvc
-        .perform(post("/api/console/batch-windows").contentType(APPLICATION_JSON).content(body("")))
+        .perform(
+            post("/api/console/batch-windows").contentType(APPLICATION_JSON).content(body("")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -109,10 +110,9 @@ class ConsoleBatchWindowControllerValidationTest {
   void accepts_valid_windowCode() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     mockMvc
-        .perform(
-            post("/api/console/batch-windows")
-                .contentType(APPLICATION_JSON)
-                .content(body("win_ok_01")))
+        .perform(post("/api/console/batch-windows")
+            .contentType(APPLICATION_JSON)
+            .content(body("win_ok_01")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     verify(service).create(ArgumentMatchers.any());

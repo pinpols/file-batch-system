@@ -80,9 +80,8 @@ public abstract class AbstractApiExceptionHandler {
         modulePrefix(),
         exception.getMessage());
     return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(
-            CommonResponse.failure(
-                ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发修改冲突,请重试")));
+        .body(CommonResponse.failure(
+            ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发修改冲突,请重试")));
   }
 
   /**
@@ -96,9 +95,8 @@ public abstract class AbstractApiExceptionHandler {
         modulePrefix(),
         exception.getMessage());
     return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(
-            CommonResponse.failure(
-                ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试")));
+        .body(CommonResponse.failure(
+            ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试")));
   }
 
   /**
@@ -110,10 +108,9 @@ public abstract class AbstractApiExceptionHandler {
       NoResourceFoundException exception) {
     log.info("{} resource not found: {}", modulePrefix(), exception.getResourcePath());
     return ResponseEntity.status(HttpStatus.NOT_FOUND)
-        .body(
-            CommonResponse.failure(
-                ResultCode.NOT_FOUND,
-                resolveCommonCode(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.label())));
+        .body(CommonResponse.failure(
+            ResultCode.NOT_FOUND,
+            resolveCommonCode(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.label())));
   }
 
   /**
@@ -125,21 +122,18 @@ public abstract class AbstractApiExceptionHandler {
       MethodArgumentTypeMismatchException exception) {
     log.info("{} argument type mismatch: name={}", modulePrefix(), exception.getName());
     return ResponseEntity.badRequest()
-        .body(
-            CommonResponse.failure(
-                ResultCode.INVALID_ARGUMENT,
-                resolveCommonCode(
-                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
+        .body(CommonResponse.failure(
+            ResultCode.INVALID_ARGUMENT,
+            resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
   }
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<CommonResponse<Void>> handleException(Exception exception) {
     log.error("{} unexpected exception", modulePrefix(), exception);
     return ResponseEntity.internalServerError()
-        .body(
-            CommonResponse.failure(
-                ResultCode.SYSTEM_ERROR,
-                resolveCommonCode(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.label())));
+        .body(CommonResponse.failure(
+            ResultCode.SYSTEM_ERROR,
+            resolveCommonCode(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.label())));
   }
 
   private String resolveBizMessage(BizException exception) {

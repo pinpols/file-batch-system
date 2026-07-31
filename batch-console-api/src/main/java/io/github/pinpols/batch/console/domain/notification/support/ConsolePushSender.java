@@ -70,9 +70,9 @@ public class ConsolePushSender {
         && properties.getPublicKey() != null
         && properties.getPrivateKey() != null) {
       try {
-        this.pushService =
-            new PushAsyncService(properties.getPublicKey(), properties.getPrivateKey())
-                .setSubject(properties.getSubject());
+        this.pushService = new PushAsyncService(
+                properties.getPublicKey(), properties.getPrivateKey())
+            .setSubject(properties.getSubject());
         log.info("[push] ConsolePushSender initialized, subject={}", properties.getSubject());
       } catch (Exception e) {
         log.error("[push] init failed; push disabled", e);
@@ -103,13 +103,11 @@ public class ConsolePushSender {
     if (subs.isEmpty()) return;
     byte[] body;
     try {
-      body =
-          objectMapper.writeValueAsBytes(
-              Map.of(
-                  "title", payload.title() == null ? "" : payload.title(),
-                  "body", payload.body() == null ? "" : payload.body(),
-                  "tag", payload.tag() == null ? "" : payload.tag(),
-                  "url", payload.url() == null ? "/m/ops/summary" : payload.url()));
+      body = objectMapper.writeValueAsBytes(Map.of(
+          "title", payload.title() == null ? "" : payload.title(),
+          "body", payload.body() == null ? "" : payload.body(),
+          "tag", payload.tag() == null ? "" : payload.tag(),
+          "url", payload.url() == null ? "/m/ops/summary" : payload.url()));
     } catch (Exception e) {
       log.error("[push] payload serialize failed", e);
       return;
@@ -124,13 +122,12 @@ public class ConsolePushSender {
       // web-push 5.1.1 没有 .subscription(Subscription) builder 方法;直接用
       // (endpoint, userPublicKey base64-url, userAuth base64-url, body, ttl)
       // 5-arg 构造器,免去 Subscription / Keys 包装。
-      Notification notification =
-          new Notification(
-              sub.getEndpoint(),
-              sub.getP256dhKey(),
-              sub.getAuthSecret(),
-              body,
-              properties.getTtlSeconds());
+      Notification notification = new Notification(
+          sub.getEndpoint(),
+          sub.getP256dhKey(),
+          sub.getAuthSecret(),
+          body,
+          properties.getTtlSeconds());
 
       // sendOne 已在 pushTaskExecutor,但发送仍要封顶等待,避免慢 endpoint 占住线程。
       CompletableFuture<Response> future = pushService.send(notification);

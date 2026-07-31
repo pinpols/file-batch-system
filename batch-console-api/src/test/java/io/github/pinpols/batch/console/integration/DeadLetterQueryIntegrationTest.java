@@ -22,16 +22,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private DeadLetterTaskMapper deadLetterTaskMapper;
+  @Autowired
+  private DeadLetterTaskMapper deadLetterTaskMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldReturnEmptyWhenNoDeadLettersExist() {
     List<DeadLetterTaskEntity> results =
-        deadLetterTaskMapper.selectByQuery(
-            DeadLetterTaskQuery.ofTenant(
-                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
+        deadLetterTaskMapper.selectByQuery(DeadLetterTaskQuery.ofTenant(
+            "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
     assertThat(results).isEmpty();
   }
@@ -43,9 +44,8 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     insertDeadLetter(tenantId, "JOB_PARTITION", 101L, DeadLetter.FAILED, "trace-dlq-002");
     insertDeadLetter(tenantId, "JOB_PARTITION", 102L, DeadLetter.SUCCESS, "trace-dlq-003");
 
-    List<DeadLetterTaskEntity> newDlq =
-        deadLetterTaskMapper.selectByQuery(
-            DeadLetterTaskQuery.ofReplayStatus(tenantId, DeadLetter.NEW, new PageRequest(1, 10)));
+    List<DeadLetterTaskEntity> newDlq = deadLetterTaskMapper.selectByQuery(
+        DeadLetterTaskQuery.ofReplayStatus(tenantId, DeadLetter.NEW, new PageRequest(1, 10)));
 
     assertThat(newDlq).hasSize(1);
     assertThat(newDlq.get(0).getReplayStatus()).isEqualTo(DeadLetter.NEW);
@@ -58,9 +58,8 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     insertDeadLetter(tenantId, "JOB_PARTITION", 200L, DeadLetter.NEW, "trace-type-001");
     insertDeadLetter(tenantId, "JOB_PARTITION", 201L, DeadLetter.NEW, "trace-type-002");
 
-    List<DeadLetterTaskEntity> partitionDlq =
-        deadLetterTaskMapper.selectByQuery(
-            DeadLetterTaskQuery.ofSourceType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
+    List<DeadLetterTaskEntity> partitionDlq = deadLetterTaskMapper.selectByQuery(
+        DeadLetterTaskQuery.ofSourceType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
     assertThat(partitionDlq).hasSize(2);
     assertThat(partitionDlq).allMatch(d -> "JOB_PARTITION".equals(d.getSourceType()));
@@ -72,9 +71,8 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     String uniqueTrace = "unique-trace-dlq-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 300L, DeadLetter.NEW, uniqueTrace);
 
-    List<DeadLetterTaskEntity> results =
-        deadLetterTaskMapper.selectByQuery(
-            DeadLetterTaskQuery.ofTraceId(tenantId, uniqueTrace, new PageRequest(1, 10)));
+    List<DeadLetterTaskEntity> results = deadLetterTaskMapper.selectByQuery(
+        DeadLetterTaskQuery.ofTraceId(tenantId, uniqueTrace, new PageRequest(1, 10)));
 
     assertThat(results).hasSize(1);
     assertThat(results.get(0).getTraceId()).isEqualTo(uniqueTrace);
@@ -87,9 +85,8 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     insertDeadLetter(tenantId, "JOB_PARTITION", 401L, DeadLetter.FAILED, "trace-all-2");
     insertDeadLetter(tenantId, "JOB_PARTITION", 402L, DeadLetter.SUCCESS, "trace-all-3");
 
-    List<DeadLetterTaskEntity> all =
-        deadLetterTaskMapper.selectByQuery(
-            DeadLetterTaskQuery.ofTenant(tenantId, new PageRequest(1, 10)));
+    List<DeadLetterTaskEntity> all = deadLetterTaskMapper.selectByQuery(
+        DeadLetterTaskQuery.ofTenant(tenantId, new PageRequest(1, 10)));
 
     assertThat(all).hasSize(3);
   }
@@ -107,12 +104,6 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
         VALUES (?, ?, ?, 'ERROR: parse failed',
                 ?, ?, 0, ?,
                 now(), now())
-        """,
-        tenantId,
-        sourceType,
-        sourceId,
-        tenantId + ":" + sourceId,
-        replayStatus,
-        traceId);
+        """, tenantId, sourceType, sourceId, tenantId + ":" + sourceId, replayStatus, traceId);
   }
 }

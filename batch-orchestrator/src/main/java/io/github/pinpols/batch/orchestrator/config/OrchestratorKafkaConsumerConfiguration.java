@@ -100,39 +100,38 @@ public class OrchestratorKafkaConsumerConfiguration {
    */
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
-    DefaultErrorHandler handler =
-        new DefaultErrorHandler(
-            (record, exception) -> {
-              // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
-              // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
-              Throwable cause = unwrap(exception);
-              boolean businessLevel =
-                  cause instanceof BizException || cause instanceof IllegalArgumentException;
-              if (businessLevel) {
-                log.warn(
-                    "TriggerLaunchConsumer 业务错跳过: topic={} partition={} offset={} key={} cause={}",
-                    record.topic(),
-                    record.partition(),
-                    record.offset(),
-                    record.key(),
-                    cause.getMessage());
-              } else {
-                log.error(
-                    "TriggerLaunchConsumer 消息已超出重试上限: topic={} partition={} offset={}"
-                        + " key={} value={} cause={}",
-                    record.topic(),
-                    record.partition(),
-                    record.offset(),
-                    record.key(),
-                    record.value(),
-                    exception.getMessage());
-                Counter.builder(METRIC_FAILED)
-                    .tags(Tags.of("reason", "retries_exhausted"))
-                    .register(meterRegistry)
-                    .increment();
-              }
-            },
-            new FixedBackOff(eh.getRetryBackoffMs(), Math.max(0, eh.getRetryAttempts() - 1)));
+    DefaultErrorHandler handler = new DefaultErrorHandler(
+        (record, exception) -> {
+          // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
+          // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
+          Throwable cause = unwrap(exception);
+          boolean businessLevel =
+              cause instanceof BizException || cause instanceof IllegalArgumentException;
+          if (businessLevel) {
+            log.warn(
+                "TriggerLaunchConsumer 业务错跳过: topic={} partition={} offset={} key={} cause={}",
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.key(),
+                cause.getMessage());
+          } else {
+            log.error(
+                "TriggerLaunchConsumer 消息已超出重试上限: topic={} partition={} offset={}"
+                    + " key={} value={} cause={}",
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.key(),
+                record.value(),
+                exception.getMessage());
+            Counter.builder(METRIC_FAILED)
+                .tags(Tags.of("reason", "retries_exhausted"))
+                .register(meterRegistry)
+                .increment();
+          }
+        },
+        new FixedBackOff(eh.getRetryBackoffMs(), Math.max(0, eh.getRetryAttempts() - 1)));
     // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
     handler.addNotRetryableExceptions(BizException.class);
     handler.addNotRetryableExceptions(IllegalArgumentException.class);

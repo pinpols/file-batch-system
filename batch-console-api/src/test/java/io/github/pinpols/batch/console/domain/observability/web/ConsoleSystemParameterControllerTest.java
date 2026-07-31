@@ -49,13 +49,11 @@ class ConsoleSystemParameterControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleSystemParameterController(
-                    parameterService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemParameterController(
+            parameterService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -80,10 +78,9 @@ class ConsoleSystemParameterControllerTest {
     when(parameterService.getValue("t1", "retry.max-count")).thenReturn(Optional.of("3"));
 
     mockMvc
-        .perform(
-            get("/api/console/system-parameters/value")
-                .param("tenantId", "t1")
-                .param("key", "retry.max-count"))
+        .perform(get("/api/console/system-parameters/value")
+            .param("tenantId", "t1")
+            .param("key", "retry.max-count"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.key").value("retry.max-count"))
@@ -93,12 +90,10 @@ class ConsoleSystemParameterControllerTest {
   @Test
   void shouldUpsertParameter() throws Exception {
     mockMvc
-        .perform(
-            put("/api/console/system-parameters")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(put("/api/console/system-parameters")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"key":"retry.max-count","value":"5","description":"Max retry count"}
                     """))
         .andExpect(status().isOk())
@@ -110,10 +105,9 @@ class ConsoleSystemParameterControllerTest {
   @Test
   void shouldDeleteParameter() throws Exception {
     mockMvc
-        .perform(
-            delete("/api/console/system-parameters")
-                .param("tenantId", "t1")
-                .param("key", "retry.max-count"))
+        .perform(delete("/api/console/system-parameters")
+            .param("tenantId", "t1")
+            .param("key", "retry.max-count"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 

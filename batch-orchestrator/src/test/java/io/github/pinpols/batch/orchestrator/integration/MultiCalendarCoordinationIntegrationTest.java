@@ -37,8 +37,11 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ = LocalDate.of(2026, 5, 7);
 
-  @Autowired private BatchDayOpenScheduler scheduler;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private BatchDayOpenScheduler scheduler;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void seedCleanCalendars() {
@@ -89,7 +92,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   void disasterSkipOverrideShortCircuitsOpen() {
     insertCalendar("CAL_US", "America/New_York");
     // NY EDT cutoff=22:00 → 用 NY 本地 22:01 of BIZ 让 scheduler 算出 bizDate=BIZ
-    Instant now = BIZ.atTime(22, 1).atZone(java.time.ZoneId.of("America/New_York")).toInstant();
+    Instant now =
+        BIZ.atTime(22, 1).atZone(java.time.ZoneId.of("America/New_York")).toInstant();
     // disaster_day_override.effective_at 默认 = current_timestamp(墙钟今天),
     // 而测试 now = BIZ(可能是几天前)。selectActiveByCalendarBizDate 的
     // "effective_at <= now" 过滤会把这条 override 过滤掉。显式把 effective_at
@@ -123,12 +127,11 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
         TENANT,
         cutoffJson);
 
-    Map<String, Object> row =
-        jdbcTemplate.queryForMap(
-            "select calendar_code, cutoff_schedule::text as cutoff_schedule"
-                + " from batch.business_calendar"
-                + " where tenant_id = ? and calendar_code = 'CAL_JP'",
-            TENANT);
+    Map<String, Object> row = jdbcTemplate.queryForMap(
+        "select calendar_code, cutoff_schedule::text as cutoff_schedule"
+            + " from batch.business_calendar"
+            + " where tenant_id = ? and calendar_code = 'CAL_JP'",
+        TENANT);
 
     assertThat(row.get("cutoff_schedule").toString())
         .contains("default")
@@ -151,12 +154,11 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   }
 
   private Map<String, Object> selectFirstBatchDay(String calendarCode) {
-    List<Map<String, Object>> rows =
-        jdbcTemplate.queryForList(
-            "select * from batch.batch_day_instance where tenant_id = ? and calendar_code = ?"
-                + " order by biz_date desc, id desc limit 1",
-            TENANT,
-            calendarCode);
+    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+        "select * from batch.batch_day_instance where tenant_id = ? and calendar_code = ?"
+            + " order by biz_date desc, id desc limit 1",
+        TENANT,
+        calendarCode);
     return rows.isEmpty() ? null : rows.get(0);
   }
 }

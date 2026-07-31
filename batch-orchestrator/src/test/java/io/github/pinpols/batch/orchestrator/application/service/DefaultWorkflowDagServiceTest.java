@@ -45,46 +45,43 @@ class DefaultWorkflowDagServiceTest {
     @SuppressWarnings("unchecked")
     org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
         meterProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
-    dagService =
-        new DefaultWorkflowDagService(
-            edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
+    dagService = new DefaultWorkflowDagService(
+        edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
 
     // S3：原 tests 用 selectLatestByWorkflowRunIdAndNodeCode 单条 stub；
     // service 内已切换为 selectLatestByWorkflowRunIdAndNodeCodesIn 批量。
     // 在这里把批量 method 转发到单条 stub，原测试逻辑无需逐个改写。
     lenient()
         .when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(anyLong(), any()))
-        .thenAnswer(
-            inv -> {
-              Long runId = inv.getArgument(0);
-              java.util.Collection<String> codes = inv.getArgument(1);
-              java.util.List<WorkflowNodeRunEntity> out = new java.util.ArrayList<>();
-              for (String c : codes) {
-                WorkflowNodeRunEntity e =
-                    nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(runId, c);
-                if (e != null) {
-                  out.add(e);
-                }
-              }
-              return out;
-            });
+        .thenAnswer(inv -> {
+          Long runId = inv.getArgument(0);
+          java.util.Collection<String> codes = inv.getArgument(1);
+          java.util.List<WorkflowNodeRunEntity> out = new java.util.ArrayList<>();
+          for (String c : codes) {
+            WorkflowNodeRunEntity e =
+                nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(runId, c);
+            if (e != null) {
+              out.add(e);
+            }
+          }
+          return out;
+        });
 
     // 同样转发节点定义批量查询（resolveNextNodes 路径）
     lenient()
         .when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any()))
-        .thenAnswer(
-            inv -> {
-              Long defId = inv.getArgument(0);
-              java.util.Collection<String> codes = inv.getArgument(1);
-              java.util.List<WorkflowNodeEntity> out = new java.util.ArrayList<>();
-              for (String c : codes) {
-                WorkflowNodeEntity e = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(defId, c);
-                if (e != null) {
-                  out.add(e);
-                }
-              }
-              return out;
-            });
+        .thenAnswer(inv -> {
+          Long defId = inv.getArgument(0);
+          java.util.Collection<String> codes = inv.getArgument(1);
+          java.util.List<WorkflowNodeEntity> out = new java.util.ArrayList<>();
+          for (String c : codes) {
+            WorkflowNodeEntity e = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(defId, c);
+            if (e != null) {
+              out.add(e);
+            }
+          }
+          return out;
+        });
   }
 
   // ── resolveNextNodes ──────────────────────────────────────────────────────
@@ -150,7 +147,8 @@ class DefaultWorkflowDagServiceTest {
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
         .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
 
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":200}")).hasSize(1);
+    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":200}"))
+        .hasSize(1);
   }
 
   @Test
@@ -159,7 +157,8 @@ class DefaultWorkflowDagServiceTest {
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(conditionEvaluator.matches(anyString(), anyString())).thenReturn(false);
 
-    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":50}")).isEmpty();
+    assertThat(dagService.resolveNextNodes(1L, "NODE_A", true, "{\"amount\":50}"))
+        .isEmpty();
   }
 
   @Test

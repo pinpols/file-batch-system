@@ -32,26 +32,21 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
 
     LockProvider lockProvider = ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, true);
 
-    Integer tableCount =
-        jdbcTemplate.queryForObject(
-            """
+    Integer tableCount = jdbcTemplate.queryForObject("""
             select count(*)
               from information_schema.tables
              where table_schema = 'batch'
                and table_name = 'shedlock'
-            """,
-            Integer.class);
+            """, Integer.class);
     assertThat(tableCount).isEqualTo(1);
 
-    SimpleLock simpleLock =
-        lockProvider
-            .lock(
-                new LockConfiguration(
-                    BatchDateTimeSupport.utcNow(),
-                    "factory-auto-create",
-                    Duration.ofSeconds(30),
-                    Duration.ZERO))
-            .orElseThrow();
+    SimpleLock simpleLock = lockProvider
+        .lock(new LockConfiguration(
+            BatchDateTimeSupport.utcNow(),
+            "factory-auto-create",
+            Duration.ofSeconds(30),
+            Duration.ZERO))
+        .orElseThrow();
     simpleLock.unlock();
   }
 
@@ -67,12 +62,11 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
     try {
       LockProvider provider = ShedLockProviderFactory.redisLockProvider(connectionFactory, "test");
 
-      LockConfiguration cfg =
-          new LockConfiguration(
-              BatchDateTimeSupport.utcNow(),
-              "factory-redis-mutex-" + System.nanoTime(),
-              Duration.ofSeconds(30),
-              Duration.ZERO);
+      LockConfiguration cfg = new LockConfiguration(
+          BatchDateTimeSupport.utcNow(),
+          "factory-redis-mutex-" + System.nanoTime(),
+          Duration.ofSeconds(30),
+          Duration.ZERO);
 
       SimpleLock first = provider.lock(cfg).orElseThrow();
       try {

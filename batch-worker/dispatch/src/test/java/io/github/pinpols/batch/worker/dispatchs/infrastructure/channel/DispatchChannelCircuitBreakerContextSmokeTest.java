@@ -34,9 +34,14 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = "spring.main.web-application-type=none")
 class DispatchChannelCircuitBreakerContextSmokeTest {
 
-  @Autowired private DispatchChannelCircuitBreaker circuitBreaker;
-  @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
-  @Autowired private MeterRegistry meterRegistry;
+  @Autowired
+  private DispatchChannelCircuitBreaker circuitBreaker;
+
+  @Autowired
+  private CircuitBreakerRegistry circuitBreakerRegistry;
+
+  @Autowired
+  private MeterRegistry meterRegistry;
 
   @Test
   void contextLoadsWithResilience4jAutoconfig() {
@@ -82,7 +87,10 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
     }
     assertThat(circuitBreaker.allow(key)).as("breaker for key must be OPEN").isFalse();
 
-    assertThat(meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", key).meters())
+    assertThat(meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", key)
+            .meters())
         .as("self-held registry breaker state must be bound to the injected MeterRegistry")
         .isNotEmpty();
   }

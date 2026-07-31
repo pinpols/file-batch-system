@@ -39,8 +39,11 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleConfigSyncControllerTest {
 
-  @Mock private ConsoleConfigSyncApplicationService service;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private ConsoleConfigSyncApplicationService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -54,11 +57,11 @@ class ConsoleConfigSyncControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleConfigSyncController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleConfigSyncController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -66,12 +69,10 @@ class ConsoleConfigSyncControllerTest {
     when(service.export(any(ConfigSyncExportRequest.class)))
         .thenReturn(new ConfigSyncExportResponse("ta", "dev", "prod", summary(), null));
     mockMvc
-        .perform(
-            post("/api/console/config/sync/export")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"sourceTenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
+        .perform(post("/api/console/config/sync/export")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"sourceTenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.sourceTenantId").value("ta"))
         .andExpect(jsonPath("$.data.summary.jobDefinitions").value(1));
@@ -98,13 +99,11 @@ class ConsoleConfigSyncControllerTest {
     when(service.importBundle(any(ConfigSyncImportRequest.class)))
         .thenReturn(new ConfigSyncImportResponse(7L, summary(), null));
     mockMvc
-        .perform(
-            post("/api/console/config/sync/import")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"tenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\","
-                        + "\"targetTenantIds\":[\"tb\"],\"dryRun\":true,\"bundle\":{}}"))
+        .perform(post("/api/console/config/sync/import")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\","
+                + "\"targetTenantIds\":[\"tb\"],\"dryRun\":true,\"bundle\":{}}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.syncLogId").value(7));
     verify(service).importBundle(any(ConfigSyncImportRequest.class));
@@ -113,23 +112,21 @@ class ConsoleConfigSyncControllerTest {
   @Test
   void logsShouldPassTenantAndLimit() throws Exception {
     when(service.logs("ta", 50))
-        .thenReturn(
-            List.of(
-                new ConfigSyncLogResponse(
-                    1L,
-                    "ta",
-                    "IMPORT",
-                    "dev",
-                    "prod",
-                    "jobDefinitions",
-                    1,
-                    1,
-                    0,
-                    0,
-                    "SUCCESS",
-                    null,
-                    "admin",
-                    Instant.parse("2026-05-20T10:00:00Z"))));
+        .thenReturn(List.of(new ConfigSyncLogResponse(
+            1L,
+            "ta",
+            "IMPORT",
+            "dev",
+            "prod",
+            "jobDefinitions",
+            1,
+            1,
+            0,
+            0,
+            "SUCCESS",
+            null,
+            "admin",
+            Instant.parse("2026-05-20T10:00:00Z"))));
     mockMvc
         .perform(get("/api/console/config/sync/logs").param("tenantId", "ta"))
         .andExpect(status().isOk());

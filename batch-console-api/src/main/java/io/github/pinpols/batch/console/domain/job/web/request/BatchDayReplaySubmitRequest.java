@@ -22,7 +22,9 @@ public class BatchDayReplaySubmitRequest {
   @Size(max = 128, message = "calendarCode too long (max 128)")
   private String calendarCode;
 
-  @NotBlank @ValidBizDate private String bizDate;
+  @NotBlank
+  @ValidBizDate
+  private String bizDate;
 
   /** ALL / ALL_FAILED / SUBSET_JOB_CODES / OUTPUTS_ONLY。 */
   @NotBlank

@@ -66,11 +66,14 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
     registry.add("batch.storage.backend-guard.cutover-id", () -> "storage-it-unreachable");
   }
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Autowired
   @Qualifier("exportBusinessDataSource")
@@ -79,38 +82,27 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
   @Test
   void exportToUnreachableStorageExhaustsRetriesAndDeadLetters() {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId =
-        businessJdbc.queryForObject(
-            """
+    Long batchId = businessJdbc.queryForObject("""
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
             returning id
-            """,
-            Long.class,
-            TENANT,
-            BATCH_NO);
+            """, Long.class, TENANT, BATCH_NO);
     assertThat(batchId).isNotNull();
 
-    businessJdbc.update(
-        """
+    businessJdbc.update("""
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
-        """,
-        TENANT,
-        batchId,
-        "E2E-MF-001",
-        "C-MF-1");
+        """, TENANT, batchId, "E2E-MF-001", "C-MF-1");
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            new E2eScenarioFixture.LaunchPreparationSpec(
-                    jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API)
-                .retryPolicy("FIXED")
-                .retryMaxCount(2));
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        new E2eScenarioFixture.LaunchPreparationSpec(
+                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API)
+            .retryPolicy("FIXED")
+            .retryMaxCount(2));
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", BATCH_NO);
@@ -119,37 +111,30 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
     params.put("bizType", "SETTLEMENT");
     params.put("fileCode", "e2e-export-objectStore-fail");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-export-objectStore-fail",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-export-objectStore-fail",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(240))
         .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(
-            () -> {
-              e2eOutboxPublishSupport.publishAllPending(TENANT);
-              Long dlq =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          e2eOutboxPublishSupport.publishAllPending(TENANT);
+          Long dlq = jdbcTemplate.queryForObject("""
                       select count(*) from batch.dead_letter_task dlt
                       join batch.job_partition jp on jp.id = dlt.source_id
                       join batch.job_instance ji on ji.id = jp.job_instance_id
                       where dlt.source_type = 'JOB_PARTITION'
                         and ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      Long.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
-            });
+                      """, Long.class, TENANT, seed.dedupKey());
+          assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
+        });
   }
 }

@@ -136,12 +136,10 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     final String finalSql = sql;
     final Map<String, Object> finalParams = params;
     final NamedParameterJdbcTemplate pageJdbc = namedJdbc(resolveFetchSize(context));
-    List<Map<String, Object>> rows =
-        txTemplate.execute(
-            status -> {
-              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-              return pageJdbc.queryForList(finalSql, finalParams);
-            });
+    List<Map<String, Object>> rows = txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      return pageJdbc.queryForList(finalSql, finalParams);
+    });
     if (rows == null || rows.isEmpty()) {
       return DetailPage.empty();
     }
@@ -208,7 +206,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       if (explainResult.isEmpty()) {
         return;
       }
-      String jsonText = String.valueOf(explainResult.getFirst().values().iterator().next());
+      String jsonText =
+          String.valueOf(explainResult.getFirst().values().iterator().next());
       JsonNode plan = objectMapper.readTree(jsonText);
       JsonNode node = plan.path(0).path("Plan");
 
@@ -216,22 +215,20 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       double estimatedRows = node.path("Plan Rows").asDouble(-1);
 
       if (security.getMaxEstimatedRows() > 0 && estimatedRows > security.getMaxEstimatedRows()) {
-        throw new IllegalStateException(
-            "sql_template_export EXPLAIN estimated rows "
-                + (long) estimatedRows
-                + " exceeds limit "
-                + security.getMaxEstimatedRows()
-                + " for template "
-                + context.templateCode());
+        throw new IllegalStateException("sql_template_export EXPLAIN estimated rows "
+            + (long) estimatedRows
+            + " exceeds limit "
+            + security.getMaxEstimatedRows()
+            + " for template "
+            + context.templateCode());
       }
       if (security.getMaxPlanCost() > 0 && planCost > security.getMaxPlanCost()) {
-        throw new IllegalStateException(
-            "sql_template_export EXPLAIN plan cost "
-                + planCost
-                + " exceeds limit "
-                + security.getMaxPlanCost()
-                + " for template "
-                + context.templateCode());
+        throw new IllegalStateException("sql_template_export EXPLAIN plan cost "
+            + planCost
+            + " exceeds limit "
+            + security.getMaxPlanCost()
+            + " for template "
+            + context.templateCode());
       }
       log.debug(
           "sql_template_export EXPLAIN check passed: rows={}, cost={}, template={}",
@@ -270,14 +267,13 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       where.append(
           "AND base.%s %s :__hiN%n".formatted(cursorIdent, range.includeUpper() ? "<=" : "<"));
     } else if (range != null && range.partitionCount() > 1) {
-      where.append(
-          "WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
-              .formatted(
-                  cursorIdent,
-                  range.partitionCount(),
-                  range.partitionCount(),
-                  range.partitionCount(),
-                  range.partitionNo() - 1));
+      where.append("WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
+          .formatted(
+              cursorIdent,
+              range.partitionCount(),
+              range.partitionCount(),
+              range.partitionCount(),
+              range.partitionNo() - 1));
     }
     if (hasCursor) {
       where
@@ -292,8 +288,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     FROM base
     %sORDER BY base.%s ASC
     LIMIT :__limit
-    """
-        .formatted(baseSql, where, cursorIdent);
+    """.formatted(baseSql, where, cursorIdent);
   }
 
   /** 兼容旧签名:转调新重载（inactive → 退回 hashtext 分片谓词）。 */
@@ -311,12 +306,10 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     String cur = io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
     String mmSql =
         "SELECT min(%s) AS lo, max(%s) AS hi FROM (%s) base".formatted(cur, cur, baseSql);
-    Map<String, Object> row =
-        txTemplate.execute(
-            status -> {
-              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-              return jdbc.queryForMap(mmSql, baseParams);
-            });
+    Map<String, Object> row = txTemplate.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+      return jdbc.queryForMap(mmSql, baseParams);
+    });
     return new BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
   }
 

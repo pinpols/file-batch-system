@@ -10,7 +10,8 @@ import lombok.EqualsAndHashCode;
 @Data
 public class FileArrivalGroupQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 128, message = "fileGroupCode too long (max 128)")
   private String fileGroupCode;

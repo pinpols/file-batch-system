@@ -98,17 +98,15 @@ public class DefaultConsoleFileDownloadApplicationService
     }
     try {
       InputStream inputStream = objectStore.get(bucket, objectName);
-      InputStream payload =
-          batchSecurityProperties.isBypassMode()
-              ? inputStream
-              : cryptoService.decryptIfNeeded(inputStream);
-      InputStreamResource resource =
-          new InputStreamResource(payload) {
-            @Override
-            public long contentLength() {
-              return -1;
-            }
-          };
+      InputStream payload = batchSecurityProperties.isBypassMode()
+          ? inputStream
+          : cryptoService.decryptIfNeeded(inputStream);
+      InputStreamResource resource = new InputStreamResource(payload) {
+        @Override
+        public long contentLength() {
+          return -1;
+        }
+      };
       return ResponseEntity.ok()
           .header(
               HttpHeaders.CONTENT_DISPOSITION,

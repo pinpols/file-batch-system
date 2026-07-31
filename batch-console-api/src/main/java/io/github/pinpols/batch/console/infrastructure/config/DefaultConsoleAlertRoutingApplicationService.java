@@ -39,9 +39,8 @@ public class DefaultConsoleAlertRoutingApplicationService
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     long total =
         alertRoutingConfigMapper.countByQuery(resolved, routeCode, team, severity, enabled);
-    List<Map<String, Object>> items =
-        alertRoutingConfigMapper.selectByQuery(
-            resolved, routeCode, team, severity, enabled, pageRequest);
+    List<Map<String, Object>> items = alertRoutingConfigMapper.selectByQuery(
+        resolved, routeCode, team, severity, enabled, pageRequest);
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
@@ -64,9 +63,8 @@ public class DefaultConsoleAlertRoutingApplicationService
   @Override
   public Map<String, Object> update(Long id, AlertRoutingSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        Guard.requireFound(
-            alertRoutingConfigMapper.selectById(tenantId, id), "alert routing not found");
+    Map<String, Object> existing = Guard.requireFound(
+        alertRoutingConfigMapper.selectById(tenantId, id), "alert routing not found");
     String existingRouteCode = String.valueOf(existing.get("route_code"));
     if (!existingRouteCode.equals(request.getRouteCode())) {
       Map<String, Object> duplicate =

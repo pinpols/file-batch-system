@@ -54,9 +54,8 @@ public class RequestSignatureVerifier {
     if (Math.abs(nowMillis - ts) > skewMillis) {
       return Result.CLOCK_SKEW;
     }
-    String expected =
-        RequestSignatures.sign(
-            req.apiKey(), req.method(), req.path(), req.timestamp(), req.nonce(), req.body());
+    String expected = RequestSignatures.sign(
+        req.apiKey(), req.method(), req.path(), req.timestamp(), req.nonce(), req.body());
     if (!SecretComparator.constantTimeEquals(expected, req.signature())) {
       return Result.BAD_SIGNATURE;
     }

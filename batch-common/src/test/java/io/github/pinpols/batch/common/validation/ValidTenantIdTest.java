@@ -41,7 +41,8 @@ class ValidTenantIdTest {
   @AllArgsConstructor
   @Setter
   static class Holder {
-    @ValidTenantId private String tenantId;
+    @ValidTenantId
+    private String tenantId;
   }
 
   private Set<ConstraintViolation<Holder>> violations(String value) {

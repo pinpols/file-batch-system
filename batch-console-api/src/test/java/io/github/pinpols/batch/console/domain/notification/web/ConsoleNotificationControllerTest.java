@@ -56,12 +56,11 @@ class ConsoleNotificationControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleNotificationController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleNotificationController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -81,13 +80,11 @@ class ConsoleNotificationControllerTest {
   @Test
   void shouldCreateRule() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/notifications/rules")
-                .param("tenantId", "t1")
-                .header("Idempotency-Key", "idem-1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/notifications/rules")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "idem-1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "ruleName":"high-priority",
                       "channelCode":"mail-1",
@@ -115,13 +112,11 @@ class ConsoleNotificationControllerTest {
   void shouldCreateChannelWithTypedBodyAndDefaultEnabled() throws Exception {
     // 反序列化守护:JSON 字段名与旧 Map 消费键逐一对应;enabled 缺省为 true。
     mockMvc
-        .perform(
-            post("/api/console/notifications/channels")
-                .param("tenantId", "t1")
-                .header("Idempotency-Key", "idem-2")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/notifications/channels")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "idem-2")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "channelCode":"mail-1",
                       "channelName":"Mail One",
@@ -146,12 +141,11 @@ class ConsoleNotificationControllerTest {
   @Test
   void shouldRejectChannelCreateWithoutChannelCode() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/notifications/channels")
-                .param("tenantId", "t1")
-                .header("Idempotency-Key", "idem-3")
-                .contentType(APPLICATION_JSON)
-                .content("{\"channelName\":\"Mail One\",\"channelType\":\"EMAIL\"}"))
+        .perform(post("/api/console/notifications/channels")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "idem-3")
+            .contentType(APPLICATION_JSON)
+            .content("{\"channelName\":\"Mail One\",\"channelType\":\"EMAIL\"}"))
         .andExpect(status().isBadRequest());
     verify(applicationService, never()).createChannel(eq("t1"), any());
   }
@@ -160,13 +154,11 @@ class ConsoleNotificationControllerTest {
   void shouldUpdateChannelWithoutChannelCodeInBody() throws Exception {
     // 兼容守护:update body 不要求 channelCode(路径参数为准),字段名与旧 Map 消费键一致。
     mockMvc
-        .perform(
-            put("/api/console/notifications/channels/mail-1")
-                .param("tenantId", "t1")
-                .header("Idempotency-Key", "idem-4")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(put("/api/console/notifications/channels/mail-1")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "idem-4")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "channelName":"Mail Renamed",
                       "channelType":"WEBHOOK",
@@ -189,12 +181,11 @@ class ConsoleNotificationControllerTest {
   @Test
   void shouldRejectRuleCreateWithoutRuleName() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/notifications/rules")
-                .param("tenantId", "t1")
-                .header("Idempotency-Key", "idem-5")
-                .contentType(APPLICATION_JSON)
-                .content("{\"channelCode\":\"mail-1\",\"eventTypes\":\"JOB_FAILED\"}"))
+        .perform(post("/api/console/notifications/rules")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "idem-5")
+            .contentType(APPLICATION_JSON)
+            .content("{\"channelCode\":\"mail-1\",\"eventTypes\":\"JOB_FAILED\"}"))
         .andExpect(status().isBadRequest());
     verify(applicationService, never()).createRule(eq("t1"), any());
   }

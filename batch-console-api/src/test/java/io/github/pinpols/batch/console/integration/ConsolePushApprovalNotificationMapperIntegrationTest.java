@@ -20,8 +20,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ConsolePushApprovalNotificationMapper mapper;
-  @Autowired private JdbcTemplate jdbc;
+  @Autowired
+  private ConsolePushApprovalNotificationMapper mapper;
+
+  @Autowired
+  private JdbcTemplate jdbc;
 
   @Test
   void findPendingShouldReturnTerminalApprovalsWithRequester() {

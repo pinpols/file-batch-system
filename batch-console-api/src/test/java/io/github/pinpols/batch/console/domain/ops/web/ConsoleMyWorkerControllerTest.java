@@ -17,10 +17,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleMyWorkerControllerTest {
 
-  @Mock private ConsoleMyWorkerQueryService queryService;
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleMyWorkerQueryService queryService;
 
-  @InjectMocks private ConsoleMyWorkerController controller;
+  @Mock
+  private ConsoleResponseFactory responseFactory;
+
+  @InjectMocks
+  private ConsoleMyWorkerController controller;
 
   @Test
   void listResolvesTenantAndQueriesSelfHostedOnly() {

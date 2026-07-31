@@ -31,9 +31,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorkflowTerminalOutboxServiceTest {
 
-  @Mock private DomainEventPublisher domainEventPublisher;
+  @Mock
+  private DomainEventPublisher domainEventPublisher;
 
-  @Mock private OpenLineageEmitter openLineageEmitter;
+  @Mock
+  private OpenLineageEmitter openLineageEmitter;
 
   private WorkflowTerminalOutboxService service;
 
@@ -47,8 +49,10 @@ class WorkflowTerminalOutboxServiceTest {
   @Test
   @DisplayName("isTerminal: SUCCESS / FAILED / TERMINATED / *_DRY_RUN 都是终态")
   void terminalWhitelist() {
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS.code())).isTrue();
-    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED.code())).isTrue();
+    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS.code()))
+        .isTrue();
+    assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED.code()))
+        .isTrue();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.TERMINATED.code()))
         .isTrue();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS_DRY_RUN.code()))

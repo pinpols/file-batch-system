@@ -34,31 +34,30 @@ public class OperationAuditQueryService {
     int pageNo = req.getPageNo() == null ? 1 : req.getPageNo();
     int pageSize = req.getPageSize() == null ? 20 : req.getPageSize();
     int offset = (pageNo - 1) * pageSize;
-    long total =
-        mapper.count(
-            tenantId,
-            req.getAggregateType(),
-            req.getAggregateId(),
-            req.getAction(),
-            req.getOperatorId(),
-            req.getResult(),
-            req.getTraceId(),
-            req.getStartTime(),
-            req.getEndTime());
-    List<AuditRow> rows =
-        mapper.query(
-            tenantId,
-            req.getAggregateType(),
-            req.getAggregateId(),
-            req.getAction(),
-            req.getOperatorId(),
-            req.getResult(),
-            req.getTraceId(),
-            req.getStartTime(),
-            req.getEndTime(),
-            offset,
-            pageSize);
-    List<ConsoleOperationAuditResponse> items = rows.stream().map(this::toResponse).toList();
+    long total = mapper.count(
+        tenantId,
+        req.getAggregateType(),
+        req.getAggregateId(),
+        req.getAction(),
+        req.getOperatorId(),
+        req.getResult(),
+        req.getTraceId(),
+        req.getStartTime(),
+        req.getEndTime());
+    List<AuditRow> rows = mapper.query(
+        tenantId,
+        req.getAggregateType(),
+        req.getAggregateId(),
+        req.getAction(),
+        req.getOperatorId(),
+        req.getResult(),
+        req.getTraceId(),
+        req.getStartTime(),
+        req.getEndTime(),
+        offset,
+        pageSize);
+    List<ConsoleOperationAuditResponse> items =
+        rows.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, pageNo, pageSize, items);
   }
 

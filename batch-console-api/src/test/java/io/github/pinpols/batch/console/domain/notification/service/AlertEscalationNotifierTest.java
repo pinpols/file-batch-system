@@ -40,21 +40,19 @@ class AlertEscalationNotifierTest {
     domainEventPublisher = mock(ConsoleRealtimeDomainEventPublisher.class);
     lockExecutor = mock(LockingTaskExecutor.class);
     meterRegistry = new SimpleMeterRegistry();
-    doAnswer(
-            inv -> {
-              LockingTaskExecutor.Task t = inv.getArgument(0);
-              t.call();
-              return null;
-            })
+    doAnswer(inv -> {
+          LockingTaskExecutor.Task t = inv.getArgument(0);
+          t.call();
+          return null;
+        })
         .when(lockExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
-    notifier =
-        new AlertEscalationNotifier(
-            alertEventMapper,
-            domainEventPublisher,
-            lockExecutor,
-            new AlertEscalationNotifyProperties(),
-            meterRegistry);
+    notifier = new AlertEscalationNotifier(
+        alertEventMapper,
+        domainEventPublisher,
+        lockExecutor,
+        new AlertEscalationNotifyProperties(),
+        meterRegistry);
   }
 
   private static AlertEventEntity escalated(long id, String tenantId, int tier, int notifiedTier) {
@@ -164,7 +162,8 @@ class AlertEscalationNotifierTest {
   void shouldPublishOncePerRowAcrossTenants() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(21L, "t1", 1, 0), escalated(22L, "t2", 3, 2)));
-    when(alertEventMapper.markEscalationNotified(any(), any(), anyInt(), anyInt())).thenReturn(1);
+    when(alertEventMapper.markEscalationNotified(any(), any(), anyInt(), anyInt()))
+        .thenReturn(1);
 
     notifier.poll();
 

@@ -21,24 +21,20 @@ class RequestSignaturesTest {
   @Test
   @DisplayName("canonical 串按 method/path/ts/nonce/bodyHash 用 \\n 连接")
   void canonicalStringJoinsFieldsWithNewline() {
-    String c =
-        RequestSignatures.canonicalString(
-            "post", "/internal/tasks/10/claim", "1700000000000", "abc123", EMPTY);
+    String c = RequestSignatures.canonicalString(
+        "post", "/internal/tasks/10/claim", "1700000000000", "abc123", EMPTY);
     assertThat(c)
-        .isEqualTo(
-            "POST\n/internal/tasks/10/claim\n1700000000000\nabc123\n"
-                + "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        .isEqualTo("POST\n/internal/tasks/10/claim\n1700000000000\nabc123\n"
+            + "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   }
 
   @Test
   @DisplayName("sign 产出 64 位小写 hex，且确定性")
   void signIsLowercaseHexAndDeterministic() {
-    String s1 =
-        RequestSignatures.sign(
-            "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
-    String s2 =
-        RequestSignatures.sign(
-            "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
+    String s1 = RequestSignatures.sign(
+        "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
+    String s2 = RequestSignatures.sign(
+        "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
     assertThat(s1).hasSize(64).isEqualTo(s2).matches("[0-9a-f]{64}");
   }
 
@@ -49,9 +45,8 @@ class RequestSignaturesTest {
     String base = RequestSignatures.sign("k", "POST", "/p", "1", "n", body);
     assertThat(RequestSignatures.sign("k", "POST", "/p", "1", "n2", body)).isNotEqualTo(base);
     assertThat(RequestSignatures.sign("k2", "POST", "/p", "1", "n", body)).isNotEqualTo(base);
-    assertThat(
-            RequestSignatures.sign(
-                "k", "POST", "/p", "1", "n", "{ }".getBytes(StandardCharsets.UTF_8)))
+    assertThat(RequestSignatures.sign(
+            "k", "POST", "/p", "1", "n", "{ }".getBytes(StandardCharsets.UTF_8)))
         .isNotEqualTo(base);
   }
 }

@@ -19,7 +19,8 @@ import org.springframework.boot.test.context.SpringBootTest;
     })
 class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired Scheduler scheduler;
+  @Autowired
+  Scheduler scheduler;
 
   @Test
   void contextLoads() {

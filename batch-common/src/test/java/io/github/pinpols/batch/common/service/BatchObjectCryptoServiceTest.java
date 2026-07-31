@@ -24,9 +24,8 @@ class BatchObjectCryptoServiceTest {
 
   // 32-byte AES-256 test key (random, base64-encoded)
   private static final String KEY_REF = "TEST_KEY_2026";
-  private static final String KEY_B64 =
-      Base64.getEncoder()
-          .encodeToString("01234567890123456789012345678901".getBytes(StandardCharsets.US_ASCII));
+  private static final String KEY_B64 = Base64.getEncoder()
+      .encodeToString("01234567890123456789012345678901".getBytes(StandardCharsets.US_ASCII));
 
   private BatchObjectCryptoService cryptoService;
 

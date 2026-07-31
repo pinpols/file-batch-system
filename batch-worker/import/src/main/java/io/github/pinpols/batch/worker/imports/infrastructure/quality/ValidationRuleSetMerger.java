@@ -36,10 +36,8 @@ public class ValidationRuleSetMerger {
     }
     deepMerge(
         merged,
-        configSupport.toMap(
-            firstNonNull(
-                templateConfig.get("validation_rule_set"),
-                templateConfig.get("validationRuleSet"))));
+        configSupport.toMap(firstNonNull(
+            templateConfig.get("validation_rule_set"), templateConfig.get("validationRuleSet"))));
     return merged;
   }
 

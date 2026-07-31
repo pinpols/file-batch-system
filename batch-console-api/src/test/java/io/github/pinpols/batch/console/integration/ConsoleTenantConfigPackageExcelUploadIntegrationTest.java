@@ -34,21 +34,20 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   private static final String EXCEL_CONTENT_TYPE =
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-  @LocalServerPort private int port;
+  @LocalServerPort
+  private int port;
 
   @Test
   void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
     byte[] workbook = tenantPackageWorkbook();
     String boundary = "excel-upload-it-boundary";
-    HttpRequest request =
-        HttpRequest.newBuilder(
-                URI.create(
-                    "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
-            .timeout(Duration.ofSeconds(60))
-            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-it")
-            .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
-            .build();
+    HttpRequest request = HttpRequest.newBuilder(URI.create(
+            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+        .timeout(Duration.ofSeconds(60))
+        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-it")
+        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
+        .build();
 
     HttpResponse<String> response =
         HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
@@ -120,57 +119,55 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
           workbook,
           ConfigPackageExcelValidator.CHANNEL_SHEET,
           ConfigPackageExcelSchema.FileChannel.COLUMNS,
-          List.of(
-              row(
-                  "tenant_id", "excel-upload-ta",
-                  "channel_code", "excel_upload_local",
-                  "channel_name", "Excel Upload Local",
-                  "channel_type", "LOCAL",
-                  "target_endpoint", "/tmp/excel-upload",
-                  "auth_type", "NONE",
-                  "config_json", "{\"target_endpoint\":\"/tmp/excel-upload\"}",
-                  "receipt_policy", "NONE",
-                  "timeout_seconds", "30",
-                  "enabled", "true")));
+          List.of(row(
+              "tenant_id", "excel-upload-ta",
+              "channel_code", "excel_upload_local",
+              "channel_name", "Excel Upload Local",
+              "channel_type", "LOCAL",
+              "target_endpoint", "/tmp/excel-upload",
+              "auth_type", "NONE",
+              "config_json", "{\"target_endpoint\":\"/tmp/excel-upload\"}",
+              "receipt_policy", "NONE",
+              "timeout_seconds", "30",
+              "enabled", "true")));
       sheet(
           workbook,
           ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
           ConfigPackageExcelSchema.FileTemplate.COLUMNS,
-          List.of(
-              row(
-                  "tenant_id", "excel-upload-ta",
-                  "template_code", "EXCEL_UPLOAD_TEMPLATE",
-                  "template_name", "Excel Upload Template",
-                  "template_type", "IMPORT",
-                  "biz_type", "SETTLEMENT",
-                  "file_format_type", "DELIMITED",
-                  "charset", "UTF-8",
-                  "target_charset", "UTF-8",
-                  "with_bom", "false",
-                  "line_separator", "\\n",
-                  "delimiter", ",",
-                  "quote_char", "\"",
-                  "escape_char", "\\",
-                  "record_length", "",
-                  "header_rows", "1",
-                  "footer_rows", "0",
-                  "checksum_type", "NONE",
-                  "compress_type", "NONE",
-                  "encrypt_type", "NONE",
-                  "field_mappings", "[]",
-                  "validation_rule_set", "{}",
-                  "query_param_schema", "{}",
-                  "streaming_enabled", "false",
-                  "page_size", "1000",
-                  "fetch_size", "1000",
-                  "chunk_size", "1000",
-                  "preview_masking_enabled", "false",
-                  "error_line_masking_enabled", "false",
-                  "log_masking_enabled", "false",
-                  "content_encryption_enabled", "false",
-                  "download_requires_approval", "false",
-                  "enabled", "true",
-                  "version", "1")));
+          List.of(row(
+              "tenant_id", "excel-upload-ta",
+              "template_code", "EXCEL_UPLOAD_TEMPLATE",
+              "template_name", "Excel Upload Template",
+              "template_type", "IMPORT",
+              "biz_type", "SETTLEMENT",
+              "file_format_type", "DELIMITED",
+              "charset", "UTF-8",
+              "target_charset", "UTF-8",
+              "with_bom", "false",
+              "line_separator", "\\n",
+              "delimiter", ",",
+              "quote_char", "\"",
+              "escape_char", "\\",
+              "record_length", "",
+              "header_rows", "1",
+              "footer_rows", "0",
+              "checksum_type", "NONE",
+              "compress_type", "NONE",
+              "encrypt_type", "NONE",
+              "field_mappings", "[]",
+              "validation_rule_set", "{}",
+              "query_param_schema", "{}",
+              "streaming_enabled", "false",
+              "page_size", "1000",
+              "fetch_size", "1000",
+              "chunk_size", "1000",
+              "preview_masking_enabled", "false",
+              "error_line_masking_enabled", "false",
+              "log_masking_enabled", "false",
+              "content_encryption_enabled", "false",
+              "download_requires_approval", "false",
+              "enabled", "true",
+              "version", "1")));
       sheet(
           workbook,
           ConfigPackageExcelValidator.PIPELINE_SHEET,

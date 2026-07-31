@@ -6,7 +6,8 @@ import lombok.Data;
 
 @Data
 public class BatchWindowUpdateRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 256)
   private String windowName;

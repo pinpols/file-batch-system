@@ -40,16 +40,15 @@ public class SlidingWindowRateLimiter {
   static {
     RATE_LIMIT_SCRIPT = new DefaultRedisScript<>();
     RATE_LIMIT_SCRIPT.setResultType(Long.class);
-    RATE_LIMIT_SCRIPT.setScriptText(
-        "redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2]) "
-            + "local count = redis.call('ZCARD', KEYS[1]) "
-            + "if count < tonumber(ARGV[3]) then "
-            + "  redis.call('ZADD', KEYS[1], ARGV[1], ARGV[4]) "
-            + "  redis.call('EXPIRE', KEYS[1], ARGV[5]) "
-            + "  return 1 "
-            + "else "
-            + "  return 0 "
-            + "end");
+    RATE_LIMIT_SCRIPT.setScriptText("redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2]) "
+        + "local count = redis.call('ZCARD', KEYS[1]) "
+        + "if count < tonumber(ARGV[3]) then "
+        + "  redis.call('ZADD', KEYS[1], ARGV[1], ARGV[4]) "
+        + "  redis.call('EXPIRE', KEYS[1], ARGV[5]) "
+        + "  return 1 "
+        + "else "
+        + "  return 0 "
+        + "end");
   }
 
   private final StringRedisTemplate redisTemplate;
@@ -68,15 +67,14 @@ public class SlidingWindowRateLimiter {
     long ttlSeconds = (WINDOW_MILLIS / 1000) + 1;
     String member = UUID.randomUUID().toString();
 
-    Long result =
-        redisTemplate.execute(
-            RATE_LIMIT_SCRIPT,
-            List.of("rate_limit:" + key),
-            String.valueOf(now),
-            String.valueOf(windowStart),
-            String.valueOf(limit),
-            member,
-            String.valueOf(ttlSeconds));
+    Long result = redisTemplate.execute(
+        RATE_LIMIT_SCRIPT,
+        List.of("rate_limit:" + key),
+        String.valueOf(now),
+        String.valueOf(windowStart),
+        String.valueOf(limit),
+        member,
+        String.valueOf(ttlSeconds));
     return Long.valueOf(1L).equals(result);
   }
 }

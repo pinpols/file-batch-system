@@ -51,18 +51,16 @@ class ParseStepFixedWidthAndXmlTest {
             + "C00002Bob                 INACTIVE\n"
             + "C00003Charlie             ACTIVE  \n";
 
-    Map<String, Object> templateConfig =
-        Map.of(
-            "field_mappings",
-            List.of(
-                Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
-                Map.of(
-                    "source", "customerName", "target", "customerName", "start", 6, "length", 20),
-                Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
-            "record_length",
-            34,
-            "jdbc_mapped_import",
-            Map.of());
+    Map<String, Object> templateConfig = Map.of(
+        "field_mappings",
+        List.of(
+            Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
+            Map.of("source", "customerName", "target", "customerName", "start", 6, "length", 20),
+            Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
+        "record_length",
+        34,
+        "jdbc_mapped_import",
+        Map.of());
 
     ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
 
@@ -78,28 +76,25 @@ class ParseStepFixedWidthAndXmlTest {
   /** header_rows + footer_rows 用于跳过头尾。 */
   @Test
   void shouldParseFixedWidth_skippingHeaderAndFooter() {
-    String fixed =
-        "HEADER LINE                       \n" // header_rows=1 跳
-            + "C00001Alice               ACTIVE  \n"
-            + "C00002Bob                 INACTIVE\n"
-            + "FOOTER:total=2                    \n"; // footer_rows=1 跳
+    String fixed = "HEADER LINE                       \n" // header_rows=1 跳
+        + "C00001Alice               ACTIVE  \n"
+        + "C00002Bob                 INACTIVE\n"
+        + "FOOTER:total=2                    \n"; // footer_rows=1 跳
 
-    Map<String, Object> templateConfig =
-        Map.of(
-            "field_mappings",
-            List.of(
-                Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
-                Map.of(
-                    "source", "customerName", "target", "customerName", "start", 6, "length", 20),
-                Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
-            "record_length",
-            34,
-            "header_rows",
-            1,
-            "footer_rows",
-            1,
-            "jdbc_mapped_import",
-            Map.of());
+    Map<String, Object> templateConfig = Map.of(
+        "field_mappings",
+        List.of(
+            Map.of("source", "customerNo", "target", "customerNo", "start", 0, "length", 6),
+            Map.of("source", "customerName", "target", "customerName", "start", 6, "length", 20),
+            Map.of("source", "status", "target", "status", "start", 26, "length", 8)),
+        "record_length",
+        34,
+        "header_rows",
+        1,
+        "footer_rows",
+        1,
+        "jdbc_mapped_import",
+        Map.of());
 
     ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
 
@@ -116,16 +111,14 @@ class ParseStepFixedWidthAndXmlTest {
     String fixed = "C00004Dana                ACTIVE  \n";
     PGobject fieldMappings = new PGobject();
     fieldMappings.setType("jsonb");
-    fieldMappings.setValue(
-        "["
-            + "{\"target\":\"customerNo\",\"start\":0,\"length\":6},"
-            + "{\"target\":\"customerName\",\"start\":6,\"length\":20},"
-            + "{\"target\":\"status\",\"start\":26,\"length\":8}"
-            + "]");
+    fieldMappings.setValue("["
+        + "{\"target\":\"customerNo\",\"start\":0,\"length\":6},"
+        + "{\"target\":\"customerName\",\"start\":6,\"length\":20},"
+        + "{\"target\":\"status\",\"start\":26,\"length\":8}"
+        + "]");
 
-    Map<String, Object> templateConfig =
-        Map.of(
-            "field_mappings", fieldMappings, "record_length", 34, "jdbc_mapped_import", Map.of());
+    Map<String, Object> templateConfig = Map.of(
+        "field_mappings", fieldMappings, "record_length", 34, "jdbc_mapped_import", Map.of());
 
     ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
 
@@ -142,20 +135,19 @@ class ParseStepFixedWidthAndXmlTest {
   /** 标准 records 包裹结构: &lt;records&gt;&lt;record&gt;...&lt;/record&gt;...&lt;/records&gt; */
   @Test
   void shouldParseXml_recordElementChildren() {
-    String xml =
-        "<?xml version='1.0' encoding='UTF-8'?>"
-            + "<records>"
-            + "  <record>"
-            + "    <customerNo>C001</customerNo>"
-            + "    <customerName>Alice</customerName>"
-            + "    <status>ACTIVE</status>"
-            + "  </record>"
-            + "  <record>"
-            + "    <customerNo>C002</customerNo>"
-            + "    <customerName>Bob</customerName>"
-            + "    <status>INACTIVE</status>"
-            + "  </record>"
-            + "</records>";
+    String xml = "<?xml version='1.0' encoding='UTF-8'?>"
+        + "<records>"
+        + "  <record>"
+        + "    <customerNo>C001</customerNo>"
+        + "    <customerName>Alice</customerName>"
+        + "    <status>ACTIVE</status>"
+        + "  </record>"
+        + "  <record>"
+        + "    <customerNo>C002</customerNo>"
+        + "    <customerName>Bob</customerName>"
+        + "    <status>INACTIVE</status>"
+        + "  </record>"
+        + "</records>";
 
     Map<String, Object> templateConfig =
         Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());
@@ -174,10 +166,9 @@ class ParseStepFixedWidthAndXmlTest {
   /** XXE 防护：DOCTYPE / entity 被 XmlFormatParser 拒绝（disallow-doctype-decl=true）。 */
   @Test
   void shouldRejectXml_withDoctype_xxeProtection() {
-    String xmlWithDoctype =
-        "<?xml version='1.0'?>"
-            + "<!DOCTYPE foo SYSTEM '/etc/passwd'>"
-            + "<records><record><customerNo>C001</customerNo></record></records>";
+    String xmlWithDoctype = "<?xml version='1.0'?>"
+        + "<!DOCTYPE foo SYSTEM '/etc/passwd'>"
+        + "<records><record><customerNo>C001</customerNo></record></records>";
 
     Map<String, Object> templateConfig =
         Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());
@@ -195,31 +186,30 @@ class ParseStepFixedWidthAndXmlTest {
 
   private ImportJobContext buildContext(
       String rawPayload, String fileFormatType, Map<String, Object> templateConfig) {
-    ImportPayload importPayload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            fileFormatType,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            rawPayload,
-            null,
-            null,
-            null,
-            null,
-            Boolean.TRUE,
-            Map.of());
+    ImportPayload importPayload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        fileFormatType,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        rawPayload,
+        null,
+        null,
+        null,
+        null,
+        Boolean.TRUE,
+        Map.of());
 
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("tenant-fixed-xml-test");
@@ -240,7 +230,8 @@ class ParseStepFixedWidthAndXmlTest {
     Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
     assertThat(path).as("PARSED_RECORDS_PATH must be set on success").isNotNull();
     try {
-      long lineCount = Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).count();
+      long lineCount =
+          Files.lines(Path.of(path.toString())).filter(l -> !l.isBlank()).count();
       assertThat(lineCount).isEqualTo(expected);
     } catch (Exception e) {
       throw new AssertionError("Could not count NDJSON lines: " + e.getMessage(), e);

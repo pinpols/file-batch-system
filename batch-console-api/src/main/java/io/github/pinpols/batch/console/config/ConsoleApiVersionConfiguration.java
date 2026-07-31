@@ -31,34 +31,32 @@ public class ConsoleApiVersionConfiguration {
   @Bean
   FilterRegistrationBean<OncePerRequestFilter> apiVersionFilter() {
     FilterRegistrationBean<OncePerRequestFilter> registration = new FilterRegistrationBean<>();
-    registration.setFilter(
-        new OncePerRequestFilter() {
-          @Override
-          protected void doFilterInternal(
-              HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-              throws ServletException, IOException {
-            response.setHeader(VERSION_HEADER, CURRENT_VERSION);
-            String uri = request.getRequestURI();
-            if (uri.startsWith(V1_PREFIX)) {
-              String rewritten = UNVERSIONED_PREFIX + uri.substring(V1_PREFIX.length());
-              HttpServletRequest wrapped =
-                  new HttpServletRequestWrapper(request) {
-                    @Override
-                    public String getRequestURI() {
-                      return rewritten;
-                    }
-
-                    @Override
-                    public String getServletPath() {
-                      return rewritten;
-                    }
-                  };
-              filterChain.doFilter(wrapped, response);
-              return;
+    registration.setFilter(new OncePerRequestFilter() {
+      @Override
+      protected void doFilterInternal(
+          HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+          throws ServletException, IOException {
+        response.setHeader(VERSION_HEADER, CURRENT_VERSION);
+        String uri = request.getRequestURI();
+        if (uri.startsWith(V1_PREFIX)) {
+          String rewritten = UNVERSIONED_PREFIX + uri.substring(V1_PREFIX.length());
+          HttpServletRequest wrapped = new HttpServletRequestWrapper(request) {
+            @Override
+            public String getRequestURI() {
+              return rewritten;
             }
-            filterChain.doFilter(request, response);
-          }
-        });
+
+            @Override
+            public String getServletPath() {
+              return rewritten;
+            }
+          };
+          filterChain.doFilter(wrapped, response);
+          return;
+        }
+        filterChain.doFilter(request, response);
+      }
+    });
     registration.addUrlPatterns("/api/*");
     registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
     return registration;

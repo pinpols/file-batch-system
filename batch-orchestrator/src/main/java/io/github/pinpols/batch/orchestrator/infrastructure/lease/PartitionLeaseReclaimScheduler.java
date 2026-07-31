@@ -70,11 +70,10 @@ public class PartitionLeaseReclaimScheduler {
     }
     try {
       int batchSize = governance.partitionLease().getReclaimBatchSize();
-      List<JobPartitionEntity> expiredPartitions =
-          jobPartitionMapper.selectExpiredLeasesGlobal(
-              PartitionStatus.READY.code(),
-              PartitionStatus.RUNNING.code(),
-              batchSize > 0 ? batchSize : null);
+      List<JobPartitionEntity> expiredPartitions = jobPartitionMapper.selectExpiredLeasesGlobal(
+          PartitionStatus.READY.code(),
+          PartitionStatus.RUNNING.code(),
+          batchSize > 0 ? batchSize : null);
       if (batchSize > 0 && expiredPartitions.size() >= batchSize) {
         log.warn(
             "partition reclaim hit batch ceiling: scanned={}, batchSize={}; either lease window"
@@ -135,9 +134,8 @@ public class PartitionLeaseReclaimScheduler {
       return;
     }
     try {
-      Instant olderThan =
-          BatchDateTimeSupport.utcNow()
-              .minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
+      Instant olderThan = BatchDateTimeSupport.utcNow()
+          .minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
       int batchSize = governance.partitionLease().getOrphanSweepBatchSize();
       List<JobPartitionEntity> orphans =
           jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(

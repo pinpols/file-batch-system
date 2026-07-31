@@ -12,14 +12,10 @@ class WorkflowMermaidRendererTest {
 
   @Test
   void rendersStartTaskEndChainWithCorrectShapes() {
-    WorkflowDefinitionDetailResponse detail =
-        detail(
-            List.of(
-                node("START_0", "起点", "START"),
-                node("LOAD", "加载", "TASK"),
-                node("END_0", "终点", "END")),
-            List.of(
-                edge("START_0", "LOAD", "ALWAYS", null), edge("LOAD", "END_0", "SUCCESS", null)));
+    WorkflowDefinitionDetailResponse detail = detail(
+        List.of(
+            node("START_0", "起点", "START"), node("LOAD", "加载", "TASK"), node("END_0", "终点", "END")),
+        List.of(edge("START_0", "LOAD", "ALWAYS", null), edge("LOAD", "END_0", "SUCCESS", null)));
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
@@ -33,18 +29,17 @@ class WorkflowMermaidRendererTest {
 
   @Test
   void rendersGatewayWithConditionEdgeLabel() {
-    WorkflowDefinitionDetailResponse detail =
-        detail(
-            List.of(
-                node("START_0", null, "START"),
-                node("GW", "分流", "GATEWAY"),
-                node("A", null, "TASK"),
-                node("END_0", null, "END")),
-            List.of(
-                edge("START_0", "GW", "ALWAYS", null),
-                edge("GW", "A", "CONDITION", "x > 0"),
-                edge("GW", "END_0", "CONDITION", "x <= 0"),
-                edge("A", "END_0", "ALWAYS", null)));
+    WorkflowDefinitionDetailResponse detail = detail(
+        List.of(
+            node("START_0", null, "START"),
+            node("GW", "分流", "GATEWAY"),
+            node("A", null, "TASK"),
+            node("END_0", null, "END")),
+        List.of(
+            edge("START_0", "GW", "ALWAYS", null),
+            edge("GW", "A", "CONDITION", "x > 0"),
+            edge("GW", "END_0", "CONDITION", "x <= 0"),
+            edge("A", "END_0", "ALWAYS", null)));
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
@@ -55,17 +50,16 @@ class WorkflowMermaidRendererTest {
 
   @Test
   void shapesForFileStepAndWaitNodes() {
-    WorkflowDefinitionDetailResponse detail =
-        detail(
-            List.of(
-                node("START_0", null, "START"),
-                node("FILE_1", "文件导入", "FILE_STEP"),
-                node("WAIT_1", "等到货", "WAIT"),
-                node("END_0", null, "END")),
-            List.of(
-                edge("START_0", "FILE_1", "ALWAYS", null),
-                edge("FILE_1", "WAIT_1", "ALWAYS", null),
-                edge("WAIT_1", "END_0", "ALWAYS", null)));
+    WorkflowDefinitionDetailResponse detail = detail(
+        List.of(
+            node("START_0", null, "START"),
+            node("FILE_1", "文件导入", "FILE_STEP"),
+            node("WAIT_1", "等到货", "WAIT"),
+            node("END_0", null, "END")),
+        List.of(
+            edge("START_0", "FILE_1", "ALWAYS", null),
+            edge("FILE_1", "WAIT_1", "ALWAYS", null),
+            edge("WAIT_1", "END_0", "ALWAYS", null)));
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
@@ -75,18 +69,17 @@ class WorkflowMermaidRendererTest {
 
   @Test
   void failureEdgeUsesDottedArrow() {
-    WorkflowDefinitionDetailResponse detail =
-        detail(
-            List.of(
-                node("START_0", null, "START"),
-                node("T", null, "TASK"),
-                node("CATCH", null, "TASK"),
-                node("END_0", null, "END")),
-            List.of(
-                edge("START_0", "T", "ALWAYS", null),
-                edge("T", "CATCH", "FAILURE", null),
-                edge("T", "END_0", "SUCCESS", null),
-                edge("CATCH", "END_0", "ALWAYS", null)));
+    WorkflowDefinitionDetailResponse detail = detail(
+        List.of(
+            node("START_0", null, "START"),
+            node("T", null, "TASK"),
+            node("CATCH", null, "TASK"),
+            node("END_0", null, "END")),
+        List.of(
+            edge("START_0", "T", "ALWAYS", null),
+            edge("T", "CATCH", "FAILURE", null),
+            edge("T", "END_0", "SUCCESS", null),
+            edge("CATCH", "END_0", "ALWAYS", null)));
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 

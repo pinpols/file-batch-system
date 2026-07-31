@@ -107,9 +107,8 @@ public class InstanceManagementApplicationService {
           "error.common.state_conflict_detail",
           "cannot cancel partition from " + partition.getPartitionStatus());
     }
-    int rows =
-        jobPartitionMapper.promoteStatus(
-            tenantId, id, partition.getPartitionStatus(), "CANCELLED", partition.getVersion());
+    int rows = jobPartitionMapper.promoteStatus(
+        tenantId, id, partition.getPartitionStatus(), "CANCELLED", partition.getVersion());
     if (rows == 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
@@ -129,12 +128,10 @@ public class InstanceManagementApplicationService {
   }
 
   public Map<String, Object> retryFailedPartitions(String tenantId, Long instanceId) {
-    JobInstanceEntity instance =
-        Guard.requireFound(
-            jobInstanceMapper.selectById(tenantId, instanceId), "job instance not found");
-    List<JobPartitionEntity> failedPartitions =
-        jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(tenantId, instanceId, "FAILED", null));
+    JobInstanceEntity instance = Guard.requireFound(
+        jobInstanceMapper.selectById(tenantId, instanceId), "job instance not found");
+    List<JobPartitionEntity> failedPartitions = jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(tenantId, instanceId, "FAILED", null));
     if (failedPartitions == null || failedPartitions.isEmpty()) {
       return Map.of(
           "id",
@@ -206,9 +203,8 @@ public class InstanceManagementApplicationService {
           "error.common.state_conflict_detail",
           "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
     }
-    JobInstanceTerminalStatusCommand cmd =
-        new JobInstanceTerminalStatusCommand(
-            tenantId, id, targetStatus, BatchDateTimeSupport.utcNow(), instance.getVersion());
+    JobInstanceTerminalStatusCommand cmd = new JobInstanceTerminalStatusCommand(
+        tenantId, id, targetStatus, BatchDateTimeSupport.utcNow(), instance.getVersion());
     int rows =
         jobInstanceTerminalStatusApplicationService.updateTerminalStatusAndReconcileChildren(cmd);
     if (rows == 0) {

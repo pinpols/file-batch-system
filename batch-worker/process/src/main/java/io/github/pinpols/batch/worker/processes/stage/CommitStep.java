@@ -18,7 +18,8 @@ public class CommitStep implements ProcessStageStep {
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
     // ADR-026: 演练模式不写业务表（PROCESS commit 是最大副作用入口），直接 success 返回。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return ProcessStageResult.success(stage());
     }
     ProcessComputePlugin plugin = context.getResolvedPlugin();

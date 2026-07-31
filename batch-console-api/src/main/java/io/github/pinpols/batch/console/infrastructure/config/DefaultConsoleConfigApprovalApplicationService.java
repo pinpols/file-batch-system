@@ -75,34 +75,32 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
     }
-    configApprovalMapper.insert(
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            KEY_RELEASE_ID,
-            releaseId,
-            KEY_APPROVAL_STATUS,
-            STATUS_PENDING,
-            "requestedBy",
-            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-            "reviewComment",
-            ConsoleTextSanitizer.safeInput(request.getReason(), 1024),
-            "expiredAt",
-            parseInstant(request.getExpiredAt())));
-    configReleaseMapper.updateConfigReleaseStatus(
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            KEY_RELEASE_ID,
-            releaseId,
-            KEY_NEXT_STATUS,
-            PENDING_APPROVAL,
-            "publishedAt",
-            null,
-            "rolledBackAt",
-            null,
-            "updatedBy",
-            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+    configApprovalMapper.insert(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_RELEASE_ID,
+        releaseId,
+        KEY_APPROVAL_STATUS,
+        STATUS_PENDING,
+        "requestedBy",
+        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+        "reviewComment",
+        ConsoleTextSanitizer.safeInput(request.getReason(), 1024),
+        "expiredAt",
+        parseInstant(request.getExpiredAt())));
+    configReleaseMapper.updateConfigReleaseStatus(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_RELEASE_ID,
+        releaseId,
+        KEY_NEXT_STATUS,
+        PENDING_APPROVAL,
+        "publishedAt",
+        null,
+        "rolledBackAt",
+        null,
+        "updatedBy",
+        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
     logChange(
         tenantId,
         release,
@@ -140,34 +138,31 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
-    int rows =
-        configApprovalMapper.approve(
-            mapOf(
-                KEY_TENANT_ID,
-                tenantId,
-                "id",
-                approvalId,
-                "reviewedBy",
-                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-                "reviewComment",
-                ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
+    int rows = configApprovalMapper.approve(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        "id",
+        approvalId,
+        "reviewedBy",
+        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+        "reviewComment",
+        ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
-    configReleaseMapper.updateConfigReleaseStatus(
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            KEY_RELEASE_ID,
-            releaseId,
-            KEY_NEXT_STATUS,
-            ConfigLifecycleStatus.PUBLISHED.code(),
-            "publishedAt",
-            BatchDateTimeSupport.utcNow(),
-            "rolledBackAt",
-            null,
-            "updatedBy",
-            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+    configReleaseMapper.updateConfigReleaseStatus(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_RELEASE_ID,
+        releaseId,
+        KEY_NEXT_STATUS,
+        ConfigLifecycleStatus.PUBLISHED.code(),
+        "publishedAt",
+        BatchDateTimeSupport.utcNow(),
+        "rolledBackAt",
+        null,
+        "updatedBy",
+        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
     logChange(
         tenantId,
         release,
@@ -188,34 +183,31 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
-    int rows =
-        configApprovalMapper.reject(
-            mapOf(
-                KEY_TENANT_ID,
-                tenantId,
-                "id",
-                approvalId,
-                "reviewedBy",
-                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-                "reviewComment",
-                ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
+    int rows = configApprovalMapper.reject(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        "id",
+        approvalId,
+        "reviewedBy",
+        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+        "reviewComment",
+        ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
-    configReleaseMapper.updateConfigReleaseStatus(
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            KEY_RELEASE_ID,
-            releaseId,
-            KEY_NEXT_STATUS,
-            ConfigLifecycleStatus.DRAFT.code(),
-            "publishedAt",
-            null,
-            "rolledBackAt",
-            null,
-            "updatedBy",
-            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+    configReleaseMapper.updateConfigReleaseStatus(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_RELEASE_ID,
+        releaseId,
+        KEY_NEXT_STATUS,
+        ConfigLifecycleStatus.DRAFT.code(),
+        "publishedAt",
+        null,
+        "rolledBackAt",
+        null,
+        "updatedBy",
+        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
     logChange(
         tenantId,
         release,
@@ -251,9 +243,8 @@ public class DefaultConsoleConfigApprovalApplicationService
             .versionNo(release.getVersionNo())
             .action(action)
             .operatorType("API")
-            .summary(
-                JsonUtils.toJson(
-                    mapOf("reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
+            .summary(JsonUtils.toJson(
+                mapOf("reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
             .build());
   }
 

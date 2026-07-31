@@ -44,22 +44,17 @@ class ConsoleAiControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAiController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAiController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ai/chat")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ai/chat").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","prompt":"列出今日失败的作业"}
                     """))
         .andExpect(status().isBadRequest())
@@ -71,12 +66,10 @@ class ConsoleAiControllerTest {
   @Test
   void shouldReturn400WhenPromptIsBlank() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ai/chat")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ai/chat")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","prompt":""}
                     """))
         .andExpect(status().isBadRequest())
@@ -92,12 +85,10 @@ class ConsoleAiControllerTest {
     when(applicationService.chat(any(), anyString())).thenReturn(chatResponse);
 
     mockMvc
-        .perform(
-            post("/api/console/ai/chat")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ai/chat")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","prompt":"列出今日失败的作业"}
                     """))
         .andExpect(status().isOk())

@@ -179,11 +179,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       throw new SqlValidationException("no valid SQL statement found");
     }
     if (statements.size() > props.getMaxStatementsPerJob()) {
-      throw new SqlValidationException(
-          "too many statements: "
-              + statements.size()
-              + " > maxStatementsPerJob="
-              + props.getMaxStatementsPerJob());
+      throw new SqlValidationException("too many statements: "
+          + statements.size()
+          + " > maxStatementsPerJob="
+          + props.getMaxStatementsPerJob());
     }
 
     // 三道闸模型:语句类型/DDL 不再由 app 白名单管控,放行范围 = 所连最小权限 DB 角色被授予的权限;
@@ -236,11 +235,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       return configured;
     }
     if (!props.getAllowedDataSourceBeans().contains(paramBean)) {
-      throw new SqlValidationException(
-          "dataSourceBean '"
-              + paramBean
-              + "' not in allowedDataSourceBeans="
-              + props.getAllowedDataSourceBeans());
+      throw new SqlValidationException("dataSourceBean '"
+          + paramBean
+          + "' not in allowedDataSourceBeans="
+          + props.getAllowedDataSourceBeans());
     }
     return paramBean;
   }
@@ -401,8 +399,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           "REVOKE",
           "ANALYZE",
           "VACUUM",
-          "DO" ->
-          "DDL";
+          "DO" -> "DDL";
       case "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "SET" -> "TX";
       default -> "OTHER";
     };
@@ -436,12 +433,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
               + " batch.worker.executors.sql.forbid-os-capable-role=false and enforce a"
               + " dialect-native least-privilege role.");
     }
-    String sql =
-        "select rolsuper"
-            + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
-            + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
-            + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
-            + " from pg_roles where rolname = current_user";
+    String sql = "select rolsuper"
+        + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+        + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+        + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+        + " from pg_roles where rolname = current_user";
     try (Statement st = conn.createStatement();
         ResultSet rs = st.executeQuery(sql)) {
       if (rs.next() && rs.getBoolean(1)) {
@@ -464,56 +460,51 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     // 全 SELECT 时强制显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段内生效。
     // 写任务保持原有 autoCommit 语义。
     boolean effectiveAutoCommit = inv.allSelect ? false : inv.autoCommit;
-    AtomicConnectionManager.Options opts =
-        AtomicConnectionManager.Options.defaults()
-            .withAutoCommit(effectiveAutoCommit)
-            .withReadOnly(inv.allSelect)
-            // 角色闸用 executor 本地实现(error message + 异常类型保留 i18n / SqlValidationException 语义),
-            // 不走 manager 的 SecurityException 实现。
-            .withForbidOsCapableRole(false);
+    AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
+        .withAutoCommit(effectiveAutoCommit)
+        .withReadOnly(inv.allSelect)
+        // 角色闸用 executor 本地实现(error message + 异常类型保留 i18n / SqlValidationException 语义),
+        // 不走 manager 的 SecurityException 实现。
+        .withForbidOsCapableRole(false);
 
     try {
-      AtomicConnectionManager.withConnection(
-          inv.dataSource,
-          opts,
-          conn -> {
-            if (props.isForbidOsCapableRole()) {
-              requireNonOsCapableRole(conn);
-            }
-            if (inv.allSelect) {
-              try (Statement guard = conn.createStatement()) {
-                guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
-              } catch (SQLException setEx) {
-                log.warn("SET LOCAL statement_timeout failed: {}", setEx.getMessage());
+      AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
+        if (props.isForbidOsCapableRole()) {
+          requireNonOsCapableRole(conn);
+        }
+        if (inv.allSelect) {
+          try (Statement guard = conn.createStatement()) {
+            guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
+          } catch (SQLException setEx) {
+            log.warn("SET LOCAL statement_timeout failed: {}", setEx.getMessage());
+          }
+        }
+        for (String sql : inv.statements) {
+          try (Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(inv.timeoutSec);
+            boolean hasResultSet = stmt.execute(sql);
+            if (hasResultSet) {
+              try (ResultSet rs = stmt.getResultSet()) {
+                FetchResult fr = fetchResults(rs);
+                execResult.lastResultSet = fr.rows;
+                execResult.lastResultRows = fr.actualCount;
+                execResult.truncated = execResult.truncated || fr.truncated;
+              }
+            } else {
+              int affected = stmt.getUpdateCount();
+              if (affected > 0) {
+                execResult.totalAffected += affected;
               }
             }
-            for (String sql : inv.statements) {
-              try (Statement stmt = conn.createStatement()) {
-                stmt.setQueryTimeout(inv.timeoutSec);
-                boolean hasResultSet = stmt.execute(sql);
-                if (hasResultSet) {
-                  try (ResultSet rs = stmt.getResultSet()) {
-                    FetchResult fr = fetchResults(rs);
-                    execResult.lastResultSet = fr.rows;
-                    execResult.lastResultRows = fr.actualCount;
-                    execResult.truncated = execResult.truncated || fr.truncated;
-                  }
-                } else {
-                  int affected = stmt.getUpdateCount();
-                  if (affected > 0) {
-                    execResult.totalAffected += affected;
-                  }
-                }
-              }
-            }
-            return null;
-          });
+          }
+        }
+        return null;
+      });
     } catch (SQLException ex) {
       // PG statement_timeout → SQLState "57014" (query_canceled);其它驱动语义不同,这里做最常见识别
-      boolean isTimeout =
-          "57014".equals(ex.getSQLState())
-              || (ex.getMessage() != null
-                  && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
+      boolean isTimeout = "57014".equals(ex.getSQLState())
+          || (ex.getMessage() != null
+              && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
       return AtomicErrorCode.fail(
           isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
           "sql failed: " + ex.getMessage(),

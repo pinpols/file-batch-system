@@ -60,18 +60,17 @@ class BatchDaySettleSchedulerTest {
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<BatchDaySettleScheduler> selfProvider = mock(ObjectProvider.class);
-    scheduler =
-        new BatchDaySettleScheduler(
-            batchDayInstanceMapper,
-            jobInstanceMapper,
-            jobExecutionLogMapper,
-            triggerRequestMapper,
-            configCacheService,
-            launchService,
-            gracefulShutdown,
-            selfProvider,
-            new BatchDateTimeSupport(
-                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
+    scheduler = new BatchDaySettleScheduler(
+        batchDayInstanceMapper,
+        jobInstanceMapper,
+        jobExecutionLogMapper,
+        triggerRequestMapper,
+        configCacheService,
+        launchService,
+        gracefulShutdown,
+        selfProvider,
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
     // self-proxy 在单测里直接指向 scheduler 自身，绕开 Spring AOP；REQUIRES_NEW 事务语义在单测里不跑也没事
     when(selfProvider.getObject()).thenReturn(scheduler);
   }

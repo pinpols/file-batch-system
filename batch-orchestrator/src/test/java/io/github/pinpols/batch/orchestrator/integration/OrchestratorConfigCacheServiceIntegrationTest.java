@@ -39,15 +39,26 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   })
   static class TestApplication {}
 
-  @MockitoBean private JobDefinitionMapper jobDefinitionMapper;
-  @MockitoBean private WorkflowDefinitionMapper workflowDefinitionMapper;
-  @MockitoBean private BusinessCalendarMapper businessCalendarMapper;
-  @MockitoBean private BatchWindowMapper batchWindowMapper;
-  @MockitoBean private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+  @MockitoBean
+  private JobDefinitionMapper jobDefinitionMapper;
 
-  @Autowired private OrchestratorConfigCacheService configCacheService;
+  @MockitoBean
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
 
-  @Autowired private StringRedisTemplate redisTemplate;
+  @MockitoBean
+  private BusinessCalendarMapper businessCalendarMapper;
+
+  @MockitoBean
+  private BatchWindowMapper batchWindowMapper;
+
+  @MockitoBean
+  private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+
+  @Autowired
+  private OrchestratorConfigCacheService configCacheService;
+
+  @Autowired
+  private StringRedisTemplate redisTemplate;
 
   @Test
   void cacheMissLoadsFromRepositoryAndPopulatesRedis() {

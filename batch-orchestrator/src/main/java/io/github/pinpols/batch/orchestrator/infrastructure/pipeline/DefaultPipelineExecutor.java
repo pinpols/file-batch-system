@@ -44,9 +44,8 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
     }
     definition.getSteps().stream()
         .filter(step -> Boolean.TRUE.equals(step.getEnabled()))
-        .sorted(
-            Comparator.comparing(
-                step -> step.getStepOrder() == null ? Integer.MAX_VALUE : step.getStepOrder()))
+        .sorted(Comparator.comparing(
+            step -> step.getStepOrder() == null ? Integer.MAX_VALUE : step.getStepOrder()))
         .forEach(stepDefinition -> results.add(executeStep(context, definition, stepDefinition)));
     context.setStepResults(results);
     PipelineExecutionResult result = new PipelineExecutionResult();
@@ -74,14 +73,14 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
       ExecutionContext context, PipelineDefinition definition, StepDefinition stepDefinition) {
     WorkerRouteModel route = context.getDefaultWorkerRoute();
     if (route == null) {
-      route =
-          workerRouter.route(
-              context.getTenantId(), definition.getJobCode(), stepDefinition.getStepCode());
+      route = workerRouter.route(
+          context.getTenantId(), definition.getJobCode(), stepDefinition.getStepCode());
     }
     if (route == null) {
       route = new WorkerRouteModel();
     }
-    if (stepDefinition.getWorkerType() != null && !stepDefinition.getWorkerType().isBlank()) {
+    if (stepDefinition.getWorkerType() != null
+        && !stepDefinition.getWorkerType().isBlank()) {
       WorkerRouteModel override = copyRoute(route);
       override.setWorkerType(stepDefinition.getWorkerType());
       override.setCapabilityTags(stepDefinition.getCapabilityTags());

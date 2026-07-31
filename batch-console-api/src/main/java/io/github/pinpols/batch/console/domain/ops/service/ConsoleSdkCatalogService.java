@@ -35,59 +35,56 @@ public class ConsoleSdkCatalogService {
    *   <li>go {@code github.com/pinpols/file-batch-system/batch-worker-sdk-go} ← 无 tag(仓库版)
    * </ul>
    */
-  private static final List<SdkLanguage> LANGUAGES =
-      List.of(
-          new SdkLanguage(
-              "java",
-              "io.github.pinpols.batch:batch-worker-sdk",
-              "1.1.0-SNAPSHOT",
-              "<dependency>\n"
-                  + "  <groupId>io.github.pinpols.batch</groupId>\n"
-                  + "  <artifactId>batch-worker-sdk</artifactId>\n"
-                  + "  <version>1.1.0-SNAPSHOT</version>\n"
-                  + "</dependency>",
-              CONFORMANCE_PER_PR_PARITY),
-          new SdkLanguage(
-              "python",
-              "batch-worker-sdk",
-              "0.5.0a0",
-              "pip install batch-worker-sdk",
-              CONFORMANCE_PER_PR_PARITY),
-          new SdkLanguage(
-              "typescript",
-              "@batch/worker-sdk",
-              "1.1.0",
-              "npm install @batch/worker-sdk",
-              CONFORMANCE_PER_PR_PARITY),
-          new SdkLanguage(
-              "rust",
-              "batch-worker-sdk",
-              "1.1.0",
-              "cargo add batch-worker-sdk",
-              CONFORMANCE_PER_PR_PARITY),
-          new SdkLanguage(
-              "go",
-              "github.com/pinpols/file-batch-system/batch-worker-sdk-go",
-              "repo-version",
-              "go get github.com/pinpols/file-batch-system/batch-worker-sdk-go",
-              CONFORMANCE_PER_PR_PARITY));
+  private static final List<SdkLanguage> LANGUAGES = List.of(
+      new SdkLanguage(
+          "java",
+          "io.github.pinpols.batch:batch-worker-sdk",
+          "1.1.0-SNAPSHOT",
+          "<dependency>\n"
+              + "  <groupId>io.github.pinpols.batch</groupId>\n"
+              + "  <artifactId>batch-worker-sdk</artifactId>\n"
+              + "  <version>1.1.0-SNAPSHOT</version>\n"
+              + "</dependency>",
+          CONFORMANCE_PER_PR_PARITY),
+      new SdkLanguage(
+          "python",
+          "batch-worker-sdk",
+          "0.5.0a0",
+          "pip install batch-worker-sdk",
+          CONFORMANCE_PER_PR_PARITY),
+      new SdkLanguage(
+          "typescript",
+          "@batch/worker-sdk",
+          "1.1.0",
+          "npm install @batch/worker-sdk",
+          CONFORMANCE_PER_PR_PARITY),
+      new SdkLanguage(
+          "rust",
+          "batch-worker-sdk",
+          "1.1.0",
+          "cargo add batch-worker-sdk",
+          CONFORMANCE_PER_PR_PARITY),
+      new SdkLanguage(
+          "go",
+          "github.com/pinpols/file-batch-system/batch-worker-sdk-go",
+          "repo-version",
+          "go get github.com/pinpols/file-batch-system/batch-worker-sdk-go",
+          CONFORMANCE_PER_PR_PARITY));
 
   /** SDK 契约文档索引(仓库相对路径)。 */
-  private static final List<SdkDoc> DOCS =
-      List.of(
-          new SdkDoc("BYO SDK Conformance Contract", "docs/sdk/byo-conformance-contract.md"),
-          new SdkDoc("SDK Shared Constants", "docs/api/sdk-shared-constants.yaml"),
-          new SdkDoc("SDK Wire Protocol", "docs/sdk/wire-protocol.md"));
+  private static final List<SdkDoc> DOCS = List.of(
+      new SdkDoc("BYO SDK Conformance Contract", "docs/sdk/byo-conformance-contract.md"),
+      new SdkDoc("SDK Shared Constants", "docs/api/sdk-shared-constants.yaml"),
+      new SdkDoc("SDK Wire Protocol", "docs/sdk/wire-protocol.md"));
 
   /** 组装只读目录(无副作用,可被外层缓存)。 */
   public SdkCatalog catalog() {
     List<String> supported = SdkPlatformConstants.SCHEMA_VERSIONS_SUPPORTED;
-    int maxMajor =
-        supported.stream()
-            .map(v -> v.startsWith("v") ? v.substring(1) : v)
-            .mapToInt(Integer::parseInt)
-            .max()
-            .orElse(0);
+    int maxMajor = supported.stream()
+        .map(v -> v.startsWith("v") ? v.substring(1) : v)
+        .mapToInt(Integer::parseInt)
+        .max()
+        .orElse(0);
     String current = "v" + maxMajor;
     String rejectedFrom = "v" + (maxMajor + 1);
     ProtocolVersion protocol = new ProtocolVersion(supported, current, rejectedFrom);

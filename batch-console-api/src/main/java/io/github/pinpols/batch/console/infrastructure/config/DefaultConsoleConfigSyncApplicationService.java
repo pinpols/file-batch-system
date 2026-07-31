@@ -107,8 +107,8 @@ public class DefaultConsoleConfigSyncApplicationService
       if (operator == null || operator.isBlank()) {
         operator = "system";
       }
-      TenantConfigBatchInitResponse response =
-          initApplicationService.batchInit(initRequest, operator, UUID.randomUUID().toString());
+      TenantConfigBatchInitResponse response = initApplicationService.batchInit(
+          initRequest, operator, UUID.randomUUID().toString());
       updateLog(logId, tenantId, response);
       return new ConfigSyncImportResponse(
           logId, ConfigSyncSummaryResponse.from(request.getBundle()), response);
@@ -130,24 +130,21 @@ public class DefaultConsoleConfigSyncApplicationService
   private void markLogFailed(String tenantId, Long logId, int failedItems, String errorMessage) {
     TransactionTemplate tt = new TransactionTemplate(transactionManager);
     tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    tt.executeWithoutResult(
-        status ->
-            configSyncLogMapper.updateResult(
-                mapOf(
-                    KEY_TENANT_ID,
-                    tenantId,
-                    "id",
-                    logId,
-                    "syncStatus",
-                    "FAILED",
-                    "successItems",
-                    0,
-                    "failedItems",
-                    failedItems,
-                    "skippedItems",
-                    0,
-                    "detailJson",
-                    JsonUtils.toJson(mapOf("error", errorMessage)))));
+    tt.executeWithoutResult(status -> configSyncLogMapper.updateResult(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        "id",
+        logId,
+        "syncStatus",
+        "FAILED",
+        "successItems",
+        0,
+        "failedItems",
+        failedItems,
+        "skippedItems",
+        0,
+        "detailJson",
+        JsonUtils.toJson(mapOf("error", errorMessage)))));
   }
 
   private Long createLog(
@@ -155,32 +152,31 @@ public class DefaultConsoleConfigSyncApplicationService
     ConfigSyncSummaryResponse summary = ConfigSyncSummaryResponse.from(bundle);
     int totalItems = summary.total();
     String operator = metadataResolver.current().operatorId();
-    Map<String, Object> params =
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            "syncDirection",
-            "IMPORT",
-            "sourceEnv",
-            request.getSourceEnv(),
-            "targetEnv",
-            request.getTargetEnv(),
-            "configTypes",
-            String.join(",", configTypes()),
-            "totalItems",
-            totalItems,
-            "successItems",
-            0,
-            "failedItems",
-            0,
-            "skippedItems",
-            0,
-            "syncStatus",
-            "RUNNING",
-            "detailJson",
-            JsonUtils.toJson(mapOf(KEY_SUMMARY, summary, "dryRun", request.isDryRun())),
-            "operatorId",
-            operator);
+    Map<String, Object> params = mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        "syncDirection",
+        "IMPORT",
+        "sourceEnv",
+        request.getSourceEnv(),
+        "targetEnv",
+        request.getTargetEnv(),
+        "configTypes",
+        String.join(",", configTypes()),
+        "totalItems",
+        totalItems,
+        "successItems",
+        0,
+        "failedItems",
+        0,
+        "skippedItems",
+        0,
+        "syncStatus",
+        "RUNNING",
+        "detailJson",
+        JsonUtils.toJson(mapOf(KEY_SUMMARY, summary, "dryRun", request.isDryRun())),
+        "operatorId",
+        operator);
     configSyncLogMapper.insert(params);
     return longValue(params.get("id"));
   }
@@ -189,22 +185,21 @@ public class DefaultConsoleConfigSyncApplicationService
     int total = response.totalTenants();
     int success = response.successTenants();
     int failed = response.failureTenants();
-    configSyncLogMapper.updateResult(
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            "id",
-            logId,
-            "syncStatus",
-            failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
-            "successItems",
-            success,
-            "failedItems",
-            failed,
-            "skippedItems",
-            Math.max(total - success - failed, 0),
-            "detailJson",
-            JsonUtils.toJson(response)));
+    configSyncLogMapper.updateResult(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        "id",
+        logId,
+        "syncStatus",
+        failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
+        "successItems",
+        success,
+        "failedItems",
+        failed,
+        "skippedItems",
+        Math.max(total - success - failed, 0),
+        "detailJson",
+        JsonUtils.toJson(response)));
   }
 
   private TenantConfigBatchInitRequest toInitRequest(ConfigSyncImportRequest request) {

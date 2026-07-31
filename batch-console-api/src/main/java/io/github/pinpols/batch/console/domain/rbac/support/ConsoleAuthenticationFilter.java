@@ -106,10 +106,9 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         }
         if (payload != null) {
           // R4-P1-1：用 ticket 签发时绑定的真实角色集；空角色（旧数据兼容）走配置默认值回退。
-          LinkedHashSet<String> authorities =
-              payload.authorities().isEmpty()
-                  ? new LinkedHashSet<>(properties.getDefaultAuthorities())
-                  : new LinkedHashSet<>(payload.authorities());
+          LinkedHashSet<String> authorities = payload.authorities().isEmpty()
+              ? new LinkedHashSet<>(properties.getDefaultAuthorities())
+              : new LinkedHashSet<>(payload.authorities());
           ConsolePrincipal principal =
               new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
           setAuthentication(principal, "sse-ticket");
@@ -158,13 +157,12 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
           String username = resolveUsername(request);
           String tenantId = resolveTenant(request);
           Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
-          ConsolePrincipal principal =
-              new ConsolePrincipal(
-                  username,
-                  tenantId,
-                  authorities.stream()
-                      .map(SimpleGrantedAuthority::getAuthority)
-                      .collect(Collectors.toCollection(LinkedHashSet::new)));
+          ConsolePrincipal principal = new ConsolePrincipal(
+              username,
+              tenantId,
+              authorities.stream()
+                  .map(SimpleGrantedAuthority::getAuthority)
+                  .collect(Collectors.toCollection(LinkedHashSet::new)));
           setAuthentication(principal, "bypass-mode");
         } catch (IllegalArgumentException exception) {
           SwallowedExceptionLogger.info(
@@ -186,13 +184,12 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   }
 
   private void setAuthentication(ConsolePrincipal principal, String credentials) {
-    UsernamePasswordAuthenticationToken authentication =
-        new UsernamePasswordAuthenticationToken(
-            principal,
-            credentials,
-            principal.authorities().stream()
-                .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toCollection(LinkedHashSet::new)));
+    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+        principal,
+        credentials,
+        principal.authorities().stream()
+            .map(SimpleGrantedAuthority::new)
+            .collect(Collectors.toCollection(LinkedHashSet::new)));
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 

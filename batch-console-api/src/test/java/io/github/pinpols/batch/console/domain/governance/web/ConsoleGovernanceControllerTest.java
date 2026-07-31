@@ -50,13 +50,11 @@ class ConsoleGovernanceControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleGovernanceController(
-                    parameterService, responseFactory, requestMetadataResolver, tenantGuard))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleGovernanceController(
+            parameterService, responseFactory, requestMetadataResolver, tenantGuard))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -71,19 +69,17 @@ class ConsoleGovernanceControllerTest {
         .perform(get("/api/console/ops/governance").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(
-            jsonPath("$.data['governance.outbox.circuit-breaker.failure-threshold']").value("5"));
+        .andExpect(jsonPath("$.data['governance.outbox.circuit-breaker.failure-threshold']")
+            .value("5"));
   }
 
   @Test
   void shouldUpdateGovernanceParam() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ops/governance")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/ops/governance")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"key":"governance.outbox.circuit-breaker.failure-threshold","value":"5"}
                     """))
         .andExpect(status().isOk())
@@ -101,10 +97,9 @@ class ConsoleGovernanceControllerTest {
   @Test
   void shouldResetGovernanceParam() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/ops/governance/reset")
-                .param("tenantId", "t1")
-                .param("key", "governance.x"))
+        .perform(post("/api/console/ops/governance/reset")
+            .param("tenantId", "t1")
+            .param("key", "governance.x"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 

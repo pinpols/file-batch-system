@@ -71,9 +71,11 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired SqlTemplateExportDataPlugin sqlTemplatePlugin;
+  @Autowired
+  SqlTemplateExportDataPlugin sqlTemplatePlugin;
 
-  @Autowired GenericJdbcMappedExportDataPlugin jdbcMappedPlugin;
+  @Autowired
+  GenericJdbcMappedExportDataPlugin jdbcMappedPlugin;
 
   @BeforeEach
   void setTenantContext() {
@@ -100,8 +102,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
         Statement stmt = conn.createStatement()) {
       conn.setAutoCommit(false);
 
-      stmt.execute(
-          """
+      stmt.execute("""
           CREATE TABLE IF NOT EXISTS biz.keyset_demo (
               id        BIGINT PRIMARY KEY,
               tenant_id VARCHAR(64)  NOT NULL,
@@ -119,8 +120,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       stmt.execute(bulk.toString());
 
       // 用例 2：倾斜数据——独立表，跳过 id ∈ [400,450]，实插 950 行
-      stmt.execute(
-          """
+      stmt.execute("""
           CREATE TABLE IF NOT EXISTS biz.keyset_skew_demo (
               id        BIGINT PRIMARY KEY,
               tenant_id VARCHAR(64)  NOT NULL,
@@ -144,21 +144,17 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
       stmt.execute(skew.toString());
 
       // jdbc_mapped keyset 变体：复用 settlement_batch + settlement_detail（id 数值列）
-      stmt.execute(
-          """
+      stmt.execute("""
           INSERT INTO biz.settlement_batch
               (id, tenant_id, batch_no, biz_date, accounting_period)
           VALUES
               (%d, '%s', '%s', '2024-01-01', '2024-01')
           ON CONFLICT DO NOTHING
-          """
-              .formatted(BATCH_ID_SEED, TENANT_ID, "KEYSET-JDBC-MAPPED"));
+          """.formatted(BATCH_ID_SEED, TENANT_ID, "KEYSET-JDBC-MAPPED"));
       stmt.execute("DELETE FROM biz.settlement_detail WHERE batch_id = " + BATCH_ID_SEED);
-      StringBuilder detail =
-          new StringBuilder(
-              "INSERT INTO biz.settlement_detail"
-                  + "(tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,"
-                  + " gross_amount, fee_amount, net_amount) VALUES ");
+      StringBuilder detail = new StringBuilder("INSERT INTO biz.settlement_detail"
+          + "(tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,"
+          + " gross_amount, fee_amount, net_amount) VALUES ");
       for (int i = 1; i <= ROW_COUNT; i++) {
         detail
             .append("('")
@@ -201,12 +197,11 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @DisplayName("用例1 sql_template+keyset: 4 片无重叠且合集恰好等于全量 1000 行")
   void sqlTemplate_keyset_fourPartitions_disjointAndComplete() throws Exception {
     // 准备: opt-in keyset
-    Map<String, Object> templateConfig =
-        Map.of(
-            "default_query_sql",
-            "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo",
-            "partition_keyset_range",
-            true);
+    Map<String, Object> templateConfig = Map.of(
+        "default_query_sql",
+        "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo",
+        "partition_keyset_range",
+        true);
 
     // 执行
     List<Set<Object>> partitions =
@@ -224,13 +219,12 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @DisplayName("用例2 sql_template+keyset: 倾斜空洞下 4 片仍无重叠且合集等于实插 950 行")
   void sqlTemplate_keyset_skewed_disjointAndComplete() throws Exception {
     // 准备: 同表，batch_no = SKEW（id 有空洞 [400,450]）
-    Map<String, Object> templateConfig =
-        Map.of(
-            "default_query_sql",
-            "SELECT id FROM biz.keyset_skew_demo WHERE tenant_id = :tenantId AND batch_no ="
-                + " :batchNo",
-            "partition_keyset_range",
-            true);
+    Map<String, Object> templateConfig = Map.of(
+        "default_query_sql",
+        "SELECT id FROM biz.keyset_skew_demo WHERE tenant_id = :tenantId AND batch_no ="
+            + " :batchNo",
+        "partition_keyset_range",
+        true);
 
     // 执行
     List<Set<Object>> partitions =
@@ -248,10 +242,9 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @DisplayName("用例3 sql_template 未 opt-in: 退回 hashtext 路径，4 片合集仍等于全量 1000 行")
   void sqlTemplate_noOptIn_fallbackHashtext_complete() throws Exception {
     // 准备: 不设 partition_keyset_range（走 hashtext 分片）
-    Map<String, Object> templateConfig =
-        Map.of(
-            "default_query_sql",
-            "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo");
+    Map<String, Object> templateConfig = Map.of(
+        "default_query_sql",
+        "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo");
 
     // 执行
     List<Set<Object>> partitions =
@@ -269,12 +262,11 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @DisplayName("用例4 sql_template+keyset: 单分片翻多页时 min/max 边界缓存进 exportSnapshot 且跨页稳定")
   void sqlTemplate_keyset_boundaryComputedOncePerPartition() throws Exception {
     // 准备: partitionNo=1，pageSize 小到保证多页（1000 行 / 4 片 ≈ 250 行，PAGE_SIZE=200 → ≥2 页）
-    Map<String, Object> templateConfig =
-        Map.of(
-            "default_query_sql",
-            "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo",
-            "partition_keyset_range",
-            true);
+    Map<String, Object> templateConfig = Map.of(
+        "default_query_sql",
+        "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo",
+        "partition_keyset_range",
+        true);
 
     // 单个 exportSnapshot 跨页共享（plugin 内 planner 把结果缓存进它）
     Map<String, Object> sharedSnapshot = new LinkedHashMap<>();
@@ -283,16 +275,8 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
     ExportKeysetRange firstCached = null;
 
     while (true) {
-      ExportDataContext ctx =
-          new ExportDataContext(
-              TENANT_ID,
-              "JOB",
-              BATCH_NO,
-              "TPL",
-              templateConfig,
-              sharedSnapshot,
-              1,
-              PARTITION_COUNT);
+      ExportDataContext ctx = new ExportDataContext(
+          TENANT_ID, "JOB", BATCH_NO, "TPL", templateConfig, sharedSnapshot, 1, PARTITION_COUNT);
       ExportDataPlugin.DetailPage page =
           sqlTemplatePlugin.loadDetailPage(ctx, 0L, PAGE_SIZE, cursor);
 
@@ -331,17 +315,16 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("补充 jdbc_mapped+keyset: 4 片无重叠且合集等于全量 1000 行")
   void jdbcMapped_keyset_fourPartitions_disjointAndComplete() throws Exception {
-    Map<String, Object> jdbcMappedSpec =
-        Map.of(
-            "schema", "biz",
-            "batchTable", "settlement_batch",
-            "batchTenantColumn", "tenant_id",
-            "batchNoColumn", "batch_no",
-            "batchSelectColumns", List.of("id", "batch_no", "tenant_id"),
-            "detailTable", "settlement_detail",
-            "detailFkColumn", "batch_id",
-            "detailOrderByColumn", "id",
-            "detailSelectColumns", List.of("id", "batch_id", "customer_no"));
+    Map<String, Object> jdbcMappedSpec = Map.of(
+        "schema", "biz",
+        "batchTable", "settlement_batch",
+        "batchTenantColumn", "tenant_id",
+        "batchNoColumn", "batch_no",
+        "batchSelectColumns", List.of("id", "batch_no", "tenant_id"),
+        "detailTable", "settlement_detail",
+        "detailFkColumn", "batch_id",
+        "detailOrderByColumn", "id",
+        "detailSelectColumns", List.of("id", "batch_id", "customer_no"));
 
     Map<String, Object> templateConfig =
         Map.of("jdbc_mapped_export", jdbcMappedSpec, "partition_keyset_range", true);
@@ -380,16 +363,8 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
     Map<String, Object> snapshot = new LinkedHashMap<>();
 
     while (true) {
-      ExportDataContext ctx =
-          new ExportDataContext(
-              TENANT_ID,
-              "JOB",
-              batchNo,
-              "TPL",
-              templateConfig,
-              snapshot,
-              partitionNo,
-              PARTITION_COUNT);
+      ExportDataContext ctx = new ExportDataContext(
+          TENANT_ID, "JOB", batchNo, "TPL", templateConfig, snapshot, partitionNo, PARTITION_COUNT);
 
       ExportDataPlugin.DetailPage page = plugin.loadDetailPage(ctx, batchId, PAGE_SIZE, cursor);
 

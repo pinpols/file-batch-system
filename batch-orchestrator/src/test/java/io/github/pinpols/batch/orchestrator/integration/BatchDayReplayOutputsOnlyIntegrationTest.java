@@ -38,99 +38,99 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
   private static final String JOB_CODE = "DAILY_PNL";
   private static final String BUSINESS_KEY = "job:" + JOB_CODE + ":" + BIZ_DATE;
 
-  @Autowired private BatchDayReplayService replayService;
-  @Autowired private ResultVersionMapper resultVersionMapper;
-  @Autowired private BatchDayReplayEntryMapper entryMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private BatchDayReplayService replayService;
+
+  @Autowired
+  private ResultVersionMapper resultVersionMapper;
+
+  @Autowired
+  private BatchDayReplayEntryMapper entryMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void outputsOnlyPromotesPendingVersionAndCompletesSession() {
     // Step 1: seed 两版 result_version：v1 EFFECTIVE，v2 PENDING（要 promote 的目标）
     long sourceInstanceId = insertStubJobInstance("INST-A", "SUCCESS");
     long secondInstanceId = insertStubJobInstance("INST-B", "SUCCESS");
-    ResultVersionEntity v1 =
-        ResultVersionEntity.builder()
-            .tenantId(TENANT)
-            .businessKey(BUSINESS_KEY)
-            .versionNo(1)
-            .jobInstanceId(sourceInstanceId)
-            .status("EFFECTIVE")
-            .effectiveAt(Instant.parse("2026-05-04T10:00:00Z"))
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"recordCount\":100}")
-            .generatedAt(Instant.parse("2026-05-04T10:00:00Z"))
-            .generatedBy("test")
-            .promotionPolicy("AUTO_LATEST")
-            .createdAt(Instant.parse("2026-05-04T10:00:00Z"))
-            .updatedAt(Instant.parse("2026-05-04T10:00:00Z"))
-            .build();
-    ResultVersionEntity v2 =
-        ResultVersionEntity.builder()
-            .tenantId(TENANT)
-            .businessKey(BUSINESS_KEY)
-            .versionNo(2)
-            .jobInstanceId(secondInstanceId)
-            .status("PENDING")
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"recordCount\":150}")
-            .generatedAt(Instant.parse("2026-05-04T11:00:00Z"))
-            .generatedBy("test")
-            .promotionPolicy("MANUAL_APPROVAL")
-            .createdAt(Instant.parse("2026-05-04T11:00:00Z"))
-            .updatedAt(Instant.parse("2026-05-04T11:00:00Z"))
-            .build();
-    ResultVersionEntity v3 =
-        ResultVersionEntity.builder()
-            .tenantId(TENANT)
-            .businessKey(BUSINESS_KEY)
-            .versionNo(3)
-            .jobInstanceId(secondInstanceId)
-            .status("PENDING")
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"recordCount\":180}")
-            .generatedAt(Instant.parse("2026-05-04T11:05:00Z"))
-            .generatedBy("test")
-            .promotionPolicy("MANUAL_APPROVAL")
-            .createdAt(Instant.parse("2026-05-04T11:05:00Z"))
-            .updatedAt(Instant.parse("2026-05-04T11:05:00Z"))
-            .build();
+    ResultVersionEntity v1 = ResultVersionEntity.builder()
+        .tenantId(TENANT)
+        .businessKey(BUSINESS_KEY)
+        .versionNo(1)
+        .jobInstanceId(sourceInstanceId)
+        .status("EFFECTIVE")
+        .effectiveAt(Instant.parse("2026-05-04T10:00:00Z"))
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"recordCount\":100}")
+        .generatedAt(Instant.parse("2026-05-04T10:00:00Z"))
+        .generatedBy("test")
+        .promotionPolicy("AUTO_LATEST")
+        .createdAt(Instant.parse("2026-05-04T10:00:00Z"))
+        .updatedAt(Instant.parse("2026-05-04T10:00:00Z"))
+        .build();
+    ResultVersionEntity v2 = ResultVersionEntity.builder()
+        .tenantId(TENANT)
+        .businessKey(BUSINESS_KEY)
+        .versionNo(2)
+        .jobInstanceId(secondInstanceId)
+        .status("PENDING")
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"recordCount\":150}")
+        .generatedAt(Instant.parse("2026-05-04T11:00:00Z"))
+        .generatedBy("test")
+        .promotionPolicy("MANUAL_APPROVAL")
+        .createdAt(Instant.parse("2026-05-04T11:00:00Z"))
+        .updatedAt(Instant.parse("2026-05-04T11:00:00Z"))
+        .build();
+    ResultVersionEntity v3 = ResultVersionEntity.builder()
+        .tenantId(TENANT)
+        .businessKey(BUSINESS_KEY)
+        .versionNo(3)
+        .jobInstanceId(secondInstanceId)
+        .status("PENDING")
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"recordCount\":180}")
+        .generatedAt(Instant.parse("2026-05-04T11:05:00Z"))
+        .generatedBy("test")
+        .promotionPolicy("MANUAL_APPROVAL")
+        .createdAt(Instant.parse("2026-05-04T11:05:00Z"))
+        .updatedAt(Instant.parse("2026-05-04T11:05:00Z"))
+        .build();
     resultVersionMapper.insert(v1);
     resultVersionMapper.insert(v2);
     resultVersionMapper.insert(v3);
-    Long v2Id =
-        jdbcTemplate.queryForObject(
-            "select id from batch.result_version where tenant_id=? and business_key=? and"
-                + " version_no=?",
-            Long.class,
-            TENANT,
-            BUSINESS_KEY,
-            2);
+    Long v2Id = jdbcTemplate.queryForObject(
+        "select id from batch.result_version where tenant_id=? and business_key=? and"
+            + " version_no=?",
+        Long.class,
+        TENANT,
+        BUSINESS_KEY,
+        2);
     assertThat(v2Id).isNotNull();
-    Long v3Id =
-        jdbcTemplate.queryForObject(
-            "select id from batch.result_version where tenant_id=? and business_key=? and"
-                + " version_no=?",
-            Long.class,
-            TENANT,
-            BUSINESS_KEY,
-            3);
+    Long v3Id = jdbcTemplate.queryForObject(
+        "select id from batch.result_version where tenant_id=? and business_key=? and"
+            + " version_no=?",
+        Long.class,
+        TENANT,
+        BUSINESS_KEY,
+        3);
     assertThat(v3Id).isNotNull();
 
     // Step 2: 提交 OUTPUTS_ONLY session，autoApprove 直接 RUNNING
-    BatchDayReplaySessionEntity session =
-        replayService.submit(
-            BatchDayReplaySubmitCommand.builder()
-                .tenantId(TENANT)
-                .calendarCode(CALENDAR)
-                .bizDate(BIZ_DATE)
-                .scope("OUTPUTS_ONLY")
-                .versionIds(List.of(v2Id, v3Id))
-                .resultPolicy("MANUAL_CONFIRM_EFFECTIVE")
-                .configVersionPolicy("USE_ORIGINAL_CONFIG")
-                .reason("regulatory restate IT")
-                .requestedBy("ops")
-                .autoApprove(true)
-                .build());
+    BatchDayReplaySessionEntity session = replayService.submit(BatchDayReplaySubmitCommand.builder()
+        .tenantId(TENANT)
+        .calendarCode(CALENDAR)
+        .bizDate(BIZ_DATE)
+        .scope("OUTPUTS_ONLY")
+        .versionIds(List.of(v2Id, v3Id))
+        .resultPolicy("MANUAL_CONFIRM_EFFECTIVE")
+        .configVersionPolicy("USE_ORIGINAL_CONFIG")
+        .reason("regulatory restate IT")
+        .requestedBy("ops")
+        .autoApprove(true)
+        .build());
     assertThat(session.status()).isEqualTo("RUNNING");
     assertThat(session.totalCount()).isEqualTo(2);
     assertThat(entryMapper.selectBySessionId(session.id()))
@@ -157,25 +157,23 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
         .containsExactly(v2Id, v3Id);
 
     // 守护：partial unique index 约束没破坏（同 business_key 仍至多 1 EFFECTIVE）
-    Long effectiveCount =
-        jdbcTemplate.queryForObject(
-            "select count(1) from batch.result_version where tenant_id=? and business_key=? and"
-                + " status='EFFECTIVE'",
-            Long.class,
-            TENANT,
-            BUSINESS_KEY);
+    Long effectiveCount = jdbcTemplate.queryForObject(
+        "select count(1) from batch.result_version where tenant_id=? and business_key=? and"
+            + " status='EFFECTIVE'",
+        Long.class,
+        TENANT,
+        BUSINESS_KEY);
     assertThat(effectiveCount).isEqualTo(1L);
   }
 
   private long insertStubJobInstance(String instanceNo, String status) {
     // 仅写最小必要列（FK / NOT NULL） — 不走 launch service，纯桩。tenant + job_code + biz_date 即可。
-    Long jobDefId =
-        jdbcTemplate.queryForObject(
-            "select coalesce((select id from batch.job_definition where tenant_id=? and"
-                + " job_code=?), 0)",
-            Long.class,
-            TENANT,
-            JOB_CODE);
+    Long jobDefId = jdbcTemplate.queryForObject(
+        "select coalesce((select id from batch.job_definition where tenant_id=? and"
+            + " job_code=?), 0)",
+        Long.class,
+        TENANT,
+        JOB_CODE);
     if (jobDefId == null || jobDefId == 0L) {
       jdbcTemplate.update(
           "insert into batch.job_definition (tenant_id, job_code, job_name, job_type, biz_type,"
@@ -190,24 +188,22 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
           TENANT,
           JOB_CODE,
           CALENDAR);
-      jobDefId =
-          jdbcTemplate.queryForObject(
-              "select id from batch.job_definition where tenant_id=? and job_code=?",
-              Long.class,
-              TENANT,
-              JOB_CODE);
+      jobDefId = jdbcTemplate.queryForObject(
+          "select id from batch.job_definition where tenant_id=? and job_code=?",
+          Long.class,
+          TENANT,
+          JOB_CODE);
     }
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            "insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code,"
-                + " biz_date, dedup_key, request_status) values (?, ?, 'SCHEDULED', ?, ?, ?,"
-                + " 'LAUNCHED') returning id",
-            Long.class,
-            TENANT,
-            "REQ:" + JOB_CODE + ":" + instanceNo,
-            JOB_CODE,
-            BIZ_DATE,
-            "TR:" + TENANT + ":" + JOB_CODE + ":" + instanceNo);
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        "insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code,"
+            + " biz_date, dedup_key, request_status) values (?, ?, 'SCHEDULED', ?, ?, ?,"
+            + " 'LAUNCHED') returning id",
+        Long.class,
+        TENANT,
+        "REQ:" + JOB_CODE + ":" + instanceNo,
+        JOB_CODE,
+        BIZ_DATE,
+        "TR:" + TENANT + ":" + JOB_CODE + ":" + instanceNo);
     jdbcTemplate.update(
         "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
             + " biz_date, trigger_request_id, trigger_type, instance_status, queue_code,"

@@ -15,18 +15,16 @@ import org.junit.jupiter.api.Test;
  */
 class RlsPhaseAMigrationCoverageTest {
 
-  private static final List<String> MIGRATION_SCRIPTS =
-      List.of(
-          "rls-phase-a.sql", "rls-phase-a-strict.sql", "rls-phase-a-rollback-to-transition.sql");
+  private static final List<String> MIGRATION_SCRIPTS = List.of(
+      "rls-phase-a.sql", "rls-phase-a-strict.sql", "rls-phase-a-rollback-to-transition.sql");
 
   @Test
   @DisplayName("RLS 安装、strict、回滚脚本都动态发现 biz 租户表")
   void migrationScriptsUseDynamicTenantTableDiscovery() throws IOException {
     for (String filename : MIGRATION_SCRIPTS) {
-      Path script =
-          Path.of(System.getProperty("user.dir"))
-              .getParent()
-              .resolve("scripts/db/business/" + filename);
+      Path script = Path.of(System.getProperty("user.dir"))
+          .getParent()
+          .resolve("scripts/db/business/" + filename);
       assertThat(script).as(filename + " 必须存在").exists();
 
       String sql = Files.readString(script);

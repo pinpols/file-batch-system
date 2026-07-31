@@ -12,8 +12,7 @@ public class QuartzMisfireRecoveryConfiguration {
   @Bean
   SchedulerFactoryBeanCustomizer quartzMisfireRecoveryCustomizer(
       ObjectProvider<org.quartz.Scheduler> schedulerProvider) {
-    return factory ->
-        factory.setGlobalTriggerListeners(
-            new QuartzMisfireRecoveryListener(schedulerProvider::getObject));
+    return factory -> factory.setGlobalTriggerListeners(
+        new QuartzMisfireRecoveryListener(schedulerProvider::getObject));
   }
 }

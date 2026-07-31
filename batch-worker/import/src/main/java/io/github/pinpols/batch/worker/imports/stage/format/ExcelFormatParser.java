@@ -83,22 +83,20 @@ public class ExcelFormatParser implements FormatParser {
     // 但若调用方显式 file_format_type=EXCEL 喂进 OLE2 字节,这里给出明确报错而非崩成坏文件。
     rejectLegacyBinaryXls(excelBytes);
     if (excelBytes.length > properties.getMaxExcelBytes()) {
-      throw new IllegalStateException(
-          "IMPORT_PARSE_EXCEL_TOO_LARGE: xlsx size "
-              + excelBytes.length
-              + " bytes exceeds cap "
-              + properties.getMaxExcelBytes());
+      throw new IllegalStateException("IMPORT_PARSE_EXCEL_TOO_LARGE: xlsx size "
+          + excelBytes.length
+          + " bytes exceeds cap "
+          + properties.getMaxExcelBytes());
     }
     ImportPayload importPayload = request.importPayload();
     Object templateConfig = request.templateConfig();
     boolean preserveLogicalRow = request.preserveLogicalRow();
 
-    int headerRows =
-        support.resolveInt(
-            importPayload == null ? null : importPayload.headerRows(),
-            templateConfig,
-            "header_rows",
-            1);
+    int headerRows = support.resolveInt(
+        importPayload == null ? null : importPayload.headerRows(),
+        templateConfig,
+        "header_rows",
+        1);
     List<ColumnBinding> bindings =
         loadColumnBindings(support.templateFieldMappings(templateConfig));
     long previewRows = resolvePreviewRows(templateConfig);
@@ -108,10 +106,9 @@ public class ExcelFormatParser implements FormatParser {
       tempFile = Files.createTempFile("import-xlsx-", ".xlsx");
       Files.write(tempFile, excelBytes);
     }
-    try (OPCPackage pkg =
-        tempFile != null
-            ? OPCPackage.open(tempFile.toFile(), PackageAccess.READ)
-            : OPCPackage.open(new ByteArrayInputStream(excelBytes))) {
+    try (OPCPackage pkg = tempFile != null
+        ? OPCPackage.open(tempFile.toFile(), PackageAccess.READ)
+        : OPCPackage.open(new ByteArrayInputStream(excelBytes))) {
       XSSFReader reader = new XSSFReader(pkg);
       ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
       StylesTable styles = reader.getStylesTable();
@@ -125,9 +122,8 @@ public class ExcelFormatParser implements FormatParser {
           String sheetName = iter.getSheetName();
           seenSheetNames.add(sheetName);
           if (selector.matches(idx, sheetName)) {
-            SaxRowAccumulator accumulator =
-                new SaxRowAccumulator(
-                    context, writer, preserveLogicalRow, headerRows, bindings, previewRows);
+            SaxRowAccumulator accumulator = new SaxRowAccumulator(
+                context, writer, preserveLogicalRow, headerRows, bindings, previewRows);
             XMLReader xml = XMLHelper.newXMLReader();
             xml.setContentHandler(
                 new XSSFSheetXMLHandler(styles, strings, accumulator, formatter, false));

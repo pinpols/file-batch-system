@@ -71,12 +71,11 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
         SVC,
         "list",
         () -> {
-          CommonResponse<List<Object>> resp =
-              newClient()
-                  .get()
-                  .uri("/api/triggers/management/list")
-                  .retrieve()
-                  .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
+          CommonResponse<List<Object>> resp = newClient()
+              .get()
+              .uri("/api/triggers/management/list")
+              .retrieve()
+              .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
           List<Object> data = resp != null ? resp.data() : List.<Object>of();
           return filterByTenant(data, tenantScope);
         },
@@ -92,34 +91,26 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
       return data != null ? data : List.<Object>of();
     }
     return data.stream()
-        .filter(
-            item ->
-                item instanceof Map<?, ?> row
-                    && tenantScope.equals(String.valueOf(row.get("tenantId"))))
+        .filter(item -> item instanceof Map<?, ?> row
+            && tenantScope.equals(String.valueOf(row.get("tenantId"))))
         .toList();
   }
 
   @Override
   public Map<String, String> triggerAction(String tenantId, String jobCode, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return downstreamFallback.callOrThrow(
-        SVC,
-        "action",
-        () -> {
-          CommonResponse<Map<String, String>> resp =
-              newClient()
-                  .post()
-                  .uri(
-                      uriBuilder ->
-                          uriBuilder
-                              .path("/api/triggers/management/{action}")
-                              .queryParam("tenantId", resolved)
-                              .queryParam("jobCode", jobCode)
-                              .build(action))
-                  .retrieve()
-                  .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
-          return resp != null ? resp.data() : Map.of();
-        });
+    return downstreamFallback.callOrThrow(SVC, "action", () -> {
+      CommonResponse<Map<String, String>> resp = newClient()
+          .post()
+          .uri(uriBuilder -> uriBuilder
+              .path("/api/triggers/management/{action}")
+              .queryParam("tenantId", resolved)
+              .queryParam("jobCode", jobCode)
+              .build(action))
+          .retrieve()
+          .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
+      return resp != null ? resp.data() : Map.of();
+    });
   }
 
   @Override
@@ -139,22 +130,20 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   }
 
   private Map<String, String> proxyGet(String path) {
-    CommonResponse<Map<String, String>> resp =
-        newClient()
-            .get()
-            .uri(path)
-            .retrieve()
-            .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
+    CommonResponse<Map<String, String>> resp = newClient()
+        .get()
+        .uri(path)
+        .retrieve()
+        .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
     return resp != null ? resp.data() : Map.of();
   }
 
   private Map<String, String> proxyPost(String path) {
-    CommonResponse<Map<String, String>> resp =
-        newClient()
-            .post()
-            .uri(path)
-            .retrieve()
-            .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
+    CommonResponse<Map<String, String>> resp = newClient()
+        .post()
+        .uri(path)
+        .retrieve()
+        .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
     return resp != null ? resp.data() : Map.of();
   }
 }

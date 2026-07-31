@@ -40,11 +40,9 @@ class ControlTotalEvaluatorTest {
   @Test
   @DisplayName("blocker=true 且金额不符 → 阻断性 ValidationIssue")
   void blockerMismatch_raisesIssue() {
-    ValidationSession session =
-        session(
-            Map.of(
-                "controlTotalCheck",
-                Map.of("amountField", "amount", "expected", "999.00", "blocker", true)));
+    ValidationSession session = session(Map.of(
+        "controlTotalCheck",
+        Map.of("amountField", "amount", "expected", "999.00", "blocker", true)));
     evaluator.accumulate(session, rows("100.00", "200.00"));
     ValidationIssue issue = evaluator.finalizeCheck(session);
     assertThat(issue).isNotNull();
@@ -64,19 +62,10 @@ class ControlTotalEvaluatorTest {
   @Test
   @DisplayName("容差内的小数尾差 → 放行")
   void withinTolerance_noIssue() {
-    ValidationSession session =
-        session(
-            Map.of(
-                "controlTotalCheck",
-                Map.of(
-                    "amountField",
-                    "amount",
-                    "expected",
-                    "300.00",
-                    "blocker",
-                    true,
-                    "tolerance",
-                    "0.05")));
+    ValidationSession session = session(Map.of(
+        "controlTotalCheck",
+        Map.of(
+            "amountField", "amount", "expected", "300.00", "blocker", true, "tolerance", "0.05")));
     evaluator.accumulate(session, rows("100.00", "200.02"));
     assertThat(evaluator.finalizeCheck(session)).isNull();
   }

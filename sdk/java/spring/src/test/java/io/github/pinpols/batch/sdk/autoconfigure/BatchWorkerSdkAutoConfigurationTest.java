@@ -21,9 +21,8 @@ import org.springframework.context.annotation.Configuration;
 
 class BatchWorkerSdkAutoConfigurationTest {
 
-  private final ApplicationContextRunner contextRunner =
-      new ApplicationContextRunner()
-          .withConfiguration(AutoConfigurations.of(BatchWorkerSdkAutoConfiguration.class));
+  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+      .withConfiguration(AutoConfigurations.of(BatchWorkerSdkAutoConfiguration.class));
 
   @Test
   void bindsPropertiesToBatchPlatformClientConfig() {
@@ -51,33 +50,32 @@ class BatchWorkerSdkAutoConfigurationTest {
             "batch.worker-sdk.kafka-sasl-jaas-config=jaas",
             "batch.worker-sdk.strict-timing-validation=false",
             "batch.worker-sdk.request-signing-enabled=true")
-        .run(
-            context -> {
-              assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
-              BatchPlatformClientConfig config = context.getBean(BatchPlatformClientConfig.class);
-              assertThat(config.getBaseUrl()).isEqualTo("https://batch.example.com");
-              assertThat(config.getApiKey()).isEqualTo("secret");
-              assertThat(config.getTenantId()).isEqualTo("tenant-a");
-              assertThat(config.getWorkerCode()).isEqualTo("worker-a");
-              assertThat(config.getKafkaBootstrap()).isEqualTo("kafka:9092");
-              assertThat(config.getKafkaTopicPattern()).isEqualTo("batch.task.dispatch.*.tenant-a");
-              assertThat(config.getKafkaGroupId()).isEqualTo("tenant-a-workers");
-              assertThat(config.getBuildId()).isEqualTo("git-abc123");
-              assertThat(config.getHttpTimeout()).isEqualTo(Duration.ofSeconds(7));
-              assertThat(config.getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(15));
-              assertThat(config.getMaxConcurrentTasks()).isEqualTo(9);
-              assertThat(config.getKafkaPollInterval()).isEqualTo(Duration.ofMillis(150));
-              assertThat(config.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(22));
-              assertThat(config.getClaimMax5xxRetries()).isEqualTo(5);
-              assertThat(config.getClaimRetryBaseDelay()).isEqualTo(Duration.ofMillis(350));
-              assertThat(config.getClientErrorFailFastThreshold()).isEqualTo(6);
-              assertThat(config.getKafkaSecurityProtocol()).isEqualTo("SASL_SSL");
-              assertThat(config.getKafkaSaslMechanism()).isEqualTo("SCRAM-SHA-512");
-              assertThat(config.getKafkaSaslJaasConfig()).isEqualTo("jaas");
-              // P2:补齐缺键 —— Spring 用户此前无法开启请求签名 / 降级时序校验。
-              assertThat(config.isStrictTimingValidation()).isFalse();
-              assertThat(config.isRequestSigningEnabled()).isTrue();
-            });
+        .run(context -> {
+          assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
+          BatchPlatformClientConfig config = context.getBean(BatchPlatformClientConfig.class);
+          assertThat(config.getBaseUrl()).isEqualTo("https://batch.example.com");
+          assertThat(config.getApiKey()).isEqualTo("secret");
+          assertThat(config.getTenantId()).isEqualTo("tenant-a");
+          assertThat(config.getWorkerCode()).isEqualTo("worker-a");
+          assertThat(config.getKafkaBootstrap()).isEqualTo("kafka:9092");
+          assertThat(config.getKafkaTopicPattern()).isEqualTo("batch.task.dispatch.*.tenant-a");
+          assertThat(config.getKafkaGroupId()).isEqualTo("tenant-a-workers");
+          assertThat(config.getBuildId()).isEqualTo("git-abc123");
+          assertThat(config.getHttpTimeout()).isEqualTo(Duration.ofSeconds(7));
+          assertThat(config.getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(15));
+          assertThat(config.getMaxConcurrentTasks()).isEqualTo(9);
+          assertThat(config.getKafkaPollInterval()).isEqualTo(Duration.ofMillis(150));
+          assertThat(config.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(22));
+          assertThat(config.getClaimMax5xxRetries()).isEqualTo(5);
+          assertThat(config.getClaimRetryBaseDelay()).isEqualTo(Duration.ofMillis(350));
+          assertThat(config.getClientErrorFailFastThreshold()).isEqualTo(6);
+          assertThat(config.getKafkaSecurityProtocol()).isEqualTo("SASL_SSL");
+          assertThat(config.getKafkaSaslMechanism()).isEqualTo("SCRAM-SHA-512");
+          assertThat(config.getKafkaSaslJaasConfig()).isEqualTo("jaas");
+          // P2:补齐缺键 —— Spring 用户此前无法开启请求签名 / 降级时序校验。
+          assertThat(config.isStrictTimingValidation()).isFalse();
+          assertThat(config.isRequestSigningEnabled()).isTrue();
+        });
   }
 
   @Test
@@ -92,12 +90,11 @@ class BatchWorkerSdkAutoConfigurationTest {
             "batch.worker-sdk.kafka-bootstrap=ignored:9092",
             "batch.worker-sdk.kafka-topic-pattern=ignored",
             "batch.worker-sdk.kafka-group-id=ignored")
-        .run(
-            context -> {
-              assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
-              assertThat(context.getBean(BatchPlatformClientConfig.class).getTenantId())
-                  .isEqualTo("custom-tenant");
-            });
+        .run(context -> {
+          assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
+          assertThat(context.getBean(BatchPlatformClientConfig.class).getTenantId())
+              .isEqualTo("custom-tenant");
+        });
   }
 
   @Test
@@ -105,11 +102,10 @@ class BatchWorkerSdkAutoConfigurationTest {
     contextRunner
         .withUserConfiguration(HandlerConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
-        .run(
-            context -> {
-              BatchPlatformClient client = context.getBean(BatchPlatformClient.class);
-              assertThat(registeredHandlers(client)).containsOnlyKeys("import", "export");
-            });
+        .run(context -> {
+          BatchPlatformClient client = context.getBean(BatchPlatformClient.class);
+          assertThat(registeredHandlers(client)).containsOnlyKeys("import", "export");
+        });
   }
 
   @Test
@@ -117,12 +113,10 @@ class BatchWorkerSdkAutoConfigurationTest {
     contextRunner
         .withUserConfiguration(HandlerAndIdempotencyConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
-        .run(
-            context -> {
-              BatchPlatformClient client = context.getBean(BatchPlatformClient.class);
-              assertThat(idempotencyStore(client))
-                  .isSameAs(context.getBean(SdkIdempotencyStore.class));
-            });
+        .run(context -> {
+          BatchPlatformClient client = context.getBean(BatchPlatformClient.class);
+          assertThat(idempotencyStore(client)).isSameAs(context.getBean(SdkIdempotencyStore.class));
+        });
   }
 
   @Test
@@ -130,11 +124,10 @@ class BatchWorkerSdkAutoConfigurationTest {
     contextRunner
         .withUserConfiguration(HandlerConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
-        .run(
-            context -> {
-              BatchPlatformClient client = context.getBean(BatchPlatformClient.class);
-              assertThat(idempotencyStore(client)).isNull();
-            });
+        .run(context -> {
+          BatchPlatformClient client = context.getBean(BatchPlatformClient.class);
+          assertThat(idempotencyStore(client)).isNull();
+        });
   }
 
   @Test
@@ -142,12 +135,11 @@ class BatchWorkerSdkAutoConfigurationTest {
     contextRunner
         .withUserConfiguration(HandlerConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
-        .run(
-            context -> {
-              assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
-              assertThat(context).hasSingleBean(BatchPlatformClient.class);
-              assertThat(context).doesNotHaveBean(BatchPlatformClientLifecycle.class);
-            });
+        .run(context -> {
+          assertThat(context).hasSingleBean(BatchPlatformClientConfig.class);
+          assertThat(context).hasSingleBean(BatchPlatformClient.class);
+          assertThat(context).doesNotHaveBean(BatchPlatformClientLifecycle.class);
+        });
   }
 
   @Test
@@ -156,16 +148,15 @@ class BatchWorkerSdkAutoConfigurationTest {
     contextRunner
         .withBean(BatchPlatformClient.class, () -> client)
         .withUserConfiguration(CustomConfigConfiguration.class)
-        .run(
-            context -> {
-              assertThat(context).hasSingleBean(BatchPlatformClientLifecycle.class);
-              BatchPlatformClientLifecycle lifecycle =
-                  context.getBean(BatchPlatformClientLifecycle.class);
-              assertThat(lifecycle.getPhase()).isEqualTo(BatchPlatformClientLifecycle.PHASE);
-              assertThat(lifecycle.isAutoStartup()).isTrue();
-              assertThat(lifecycle.isRunning()).isTrue();
-              verify(client).start();
-            });
+        .run(context -> {
+          assertThat(context).hasSingleBean(BatchPlatformClientLifecycle.class);
+          BatchPlatformClientLifecycle lifecycle =
+              context.getBean(BatchPlatformClientLifecycle.class);
+          assertThat(lifecycle.getPhase()).isEqualTo(BatchPlatformClientLifecycle.PHASE);
+          assertThat(lifecycle.isAutoStartup()).isTrue();
+          assertThat(lifecycle.isRunning()).isTrue();
+          verify(client).start();
+        });
     verify(client).stop();
   }
 

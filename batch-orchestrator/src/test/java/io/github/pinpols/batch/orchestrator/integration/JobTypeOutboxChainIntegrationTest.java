@@ -26,26 +26,26 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void importJobShouldWriteImportOutboxEvent() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchRequest importRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("tr-import")
-            .params(Map.of())
-            .build();
+    LaunchRequest importRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("tr-import")
+        .params(Map.of())
+        .build();
     launchService.launch(importRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
@@ -54,20 +54,18 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void exportJobShouldWriteExportOutboxEvent() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "EXPORT", "EXPORT", TriggerType.MANUAL);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "EXPORT", "EXPORT", TriggerType.MANUAL);
 
-    LaunchRequest exportRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(TriggerType.MANUAL)
-            .requestId(seed.requestId())
-            .traceId("tr-export")
-            .params(Map.of())
-            .build();
+    LaunchRequest exportRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.MANUAL)
+        .requestId(seed.requestId())
+        .traceId("tr-export")
+        .params(Map.of())
+        .build();
     launchService.launch(exportRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "EXPORT"))
@@ -76,20 +74,18 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void dispatchJobShouldWriteDispatchOutboxEvent() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", TriggerType.EVENT);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", TriggerType.EVENT);
 
-    LaunchRequest dispatchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(TriggerType.EVENT)
-            .requestId(seed.requestId())
-            .traceId("tr-dispatch")
-            .params(Map.of())
-            .build();
+    LaunchRequest dispatchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("tr-dispatch")
+        .params(Map.of())
+        .build();
     launchService.launch(dispatchRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "DISPATCH"))

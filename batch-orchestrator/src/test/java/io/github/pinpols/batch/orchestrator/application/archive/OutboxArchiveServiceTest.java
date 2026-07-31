@@ -63,7 +63,8 @@ class OutboxArchiveServiceTest {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
-    when(mapper.selectArchivableIds(eq("PUBLISHED"), any(Instant.class), anyInt())).thenReturn(ids);
+    when(mapper.selectArchivableIds(eq("PUBLISHED"), any(Instant.class), anyInt()))
+        .thenReturn(ids);
     when(mapper.archiveEventDeliveryLogsByOutboxIds(ids)).thenReturn(5);
     when(mapper.archiveOutboxEventsByIds(ids)).thenReturn(3);
     when(mapper.deleteEventDeliveryLogsByOutboxIds(ids)).thenReturn(5);

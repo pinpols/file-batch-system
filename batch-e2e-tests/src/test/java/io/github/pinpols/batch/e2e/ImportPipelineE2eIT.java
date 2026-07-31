@@ -60,11 +60,14 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Autowired
   @Qualifier("importBusinessDataSource")
@@ -72,9 +75,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
 
   @Test
   void importJobRunsThroughKafkaClaimAndReportsSuccess() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -86,46 +88,38 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
             + "\"certificateNo\":\"ID-20260115-0001\",\"mobileNo\":\"13800000001\","
             + "\"email\":\"e2e@example.com\",\"status\":\"ACTIVE\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-import",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-import",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logJobFlowSnapshot(
-                  jdbcTemplate, TENANT, seed.dedupKey(), "ImportPipelineE2eIT");
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          E2eStatusLogger.logJobFlowSnapshot(
+              jdbcTemplate, TENANT, seed.dedupKey(), "ImportPipelineE2eIT");
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Integer rows =
-        businessJdbc.queryForObject(
-            "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no ="
-                + " ?",
-            Integer.class,
-            TENANT,
-            "E2E001");
+    Integer rows = businessJdbc.queryForObject(
+        "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no ="
+            + " ?",
+        Integer.class,
+        TENANT,
+        "E2E001");
     assertThat(rows).isNotNull();
     assertThat(rows).isGreaterThanOrEqualTo(1);
   }

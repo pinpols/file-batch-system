@@ -33,13 +33,12 @@ class BatchDayCutoffSchedulerTest {
   void setUp() {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     triggerGracefulShutdown = mock(TriggerGracefulShutdown.class);
-    scheduler =
-        new BatchDayCutoffScheduler(
-            batchDayInstanceMapper,
-            triggerGracefulShutdown,
-            new BatchTimezoneProvider(new BatchTimezoneProperties()),
-            new BatchDateTimeSupport(
-                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
+    scheduler = new BatchDayCutoffScheduler(
+        batchDayInstanceMapper,
+        triggerGracefulShutdown,
+        new BatchTimezoneProvider(new BatchTimezoneProperties()),
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test

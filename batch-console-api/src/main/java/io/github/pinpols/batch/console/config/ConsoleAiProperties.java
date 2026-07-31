@@ -61,59 +61,55 @@ public class ConsoleAiProperties {
    * 域内关键词。Prompt 包含至少一个 → 判为 in-scope（PLATFORM/WORKFLOW/FILE_GOVERNANCE/OPERATIONS）；都不含 →
    * REJECTED_SCOPE。
    */
-  private List<String> domainKeywords =
-      new ArrayList<>(
-          List.of(
-              "batch",
-              "workflow",
-              "job",
-              "instance",
-              "partition",
-              "task",
-              "file",
-              "dispatch",
-              "import",
-              "export",
-              "orchestrator",
-              "trigger",
-              "worker",
-              "pipeline",
-              "dag",
-              "retry",
-              "dead letter",
-              "dead-letter",
-              "archive",
-              "governance",
-              "console",
-              "audit",
-              "reconcile",
-              "归档",
-              "重分发",
-              "工作流",
-              "文件",
-              "调度",
-              "导入",
-              "导出",
-              "重试",
-              "死信",
-              "节点",
-              "分片"));
+  private List<String> domainKeywords = new ArrayList<>(List.of(
+      "batch",
+      "workflow",
+      "job",
+      "instance",
+      "partition",
+      "task",
+      "file",
+      "dispatch",
+      "import",
+      "export",
+      "orchestrator",
+      "trigger",
+      "worker",
+      "pipeline",
+      "dag",
+      "retry",
+      "dead letter",
+      "dead-letter",
+      "archive",
+      "governance",
+      "console",
+      "audit",
+      "reconcile",
+      "归档",
+      "重分发",
+      "工作流",
+      "文件",
+      "调度",
+      "导入",
+      "导出",
+      "重试",
+      "死信",
+      "节点",
+      "分片"));
 
   /** 阻断关键词。Prompt 命中 → 直接 REJECTED_SAFETY，不发送到模型。覆盖密钥 / 越权类词。 */
-  private List<String> blockedKeywords =
-      new ArrayList<>(
-          List.of(
-              "password",
-              "api key",
-              "api-key",
-              "secret",
-              "token",
-              "system prompt",
-              "system prompt",
-              "密钥",
-              "密码",
-              "口令",
-              "私钥"));
+  private List<String> blockedKeywords = new ArrayList<>(List.of(
+      "password",
+      "api key",
+      "api-key",
+      "secret",
+      "token",
+      "system prompt",
+      "system prompt",
+      "密钥",
+      "密码",
+      "口令",
+      "私钥"));
 
   /** 检索增强(RAG)配置:把系统自身语料向量化后注入提示词,让模型基于事实作答。 */
   private Rag rag = new Rag();

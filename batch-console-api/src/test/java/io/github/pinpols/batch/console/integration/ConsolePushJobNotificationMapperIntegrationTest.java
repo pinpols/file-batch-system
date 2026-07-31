@@ -22,8 +22,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ConsolePushJobNotificationMapper mapper;
-  @Autowired private JdbcTemplate jdbc;
+  @Autowired
+  private ConsolePushJobNotificationMapper mapper;
+
+  @Autowired
+  private JdbcTemplate jdbc;
 
   @Test
   void findPendingShouldReturnTerminalInstancesWithOperator() {
@@ -34,8 +37,10 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
     List<PendingJobNotification> pending = mapper.findPending(10, 50);
 
     assertThat(pending).extracting(PendingJobNotification::getJobInstanceId).contains(instanceId);
-    PendingJobNotification mine =
-        pending.stream().filter(p -> p.getJobInstanceId().equals(instanceId)).findFirst().get();
+    PendingJobNotification mine = pending.stream()
+        .filter(p -> p.getJobInstanceId().equals(instanceId))
+        .findFirst()
+        .get();
     assertThat(mine.getOperatorId()).isEqualTo("alice");
     assertThat(mine.getInstanceStatus()).isEqualTo("SUCCESS");
     assertThat(mine.getJobCode()).isEqualTo("JOB_OK");
@@ -116,26 +121,20 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private long ensureJobDefinition(String tenantId, String jobCode) {
-    Long existing =
-        jdbc.query(
-            "select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1",
-            rs -> rs.next() ? rs.getLong(1) : null,
-            tenantId,
-            jobCode);
+    Long existing = jdbc.query(
+        "select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1",
+        rs -> rs.next() ? rs.getLong(1) : null,
+        tenantId,
+        jobCode);
     if (existing != null) {
       return existing;
     }
-    return jdbc.queryForObject(
-        """
+    return jdbc.queryForObject("""
         INSERT INTO batch.job_definition
           (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
         VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
         RETURNING id
-        """,
-        Long.class,
-        tenantId,
-        jobCode,
-        jobCode + "-name");
+        """, Long.class, tenantId, jobCode, jobCode + "-name");
   }
 
   private long insertJobInstance(
@@ -146,9 +145,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
       String operatorId,
       String finishedAgo) {
     String instanceNo = jobCode + "-" + System.nanoTime();
-    Long id =
-        jdbc.queryForObject(
-            """
+    Long id = jdbc.queryForObject(
+        """
             INSERT INTO batch.job_instance
               (tenant_id, job_definition_id, job_code, instance_no, biz_date,
                trigger_type, instance_status, priority, dedup_key, trace_id,
@@ -158,17 +156,17 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
                     ?, now() - (?::interval), now(), now())
             RETURNING id
             """,
-            Long.class,
-            tenantId,
-            jobDefinitionId,
-            jobCode,
-            instanceNo,
-            Date.valueOf(LocalDate.now()),
-            status,
-            tenantId + ":" + instanceNo,
-            "trace-" + instanceNo,
-            operatorId,
-            finishedAgo);
+        Long.class,
+        tenantId,
+        jobDefinitionId,
+        jobCode,
+        instanceNo,
+        Date.valueOf(LocalDate.now()),
+        status,
+        tenantId + ":" + instanceNo,
+        "trace-" + instanceNo,
+        operatorId,
+        finishedAgo);
     return id;
   }
 }

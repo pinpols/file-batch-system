@@ -52,8 +52,9 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
     this.config = Objects.requireNonNull(config, "config");
     this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
     this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
-    this.httpClient =
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(config.timeoutSeconds())).build();
+    this.httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(config.timeoutSeconds()))
+        .build();
   }
 
   @Override
@@ -98,12 +99,11 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
     }
     String json = objectMapper.writeValueAsString(row);
     try {
-      HttpRequest req =
-          HttpRequest.newBuilder(uri)
-              .timeout(Duration.ofSeconds(config.timeoutSeconds()))
-              .header("Content-Type", "application/json")
-              .POST(BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-              .build();
+      HttpRequest req = HttpRequest.newBuilder(uri)
+          .timeout(Duration.ofSeconds(config.timeoutSeconds()))
+          .header("Content-Type", "application/json")
+          .POST(BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+          .build();
       HttpResponse<Void> resp = httpClient.send(req, BodyHandlers.discarding());
       if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
         counts.incSuccess();

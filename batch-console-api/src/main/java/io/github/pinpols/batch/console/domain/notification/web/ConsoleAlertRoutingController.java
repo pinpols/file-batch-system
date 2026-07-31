@@ -35,17 +35,15 @@ public class ConsoleAlertRoutingController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    PageResponse<Map<String, Object>> page =
-        alertRoutingApplicationService.list(
-            tenantId, routeCode, team, severity, enabled, pageNo, pageSize);
-    return responseFactory.success(
-        new PageResponse<>(
-            page.total(),
-            page.pageNo(),
-            page.pageSize(),
-            page.items().stream().map(ConsoleAlertRoutingResponse::from).toList(),
-            page.nextCursor(),
-            page.hasMore()));
+    PageResponse<Map<String, Object>> page = alertRoutingApplicationService.list(
+        tenantId, routeCode, team, severity, enabled, pageNo, pageSize);
+    return responseFactory.success(new PageResponse<>(
+        page.total(),
+        page.pageNo(),
+        page.pageSize(),
+        page.items().stream().map(ConsoleAlertRoutingResponse::from).toList(),
+        page.nextCursor(),
+        page.hasMore()));
   }
 
   @PostMapping

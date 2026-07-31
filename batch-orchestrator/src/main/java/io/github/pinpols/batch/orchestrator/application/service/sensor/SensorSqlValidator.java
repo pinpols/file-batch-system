@@ -104,10 +104,9 @@ public final class SensorSqlValidator {
       throw new IllegalArgumentException(
           "sensor SQL requires fully-qualified schema.table, found: " + violation.violatingName());
     }
-    throw new IllegalArgumentException(
-        "sensor SQL references disallowed schema '"
-            + violation.violatingName()
-            + "' - allowed: "
-            + allowedSchemas);
+    throw new IllegalArgumentException("sensor SQL references disallowed schema '"
+        + violation.violatingName()
+        + "' - allowed: "
+        + allowedSchemas);
   }
 }

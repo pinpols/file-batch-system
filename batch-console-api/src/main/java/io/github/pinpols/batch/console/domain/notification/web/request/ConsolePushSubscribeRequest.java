@@ -18,5 +18,6 @@ public record ConsolePushSubscribeRequest(
     @NotBlank @Size(max = 1024) String endpoint, Long expirationTime, Keys keys) {
 
   public record Keys(
-      @NotBlank @Size(max = 256) String p256dh, @NotBlank @Size(max = 64) String auth) {}
+      @NotBlank @Size(max = 256) String p256dh,
+      @NotBlank @Size(max = 64) String auth) {}
 }

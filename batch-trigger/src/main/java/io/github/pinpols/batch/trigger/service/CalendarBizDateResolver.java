@@ -95,14 +95,13 @@ public class CalendarBizDateResolver {
       }
       candidate = candidate.plusDays(direction);
     }
-    throw new IllegalStateException(
-        "No workday found within "
-            + MAX_WORKDAY_SEARCH_DAYS
-            + " days "
-            + directionLabel
-            + " "
-            + date
-            + " — calendar may have all days marked as holidays");
+    throw new IllegalStateException("No workday found within "
+        + MAX_WORKDAY_SEARCH_DAYS
+        + " days "
+        + directionLabel
+        + " "
+        + date
+        + " — calendar may have all days marked as holidays");
   }
 
   private boolean isHoliday(LocalDate date, CalendarBizDateDefinition calendar) {

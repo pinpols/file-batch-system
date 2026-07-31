@@ -32,7 +32,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class ApiKeyVerifierTest {
 
-  @Mock private ApiKeyAuthMapper mapper;
+  @Mock
+  private ApiKeyAuthMapper mapper;
+
   private ApiKeyVerifier verifier;
 
   /** 可推进的假时钟(nanos),同时驱动 Caffeine TTL 逐出、touch 节流窗口与 expires_at 复查墙钟。 */
@@ -188,12 +190,8 @@ class ApiKeyVerifierTest {
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     // 只读 key 命中读 scope（read 或 execute 任一即可）
-    assertThat(
-            verifier.verifyWithAnyScope(
-                RAW_KEY,
-                "tx",
-                ApiKeyVerifier.SCOPE_WORKER_READ,
-                ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
+    assertThat(verifier.verifyWithAnyScope(
+            RAW_KEY, "tx", ApiKeyVerifier.SCOPE_WORKER_READ, ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
         .isPresent();
     // 但只读 key 不满足纯写 scope
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
@@ -206,12 +204,8 @@ class ApiKeyVerifierTest {
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     // execute 是 read 的超集：可写者必可读
-    assertThat(
-            verifier.verifyWithAnyScope(
-                RAW_KEY,
-                "tx",
-                ApiKeyVerifier.SCOPE_WORKER_READ,
-                ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
+    assertThat(verifier.verifyWithAnyScope(
+            RAW_KEY, "tx", ApiKeyVerifier.SCOPE_WORKER_READ, ApiKeyVerifier.SCOPE_WORKER_EXECUTE))
         .isPresent();
   }
 
@@ -221,7 +215,8 @@ class ApiKeyVerifierTest {
         .isTrue();
     assertThat(ApiKeyVerifier.scopesAllowAny("worker.execute", "worker.read", "worker.execute"))
         .isTrue();
-    assertThat(ApiKeyVerifier.scopesAllowAny("*", "worker.read", "worker.execute")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllowAny("*", "worker.read", "worker.execute"))
+        .isTrue();
     assertThat(ApiKeyVerifier.scopesAllowAny("worker.read", "worker.execute")).isFalse();
     assertThat(ApiKeyVerifier.scopesAllowAny("anything")).isTrue();
   }
@@ -229,9 +224,11 @@ class ApiKeyVerifierTest {
   @Test
   void scopesAllowParser() {
     assertThat(ApiKeyVerifier.scopesAllow("*", "anything")).isTrue();
-    assertThat(ApiKeyVerifier.scopesAllow("worker.execute,read", "worker.execute")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllow("worker.execute,read", "worker.execute"))
+        .isTrue();
     assertThat(ApiKeyVerifier.scopesAllow("worker.execute read", "read")).isTrue();
-    assertThat(ApiKeyVerifier.scopesAllow("  worker.execute  ", "worker.execute")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllow("  worker.execute  ", "worker.execute"))
+        .isTrue();
     assertThat(ApiKeyVerifier.scopesAllow("read", "worker.execute")).isFalse();
     assertThat(ApiKeyVerifier.scopesAllow("", "anything")).isFalse();
     assertThat(ApiKeyVerifier.scopesAllow(null, "anything")).isFalse();
@@ -295,17 +292,8 @@ class ApiKeyVerifierTest {
   void cacheHitWithExpiredEntryFallsBackToSlowPathAndIsRejected() {
     // key 在 fakeClock 的 30s 后自然过期
     ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(RAW_KEY);
-    ApiKeyEntity shortLived =
-        new ApiKeyEntity(
-            9L,
-            "tx",
-            "kn",
-            "*",
-            true,
-            Instant.EPOCH.plusSeconds(30),
-            sh.hash(),
-            sh.salt(),
-            "pbkdf2");
+    ApiKeyEntity shortLived = new ApiKeyEntity(
+        9L, "tx", "kn", "*", true, Instant.EPOCH.plusSeconds(30), sh.hash(), sh.salt(), "pbkdf2");
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx"))
         .thenReturn(List.of(shortLived))
         .thenReturn(List.of()); // 过期后 SQL 只取未过期行 → 无候选
@@ -395,18 +383,16 @@ class ApiKeyVerifierTest {
     metered.verify(RAW_KEY, "tx"); // hit
 
     // CaffeineCacheMetrics 以 tag cache=apikey.verify 暴露 cache.gets{result=hit/miss}
-    double hits =
-        registry
-            .get("cache.gets")
-            .tags("cache", "apikey.verify", "result", "hit")
-            .functionCounter()
-            .count();
-    double misses =
-        registry
-            .get("cache.gets")
-            .tags("cache", "apikey.verify", "result", "miss")
-            .functionCounter()
-            .count();
+    double hits = registry
+        .get("cache.gets")
+        .tags("cache", "apikey.verify", "result", "hit")
+        .functionCounter()
+        .count();
+    double misses = registry
+        .get("cache.gets")
+        .tags("cache", "apikey.verify", "result", "miss")
+        .functionCounter()
+        .count();
     assertThat(hits).isEqualTo(1.0d);
     assertThat(misses).isEqualTo(1.0d);
   }

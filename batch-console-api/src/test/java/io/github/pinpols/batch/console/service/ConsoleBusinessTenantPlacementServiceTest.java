@@ -20,8 +20,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleBusinessTenantPlacementServiceTest {
 
-  @Mock private ConsoleBusinessTenantPlacementMapper placementMapper;
-  @Mock private ConsoleBusinessShardCatalogMapper shardCatalogMapper;
+  @Mock
+  private ConsoleBusinessTenantPlacementMapper placementMapper;
+
+  @Mock
+  private ConsoleBusinessShardCatalogMapper shardCatalogMapper;
 
   private ConsoleBusinessTenantPlacementService service() {
     return new ConsoleBusinessTenantPlacementService(

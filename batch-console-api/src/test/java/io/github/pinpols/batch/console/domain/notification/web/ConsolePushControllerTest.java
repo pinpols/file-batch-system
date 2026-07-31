@@ -47,13 +47,11 @@ class ConsolePushControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsolePushController(
-                    subscriptionService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsolePushController(
+            subscriptionService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -83,11 +81,10 @@ class ConsolePushControllerTest {
   void unsubscribeShouldReturnSuccessAndForwardEndpoint() throws Exception {
     // unsubscribe 改返 CommonResponse(对齐 §Java 规则 #6,不再裸 204 no-content)
     mockMvc
-        .perform(
-            post("/api/console/push/unsubscribe")
-                .param("tenantId", "ta")
-                .contentType(APPLICATION_JSON)
-                .content("{\"endpoint\":\"https://push.example/x\"}"))
+        .perform(post("/api/console/push/unsubscribe")
+            .param("tenantId", "ta")
+            .contentType(APPLICATION_JSON)
+            .content("{\"endpoint\":\"https://push.example/x\"}"))
         .andExpect(status().isOk());
     verify(subscriptionService).unsubscribe("ta", "tester", "https://push.example/x");
   }

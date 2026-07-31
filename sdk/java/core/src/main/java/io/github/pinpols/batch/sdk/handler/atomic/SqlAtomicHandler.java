@@ -30,12 +30,11 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
 
   private static final String SQL_PARAM = "sql";
 
-  private static final String OS_CAPABLE_ROLE_PROBE =
-      "select rolsuper"
-          + " or pg_has_role(current_user,'pg_execute_server_program','USAGE')"
-          + " or pg_has_role(current_user,'pg_read_server_files','USAGE')"
-          + " or pg_has_role(current_user,'pg_write_server_files','USAGE')"
-          + " from pg_roles where rolname=current_user";
+  private static final String OS_CAPABLE_ROLE_PROBE = "select rolsuper"
+      + " or pg_has_role(current_user,'pg_execute_server_program','USAGE')"
+      + " or pg_has_role(current_user,'pg_read_server_files','USAGE')"
+      + " or pg_has_role(current_user,'pg_write_server_files','USAGE')"
+      + " from pg_roles where rolname=current_user";
 
   private final SqlAtomicConfig config;
   private final DataSource dataSource;
@@ -58,11 +57,10 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
       throw new IllegalArgumentException("no executable SQL statement found");
     }
     if (statements.size() > config.maxStatementsPerJob()) {
-      throw new IllegalArgumentException(
-          "too many statements: "
-              + statements.size()
-              + " > maxStatementsPerJob="
-              + config.maxStatementsPerJob());
+      throw new IllegalArgumentException("too many statements: "
+          + statements.size()
+          + " > maxStatementsPerJob="
+          + config.maxStatementsPerJob());
     }
     try (Connection conn = dataSource.getConnection()) {
       if (config.forbidOsCapableRole()) {

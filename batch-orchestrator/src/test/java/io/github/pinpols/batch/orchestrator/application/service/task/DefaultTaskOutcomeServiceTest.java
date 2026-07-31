@@ -65,32 +65,67 @@ class DefaultTaskOutcomeServiceTest {
     WorkflowNodeRunEntity waiting =
         nodeRun("WAITING", 1, WorkflowNodeRunStatus.WAITING_DEPENDENCY.code());
 
-    assertThat(
-            DefaultTaskOutcomeService.resolveActiveNodeCodes(
-                java.util.List.of(fork, end, oldBranch, finishedBranch, waiting)))
+    assertThat(DefaultTaskOutcomeService.resolveActiveNodeCodes(
+            java.util.List.of(fork, end, oldBranch, finishedBranch, waiting)))
         .containsExactly("WAITING");
   }
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private WorkflowNodeMapper workflowNodeMapper;
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Mock private RetryGovernanceService retryGovernanceService;
-  @Mock private StateMachine<Object> stateMachine;
-  @Mock private WorkflowDagService workflowDagService;
-  @Mock private ObjectProvider<WorkflowNodeDispatchService> nodeDispatchProvider;
-  @Mock private WorkflowTerminalOutboxService workflowTerminalOutboxService;
-  @Mock private VerifierFailureOutboxService verifierFailureOutboxService;
-  @Mock private JobInstanceTerminalChildStateReconciler terminalChildReconciler;
-  @Mock private ResultVersionWriter resultVersionWriter;
-  @Mock private BatchDayReplayTerminalReconciler batchDayReplayReconciler;
-  @Mock private FailureClassifier failureClassifier;
-  @Mock private JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  private RetryGovernanceService retryGovernanceService;
+
+  @Mock
+  private StateMachine<Object> stateMachine;
+
+  @Mock
+  private WorkflowDagService workflowDagService;
+
+  @Mock
+  private ObjectProvider<WorkflowNodeDispatchService> nodeDispatchProvider;
+
+  @Mock
+  private WorkflowTerminalOutboxService workflowTerminalOutboxService;
+
+  @Mock
+  private VerifierFailureOutboxService verifierFailureOutboxService;
+
+  @Mock
+  private JobInstanceTerminalChildStateReconciler terminalChildReconciler;
+
+  @Mock
+  private ResultVersionWriter resultVersionWriter;
+
+  @Mock
+  private BatchDayReplayTerminalReconciler batchDayReplayReconciler;
+
+  @Mock
+  private FailureClassifier failureClassifier;
+
+  @Mock
+  private JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
 
   private DefaultTaskOutcomeService service;
 
@@ -98,16 +133,14 @@ class DefaultTaskOutcomeServiceTest {
   void setUp() {
     MockitoAnnotations.openMocks(this);
     MeterRegistry meterRegistry = new SimpleMeterRegistry();
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers =
-        new OrchestratorWorkflowMappers(
-            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
+    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
+        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
     DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators collaborators =
         new DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators(
             retryGovernanceService,

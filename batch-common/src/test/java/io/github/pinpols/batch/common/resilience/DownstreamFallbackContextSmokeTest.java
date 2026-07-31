@@ -30,9 +30,14 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = "spring.main.web-application-type=none")
 class DownstreamFallbackContextSmokeTest {
 
-  @Autowired private DownstreamFallback downstreamFallback;
-  @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
-  @Autowired private MeterRegistry meterRegistry;
+  @Autowired
+  private DownstreamFallback downstreamFallback;
+
+  @Autowired
+  private CircuitBreakerRegistry circuitBreakerRegistry;
+
+  @Autowired
+  private MeterRegistry meterRegistry;
 
   @Test
   void contextLoadsWithResilience4jAutoconfigAndFallbackWorks() {

@@ -30,46 +30,46 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class WorkerControllerTest {
 
-  @Mock private WorkerRegistryServerService workerRegistryService;
-  @Mock private WorkerDrainGovernanceService workerDrainGovernanceService;
-  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
+  @Mock
+  private WorkerRegistryServerService workerRegistryService;
+
+  @Mock
+  private WorkerDrainGovernanceService workerDrainGovernanceService;
+
+  @Mock
+  private TenantActionRateLimiter tenantActionRateLimiter;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new WorkerController(
-                    workerRegistryService, workerDrainGovernanceService, tenantActionRateLimiter))
-            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new WorkerController(
+            workerRegistryService, workerDrainGovernanceService, tenantActionRateLimiter))
+        .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+        .build();
   }
 
   @Test
   void shouldBindDrainRequestTimeoutSeconds() throws Exception {
     when(workerDrainGovernanceService.startDrain(eq("t1"), eq("worker-1"), eq(1)))
-        .thenReturn(
-            new WorkerRegistryEntity(
-                1L,
-                "t1",
-                "worker-1",
-                "import",
-                null,
-                null,
-                "DRAINING",
-                BatchDateTimeSupport.utcNow(),
-                0,
-                10,
-                BatchDateTimeSupport.utcNow(),
-                BatchDateTimeSupport.utcNow()));
+        .thenReturn(new WorkerRegistryEntity(
+            1L,
+            "t1",
+            "worker-1",
+            "import",
+            null,
+            null,
+            "DRAINING",
+            BatchDateTimeSupport.utcNow(),
+            0,
+            10,
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow()));
 
     mockMvc
-        .perform(
-            post("/internal/workers/worker-1/drain")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/internal/workers/worker-1/drain")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId": "t1",
                       "timeoutSeconds": 1
@@ -83,26 +83,24 @@ class WorkerControllerTest {
   @Test
   void shouldRouteWarmupToGovernanceService() throws Exception {
     when(workerDrainGovernanceService.warmup(eq("t1"), eq("worker-1")))
-        .thenReturn(
-            new WorkerRegistryEntity(
-                1L,
-                "t1",
-                "worker-1",
-                "import",
-                null,
-                null,
-                "ONLINE",
-                BatchDateTimeSupport.utcNow(),
-                0,
-                10,
-                BatchDateTimeSupport.utcNow(),
-                BatchDateTimeSupport.utcNow()));
+        .thenReturn(new WorkerRegistryEntity(
+            1L,
+            "t1",
+            "worker-1",
+            "import",
+            null,
+            null,
+            "ONLINE",
+            BatchDateTimeSupport.utcNow(),
+            0,
+            10,
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow()));
 
     mockMvc
-        .perform(
-            post("/internal/workers/worker-1/warmup")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\"}"))
+        .perform(post("/internal/workers/worker-1/warmup")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk());
 
     verify(workerDrainGovernanceService).warmup("t1", "worker-1");
@@ -111,11 +109,10 @@ class WorkerControllerTest {
   @Test
   void shouldRejectApiKeyTenantMismatchOnWorkerGovernanceRequest() throws Exception {
     mockMvc
-        .perform(
-            post("/internal/workers/worker-1/drain")
-                .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"tenant-b\",\"timeoutSeconds\":1}"))
+        .perform(post("/internal/workers/worker-1/drain")
+            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "tenant-a")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"tenant-b\",\"timeoutSeconds\":1}"))
         .andExpect(status().isForbidden());
   }
 
@@ -127,10 +124,9 @@ class WorkerControllerTest {
         .thenReturn(onlineWorker("ONLINE", 8));
 
     mockMvc
-        .perform(
-            post("/internal/workers/worker-1/heartbeat")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+        .perform(post("/internal/workers/worker-1/heartbeat")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.platformStatus").value("NORMAL"))
         .andExpect(jsonPath("$.shouldDrain").value(false))
@@ -144,10 +140,9 @@ class WorkerControllerTest {
         .thenReturn(onlineWorker("DRAINING", 8));
 
     mockMvc
-        .perform(
-            post("/internal/workers/worker-1/heartbeat")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+        .perform(post("/internal/workers/worker-1/heartbeat")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.platformStatus").value("DRAINING"))
         .andExpect(jsonPath("$.shouldDrain").value(true));
@@ -163,10 +158,9 @@ class WorkerControllerTest {
         .thenReturn(onlineWorker("ONLINE", 10));
 
     mockMvc
-        .perform(
-            post("/internal/workers/register")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
+        .perform(post("/internal/workers/register")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
         .andExpect(status().isOk());
 
     verify(workerRegistryService).register(any(WorkerHeartbeatDto.class));
@@ -178,10 +172,9 @@ class WorkerControllerTest {
         .thenReturn(false);
 
     mockMvc
-        .perform(
-            post("/internal/workers/register")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
+        .perform(post("/internal/workers/register")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
         .andExpect(status().isTooManyRequests());
 
     verify(workerRegistryService, org.mockito.Mockito.never())

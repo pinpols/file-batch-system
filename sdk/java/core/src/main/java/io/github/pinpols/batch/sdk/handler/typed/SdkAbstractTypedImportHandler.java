@@ -118,11 +118,10 @@ public abstract class SdkAbstractTypedImportHandler<I, O, R> extends SdkAbstract
       return SdkTaskResult.ok("import already completed (resumed checkpoint), skipped");
     }
     SdkRowResult counts = new SdkRowResult();
-    resumed.ifPresent(
-        s -> {
-          counts.addSuccess(s.succeedCount());
-          ctx.commitCoordinator().restoreCounts(s.succeedCount(), s.failCount());
-        });
+    resumed.ifPresent(s -> {
+      counts.addSuccess(s.succeedCount());
+      ctx.commitCoordinator().restoreCounts(s.succeedCount(), s.failCount());
+    });
     try {
       openSource(input, ctx);
       List<R> buf = new ArrayList<>(batchSize());

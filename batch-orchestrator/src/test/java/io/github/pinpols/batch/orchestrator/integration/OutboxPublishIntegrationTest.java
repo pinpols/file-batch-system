@@ -47,13 +47,17 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-  @Autowired private OutboxPublisher outboxPublisher;
+  @Autowired
+  private OutboxPublisher outboxPublisher;
 
-  @Autowired private OutboxEventMapper outboxEventMapper;
+  @Autowired
+  private OutboxEventMapper outboxEventMapper;
 
-  @Autowired private EventDeliveryLogMapper eventDeliveryLogMapper;
+  @Autowired
+  private EventDeliveryLogMapper eventDeliveryLogMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   static {
     // KRaft Apache Kafka 4.x 默认 auto.create.topics.enable=false。topic 必须在 Spring context 加载前
@@ -62,17 +66,14 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   private static void createOutboxTopicsStaticInit() {
-    try (AdminClient admin =
-        AdminClient.create(
-            Map.of(
-                org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-                kafkaBootstrapServers()))) {
+    try (AdminClient admin = AdminClient.create(Map.of(
+        org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+        kafkaBootstrapServers()))) {
       admin
-          .createTopics(
-              List.of(
-                  new NewTopic(BatchTopics.OUTBOX_EVENT, 1, (short) 1),
-                  new NewTopic(BatchTopics.TASK_DISPATCH_IMPORT + ".t1", 1, (short) 1),
-                  new NewTopic(BatchTopics.TASK_DISPATCH_EXPORT + ".t1", 1, (short) 1)))
+          .createTopics(List.of(
+              new NewTopic(BatchTopics.OUTBOX_EVENT, 1, (short) 1),
+              new NewTopic(BatchTopics.TASK_DISPATCH_IMPORT + ".t1", 1, (short) 1),
+              new NewTopic(BatchTopics.TASK_DISPATCH_EXPORT + ".t1", 1, (short) 1)))
           .all()
           .get();
     } catch (java.util.concurrent.ExecutionException e) {
@@ -94,12 +95,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     assertThat(published).isTrue();
 
     List<EventDeliveryLogEntity> logs =
-        eventDeliveryLogMapper.selectByQuery(
-            new EventDeliveryLogQuery(
-                "t1",
-                OutboxPublishStatus.PUBLISHED.code(),
-                "CUSTOM_EVENT_TYPE",
-                "key-fallback-001"));
+        eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
+            "t1", OutboxPublishStatus.PUBLISHED.code(), "CUSTOM_EVENT_TYPE", "key-fallback-001"));
     assertThat(logs).hasSize(1);
     assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.OUTBOX_EVENT);
 
@@ -133,9 +130,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     assertThat(published).isTrue();
 
     List<EventDeliveryLogEntity> logs =
-        eventDeliveryLogMapper.selectByQuery(
-            new EventDeliveryLogQuery(
-                "t1", OutboxPublishStatus.PUBLISHED.code(), "IMPORT", "key-import-001"));
+        eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
+            "t1", OutboxPublishStatus.PUBLISHED.code(), "IMPORT", "key-import-001"));
     assertThat(logs).hasSize(1);
     // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
     assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_IMPORT + ".t1");
@@ -170,9 +166,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     assertThat(published).isTrue();
 
     List<EventDeliveryLogEntity> logs =
-        eventDeliveryLogMapper.selectByQuery(
-            new EventDeliveryLogQuery(
-                "t1", OutboxPublishStatus.PUBLISHED.code(), "EXPORT", "key-export-001"));
+        eventDeliveryLogMapper.selectByQuery(new EventDeliveryLogQuery(
+            "t1", OutboxPublishStatus.PUBLISHED.code(), "EXPORT", "key-export-001"));
     assertThat(logs).hasSize(1);
     // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
     assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT + ".t1");
@@ -199,12 +194,11 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   // --- helpers ---
 
   private void reloadGeneratedId(OutboxEventEntity event) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            "select id from batch.outbox_event where tenant_id = ? and event_key = ?",
-            Long.class,
-            event.getTenantId(),
-            event.getEventKey());
+    Long id = jdbcTemplate.queryForObject(
+        "select id from batch.outbox_event where tenant_id = ? and event_key = ?",
+        Long.class,
+        event.getTenantId(),
+        event.getEventKey());
     event.setId(id);
   }
 
@@ -216,8 +210,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     e.setAggregateId(1L);
     e.setEventType(eventType);
     e.setEventKey(eventKey);
-    e.setPayloadJson(
-        """
+    e.setPayloadJson("""
         {
           "schemaVersion":"v1",
           "tenantId":"t1",
@@ -237,8 +230,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
           "idempotencyKey":"%s",
           "dispatchAt":"2026-01-15T00:00:00Z"
         }
-        """
-            .formatted(eventType, eventKey));
+        """.formatted(eventType, eventKey));
     e.setPublishStatus(OutboxPublishStatus.NEW.code());
     e.setPublishAttempt(0);
     e.setNextPublishAt(BatchDateTimeSupport.utcNow());
@@ -247,17 +239,16 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   private static KafkaConsumer<String, String> buildConsumer(String groupId) {
-    return new KafkaConsumer<>(
-        Map.of(
-            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-            kafkaBootstrapServers(),
-            ConsumerConfig.GROUP_ID_CONFIG,
-            groupId,
-            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-            "earliest",
-            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            StringDeserializer.class,
-            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            StringDeserializer.class));
+    return new KafkaConsumer<>(Map.of(
+        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        kafkaBootstrapServers(),
+        ConsumerConfig.GROUP_ID_CONFIG,
+        groupId,
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+        "earliest",
+        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+        StringDeserializer.class,
+        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+        StringDeserializer.class));
   }
 }

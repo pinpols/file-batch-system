@@ -26,9 +26,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private PendingCatchUpMapper pendingCatchUpMapper;
+  @Autowired
+  private PendingCatchUpMapper pendingCatchUpMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldFilterByBizDate() {
@@ -37,12 +39,11 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "JOB_B", "2026-06-21");
     insertCatchUp(tenantId, "JOB_C", "2026-06-21");
 
-    PendingCatchUpQuery query =
-        PendingCatchUpQuery.builder()
-            .tenantId(tenantId)
-            .bizDate("2026-06-21")
-            .pageRequest(new PageRequest(1, 10))
-            .build();
+    PendingCatchUpQuery query = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .bizDate("2026-06-21")
+        .pageRequest(new PageRequest(1, 10))
+        .build();
 
     List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
     long total = pendingCatchUpMapper.countByQuery(query);
@@ -58,11 +59,10 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "JOB_A", "2026-06-20");
     insertCatchUp(tenantId, "JOB_B", "2026-06-21");
 
-    PendingCatchUpQuery query =
-        PendingCatchUpQuery.builder()
-            .tenantId(tenantId)
-            .pageRequest(new PageRequest(1, 10))
-            .build();
+    PendingCatchUpQuery query = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .pageRequest(new PageRequest(1, 10))
+        .build();
 
     assertThat(pendingCatchUpMapper.selectByQuery(query)).hasSize(2);
     assertThat(pendingCatchUpMapper.countByQuery(query)).isEqualTo(2);
@@ -74,12 +74,11 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "PAYROLL_DAILY", "2026-06-21");
     insertCatchUp(tenantId, "LEDGER_CLOSE", "2026-06-21");
 
-    PendingCatchUpQuery query =
-        PendingCatchUpQuery.builder()
-            .tenantId(tenantId)
-            .keyword("payroll")
-            .pageRequest(new PageRequest(1, 10))
-            .build();
+    PendingCatchUpQuery query = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .keyword("payroll")
+        .pageRequest(new PageRequest(1, 10))
+        .build();
 
     List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);
@@ -93,13 +92,12 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
     insertCatchUp(tenantId, "JOB_A", "2026-06-21");
     insertCatchUp(tenantId, "JOB_B", "2026-06-21");
 
-    PendingCatchUpQuery query =
-        PendingCatchUpQuery.builder()
-            .tenantId(tenantId)
-            .jobCode("JOB_A")
-            .bizDate("2026-06-21")
-            .pageRequest(new PageRequest(1, 10))
-            .build();
+    PendingCatchUpQuery query = PendingCatchUpQuery.builder()
+        .tenantId(tenantId)
+        .jobCode("JOB_A")
+        .bizDate("2026-06-21")
+        .pageRequest(new PageRequest(1, 10))
+        .build();
 
     List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);
@@ -110,17 +108,11 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
 
   private void insertCatchUp(String tenantId, String jobCode, String bizDate) {
     String requestId = jobCode + "-" + System.nanoTime();
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         INSERT INTO batch.trigger_request
           (tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
            request_status, created_at, updated_at)
         VALUES (?, ?, 'CATCH_UP', ?, cast(? as date), ?, 'ACCEPTED', now(), now())
-        """,
-        tenantId,
-        requestId,
-        jobCode,
-        bizDate,
-        tenantId + ":" + requestId);
+        """, tenantId, requestId, jobCode, bizDate, tenantId + ":" + requestId);
   }
 }

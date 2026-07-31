@@ -10,23 +10,34 @@ import lombok.Data;
 
 @Data
 public class WorkflowDefinitionSaveRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String workflowCode;
+  @ValidResourceCode
+  private String workflowCode;
 
   @Size(max = 256)
   private String workflowName;
 
   private String workflowType;
   private Boolean enabled;
-  @Valid private List<NodeItem> nodes;
-  @Valid private List<EdgeItem> edges;
+
+  @Valid
+  private List<NodeItem> nodes;
+
+  @Valid
+  private List<EdgeItem> edges;
 
   @Data
   public static class NodeItem {
-    @ValidResourceCode private String nodeCode;
+    @ValidResourceCode
+    private String nodeCode;
+
     private String nodeName;
-    @NotBlank private String nodeType;
+
+    @NotBlank
+    private String nodeType;
+
     private String relatedJobCode;
     private String relatedPipelineCode;
     private String workerGroup;
@@ -41,8 +52,12 @@ public class WorkflowDefinitionSaveRequest {
 
   @Data
   public static class EdgeItem {
-    @ValidResourceCode private String fromNodeCode;
-    @ValidResourceCode private String toNodeCode;
+    @ValidResourceCode
+    private String fromNodeCode;
+
+    @ValidResourceCode
+    private String toNodeCode;
+
     private String edgeType;
     private String conditionExpr;
     private Boolean enabled;

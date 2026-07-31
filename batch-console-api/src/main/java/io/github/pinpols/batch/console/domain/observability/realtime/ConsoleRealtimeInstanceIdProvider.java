@@ -25,10 +25,9 @@ public class ConsoleRealtimeInstanceIdProvider {
   }
 
   private String resolveInstanceId(Environment environment) {
-    String configured =
-        firstNonBlank(
-            environment.getProperty("batch.console.instance-id"),
-            environment.getProperty("BATCH_CONSOLE_INSTANCE_ID"));
+    String configured = firstNonBlank(
+        environment.getProperty("batch.console.instance-id"),
+        environment.getProperty("BATCH_CONSOLE_INSTANCE_ID"));
     if (configured != null) {
       return configured;
     }

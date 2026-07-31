@@ -12,15 +12,14 @@ class LaunchRequestTest {
 
   @Test
   void sevenArgConstructorDefaultsIntervalReplayDryRunToFalsy() {
-    LaunchRequest r =
-        new LaunchRequest(
-            "t1",
-            "JOB_A",
-            LocalDate.of(2026, 5, 7),
-            TriggerType.MANUAL,
-            "req-1",
-            "trace-1",
-            Map.of("k", "v"));
+    LaunchRequest r = new LaunchRequest(
+        "t1",
+        "JOB_A",
+        LocalDate.of(2026, 5, 7),
+        TriggerType.MANUAL,
+        "req-1",
+        "trace-1",
+        Map.of("k", "v"));
 
     assertThat(r.dataIntervalStart()).isNull();
     assertThat(r.dataIntervalEnd()).isNull();
@@ -32,17 +31,16 @@ class LaunchRequestTest {
   void nineArgConstructorPreservesIntervalAndDefaultsReplayAndDryRun() {
     Instant start = Instant.parse("2026-05-07T00:00:00Z");
     Instant end = Instant.parse("2026-05-08T00:00:00Z");
-    LaunchRequest r =
-        new LaunchRequest(
-            "t1",
-            "JOB_A",
-            LocalDate.of(2026, 5, 7),
-            TriggerType.SCHEDULED,
-            "req-1",
-            "trace-1",
-            Map.of(),
-            start,
-            end);
+    LaunchRequest r = new LaunchRequest(
+        "t1",
+        "JOB_A",
+        LocalDate.of(2026, 5, 7),
+        TriggerType.SCHEDULED,
+        "req-1",
+        "trace-1",
+        Map.of(),
+        start,
+        end);
 
     assertThat(r.dataIntervalStart()).isEqualTo(start);
     assertThat(r.dataIntervalEnd()).isEqualTo(end);
@@ -52,18 +50,17 @@ class LaunchRequestTest {
 
   @Test
   void tenArgConstructorPreservesReplaySessionAndDefaultsDryRun() {
-    LaunchRequest r =
-        new LaunchRequest(
-            "t1",
-            "JOB_A",
-            LocalDate.of(2026, 5, 7),
-            TriggerType.MANUAL,
-            "req-1",
-            "trace-1",
-            Map.of(),
-            null,
-            null,
-            42L);
+    LaunchRequest r = new LaunchRequest(
+        "t1",
+        "JOB_A",
+        LocalDate.of(2026, 5, 7),
+        TriggerType.MANUAL,
+        "req-1",
+        "trace-1",
+        Map.of(),
+        null,
+        null,
+        42L);
 
     assertThat(r.replaySessionId()).isEqualTo(42L);
     assertThat(r.dryRun()).isFalse();
@@ -71,17 +68,16 @@ class LaunchRequestTest {
 
   @Test
   void builderCarriesDryRunFlag() {
-    LaunchRequest r =
-        LaunchRequest.builder()
-            .tenantId("t1")
-            .jobCode("JOB_A")
-            .bizDate(LocalDate.of(2026, 5, 7))
-            .triggerType(TriggerType.MANUAL)
-            .requestId("req-1")
-            .traceId("trace-1")
-            .params(Map.of())
-            .dryRun(true)
-            .build();
+    LaunchRequest r = LaunchRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, 5, 7))
+        .triggerType(TriggerType.MANUAL)
+        .requestId("req-1")
+        .traceId("trace-1")
+        .params(Map.of())
+        .dryRun(true)
+        .build();
 
     assertThat(r.dryRun()).isTrue();
     assertThat(r.replaySessionId()).isNull();

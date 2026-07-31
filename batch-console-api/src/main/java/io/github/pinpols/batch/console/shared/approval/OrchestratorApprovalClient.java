@@ -49,37 +49,33 @@ public class OrchestratorApprovalClient {
    */
   public String submitApproval(ApprovalSubmitCommand command) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    String requesterId =
-        ConsoleTextSanitizer.safeInput(
-            command.requesterId() != null ? command.requesterId() : metadata.operatorId(), 64);
-    ApprovalSubmitBody body =
-        new ApprovalSubmitBody(
-            command.tenantId(),
-            command.approvalType(),
-            command.actionType(),
-            command.targetType(),
-            command.targetId(),
-            command.payloadJson(),
-            requesterId,
-            metadata.traceId(),
-            command.idempotencyKey(),
-            ConsoleTextSanitizer.safeInput(command.approvalReason(), 512));
-    ApprovalSubmitResponse response =
-        orchestratorInternalRestClient
-            .build()
-            .post()
-            .uri("/internal/approvals")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-            .body(body)
-            .retrieve()
-            .body(ApprovalSubmitResponse.class);
+    String requesterId = ConsoleTextSanitizer.safeInput(
+        command.requesterId() != null ? command.requesterId() : metadata.operatorId(), 64);
+    ApprovalSubmitBody body = new ApprovalSubmitBody(
+        command.tenantId(),
+        command.approvalType(),
+        command.actionType(),
+        command.targetType(),
+        command.targetId(),
+        command.payloadJson(),
+        requesterId,
+        metadata.traceId(),
+        command.idempotencyKey(),
+        ConsoleTextSanitizer.safeInput(command.approvalReason(), 512));
+    ApprovalSubmitResponse response = orchestratorInternalRestClient
+        .build()
+        .post()
+        .uri("/internal/approvals")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
+        .body(body)
+        .retrieve()
+        .body(ApprovalSubmitResponse.class);
     if (response == null || !hasText(response.approvalNo())) {
-      String messageKey =
-          command.emptyResponseMessageKey() != null
-              ? command.emptyResponseMessageKey()
-              : DEFAULT_EMPTY_RESPONSE_MESSAGE;
+      String messageKey = command.emptyResponseMessageKey() != null
+          ? command.emptyResponseMessageKey()
+          : DEFAULT_EMPTY_RESPONSE_MESSAGE;
       throw BizException.of(ResultCode.SYSTEM_ERROR, messageKey);
     }
     return response.approvalNo();
@@ -91,16 +87,14 @@ public class OrchestratorApprovalClient {
    */
   public void requireApprovedApproval(
       String tenantId, String approvalNo, ApprovalTargetBinding binding) {
-    ApprovalRecordResponse response =
-        orchestratorInternalRestClient
-            .build()
-            .get()
-            .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-            .retrieve()
-            .body(ApprovalRecordResponse.class);
-    ApprovalRecord record =
-        Guard.requireFound(
-            response == null ? null : response.record(), "approval request not found");
+    ApprovalRecordResponse response = orchestratorInternalRestClient
+        .build()
+        .get()
+        .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
+        .retrieve()
+        .body(ApprovalRecordResponse.class);
+    ApprovalRecord record = Guard.requireFound(
+        response == null ? null : response.record(), "approval request not found");
     String status = record.approvalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");

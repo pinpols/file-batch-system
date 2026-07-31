@@ -30,19 +30,21 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class TriggerControllerTest {
 
-  @Mock private TriggerService triggerService;
-  @Mock private TriggerGracefulShutdown triggerGracefulShutdown;
+  @Mock
+  private TriggerService triggerService;
+
+  @Mock
+  private TriggerGracefulShutdown triggerGracefulShutdown;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new TriggerController(triggerService, triggerGracefulShutdown))
-            .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
-            .setMessageConverters(new JacksonJsonHttpMessageConverter())
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new TriggerController(triggerService, triggerGracefulShutdown))
+        .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
+        .setMessageConverters(new JacksonJsonHttpMessageConverter())
+        .build();
   }
 
   @Test
@@ -50,12 +52,10 @@ class TriggerControllerTest {
     when(triggerService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-response"));
 
     mockMvc
-        .perform(
-            post("/api/triggers/launch")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/triggers/launch")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId": "t1",
                       "jobCode": "IMPORT_JOB",
@@ -79,12 +79,10 @@ class TriggerControllerTest {
   @Test
   void shouldReturnValidationErrorWhenRequiredFieldsAreMissing() throws Exception {
     mockMvc
-        .perform(
-            post("/api/triggers/launch")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/triggers/launch")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId": "",
                       "bizDate": "2026-03-27"
@@ -100,11 +98,7 @@ class TriggerControllerTest {
   @Test
   void shouldReturnMissingIdempotencyKeyWhenHeaderIsAbsent() throws Exception {
     mockMvc
-        .perform(
-            post("/api/triggers/launch")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/triggers/launch").contentType(APPLICATION_JSON).content("""
                     {
                       "tenantId": "t1",
                       "jobCode": "IMPORT_JOB",
@@ -124,12 +118,10 @@ class TriggerControllerTest {
         .thenReturn(new LaunchResponse("inst-cu", "trace-cu"));
 
     mockMvc
-        .perform(
-            post("/api/triggers/catch-up/approve")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cu-1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/triggers/catch-up/approve")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cu-1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId": "t1",
                       "requestId": "req-cu-1",
@@ -146,12 +138,10 @@ class TriggerControllerTest {
   @Test
   void shouldReturnValidationErrorWhenCatchUpApprovalTenantIsMissing() throws Exception {
     mockMvc
-        .perform(
-            post("/api/triggers/catch-up/approve")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/triggers/catch-up/approve")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId": "",
                       "requestId": "req-001",

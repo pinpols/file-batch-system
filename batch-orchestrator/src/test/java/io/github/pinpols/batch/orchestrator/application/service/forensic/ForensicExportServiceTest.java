@@ -34,7 +34,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class ForensicExportServiceTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   private ForensicExportLogMapper logMapper;
   private JobInstanceMapper jobInstanceMapper;
@@ -51,12 +52,10 @@ class ForensicExportServiceTest {
     properties.setStorageDir(tempDir.toString());
     properties.setInstanceRowCap(10_000);
     properties.setEnabled(true);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    service =
-        new ForensicExportService(
-            logMapper, jobInstanceMapper, auditMapper, properties, dateTimeSupport);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    service = new ForensicExportService(
+        logMapper, jobInstanceMapper, auditMapper, properties, dateTimeSupport);
   }
 
   @Test
@@ -72,14 +71,12 @@ class ForensicExportServiceTest {
     when(auditMapper.selectByCalendarBizDate(eq("t1"), isNull(), any(), anyInt()))
         .thenReturn(List.of());
 
-    ForensicExportResponse response =
-        service.export(
-            ForensicExportRequest.builder()
-                .tenantId("t1")
-                .bizDateFrom(LocalDate.of(2026, 3, 15))
-                .bizDateTo(LocalDate.of(2026, 3, 15))
-                .requestedBy("ops")
-                .build());
+    ForensicExportResponse response = service.export(ForensicExportRequest.builder()
+        .tenantId("t1")
+        .bizDateFrom(LocalDate.of(2026, 3, 15))
+        .bizDateTo(LocalDate.of(2026, 3, 15))
+        .requestedBy("ops")
+        .build());
 
     assertThat(response.exportId()).isNotBlank();
     assertThat(response.status()).isEqualTo("COMPLETED");
@@ -110,28 +107,22 @@ class ForensicExportServiceTest {
   @Test
   void shouldRejectWhenDisabled() {
     properties.setEnabled(false);
-    assertThatThrownBy(
-            () ->
-                service.export(
-                    ForensicExportRequest.builder()
-                        .tenantId("t1")
-                        .bizDateFrom(LocalDate.of(2026, 3, 15))
-                        .bizDateTo(LocalDate.of(2026, 3, 15))
-                        .build()))
+    assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
+            .tenantId("t1")
+            .bizDateFrom(LocalDate.of(2026, 3, 15))
+            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.disabled");
   }
 
   @Test
   void shouldRejectInvalidDateRange() {
-    assertThatThrownBy(
-            () ->
-                service.export(
-                    ForensicExportRequest.builder()
-                        .tenantId("t1")
-                        .bizDateFrom(LocalDate.of(2026, 3, 16))
-                        .bizDateTo(LocalDate.of(2026, 3, 15))
-                        .build()))
+    assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
+            .tenantId("t1")
+            .bizDateFrom(LocalDate.of(2026, 3, 16))
+            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.invalid_date_range");
   }
@@ -139,27 +130,21 @@ class ForensicExportServiceTest {
   @Test
   void shouldRejectDateRangeBeyondConfiguredCap() {
     properties.setMaxDateRangeDays(2);
-    assertThatThrownBy(
-            () ->
-                service.export(
-                    ForensicExportRequest.builder()
-                        .tenantId("t1")
-                        .bizDateFrom(LocalDate.of(2026, 3, 15))
-                        .bizDateTo(LocalDate.of(2026, 3, 17))
-                        .build()))
+    assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
+            .tenantId("t1")
+            .bizDateFrom(LocalDate.of(2026, 3, 15))
+            .bizDateTo(LocalDate.of(2026, 3, 17))
+            .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.date_range_too_large");
   }
 
   @Test
   void shouldRejectMissingTenantOrDate() {
-    assertThatThrownBy(
-            () ->
-                service.export(
-                    ForensicExportRequest.builder()
-                        .bizDateFrom(LocalDate.of(2026, 3, 15))
-                        .bizDateTo(LocalDate.of(2026, 3, 15))
-                        .build()))
+    assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
+            .bizDateFrom(LocalDate.of(2026, 3, 15))
+            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.invalid_argument");
   }
@@ -169,14 +154,11 @@ class ForensicExportServiceTest {
     when(jobInstanceMapper.selectForensicByBizDateRange(eq("t1"), any(), any(), isNull(), anyInt()))
         .thenThrow(new RuntimeException("boom"));
 
-    assertThatThrownBy(
-            () ->
-                service.export(
-                    ForensicExportRequest.builder()
-                        .tenantId("t1")
-                        .bizDateFrom(LocalDate.of(2026, 3, 15))
-                        .bizDateTo(LocalDate.of(2026, 3, 15))
-                        .build()))
+    assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
+            .tenantId("t1")
+            .bizDateFrom(LocalDate.of(2026, 3, 15))
+            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .build()))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("boom");
 
@@ -192,14 +174,12 @@ class ForensicExportServiceTest {
     when(auditMapper.selectByCalendarBizDate(eq("t1"), isNull(), any(), anyInt()))
         .thenReturn(List.of());
 
-    ForensicExportResponse response =
-        service.export(
-            ForensicExportRequest.builder()
-                .tenantId("t1")
-                .bizDateFrom(LocalDate.of(2026, 3, 15))
-                .bizDateTo(LocalDate.of(2026, 3, 15))
-                .jobCodes(List.of("DAILY_PNL"))
-                .build());
+    ForensicExportResponse response = service.export(ForensicExportRequest.builder()
+        .tenantId("t1")
+        .bizDateFrom(LocalDate.of(2026, 3, 15))
+        .bizDateTo(LocalDate.of(2026, 3, 15))
+        .jobCodes(List.of("DAILY_PNL"))
+        .build());
 
     assertThat(response.status()).isEqualTo("COMPLETED");
     assertManifestContainsJobFilter(Path.of(response.storagePath()), "DAILY_PNL");

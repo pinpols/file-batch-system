@@ -41,12 +41,11 @@ final class DryRunEndpointProbe {
       probed++;
       String trimmed = url.trim();
       if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-        findings.add(
-            DryRunFinding.warn(
-                "EXEC_ENDPOINT_NON_HTTP",
-                SCOPE_EXECUTION,
-                "endpoint not http/https; reachability probe skipped: " + key,
-                trimmed));
+        findings.add(DryRunFinding.warn(
+            "EXEC_ENDPOINT_NON_HTTP",
+            SCOPE_EXECUTION,
+            "endpoint not http/https; reachability probe skipped: " + key,
+            trimmed));
         continue;
       }
       if (!probeEndpoint(key, trimmed, findings)) {
@@ -61,51 +60,45 @@ final class DryRunEndpointProbe {
       URI probeUri = URI.create(url);
       String host = probeUri.getHost();
       if (host == null) {
-        findings.add(
-            DryRunFinding.warn(
-                "EXEC_ENDPOINT_BLOCKED",
-                SCOPE_EXECUTION,
-                key + " endpoint URL has no host; reachability probe skipped",
-                url));
+        findings.add(DryRunFinding.warn(
+            "EXEC_ENDPOINT_BLOCKED",
+            SCOPE_EXECUTION,
+            key + " endpoint URL has no host; reachability probe skipped",
+            url));
         return true;
       }
       if (!endpointEgressAllowed(key, url, host, findings)) {
         return true;
       }
-      HttpRequest request =
-          HttpRequest.newBuilder(probeUri)
-              .method("HEAD", HttpRequest.BodyPublishers.noBody())
-              .timeout(HTTP_PROBE_TIMEOUT)
-              .build();
+      HttpRequest request = HttpRequest.newBuilder(probeUri)
+          .method("HEAD", HttpRequest.BodyPublishers.noBody())
+          .timeout(HTTP_PROBE_TIMEOUT)
+          .build();
       HttpResponse<Void> response =
           httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int status = response.statusCode();
       if (status >= 200 && status < 500) {
-        findings.add(
-            DryRunFinding.pass(
-                "EXEC_ENDPOINT_OK", SCOPE_EXECUTION, key + " reachable; HEAD returned " + status));
+        findings.add(DryRunFinding.pass(
+            "EXEC_ENDPOINT_OK", SCOPE_EXECUTION, key + " reachable; HEAD returned " + status));
       } else {
-        findings.add(
-            DryRunFinding.warn(
-                "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, url));
+        findings.add(DryRunFinding.warn(
+            "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, url));
       }
       return true;
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_ENDPOINT_PROBE_INTERRUPTED",
-              SCOPE_EXECUTION,
-              key + " probe interrupted; remaining endpoint probes skipped",
-              url));
+      findings.add(DryRunFinding.warn(
+          "EXEC_ENDPOINT_PROBE_INTERRUPTED",
+          SCOPE_EXECUTION,
+          key + " probe interrupted; remaining endpoint probes skipped",
+          url));
       return false;
     } catch (Exception ex) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_ENDPOINT_UNREACHABLE",
-              SCOPE_EXECUTION,
-              key + " probe failed: " + ex.getMessage(),
-              url));
+      findings.add(DryRunFinding.warn(
+          "EXEC_ENDPOINT_UNREACHABLE",
+          SCOPE_EXECUTION,
+          key + " probe failed: " + ex.getMessage(),
+          url));
       return true;
     }
   }
@@ -115,23 +108,21 @@ final class DryRunEndpointProbe {
     try {
       for (InetAddress address : InetAddress.getAllByName(host)) {
         if (DnsResolveGuard.isBlocked(address)) {
-          findings.add(
-              DryRunFinding.warn(
-                  "EXEC_ENDPOINT_BLOCKED",
-                  SCOPE_EXECUTION,
-                  key + " target rejected by egress security policy; reachability probe skipped",
-                  url));
+          findings.add(DryRunFinding.warn(
+              "EXEC_ENDPOINT_BLOCKED",
+              SCOPE_EXECUTION,
+              key + " target rejected by egress security policy; reachability probe skipped",
+              url));
           return false;
         }
       }
       return true;
     } catch (UnknownHostException ex) {
-      findings.add(
-          DryRunFinding.warn(
-              "EXEC_ENDPOINT_UNREACHABLE",
-              SCOPE_EXECUTION,
-              key + " host unresolvable; reachability probe skipped",
-              url));
+      findings.add(DryRunFinding.warn(
+          "EXEC_ENDPOINT_UNREACHABLE",
+          SCOPE_EXECUTION,
+          key + " host unresolvable; reachability probe skipped",
+          url));
       return false;
     }
   }

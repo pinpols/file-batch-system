@@ -260,9 +260,8 @@ public class FilesystemObjectStore implements BatchObjectStore {
         }
         long size = Files.size(p);
         FileTime mtime = Files.getLastModifiedTime(p);
-        smallestKeys.add(
-            new ObjectSummary(
-                relKey, size, mtime.toInstant(), syntheticEtag(size, mtime.toInstant())));
+        smallestKeys.add(new ObjectSummary(
+            relKey, size, mtime.toInstant(), syntheticEtag(size, mtime.toInstant())));
         if (smallestKeys.size() > maxKeys + 1) {
           smallestKeys.poll();
         }
@@ -287,9 +286,8 @@ public class FilesystemObjectStore implements BatchObjectStore {
           "filesystem presign requires batch.storage.filesystem.download-base-url");
     }
     if (presignSecret == null || presignSecret.isBlank()) {
-      throw new ObjectStoreException(
-          "filesystem presign requires non-blank secret (set"
-              + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
+      throw new ObjectStoreException("filesystem presign requires non-blank secret (set"
+          + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
     }
     Duration effectiveTtl = ttl == null ? defaultPresignTtl : ttl;
     if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {

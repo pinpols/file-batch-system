@@ -50,14 +50,13 @@ class ImportTaskExecutorTest {
   void executeTranslatesContextToStepRequestPreservingFields() {
     when(delegate.execute(any())).thenReturn(StepExecutionResponse.successResponse());
 
-    TaskContext ctx =
-        new TaskContext(
-            "tenant-1",
-            "job-import-1",
-            "ti-9",
-            "worker-7",
-            Map.of(), // SPI parameters 不映射(Phase 3 不做),走 runtimeAttributes
-            Map.of("pipelineInstanceId", 42L, "traceId", "trace-abc"));
+    TaskContext ctx = new TaskContext(
+        "tenant-1",
+        "job-import-1",
+        "ti-9",
+        "worker-7",
+        Map.of(), // SPI parameters 不映射(Phase 3 不做),走 runtimeAttributes
+        Map.of("pipelineInstanceId", 42L, "traceId", "trace-abc"));
 
     TaskResult r = executor.execute(ctx);
 

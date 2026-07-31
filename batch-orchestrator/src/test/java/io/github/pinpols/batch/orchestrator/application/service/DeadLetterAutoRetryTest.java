@@ -60,18 +60,17 @@ class DeadLetterAutoRetryTest {
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.retry()).thenReturn(properties);
 
-    service =
-        new DefaultRetryGovernanceService(
-            retryScheduleMapper,
-            deadLetterTaskMapper,
-            jobDefinitionMapper,
-            jobTaskMapper,
-            jobPartitionMapper,
-            jobInstanceMapper,
-            jobStepInstanceMapper,
-            taskDispatchOutboxService,
-            governance,
-            null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
+    service = new DefaultRetryGovernanceService(
+        retryScheduleMapper,
+        deadLetterTaskMapper,
+        jobDefinitionMapper,
+        jobTaskMapper,
+        jobPartitionMapper,
+        jobInstanceMapper,
+        jobStepInstanceMapper,
+        taskDispatchOutboxService,
+        governance,
+        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
   }
 
   /**

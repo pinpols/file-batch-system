@@ -89,11 +89,10 @@ public final class SdkCommitCoordinator {
     checkpoint.save(taskId, state);
     commitCounter++;
     if (selfReport && commitCounter % reportIntervalBatches == 0) {
-      progress.report(
-          Map.of(
-              "succeed", succeedCount,
-              "fail", failCount,
-              "breakPosition", state.breakPosition()));
+      progress.report(Map.of(
+          "succeed", succeedCount,
+          "fail", failCount,
+          "breakPosition", state.breakPosition()));
     }
     if (cancellation.isCancelled()) {
       throw new SdkTaskStoppedException(state.breakPosition());

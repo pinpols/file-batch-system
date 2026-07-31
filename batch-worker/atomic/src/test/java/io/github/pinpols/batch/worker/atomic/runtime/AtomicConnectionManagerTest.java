@@ -67,10 +67,9 @@ class AtomicConnectionManagerTest {
     AtomicConnectionManager.Options ro = AtomicConnectionManager.Options.readOnly();
     assertThat(ro.readOnly).isTrue();
 
-    AtomicConnectionManager.Options modified =
-        AtomicConnectionManager.Options.defaults()
-            .withAutoCommit(true)
-            .withForbidOsCapableRole(false);
+    AtomicConnectionManager.Options modified = AtomicConnectionManager.Options.defaults()
+        .withAutoCommit(true)
+        .withForbidOsCapableRole(false);
     assertThat(modified.autoCommit).isTrue();
     assertThat(modified.forbidOsCapableRole).isFalse();
   }

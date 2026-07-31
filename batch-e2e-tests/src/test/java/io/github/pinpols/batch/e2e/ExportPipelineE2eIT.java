@@ -57,11 +57,14 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final String BATCH_NO = "E2E-SET-EXPORT-1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Autowired
   @Qualifier("exportBusinessDataSource")
@@ -72,9 +75,8 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     seedSettlementData(businessJdbc, BATCH_NO, "E2E-SET-001", "C-E2E-1");
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", BATCH_NO);
@@ -83,42 +85,34 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
     params.put("bizType", "SETTLEMENT");
     params.put("fileCode", "e2e-export-file");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-export",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-export",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
 
-    BigDecimal total =
-        businessJdbc.queryForObject(
-            "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
-            BigDecimal.class,
-            TENANT,
-            BATCH_NO);
+    BigDecimal total = businessJdbc.queryForObject(
+        "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
+        BigDecimal.class,
+        TENANT,
+        BATCH_NO);
     assertThat(total).isNotNull();
   }
 
@@ -128,9 +122,8 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     seedSettlementData(businessJdbc, batchNo, "E2E-BND-SET-001", "C-E2E-BND-1");
 
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "BUNDLE_EXPORT", "export");
+    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "BUNDLE_EXPORT", "export");
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", batchNo);
@@ -142,75 +135,54 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
             Map.of("templateCode", "EXP-SETTLEMENT-JSON"),
             Map.of("templateCode", "EXP-SETTLEMENT-CSV")));
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.EVENT,
-            seed.requestId(),
-            "e2e-tr-bundle-export",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.EVENT,
+        seed.requestId(),
+        "e2e-tr-bundle-export",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(180))
         .pollInterval(Duration.ofMillis(250))
-        .untilAsserted(
-            () -> {
-              Integer successfulTasks =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          Integer successfulTasks =
+              jdbcTemplate.queryForObject("""
                       select count(*)::int from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ? and t.task_status = 'SUCCESS'
-                      """,
-                      Integer.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(successfulTasks).isEqualTo(2);
-            });
+                      """, Integer.class, TENANT, seed.dedupKey());
+          assertThat(successfulTasks).isEqualTo(2);
+        });
 
-    Integer generatedFiles =
-        jdbcTemplate.queryForObject(
-            """
+    Integer generatedFiles = jdbcTemplate.queryForObject("""
             select count(*)::int from batch.file_record
             where tenant_id = ? and source_ref = ? and file_status = 'GENERATED'
               and metadata_json->>'templateCode' in ('EXP-SETTLEMENT-JSON','EXP-SETTLEMENT-CSV')
-            """,
-            Integer.class,
-            TENANT,
-            batchNo);
+            """, Integer.class, TENANT, batchNo);
     assertThat(generatedFiles).isEqualTo(2);
   }
 
   private void seedSettlementData(
       JdbcTemplate businessJdbc, String batchNo, String settlementNo, String customerNo) {
-    Long batchId =
-        businessJdbc.queryForObject(
-            """
+    Long batchId = businessJdbc.queryForObject("""
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
             returning id
-            """,
-            Long.class,
-            TENANT,
-            batchNo);
+            """, Long.class, TENANT, batchNo);
     assertThat(batchId).isNotNull();
 
-    businessJdbc.update(
-        """
+    businessJdbc.update("""
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
-        """,
-        TENANT,
-        batchId,
-        settlementNo,
-        customerNo);
+        """, TENANT, batchId, settlementNo, customerNo);
   }
 }

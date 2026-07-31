@@ -28,9 +28,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private BatchStartupSelfCheck startupSelfCheck;
+  @Autowired
+  private BatchStartupSelfCheck startupSelfCheck;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void startupSelfCheckBeanIsPresent() {
@@ -39,31 +41,25 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void batchSchemaExistsAfterMigration() {
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "select count(*) from information_schema.schemata where schema_name = 'batch'",
-            Long.class);
+    Long cnt = jdbcTemplate.queryForObject(
+        "select count(*) from information_schema.schemata where schema_name = 'batch'", Long.class);
     assertThat(cnt).isEqualTo(1L);
   }
 
   @Test
   void quartzSchemaExistsAfterMigration() {
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "select count(*) from information_schema.schemata where schema_name = 'quartz'",
-            Long.class);
+    Long cnt = jdbcTemplate.queryForObject(
+        "select count(*) from information_schema.schemata where schema_name = 'quartz'",
+        Long.class);
     assertThat(cnt).isEqualTo(1L);
   }
 
   @Test
   void batchDayInstanceTableExistsAfterV31Migration() {
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            """
+    Long cnt = jdbcTemplate.queryForObject("""
             select count(*) from information_schema.tables
             where table_schema = 'batch' and table_name = 'batch_day_instance'
-            """,
-            Long.class);
+            """, Long.class);
     assertThat(cnt).isEqualTo(1L);
   }
 
@@ -71,37 +67,28 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   void businessCalendarV31ColumnsExistAfterMigration() {
     for (String column :
         new String[] {"cutoff_time", "late_arrival_tolerance_min", "sla_offset_min"}) {
-      Long cnt =
-          jdbcTemplate.queryForObject(
-              """
+      Long cnt = jdbcTemplate.queryForObject("""
               select count(*) from information_schema.columns
               where table_schema = 'batch'
                 and table_name = 'business_calendar'
                 and column_name = ?
-              """,
-              Long.class,
-              column);
+              """, Long.class, column);
       assertThat(cnt).as("column business_calendar.%s should exist", column).isEqualTo(1L);
     }
   }
 
   @Test
   void allQuartzTablesExistAfterMigration() {
-    for (String table :
-        new String[] {
-          "qrtz_job_details", "qrtz_triggers", "qrtz_simple_triggers",
-          "qrtz_cron_triggers", "qrtz_simprop_triggers", "qrtz_blob_triggers",
-          "qrtz_calendars", "qrtz_paused_trigger_grps", "qrtz_fired_triggers",
-          "qrtz_scheduler_state", "qrtz_locks"
-        }) {
-      Long cnt =
-          jdbcTemplate.queryForObject(
-              """
+    for (String table : new String[] {
+      "qrtz_job_details", "qrtz_triggers", "qrtz_simple_triggers",
+      "qrtz_cron_triggers", "qrtz_simprop_triggers", "qrtz_blob_triggers",
+      "qrtz_calendars", "qrtz_paused_trigger_grps", "qrtz_fired_triggers",
+      "qrtz_scheduler_state", "qrtz_locks"
+    }) {
+      Long cnt = jdbcTemplate.queryForObject("""
               select count(*) from information_schema.tables
               where table_schema = 'quartz' and table_name = ?
-              """,
-              Long.class,
-              table);
+              """, Long.class, table);
       assertThat(cnt).as("quartz table %s should exist", table).isEqualTo(1L);
     }
   }

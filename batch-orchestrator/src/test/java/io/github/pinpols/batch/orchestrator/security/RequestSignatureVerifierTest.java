@@ -23,7 +23,9 @@ class RequestSignatureVerifierTest {
   private static final String KEY = "api-key-1";
   private static final byte[] BODY = "{\"tenantId\":\"t1\"}".getBytes(StandardCharsets.UTF_8);
 
-  @Mock private NonceStore nonceStore;
+  @Mock
+  private NonceStore nonceStore;
+
   private RequestSignatureVerifier verifier;
 
   @BeforeEach

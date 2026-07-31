@@ -31,26 +31,23 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     if (templateConfig == null || templateConfig.isEmpty()) {
       throw new WorkerConfigException("template config missing");
     }
-    String detailSql =
-        textValue(
-            firstNonNull(
-                templateConfig.get("default_query_sql"),
-                templateConfig.get("defaultQuerySql"),
-                templateConfig.get("detail_query_sql"),
-                templateConfig.get("detailQuerySql")));
+    String detailSql = textValue(firstNonNull(
+        templateConfig.get("default_query_sql"),
+        templateConfig.get("defaultQuerySql"),
+        templateConfig.get("detail_query_sql"),
+        templateConfig.get("detailQuerySql")));
     if (!Texts.hasText(detailSql)) {
       throw new WorkerConfigException("default_query_sql is required for sql_template_export");
     }
 
     Map<String, Object> schemaMap = toMap(templateConfig.get("query_param_schema"), objectMapper);
-    Map<String, Object> spec =
-        toMap(
-            firstNonNull(
-                schemaMap.get("sqlTemplateExport"),
-                schemaMap.get("sql_template_export"),
-                templateConfig.get("sql_template_export"),
-                templateConfig.get("sqlTemplateExport")),
-            objectMapper);
+    Map<String, Object> spec = toMap(
+        firstNonNull(
+            schemaMap.get("sqlTemplateExport"),
+            schemaMap.get("sql_template_export"),
+            templateConfig.get("sql_template_export"),
+            templateConfig.get("sqlTemplateExport")),
+        objectMapper);
 
     String cursorColumn =
         textValue(firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column")));

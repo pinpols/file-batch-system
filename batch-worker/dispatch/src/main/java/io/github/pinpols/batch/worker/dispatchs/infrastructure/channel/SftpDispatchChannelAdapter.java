@@ -132,32 +132,30 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
 
     String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    String externalRequestId =
-        command.payload().externalRequestId() != null
-                && !command.payload().externalRequestId().isBlank()
-            ? command.payload().externalRequestId()
-            : UUID.randomUUID().toString();
-    String receiptCode =
-        command.payload().receiptCode() != null && !command.payload().receiptCode().isBlank()
-            ? command.payload().receiptCode()
-            : "R-" + externalRequestId;
+    String externalRequestId = command.payload().externalRequestId() != null
+            && !command.payload().externalRequestId().isBlank()
+        ? command.payload().externalRequestId()
+        : UUID.randomUUID().toString();
+    String receiptCode = command.payload().receiptCode() != null
+            && !command.payload().receiptCode().isBlank()
+        ? command.payload().receiptCode()
+        : "R-" + externalRequestId;
     boolean acknowledged =
         "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
     boolean pending =
         "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
-    SftpUploadContext uploadCtx =
-        SftpUploadContext.builder()
-            .command(command)
-            .channelConfig(channelConfig)
-            .connConfig(connConfig)
-            .remoteTarget(remoteTarget)
-            .fileRecord(command.fileRecord())
-            .externalRequestId(externalRequestId)
-            .receiptCode(receiptCode)
-            .acknowledged(acknowledged)
-            .pending(pending)
-            .build();
+    SftpUploadContext uploadCtx = SftpUploadContext.builder()
+        .command(command)
+        .channelConfig(channelConfig)
+        .connConfig(connConfig)
+        .remoteTarget(remoteTarget)
+        .fileRecord(command.fileRecord())
+        .externalRequestId(externalRequestId)
+        .receiptCode(receiptCode)
+        .acknowledged(acknowledged)
+        .pending(pending)
+        .build();
     return uploadViaSftp(uploadCtx);
   }
 
@@ -186,10 +184,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
     String remoteName = stringProp(channelConfig, "sftp_remote_file_name");
     if (!Texts.hasText(remoteName)) {
-      remoteName =
-          firstNonBlank(
-              String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-              String.valueOf(fileRecord.getOrDefault("file_name", "file.bin")));
+      remoteName = firstNonBlank(
+          String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
+          String.valueOf(fileRecord.getOrDefault("file_name", "file.bin")));
     }
     remoteName = sanitizeFileName(remoteName);
     return new RemoteTarget(remoteDir, remoteName);
@@ -232,7 +229,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         InetAddress resolved = DnsResolveGuard.resolveAndValidate(connectHost);
         connectHost = resolved.getHostAddress();
       }
-      session = jsch.getSession(ctx.connConfig().user(), connectHost, ctx.connConfig().port());
+      session =
+          jsch.getSession(ctx.connConfig().user(), connectHost, ctx.connConfig().port());
       // 保留原始 hostname 用于 StrictHostKeyChecking 匹配 known_hosts
       session.setConfig("HostKeyAlias", ctx.connConfig().host());
       // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
@@ -259,15 +257,14 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
             remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
         manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
         String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
-        manifest =
-            DispatchManifestSupport.manifestPayload(
-                ctx.command(),
-                evidence,
-                ctx.remoteTarget().remoteName(),
-                ctx.externalRequestId(),
-                ctx.receiptCode(),
-                payloadDigest,
-                manifestRef);
+        manifest = DispatchManifestSupport.manifestPayload(
+            ctx.command(),
+            evidence,
+            ctx.remoteTarget().remoteName(),
+            ctx.externalRequestId(),
+            ctx.receiptCode(),
+            payloadDigest,
+            manifestRef);
         sftp.put(
             new ByteArrayInputStream(manifest.bytes()),
             manifestTempRemotePath,

@@ -24,13 +24,11 @@ public class HttpRequestMdcFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
-    String requestId =
-        CorrelationIds.normalize(
-            request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
-            IdGenerator.newBusinessNo("req"));
-    String traceId =
-        CorrelationIds.normalize(
-            request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
+    String requestId = CorrelationIds.normalize(
+        request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
+        IdGenerator.newBusinessNo("req"));
+    String traceId = CorrelationIds.normalize(
+        request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
     String tenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     try {
       BatchMdc.put(StructuredLogField.SERVICE, applicationName);

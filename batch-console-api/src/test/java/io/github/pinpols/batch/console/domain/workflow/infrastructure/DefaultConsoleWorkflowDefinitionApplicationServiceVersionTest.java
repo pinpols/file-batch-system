@@ -73,19 +73,18 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
     ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
 
-    service =
-        new DefaultConsoleWorkflowDefinitionApplicationService(
-            definitionMapper,
-            nodeMapper,
-            edgeMapper,
-            versionMapper,
-            mock(JobDefinitionMapper.class),
-            mock(ConsoleRealtimeDomainEventPublisher.class),
-            tenantGuard,
-            mock(ConsoleConfigCacheInvalidationService.class),
-            lockService,
-            mock(WorkflowDagValidator.class),
-            new ObjectMapper());
+    service = new DefaultConsoleWorkflowDefinitionApplicationService(
+        definitionMapper,
+        nodeMapper,
+        edgeMapper,
+        versionMapper,
+        mock(JobDefinitionMapper.class),
+        mock(ConsoleRealtimeDomainEventPublisher.class),
+        tenantGuard,
+        mock(ConsoleConfigCacheInvalidationService.class),
+        lockService,
+        mock(WorkflowDagValidator.class),
+        new ObjectMapper());
   }
 
   @Test
@@ -198,9 +197,8 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
     snap.setWorkflowName("v3-name");
     snap.setWorkflowType("DAG");
     snap.setEnabled(true);
-    snap.setNodesJson(
-        "[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
-            + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}]");
+    snap.setNodesJson("[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
+        + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}]");
     snap.setEdgesJson("[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]");
     snap.setSavedAt(Instant.parse("2026-06-01T00:00:00Z"));
     when(versionMapper.findByDefinitionIdAndVersion(TENANT, DEF_ID, 3)).thenReturn(snap);

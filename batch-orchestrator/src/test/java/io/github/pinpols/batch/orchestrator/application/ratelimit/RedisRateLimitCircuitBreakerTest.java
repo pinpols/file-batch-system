@@ -52,9 +52,8 @@ class RedisRateLimitCircuitBreakerTest {
     when(proxyManager.getProxy(anyString(), any()))
         .thenThrow(new RedisCommandTimeoutException("simulated sustained timeout"));
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-    RedisRateLimitCircuitBreaker circuitBreaker =
-        new RedisRateLimitCircuitBreaker(
-            config(3, 10_000L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
+    RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
+        config(3, 10_000L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
     TokenBucketRateLimiter limiter =
         new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
 
@@ -75,22 +74,23 @@ class RedisRateLimitCircuitBreakerTest {
     verify(proxyManager, times(3)).getProxy(anyString(), any());
     assertThat(elapsedMillis).as("short-circuit must be near-instant").isLessThan(100L);
     // gauge=1(OPEN)
-    assertThat(meterRegistry.get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN).gauge().value())
+    assertThat(meterRegistry
+            .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
+            .gauge()
+            .value())
         .isEqualTo(1.0);
     // 短路放行计 reason=circuit_open;前 3 次发了命令的故障计 reason=redis_exception
-    assertThat(
-            meterRegistry
-                .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
-                .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_CIRCUIT_OPEN)
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
+            .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_CIRCUIT_OPEN)
+            .counter()
+            .count())
         .isEqualTo(1.0);
-    assertThat(
-            meterRegistry
-                .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
-                .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_REDIS)
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .get(TokenBucketRateLimiter.METRIC_FAILOPEN)
+            .tag("reason", TokenBucketRateLimiter.FAILOPEN_REASON_REDIS)
+            .counter()
+            .count())
         .isEqualTo(3.0);
   }
 
@@ -103,18 +103,15 @@ class RedisRateLimitCircuitBreakerTest {
     when(bucketProxy.tryConsume(1)).thenReturn(true);
     @SuppressWarnings("unchecked")
     LettuceBasedProxyManager<String> proxyManager = mock(LettuceBasedProxyManager.class);
-    when(proxyManager.getProxy(anyString(), any()))
-        .thenAnswer(
-            invocation -> {
-              if (fail.get()) {
-                throw new RedisCommandTimeoutException("simulated timeout");
-              }
-              return bucketProxy;
-            });
+    when(proxyManager.getProxy(anyString(), any())).thenAnswer(invocation -> {
+      if (fail.get()) {
+        throw new RedisCommandTimeoutException("simulated timeout");
+      }
+      return bucketProxy;
+    });
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-    RedisRateLimitCircuitBreaker circuitBreaker =
-        new RedisRateLimitCircuitBreaker(
-            config(3, 100L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
+    RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
+        config(3, 100L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
     TokenBucketRateLimiter limiter =
         new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
 
@@ -122,7 +119,10 @@ class RedisRateLimitCircuitBreakerTest {
     for (int i = 0; i < 3; i++) {
       limiter.tryConsume("t1", "LAUNCH", 100);
     }
-    assertThat(meterRegistry.get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN).gauge().value())
+    assertThat(meterRegistry
+            .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
+            .gauge()
+            .value())
         .as("circuit should be OPEN after sustained failure")
         .isEqualTo(1.0);
 
@@ -134,7 +134,10 @@ class RedisRateLimitCircuitBreakerTest {
 
     // assert: 探测成功放行,熔断回到 CLOSED(gauge=0),后续正常发 Redis 命令
     assertThat(probeAllowed).isTrue();
-    assertThat(meterRegistry.get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN).gauge().value())
+    assertThat(meterRegistry
+            .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
+            .gauge()
+            .value())
         .as("circuit should recover to CLOSED after successful half-open probe")
         .isEqualTo(0.0);
     assertThat(limiter.tryConsume("t1", "LAUNCH", 100))
@@ -152,9 +155,8 @@ class RedisRateLimitCircuitBreakerTest {
     LettuceBasedProxyManager<String> proxyManager = mock(LettuceBasedProxyManager.class);
     when(proxyManager.getProxy(eq("ratelimit:t1:TASK_REPORT"), any())).thenReturn(bucketProxy);
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-    RedisRateLimitCircuitBreaker circuitBreaker =
-        new RedisRateLimitCircuitBreaker(
-            config(3, 10_000L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
+    RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
+        config(3, 10_000L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
     TokenBucketRateLimiter limiter =
         new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
 
@@ -168,9 +170,13 @@ class RedisRateLimitCircuitBreakerTest {
     }
 
     // 熔断从未打开(gauge=0),getProxy 每次都真发(未短路),无任何 fail-open 计数
-    assertThat(meterRegistry.get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN).gauge().value())
+    assertThat(meterRegistry
+            .get(RedisRateLimitCircuitBreaker.METRIC_CIRCUIT_OPEN)
+            .gauge()
+            .value())
         .isEqualTo(0.0);
     verify(proxyManager, times(5)).getProxy(anyString(), any());
-    assertThat(meterRegistry.find(TokenBucketRateLimiter.METRIC_FAILOPEN).counter()).isNull();
+    assertThat(meterRegistry.find(TokenBucketRateLimiter.METRIC_FAILOPEN).counter())
+        .isNull();
   }
 }

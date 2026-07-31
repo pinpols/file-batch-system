@@ -13,7 +13,8 @@ class DispatchReadbackVerifierTest {
   @Test
   @DisplayName("readback_verify_enabled=true 启用;false / 缺省 / null 不启用")
   void enabled_respectsFlag() {
-    assertThat(DispatchReadbackVerifier.enabled(Map.of("readback_verify_enabled", true))).isTrue();
+    assertThat(DispatchReadbackVerifier.enabled(Map.of("readback_verify_enabled", true)))
+        .isTrue();
     assertThat(DispatchReadbackVerifier.enabled(Map.of("readback_verify_enabled", "true")))
         .isTrue();
     assertThat(DispatchReadbackVerifier.enabled(Map.of("readback_verify_enabled", false)))
@@ -30,7 +31,8 @@ class DispatchReadbackVerifierTest {
     assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("fileSizeBytes", "2048")))
         .isEqualTo(2048L);
     assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("other", 1))).isNull();
-    assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("file_size_bytes", "x"))).isNull();
+    assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("file_size_bytes", "x")))
+        .isNull();
     assertThat(DispatchReadbackVerifier.expectedSizeBytes(null)).isNull();
   }
 

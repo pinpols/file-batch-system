@@ -37,14 +37,13 @@ public class ConsoleBatchDayController {
   @PostMapping("/operate")
   public CommonResponse<ConsoleBatchDayOperateResponse> operate(
       @Valid @RequestBody BatchDayOperateRequest request) {
-    Map<String, Object> result =
-        orchestratorProxyService.batchDayOperate(
-            request.getTenantId(),
-            request.getCalendarCode(),
-            request.getBizDate(),
-            request.getAction(),
-            request.getOperatorId(),
-            request.getReason());
+    Map<String, Object> result = orchestratorProxyService.batchDayOperate(
+        request.getTenantId(),
+        request.getCalendarCode(),
+        request.getBizDate(),
+        request.getAction(),
+        request.getOperatorId(),
+        request.getReason());
     return responseFactory.success(ConsoleBatchDayOperateResponse.from(result));
   }
 }

@@ -22,7 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CompleteDispatchStepTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   private CompleteDispatchStep step;
 
@@ -108,9 +109,8 @@ class CompleteDispatchStepTest {
   }
 
   private DispatchJobContext buildContext(String receiptStatus, String receiptCode) {
-    DispatchPayload payload =
-        new DispatchPayload(
-            "10", null, "CH1", "target", "ext-1", receiptCode, null, null, null, null);
+    DispatchPayload payload = new DispatchPayload(
+        "10", null, "CH1", "target", "ext-1", receiptCode, null, null, null, null);
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.setWorkerId("w1");

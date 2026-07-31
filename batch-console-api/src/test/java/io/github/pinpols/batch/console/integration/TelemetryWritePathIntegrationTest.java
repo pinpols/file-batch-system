@@ -34,16 +34,17 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
 class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort private int port;
+  @LocalServerPort
+  private int port;
+
   private WebTestClient webTestClient;
 
   @BeforeEach
   void setUp() {
-    webTestClient =
-        WebTestClient.bindToServer()
-            .baseUrl("http://127.0.0.1:" + port)
-            .responseTimeout(Duration.ofSeconds(30))
-            .build();
+    webTestClient = WebTestClient.bindToServer()
+        .baseUrl("http://127.0.0.1:" + port)
+        .responseTimeout(Duration.ofSeconds(30))
+        .build();
   }
 
   @Test
@@ -110,12 +111,11 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
     // props 单 event 最大 8KB,构造 10KB 字符串触发 validateProps 拦截
     String big = "x".repeat(10_000);
     Map<String, Object> bigProps = Map.of("payload", big);
-    Map<String, Object> body =
-        Map.of(
-            "app",
-            "console",
-            "events",
-            List.of(Map.of("type", "info", "name", "fat-event", "props", bigProps)));
+    Map<String, Object> body = Map.of(
+        "app",
+        "console",
+        "events",
+        List.of(Map.of("type", "info", "name", "fat-event", "props", bigProps)));
     webTestClient
         .post()
         .uri("/api/console/telemetry/events")

@@ -130,26 +130,22 @@ class OrchestratorApprovalClientTest {
   @Test
   void shouldReturnApprovalNo_onSuccessfulSubmit() {
     stubSubmit(new ApprovalSubmitResponse("APR-9"));
-    String approvalNo =
-        client.submitApproval(
-            ApprovalSubmitCommand.builder()
-                .tenantId("t1")
-                .approvalType("DOWNLOAD")
-                .actionType("DOWNLOAD")
-                .targetType("FILE")
-                .targetId("100")
-                .idempotencyKey("idem-1")
-                .build());
+    String approvalNo = client.submitApproval(ApprovalSubmitCommand.builder()
+        .tenantId("t1")
+        .approvalType("DOWNLOAD")
+        .actionType("DOWNLOAD")
+        .targetType("FILE")
+        .targetId("100")
+        .idempotencyKey("idem-1")
+        .build());
     assertThat(approvalNo).isEqualTo("APR-9");
   }
 
   @Test
   void shouldThrowDefaultKey_whenSubmitResponseEmpty() {
     stubSubmit(null);
-    assertThatThrownBy(
-            () ->
-                client.submitApproval(
-                    ApprovalSubmitCommand.builder().tenantId("t1").idempotencyKey("i").build()))
+    assertThatThrownBy(() -> client.submitApproval(
+            ApprovalSubmitCommand.builder().tenantId("t1").idempotencyKey("i").build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.approval.empty_response");
   }
@@ -157,14 +153,11 @@ class OrchestratorApprovalClientTest {
   @Test
   void shouldThrowCallerKey_whenSubmitResponseEmptyAndCustomKeyGiven() {
     stubSubmit(new ApprovalSubmitResponse("  "));
-    assertThatThrownBy(
-            () ->
-                client.submitApproval(
-                    ApprovalSubmitCommand.builder()
-                        .tenantId("t1")
-                        .idempotencyKey("i")
-                        .emptyResponseMessageKey("error.approval.submit_failed")
-                        .build()))
+    assertThatThrownBy(() -> client.submitApproval(ApprovalSubmitCommand.builder()
+            .tenantId("t1")
+            .idempotencyKey("i")
+            .emptyResponseMessageKey("error.approval.submit_failed")
+            .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.approval.submit_failed");
   }
@@ -172,17 +165,16 @@ class OrchestratorApprovalClientTest {
   @Test
   void shouldSanitizeRequesterIdAndReason() {
     RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-10"));
-    client.submitApproval(
-        ApprovalSubmitCommand.builder()
-            .tenantId("t1")
-            .approvalType("SELF_SERVICE")
-            .actionType("RERUN")
-            .targetType("JOB_INSTANCE")
-            .targetId("JOB-1")
-            .requesterId("  ops\u0007-user  ")
-            .approvalReason("  reason\u0000with-ctrl  ")
-            .idempotencyKey("idem-2")
-            .build());
+    client.submitApproval(ApprovalSubmitCommand.builder()
+        .tenantId("t1")
+        .approvalType("SELF_SERVICE")
+        .actionType("RERUN")
+        .targetType("JOB_INSTANCE")
+        .targetId("JOB-1")
+        .requesterId("  ops\u0007-user  ")
+        .approvalReason("  reason\u0000with-ctrl  ")
+        .idempotencyKey("idem-2")
+        .build());
     ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
     verify(bodySpec).body(captor.capture());
     String json = JsonUtils.toJson(captor.getValue());

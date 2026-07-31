@@ -53,12 +53,11 @@ public class ResultVersionPromoteService {
     // 2) 当前 PENDING → EFFECTIVE（CAS 在 status='PENDING' 上守护，并发 promote 抢同一行只允许一份成功）
     int updated = resultVersionMapper.promoteToEffective(tenantId, versionId, now);
     if (updated == 0) {
-      throw new OptimisticLockingFailureException(
-          "result_version promote race lost: tenantId="
-              + tenantId
-              + ", id="
-              + versionId
-              + ", expected status=PENDING");
+      throw new OptimisticLockingFailureException("result_version promote race lost: tenantId="
+          + tenantId
+          + ", id="
+          + versionId
+          + ", expected status=PENDING");
     }
     ResultVersionEntity promoted = loadOrThrow(tenantId, versionId);
     materializePromotedVersion(promoted);

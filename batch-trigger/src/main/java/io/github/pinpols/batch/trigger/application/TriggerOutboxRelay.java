@@ -115,25 +115,23 @@ public class TriggerOutboxRelay {
     }
     meterRegistry.gauge("batch.trigger.outbox.pending.events", pendingEvents);
     meterRegistry.gauge("batch.trigger.outbox.publishing.stale.events", stalePublishingEvents);
-    giveUpCounter =
-        Counter.builder("batch.trigger.outbox.give_up.total")
-            .description("trigger_outbox_event rows transitioned to GIVE_UP")
-            .register(meterRegistry);
-    publishLatencyOk =
-        io.micrometer.core.instrument.Timer.builder("batch.trigger.outbox.publish.latency")
-            .description("trigger_outbox publishOne latency (single event)")
-            .tags("result", "ok")
-            .publishPercentiles(0.5, 0.95, 0.99)
-            .register(meterRegistry);
-    publishLatencyFail =
-        io.micrometer.core.instrument.Timer.builder("batch.trigger.outbox.publish.latency")
-            .description("trigger_outbox publishOne latency (single event)")
-            .tags("result", "fail")
-            .publishPercentiles(0.5, 0.95, 0.99)
-            .register(meterRegistry);
-    scheduledTask =
-        scheduler.scheduleWithFixedDelay(
-            this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
+    giveUpCounter = Counter.builder("batch.trigger.outbox.give_up.total")
+        .description("trigger_outbox_event rows transitioned to GIVE_UP")
+        .register(meterRegistry);
+    publishLatencyOk = io.micrometer.core.instrument.Timer.builder(
+            "batch.trigger.outbox.publish.latency")
+        .description("trigger_outbox publishOne latency (single event)")
+        .tags("result", "ok")
+        .publishPercentiles(0.5, 0.95, 0.99)
+        .register(meterRegistry);
+    publishLatencyFail = io.micrometer.core.instrument.Timer.builder(
+            "batch.trigger.outbox.publish.latency")
+        .description("trigger_outbox publishOne latency (single event)")
+        .tags("result", "fail")
+        .publishPercentiles(0.5, 0.95, 0.99)
+        .register(meterRegistry);
+    scheduledTask = scheduler.scheduleWithFixedDelay(
+        this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
     log.info(
         "TriggerOutboxRelay 已启动:poll={}ms batch={} backoff_max={}s",
         properties.getPollIntervalMillis(),
@@ -157,12 +155,10 @@ public class TriggerOutboxRelay {
 
   private void runStartupAudit() {
     try {
-      long pending =
-          mapper.countByStatuses(
-              List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
-      long stale =
-          mapper.countStalePublishing(
-              OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds());
+      long pending = mapper.countByStatuses(
+          List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
+      long stale = mapper.countStalePublishing(
+          OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds());
       pendingEvents.set(pending);
       stalePublishingEvents.set(stale);
       if (pending == 0 && stale == 0) {
@@ -236,12 +232,11 @@ public class TriggerOutboxRelay {
       return;
     }
     Instant now = BatchDateTimeSupport.utcNow();
-    List<TriggerOutboxEventEntity> batch =
-        mapper.selectPending(
-            now,
-            properties.getBatchSize(),
-            OutboxPublishStatus.NEW.code(),
-            OutboxPublishStatus.FAILED.code());
+    List<TriggerOutboxEventEntity> batch = mapper.selectPending(
+        now,
+        properties.getBatchSize(),
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code());
     if (batch.isEmpty()) {
       return;
     }
@@ -282,12 +277,11 @@ public class TriggerOutboxRelay {
     if (shouldStopPolling()) {
       return false;
     }
-    int claimed =
-        mapper.markPublishing(
-            event.getId(),
-            OutboxPublishStatus.PUBLISHING.code(),
-            OutboxPublishStatus.NEW.code(),
-            OutboxPublishStatus.FAILED.code());
+    int claimed = mapper.markPublishing(
+        event.getId(),
+        OutboxPublishStatus.PUBLISHING.code(),
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code());
     if (claimed == 0) {
       // 已被其它 relay 实例 / 之前的 hung-process 抢走或状态已变,本轮跳过
       return false;
@@ -302,13 +296,12 @@ public class TriggerOutboxRelay {
           event.getId(),
           event.getRequestId(),
           ex);
-      int updated =
-          mapper.markFailed(
-              event.getId(),
-              OutboxPublishStatus.GIVE_UP.code(),
-              truncate("payload deserialize: " + ex.getMessage()),
-              BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
-              OutboxPublishStatus.PUBLISHING.code());
+      int updated = mapper.markFailed(
+          event.getId(),
+          OutboxPublishStatus.GIVE_UP.code(),
+          truncate("payload deserialize: " + ex.getMessage()),
+          BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
+          OutboxPublishStatus.PUBLISHING.code());
       if (updated == 0) {
         log.warn("TriggerOutboxRelay markFailed(GIVE_UP) 0 行受影响,行已被其它实例接管: id={}", event.getId());
       }
@@ -324,11 +317,10 @@ public class TriggerOutboxRelay {
       return false;
     }
     if (result.success()) {
-      int updated =
-          mapper.markPublished(
-              event.getId(),
-              OutboxPublishStatus.PUBLISHED.code(),
-              OutboxPublishStatus.PUBLISHING.code());
+      int updated = mapper.markPublished(
+          event.getId(),
+          OutboxPublishStatus.PUBLISHED.code(),
+          OutboxPublishStatus.PUBLISHING.code());
       if (updated == 0) {
         log.warn("TriggerOutboxRelay markPublished 0 行受影响,行已被其它实例接管: id={}", event.getId());
       }
@@ -346,13 +338,12 @@ public class TriggerOutboxRelay {
             event.getRequestId(),
             event.getTopic(),
             result.errorMessage());
-        int updated =
-            mapper.markFailed(
-                event.getId(),
-                OutboxPublishStatus.GIVE_UP.code(),
-                truncate(result.errorMessage()),
-                BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
-                OutboxPublishStatus.PUBLISHING.code());
+        int updated = mapper.markFailed(
+            event.getId(),
+            OutboxPublishStatus.GIVE_UP.code(),
+            truncate(result.errorMessage()),
+            BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
+            OutboxPublishStatus.PUBLISHING.code());
         if (updated == 0) {
           log.warn("TriggerOutboxRelay markFailed(GIVE_UP) 0 行受影响,行已被其它实例接管: id={}", event.getId());
         }
@@ -362,13 +353,12 @@ public class TriggerOutboxRelay {
         return false;
       }
       Instant retryAt = BatchDateTimeSupport.utcNow().plusSeconds(backoffSeconds(nextAttempt));
-      int updated =
-          mapper.markFailed(
-              event.getId(),
-              OutboxPublishStatus.FAILED.code(),
-              truncate(result.errorMessage()),
-              retryAt,
-              OutboxPublishStatus.PUBLISHING.code());
+      int updated = mapper.markFailed(
+          event.getId(),
+          OutboxPublishStatus.FAILED.code(),
+          truncate(result.errorMessage()),
+          retryAt,
+          OutboxPublishStatus.PUBLISHING.code());
       if (updated == 0) {
         log.warn("TriggerOutboxRelay markFailed(FAILED) 0 行受影响,行已被其它实例接管: id={}", event.getId());
       }
@@ -398,24 +388,21 @@ public class TriggerOutboxRelay {
   }
 
   private void resetStalePublishing() {
-    int reset =
-        mapper.resetStalePublishing(
-            OutboxPublishStatus.PUBLISHING.code(),
-            OutboxPublishStatus.FAILED.code(),
-            "stale PUBLISHING reset by TriggerOutboxRelay",
-            properties.getPublishingTimeoutSeconds());
+    int reset = mapper.resetStalePublishing(
+        OutboxPublishStatus.PUBLISHING.code(),
+        OutboxPublishStatus.FAILED.code(),
+        "stale PUBLISHING reset by TriggerOutboxRelay",
+        properties.getPublishingTimeoutSeconds());
     if (reset > 0) {
       log.warn("TriggerOutboxRelay 重置 {} 条滞留 PUBLISHING 为 FAILED", reset);
     }
   }
 
   private void sampleBacklog() {
-    pendingEvents.set(
-        mapper.countByStatuses(
-            List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code())));
-    stalePublishingEvents.set(
-        mapper.countStalePublishing(
-            OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds()));
+    pendingEvents.set(mapper.countByStatuses(
+        List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code())));
+    stalePublishingEvents.set(mapper.countStalePublishing(
+        OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds()));
   }
 
   private LockConfiguration lockConfig() {

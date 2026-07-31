@@ -27,16 +27,12 @@ public final class ProcessE2eFixture {
 
   /** 写入 sqlTransform e2e 的演示数据：A=10+20、B=7。 */
   public static void seedDemoOrderEvents(JdbcTemplate jdbcTemplate, String tenantId) {
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into biz.process_order_event values
           (?, 'A', date '2026-01-15', 1, 10.00),
           (?, 'A', date '2026-01-15', 2, 20.00),
           (?, 'B', date '2026-01-15', 3, 7.00)
-        """,
-        tenantId,
-        tenantId,
-        tenantId);
+        """, tenantId, tenantId, tenantId);
   }
 
   /** 写入 sqlTransform PROCESS pipeline 定义（5 stage：PREPARE/COMPUTE/VALIDATE/COMMIT/FEEDBACK）。 */
@@ -78,9 +74,8 @@ public final class ProcessE2eFixture {
       String jobCode,
       String customComputeImplCode,
       String computeStepParamsJson) {
-    Long pipelineDefinitionId =
-        insertPipelineDefinition(
-            jdbcTemplate, tenantId, jobCode, "e2e custom plugin process pipeline");
+    Long pipelineDefinitionId = insertPipelineDefinition(
+        jdbcTemplate, tenantId, jobCode, "e2e custom plugin process pipeline");
     insertProcessSteps(
         jdbcTemplate,
         pipelineDefinitionId,
@@ -96,17 +91,12 @@ public final class ProcessE2eFixture {
 
   private static Long insertPipelineDefinition(
       JdbcTemplate jdbcTemplate, String tenantId, String jobCode, String pipelineName) {
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         insert into batch.pipeline_definition (
             tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group, version, enabled
         ) values (?, ?, ?, 'PROCESS', 'E2E', 'PROCESS', 1, true)
         returning id
-        """,
-        Long.class,
-        tenantId,
-        jobCode,
-        pipelineName);
+        """, Long.class, tenantId, jobCode, pipelineName);
   }
 
   private static void insertProcessSteps(
@@ -131,9 +121,7 @@ public final class ProcessE2eFixture {
 
   private static Map<String, Object> sqlTransformSpec() {
     Map<String, Object> spec = new LinkedHashMap<>();
-    spec.put(
-        "sourceSql",
-        """
+    spec.put("sourceSql", """
         select tenant_id,
                account_id,
                biz_date,

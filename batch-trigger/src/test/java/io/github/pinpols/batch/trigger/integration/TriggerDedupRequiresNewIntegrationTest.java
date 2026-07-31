@@ -43,8 +43,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Import(TriggerDedupRequiresNewIntegrationTest.TestConfig.class)
 class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private TriggerService triggerService;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private TriggerService triggerService;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void cleanUp() {
@@ -60,31 +63,28 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     assertThat(response).isNotNull();
 
     // trigger_request 已写入数据库且状态为 ACCEPTED
-    Integer requestCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
-            Integer.class,
-            "t1",
-            "idem-async");
+    Integer requestCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
+        Integer.class,
+        "t1",
+        "idem-async");
     assertThat(requestCount).as("trigger_request should be persisted").isEqualTo(1);
 
-    String status =
-        jdbcTemplate.queryForObject(
-            "select request_status from batch.trigger_request where tenant_id = ? and dedup_key ="
-                + " ?",
-            String.class,
-            "t1",
-            "idem-async");
+    String status = jdbcTemplate.queryForObject(
+        "select request_status from batch.trigger_request where tenant_id = ? and dedup_key ="
+            + " ?",
+        String.class,
+        "t1",
+        "idem-async");
     assertThat(status).as("async path should set ACCEPTED status").isEqualTo("ACCEPTED");
 
     // trigger_outbox_event 与 trigger_request 在同一 REQUIRES_NEW 事务内原子写入数据库
-    Integer outboxCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
-                + " ?",
-            Integer.class,
-            "t1",
-            "req-async");
+    Integer outboxCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
+            + " ?",
+        Integer.class,
+        "t1",
+        "req-async");
     assertThat(outboxCount)
         .as("trigger_outbox_event should be written atomically with trigger_request")
         .isEqualTo(1);
@@ -99,12 +99,11 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     triggerService.launch(second);
 
     // 两次调用相同 dedupKey，只产生一条记录
-    Integer count =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
-            Integer.class,
-            "t1",
-            "idem-twice");
+    Integer count = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
+        Integer.class,
+        "t1",
+        "idem-twice");
     assertThat(count).isEqualTo(1);
   }
 

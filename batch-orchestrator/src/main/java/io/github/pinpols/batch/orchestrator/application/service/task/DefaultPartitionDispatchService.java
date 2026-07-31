@@ -102,11 +102,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     Instant startedAt = context.startedAt();
     String sourcePayload = buildPayloadJson(request, jobInstance, effectiveParams);
     // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
-    DispatchOutcome outcome =
-        (initialNodes != null && !initialNodes.isEmpty())
-            ? dispatchInitialDagNodes(
-                initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
-            : dispatchByPlan(request, effectiveParams, traceId, jobInstance);
+    DispatchOutcome outcome = (initialNodes != null && !initialNodes.isEmpty())
+        ? dispatchInitialDagNodes(initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
+        : dispatchByPlan(request, effectiveParams, traceId, jobInstance);
     refreshJobInstanceVersion(jobInstance);
     if (outcome.dispatchable()) {
       transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
@@ -128,9 +126,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       if (initialNode == null || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
         continue;
       }
-      partitionCount +=
-          workflowNodeDispatchService.dispatchNode(
-              jobInstance, workflowRun, initialNode, sourcePayload, traceId);
+      partitionCount += workflowNodeDispatchService.dispatchNode(
+          jobInstance, workflowRun, initialNode, sourcePayload, traceId);
     }
     return new DispatchOutcome(partitionCount, true);
   }
@@ -140,13 +137,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       Map<String, Object> effectiveParams,
       String traceId,
       JobInstanceEntity jobInstance) {
-    SchedulePlan plan =
-        schedulePlanBuilder.build(
-            new SchedulePlanCommand(
-                request.tenantId(),
-                request.jobCode(),
-                request.bizDate().toString(),
-                effectiveParams));
+    SchedulePlan plan = schedulePlanBuilder.build(new SchedulePlanCommand(
+        request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams));
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
     if (isRejected(decision)) {
@@ -157,13 +149,11 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
           decision.getReasonMessage());
     }
     applySchedulingDecision(plan, decision);
-    List<JobPartitionEntity> partitions =
-        partitionLifecycleService.createPartitions(
-            plan, jobInstance.getId(), decision.getPartitionStatus());
-    createTasksAndMaybeOutboxEvents(
-        new TaskCreationContext(
-            new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
-            new TaskSchedulingContext(plan, partitions, decision)));
+    List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
+        plan, jobInstance.getId(), decision.getPartitionStatus());
+    createTasksAndMaybeOutboxEvents(new TaskCreationContext(
+        new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
+        new TaskSchedulingContext(plan, partitions, decision)));
     return new DispatchOutcome(partitions.size(), decision.isDispatchable());
   }
 
@@ -188,16 +178,14 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       int partitionCount,
       Instant startedAt) {
     // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
-    int updated =
-        jobInstanceMapper.markRunning(
-            MarkInstanceRunningParam.builder()
-                .tenantId(jobInstance.getTenantId())
-                .id(jobInstance.getId())
-                .instanceStatus(stateMachine.transition(jobInstance, "START").toState())
-                .expectedPartitionCount(partitionCount)
-                .startedAt(startedAt)
-                .expectedVersion(jobInstance.getVersion())
-                .build());
+    int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+        .tenantId(jobInstance.getTenantId())
+        .id(jobInstance.getId())
+        .instanceStatus(stateMachine.transition(jobInstance, "START").toState())
+        .expectedPartitionCount(partitionCount)
+        .startedAt(startedAt)
+        .expectedVersion(jobInstance.getVersion())
+        .build());
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
     }
@@ -215,16 +203,14 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   private void transitionInstanceToWaiting(
       JobInstanceEntity jobInstance, WorkflowRunEntity workflowRun, int partitionCount) {
     // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
-    int updated =
-        jobInstanceMapper.markRunning(
-            MarkInstanceRunningParam.builder()
-                .tenantId(jobInstance.getTenantId())
-                .id(jobInstance.getId())
-                .instanceStatus(JobInstanceStatus.WAITING.code())
-                .expectedPartitionCount(partitionCount)
-                .startedAt(null)
-                .expectedVersion(jobInstance.getVersion())
-                .build());
+    int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+        .tenantId(jobInstance.getTenantId())
+        .id(jobInstance.getId())
+        .instanceStatus(JobInstanceStatus.WAITING.code())
+        .expectedPartitionCount(partitionCount)
+        .startedAt(null)
+        .expectedVersion(jobInstance.getVersion())
+        .build());
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
     }
@@ -291,15 +277,15 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     // V88: 拷 priority (源 = SchedulePlan.priority, 由 DefaultSchedulePlanBuilder 从 job_definition 读)
     task.setPriority(context.creation().scheduling().plan().getPriority());
     Map<String, Object> effectiveParams = context.creation().execution().effectiveParams();
-    task.setTaskPayload(
-        buildPayloadJson(
-            context.creation().execution().request(),
-            context.creation().execution().jobInstance(),
-            effectiveParams,
-            context.partition()));
+    task.setTaskPayload(buildPayloadJson(
+        context.creation().execution().request(),
+        context.creation().execution().jobInstance(),
+        effectiveParams,
+        context.partition()));
     // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
     task.setEffectiveParameters(effectiveParams == null ? null : JsonUtils.toJson(effectiveParams));
-    task.setDryRun(Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
+    task.setDryRun(
+        Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
     return task;
   }
 
@@ -383,8 +369,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       }
     }
     if (!payload.containsKey("bizDate")) {
-      String bizDate =
-          request == null || request.bizDate() == null ? null : request.bizDate().toString();
+      String bizDate = request == null || request.bizDate() == null
+          ? null
+          : request.bizDate().toString();
       if (bizDate != null && !bizDate.isBlank()) {
         payload.put("bizDate", bizDate);
       }

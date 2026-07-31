@@ -45,9 +45,14 @@ import org.springframework.transaction.support.TransactionTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private TransactionTemplate transactionTemplate;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private TransactionTemplate transactionTemplate;
 
   private static final String TENANT = "t1";
 
@@ -63,29 +68,23 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
       ExecutorService pool = Executors.newFixedThreadPool(threads);
       List<Future<?>> futures = new ArrayList<>();
       for (int i = 0; i < threads; i++) {
-        futures.add(
-            pool.submit(
-                () -> {
-                  startGate.await();
-                  // 同 instance 的并发 RMW(模拟 report 的 read-modify-write):取锁串行化后读改写。
-                  transactionTemplate.executeWithoutResult(
-                      status -> {
-                        jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instanceId);
-                        Integer current =
-                            jdbcTemplate.queryForObject(
-                                "SELECT success_partition_count FROM batch.job_instance WHERE id ="
-                                    + " ?",
-                                Integer.class,
-                                instanceId);
-                        int next = (current == null ? 0 : current) + 1;
-                        jdbcTemplate.update(
-                            "UPDATE batch.job_instance SET success_partition_count = ? WHERE id ="
-                                + " ?",
-                            next,
-                            instanceId);
-                      });
-                  return null;
-                }));
+        futures.add(pool.submit(() -> {
+          startGate.await();
+          // 同 instance 的并发 RMW(模拟 report 的 read-modify-write):取锁串行化后读改写。
+          transactionTemplate.executeWithoutResult(status -> {
+            jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instanceId);
+            Integer current = jdbcTemplate.queryForObject(
+                "SELECT success_partition_count FROM batch.job_instance WHERE id =" + " ?",
+                Integer.class,
+                instanceId);
+            int next = (current == null ? 0 : current) + 1;
+            jdbcTemplate.update(
+                "UPDATE batch.job_instance SET success_partition_count = ? WHERE id =" + " ?",
+                next,
+                instanceId);
+          });
+          return null;
+        }));
       }
 
       startGate.countDown();
@@ -95,11 +94,10 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
       }
       pool.shutdown();
 
-      Integer finalCount =
-          jdbcTemplate.queryForObject(
-              "SELECT success_partition_count FROM batch.job_instance WHERE id = ?",
-              Integer.class,
-              instanceId);
+      Integer finalCount = jdbcTemplate.queryForObject(
+          "SELECT success_partition_count FROM batch.job_instance WHERE id = ?",
+          Integer.class,
+          instanceId);
       // 串行化 → 无丢更新 → 恰好 == 线程数。
       assertThat(finalCount)
           .as("advisory lock must serialize RMW, no lost update")
@@ -124,27 +122,21 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
       for (long target : new long[] {instanceA, instanceB}) {
         for (int i = 0; i < perInstance; i++) {
           long instanceId = target;
-          futures.add(
-              pool.submit(
-                  () -> {
-                    startGate.await();
-                    transactionTemplate.executeWithoutResult(
-                        status -> {
-                          jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instanceId);
-                          Integer current =
-                              jdbcTemplate.queryForObject(
-                                  "SELECT success_partition_count FROM batch.job_instance WHERE"
-                                      + " id = ?",
-                                  Integer.class,
-                                  instanceId);
-                          jdbcTemplate.update(
-                              "UPDATE batch.job_instance SET success_partition_count = ? WHERE"
-                                  + " id = ?",
-                              (current == null ? 0 : current) + 1,
-                              instanceId);
-                        });
-                    return null;
-                  }));
+          futures.add(pool.submit(() -> {
+            startGate.await();
+            transactionTemplate.executeWithoutResult(status -> {
+              jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instanceId);
+              Integer current = jdbcTemplate.queryForObject(
+                  "SELECT success_partition_count FROM batch.job_instance WHERE" + " id = ?",
+                  Integer.class,
+                  instanceId);
+              jdbcTemplate.update(
+                  "UPDATE batch.job_instance SET success_partition_count = ? WHERE" + " id = ?",
+                  (current == null ? 0 : current) + 1,
+                  instanceId);
+            });
+            return null;
+          }));
         }
       }
 
@@ -165,41 +157,28 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
   }
 
   private int counterOf(long instanceId) {
-    Integer v =
-        jdbcTemplate.queryForObject(
-            "SELECT success_partition_count FROM batch.job_instance WHERE id = ?",
-            Integer.class,
-            instanceId);
+    Integer v = jdbcTemplate.queryForObject(
+        "SELECT success_partition_count FROM batch.job_instance WHERE id = ?",
+        Integer.class,
+        instanceId);
     return v == null ? 0 : v;
   }
 
   private long seedInstance(String suffix) {
     String jobCode = "JOB_" + suffix;
-    Long jobDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobDefinitionId = jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_definition (
                 tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode
             ) VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', 'API')
             RETURNING id
-            """,
-            Long.class,
-            TENANT,
-            jobCode,
-            jobCode);
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            """
+            """, Long.class, TENANT, jobCode, jobCode);
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        """
             INSERT INTO batch.trigger_request (
                 tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
             ) VALUES (?, ?, 'API', ?, ?, 'LAUNCHED')
             RETURNING id
-            """,
-            Long.class,
-            TENANT,
-            "REQ_" + suffix,
-            jobCode,
-            "TR_DEDUP_" + suffix);
+            """, Long.class, TENANT, "REQ_" + suffix, jobCode, "TR_DEDUP_" + suffix);
     return jdbcTemplate.queryForObject(
         """
         INSERT INTO batch.job_instance (

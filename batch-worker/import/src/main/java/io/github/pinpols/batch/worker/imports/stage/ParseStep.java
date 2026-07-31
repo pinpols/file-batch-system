@@ -95,18 +95,17 @@ public class ParseStep implements ImportStageStep {
     XmlFormatParser xmlParser = new XmlFormatParser(support);
     FixedWidthFormatParser fixedWidthParser = new FixedWidthFormatParser(support);
     DelimitedFormatParser delimitedParser = new DelimitedFormatParser(support);
-    this.parsers =
-        Map.of(
-            FORMAT_EXCEL,
-            excelParser,
-            "JSON",
-            jsonParser,
-            "XML",
-            xmlParser,
-            "FIXED_WIDTH",
-            fixedWidthParser,
-            "DELIMITED",
-            delimitedParser);
+    this.parsers = Map.of(
+        FORMAT_EXCEL,
+        excelParser,
+        "JSON",
+        jsonParser,
+        "XML",
+        xmlParser,
+        "FIXED_WIDTH",
+        fixedWidthParser,
+        "DELIMITED",
+        delimitedParser);
     this.defaultParser = delimitedParser;
   }
 
@@ -121,37 +120,32 @@ public class ParseStep implements ImportStageStep {
     Path spoolFile = resolveSpoolPath(context);
     Map<String, Object> attrs = context.getAttributes();
     try {
-      String payloadText =
-          String.valueOf(
-              attrs.getOrDefault(
-                  PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload()));
+      String payloadText = String.valueOf(attrs.getOrDefault(
+          PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, context.getRawPayload()));
       payloadText = peelTrailerControlRecord(context, payloadText, attrs);
       ImportPayload importPayload =
           attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
               ? payload
               : null;
       stagingFile = createStagingFile(context, "parsed");
-      long totalCount =
-          parsePayloads(
-              context,
-              payloadText,
-              importPayload,
-              attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG),
-              stagingFile);
+      long totalCount = parsePayloads(
+          context,
+          payloadText,
+          importPayload,
+          attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG),
+          stagingFile);
       // 默认按行 mod 切片:partitionCount > 1 且未关闭时,流式过滤 staging 文件,只保留属于本 partition 的行。
       // (lineNo 0-based;partitionNo 1-based;条件 lineNo % count == partitionNo - 1)
       // totalCount = 文件原始行数(全部 partition 视角);parsedCount = 本 partition 实际处理的行数
-      long partitionedCount =
-          applyPartitionFilter(
-              context, stagingFile, totalCount, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+      long partitionedCount = applyPartitionFilter(
+          context, stagingFile, totalCount, attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
       attrs.put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
       // 切片时 parsedCount 应反映本 partition 视角(下游 LoadStep 用它做 audit + step output);
       // 不切片时维持原有 support.numberValue(...) 值回退,保持与历史行为一致。
       Object existingParsedCount = attrs.get(KEY_PARSED_COUNT);
-      long parsedCountValue =
-          partitionedCount != totalCount
-              ? partitionedCount
-              : support.numberValue(existingParsedCount);
+      long parsedCountValue = partitionedCount != totalCount
+          ? partitionedCount
+          : support.numberValue(existingParsedCount);
       attrs.put(KEY_PARSED_COUNT, parsedCountValue);
       attrs.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
       if (totalCount == 0
@@ -382,19 +376,17 @@ public class ParseStep implements ImportStageStep {
       throws Exception {
     boolean preserveLogicalRow = preserveLogicalRow(context, templateConfig);
     Object binary = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-    try (BufferedWriter writer =
-        Files.newBufferedWriter(
-            stagingFile,
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
+    try (BufferedWriter writer = Files.newBufferedWriter(
+        stagingFile,
+        StandardCharsets.UTF_8,
+        StandardOpenOption.CREATE,
+        StandardOpenOption.TRUNCATE_EXISTING,
+        StandardOpenOption.WRITE)) {
       if (binary instanceof byte[] binaryBytes && binaryBytes.length > 0) {
         String format = resolveFormat(importPayload, templateConfig, "");
         if (FORMAT_EXCEL.equalsIgnoreCase(format)) {
-          FormatParseRequest request =
-              new FormatParseRequest(
-                  null, binaryBytes, importPayload, templateConfig, preserveLogicalRow);
+          FormatParseRequest request = new FormatParseRequest(
+              null, binaryBytes, importPayload, templateConfig, preserveLogicalRow);
           return parsers.get(FORMAT_EXCEL).parse(context, request, writer);
         }
         Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
@@ -417,31 +409,28 @@ public class ParseStep implements ImportStageStep {
       throws Exception {
     Path spoolPath = resolveSpoolPath(context);
     Charset spoolCharset = resolveSpoolCharset(context);
-    String format =
-        spoolPath != null
-            ? resolveFormat(importPayload, templateConfig, "")
-            : resolveFormat(importPayload, templateConfig, payloadText);
-    FormatParseRequest request =
-        new FormatParseRequest(
-            payloadText,
-            null,
-            importPayload,
-            templateConfig,
-            preserveLogicalRow,
-            spoolPath,
-            spoolCharset);
+    String format = spoolPath != null
+        ? resolveFormat(importPayload, templateConfig, "")
+        : resolveFormat(importPayload, templateConfig, payloadText);
+    FormatParseRequest request = new FormatParseRequest(
+        payloadText,
+        null,
+        importPayload,
+        templateConfig,
+        preserveLogicalRow,
+        spoolPath,
+        spoolCharset);
     if (FORMAT_EXCEL.equalsIgnoreCase(format)) {
       byte[] bytes =
           payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
-      request =
-          new FormatParseRequest(
-              payloadText,
-              bytes,
-              importPayload,
-              templateConfig,
-              preserveLogicalRow,
-              spoolPath,
-              spoolCharset);
+      request = new FormatParseRequest(
+          payloadText,
+          bytes,
+          importPayload,
+          templateConfig,
+          preserveLogicalRow,
+          spoolPath,
+          spoolCharset);
     }
     FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
     return parser.parse(context, request, writer);
@@ -564,7 +553,8 @@ public class ParseStep implements ImportStageStep {
       if (switchVal == null) {
         switchVal = tc.get("partitionAwareParse");
       }
-      if (switchVal != null && "false".equalsIgnoreCase(String.valueOf(switchVal).trim())) {
+      if (switchVal != null
+          && "false".equalsIgnoreCase(String.valueOf(switchVal).trim())) {
         return totalCount;
       }
     }
@@ -577,24 +567,22 @@ public class ParseStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
       return totalCount;
     }
-    Path filtered =
-        Files.createTempFile(
-            BatchFileConstants.importStagePrefix(
-                String.valueOf(context.getFileId()),
-                String.valueOf(context.getWorkerId()),
-                "parsed-p" + partitionNo),
-            ".tmp");
+    Path filtered = Files.createTempFile(
+        BatchFileConstants.importStagePrefix(
+            String.valueOf(context.getFileId()),
+            String.valueOf(context.getWorkerId()),
+            "parsed-p" + partitionNo),
+        ".tmp");
     long lineNo = 0;
     long kept = 0;
     int targetMod = partitionNo - 1;
     try (BufferedReader reader = Files.newBufferedReader(stagingFile, StandardCharsets.UTF_8);
-        BufferedWriter writer =
-            Files.newBufferedWriter(
-                filtered,
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE)) {
+        BufferedWriter writer = Files.newBufferedWriter(
+            filtered,
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE)) {
       String line;
       while ((line = reader.readLine()) != null) {
         if (lineNo % partitionCount == targetMod) {

@@ -68,11 +68,10 @@ class ConsoleAdminTestDataControllerTest {
         new ConsoleAdminTestDataController(cleanupService, responseFactory, environment);
     // PostConstruct 在 standalone setup 下不会自动跑;此处显式调一次走非 prod 路径(test profile)
     ReflectionTestUtils.invokeMethod(controller, "validateProfile");
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(controller)
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test

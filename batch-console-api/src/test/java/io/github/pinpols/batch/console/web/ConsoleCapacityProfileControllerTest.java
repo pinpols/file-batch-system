@@ -63,17 +63,13 @@ class ConsoleCapacityProfileControllerTest {
     doReturn(getSpec).when(getUriSpec).uri(any(Function.class));
     when(getSpec.retrieve()).thenReturn(responseSpec);
     when(responseSpec.body(any(ParameterizedTypeReference.class)))
-        .thenReturn(
-            CommonResponse.success(
-                new CapacityProfileResponse(
-                    null, "ta", null, "JOB", "BFS_HOT_TABLES", List.of(), null, null)));
+        .thenReturn(CommonResponse.success(new CapacityProfileResponse(
+            null, "ta", null, "JOB", "BFS_HOT_TABLES", List.of(), null, null)));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleCapacityProfileController(
-                    orchestratorInternalRestClient, tenantGuard, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleCapacityProfileController(
+            orchestratorInternalRestClient, tenantGuard, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
@@ -81,13 +77,12 @@ class ConsoleCapacityProfileControllerTest {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
 
     mockMvc
-        .perform(
-            get("/api/console/capacity-profile")
-                .param("tenantId", "ta")
-                .param("groupBy", "JOB")
-                .param("from", "2026-06-30T00:00:00Z")
-                .param("to", "2026-06-30T01:00:00Z")
-                .param("limit", "10"))
+        .perform(get("/api/console/capacity-profile")
+            .param("tenantId", "ta")
+            .param("groupBy", "JOB")
+            .param("from", "2026-06-30T00:00:00Z")
+            .param("to", "2026-06-30T01:00:00Z")
+            .param("limit", "10"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.scope").value("BFS_HOT_TABLES"))
         .andExpect(jsonPath("$.data.groupBy").value("JOB"));

@@ -128,16 +128,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       auditDetail.put("approvalId", command.approvalId());
       auditDetail.put("contentEncryptionEnabled", true);
       auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
-      fileGovernanceRepository.appendAudit(
-          new FileGovernanceRepository.FileAuditCommand(
-              command.tenantId(),
-              command.fileId(),
-              "PRESIGN_DOWNLOAD",
-              STATUS_SUCCESS,
-              new FileGovernanceRepository.FileAuditActor(
-                  resolveOperatorType(command.operatorId()), command.operatorId()),
-              command.traceId(),
-              auditDetail));
+      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+          command.tenantId(),
+          command.fileId(),
+          "PRESIGN_DOWNLOAD",
+          STATUS_SUCCESS,
+          new FileGovernanceRepository.FileAuditActor(
+              resolveOperatorType(command.operatorId()), command.operatorId()),
+          command.traceId(),
+          auditDetail));
       return consolePath;
     }
     String storagePath = stringValue(fileRecord.get("storage_path"));
@@ -163,16 +162,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           "previewMaskingNote",
           "template enables preview masking; avoid exposing raw object bytes in UI");
     }
-    fileGovernanceRepository.appendAudit(
-        new FileGovernanceRepository.FileAuditCommand(
-            command.tenantId(),
-            command.fileId(),
-            "PRESIGN_DOWNLOAD",
-            STATUS_SUCCESS,
-            new FileGovernanceRepository.FileAuditActor(
-                resolveOperatorType(command.operatorId()), command.operatorId()),
-            command.traceId(),
-            auditDetail));
+    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+        command.tenantId(),
+        command.fileId(),
+        "PRESIGN_DOWNLOAD",
+        STATUS_SUCCESS,
+        new FileGovernanceRepository.FileAuditActor(
+            resolveOperatorType(command.operatorId()), command.operatorId()),
+        command.traceId(),
+        auditDetail));
     return presignedUrl;
   }
 
@@ -182,15 +180,14 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     validateUploadSessionCommand(command);
     Instant now = BatchDateTimeSupport.utcNow();
     String fileName = safeFileName(command.fileName());
-    String storagePath =
-        "uploads/"
-            + safeKeySegment(command.tenantId())
-            + "/"
-            + OBJECT_KEY_DATE.format(now)
-            + "/"
-            + UUID.randomUUID()
-            + "-"
-            + fileName;
+    String storagePath = "uploads/"
+        + safeKeySegment(command.tenantId())
+        + "/"
+        + OBJECT_KEY_DATE.format(now)
+        + "/"
+        + UUID.randomUUID()
+        + "-"
+        + fileName;
     String storageBucket = s3GovernanceStorage.defaultBucket();
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("channelCode", command.channelCode());
@@ -199,33 +196,31 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     metadata.put("storageBackend", "BatchObjectStore");
     metadata.put("uploadSessionCreatedAt", now.toString());
     metadata.put("uploadSessionOperatorId", command.operatorId());
-    Long fileId =
-        fileGovernanceRepository.createReconciledFileRecord(
-            new FileGovernanceRepository.ReconciledFileRecordCommand(
-                new FileGovernanceRepository.FileIdentity(
-                    command.tenantId(), "INPUT", fileName, fileFormatType(fileName)),
-                0L,
-                new FileGovernanceRepository.FileStorage("S3", storagePath, storageBucket),
-                "UPLOAD",
-                "RECEIVED",
-                command.traceId(),
-                metadata));
+    Long fileId = fileGovernanceRepository.createReconciledFileRecord(
+        new FileGovernanceRepository.ReconciledFileRecordCommand(
+            new FileGovernanceRepository.FileIdentity(
+                command.tenantId(), "INPUT", fileName, fileFormatType(fileName)),
+            0L,
+            new FileGovernanceRepository.FileStorage("S3", storagePath, storageBucket),
+            "UPLOAD",
+            "RECEIVED",
+            command.traceId(),
+            metadata));
     if (fileId == null) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
           "upload storage path already exists");
     }
-    fileGovernanceRepository.appendAudit(
-        new FileGovernanceRepository.FileAuditCommand(
-            command.tenantId(),
-            fileId,
-            "UPLOAD_SESSION_CREATED",
-            STATUS_SUCCESS,
-            new FileGovernanceRepository.FileAuditActor(
-                resolveOperatorType(command.operatorId()), command.operatorId()),
-            command.traceId(),
-            metadata));
+    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+        command.tenantId(),
+        fileId,
+        "UPLOAD_SESSION_CREATED",
+        STATUS_SUCCESS,
+        new FileGovernanceRepository.FileAuditActor(
+            resolveOperatorType(command.operatorId()), command.operatorId()),
+        command.traceId(),
+        metadata));
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("fileId", fileId);
     response.put("status", "RECEIVED");
@@ -269,16 +264,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     metadata.put("uploadedSizeBytes", fileSizeBytes);
     fileGovernanceRepository.markFileArrivalConfirmed(
         command.tenantId(), command.fileId(), fileSizeBytes, metadata);
-    fileGovernanceRepository.appendAudit(
-        new FileGovernanceRepository.FileAuditCommand(
-            command.tenantId(),
-            command.fileId(),
-            "CONFIRM_ARRIVAL",
-            STATUS_SUCCESS,
-            new FileGovernanceRepository.FileAuditActor(
-                resolveOperatorType(command.operatorId()), command.operatorId()),
-            command.traceId(),
-            metadata));
+    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+        command.tenantId(),
+        command.fileId(),
+        "CONFIRM_ARRIVAL",
+        STATUS_SUCCESS,
+        new FileGovernanceRepository.FileAuditActor(
+            resolveOperatorType(command.operatorId()), command.operatorId()),
+        command.traceId(),
+        metadata));
     return "ARRIVAL_CONFIRMED";
   }
 
@@ -296,9 +290,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (fileRecord.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    Map<String, Object> dispatchRecord =
-        fileGovernanceRepository.loadLatestDispatchRecord(
-            command.tenantId(), command.fileId(), command.channelCode());
+    Map<String, Object> dispatchRecord = fileGovernanceRepository.loadLatestDispatchRecord(
+        command.tenantId(), command.fileId(), command.channelCode());
     if (dispatchRecord.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.dispatch.record_not_found");
     }
@@ -308,15 +301,13 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (relatedJobInstanceId == null) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.dispatch.pipeline_unbound");
     }
-    JobInstanceEntity jobInstance =
-        Guard.requireFound(
-            jobInstanceMapper.selectById(command.tenantId(), relatedJobInstanceId),
-            "dispatch job instance not found");
+    JobInstanceEntity jobInstance = Guard.requireFound(
+        jobInstanceMapper.selectById(command.tenantId(), relatedJobInstanceId),
+        "dispatch job instance not found");
     JobTaskEntity task = resolveDispatchTask(command.tenantId(), jobInstance.getId());
-    JobPartitionEntity partition =
-        Guard.requireFound(
-            jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId()),
-            "dispatch partition not found");
+    JobPartitionEntity partition = Guard.requireFound(
+        jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId()),
+        "dispatch partition not found");
 
     fileGovernanceRepository.resetDispatchRecordForRedispatch(
         command.tenantId(), toLong(dispatchRecord.get("id")));
@@ -334,16 +325,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         command.traceId(),
         OutboxEventKeyGenerator.forFileRedispatch(command.tenantId(), task.getId()),
         RunMode.COMPENSATE);
-    fileGovernanceRepository.appendAudit(
-        new FileGovernanceRepository.FileAuditCommand(
-            command.tenantId(),
-            command.fileId(),
-            "REDISPATCH",
-            STATUS_SUCCESS,
-            new FileGovernanceRepository.FileAuditActor(
-                resolveOperatorType(command.operatorId()), command.operatorId()),
-            command.traceId(),
-            buildRedispatchDetail(dispatchRecord, task, partition, command)));
+    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+        command.tenantId(),
+        command.fileId(),
+        "REDISPATCH",
+        STATUS_SUCCESS,
+        new FileGovernanceRepository.FileAuditActor(
+            resolveOperatorType(command.operatorId()), command.operatorId()),
+        command.traceId(),
+        buildRedispatchDetail(dispatchRecord, task, partition, command)));
     return "REDISPATCH_ACCEPTED";
   }
 
@@ -351,12 +341,11 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   @Transactional
   public String operateArrivalGroup(ArrivalGroupGovernanceCommand command) {
     validateArrivalGroupCommand(command);
-    List<Map<String, Object>> groupFiles =
-        Texts.hasText(command.bizDate())
-            ? fileGovernanceRepository.selectArrivalGroupFiles(
-                command.tenantId(), command.fileGroupCode(), command.bizDate())
-            : fileGovernanceRepository.selectArrivalGroupFiles(
-                command.tenantId(), command.fileGroupCode());
+    List<Map<String, Object>> groupFiles = Texts.hasText(command.bizDate())
+        ? fileGovernanceRepository.selectArrivalGroupFiles(
+            command.tenantId(), command.fileGroupCode(), command.bizDate())
+        : fileGovernanceRepository.selectArrivalGroupFiles(
+            command.tenantId(), command.fileGroupCode());
     if (groupFiles.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
     }
@@ -369,10 +358,10 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           case "SKIP_BATCH" -> "TIMEOUT";
           case "EMPTY_RUN", "TRIGGER_NOW" -> "TRIGGERED";
           default ->
-              throw BizException.of(
-                  ResultCode.INVALID_ARGUMENT,
-                  "error.common.invalid_argument_detail",
-                  "unsupported arrival action: " + command.action());
+            throw BizException.of(
+                ResultCode.INVALID_ARGUMENT,
+                "error.common.invalid_argument_detail",
+                "unsupported arrival action: " + command.action());
         };
     if ("EMPTY_RUN".equals(action) && !toBoolean(groupFiles.get(0).get("allow_empty_run"))) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.arrival_group.empty_run_not_allowed");
@@ -381,14 +370,12 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.arrival_group.skip_batch_not_allowed");
     }
-    long extensionSeconds =
-        command.extendWaitSeconds() == null || command.extendWaitSeconds() <= 0
-            ? fileGovernanceProperties.getArrival().getManualWaitExtensionSeconds()
-            : command.extendWaitSeconds();
-    String latestTolerableTime =
-        "CONTINUE_WAITING".equals(action)
-            ? now.plusSeconds(Math.max(1L, extensionSeconds)).toString()
-            : stringValue(groupFiles.get(0).get("latest_tolerable_time"));
+    long extensionSeconds = command.extendWaitSeconds() == null || command.extendWaitSeconds() <= 0
+        ? fileGovernanceProperties.getArrival().getManualWaitExtensionSeconds()
+        : command.extendWaitSeconds();
+    String latestTolerableTime = "CONTINUE_WAITING".equals(action)
+        ? now.plusSeconds(Math.max(1L, extensionSeconds)).toString()
+        : stringValue(groupFiles.get(0).get("latest_tolerable_time"));
     for (Map<String, Object> groupFile : groupFiles) {
       Long fileId = toLong(groupFile.get("id"));
       if (fileId == null) {
@@ -412,16 +399,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         metadata.put("arrivalTimedOutAt", now.toString());
       }
       fileGovernanceRepository.updateFileMetadata(command.tenantId(), fileId, metadata);
-      fileGovernanceRepository.appendAudit(
-          new FileGovernanceRepository.FileAuditCommand(
-              command.tenantId(),
-              fileId,
-              "ARRIVAL_MANUAL_" + action,
-              STATUS_SUCCESS,
-              new FileGovernanceRepository.FileAuditActor(
-                  resolveOperatorType(command.operatorId()), command.operatorId()),
-              command.traceId(),
-              metadata));
+      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+          command.tenantId(),
+          fileId,
+          "ARRIVAL_MANUAL_" + action,
+          STATUS_SUCCESS,
+          new FileGovernanceRepository.FileAuditActor(
+              resolveOperatorType(command.operatorId()), command.operatorId()),
+          command.traceId(),
+          metadata));
     }
     return nextState;
   }
@@ -483,54 +469,51 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       assertNoActiveRuntime(command);
       // 状态机校验：业务规则属于应用层职责（已从 Repository 上移）
       FileStateMachine.assertTransition(currentStatus, nextStatus);
-      int updated =
-          fileGovernanceRepository.updateFileStatus(
-              command.tenantId(),
-              command.fileId(),
-              currentStatus,
-              nextStatus,
-              Map.of(
-                  "governanceOperation", operationType,
-                  "reason", Objects.requireNonNullElse(command.reason(), ""),
-                  "operatorId", Objects.requireNonNullElse(command.operatorId(), "")));
+      int updated = fileGovernanceRepository.updateFileStatus(
+          command.tenantId(),
+          command.fileId(),
+          currentStatus,
+          nextStatus,
+          Map.of(
+              "governanceOperation", operationType,
+              "reason", Objects.requireNonNullElse(command.reason(), ""),
+              "operatorId", Objects.requireNonNullElse(command.operatorId(), "")));
       if (updated <= 0) {
         throw BizException.of(
             ResultCode.STATE_CONFLICT,
             "error.common.state_conflict_detail",
             "file status changed concurrently, expected " + currentStatus);
       }
-      fileGovernanceRepository.appendAudit(
-          new FileGovernanceRepository.FileAuditCommand(
-              command.tenantId(),
-              command.fileId(),
-              operationType,
-              STATUS_SUCCESS,
-              new FileGovernanceRepository.FileAuditActor(
-                  resolveOperatorType(command.operatorId()), command.operatorId()),
-              command.traceId(),
-              fileGovernanceRepository.operationDetail(
-                  currentStatus, nextStatus, command.operatorId(), command.reason())));
+      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+          command.tenantId(),
+          command.fileId(),
+          operationType,
+          STATUS_SUCCESS,
+          new FileGovernanceRepository.FileAuditActor(
+              resolveOperatorType(command.operatorId()), command.operatorId()),
+          command.traceId(),
+          fileGovernanceRepository.operationDetail(
+              currentStatus, nextStatus, command.operatorId(), command.reason())));
       return nextStatus;
     } catch (RuntimeException exception) {
-      fileGovernanceRepository.appendAudit(
-          new FileGovernanceRepository.FileAuditCommand(
-              command.tenantId(),
-              command.fileId(),
-              operationType,
-              "FAILED",
-              new FileGovernanceRepository.FileAuditActor(
-                  resolveOperatorType(command.operatorId()), command.operatorId()),
-              command.traceId(),
-              Map.of(
-                  "currentStatus",
-                  Objects.requireNonNullElse(currentStatus, ""),
-                  "nextStatus",
-                  Objects.requireNonNullElse(nextStatus, ""),
-                  "reason",
-                  Objects.requireNonNullElse(command.reason(), ""),
-                  "errorMessage",
-                  Objects.requireNonNullElse(
-                      exception.getMessage(), exception.getClass().getSimpleName()))));
+      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
+          command.tenantId(),
+          command.fileId(),
+          operationType,
+          "FAILED",
+          new FileGovernanceRepository.FileAuditActor(
+              resolveOperatorType(command.operatorId()), command.operatorId()),
+          command.traceId(),
+          Map.of(
+              "currentStatus",
+              Objects.requireNonNullElse(currentStatus, ""),
+              "nextStatus",
+              Objects.requireNonNullElse(nextStatus, ""),
+              "reason",
+              Objects.requireNonNullElse(command.reason(), ""),
+              "errorMessage",
+              Objects.requireNonNullElse(
+                  exception.getMessage(), exception.getClass().getSimpleName()))));
       throw exception;
     }
   }
@@ -540,9 +523,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         jobTaskMapper.selectByQuery(JobTaskQuery.ofJobInstance(tenantId, jobInstanceId));
     return tasks.stream()
         .filter(task -> "DISPATCH".equalsIgnoreCase(task.getTaskType()))
-        .sorted(
-            Comparator.comparing(
-                JobTaskEntity::getTaskSeq, Comparator.nullsLast(Integer::compareTo)))
+        .sorted(Comparator.comparing(
+            JobTaskEntity::getTaskSeq, Comparator.nullsLast(Integer::compareTo)))
         .findFirst()
         .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.dispatch.task_not_found"));
   }

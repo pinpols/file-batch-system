@@ -24,8 +24,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ExtendWith(MockitoExtension.class)
 class ConsoleConfigCacheInvalidationServiceTest {
 
-  @Mock private StringRedisTemplate redisTemplate;
-  @Mock private ConsoleQueryCacheService queryCacheService;
+  @Mock
+  private StringRedisTemplate redisTemplate;
+
+  @Mock
+  private ConsoleQueryCacheService queryCacheService;
 
   private ConsoleConfigCacheInvalidationService service;
 
@@ -76,12 +79,11 @@ class ConsoleConfigCacheInvalidationServiceTest {
   void evictAllJobDefinitionsUsesScanInsteadOfKeys() {
     Cursor<String> cursor = (Cursor<String>) org.mockito.Mockito.mock(Cursor.class);
     Iterator<Boolean> hasNext = List.of(true, true, true, false).iterator();
-    Iterator<String> next =
-        List.of(
-                "config:t1:job-definition:JOB1",
-                "config:t1:job-definition:JOB2",
-                "config:t1:job-definition:JOB3")
-            .iterator();
+    Iterator<String> next = List.of(
+            "config:t1:job-definition:JOB1",
+            "config:t1:job-definition:JOB2",
+            "config:t1:job-definition:JOB3")
+        .iterator();
     when(cursor.hasNext()).thenAnswer(inv -> hasNext.next());
     when(cursor.next()).thenAnswer(inv -> next.next());
     when(redisTemplate.scan(any(ScanOptions.class))).thenReturn(cursor);

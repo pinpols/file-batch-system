@@ -26,8 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 @ExtendWith(MockitoExtension.class)
 class TaskDispatchOutboxServiceMandatoryTest {
 
-  @Mock private DomainEventPublisher domainEventPublisher;
-  @Mock private JobTaskMapper jobTaskMapper;
+  @Mock
+  private DomainEventPublisher domainEventPublisher;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
 
@@ -90,14 +93,13 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
   @Test
   void writeDispatchEvent_methodHasMandatoryTransactional() throws Exception {
-    Method method =
-        TaskDispatchOutboxService.class.getDeclaredMethod(
-            "writeDispatchEvent",
-            JobInstanceEntity.class,
-            JobTaskEntity.class,
-            JobPartitionEntity.class,
-            String.class,
-            String.class);
+    Method method = TaskDispatchOutboxService.class.getDeclaredMethod(
+        "writeDispatchEvent",
+        JobInstanceEntity.class,
+        JobTaskEntity.class,
+        JobPartitionEntity.class,
+        String.class,
+        String.class);
     Transactional tx = method.getAnnotation(Transactional.class);
     assertThat(tx).isNotNull();
     assertThat(tx.propagation()).isEqualTo(Propagation.MANDATORY);
@@ -105,15 +107,14 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
   @Test
   void writeDispatchEvent_withRunMode_methodHasMandatoryTransactional() throws Exception {
-    Method method =
-        TaskDispatchOutboxService.class.getDeclaredMethod(
-            "writeDispatchEvent",
-            JobInstanceEntity.class,
-            JobTaskEntity.class,
-            JobPartitionEntity.class,
-            String.class,
-            String.class,
-            RunMode.class);
+    Method method = TaskDispatchOutboxService.class.getDeclaredMethod(
+        "writeDispatchEvent",
+        JobInstanceEntity.class,
+        JobTaskEntity.class,
+        JobPartitionEntity.class,
+        String.class,
+        String.class,
+        RunMode.class);
     Transactional tx = method.getAnnotation(Transactional.class);
     assertThat(tx).isNotNull();
     assertThat(tx.propagation()).isEqualTo(Propagation.MANDATORY);

@@ -20,12 +20,11 @@ class LocalizedErrorRendererTest {
 
   @Test
   void renderWithKeyAndArgsResolvesPerLocale() {
-    String rendered =
-        renderer.render(
-            "error.tenant.already_exists",
-            "[\"acme\"]",
-            "stale message in storage",
-            Locale.SIMPLIFIED_CHINESE);
+    String rendered = renderer.render(
+        "error.tenant.already_exists",
+        "[\"acme\"]",
+        "stale message in storage",
+        Locale.SIMPLIFIED_CHINESE);
 
     assertThat(rendered).isEqualTo("租户已存在:acme");
   }
@@ -103,12 +102,11 @@ class LocalizedErrorRendererTest {
   void renderWithCorruptArgsFallsBackInsteadOfThrowing() {
     // error.tenant.already_exists 模板含 {0}，但 errorArgsJson 损坏 → parseArgs 返回空数组 →
     // MessageFormat 尝试替换 {0} 时抛 IllegalArgumentException；renderer 应 fallback
-    String rendered =
-        renderer.render(
-            "error.tenant.already_exists",
-            "<<<not valid json>>>",
-            "fallback for corrupt args",
-            Locale.ENGLISH);
+    String rendered = renderer.render(
+        "error.tenant.already_exists",
+        "<<<not valid json>>>",
+        "fallback for corrupt args",
+        Locale.ENGLISH);
 
     // 损坏 args 解析为空数组后，MessageFormat 行为可能因 Spring 版本而异；
     // 关键约束是不抛异常，且至少能返回某个字符串（fallback 或 raw template）
@@ -167,11 +165,8 @@ class LocalizedErrorRendererTest {
   /** P3：args 含复杂对象不阻塞写入数据库（仅 log.warn）；JSON 序列化仍能完成。 */
   @Test
   void bizExceptionUtilsAcceptsComplexArgsWithoutThrowing() {
-    BizException ex =
-        BizException.of(
-            ResultCode.NOT_FOUND,
-            "error.tenant.already_exists",
-            java.util.Map.of("nested", "value"));
+    BizException ex = BizException.of(
+        ResultCode.NOT_FOUND, "error.tenant.already_exists", java.util.Map.of("nested", "value"));
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
 

@@ -51,22 +51,20 @@ final class TaskOutcomeStatePolicy {
       latestByNode.merge(
           nodeRun.getNodeCode(),
           nodeRun,
-          (left, right) ->
-              Optional.ofNullable(right.getRunSeq()).orElse(0)
-                      >= Optional.ofNullable(left.getRunSeq()).orElse(0)
-                  ? right
-                  : left);
+          (left, right) -> Optional.ofNullable(right.getRunSeq()).orElse(0)
+                  >= Optional.ofNullable(left.getRunSeq()).orElse(0)
+              ? right
+              : left);
     }
     Set<String> activeNodes = new LinkedHashSet<>();
-    latestByNode.forEach(
-        (nodeCode, nodeRun) -> {
-          String status = nodeRun.getNodeStatus();
-          if (WorkflowNodeRunStatus.READY.code().equals(status)
-              || WorkflowNodeRunStatus.WAITING_DEPENDENCY.code().equals(status)
-              || WorkflowNodeRunStatus.RUNNING.code().equals(status)) {
-            activeNodes.add(nodeCode);
-          }
-        });
+    latestByNode.forEach((nodeCode, nodeRun) -> {
+      String status = nodeRun.getNodeStatus();
+      if (WorkflowNodeRunStatus.READY.code().equals(status)
+          || WorkflowNodeRunStatus.WAITING_DEPENDENCY.code().equals(status)
+          || WorkflowNodeRunStatus.RUNNING.code().equals(status)) {
+        activeNodes.add(nodeCode);
+      }
+    });
     return activeNodes;
   }
 

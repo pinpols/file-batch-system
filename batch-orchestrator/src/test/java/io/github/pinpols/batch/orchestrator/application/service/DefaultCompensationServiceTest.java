@@ -48,27 +48,25 @@ class DefaultCompensationServiceTest {
   @BeforeEach
   void setUp() {
     compensationCommandMapper = mock(CompensationCommandMapper.class);
-    jobMappers =
-        new OrchestratorJobMappers(
-            mock(JobInstanceMapper.class),
-            mock(JobPartitionMapper.class),
-            mock(JobTaskMapper.class),
-            mock(JobStepInstanceMapper.class),
-            mock(TriggerRequestMapper.class));
+    jobMappers = new OrchestratorJobMappers(
+        mock(JobInstanceMapper.class),
+        mock(JobPartitionMapper.class),
+        mock(JobTaskMapper.class),
+        mock(JobStepInstanceMapper.class),
+        mock(TriggerRequestMapper.class));
     retryGovernanceService = mock(RetryGovernanceService.class);
     fileGovernanceService = mock(FileGovernanceService.class);
     launchService = mock(LaunchService.class);
     launchServiceProvider = mock(ObjectProvider.class);
     taskExecutionService = mock(TaskExecutionService.class);
 
-    service =
-        new DefaultCompensationService(
-            compensationCommandMapper,
-            jobMappers,
-            retryGovernanceService,
-            fileGovernanceService,
-            launchServiceProvider,
-            taskExecutionService);
+    service = new DefaultCompensationService(
+        compensationCommandMapper,
+        jobMappers,
+        retryGovernanceService,
+        fileGovernanceService,
+        launchServiceProvider,
+        taskExecutionService);
     Mockito.when(launchServiceProvider.getObject()).thenReturn(launchService);
     ReflectionTestUtils.setField(service, "self", service);
   }
@@ -136,22 +134,21 @@ class DefaultCompensationServiceTest {
 
   @Test
   void shouldThrowWhenBatchJobCodeIsBlank() {
-    CompensationSubmitCommand cmd =
-        new CompensationSubmitCommand(
-            "t1",
-            "BATCH",
-            null,
-            null,
-            null,
-            LocalDate.now(),
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null);
+    CompensationSubmitCommand cmd = new CompensationSubmitCommand(
+        "t1",
+        "BATCH",
+        null,
+        null,
+        null,
+        LocalDate.now(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
     when(compensationCommandMapper.countRunningByTarget(
             anyString(), anyString(), any(), anyString()))
         .thenReturn(0);
@@ -161,9 +158,8 @@ class DefaultCompensationServiceTest {
 
   @Test
   void shouldThrowWhenFileTargetIdAndRelatedFileIdAreNull() {
-    CompensationSubmitCommand cmd =
-        new CompensationSubmitCommand(
-            "t1", "FILE", null, null, null, null, null, null, "CH1", null, null, null, null, null);
+    CompensationSubmitCommand cmd = new CompensationSubmitCommand(
+        "t1", "FILE", null, null, null, null, null, null, "CH1", null, null, null, null, null);
     when(compensationCommandMapper.countRunningByTarget(
             anyString(), anyString(), any(), anyString()))
         .thenReturn(0);
@@ -227,22 +223,21 @@ class DefaultCompensationServiceTest {
 
   @Test
   void shouldReprocessFileSuccessfully_FILE_path() {
-    CompensationSubmitCommand cmd =
-        new CompensationSubmitCommand(
-            "t1",
-            "FILE",
-            null,
-            null,
-            null,
-            null,
-            null,
-            777L, // relatedFileId
-            "CH-A",
-            "reprocess test",
-            "op-001",
-            null,
-            null,
-            null);
+    CompensationSubmitCommand cmd = new CompensationSubmitCommand(
+        "t1",
+        "FILE",
+        null,
+        null,
+        null,
+        null,
+        null,
+        777L, // relatedFileId
+        "CH-A",
+        "reprocess test",
+        "op-001",
+        null,
+        null,
+        null);
     when(compensationCommandMapper.countRunningByTarget(
             anyString(), anyString(), any(), anyString()))
         .thenReturn(0);
@@ -287,22 +282,21 @@ class DefaultCompensationServiceTest {
   @Test
   void shouldRerunBatchSuccessfully_BATCH_path() {
     LocalDate bizDate = LocalDate.now();
-    CompensationSubmitCommand cmd =
-        new CompensationSubmitCommand(
-            "t1",
-            "BATCH",
-            null,
-            null,
-            "BATCH_JOB_CODE",
-            bizDate,
-            "batch-200",
-            null,
-            null,
-            "rerun batch",
-            "op-001",
-            null,
-            null,
-            null);
+    CompensationSubmitCommand cmd = new CompensationSubmitCommand(
+        "t1",
+        "BATCH",
+        null,
+        null,
+        "BATCH_JOB_CODE",
+        bizDate,
+        "batch-200",
+        null,
+        null,
+        "rerun batch",
+        "op-001",
+        null,
+        null,
+        null);
     when(compensationCommandMapper.countRunningByTarget(
             anyString(), anyString(), any(), anyString()))
         .thenReturn(0);

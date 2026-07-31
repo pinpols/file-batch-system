@@ -145,9 +145,8 @@ class SqlTaskExecutorTest {
 
     @Test
     void ignoresSemicolonInTaggedDollarQuote() {
-      assertThat(
-              SqlTaskExecutor.splitStatements(
-                  "DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$; SELECT 9"))
+      assertThat(SqlTaskExecutor.splitStatements(
+              "DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$; SELECT 9"))
           .containsExactly("DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$", "SELECT 9");
     }
 
@@ -185,7 +184,8 @@ class SqlTaskExecutorTest {
     @Test
     void detectsDdl() {
       assertThat(SqlTaskExecutor.detectStatementType("CREATE TABLE t (id INT)")).isEqualTo("DDL");
-      assertThat(SqlTaskExecutor.detectStatementType("ALTER TABLE t ADD col INT")).isEqualTo("DDL");
+      assertThat(SqlTaskExecutor.detectStatementType("ALTER TABLE t ADD col INT"))
+          .isEqualTo("DDL");
       assertThat(SqlTaskExecutor.detectStatementType("DROP INDEX i")).isEqualTo("DDL");
       assertThat(SqlTaskExecutor.detectStatementType("TRUNCATE TABLE t")).isEqualTo("DDL");
       assertThat(SqlTaskExecutor.detectStatementType("GRANT SELECT ON t TO u")).isEqualTo("DDL");

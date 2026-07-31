@@ -22,16 +22,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private RetryScheduleMapper retryScheduleMapper;
+  @Autowired
+  private RetryScheduleMapper retryScheduleMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldReturnEmptyWhenNoRetrySchedulesExist() {
     List<RetryScheduleEntity> results =
-        retryScheduleMapper.selectByQuery(
-            RetryScheduleQuery.ofTenant(
-                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
+        retryScheduleMapper.selectByQuery(RetryScheduleQuery.ofTenant(
+            "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
     assertThat(results).isEmpty();
   }
@@ -43,9 +44,8 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     insertRetrySchedule(tenantId, "JOB_PARTITION", 101L, "FIXED", "SUCCESS", 2);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 102L, "FIXED", "FAILED", 1);
 
-    List<RetryScheduleEntity> waiting =
-        retryScheduleMapper.selectByQuery(
-            RetryScheduleQuery.ofRetryStatus(tenantId, "WAITING", new PageRequest(1, 10)));
+    List<RetryScheduleEntity> waiting = retryScheduleMapper.selectByQuery(
+        RetryScheduleQuery.ofRetryStatus(tenantId, "WAITING", new PageRequest(1, 10)));
 
     assertThat(waiting).hasSize(1);
     assertThat(waiting.get(0).getRetryStatus()).isEqualTo("WAITING");
@@ -57,9 +57,8 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     insertRetrySchedule(tenantId, "JOB_PARTITION", 200L, "FIXED", "WAITING", 1);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 201L, "EXPONENTIAL", "WAITING", 1);
 
-    List<RetryScheduleEntity> exponential =
-        retryScheduleMapper.selectByQuery(
-            RetryScheduleQuery.ofRetryPolicy(tenantId, "EXPONENTIAL", new PageRequest(1, 10)));
+    List<RetryScheduleEntity> exponential = retryScheduleMapper.selectByQuery(
+        RetryScheduleQuery.ofRetryPolicy(tenantId, "EXPONENTIAL", new PageRequest(1, 10)));
 
     assertThat(exponential).hasSize(1);
     assertThat(exponential.get(0).getRetryPolicy()).isEqualTo("EXPONENTIAL");
@@ -71,9 +70,8 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     insertRetrySchedule(tenantId, "JOB_PARTITION", 300L, "FIXED", "WAITING", 1);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 301L, "FIXED", "WAITING", 1);
 
-    List<RetryScheduleEntity> partitionRetries =
-        retryScheduleMapper.selectByQuery(
-            RetryScheduleQuery.ofRelatedType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
+    List<RetryScheduleEntity> partitionRetries = retryScheduleMapper.selectByQuery(
+        RetryScheduleQuery.ofRelatedType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
     assertThat(partitionRetries).hasSize(2);
     assertThat(partitionRetries).allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));

@@ -62,7 +62,8 @@ public class WorkerStartupRuntimeAudit {
   Map<String, Object> auditCore() {
     Map<String, Object> details = new LinkedHashMap<>();
     List<String> issues = new ArrayList<>();
-    List<WorkerConfiguration> configurations = workerConfigurationProvider.stream().toList();
+    List<WorkerConfiguration> configurations =
+        workerConfigurationProvider.stream().toList();
     put(details, "configurationCount", configurations.size());
     put(details, "configurations", auditConfigurations(configurations, issues));
     if (configurations.isEmpty()) {
@@ -77,10 +78,9 @@ public class WorkerStartupRuntimeAudit {
     if (registrations.isEmpty()) {
       issues.add("no registered worker in runtime state");
     }
-    long decommissioned =
-        registrations.stream()
-            .filter(r -> "DECOMMISSIONED".equalsIgnoreCase(nullToEmpty(r.getStatus())))
-            .count();
+    long decommissioned = registrations.stream()
+        .filter(r -> "DECOMMISSIONED".equalsIgnoreCase(nullToEmpty(r.getStatus())))
+        .count();
     put(details, "decommissionedRegistrations", decommissioned);
     if (decommissioned > 0) {
       issues.add("registered worker status is DECOMMISSIONED");
@@ -146,9 +146,8 @@ public class WorkerStartupRuntimeAudit {
       return details;
     }
     try {
-      long cutoff =
-          BatchDateTimeSupport.utcEpochMillis()
-              - reportOutboxProperties.getPublishingStaleRecoverAfterMillis();
+      long cutoff = BatchDateTimeSupport.utcEpochMillis()
+          - reportOutboxProperties.getPublishingStaleRecoverAfterMillis();
       WorkerReportOutboxStats stats = repository.stats(cutoff);
       put(details, "newCount", stats.newCount());
       put(details, "publishingCount", stats.publishingCount());
@@ -171,28 +170,22 @@ public class WorkerStartupRuntimeAudit {
 
   private Map<String, Object> auditContributors(List<String> unhealthy) {
     Map<String, Object> results = new LinkedHashMap<>();
-    contributorProvider
-        .orderedStream()
-        .forEach(
-            contributor -> {
-              String name = contributor.name();
-              try {
-                WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
-                put(
-                    results,
-                    name,
-                    auditContributorDetails(result.healthy(), result.details(), null));
-                if (!result.healthy()) {
-                  unhealthy.add(name);
-                }
-              } catch (RuntimeException ex) {
-                SwallowedExceptionLogger.warn(
-                    WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+    contributorProvider.orderedStream().forEach(contributor -> {
+      String name = contributor.name();
+      try {
+        WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
+        put(results, name, auditContributorDetails(result.healthy(), result.details(), null));
+        if (!result.healthy()) {
+          unhealthy.add(name);
+        }
+      } catch (RuntimeException ex) {
+        SwallowedExceptionLogger.warn(
+            WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
 
-                put(results, name, auditContributorDetails(false, Map.of(), ex.getMessage()));
-                unhealthy.add(name);
-              }
-            });
+        put(results, name, auditContributorDetails(false, Map.of(), ex.getMessage()));
+        unhealthy.add(name);
+      }
+    });
     return results;
   }
 

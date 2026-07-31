@@ -42,26 +42,24 @@ class WebhookDeliveryRelayTest {
     dispatcher = mock(WebhookDispatcher.class);
     meterRegistry = new SimpleMeterRegistry();
     lockExecutor = mock(LockingTaskExecutor.class);
-    doAnswer(
-            inv -> {
-              LockingTaskExecutor.Task t = inv.getArgument(0);
-              t.call();
-              return null;
-            })
+    doAnswer(inv -> {
+          LockingTaskExecutor.Task t = inv.getArgument(0);
+          t.call();
+          return null;
+        })
         .when(lockExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
     // 用户在 e1de09db 等 refactor 把 WebhookDeliveryRelay 的 @Value 配置抽到 WebhookRelayProperties,
     // 测试需要同步更新构造器调用以反映新签名
     io.github.pinpols.batch.console.config.WebhookRelayProperties props =
         new io.github.pinpols.batch.console.config.WebhookRelayProperties();
-    relay =
-        new WebhookDeliveryRelay(
-            deliveryLogRepository,
-            subscriptionRepository,
-            dispatcher,
-            lockExecutor,
-            meterRegistry,
-            props);
+    relay = new WebhookDeliveryRelay(
+        deliveryLogRepository,
+        subscriptionRepository,
+        dispatcher,
+        lockExecutor,
+        meterRegistry,
+        props);
   }
 
   @Test
@@ -76,11 +74,10 @@ class WebhookDeliveryRelayTest {
 
   @Test
   void shouldDowngradeRedisStoppingDuringShutdown() throws Throwable {
-    doAnswer(
-            inv -> {
-              relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
-              throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
-            })
+    doAnswer(inv -> {
+          relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+          throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
+        })
         .when(lockExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
 
@@ -91,10 +88,8 @@ class WebhookDeliveryRelayTest {
 
   @Test
   void shouldRecognizeRedisStoppedLifecycleNoise() {
-    assertThat(
-            WebhookDeliveryRelay.isShutdownNoise(
-                new IllegalStateException(
-                    "LettuceConnectionFactory has been STOPPED. Use start() to initialize it")))
+    assertThat(WebhookDeliveryRelay.isShutdownNoise(new IllegalStateException(
+            "LettuceConnectionFactory has been STOPPED. Use start() to initialize it")))
         .isTrue();
   }
 
@@ -144,7 +139,8 @@ class WebhookDeliveryRelayTest {
         .markRetryFailure(eq(102L), eq(4), eq(503), eq("service unavailable"), any(Instant.class));
     verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
     verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
-    assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count()).isZero();
+    assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
+        .isZero();
   }
 
   @Test
@@ -253,10 +249,9 @@ class WebhookDeliveryRelayTest {
     when(deliveryLogRepository.claimForRetry(201L)).thenReturn(1);
     // 202 抛异常, 201 正常成功
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
-    doAnswer(
-            inv -> {
-              throw new RuntimeException("simulated dispatcher crash");
-            })
+    doAnswer(inv -> {
+          throw new RuntimeException("simulated dispatcher crash");
+        })
         .when(dispatcher)
         .attemptDelivery(eq(subscription), any(), eq(badRow.getPayloadJson()));
     when(dispatcher.attemptDelivery(eq(subscription), any(), eq(okRow.getPayloadJson())))
@@ -276,9 +271,8 @@ class WebhookDeliveryRelayTest {
     row.setTenantId("t1");
     row.setSubscriptionId(7L);
     row.setEventType("JOB_SUCCESS");
-    row.setPayloadJson(
-        "{\"tenantId\":\"t1\",\"eventType\":\"JOB_SUCCESS\",\"stream\":\"jobs\","
-            + "\"cursor\":\"c1\",\"emittedAt\":\"2026-04-30T10:00:00Z\",\"data\":{\"k\":\"v\"}}");
+    row.setPayloadJson("{\"tenantId\":\"t1\",\"eventType\":\"JOB_SUCCESS\",\"stream\":\"jobs\","
+        + "\"cursor\":\"c1\",\"emittedAt\":\"2026-04-30T10:00:00Z\",\"data\":{\"k\":\"v\"}}");
     row.setHttpStatus(500);
     row.setResponseBody("prior failure");
     row.setDeliveryStatus("EXHAUSTED");

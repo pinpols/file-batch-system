@@ -228,9 +228,8 @@ public class WorkflowDagValidator {
     if (def == null || def.getId() == null) {
       return Set.of();
     }
-    List<WorkflowNodeEntity> nodes =
-        workflowNodeMapper.selectByQuery(
-            WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), null));
+    List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(
+        WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), null));
     Set<String> refs = new LinkedHashSet<>();
     for (WorkflowNodeEntity n : nodes) {
       if (WorkflowNodeType.JOB.code().equalsIgnoreCase(n.getNodeType())
@@ -249,12 +248,11 @@ public class WorkflowDagValidator {
 
   /** selectByQuery 用 LIKE 模糊匹配 code,这里取精确相等那条(已按 version desc,id desc 排序 → live 行在前)。 */
   private WorkflowDefinitionEntity findLiveDefinitionByCode(String tenantId, String workflowCode) {
-    List<WorkflowDefinitionEntity> matches =
-        workflowDefinitionMapper.selectByQuery(
-            WorkflowDefinitionQuery.builder()
-                .tenantId(tenantId)
-                .workflowCode(workflowCode)
-                .build());
+    WorkflowDefinitionQuery query = WorkflowDefinitionQuery.builder()
+        .tenantId(tenantId)
+        .workflowCode(workflowCode)
+        .build();
+    List<WorkflowDefinitionEntity> matches = workflowDefinitionMapper.selectByQuery(query);
     for (WorkflowDefinitionEntity d : matches) {
       if (workflowCode.equals(d.getWorkflowCode())) {
         return d;
@@ -332,12 +330,11 @@ public class WorkflowDagValidator {
       }
     }
     if (visited < nodeCodes.size()) {
-      String stuck =
-          deg.entrySet().stream()
-              .filter(e -> e.getValue() > 0)
-              .map(Map.Entry::getKey)
-              .findFirst()
-              .orElse("?");
+      String stuck = deg.entrySet().stream()
+          .filter(e -> e.getValue() > 0)
+          .map(Map.Entry::getKey)
+          .findFirst()
+          .orElse("?");
       throw BizException.of(
           ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected", stuck);
     }

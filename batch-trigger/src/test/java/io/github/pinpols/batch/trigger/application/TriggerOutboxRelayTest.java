@@ -48,9 +48,14 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TriggerOutboxRelayTest {
 
-  @Mock private TriggerOutboxEventMapper mapper;
-  @Mock private TriggerEventPublisher publisher;
-  @Mock private LockingTaskExecutor lockingTaskExecutor;
+  @Mock
+  private TriggerOutboxEventMapper mapper;
+
+  @Mock
+  private TriggerEventPublisher publisher;
+
+  @Mock
+  private LockingTaskExecutor lockingTaskExecutor;
 
   private TriggerOutboxRelay relay;
   private TriggerOutboxRelayProperties relayProperties;
@@ -63,25 +68,23 @@ class TriggerOutboxRelayTest {
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("trigger-outbox-relay-test-");
     scheduler.initialize();
-    relay =
-        new TriggerOutboxRelay(
-            mapper,
-            publisher,
-            lockingTaskExecutor,
-            new SimpleMeterRegistry(),
-            relayProperties,
-            scheduler);
+    relay = new TriggerOutboxRelay(
+        mapper,
+        publisher,
+        lockingTaskExecutor,
+        new SimpleMeterRegistry(),
+        relayProperties,
+        scheduler);
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);
     when(mapper.countStalePublishing(anyString(), anyLong())).thenReturn(0L);
     // executeWithLock(Task,LockConfiguration) 返回 void → 必须用 doAnswer 而非 when
-    doAnswer(
-            inv -> {
-              LockingTaskExecutor.Task task = inv.getArgument(0);
-              task.call();
-              return null;
-            })
+    doAnswer(inv -> {
+          LockingTaskExecutor.Task task = inv.getArgument(0);
+          task.call();
+          return null;
+        })
         .when(lockingTaskExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
   }
@@ -117,11 +120,10 @@ class TriggerOutboxRelayTest {
 
   @Test
   void poll_redisStoppingDuringShutdown_isNotBusinessError() throws Throwable {
-    doAnswer(
-            inv -> {
-              relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
-              throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
-            })
+    doAnswer(inv -> {
+          relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+          throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
+        })
         .when(lockingTaskExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
 
@@ -300,15 +302,14 @@ class TriggerOutboxRelayTest {
   }
 
   private static String validEnvelopePayload() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "tenant-a",
-            "test-job",
-            LocalDate.parse("2026-04-30"),
-            TriggerType.MANUAL,
-            "req-1",
-            "trace-1",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "tenant-a",
+        "test-job",
+        LocalDate.parse("2026-04-30"),
+        TriggerType.MANUAL,
+        "req-1",
+        "trace-1",
+        Map.of());
     return JsonUtils.toJson(
         LaunchEnvelope.of(request, "tenant-a:req-1", BatchDateTimeSupport.utcNow()));
   }

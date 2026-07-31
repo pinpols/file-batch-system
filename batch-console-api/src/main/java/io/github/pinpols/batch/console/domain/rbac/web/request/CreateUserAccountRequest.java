@@ -13,7 +13,8 @@ import lombok.Data;
 @Data
 public class CreateUserAccountRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(min = 2, max = 128)
@@ -39,9 +40,8 @@ public class CreateUserAccountRequest {
    */
   @Size(max = 512)
   @Pattern(
-      regexp =
-          "^$|^ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER)"
-              + "(,ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER))*$",
+      regexp = "^$|^ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER)"
+          + "(,ROLE_(ADMIN|TENANT_ADMIN|TENANT_USER|AUDITOR|USER))*$",
       message = "authoritiesCsv must be comma-separated known ROLE_* values")
   private String authoritiesCsv;
 }

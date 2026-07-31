@@ -37,9 +37,11 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   @Import({BatchClockConfig.class, ConsoleRealtimeReplayStore.class})
   static class TestApplication {}
 
-  @MockitoBean private ConsoleRealtimeMetrics realtimeMetrics;
+  @MockitoBean
+  private ConsoleRealtimeMetrics realtimeMetrics;
 
-  @Autowired private ConsoleRealtimeReplayStore replayStore;
+  @Autowired
+  private ConsoleRealtimeReplayStore replayStore;
 
   @Test
   void appendAndReplayReturnsEventsAfterCursor() {

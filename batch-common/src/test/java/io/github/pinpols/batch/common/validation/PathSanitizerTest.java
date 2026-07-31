@@ -9,7 +9,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class PathSanitizerTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   @Test
   void sanitize_normalPath_returnsAbsoluteNormalized() {
@@ -46,16 +47,15 @@ class PathSanitizerTest {
   @Test
   void sanitize_withBaseDir_validSubpath_returnsPath() {
     Path result = PathSanitizer.sanitize(tempDir.resolve("sub/file.txt").toString(), tempDir);
-    assertThat(result.toString()).startsWith(tempDir.toAbsolutePath().normalize().toString());
+    assertThat(result.toString())
+        .startsWith(tempDir.toAbsolutePath().normalize().toString());
   }
 
   @Test
   void sanitize_withBaseDir_escapingPath_throwsSecurity() {
     Path other = Path.of("/etc");
-    assertThatThrownBy(
-            () ->
-                PathSanitizer.sanitize(
-                    "/etc/passwd", other.getParent() == null ? Path.of("/tmp") : tempDir))
+    assertThatThrownBy(() -> PathSanitizer.sanitize(
+            "/etc/passwd", other.getParent() == null ? Path.of("/tmp") : tempDir))
         .isInstanceOf(SecurityException.class)
         .hasMessageContaining("escapes");
   }

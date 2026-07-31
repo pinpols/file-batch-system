@@ -70,17 +70,18 @@ public class DefaultCompensationService implements CompensationService {
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final TaskExecutionService taskExecutionService;
 
-  @Lazy @Autowired private DefaultCompensationService self;
+  @Lazy
+  @Autowired
+  private DefaultCompensationService self;
 
   /** 路由表：compensationType → handler。构造时一次性构建；O(1) 查找。 */
-  private final Map<String, CompensationHandler> handlersByType =
-      Map.of(
-          "JOB", this::rerunJob,
-          "STEP", this::rerunStep,
-          "PARTITION", this::retryPartition,
-          "FILE", (cmd, cmdNo, traceId, entity) -> reprocessFile(cmd, traceId, entity),
-          "BATCH", this::rerunBatch,
-          "DLQ", this::replayDeadLetter);
+  private final Map<String, CompensationHandler> handlersByType = Map.of(
+      "JOB", this::rerunJob,
+      "STEP", this::rerunStep,
+      "PARTITION", this::retryPartition,
+      "FILE", (cmd, cmdNo, traceId, entity) -> reprocessFile(cmd, traceId, entity),
+      "BATCH", this::rerunBatch,
+      "DLQ", this::replayDeadLetter);
 
   private record CompensationLaunchTarget(
       String tenantId, String jobCode, LocalDate bizDate, TriggerType triggerType) {}
@@ -131,10 +132,9 @@ public class DefaultCompensationService implements CompensationService {
       commandNo = IdGenerator.newBusinessNo("cmp");
       String normalizedType = normalizeType(command.compensationType());
       String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
-      traceId =
-          Texts.hasText(resolvedTraceId)
-              ? resolvedTraceId
-              : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
+      traceId = Texts.hasText(resolvedTraceId)
+          ? resolvedTraceId
+          : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
       assertNoRunningConflict(command);
     } catch (RuntimeException pre) {
       self.appendPreInsertFailureLog(command, traceId, commandNo, pre);
@@ -175,21 +175,19 @@ public class DefaultCompensationService implements CompensationService {
     Map<String, Object> result = execute(command, commandNo, traceId, entity);
     result.put("hitCount", 1);
     result.put("conflictCount", 0);
-    compensationCommandMapper.updateStatus(
-        UpdateCompensationStatusParam.builder()
-            .tenantId(command.tenantId())
-            .id(entity.getId())
-            .commandStatus(CompensationCommandStatus.SUCCESS.code())
-            .relatedJobInstanceId(entity.getRelatedJobInstanceId())
-            .relatedFileId(entity.getRelatedFileId())
-            .resultSummary(JsonUtils.toJson(result))
-            .errorCode(null)
-            .errorMessage(null)
-            .finishedAt(BatchDateTimeSupport.utcNow())
-            .build());
-    appendCompensationLog(
-        new CompensationLogContext(
-            command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null));
+    compensationCommandMapper.updateStatus(UpdateCompensationStatusParam.builder()
+        .tenantId(command.tenantId())
+        .id(entity.getId())
+        .commandStatus(CompensationCommandStatus.SUCCESS.code())
+        .relatedJobInstanceId(entity.getRelatedJobInstanceId())
+        .relatedFileId(entity.getRelatedFileId())
+        .resultSummary(JsonUtils.toJson(result))
+        .errorCode(null)
+        .errorMessage(null)
+        .finishedAt(BatchDateTimeSupport.utcNow())
+        .build());
+    appendCompensationLog(new CompensationLogContext(
+        command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null));
   }
 
   /**
@@ -202,21 +200,19 @@ public class DefaultCompensationService implements CompensationService {
       String traceId,
       CompensationCommandEntity entity,
       Exception exception) {
-    compensationCommandMapper.updateStatus(
-        UpdateCompensationStatusParam.builder()
-            .tenantId(command.tenantId())
-            .id(entity.getId())
-            .commandStatus(CompensationCommandStatus.FAILED.code())
-            .relatedJobInstanceId(entity.getRelatedJobInstanceId())
-            .relatedFileId(entity.getRelatedFileId())
-            .resultSummary(null)
-            .errorCode(resolveErrorCode(exception))
-            .errorMessage(exception.getMessage())
-            .finishedAt(BatchDateTimeSupport.utcNow())
-            .build());
-    appendCompensationLog(
-        new CompensationLogContext(
-            command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception));
+    compensationCommandMapper.updateStatus(UpdateCompensationStatusParam.builder()
+        .tenantId(command.tenantId())
+        .id(entity.getId())
+        .commandStatus(CompensationCommandStatus.FAILED.code())
+        .relatedJobInstanceId(entity.getRelatedJobInstanceId())
+        .relatedFileId(entity.getRelatedFileId())
+        .resultSummary(null)
+        .errorCode(resolveErrorCode(exception))
+        .errorMessage(exception.getMessage())
+        .finishedAt(BatchDateTimeSupport.utcNow())
+        .build());
+    appendCompensationLog(new CompensationLogContext(
+        command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception));
   }
 
   /**
@@ -297,18 +293,16 @@ public class DefaultCompensationService implements CompensationService {
     params.put("retryFlag", false);
     params.put("reason", command.reason());
     applyRerunPolicyParams(params, command);
-    LaunchResponse response =
-        launchCompensation(
-            CompensationLaunchRequest.of(
-                new CompensationLaunchTarget(
-                    command.tenantId(),
-                    sourceInstance.getJobCode(),
-                    sourceInstance.getBizDate(),
-                    TriggerType.CATCH_UP),
-                params,
-                traceId,
-                commandNo,
-                command.replaySessionId()));
+    LaunchResponse response = launchCompensation(CompensationLaunchRequest.of(
+        new CompensationLaunchTarget(
+            command.tenantId(),
+            sourceInstance.getJobCode(),
+            sourceInstance.getBizDate(),
+            TriggerType.CATCH_UP),
+        params,
+        traceId,
+        commandNo,
+        command.replaySessionId()));
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? sourceInstance.getId() : launched.getId());
@@ -328,10 +322,9 @@ public class DefaultCompensationService implements CompensationService {
       CompensationCommandEntity entity) {
     Long stepId = command.targetId();
     Guard.require(stepId != null, "step targetId is required");
-    JobStepInstanceEntity stepInstance =
-        Guard.requireFound(
-            jobMappers.jobStepInstanceMapper.selectById(command.tenantId(), stepId),
-            "job step instance not found");
+    JobStepInstanceEntity stepInstance = Guard.requireFound(
+        jobMappers.jobStepInstanceMapper.selectById(command.tenantId(), stepId),
+        "job step instance not found");
     entity.setRelatedJobInstanceId(stepInstance.getJobInstanceId());
     Long taskId = stepInstance.getJobTaskId();
     Guard.require(taskId != null, "step jobTaskId is required");
@@ -375,16 +368,15 @@ public class DefaultCompensationService implements CompensationService {
       CompensationSubmitCommand command, String traceId, CompensationCommandEntity entity) {
     Long fileId = firstNonNull(command.relatedFileId(), command.targetId());
     Guard.require(fileId != null, "file targetId is required");
-    FileGovernanceCommand redispatchCommand =
-        FileGovernanceCommand.builder()
-            .tenantId(command.tenantId())
-            .fileId(fileId)
-            .channelCode(command.channelCode())
-            .operatorId(command.operatorId())
-            .traceId(traceId)
-            .reason(command.reason())
-            .approvalId(command.approvalId())
-            .build();
+    FileGovernanceCommand redispatchCommand = FileGovernanceCommand.builder()
+        .tenantId(command.tenantId())
+        .fileId(fileId)
+        .channelCode(command.channelCode())
+        .operatorId(command.operatorId())
+        .traceId(traceId)
+        .reason(command.reason())
+        .approvalId(command.approvalId())
+        .build();
     String result = fileGovernanceService.redispatchFile(redispatchCommand);
     entity.setRelatedFileId(fileId);
     Map<String, Object> summary = new LinkedHashMap<>();
@@ -414,15 +406,13 @@ public class DefaultCompensationService implements CompensationService {
     params.put("retryFlag", false);
     params.put("reason", command.reason());
     applyRerunPolicyParams(params, command);
-    LaunchResponse response =
-        launchCompensation(
-            CompensationLaunchRequest.of(
-                new CompensationLaunchTarget(
-                    command.tenantId(), command.jobCode(), command.bizDate(), TriggerType.CATCH_UP),
-                params,
-                traceId,
-                commandNo,
-                command.replaySessionId()));
+    LaunchResponse response = launchCompensation(CompensationLaunchRequest.of(
+        new CompensationLaunchTarget(
+            command.tenantId(), command.jobCode(), command.bizDate(), TriggerType.CATCH_UP),
+        params,
+        traceId,
+        commandNo,
+        command.replaySessionId()));
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());
@@ -466,17 +456,16 @@ public class DefaultCompensationService implements CompensationService {
     triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
     triggerRequest.setTraceId(request.traceId());
     jobMappers.triggerRequestMapper.insert(triggerRequest);
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(request.target().tenantId())
-            .jobCode(request.target().jobCode())
-            .bizDate(request.target().bizDate())
-            .triggerType(request.target().triggerType())
-            .requestId(requestId)
-            .traceId(request.traceId())
-            .params(request.params())
-            .replaySessionId(request.replaySessionId())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(request.target().tenantId())
+        .jobCode(request.target().jobCode())
+        .bizDate(request.target().bizDate())
+        .triggerType(request.target().triggerType())
+        .requestId(requestId)
+        .traceId(request.traceId())
+        .params(request.params())
+        .replaySessionId(request.replaySessionId())
+        .build();
     return launchServiceProvider.getObject().launch(launchRequest);
   }
 
@@ -509,9 +498,8 @@ public class DefaultCompensationService implements CompensationService {
       }
     }
     if (Texts.hasText(command.targetInstanceNo())) {
-      JobInstanceEntity entity =
-          jobMappers.jobInstanceMapper.selectByInstanceNo(
-              command.tenantId(), command.targetInstanceNo());
+      JobInstanceEntity entity = jobMappers.jobInstanceMapper.selectByInstanceNo(
+          command.tenantId(), command.targetInstanceNo());
       if (entity != null) {
         return entity;
       }
@@ -572,11 +560,10 @@ public class DefaultCompensationService implements CompensationService {
       entry.setLogType("COMPENSATION_REJECTED");
       entry.setTraceId(traceId);
       String type = command == null ? null : command.compensationType();
-      entry.setMessage(
-          "compensation submit rejected before insert: type="
-              + type
-              + ", reason="
-              + (exception == null ? null : exception.getMessage()));
+      entry.setMessage("compensation submit rejected before insert: type="
+          + type
+          + ", reason="
+          + (exception == null ? null : exception.getMessage()));
       Map<String, Object> detail = new LinkedHashMap<>();
       detail.put("commandNo", commandNo); // 可能 null,看 validate 是否已通过
       detail.put("compensationType", type);
@@ -603,9 +590,8 @@ public class DefaultCompensationService implements CompensationService {
       return;
     }
     String type = normalizeType(command.compensationType());
-    int running =
-        compensationCommandMapper.countRunningByTarget(
-            command.tenantId(), type, targetId, CompensationCommandStatus.RUNNING.code());
+    int running = compensationCommandMapper.countRunningByTarget(
+        command.tenantId(), type, targetId, CompensationCommandStatus.RUNNING.code());
     if (running > 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.compensation.already_running");
     }

@@ -166,14 +166,13 @@ public class TwilioSmsProvider implements SmsProvider {
 
   /** 抽出便于单测覆盖：以 {@code application/x-www-form-urlencoded} POST 表单到 url，带 Basic 鉴权头，返回状态码 + 响应体。 */
   protected TwilioResponse postForm(String url, String authHeader, String body) throws Exception {
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .timeout(REQUEST_TIMEOUT)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Authorization", authHeader)
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-            .build();
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create(url))
+        .timeout(REQUEST_TIMEOUT)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Authorization", authHeader)
+        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+        .build();
     HttpResponse<String> response =
         httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     return new TwilioResponse(response.statusCode(), response.body());

@@ -185,10 +185,9 @@ public class ConsoleQueryCacheService {
       return normalized;
     }
     String hash = Hashes.sha256Short(trimmed);
-    String prefix =
-        normalized.length() <= KEY_SEGMENT_PREFIX_LENGTH
-            ? normalized
-            : normalized.substring(0, KEY_SEGMENT_PREFIX_LENGTH);
+    String prefix = normalized.length() <= KEY_SEGMENT_PREFIX_LENGTH
+        ? normalized
+        : normalized.substring(0, KEY_SEGMENT_PREFIX_LENGTH);
     return prefix + "~" + (hash == null ? "0000000000000000" : hash);
   }
 

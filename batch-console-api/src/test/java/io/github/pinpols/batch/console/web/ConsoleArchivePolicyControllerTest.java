@@ -48,13 +48,11 @@ class ConsoleArchivePolicyControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleArchivePolicyController(
-                    archivePolicyService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleArchivePolicyController(
+            archivePolicyService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -80,12 +78,10 @@ class ConsoleArchivePolicyControllerTest {
   @Test
   void shouldUpsertPolicy() throws Exception {
     mockMvc
-        .perform(
-            put("/api/console/ops/archive-policies")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(put("/api/console/ops/archive-policies")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "targetTable":"job_instance",
                       "retentionDays":90,
@@ -98,16 +94,15 @@ class ConsoleArchivePolicyControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArchivePolicyUpsertParam expected =
-        ArchivePolicyUpsertParam.builder()
-            .tenantId("t1")
-            .targetTable("job_instance")
-            .retentionDays(90)
-            .archiveEnabled(true)
-            .batchSize(1000)
-            .description("Archive job instances")
-            .operator("operator-1")
-            .build();
+    ArchivePolicyUpsertParam expected = ArchivePolicyUpsertParam.builder()
+        .tenantId("t1")
+        .targetTable("job_instance")
+        .retentionDays(90)
+        .archiveEnabled(true)
+        .batchSize(1000)
+        .description("Archive job instances")
+        .operator("operator-1")
+        .build();
     verify(archivePolicyService).upsert(expected);
   }
 }

@@ -143,13 +143,11 @@ public class DefaultWorkerSelector implements WorkerSelector {
   }
 
   private List<WorkerRegistryEntity> findCandidates(String tenantId, String workerGroup) {
-    Supplier<List<WorkerRegistryEntity>> loader =
-        () ->
-            Texts.hasText(workerGroup)
-                ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
-                    tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
-                : workerRegistryMapper.selectByTenantAndStatus(
-                    tenantId, WorkerRegistryStatus.ONLINE.code());
+    Supplier<List<WorkerRegistryEntity>> loader = () -> Texts.hasText(workerGroup)
+        ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
+            tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
+        : workerRegistryMapper.selectByTenantAndStatus(
+            tenantId, WorkerRegistryStatus.ONLINE.code());
     WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
     if (cache == null) {
       return loader.get();
@@ -164,12 +162,10 @@ public class DefaultWorkerSelector implements WorkerSelector {
         // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
         // (默认 max_concurrent=10; 全 group 满则 partition 退化 WAITING)
         .filter(DefaultWorkerSelector::hasCapacity)
-        .min(
-            Comparator.comparingInt(
-                    (WorkerRegistryEntity r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
-                .thenComparing(
-                    WorkerRegistryEntity::heartbeatAt,
-                    Comparator.nullsLast(Comparator.reverseOrder())))
+        .min(Comparator.comparingInt(
+                (WorkerRegistryEntity r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
+            .thenComparing(
+                WorkerRegistryEntity::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder())))
         .orElse(null);
   }
 
@@ -190,16 +186,15 @@ public class DefaultWorkerSelector implements WorkerSelector {
       return;
     }
     Counter.builder(METRIC_NO_MATCH)
-        .tags(
-            Tags.of(
-                "tenantId",
-                String.valueOf(request.getTenantId()),
-                "workerType",
-                String.valueOf(request.getWorkerType()),
-                "resourceTag",
-                queue == null || queue.resourceTag() == null ? "none" : queue.resourceTag(),
-                "reason",
-                reason))
+        .tags(Tags.of(
+            "tenantId",
+            String.valueOf(request.getTenantId()),
+            "workerType",
+            String.valueOf(request.getWorkerType()),
+            "resourceTag",
+            queue == null || queue.resourceTag() == null ? "none" : queue.resourceTag(),
+            "reason",
+            reason))
         .register(registry)
         .increment();
   }

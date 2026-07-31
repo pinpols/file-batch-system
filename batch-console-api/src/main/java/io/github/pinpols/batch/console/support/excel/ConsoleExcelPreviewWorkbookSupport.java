@@ -106,10 +106,9 @@ public final class ConsoleExcelPreviewWorkbookSupport {
   }
 
   public static String previewWorkbookFileName(String originalFileName) {
-    String baseName =
-        (originalFileName == null || originalFileName.isBlank())
-            ? "excel-preview.xlsx"
-            : originalFileName.trim();
+    String baseName = (originalFileName == null || originalFileName.isBlank())
+        ? "excel-preview.xlsx"
+        : originalFileName.trim();
     if (baseName.endsWith(".xlsx")) {
       return baseName.substring(0, baseName.length() - 5) + "-preview.xlsx";
     }

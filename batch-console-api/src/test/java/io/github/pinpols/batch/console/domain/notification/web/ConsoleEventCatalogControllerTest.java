@@ -40,12 +40,11 @@ class ConsoleEventCatalogControllerTest {
     messageSource.setBasename("messages");
     messageSource.setDefaultEncoding("UTF-8");
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleEventCatalogController(responseFactory, messageSource))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleEventCatalogController(responseFactory, messageSource))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test

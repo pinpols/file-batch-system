@@ -58,9 +58,8 @@ public class DispatchStepExecutionAdapter
     DispatchJobContext context = new DispatchJobContext();
     populateCommonFields(context, request, contextMap);
     context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
-    context.setDispatchId(
-        String.valueOf(
-            contextMap.getOrDefault("taskId", contextMap.getOrDefault("dispatchId", ""))));
+    context.setDispatchId(String.valueOf(
+        contextMap.getOrDefault("taskId", contextMap.getOrDefault("dispatchId", ""))));
     Object dispatchPayload = contextMap.get("dispatchPayload");
     if (dispatchPayload == null
         && context.getRawPayload() != null

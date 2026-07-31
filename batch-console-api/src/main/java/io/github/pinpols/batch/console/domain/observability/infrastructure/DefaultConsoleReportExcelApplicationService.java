@@ -175,12 +175,10 @@ public class DefaultConsoleReportExcelApplicationService
     RestClient client = orchestratorInternalRestClient.build();
     return client
         .get()
-        .uri(
-            uriBuilder ->
-                uriBuilder
-                    .path("/internal/scheduler/snapshot")
-                    .queryParam("tenantId", tenantId)
-                    .build())
+        .uri(uriBuilder -> uriBuilder
+            .path("/internal/scheduler/snapshot")
+            .queryParam("tenantId", tenantId)
+            .build())
         .retrieve()
         .body(ConsoleSchedulerSnapshotResponse.class);
   }
@@ -188,19 +186,15 @@ public class DefaultConsoleReportExcelApplicationService
   private List<ConsoleSchedulerSnapshotHistoryResponse> fetchSnapshotHistory(
       String tenantId, int limit) {
     RestClient client = orchestratorInternalRestClient.build();
-    List<ConsoleSchedulerSnapshotHistoryResponse> body =
-        client
-            .get()
-            .uri(
-                uriBuilder ->
-                    uriBuilder
-                        .path("/internal/scheduler/snapshot/history")
-                        .queryParam("tenantId", tenantId)
-                        .queryParam("limit", limit)
-                        .build())
-            .retrieve()
-            .body(
-                new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
+    List<ConsoleSchedulerSnapshotHistoryResponse> body = client
+        .get()
+        .uri(uriBuilder -> uriBuilder
+            .path("/internal/scheduler/snapshot/history")
+            .queryParam("tenantId", tenantId)
+            .queryParam("limit", limit)
+            .build())
+        .retrieve()
+        .body(new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
     return body == null ? List.of() : body;
   }
 
@@ -213,9 +207,8 @@ public class DefaultConsoleReportExcelApplicationService
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             ContentDisposition.attachment().filename(fileName).build().toString())
-        .contentType(
-            MediaType.parseMediaType(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(body);
   }
 
@@ -291,11 +284,10 @@ public class DefaultConsoleReportExcelApplicationService
       List<Object> values = new ArrayList<>();
       try {
         for (String header : headers) {
-          RecordComponent component =
-              Arrays.stream(rowType.getRecordComponents())
-                  .filter(item -> item.getName().equals(header))
-                  .findFirst()
-                  .orElse(null);
+          RecordComponent component = Arrays.stream(rowType.getRecordComponents())
+              .filter(item -> item.getName().equals(header))
+              .findFirst()
+              .orElse(null);
           values.add(component == null ? null : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {

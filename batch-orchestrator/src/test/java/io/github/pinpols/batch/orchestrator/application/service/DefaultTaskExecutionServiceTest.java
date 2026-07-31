@@ -28,17 +28,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultTaskExecutionServiceTest {
 
-  @Mock private TaskCreationService taskCreationService;
-  @Mock private TaskAssignmentService taskAssignmentService;
-  @Mock private TaskOutcomeService taskOutcomeService;
+  @Mock
+  private TaskCreationService taskCreationService;
+
+  @Mock
+  private TaskAssignmentService taskAssignmentService;
+
+  @Mock
+  private TaskOutcomeService taskOutcomeService;
 
   private DefaultTaskExecutionService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new DefaultTaskExecutionService(
-            taskCreationService, taskAssignmentService, taskOutcomeService);
+    service = new DefaultTaskExecutionService(
+        taskCreationService, taskAssignmentService, taskOutcomeService);
   }
 
   @Test
@@ -97,7 +101,8 @@ class DefaultTaskExecutionServiceTest {
   @Test
   void updateTaskStatus_delegatesToAssignmentService() {
     JobTaskEntity task = new JobTaskEntity();
-    when(taskAssignmentService.updateTaskStatus("t1", 1L, "RUNNING", null, null)).thenReturn(task);
+    when(taskAssignmentService.updateTaskStatus("t1", 1L, "RUNNING", null, null))
+        .thenReturn(task);
 
     JobTaskEntity result = service.updateTaskStatus("t1", 1L, "RUNNING", null, null);
 
@@ -141,9 +146,8 @@ class DefaultTaskExecutionServiceTest {
 
   @Test
   void applyTaskOutcome_delegatesToOutcomeService() {
-    TaskOutcomeCommand command =
-        new TaskOutcomeCommand(
-            "t1", 1L, null, true, null, null, null, null, null, null, null, null, null, null);
+    TaskOutcomeCommand command = new TaskOutcomeCommand(
+        "t1", 1L, null, true, null, null, null, null, null, null, null, null, null, null);
     JobTaskEntity task = new JobTaskEntity();
     when(taskOutcomeService.applyTaskOutcome(command)).thenReturn(task);
 

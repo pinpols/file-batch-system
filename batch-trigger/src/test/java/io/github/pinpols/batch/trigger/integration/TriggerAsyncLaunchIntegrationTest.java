@@ -71,8 +71,11 @@ import org.springframework.boot.test.context.SpringBootTest;
     })
 class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private TriggerService triggerService;
-  @Autowired private TriggerOutboxEventMapper outboxMapper;
+  @Autowired
+  private TriggerService triggerService;
+
+  @Autowired
+  private TriggerOutboxEventMapper outboxMapper;
 
   @Value("${spring.kafka.bootstrap-servers}")
   private String bootstrapServers;
@@ -104,27 +107,18 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   @Test
   void happyPath_writesOutboxAndPublishesToKafka() {
     String requestId = "req-happy-" + UUID.randomUUID();
-    LaunchResponse response =
-        triggerService.launch(
-            new TriggerLaunchCommand(
-                buildRequest(tenantId, "JOB_HAPPY"),
-                "idem-" + requestId,
-                requestId,
-                "trace-happy"));
+    LaunchResponse response = triggerService.launch(new TriggerLaunchCommand(
+        buildRequest(tenantId, "JOB_HAPPY"), "idem-" + requestId, requestId, "trace-happy"));
 
     // 1) trigger_request + trigger_outbox_event 同事务都被写入
     assertThat(response.instanceNo()).isEqualTo(requestId);
-    await()
-        .atMost(Duration.ofSeconds(8))
-        .untilAsserted(
-            () -> {
-              List<TriggerOutboxEventEntity> events =
-                  outboxMapper.selectByTenantAndRequest(tenantId, requestId);
-              assertThat(events).hasSize(1);
-              assertThat(events.get(0).getPublishStatus())
-                  .isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-              assertThat(events.get(0).getPublishedAt()).isNotNull();
-            });
+    await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+      List<TriggerOutboxEventEntity> events =
+          outboxMapper.selectByTenantAndRequest(tenantId, requestId);
+      assertThat(events).hasSize(1);
+      assertThat(events.get(0).getPublishStatus()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+      assertThat(events.get(0).getPublishedAt()).isNotNull();
+    });
 
     // 2) Kafka topic 真收到 envelope, key + payload 正确
     ConsumerRecord<String, String> record = pollUntilFound(requestId, Duration.ofSeconds(8));
@@ -147,28 +141,22 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     String requestId = "req-dup-" + UUID.randomUUID();
     String idem = "idem-" + requestId;
 
-    LaunchResponse first =
-        triggerService.launch(
-            new TriggerLaunchCommand(buildRequest(tenantId, "JOB_DUP"), idem, requestId, "tr-1"));
-    LaunchResponse second =
-        triggerService.launch(
-            new TriggerLaunchCommand(buildRequest(tenantId, "JOB_DUP"), idem, requestId, "tr-2"));
+    LaunchResponse first = triggerService.launch(
+        new TriggerLaunchCommand(buildRequest(tenantId, "JOB_DUP"), idem, requestId, "tr-1"));
+    LaunchResponse second = triggerService.launch(
+        new TriggerLaunchCommand(buildRequest(tenantId, "JOB_DUP"), idem, requestId, "tr-2"));
 
     // 第二次返回与第一次同 requestId(走 dedup return existing)
     assertThat(first.instanceNo()).isEqualTo(requestId);
     assertThat(second.instanceNo()).isEqualTo(requestId);
 
-    await()
-        .atMost(Duration.ofSeconds(8))
-        .untilAsserted(
-            () -> {
-              List<TriggerOutboxEventEntity> events =
-                  outboxMapper.selectByTenantAndRequest(tenantId, requestId);
-              // uk_trigger_outbox_event_tenant_request 防重 + dedup 路径不二次 INSERT
-              assertThat(events).hasSize(1);
-              assertThat(events.get(0).getPublishStatus())
-                  .isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-            });
+    await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+      List<TriggerOutboxEventEntity> events =
+          outboxMapper.selectByTenantAndRequest(tenantId, requestId);
+      // uk_trigger_outbox_event_tenant_request 防重 + dedup 路径不二次 INSERT
+      assertThat(events).hasSize(1);
+      assertThat(events.get(0).getPublishStatus()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -183,19 +171,17 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     orphan.setTenantId(tenantId);
     orphan.setRequestId(requestId);
     orphan.setTopic(BatchTopics.TRIGGER_LAUNCH_V1);
-    orphan.setPayload(
-        JsonUtils.toJson(
-            LaunchEnvelope.of(
-                new io.github.pinpols.batch.common.dto.LaunchRequest(
-                    tenantId,
-                    "JOB_RECOVER",
-                    LocalDate.of(2026, 4, 30),
-                    TriggerType.MANUAL,
-                    requestId,
-                    "tr-recover",
-                    Map.of()),
-                "idem-recover-" + requestId,
-                BatchDateTimeSupport.utcNow())));
+    orphan.setPayload(JsonUtils.toJson(LaunchEnvelope.of(
+        new io.github.pinpols.batch.common.dto.LaunchRequest(
+            tenantId,
+            "JOB_RECOVER",
+            LocalDate.of(2026, 4, 30),
+            TriggerType.MANUAL,
+            requestId,
+            "tr-recover",
+            Map.of()),
+        "idem-recover-" + requestId,
+        BatchDateTimeSupport.utcNow())));
     orphan.setPublishStatus(OutboxPublishStatus.NEW.code());
     orphan.setPublishAttempt(0);
     orphan.setTraceId("tr-recover");
@@ -203,16 +189,12 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     outboxMapper.insert(orphan);
 
     // relay 主线程已经在 daemon 跑,会自动扫到该行;断言它推进到 PUBLISHED
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(
-            () -> {
-              List<TriggerOutboxEventEntity> events =
-                  outboxMapper.selectByTenantAndRequest(tenantId, requestId);
-              assertThat(events).hasSize(1);
-              assertThat(events.get(0).getPublishStatus())
-                  .isEqualTo(OutboxPublishStatus.PUBLISHED.code());
-            });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      List<TriggerOutboxEventEntity> events =
+          outboxMapper.selectByTenantAndRequest(tenantId, requestId);
+      assertThat(events).hasSize(1);
+      assertThat(events.get(0).getPublishStatus()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+    });
 
     ConsumerRecord<String, String> record = pollUntilFound(requestId, Duration.ofSeconds(8));
     assertThat(record).isNotNull();
@@ -239,17 +221,13 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     bad.setNextPublishAt(BatchDateTimeSupport.utcNow());
     outboxMapper.insert(bad);
 
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(
-            () -> {
-              List<TriggerOutboxEventEntity> events =
-                  outboxMapper.selectByTenantAndRequest(tenantId, requestId);
-              assertThat(events).hasSize(1);
-              assertThat(events.get(0).getPublishStatus())
-                  .isEqualTo(OutboxPublishStatus.GIVE_UP.code());
-              assertThat(events.get(0).getLastError()).contains("payload deserialize");
-            });
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      List<TriggerOutboxEventEntity> events =
+          outboxMapper.selectByTenantAndRequest(tenantId, requestId);
+      assertThat(events).hasSize(1);
+      assertThat(events.get(0).getPublishStatus()).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+      assertThat(events.get(0).getLastError()).contains("payload deserialize");
+    });
 
     // Kafka topic 不应有该 requestId 的消息
     ConsumerRecords<String, String> drained = kafkaConsumer.poll(Duration.ofSeconds(2));
@@ -298,10 +276,9 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
         }
       }
     }
-    throw new AssertionError(
-        "Kafka topic "
-            + BatchTopics.TRIGGER_LAUNCH_V1
-            + " did not receive message for requestId="
-            + requestId);
+    throw new AssertionError("Kafka topic "
+        + BatchTopics.TRIGGER_LAUNCH_V1
+        + " did not receive message for requestId="
+        + requestId);
   }
 }

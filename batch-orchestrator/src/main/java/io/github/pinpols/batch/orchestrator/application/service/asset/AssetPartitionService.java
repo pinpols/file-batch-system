@@ -39,9 +39,8 @@ public class AssetPartitionService {
     if (latest.isPresent() && !FRESHNESS_EFFECTIVE.equals(latest.get().status())) {
       return Optional.empty();
     }
-    AssetPartitionSnapshot materialized =
-        assetPartitionMapper.selectEffectiveJobPartition(
-            tenantId, jobCode, toPartitionKey(bizDate));
+    AssetPartitionSnapshot materialized = assetPartitionMapper.selectEffectiveJobPartition(
+        tenantId, jobCode, toPartitionKey(bizDate));
     if (materialized != null && latest.isEmpty()) {
       return Optional.of(materialized);
     }
@@ -76,19 +75,18 @@ public class AssetPartitionService {
           instance.getId());
       return;
     }
-    assetPartitionMapper.upsertEffectiveJobPartition(
-        new AssetPartitionMaterializationCommand(
-            tenantId,
-            assetId,
-            jobCode,
-            toPartitionKey(instance.getBizDate()),
-            instance.getBizDate(),
-            version.id(),
-            version.businessKey(),
-            version.jobInstanceId(),
-            version.effectiveAt(),
-            version.payloadStorage(),
-            version.payloadRef()));
+    assetPartitionMapper.upsertEffectiveJobPartition(new AssetPartitionMaterializationCommand(
+        tenantId,
+        assetId,
+        jobCode,
+        toPartitionKey(instance.getBizDate()),
+        instance.getBizDate(),
+        version.id(),
+        version.businessKey(),
+        version.jobInstanceId(),
+        version.effectiveAt(),
+        version.payloadStorage(),
+        version.payloadRef()));
   }
 
   private boolean isMaterializable(JobInstanceEntity instance, ResultVersionEntity version) {

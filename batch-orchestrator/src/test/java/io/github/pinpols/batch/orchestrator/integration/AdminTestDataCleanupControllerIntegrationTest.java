@@ -22,8 +22,12 @@ import org.springframework.web.client.RestClient;
     properties = {"batch.security.bypass-mode=true"})
 class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationTest {
 
-  @LocalServerPort private int port;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @LocalServerPort
+  private int port;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   private RestClient restClient;
 
   private static final String PREFIX = "itadmin";
@@ -73,42 +77,36 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
 
   @Test
   void cleanupShouldDeleteOnlyHyphenPrefixedRecords() {
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "SELECT count(*)::int FROM batch.job_definition WHERE job_code LIKE 'itadmin-%'",
-                Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "SELECT count(*)::int FROM batch.job_definition WHERE job_code LIKE 'itadmin-%'",
+            Integer.class))
         .isEqualTo(1);
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "SELECT count(*)::int FROM batch.job_definition WHERE job_code = ?",
-                Integer.class,
-                NEIGHBOR))
+    assertThat(jdbcTemplate.queryForObject(
+            "SELECT count(*)::int FROM batch.job_definition WHERE job_code = ?",
+            Integer.class,
+            NEIGHBOR))
         .isEqualTo(1);
 
-    Map<String, Integer> response =
-        restClient
-            .delete()
-            .uri("/internal/admin/test-data?prefix=" + PREFIX)
-            .retrieve()
-            .body(new ParameterizedTypeReference<>() {});
+    Map<String, Integer> response = restClient
+        .delete()
+        .uri("/internal/admin/test-data?prefix=" + PREFIX)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
     assertThat(response).containsEntry("job_definition", 1).containsEntry("workflow_definition", 1);
 
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "SELECT count(*)::int FROM batch.job_definition WHERE job_code LIKE 'itadmin-%'",
-                Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "SELECT count(*)::int FROM batch.job_definition WHERE job_code LIKE 'itadmin-%'",
+            Integer.class))
         .isZero();
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "SELECT count(*)::int FROM batch.workflow_definition WHERE workflow_code LIKE"
-                    + " 'itadmin-%'",
-                Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "SELECT count(*)::int FROM batch.workflow_definition WHERE workflow_code LIKE"
+                + " 'itadmin-%'",
+            Integer.class))
         .isZero();
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "SELECT count(*)::int FROM batch.job_definition WHERE job_code = ?",
-                Integer.class,
-                NEIGHBOR))
+    assertThat(jdbcTemplate.queryForObject(
+            "SELECT count(*)::int FROM batch.job_definition WHERE job_code = ?",
+            Integer.class,
+            NEIGHBOR))
         .isEqualTo(1);
   }
 }

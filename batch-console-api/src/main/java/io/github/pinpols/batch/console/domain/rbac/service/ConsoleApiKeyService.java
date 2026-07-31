@@ -39,12 +39,9 @@ public class ConsoleApiKeyService {
   public CreateResult create(
       String tenantId, String keyName, String scopes, Instant expiresAt, String operator) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    repository
-        .findByTenantAndName(resolved, keyName)
-        .ifPresent(
-            existing -> {
-              throw BizException.of(ResultCode.CONFLICT, "error.api_key.name_exists");
-            });
+    repository.findByTenantAndName(resolved, keyName).ifPresent(existing -> {
+      throw BizException.of(ResultCode.CONFLICT, "error.api_key.name_exists");
+    });
 
     String rawKey = generateRawKey();
     String prefix = rawKey.substring(0, 8);
@@ -63,13 +60,10 @@ public class ConsoleApiKeyService {
         expiresAt,
         operator);
 
-    ApiKeyEntity entity =
-        repository
-            .findByTenantAndName(resolved, keyName)
-            .orElseThrow(
-                () ->
-                    BizException.of(
-                        ResultCode.SYSTEM_ERROR, "error.api_key.created_but_not_found"));
+    ApiKeyEntity entity = repository
+        .findByTenantAndName(resolved, keyName)
+        .orElseThrow(
+            () -> BizException.of(ResultCode.SYSTEM_ERROR, "error.api_key.created_but_not_found"));
     return new CreateResult(entity, rawKey);
   }
 

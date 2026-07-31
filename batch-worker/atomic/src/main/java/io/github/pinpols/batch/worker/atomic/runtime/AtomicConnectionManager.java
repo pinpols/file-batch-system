@@ -74,30 +74,27 @@ public final class AtomicConnectionManager {
    */
   public static void requireNonOsCapableRole(Connection conn) throws SQLException {
     try (Statement st = conn.createStatement();
-        ResultSet rs =
-            st.executeQuery(
-                "SELECT rolsuper,"
-                    + " pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER') AS prog,"
-                    + " pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS rdf,"
-                    + " pg_has_role(current_user, 'pg_write_server_files', 'MEMBER') AS wsf "
-                    + "FROM pg_roles WHERE rolname = current_user")) {
+        ResultSet rs = st.executeQuery("SELECT rolsuper,"
+            + " pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER') AS prog,"
+            + " pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS rdf,"
+            + " pg_has_role(current_user, 'pg_write_server_files', 'MEMBER') AS wsf "
+            + "FROM pg_roles WHERE rolname = current_user")) {
       if (rs.next()) {
         boolean superuser = rs.getBoolean("rolsuper");
         boolean prog = rs.getBoolean("prog");
         boolean rdf = rs.getBoolean("rdf");
         boolean wsf = rs.getBoolean("wsf");
         if (superuser || prog || rdf || wsf) {
-          throw new SecurityException(
-              String.format(
-                  Locale.ROOT,
-                  "DB role has OS capability (superuser=%s, exec_server_program=%s,"
-                      + " read_server_files=%s, write_server_files=%s); refusing to run SPI."
-                      + " Use a least-privilege non-superuser role, or disable"
-                      + " forbidOsCapableRole only in trusted test envs.",
-                  superuser,
-                  prog,
-                  rdf,
-                  wsf));
+          throw new SecurityException(String.format(
+              Locale.ROOT,
+              "DB role has OS capability (superuser=%s, exec_server_program=%s,"
+                  + " read_server_files=%s, write_server_files=%s); refusing to run SPI."
+                  + " Use a least-privilege non-superuser role, or disable"
+                  + " forbidOsCapableRole only in trusted test envs.",
+              superuser,
+              prog,
+              rdf,
+              wsf));
         }
       }
     }

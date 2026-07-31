@@ -111,12 +111,11 @@ public class WorkerTaskLeaseRenewer {
     List<ActiveTaskLeaseRegistry.ActiveTaskLease> leaseList = new ArrayList<>(active);
     List<TaskLeaseRenewItem> batchItems = new ArrayList<>(leaseList.size());
     for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : leaseList) {
-      batchItems.add(
-          new TaskLeaseRenewItem(
-              lease.getTenantId(),
-              Long.valueOf(lease.getTaskId()),
-              lease.getWorkerId(),
-              lease.getPartitionInvocationId()));
+      batchItems.add(new TaskLeaseRenewItem(
+          lease.getTenantId(),
+          Long.valueOf(lease.getTaskId()),
+          lease.getWorkerId(),
+          lease.getPartitionInvocationId()));
     }
     recordRenewBatchSizeMetric(batchItems.size());
     Map<Long, TaskLeaseRenewResult> results;
@@ -201,12 +200,11 @@ public class WorkerTaskLeaseRenewer {
   private boolean attemptRenew(
       ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease, boolean fastRetry) {
     try {
-      boolean renewed =
-          taskExecutionClient.renewLease(
-              activeTaskLease.getTenantId(),
-              Long.valueOf(activeTaskLease.getTaskId()),
-              activeTaskLease.getWorkerId(),
-              activeTaskLease.getPartitionInvocationId());
+      boolean renewed = taskExecutionClient.renewLease(
+          activeTaskLease.getTenantId(),
+          Long.valueOf(activeTaskLease.getTaskId()),
+          activeTaskLease.getWorkerId(),
+          activeTaskLease.getPartitionInvocationId());
       if (!renewed) {
         log.warn(
             "task lease renew rejected: tenantId={}, taskId={}, workerId={}, fastRetry={}",
@@ -274,10 +272,9 @@ public class WorkerTaskLeaseRenewer {
       synchronized (this) {
         s = renewBatchSizeSummary;
         if (s == null) {
-          s =
-              DistributionSummary.builder("batch.worker.lease.renew.batch.size")
-                  .description("ADR-016: active leases per renew tick (before HTTP chunking)")
-                  .register(registry);
+          s = DistributionSummary.builder("batch.worker.lease.renew.batch.size")
+              .description("ADR-016: active leases per renew tick (before HTTP chunking)")
+              .register(registry);
           renewBatchSizeSummary = s;
         }
       }
@@ -286,10 +283,9 @@ public class WorkerTaskLeaseRenewer {
   }
 
   private void trackFailure(ActiveTaskLeaseRegistry.ActiveTaskLease lease, String reason) {
-    int count =
-        consecutiveFailures
-            .computeIfAbsent(lease.getTaskId(), k -> new AtomicInteger())
-            .incrementAndGet();
+    int count = consecutiveFailures
+        .computeIfAbsent(lease.getTaskId(), k -> new AtomicInteger())
+        .incrementAndGet();
     if (count >= leaseProperties.getConsecutiveFailureAlertThreshold()) {
       if ("rejected".equals(reason)) {
         log.error(

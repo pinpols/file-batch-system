@@ -72,19 +72,18 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private Map<String, Object> loadShedLockStatus(String resolved) {
-    List<Map<String, Object>> locks =
-        diagnosticMapper.shedlockAll().stream()
-            .map(
-                v -> {
-                  Map<String, Object> row = new LinkedHashMap<>();
-                  row.put("name", v.getName());
-                  row.put("lockUntil", v.getLockUntil());
-                  row.put("lockedAt", v.getLockedAt());
-                  row.put("lockedBy", v.getLockedBy());
-                  return row;
-                })
-            .collect(Collectors.toList());
-    long activeLocks = locks.stream().filter(row -> row.get("lockUntil") != null).count();
+    List<Map<String, Object>> locks = diagnosticMapper.shedlockAll().stream()
+        .map(v -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("name", v.getName());
+          row.put("lockUntil", v.getLockUntil());
+          row.put("lockedAt", v.getLockedAt());
+          row.put("lockedBy", v.getLockedBy());
+          return row;
+        })
+        .collect(Collectors.toList());
+    long activeLocks =
+        locks.stream().filter(row -> row.get("lockUntil") != null).count();
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("totalLocks", locks.size());
     result.put("activeLocks", activeLocks);
@@ -113,10 +112,8 @@ public class ConsoleClusterDiagnosticService {
     long decommissionedActive =
         valueOrZero(diagnosticMapper.countDecommissionedWorkersWithActiveTasks(resolved));
     long invalidCapabilityTags = valueOrZero(diagnosticMapper.countInvalidCapabilityTags(resolved));
-    long running =
-        valueOrZero(
-            diagnosticMapper.countJobInstancesByStatuses(
-                resolved, List.of(JobInstanceStatus.RUNNING.code())));
+    long running = valueOrZero(diagnosticMapper.countJobInstancesByStatuses(
+        resolved, List.of(JobInstanceStatus.RUNNING.code())));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("onlineWorkers", online);
     result.put("drainingWorkers", draining);
@@ -147,29 +144,23 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private Map<String, Object> loadOutboxHealth(String resolved) {
-    List<Map<String, Object>> stats =
-        diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
-            .map(
-                v -> {
-                  Map<String, Object> row = new LinkedHashMap<>();
-                  row.put("deliveryStatus", v.getDeliveryStatus());
-                  row.put("cnt", v.getCnt());
-                  return row;
-                })
-            .collect(Collectors.toList());
+    List<Map<String, Object>> stats = diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
+        .map(v -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("deliveryStatus", v.getDeliveryStatus());
+          row.put("cnt", v.getCnt());
+          return row;
+        })
+        .collect(Collectors.toList());
     long pendingCount = diagnosticMapper.countPendingOutboxEvents(resolved);
-    long activeCount =
-        valueOrZero(
-            diagnosticMapper.countOutboxEventsByStatuses(
-                resolved,
-                List.of(
-                    OutboxPublishStatus.NEW.code(),
-                    OutboxPublishStatus.FAILED.code(),
-                    OutboxPublishStatus.PUBLISHING.code())));
-    long stalePublishing =
-        valueOrZero(
-            diagnosticMapper.countStalePublishingOutboxEvents(
-                resolved, OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STALE_SECONDS));
+    long activeCount = valueOrZero(diagnosticMapper.countOutboxEventsByStatuses(
+        resolved,
+        List.of(
+            OutboxPublishStatus.NEW.code(),
+            OutboxPublishStatus.FAILED.code(),
+            OutboxPublishStatus.PUBLISHING.code())));
+    long stalePublishing = valueOrZero(diagnosticMapper.countStalePublishingOutboxEvents(
+        resolved, OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STALE_SECONDS));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("pendingEvents", pendingCount);
     result.put("activeEvents", activeCount);
@@ -199,10 +190,8 @@ public class ConsoleClusterDiagnosticService {
 
   public Map<String, Object> instanceDiagnosis(String tenantId, Long instanceId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> instance =
-        Guard.requireFound(
-            diagnosticMapper.selectJobInstanceSummary(resolved, instanceId),
-            "job instance not found");
+    Map<String, Object> instance = Guard.requireFound(
+        diagnosticMapper.selectJobInstanceSummary(resolved, instanceId), "job instance not found");
     List<Map<String, Object>> partitionStatusCounts =
         diagnosticMapper.partitionStatusCounts(resolved, instanceId);
     List<Map<String, Object>> taskStatusCounts =
@@ -211,10 +200,8 @@ public class ConsoleClusterDiagnosticService {
         diagnosticMapper.outboxStatusCountsForInstance(resolved, instanceId);
     List<Map<String, Object>> workerIssues =
         diagnosticMapper.activeTaskWorkerIssues(resolved, instanceId, TASK_HEARTBEAT_STALE_SECONDS);
-    long onlineWorkersForGroup =
-        valueOrZero(
-            diagnosticMapper.countOnlineWorkersForGroup(
-                resolved, stringValue(instance.get("workerGroup"), null)));
+    long onlineWorkersForGroup = valueOrZero(diagnosticMapper.countOnlineWorkersForGroup(
+        resolved, stringValue(instance.get("workerGroup"), null)));
 
     List<Map<String, Object>> findings = new ArrayList<>();
     long totalPartitions = totalCount(partitionStatusCounts);
@@ -225,51 +212,43 @@ public class ConsoleClusterDiagnosticService {
 
     String instanceStatus = stringValue(instance.get("instanceStatus"), "");
     if (isActive(instanceStatus) && totalPartitions == 0 && totalTasks == 0) {
-      findings.add(
-          finding(
-              "ERROR",
-              "INSTANCE_HAS_NO_CHILDREN",
-              "实例仍处于活跃状态,但没有分区和任务记录。",
-              List.of("检查 launch T1/T2 是否中断", "使用实例重试或重新触发同一 requestId"),
-              Map.of("instanceStatus", instanceStatus)));
+      findings.add(finding(
+          "ERROR",
+          "INSTANCE_HAS_NO_CHILDREN",
+          "实例仍处于活跃状态,但没有分区和任务记录。",
+          List.of("检查 launch T1/T2 是否中断", "使用实例重试或重新触发同一 requestId"),
+          Map.of("instanceStatus", instanceStatus)));
     }
     if (isTerminal(instanceStatus) && (activePartitions > 0 || activeTasks > 0)) {
-      findings.add(
-          finding(
-              "ERROR",
-              "TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN",
-              "实例已终态,但仍存在活跃分区或任务。",
-              List.of("优先检查 orchestrator 终态推进日志", "必要时通过受控恢复接口处理子节点"),
-              Map.of("activePartitions", activePartitions, "activeTasks", activeTasks)));
+      findings.add(finding(
+          "ERROR",
+          "TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN",
+          "实例已终态,但仍存在活跃分区或任务。",
+          List.of("优先检查 orchestrator 终态推进日志", "必要时通过受控恢复接口处理子节点"),
+          Map.of("activePartitions", activePartitions, "activeTasks", activeTasks)));
     }
     if (isActive(instanceStatus) && onlineWorkersForGroup == 0) {
-      findings.add(
-          finding(
-              "WARN",
-              "NO_ONLINE_WORKER_FOR_GROUP",
-              "实例所属 workerGroup 当前没有 ONLINE worker。",
-              List.of("启动或恢复该 workerGroup 的 worker", "必要时调整 job_definition.worker_group"),
-              Map.of("workerGroup", stringValue(instance.get("workerGroup"), ""))));
+      findings.add(finding(
+          "WARN",
+          "NO_ONLINE_WORKER_FOR_GROUP",
+          "实例所属 workerGroup 当前没有 ONLINE worker。",
+          List.of("启动或恢复该 workerGroup 的 worker", "必要时调整 job_definition.worker_group"),
+          Map.of("workerGroup", stringValue(instance.get("workerGroup"), ""))));
     }
     if (activeOutboxEvents > 0) {
-      findings.add(
-          finding(
-              "WARN",
-              "OUTBOX_EVENTS_NOT_TERMINAL",
-              "该实例相关 outbox 事件仍未全部发布完成。",
-              List.of("查看 Outbox 页面", "对 FAILED/GIVE_UP 事件使用受控 republish"),
-              Map.of(
-                  "activeOutboxEvents", activeOutboxEvents, "statusCounts", outboxStatusCounts)));
+      findings.add(finding(
+          "WARN",
+          "OUTBOX_EVENTS_NOT_TERMINAL",
+          "该实例相关 outbox 事件仍未全部发布完成。",
+          List.of("查看 Outbox 页面", "对 FAILED/GIVE_UP 事件使用受控 republish"),
+          Map.of("activeOutboxEvents", activeOutboxEvents, "statusCounts", outboxStatusCounts)));
     }
-    workerIssues.forEach(
-        issue ->
-            findings.add(
-                finding(
-                    "WARN",
-                    stringValue(issue.get("reasonCode"), "TASK_WORKER_ISSUE"),
-                    "活跃任务存在 worker 分配或心跳异常。",
-                    List.of("查看 worker 注册状态与心跳", "等待 lease 回收后重试或取消分区"),
-                    issue)));
+    workerIssues.forEach(issue -> findings.add(finding(
+        "WARN",
+        stringValue(issue.get("reasonCode"), "TASK_WORKER_ISSUE"),
+        "活跃任务存在 worker 分配或心跳异常。",
+        List.of("查看 worker 注册状态与心跳", "等待 lease 回收后重试或取消分区"),
+        issue)));
 
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("tenantId", resolved);

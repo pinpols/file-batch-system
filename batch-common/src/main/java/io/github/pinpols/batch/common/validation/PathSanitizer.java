@@ -23,11 +23,10 @@ public final class PathSanitizer {
     Path normalized = sanitize(rawPath);
     Path normalizedBase = baseDir.toAbsolutePath().normalize();
     if (!normalized.startsWith(normalizedBase)) {
-      throw new SecurityException(
-          "path escapes allowed base directory: path="
-              + normalized
-              + ", baseDir="
-              + normalizedBase);
+      throw new SecurityException("path escapes allowed base directory: path="
+          + normalized
+          + ", baseDir="
+          + normalizedBase);
     }
     return normalized;
   }

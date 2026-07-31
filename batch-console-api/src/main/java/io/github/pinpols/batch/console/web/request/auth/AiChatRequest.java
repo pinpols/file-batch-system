@@ -15,7 +15,8 @@ public class AiChatRequest {
   @Size(max = 128)
   private String sessionId;
 
-  @NotBlank private String prompt;
+  @NotBlank
+  private String prompt;
 
   private Map<String, Object> context = new LinkedHashMap<>();
 }

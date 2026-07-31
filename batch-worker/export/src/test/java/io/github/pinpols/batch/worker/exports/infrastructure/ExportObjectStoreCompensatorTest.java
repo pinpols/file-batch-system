@@ -23,9 +23,14 @@ import org.springframework.beans.factory.ObjectProvider;
 @DisplayName("安全增量补偿 EXPORT/DISPATCH：删本 run 自己的对象，幂等，scoped 到 file_record")
 class ExportObjectStoreCompensatorTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private BatchObjectStore objectStore;
-  @Mock private ObjectProvider<BatchObjectStore> objectStoreProvider;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private BatchObjectStore objectStore;
+
+  @Mock
+  private ObjectProvider<BatchObjectStore> objectStoreProvider;
 
   private ExportObjectStoreCompensator compensator() {
     return new ExportObjectStoreCompensator(runtimeRepository, objectStoreProvider);
@@ -57,7 +62,9 @@ class ExportObjectStoreCompensatorTest {
     fileRecord.put("storage_path", "k");
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
-    doThrow(new ObjectNotFoundException("object b/k not found")).when(objectStore).delete("b", "k");
+    doThrow(new ObjectNotFoundException("object b/k not found"))
+        .when(objectStore)
+        .delete("b", "k");
 
     CompensationResult result = compensator().compensate("tenant-a", 1L, 7L, attributes);
 

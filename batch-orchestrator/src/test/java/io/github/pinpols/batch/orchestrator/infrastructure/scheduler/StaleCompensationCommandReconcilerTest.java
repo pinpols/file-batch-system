@@ -21,7 +21,8 @@ class StaleCompensationCommandReconcilerTest {
     StaleCompensationCommandReconciler reconciler = new StaleCompensationCommandReconciler(mapper);
     ReflectionTestUtils.setField(reconciler, "timeoutSeconds", 300L);
     ReflectionTestUtils.setField(reconciler, "batchSize", 25);
-    when(mapper.markStaleRunningFailed(any(), any(), any(), any(), any(), anyInt())).thenReturn(2);
+    when(mapper.markStaleRunningFailed(any(), any(), any(), any(), any(), anyInt()))
+        .thenReturn(2);
 
     reconciler.reconcile();
 

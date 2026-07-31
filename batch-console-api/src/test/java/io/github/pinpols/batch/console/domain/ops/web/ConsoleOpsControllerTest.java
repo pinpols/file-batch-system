@@ -46,13 +46,11 @@ class ConsoleOpsControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleOpsController(
-                    opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsController(
+            opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test

@@ -8,8 +8,11 @@ import lombok.Data;
 @Data
 public class DeadLetterReplayRequest {
 
-  @ValidTenantId private String tenantId;
-  @NotNull private Long deadLetterId;
+  @ValidTenantId
+  private String tenantId;
+
+  @NotNull
+  private Long deadLetterId;
 
   @Size(max = 512, message = "reason too long (max 512)")
   private String reason;

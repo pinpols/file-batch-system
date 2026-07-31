@@ -18,7 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultResourceQueueManagerTest {
 
-  @Mock private ResourceQueueMapper mapper;
+  @Mock
+  private ResourceQueueMapper mapper;
 
   private DefaultResourceQueueManager manager;
 

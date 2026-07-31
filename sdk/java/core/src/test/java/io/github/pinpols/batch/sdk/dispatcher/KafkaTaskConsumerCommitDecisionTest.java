@@ -24,16 +24,15 @@ import org.junit.jupiter.api.Test;
 /** SDK Kafka offset 契约:只有已接收/终态坏消息提交 offset,可恢复拒收不提交。 */
 class KafkaTaskConsumerCommitDecisionTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("kafka:9092")
-          .kafkaTopicPattern("batch.task.dispatch.tx.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("kafka:9092")
+      .kafkaTopicPattern("batch.task.dispatch.tx.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   @Test
   void commitsOffsetAfterDispatcherSubmitted() throws Exception {
@@ -86,11 +85,10 @@ class KafkaTaskConsumerCommitDecisionTest {
 
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.processPolledRecords(
-          List.of(
-              record(deferred.topic(), 5, message("tx")),
-              record(deferred.topic(), 6, message("tx")),
-              record(healthy.topic(), 7, message("tx"))));
+      kafka.processPolledRecords(List.of(
+          record(deferred.topic(), 5, message("tx")),
+          record(deferred.topic(), 6, message("tx")),
+          record(healthy.topic(), 7, message("tx"))));
     }
 
     // t0 的 offset 6 被留给 seek(5)后的重投;同一 poll 中的 t1 仍正常处理并提交。
@@ -115,11 +113,10 @@ class KafkaTaskConsumerCommitDecisionTest {
 
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.processPolledRecords(
-          List.of(
-              record(failed.topic(), 5, message("tx")),
-              record(failed.topic(), 6, message("tx")),
-              record(healthy.topic(), 7, message("tx"))));
+      kafka.processPolledRecords(List.of(
+          record(failed.topic(), 5, message("tx")),
+          record(failed.topic(), 6, message("tx")),
+          record(healthy.topic(), 7, message("tx"))));
     }
 
     verify(dispatcher, times(2)).onMessage(any());
@@ -135,9 +132,8 @@ class KafkaTaskConsumerCommitDecisionTest {
     Consumer<String, byte[]> consumer = mock(Consumer.class);
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(
-          new ConsumerRecord<>(
-              "batch.task.dispatch.tx.t0", 0, 3, "k", "not-json".getBytes(StandardCharsets.UTF_8)));
+      kafka.handleRecordAndMaybeCommit(new ConsumerRecord<>(
+          "batch.task.dispatch.tx.t0", 0, 3, "k", "not-json".getBytes(StandardCharsets.UTF_8)));
     }
 
     verify(dispatcher, never()).onMessage(any());
@@ -163,9 +159,8 @@ class KafkaTaskConsumerCommitDecisionTest {
     boolean laterKeepsGoing;
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      withholdKeepsGoing =
-          kafka.handleRecordAndMaybeCommit(
-              new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
+      withholdKeepsGoing = kafka.handleRecordAndMaybeCommit(
+          new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
       laterKeepsGoing = kafka.handleRecordAndMaybeCommit(record(6, message("tx")));
     }
 

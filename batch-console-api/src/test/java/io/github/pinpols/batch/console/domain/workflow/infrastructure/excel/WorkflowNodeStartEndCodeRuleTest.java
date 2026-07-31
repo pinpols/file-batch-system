@@ -13,11 +13,10 @@ class WorkflowNodeStartEndCodeRuleTest {
 
   @Test
   void shouldPass_whenStartAndEndPresentWithCanonicalCodes() {
-    List<Map<String, Object>> rows =
-        List.of(
-            node("ta", "WF_A", "1", "START", "START", 2),
-            node("ta", "WF_A", "1", "NODE_JOB1", "JOB", 3),
-            node("ta", "WF_A", "1", "END", "END", 4));
+    List<Map<String, Object>> rows = List.of(
+        node("ta", "WF_A", "1", "START", "START", 2),
+        node("ta", "WF_A", "1", "NODE_JOB1", "JOB", 3),
+        node("ta", "WF_A", "1", "END", "END", 4));
 
     List<WorkbookIssue> issues = WorkflowNodeStartEndCodeRule.validate(rows);
 
@@ -26,10 +25,9 @@ class WorkflowNodeStartEndCodeRuleTest {
 
   @Test
   void shouldReport_whenNodeTypeStartButCodeIsNotStart() {
-    List<Map<String, Object>> rows =
-        List.of(
-            node("ta", "WF_B", "1", "NODE_START", "START", 2),
-            node("ta", "WF_B", "1", "END", "END", 4));
+    List<Map<String, Object>> rows = List.of(
+        node("ta", "WF_B", "1", "NODE_START", "START", 2),
+        node("ta", "WF_B", "1", "END", "END", 4));
 
     List<WorkbookIssue> issues = WorkflowNodeStartEndCodeRule.validate(rows);
 
@@ -43,10 +41,8 @@ class WorkflowNodeStartEndCodeRuleTest {
 
   @Test
   void shouldReport_whenStartNodeMissing() {
-    List<Map<String, Object>> rows =
-        List.of(
-            node("ta", "WF_C", "1", "NODE_JOB", "JOB", 2),
-            node("ta", "WF_C", "1", "END", "END", 3));
+    List<Map<String, Object>> rows = List.of(
+        node("ta", "WF_C", "1", "NODE_JOB", "JOB", 2), node("ta", "WF_C", "1", "END", "END", 3));
 
     List<WorkbookIssue> issues = WorkflowNodeStartEndCodeRule.validate(rows);
 
@@ -56,11 +52,10 @@ class WorkflowNodeStartEndCodeRuleTest {
 
   @Test
   void shouldReport_whenTwoEndNodesInSameWorkflow() {
-    List<Map<String, Object>> rows =
-        List.of(
-            node("ta", "WF_D", "1", "START", "START", 2),
-            node("ta", "WF_D", "1", "END", "END", 3),
-            node("ta", "WF_D", "1", "END", "END", 4));
+    List<Map<String, Object>> rows = List.of(
+        node("ta", "WF_D", "1", "START", "START", 2),
+        node("ta", "WF_D", "1", "END", "END", 3),
+        node("ta", "WF_D", "1", "END", "END", 4));
 
     List<WorkbookIssue> issues = WorkflowNodeStartEndCodeRule.validate(rows);
 
@@ -70,18 +65,15 @@ class WorkflowNodeStartEndCodeRuleTest {
 
   @Test
   void shouldReport_whenNodeCodeIsStartButNodeTypeMismatched() {
-    List<Map<String, Object>> rows =
-        List.of(
-            node("ta", "WF_E", "1", "START", "JOB", 2), node("ta", "WF_E", "1", "END", "END", 3));
+    List<Map<String, Object>> rows = List.of(
+        node("ta", "WF_E", "1", "START", "JOB", 2), node("ta", "WF_E", "1", "END", "END", 3));
 
     List<WorkbookIssue> issues = WorkflowNodeStartEndCodeRule.validate(rows);
 
-    assertThat(issues)
-        .anySatisfy(
-            i -> {
-              assertThat(i.columnName()).isEqualTo("node_type");
-              assertThat(i.message()).contains("node_code='START' must have node_type='START'");
-            });
+    assertThat(issues).anySatisfy(i -> {
+      assertThat(i.columnName()).isEqualTo("node_type");
+      assertThat(i.message()).contains("node_code='START' must have node_type='START'");
+    });
   }
 
   @Test

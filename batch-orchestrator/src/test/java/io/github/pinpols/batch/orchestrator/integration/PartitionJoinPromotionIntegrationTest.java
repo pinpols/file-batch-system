@@ -59,13 +59,26 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private LaunchService launchService;
-  @Autowired private TaskExecutionService taskExecutionService;
-  @Autowired private JobInstanceMapper jobInstanceMapper;
-  @Autowired private JobPartitionMapper jobPartitionMapper;
-  @Autowired private JobTaskMapper jobTaskMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private WorkerRegistryCache workerRegistryCache;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private TaskExecutionService taskExecutionService;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private WorkerRegistryCache workerRegistryCache;
 
   @BeforeEach
   void refreshWorkers() {
@@ -104,13 +117,12 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
     // assert(结算级契约):PARTIAL_FAILED 不得产出 EFFECTIVE result_version —— 否则下游 readiness
     // 会把不完整结果当完整消费(roadmap §2.2「PARTIAL_FAILED 不得被静默消费」)。
-    Integer effectiveVersions =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.result_version"
-                + " where tenant_id = ? and job_instance_id = ? and status = 'EFFECTIVE'",
-            Integer.class,
-            TENANT,
-            fannedOut.instanceId());
+    Integer effectiveVersions = jdbcTemplate.queryForObject(
+        "select count(*) from batch.result_version"
+            + " where tenant_id = ? and job_instance_id = ? and status = 'EFFECTIVE'",
+        Integer.class,
+        TENANT,
+        fannedOut.instanceId());
     assertThat(effectiveVersions).isZero();
   }
 
@@ -159,13 +171,12 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     assertThat(failedPartitionCount(fannedOut.instanceId())).isEqualTo(0);
 
     // assert:重放不产生重复的结果版本 —— 每个 job_instance 至多 1 行 result_version(writer 幂等守护)。
-    Long resultVersionRows =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.result_version"
-                + " where tenant_id = ? and job_instance_id = ?",
-            Long.class,
-            TENANT,
-            fannedOut.instanceId());
+    Long resultVersionRows = jdbcTemplate.queryForObject(
+        "select count(*) from batch.result_version"
+            + " where tenant_id = ? and job_instance_id = ?",
+        Long.class,
+        TENANT,
+        fannedOut.instanceId());
     assertThat(resultVersionRows).isEqualTo(1L);
   }
 
@@ -177,34 +188,31 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
    * instance)。 束的 IMPORT 绑定 profile = 源文件 + 模板,每项一 partition(异构、各自绑定)。
    */
   private FannedOutInstance launchBundle(int count) {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
-            jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
+    LaunchSeed seed = LaunchIntegrationFixture.prepareBundleLaunchWithWorker(
+        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "IMPORT");
 
     List<Map<String, Object>> bundleFiles = new ArrayList<>();
     for (int i = 0; i < count; i++) {
       bundleFiles.add(Map.of("sourceFileId", 3000 + i, "templateCode", "TPL_" + i));
     }
 
-    LaunchRequest request =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.EVENT)
-            .requestId(seed.requestId())
-            .traceId("trace-join-" + seed.requestId())
-            .params(Map.of("bundleFiles", bundleFiles))
-            .build();
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.EVENT)
+        .requestId(seed.requestId())
+        .traceId("trace-join-" + seed.requestId())
+        .params(Map.of("bundleFiles", bundleFiles))
+        .build();
     launchService.launch(request);
 
     JobInstanceEntity instance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
     assertThat(instance).as("bundle launch must create the instance").isNotNull();
 
-    List<JobPartitionEntity> partitions =
-        jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(TENANT, instance.getId(), null, null));
+    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(TENANT, instance.getId(), null, null));
     assertThat(partitions).as("bundle must fan out into K partitions").hasSize(count);
 
     return new FannedOutInstance(seed, instance.getId());
@@ -213,13 +221,12 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   /** 每个 partition 对应一个 task,用束的单 worker 逐个 CLAIM(task→RUNNING, partition→RUNNING + invocation)。 */
   private List<Shard> claimAllShards(FannedOutInstance fannedOut) {
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+        new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
     List<Shard> shards = new ArrayList<>();
     for (JobTaskEntity task : tasks) {
-      JobTaskEntity claimed =
-          taskExecutionService.assignWorker(TENANT, task.getId(), fannedOut.seed().workerCode());
+      JobTaskEntity claimed = taskExecutionService.assignWorker(
+          TENANT, task.getId(), fannedOut.seed().workerCode());
       assertThat(claimed).isNotNull();
       JobPartitionEntity partition =
           jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
@@ -233,16 +240,15 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   /** 生产 REPORT 入口:worker 上报 outcome → orchestrator 状态机推进(真 {@code applyTaskOutcome})。 */
   private void reportOutcome(Shard shard, boolean success) {
     JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, shard.partitionId());
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(shard.taskId())
-            .success(success)
-            .resultSummary(success ? "{\"records\":10}" : null)
-            .errorCode(success ? null : "E_SHARD_FAIL")
-            .errorMessage(success ? null : "intentional shard failure for join gate")
-            .partitionInvocationId(partition.getCurrentInvocationId())
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(shard.taskId())
+        .success(success)
+        .resultSummary(success ? "{\"records\":10}" : null)
+        .errorCode(success ? null : "E_SHARD_FAIL")
+        .errorMessage(success ? null : "intentional shard failure for join gate")
+        .partitionInvocationId(partition.getCurrentInvocationId())
+        .build();
     taskExecutionService.applyTaskOutcome(command);
   }
 
@@ -259,12 +265,11 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int countColumn(String column, Long instanceId) {
-    Integer value =
-        jdbcTemplate.queryForObject(
-            "select " + column + " from batch.job_instance where tenant_id = ? and id = ?",
-            Integer.class,
-            TENANT,
-            instanceId);
+    Integer value = jdbcTemplate.queryForObject(
+        "select " + column + " from batch.job_instance where tenant_id = ? and id = ?",
+        Integer.class,
+        TENANT,
+        instanceId);
     return value == null ? 0 : value;
   }
 

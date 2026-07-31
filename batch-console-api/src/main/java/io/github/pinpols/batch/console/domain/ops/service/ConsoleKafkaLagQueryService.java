@@ -98,8 +98,10 @@ public class ConsoleKafkaLagQueryService {
     for (var entry : committedOffsets.entrySet()) {
       TopicPartition tp = entry.getKey();
       long committed = entry.getValue().offset();
-      long endOffset =
-          endOffsetsResult.partitionResult(tp).get(TIMEOUT_SECONDS, TimeUnit.SECONDS).offset();
+      long endOffset = endOffsetsResult
+          .partitionResult(tp)
+          .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+          .offset();
       long lag = Math.max(0, endOffset - committed);
       totalLag += lag;
       if (lag > 0) {

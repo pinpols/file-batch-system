@@ -47,15 +47,14 @@ class BatchDayOperationServiceTest {
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     batchDayOperationAuditMapper = mock(BatchDayOperationAuditMapper.class);
     launchService = mock(LaunchService.class);
-    service =
-        new BatchDayOperationService(
-            batchDayInstanceMapper,
-            waitingLaunchMapper,
-            jobExecutionLogMapper,
-            batchDayOperationAuditMapper,
-            launchService,
-            new BatchDateTimeSupport(
-                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
+    service = new BatchDayOperationService(
+        batchDayInstanceMapper,
+        waitingLaunchMapper,
+        jobExecutionLogMapper,
+        batchDayOperationAuditMapper,
+        launchService,
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test
@@ -67,15 +66,14 @@ class BatchDayOperationServiceTest {
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     BatchDayOperationService.BatchDayOperationResult result =
-        service.operate(
-            BatchDayOperateCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .action(BatchDayOperationService.BatchDayOperation.FREEZE)
-                .operatorId("ops")
-                .reason("manual hold")
-                .build());
+        service.operate(BatchDayOperateCommand.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 4))
+            .action(BatchDayOperationService.BatchDayOperation.FREEZE)
+            .operatorId("ops")
+            .reason("manual hold")
+            .build());
 
     assertThat(result.batchDay().dayStatus()).isEqualTo("OPEN");
     assertThat(result.batchDay().frozen()).isTrue();
@@ -102,15 +100,14 @@ class BatchDayOperationServiceTest {
         .thenReturn(current);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
-    service.operate(
-        BatchDayOperateCommand.builder()
-            .tenantId("t1")
-            .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
-            .action(BatchDayOperationService.BatchDayOperation.SKIP)
-            .operatorId("ops")
-            .reason("no input")
-            .build());
+    service.operate(BatchDayOperateCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, 5, 4))
+        .action(BatchDayOperationService.BatchDayOperation.SKIP)
+        .operatorId("ops")
+        .reason("no input")
+        .build());
 
     ArgumentCaptor<BatchDayInstanceEntity> captor =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
@@ -125,17 +122,14 @@ class BatchDayOperationServiceTest {
             "t1", "CAL", LocalDate.of(2026, 5, 4)))
         .thenReturn(batchDay("SETTLED"));
 
-    assertThatThrownBy(
-            () ->
-                service.operate(
-                    BatchDayOperateCommand.builder()
-                        .tenantId("t1")
-                        .calendarCode("CAL")
-                        .bizDate(LocalDate.of(2026, 5, 4))
-                        .action(BatchDayOperationService.BatchDayOperation.FREEZE)
-                        .operatorId("ops")
-                        .reason("hold")
-                        .build()))
+    assertThatThrownBy(() -> service.operate(BatchDayOperateCommand.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 4))
+            .action(BatchDayOperationService.BatchDayOperation.FREEZE)
+            .operatorId("ops")
+            .reason("hold")
+            .build()))
         .isInstanceOf(BizException.class);
 
     verify(batchDayInstanceMapper, never()).updateWithCas(any());
@@ -154,15 +148,14 @@ class BatchDayOperationServiceTest {
     when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-1", "trace-1"));
 
     BatchDayOperationService.BatchDayOperationResult result =
-        service.operate(
-            BatchDayOperateCommand.builder()
-                .tenantId("t1")
-                .calendarCode("CAL")
-                .bizDate(LocalDate.of(2026, 5, 4))
-                .action(BatchDayOperationService.BatchDayOperation.RELEASE)
-                .operatorId("ops")
-                .reason("manual release")
-                .build());
+        service.operate(BatchDayOperateCommand.builder()
+            .tenantId("t1")
+            .calendarCode("CAL")
+            .bizDate(LocalDate.of(2026, 5, 4))
+            .action(BatchDayOperationService.BatchDayOperation.RELEASE)
+            .operatorId("ops")
+            .reason("manual release")
+            .build());
 
     assertThat(result.batchDay().dayStatus()).isEqualTo("MANUAL_RELEASED");
     assertThat(result.releasedLaunchCount()).isEqualTo(1);
@@ -196,15 +189,14 @@ class BatchDayOperationServiceTest {
 
   private BatchDayWaitingLaunchEntity waitingLaunch() {
     Instant at = Instant.parse("2026-05-05T00:00:00Z");
-    Map<String, Object> payload =
-        Map.of(
-            "tenantId", "t1",
-            "jobCode", "JOB",
-            "bizDate", "2026-05-05",
-            "triggerType", "SCHEDULED",
-            "requestId", "req-1",
-            "traceId", "trace-1",
-            "params", Map.of("k", "v"));
+    Map<String, Object> payload = Map.of(
+        "tenantId", "t1",
+        "jobCode", "JOB",
+        "bizDate", "2026-05-05",
+        "triggerType", "SCHEDULED",
+        "requestId", "req-1",
+        "traceId", "trace-1",
+        "params", Map.of("k", "v"));
     return new BatchDayWaitingLaunchEntity(
         1L,
         "t1",

@@ -44,7 +44,9 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
   private final TenantConfigInitApplyHandlers applyHandlers;
 
-  @Lazy @Autowired private DefaultConsoleTenantConfigInitApplicationService self;
+  @Lazy
+  @Autowired
+  private DefaultConsoleTenantConfigInitApplicationService self;
 
   @Override
   public TenantConfigBatchInitResponse batchInit(
@@ -125,17 +127,16 @@ public class DefaultConsoleTenantConfigInitApplicationService
     // strict=true (Job Bundle 跨环境导入)：任一 spec failed 即抛出 StrictBundleAbortedException,
     // 由 @Transactional 触发整体回滚 → all-or-nothing。SKIP_EXISTING 跳过 / UPSERT 覆盖不算 failed。
     if (request.isStrict()) {
-      int totalFailed =
-          jobStats.failed()
-              + workflowStats.failed()
-              + pipelineStats.failed()
-              + channelStats.failed()
-              + templateStats.failed()
-              + queueStats.failed()
-              + windowStats.failed()
-              + calendarStats.failed()
-              + quotaStats.failed()
-              + alertStats.failed();
+      int totalFailed = jobStats.failed()
+          + workflowStats.failed()
+          + pipelineStats.failed()
+          + channelStats.failed()
+          + templateStats.failed()
+          + queueStats.failed()
+          + windowStats.failed()
+          + calendarStats.failed()
+          + quotaStats.failed()
+          + alertStats.failed();
       if (totalFailed > 0) {
         throw new StrictBundleAbortedException(
             "strict bundle aborted: " + totalFailed + " spec(s) failed for tenant=" + tenantId);

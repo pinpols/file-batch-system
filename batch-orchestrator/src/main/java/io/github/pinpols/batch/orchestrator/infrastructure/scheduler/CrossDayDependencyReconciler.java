@@ -71,9 +71,8 @@ public class CrossDayDependencyReconciler {
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
-    List<WorkflowNodeRunEntity> waiting =
-        workflowMappers.workflowNodeRunMapper.selectByNodeStatus(
-            STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
+    List<WorkflowNodeRunEntity> waiting = workflowMappers.workflowNodeRunMapper.selectByNodeStatus(
+        STATUS_WAITING_DEPENDENCY, properties.getBatchSize());
     if (waiting == null || waiting.isEmpty()) {
       return;
     }
@@ -108,9 +107,8 @@ public class CrossDayDependencyReconciler {
   /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
   private void reconcileOneBound(
       WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
-    JobInstanceEntity jobInstance =
-        jobMappers.jobInstanceMapper.selectById(
-            workflowRun.getTenantId(), workflowRun.getRelatedJobInstanceId());
+    JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(
+        workflowRun.getTenantId(), workflowRun.getRelatedJobInstanceId());
     if (jobInstance == null) {
       return;
     }
@@ -124,11 +122,10 @@ public class CrossDayDependencyReconciler {
       markFailed(nodeRun, "CROSS_DAY_DEP_SPEC_MISSING", now);
       return;
     }
-    ResolutionResult result =
-        crossDayDependencyResolver.resolve(
-            jobInstance.getTenantId(),
-            jobInstance.getBizDate(),
-            workflowNode.getCrossDayDependencies());
+    ResolutionResult result = crossDayDependencyResolver.resolve(
+        jobInstance.getTenantId(),
+        jobInstance.getBizDate(),
+        workflowNode.getCrossDayDependencies());
     if (result.isResolved()) {
       log.info(
           "cross_day_dep resolved: tenantId={}, workflowRunId={}, nodeCode={}",
@@ -180,15 +177,14 @@ public class CrossDayDependencyReconciler {
   }
 
   private void markFailed(WorkflowNodeRunEntity nodeRun, String failureCode, Instant now) {
-    workflowMappers.workflowNodeRunMapper.updateStatus(
-        UpdateNodeRunStatusParam.builder()
-            .id(nodeRun.getId())
-            .nodeStatus(STATUS_FAILED)
-            .errorCode(failureCode == null ? "CROSS_DAY_DEP_FAILED" : failureCode)
-            .errorMessage("cross-day dependency reconcile fail")
-            .durationMs(0L)
-            .finishedAt(now)
-            .build());
+    workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+        .id(nodeRun.getId())
+        .nodeStatus(STATUS_FAILED)
+        .errorCode(failureCode == null ? "CROSS_DAY_DEP_FAILED" : failureCode)
+        .errorMessage("cross-day dependency reconcile fail")
+        .durationMs(0L)
+        .finishedAt(now)
+        .build());
   }
 
   private void emitTimeoutAlert(
@@ -202,22 +198,22 @@ public class CrossDayDependencyReconciler {
     detail.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
     detail.put("nodeCode", nodeRun.getNodeCode());
     detail.put(
-        "bizDate", jobInstance.getBizDate() == null ? null : jobInstance.getBizDate().toString());
+        "bizDate",
+        jobInstance.getBizDate() == null ? null : jobInstance.getBizDate().toString());
     detail.put("waitingReason", nodeRun.getErrorMessage());
     detail.put("reason", reason);
     String resourceKey =
         jobInstance.getTenantId() + ":" + workflowRun.getId() + ":" + nodeRun.getNodeCode();
-    AlertEmitRequest request =
-        AlertEmitRequest.builder()
-            .tenantId(jobInstance.getTenantId())
-            .serviceName("batch-orchestrator")
-            .alertType(ALERT_TYPE_TIMEOUT)
-            .severity("ERROR")
-            .title("workflow cross-day dependency " + reason.toLowerCase(Locale.ROOT))
-            .detailJson(JsonUtils.toJson(detail))
-            .resourceKey(resourceKey)
-            .traceId(workflowRun.getTraceId())
-            .build();
+    AlertEmitRequest request = AlertEmitRequest.builder()
+        .tenantId(jobInstance.getTenantId())
+        .serviceName("batch-orchestrator")
+        .alertType(ALERT_TYPE_TIMEOUT)
+        .severity("ERROR")
+        .title("workflow cross-day dependency " + reason.toLowerCase(Locale.ROOT))
+        .detailJson(JsonUtils.toJson(detail))
+        .resourceKey(resourceKey)
+        .traceId(workflowRun.getTraceId())
+        .build();
     alertEventService.emit(request);
   }
 }

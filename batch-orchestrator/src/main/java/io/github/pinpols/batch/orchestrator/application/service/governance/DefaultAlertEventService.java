@@ -74,13 +74,12 @@ public class DefaultAlertEventService implements AlertEventService {
 
   private void publishToAlertmanagerAfterCommit(AlertEventEntity entity) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              alertmanagerEmitPublisher.publishFiring(entity);
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          alertmanagerEmitPublisher.publishFiring(entity);
+        }
+      });
     } else {
       // 无活跃事务(理论上 @Transactional 下不会走到);直接推,失败仍隔离。
       alertmanagerEmitPublisher.publishFiring(entity);

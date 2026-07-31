@@ -22,9 +22,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("上游就绪查询服务")
 class ReadinessServiceTest {
 
-  @Mock private AssetPartitionService assetPartitionService;
+  @Mock
+  private AssetPartitionService assetPartitionService;
 
-  @InjectMocks private ReadinessService readinessService;
+  @InjectMocks
+  private ReadinessService readinessService;
 
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 6, 20);
 
@@ -32,19 +34,18 @@ class ReadinessServiceTest {
   @DisplayName("上游该批次日 asset partition 有 EFFECTIVE 版本 → ready")
   void shouldBeReady_whenAssetPartitionEffective() {
     // arrange
-    AssetPartitionSnapshot partition =
-        new AssetPartitionSnapshot(
-            "t1",
-            "UP_JOB",
-            BIZ_DATE,
-            "2026-06-20",
-            "job:UP_JOB:2026-06-20",
-            "EFFECTIVE",
-            3,
-            900L,
-            "INLINE_JSON",
-            "{\"rows\":10}",
-            "s3://bucket/key");
+    AssetPartitionSnapshot partition = new AssetPartitionSnapshot(
+        "t1",
+        "UP_JOB",
+        BIZ_DATE,
+        "2026-06-20",
+        "job:UP_JOB:2026-06-20",
+        "EFFECTIVE",
+        3,
+        900L,
+        "INLINE_JSON",
+        "{\"rows\":10}",
+        "s3://bucket/key");
     when(assetPartitionService.findEffectiveJobPartition("t1", "UP_JOB", BIZ_DATE))
         .thenReturn(Optional.of(partition));
 

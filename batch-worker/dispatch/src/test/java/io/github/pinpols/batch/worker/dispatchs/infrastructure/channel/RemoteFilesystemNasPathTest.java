@@ -20,7 +20,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class RemoteFilesystemNasPathTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   @Test
   void probeNas_validWritableDir_returnsSuccess() {
@@ -60,14 +61,12 @@ class RemoteFilesystemNasPathTest {
     Map<String, Object> fileRecord =
         Map.of("id", 10L, "file_name", "source.dat", "biz_date", "2026-06-07");
     when(resolver.openInputStream(fileRecord)).thenReturn(new ByteArrayInputStream(payload));
-    DispatchCommand command =
-        new DispatchCommand(
-            "t1",
-            "tr-1",
-            fileRecord,
-            Map.of("nas_remote_directory", tempDir.toString(), "nas_remote_file_name", "out.dat"),
-            new DispatchPayload(
-                "10", null, "NAS_CH", null, "ext-1", "R-1", null, null, null, null));
+    DispatchCommand command = new DispatchCommand(
+        "t1",
+        "tr-1",
+        fileRecord,
+        Map.of("nas_remote_directory", tempDir.toString(), "nas_remote_file_name", "out.dat"),
+        new DispatchPayload("10", null, "NAS_CH", null, "ext-1", "R-1", null, null, null, null));
 
     DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(command, resolver);
 
@@ -80,10 +79,9 @@ class RemoteFilesystemNasPathTest {
     assertThat(result.manifestRef().ref()).isEqualTo(manifest.toRealPath().toString());
     assertThat(result.manifestRef().checksum()).isNotBlank();
     assertThat(result.manifestRef().sizeBytes()).isGreaterThan(0);
-    Map<String, Object> manifestJson =
-        JsonUtils.fromJson(
-            Files.readString(manifest, StandardCharsets.UTF_8),
-            new TypeReference<Map<String, Object>>() {});
+    Map<String, Object> manifestJson = JsonUtils.fromJson(
+        Files.readString(manifest, StandardCharsets.UTF_8),
+        new TypeReference<Map<String, Object>>() {});
     assertThat(manifestJson.get("checksumType")).isEqualTo("SHA-256");
     assertThat(manifestJson.get("sizeBytes")).isEqualTo(payload.length);
     assertThat(manifestJson.get("checksumValue")).isEqualTo(sha256(payload));
@@ -95,20 +93,18 @@ class RemoteFilesystemNasPathTest {
     Map<String, Object> fileRecord = Map.of("id", 11L, "file_name", "source.dat");
     when(resolver.openInputStream(fileRecord))
         .thenReturn(new ByteArrayInputStream("payload".getBytes(StandardCharsets.UTF_8)));
-    DispatchCommand command =
-        new DispatchCommand(
-            "t1",
-            "tr-2",
-            fileRecord,
-            Map.of(
-                "nas_remote_directory",
-                tempDir.toString(),
-                "nas_remote_file_name",
-                "disabled.dat",
-                "dispatch_manifest_enabled",
-                "false"),
-            new DispatchPayload(
-                "11", null, "NAS_CH", null, "ext-2", "R-2", null, null, null, null));
+    DispatchCommand command = new DispatchCommand(
+        "t1",
+        "tr-2",
+        fileRecord,
+        Map.of(
+            "nas_remote_directory",
+            tempDir.toString(),
+            "nas_remote_file_name",
+            "disabled.dat",
+            "dispatch_manifest_enabled",
+            "false"),
+        new DispatchPayload("11", null, "NAS_CH", null, "ext-2", "R-2", null, null, null, null));
 
     DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(command, resolver);
 

@@ -21,28 +21,21 @@ class AlertmanagerAlertRendererTest {
 
   @Test
   void rendersSingleFiringAlertWithSummaryAndDescription() {
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-dispatch",
+        Map.of("alertname", "DispatchBacklogHigh"),
+        Map.of("alertname", "DispatchBacklogHigh", "severity", "critical"),
+        Map.of(),
+        "http://am",
+        List.of(alert(
             "firing",
-            "batch-dispatch",
-            Map.of("alertname", "DispatchBacklogHigh"),
-            Map.of("alertname", "DispatchBacklogHigh", "severity", "critical"),
-            Map.of(),
-            "http://am",
-            List.of(
-                alert(
-                    "firing",
-                    Map.of(
-                        "alertname",
-                        "DispatchBacklogHigh",
-                        "severity",
-                        "critical",
-                        "instance",
-                        "worker-1"),
-                    Map.of("summary", "backlog too high", "description", "queue depth 5000"))));
+            Map.of(
+                "alertname", "DispatchBacklogHigh", "severity", "critical", "instance", "worker-1"),
+            Map.of("summary", "backlog too high", "description", "queue depth 5000"))));
 
     RenderedAlertNotification rendered = renderer.render(payload, 50);
 
@@ -61,20 +54,19 @@ class AlertmanagerAlertRendererTest {
 
   @Test
   void groupsMultipleAlertsIntoOneSummary() {
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
-            "firing",
-            "batch-sla",
-            Map.of("alert_group", "sla"),
-            Map.of("alertname", "SlaBreach"),
-            Map.of(),
-            null,
-            List.of(
-                alert("firing", Map.of("alertname", "SlaBreach", "instance", "a"), Map.of()),
-                alert("firing", Map.of("alertname", "SlaBreach", "instance", "b"), Map.of())));
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-sla",
+        Map.of("alert_group", "sla"),
+        Map.of("alertname", "SlaBreach"),
+        Map.of(),
+        null,
+        List.of(
+            alert("firing", Map.of("alertname", "SlaBreach", "instance", "a"), Map.of()),
+            alert("firing", Map.of("alertname", "SlaBreach", "instance", "b"), Map.of())));
 
     RenderedAlertNotification rendered = renderer.render(payload, 50);
 
@@ -85,18 +77,17 @@ class AlertmanagerAlertRendererTest {
 
   @Test
   void rendersResolvedStatus() {
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
-            "resolved",
-            "batch-sre",
-            Map.of(),
-            Map.of("alertname", "CpuHigh"),
-            Map.of(),
-            null,
-            List.of(alert("resolved", Map.of("alertname", "CpuHigh"), Map.of())));
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "resolved",
+        "batch-sre",
+        Map.of(),
+        Map.of("alertname", "CpuHigh"),
+        Map.of(),
+        null,
+        List.of(alert("resolved", Map.of("alertname", "CpuHigh"), Map.of())));
 
     RenderedAlertNotification rendered = renderer.render(payload, 50);
 
@@ -106,18 +97,17 @@ class AlertmanagerAlertRendererTest {
 
   @Test
   void toleratesMissingFieldsWithPlaceholders() {
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            List.of(new AlertmanagerAlert(null, null, null, null, null, null, null)));
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        List.of(new AlertmanagerAlert(null, null, null, null, null, null, null)));
 
     RenderedAlertNotification rendered = renderer.render(payload, 50);
 
@@ -127,21 +117,20 @@ class AlertmanagerAlertRendererTest {
 
   @Test
   void truncatesBeyondMaxAlerts() {
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
-            "firing",
-            "batch-default",
-            Map.of(),
-            Map.of("alertname", "Noise"),
-            Map.of(),
-            null,
-            List.of(
-                alert("firing", Map.of("alertname", "Noise", "instance", "1"), Map.of()),
-                alert("firing", Map.of("alertname", "Noise", "instance", "2"), Map.of()),
-                alert("firing", Map.of("alertname", "Noise", "instance", "3"), Map.of())));
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-default",
+        Map.of(),
+        Map.of("alertname", "Noise"),
+        Map.of(),
+        null,
+        List.of(
+            alert("firing", Map.of("alertname", "Noise", "instance", "1"), Map.of()),
+            alert("firing", Map.of("alertname", "Noise", "instance", "2"), Map.of()),
+            alert("firing", Map.of("alertname", "Noise", "instance", "3"), Map.of())));
 
     RenderedAlertNotification rendered = renderer.render(payload, 1);
 
@@ -159,18 +148,17 @@ class AlertmanagerAlertRendererTest {
       many.add(
           alert("firing", Map.of("alertname", "Flood", "instance", String.valueOf(i)), Map.of()));
     }
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
-            "firing",
-            "batch-default",
-            Map.of(),
-            Map.of("alertname", "Flood"),
-            Map.of(),
-            null,
-            many);
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-default",
+        Map.of(),
+        Map.of("alertname", "Flood"),
+        Map.of(),
+        null,
+        many);
 
     RenderedAlertNotification rendered = renderer.render(payload, 50);
 
@@ -181,18 +169,17 @@ class AlertmanagerAlertRendererTest {
 
   @Test
   void emptyAlertsListDoesNotThrow() {
-    AlertmanagerWebhookPayload payload =
-        new AlertmanagerWebhookPayload(
-            "4",
-            "gk",
-            0,
-            "firing",
-            "batch-default",
-            Map.of(),
-            Map.of("alertname", "None"),
-            Map.of(),
-            null,
-            null);
+    AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
+        "4",
+        "gk",
+        0,
+        "firing",
+        "batch-default",
+        Map.of(),
+        Map.of("alertname", "None"),
+        Map.of(),
+        null,
+        null);
 
     RenderedAlertNotification rendered = renderer.render(payload, 50);
 

@@ -27,8 +27,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private JobStepInstanceMapper jobStepInstanceMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   @DisplayName("文件类 job 的 step 反查出关联 pipelineInstanceId;无关联 pipeline 的 step 为 null")
@@ -69,17 +72,12 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
   private long insertJobInstance(String tenantId) {
     String jobCode = "JOB_" + BatchDateTimeSupport.utcEpochMillis() + "_" + System.nanoTime();
     long jobDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_definition
               (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
             VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
             RETURNING id
-            """,
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode + "-name");
+            """, Long.class, tenantId, jobCode, jobCode + "-name");
     String instanceNo = "INST-" + System.nanoTime();
     return jdbcTemplate.queryForObject(
         """
@@ -101,17 +99,12 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
   private long insertPipelineInstance(String tenantId, long relatedJobInstanceId) {
     String jobCode = "PIPE_" + System.nanoTime();
     long pipelineDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             INSERT INTO batch.pipeline_definition
               (tenant_id, job_code, pipeline_name, pipeline_type, created_at, updated_at)
             VALUES (?, ?, ?, 'IMPORT', now(), now())
             RETURNING id
-            """,
-            Long.class,
-            tenantId,
-            jobCode,
-            jobCode + "-name");
+            """, Long.class, tenantId, jobCode, jobCode + "-name");
     return jdbcTemplate.queryForObject(
         """
         INSERT INTO batch.pipeline_instance
@@ -119,40 +112,25 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
            run_status, created_at, updated_at)
         VALUES (?, ?, ?, 'IMPORT', ?, 'RUNNING', now(), now())
         RETURNING id
-        """,
-        Long.class,
-        tenantId,
-        pipelineDefinitionId,
-        jobCode,
-        relatedJobInstanceId);
+        """, Long.class, tenantId, pipelineDefinitionId, jobCode, relatedJobInstanceId);
   }
 
   private long insertTask(String tenantId, long jobInstanceId) {
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         INSERT INTO batch.job_task
           (tenant_id, job_instance_id, task_type, task_seq, task_status, created_at, updated_at)
         VALUES (?, ?, 'EXECUTION', 1, 'RUNNING', now(), now())
         RETURNING id
-        """,
-        Long.class,
-        tenantId,
-        jobInstanceId);
+        """, Long.class, tenantId, jobInstanceId);
   }
 
   private long insertStep(String tenantId, long jobInstanceId, long taskId, String stepCode) {
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         INSERT INTO batch.job_step_instance
           (tenant_id, job_instance_id, job_task_id, step_code, step_type, step_status,
            created_at, updated_at)
         VALUES (?, ?, ?, ?, 'MAIN', 'RUNNING', now(), now())
         RETURNING id
-        """,
-        Long.class,
-        tenantId,
-        jobInstanceId,
-        taskId,
-        stepCode);
+        """, Long.class, tenantId, jobInstanceId, taskId, stepCode);
   }
 }

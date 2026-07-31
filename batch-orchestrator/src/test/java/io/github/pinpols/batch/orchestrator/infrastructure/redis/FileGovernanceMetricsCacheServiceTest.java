@@ -22,8 +22,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FileGovernanceMetricsCacheServiceTest {
 
-  @Mock private OrchestratorRedisSupport redis;
-  @Mock private FileGovernanceRepository fileGovernanceRepository;
+  @Mock
+  private OrchestratorRedisSupport redis;
+
+  @Mock
+  private FileGovernanceRepository fileGovernanceRepository;
 
   private FileGovernanceMetricsCacheService service;
 
@@ -43,15 +46,14 @@ class FileGovernanceMetricsCacheServiceTest {
 
   @Test
   void cacheHitSkipsComputeAndReturnsHashEntries() {
-    Map<Object, Object> cached =
-        Map.of(
-            "tenantId", "\"t1\"",
-            "arrivalDelayViolations", "2",
-            "maxArrivalDelaySeconds", "3600",
-            "processingDelayViolations", "0",
-            "maxProcessingDelaySeconds", "0",
-            "arrivalDelaySamples", "[]",
-            "processingDelaySamples", "[]");
+    Map<Object, Object> cached = Map.of(
+        "tenantId", "\"t1\"",
+        "arrivalDelayViolations", "2",
+        "maxArrivalDelaySeconds", "3600",
+        "processingDelayViolations", "0",
+        "maxProcessingDelaySeconds", "0",
+        "arrivalDelaySamples", "[]",
+        "processingDelaySamples", "[]");
     when(redis.entries(anyString())).thenReturn(cached);
 
     Map<String, Object> result = service.load("t1", 600, 900, 604800, 10);
@@ -68,7 +70,8 @@ class FileGovernanceMetricsCacheServiceTest {
     when(fileGovernanceRepository.maxArrivalDelaySeconds(anyString())).thenReturn(7200L);
     when(fileGovernanceRepository.countProcessingDelayViolations(anyString(), anyLong(), anyLong()))
         .thenReturn(0L);
-    when(fileGovernanceRepository.maxProcessingDelaySeconds(anyString(), anyLong())).thenReturn(0L);
+    when(fileGovernanceRepository.maxProcessingDelaySeconds(anyString(), anyLong()))
+        .thenReturn(0L);
     when(fileGovernanceRepository.selectArrivalDelaySamples(anyString(), anyLong(), anyInt()))
         .thenReturn(List.of(Map.of("file_name", "f.csv")));
 

@@ -61,11 +61,10 @@ public final class DelimitedCodec {
         sb.append(delimiter);
       }
       String f = fields.get(i) == null ? "" : fields.get(i);
-      boolean needQuote =
-          f.indexOf(delimiter) >= 0
-              || f.indexOf(quote) >= 0
-              || f.indexOf('\n') >= 0
-              || f.indexOf('\r') >= 0;
+      boolean needQuote = f.indexOf(delimiter) >= 0
+          || f.indexOf(quote) >= 0
+          || f.indexOf('\n') >= 0
+          || f.indexOf('\r') >= 0;
       if (needQuote) {
         sb.append(quote);
         sb.append(f.replace(String.valueOf(quote), "" + quote + quote));

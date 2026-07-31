@@ -32,10 +32,9 @@ class IdempotencyKeyResolverTest {
   @Test
   @DisplayName("参数占位符 + 多占位符混合 + 字面量")
   void shouldResolveParamsAndMixedLiterals() {
-    String key =
-        IdempotencyKeyResolver.resolve(
-            "import:{tenantId}:{bizDate}/{orderId}",
-            ctx(Map.of("bizDate", "2026-06-01", "orderId", 123)));
+    String key = IdempotencyKeyResolver.resolve(
+        "import:{tenantId}:{bizDate}/{orderId}",
+        ctx(Map.of("bizDate", "2026-06-01", "orderId", 123)));
     assertThat(key).isEqualTo("import:tenantA:2026-06-01/123");
   }
 

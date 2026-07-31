@@ -55,7 +55,8 @@ public class RegisterStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式不创建 file_record / 不调 plugin.onRegistered（避免污染平台 file 视图）。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return ExportStageResult.success(stage());
     }
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
@@ -115,37 +116,33 @@ public class RegisterStep implements ExportStageStep {
       metadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
     mergeUserMetadata(metadata, exportPayload.metadata());
-    Long fileId =
-        runtimeRepository.createFileRecord(
-            FileRecordParam.builder()
-                .tenantId(context.getTenantId())
-                .fileCode(exportPayload.fileCode())
-                .bizType(
-                    Texts.hasText(exportPayload.bizType())
-                        ? exportPayload.bizType()
-                        : context.getJobCode())
-                .fileCategory("OUTPUT")
-                .fileName(fileName)
-                .originalFileName(fileName)
-                .fileFormatType(fileFormatType)
-                .charset(StandardCharsets.UTF_8.name())
-                .fileSizeBytes(
-                    runtimeRepository.toLong(attrs.get("fileSizeBytes")) == null
-                        ? 0L
-                        : runtimeRepository.toLong(attrs.get("fileSizeBytes")))
-                .checksumType(String.valueOf(attrs.getOrDefault("checksumType", "SHA-256")))
-                .checksumValue(nullableText(attrs.get("checksumValue")))
-                .storageType("S3")
-                .storagePath(objectName)
-                .storageBucket(bucket)
-                .fileVersion(null)
-                .bizDate(parseBizDate(exportPayload.bizDate(), context.getBizDate()))
-                .sourceType("GENERATED")
-                .sourceRef(exportPayload.batchNo())
-                .fileStatus("GENERATED")
-                .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-                .metadata(metadata)
-                .build());
+    Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+        .tenantId(context.getTenantId())
+        .fileCode(exportPayload.fileCode())
+        .bizType(
+            Texts.hasText(exportPayload.bizType()) ? exportPayload.bizType() : context.getJobCode())
+        .fileCategory("OUTPUT")
+        .fileName(fileName)
+        .originalFileName(fileName)
+        .fileFormatType(fileFormatType)
+        .charset(StandardCharsets.UTF_8.name())
+        .fileSizeBytes(
+            runtimeRepository.toLong(attrs.get("fileSizeBytes")) == null
+                ? 0L
+                : runtimeRepository.toLong(attrs.get("fileSizeBytes")))
+        .checksumType(String.valueOf(attrs.getOrDefault("checksumType", "SHA-256")))
+        .checksumValue(nullableText(attrs.get("checksumValue")))
+        .storageType("S3")
+        .storagePath(objectName)
+        .storageBucket(bucket)
+        .fileVersion(null)
+        .bizDate(parseBizDate(exportPayload.bizDate(), context.getBizDate()))
+        .sourceType("GENERATED")
+        .sourceRef(exportPayload.batchNo())
+        .fileStatus("GENERATED")
+        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .metadata(metadata)
+        .build());
     Map<String, Object> fileRecord =
         runtimeRepository.loadFileRecord(context.getTenantId(), fileId);
     attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
@@ -191,18 +188,17 @@ public class RegisterStep implements ExportStageStep {
     Map<String, Object> audit = new LinkedHashMap<>();
     audit.put("reason", "STORE_TO_REGISTER_RETRY");
     audit.put(KEY_OBJECT_NAME, context.getAttributes().get(KEY_OBJECT_NAME));
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(context.getTenantId())
-            .operationType("EXPORT_REGISTER")
-            .operationResult("SUCCESS")
-            .operatorType("SYSTEM")
-            .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME)))
-            .detailSummary(audit)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(context.getTenantId())
+        .operationType("EXPORT_REGISTER")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .operatorId(context.getWorkerId())
+        .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+        .evidenceRef(String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME)))
+        .detailSummary(audit)
+        .build());
     return ExportStageResult.success(stage());
   }
 

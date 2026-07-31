@@ -42,9 +42,8 @@ class ResultVersionRetentionSchedulerTest {
     properties.setSupersededDays(90);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     when(gracefulShutdown.isDraining()).thenReturn(false);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
     scheduler =
         new ResultVersionRetentionScheduler(mapper, properties, gracefulShutdown, dateTimeSupport);
   }

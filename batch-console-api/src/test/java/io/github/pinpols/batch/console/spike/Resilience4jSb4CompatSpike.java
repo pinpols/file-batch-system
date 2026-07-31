@@ -52,9 +52,14 @@ import org.springframework.test.context.TestPropertySource;
     })
 class Resilience4jSb4CompatSpike {
 
-  @Autowired private CircuitBreakerRegistry circuitBreakerRegistry;
-  @Autowired private RetryRegistry retryRegistry;
-  @Autowired private MeterRegistry meterRegistry;
+  @Autowired
+  private CircuitBreakerRegistry circuitBreakerRegistry;
+
+  @Autowired
+  private RetryRegistry retryRegistry;
+
+  @Autowired
+  private MeterRegistry meterRegistry;
 
   @Test
   void shouldLoadCircuitBreakerInstanceFromProperties() {
@@ -73,10 +78,9 @@ class Resilience4jSb4CompatSpike {
     CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
     for (int i = 0; i < 4; i++) {
       try {
-        cb.executeSupplier(
-            () -> {
-              throw new RuntimeException("forced");
-            });
+        cb.executeSupplier(() -> {
+          throw new RuntimeException("forced");
+        });
       } catch (RuntimeException ignored) {
         // 符合预期
       }
@@ -90,9 +94,8 @@ class Resilience4jSb4CompatSpike {
   void shouldExposeMicrometerCounter() {
     CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
     cb.executeSupplier(() -> "ok");
-    boolean found =
-        meterRegistry.getMeters().stream()
-            .anyMatch(m -> m.getId().getName().startsWith("resilience4j.circuitbreaker"));
+    boolean found = meterRegistry.getMeters().stream()
+        .anyMatch(m -> m.getId().getName().startsWith("resilience4j.circuitbreaker"));
     assertThat(found).as("micrometer bridge should auto-register counters").isTrue();
   }
 

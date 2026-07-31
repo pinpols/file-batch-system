@@ -86,15 +86,14 @@ public class InternalAuthFilter extends OncePerRequestFilter {
       }
       // 读端点(GET)接受 worker.read 或 worker.execute(execute 是 read 超集);
       // 写端点(claim/report/register 等非 GET)必须 worker.execute。据此可发"只读 key"。
-      Optional<ApiKeyEntity> rec =
-          HttpMethod.GET.matches(request.getMethod())
-              ? apiKeyVerifier.verifyWithAnyScope(
-                  apiKey,
-                  tenantHeader,
-                  ApiKeyVerifier.SCOPE_WORKER_READ,
-                  ApiKeyVerifier.SCOPE_WORKER_EXECUTE)
-              : apiKeyVerifier.verifyWithScope(
-                  apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
+      Optional<ApiKeyEntity> rec = HttpMethod.GET.matches(request.getMethod())
+          ? apiKeyVerifier.verifyWithAnyScope(
+              apiKey,
+              tenantHeader,
+              ApiKeyVerifier.SCOPE_WORKER_READ,
+              ApiKeyVerifier.SCOPE_WORKER_EXECUTE)
+          : apiKeyVerifier.verifyWithScope(
+              apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
       if (rec.isPresent()) {
         request.setAttribute(ATTR_RESOLVED_TENANT_ID, rec.get().tenantId());
         request.setAttribute(ATTR_API_KEY_RECORD, rec.get());

@@ -35,16 +35,15 @@ import org.slf4j.LoggerFactory;
  */
 class KafkaConsumerCloseJoinTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("kafka:9092")
-          .kafkaTopicPattern("batch.task.dispatch.tx.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("kafka:9092")
+      .kafkaTopicPattern("batch.task.dispatch.tx.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
   private Thread runner;
@@ -91,11 +90,10 @@ class KafkaConsumerCloseJoinTest {
     doNothing().when(consumer).pause(anyCollection());
     doNothing().when(consumer).resume(anyCollection());
     // poll 长 sleep —— 模拟卡在 broker 不响应,wakeup 也"假装"被忽略(测 join 超时路径)
-    doAnswer(
-            inv -> {
-              Thread.sleep(2_000);
-              return ConsumerRecords.<String, byte[]>empty();
-            })
+    doAnswer(inv -> {
+          Thread.sleep(2_000);
+          return ConsumerRecords.<String, byte[]>empty();
+        })
         .when(consumer)
         .poll(any());
     doNothing().when(consumer).wakeup(); // 故意不联动让 poll 抛 — 测 join 超时
@@ -131,19 +129,17 @@ class KafkaConsumerCloseJoinTest {
     doNothing().when(consumer).pause(anyCollection());
     doNothing().when(consumer).resume(anyCollection());
     // 正常 wakeup 联动 —— poll 抛 WakeupException 让 run() 退出
-    doAnswer(
-            inv -> {
-              Thread.sleep(50);
-              return ConsumerRecords.<String, byte[]>empty();
-            })
+    doAnswer(inv -> {
+          Thread.sleep(50);
+          return ConsumerRecords.<String, byte[]>empty();
+        })
         .when(consumer)
         .poll(any());
-    doAnswer(
-            inv -> {
-              when(consumer.poll(any()))
-                  .thenThrow(new org.apache.kafka.common.errors.WakeupException());
-              return null;
-            })
+    doAnswer(inv -> {
+          when(consumer.poll(any()))
+              .thenThrow(new org.apache.kafka.common.errors.WakeupException());
+          return null;
+        })
         .when(consumer)
         .wakeup();
 

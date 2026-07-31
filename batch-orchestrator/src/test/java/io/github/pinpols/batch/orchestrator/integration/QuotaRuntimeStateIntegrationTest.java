@@ -92,36 +92,34 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
-  @Autowired private QuotaRuntimeStateService quotaRuntimeStateService;
+  @Autowired
+  private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Autowired private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+  @Autowired
+  private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
   @Test
   void shouldAllowWhenWithinBaseCapNoBurstNeeded() {
-    ResourceCheck result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode("quota-test-basic-" + BatchDateTimeSupport.utcEpochMillis())
-                .baseCap(10)
-                .burstLimit(0)
-                .currentActiveCount(5)
-                .reason("OVER_CAP", "over")
-                .build());
+    ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("quota-test-basic-" + BatchDateTimeSupport.utcEpochMillis())
+        .baseCap(10)
+        .burstLimit(0)
+        .currentActiveCount(5)
+        .reason("OVER_CAP", "over")
+        .build());
 
     assertThat(result.allowed()).isTrue();
   }
 
   @Test
   void shouldBlockWhenOverBaseCapNoBurst() {
-    ResourceCheck result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode("quota-test-block-" + BatchDateTimeSupport.utcEpochMillis())
-                .baseCap(5)
-                .burstLimit(0)
-                .currentActiveCount(5)
-                .reason("OVER_CAP", "over cap")
-                .build());
+    ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("quota-test-block-" + BatchDateTimeSupport.utcEpochMillis())
+        .baseCap(5)
+        .burstLimit(0)
+        .currentActiveCount(5)
+        .reason("OVER_CAP", "over cap")
+        .build());
 
     assertThat(result.allowed()).isFalse();
   }
@@ -130,16 +128,14 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   void shouldCreateNewStateRecordForSlidingWindow() {
     String ownerCode = "sw-test-" + BatchDateTimeSupport.utcEpochMillis();
 
-    ResourceCheck result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode(ownerCode)
-                .quotaResetPolicy("SLIDING_WINDOW")
-                .baseCap(5)
-                .burstLimit(10)
-                .currentActiveCount(7)
-                .slidingWindowHours(2)
-                .build());
+    ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode(ownerCode)
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(7)
+        .slidingWindowHours(2)
+        .build());
 
     assertThat(result.allowed()).isTrue();
 
@@ -156,16 +152,15 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "sw-peak-" + BatchDateTimeSupport.utcEpochMillis();
 
     // 第一次预留：active=8, base=5, requested=2 → borrowed=5
-    quotaRuntimeStateService.evaluateAndReserve(
-        new ReservationSpec()
-            .ownerCode(ownerCode)
-            .quotaResetPolicy("SLIDING_WINDOW")
-            .baseCap(5)
-            .burstLimit(10)
-            .currentActiveCount(8)
-            .requestedCount(2)
-            .slidingWindowHours(2)
-            .build());
+    quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode(ownerCode)
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(8)
+        .requestedCount(2)
+        .slidingWindowHours(2)
+        .build());
 
     QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
@@ -178,17 +173,15 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "sw-burst-" + BatchDateTimeSupport.utcEpochMillis();
 
     // burst=3, active=10, base=5, requested=1 → borrowed=6 > burst=3
-    ResourceCheck result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode(ownerCode)
-                .quotaResetPolicy("SLIDING_WINDOW")
-                .baseCap(5)
-                .burstLimit(3)
-                .currentActiveCount(10)
-                .slidingWindowHours(2)
-                .reason("OVER_BURST", "over burst")
-                .build());
+    ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode(ownerCode)
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(3)
+        .currentActiveCount(10)
+        .slidingWindowHours(2)
+        .reason("OVER_BURST", "over burst")
+        .build());
 
     assertThat(result.allowed()).isFalse();
   }
@@ -197,15 +190,13 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   void shouldCreateNewStateRecordForCalendarDay() {
     String ownerCode = "cd-test-" + BatchDateTimeSupport.utcEpochMillis();
 
-    ResourceCheck result =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new ReservationSpec()
-                .ownerCode(ownerCode)
-                .quotaResetPolicy("CALENDAR_DAY")
-                .baseCap(5)
-                .burstLimit(10)
-                .currentActiveCount(7)
-                .build());
+    ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode(ownerCode)
+        .quotaResetPolicy("CALENDAR_DAY")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(7)
+        .build());
 
     assertThat(result.allowed()).isTrue();
 
@@ -229,12 +220,11 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             new QuotaRuntimeStateService.QuotaReservationReason("OVER", "over")));
 
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snapshot =
-        quotaRuntimeStateService.describe(
-            new QuotaRuntimeStateService.QuotaDescribeRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
-                "SLIDING_WINDOW",
-                10,
-                2));
+        quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+            "SLIDING_WINDOW",
+            10,
+            2));
 
     assertThat(snapshot).isNotNull();
     assertThat(snapshot.quotaResetPolicy()).isEqualTo("SLIDING_WINDOW");
@@ -248,20 +238,19 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "reconcile-sw-" + BatchDateTimeSupport.utcEpochMillis();
 
     // 直接插入一个已过期的状态
-    QuotaRuntimeStateEntity expiredState =
-        new QuotaRuntimeStateEntity(
-            null,
-            "t1",
-            "JOB",
-            ownerCode,
-            "SLIDING_WINDOW",
-            BatchDateTimeSupport.utcNow().minusSeconds(7200),
-            BatchDateTimeSupport.utcNow().minusSeconds(3600), // expired
-            5,
-            null,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null);
+    QuotaRuntimeStateEntity expiredState = new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        ownerCode,
+        "SLIDING_WINDOW",
+        BatchDateTimeSupport.utcNow().minusSeconds(7200),
+        BatchDateTimeSupport.utcNow().minusSeconds(3600), // expired
+        5,
+        null,
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow(),
+        null);
     quotaRuntimeStateMapper.insert(expiredState);
 
     quotaRuntimeStateService.reconcileExpiredStates(2);
@@ -277,20 +266,19 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   void shouldFindExpiredStatesViaRepository() {
     String ownerCode = "find-expired-" + BatchDateTimeSupport.utcEpochMillis();
 
-    QuotaRuntimeStateEntity state =
-        new QuotaRuntimeStateEntity(
-            null,
-            "t1",
-            "JOB",
-            ownerCode,
-            "SLIDING_WINDOW",
-            BatchDateTimeSupport.utcNow().minusSeconds(3700),
-            BatchDateTimeSupport.utcNow().minusSeconds(100), // expired
-            3,
-            null,
-            BatchDateTimeSupport.utcNow(),
-            BatchDateTimeSupport.utcNow(),
-            null);
+    QuotaRuntimeStateEntity state = new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        ownerCode,
+        "SLIDING_WINDOW",
+        BatchDateTimeSupport.utcNow().minusSeconds(3700),
+        BatchDateTimeSupport.utcNow().minusSeconds(100), // expired
+        3,
+        null,
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow(),
+        null);
     quotaRuntimeStateMapper.insert(state);
 
     List<QuotaRuntimeStateEntity> expired =

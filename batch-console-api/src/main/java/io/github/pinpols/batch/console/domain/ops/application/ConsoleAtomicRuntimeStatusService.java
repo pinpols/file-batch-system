@@ -38,13 +38,12 @@ public class ConsoleAtomicRuntimeStatusService {
         SVC,
         OP,
         () -> {
-          Map<String, Object> raw =
-              atomicClient
-                  .build()
-                  .get()
-                  .uri(ENDPOINT_URI)
-                  .retrieve()
-                  .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+          Map<String, Object> raw = atomicClient
+              .build()
+              .get()
+              .uri(ENDPOINT_URI)
+              .retrieve()
+              .body(new ParameterizedTypeReference<Map<String, Object>>() {});
           return toResponse(raw);
         },
         ex -> ConsoleAtomicRuntimeStatusResponse.unavailable("atomic worker unreachable"));

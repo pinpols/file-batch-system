@@ -51,9 +51,8 @@ public class WorkerHeartbeatTimeoutScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    long effectiveSeconds =
-        (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
-            + workerDrainProperties.getHeartbeatGraceSeconds();
+    long effectiveSeconds = (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
+        + workerDrainProperties.getHeartbeatGraceSeconds();
     int updated = workerRegistryMapper.markStaleHeartbeatsOffline(effectiveSeconds);
     if (updated > 0) {
       log.info(

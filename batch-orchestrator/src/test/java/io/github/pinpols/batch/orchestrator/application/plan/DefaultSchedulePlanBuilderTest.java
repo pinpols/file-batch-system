@@ -32,13 +32,12 @@ class DefaultSchedulePlanBuilderTest {
   void setUp() {
     configCacheService = mock(OrchestratorConfigCacheService.class);
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
-    List<PartitionCountResolver> resolvers =
-        List.of(
-            new BundlePartitionCountResolver(),
-            new ExplicitPartitionCountResolver(),
-            new SizeBasedPartitionCountResolver(),
-            new RuntimeBasedPartitionCountResolver(),
-            new WorkerBasedPartitionCountResolver(workerRegistryMapper));
+    List<PartitionCountResolver> resolvers = List.of(
+        new BundlePartitionCountResolver(),
+        new ExplicitPartitionCountResolver(),
+        new SizeBasedPartitionCountResolver(),
+        new RuntimeBasedPartitionCountResolver(),
+        new WorkerBasedPartitionCountResolver(workerRegistryMapper));
     builder = new DefaultSchedulePlanBuilder(configCacheService, resolvers);
 
     builderLogger = (Logger) LoggerFactory.getLogger(DefaultSchedulePlanBuilder.class);
@@ -120,10 +119,9 @@ class DefaultSchedulePlanBuilderTest {
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
     // 1000 items / 100 per partition = 10 partitions
-    Map<String, Object> params =
-        Map.of(
-            "estimatedItemCount", 1000,
-            "targetItemsPerPartition", 100);
+    Map<String, Object> params = Map.of(
+        "estimatedItemCount", 1000,
+        "targetItemsPerPartition", 100);
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitionCount()).isEqualTo(10);
@@ -137,10 +135,9 @@ class DefaultSchedulePlanBuilderTest {
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
     // 300 seconds historical / 60 seconds target = 5 partitions (ceil)
-    Map<String, Object> params =
-        Map.of(
-            "historicalAverageDurationSeconds", 300,
-            "targetPartitionDurationSeconds", 60);
+    Map<String, Object> params = Map.of(
+        "historicalAverageDurationSeconds", 300,
+        "targetPartitionDurationSeconds", 60);
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitionCount()).isEqualTo(5);
@@ -168,23 +165,20 @@ class DefaultSchedulePlanBuilderTest {
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
     // 同时给 explicit (=3) 和 size-resolvable (=10) 两组参数 → explicit 赢,size 应被 INFO 记录覆盖
-    Map<String, Object> params =
-        Map.of(
-            "partitionCount", 3,
-            "estimatedItemCount", 1000,
-            "targetItemsPerPartition", 100);
+    Map<String, Object> params = Map.of(
+        "partitionCount", 3,
+        "estimatedItemCount", 1000,
+        "targetItemsPerPartition", 100);
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitionCount()).isEqualTo(3);
-    assertThat(logAppender.list)
-        .anySatisfy(
-            event -> {
-              assertThat(event.getLevel()).isEqualTo(Level.INFO);
-              assertThat(event.getFormattedMessage())
-                  .contains("partition count resolver overridden")
-                  .contains("ExplicitPartitionCountResolver")
-                  .contains("SizeBasedPartitionCountResolver");
-            });
+    assertThat(logAppender.list).anySatisfy(event -> {
+      assertThat(event.getLevel()).isEqualTo(Level.INFO);
+      assertThat(event.getFormattedMessage())
+          .contains("partition count resolver overridden")
+          .contains("ExplicitPartitionCountResolver")
+          .contains("SizeBasedPartitionCountResolver");
+    });
   }
 
   @Test
@@ -197,10 +191,8 @@ class DefaultSchedulePlanBuilderTest {
     builder.build(command(params));
 
     assertThat(logAppender.list)
-        .noneSatisfy(
-            event ->
-                assertThat(event.getFormattedMessage())
-                    .contains("partition count resolver overridden"));
+        .noneSatisfy(event -> assertThat(event.getFormattedMessage())
+            .contains("partition count resolver overridden"));
   }
 
   // --- partition key format ---
@@ -265,13 +257,11 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(bundleJobDef("DYNAMIC", 5));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    Map<String, Object> params =
-        Map.of(
-            "bundleFiles",
-            List.of(
-                Map.of("sourceFileId", 101, "templateCode", "TPL_ORDER"),
-                Map.of(
-                    "sourceFileId", 102, "templateCode", "TPL_CUST", "targetRef", "biz.customer")));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 101, "templateCode", "TPL_ORDER"),
+            Map.of("sourceFileId", 102, "templateCode", "TPL_CUST", "targetRef", "biz.customer")));
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitionCount()).isEqualTo(2);
@@ -293,12 +283,11 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_EXPORT"));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    Map<String, Object> params =
-        Map.of(
-            "bundleFiles",
-            List.of(
-                Map.of("templateCode", "EXP_RISK"),
-                Map.of("templateCode", "EXP_TRADE", "targetRef", "sftp-a")));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("templateCode", "EXP_RISK"),
+            Map.of("templateCode", "EXP_TRADE", "targetRef", "sftp-a")));
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitions()).hasSize(2);
@@ -315,12 +304,11 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_DISPATCH"));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    Map<String, Object> params =
-        Map.of(
-            "bundleFiles",
-            List.of(
-                Map.of("sourceFileId", 501, "targetRef", "CH_SFTP"),
-                Map.of("sourceFileId", 502, "targetRef", "CH_OSS")));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 501, "targetRef", "CH_SFTP"),
+            Map.of("sourceFileId", 502, "targetRef", "CH_OSS")));
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitions()).hasSize(2);
@@ -338,12 +326,11 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(bundleJobDef("NONE", 5));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    Map<String, Object> params =
-        Map.of(
-            "bundleFiles",
-            List.of(
-                Map.of("sourceFileId", 101, "templateCode", "TPL_A"),
-                Map.of("sourceFileId", 102, "templateCode", "TPL_B")));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 101, "templateCode", "TPL_A"),
+            Map.of("sourceFileId", 102, "templateCode", "TPL_B")));
 
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
         .isInstanceOf(IllegalStateException.class)
@@ -370,12 +357,11 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(jobDef("STATIC", 5, null));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    Map<String, Object> params =
-        Map.of(
-            "partitionCount",
-            1,
-            "bundleFiles",
-            List.of(Map.of("sourceFileId", 101, "templateCode", "TPL_A")));
+    Map<String, Object> params = Map.of(
+        "partitionCount",
+        1,
+        "bundleFiles",
+        List.of(Map.of("sourceFileId", 101, "templateCode", "TPL_A")));
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitions().get(0).getSourceFileId()).isNull();

@@ -34,14 +34,13 @@ class SqlTaskExecutorDryRunTest {
   @Test
   void shouldShortCircuit_whenDryRunFromRuntimeAttributes() throws Exception {
     // 准备
-    TaskContext ctx =
-        new TaskContext(
-            "t1",
-            "job-1",
-            "ti-1",
-            "w-1",
-            Map.of("sql", "UPDATE t SET x=1; DELETE FROM t WHERE y=2;"),
-            Map.of("dryRun", true));
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of("sql", "UPDATE t SET x=1; DELETE FROM t WHERE y=2;"),
+        Map.of("dryRun", true));
 
     // 执行
     TaskResult result = executor.execute(ctx);
@@ -63,9 +62,8 @@ class SqlTaskExecutorDryRunTest {
   @Test
   void shouldShortCircuit_whenDryRunFromParametersFallback() throws Exception {
     // 旧调用方可能把 dryRun 塞到 parameters
-    TaskContext ctx =
-        new TaskContext(
-            "t1", "job-1", "ti-1", "w-1", Map.of("sql", "SELECT 1;", "dryRun", true), Map.of());
+    TaskContext ctx = new TaskContext(
+        "t1", "job-1", "ti-1", "w-1", Map.of("sql", "SELECT 1;", "dryRun", true), Map.of());
 
     TaskResult result = executor.execute(ctx);
 

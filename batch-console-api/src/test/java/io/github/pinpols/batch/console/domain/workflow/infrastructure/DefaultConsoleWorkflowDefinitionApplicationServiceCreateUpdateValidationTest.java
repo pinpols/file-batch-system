@@ -51,19 +51,18 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceCreateUpdateValidationTe
     ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
 
-    service =
-        new DefaultConsoleWorkflowDefinitionApplicationService(
-            definitionMapper,
-            nodeMapper,
-            edgeMapper,
-            mock(WorkflowDefinitionVersionMapper.class),
-            mock(JobDefinitionMapper.class),
-            mock(ConsoleRealtimeDomainEventPublisher.class),
-            tenantGuard,
-            mock(ConsoleConfigCacheInvalidationService.class),
-            mock(WorkflowDesignLockService.class),
-            dagValidator,
-            new ObjectMapper());
+    service = new DefaultConsoleWorkflowDefinitionApplicationService(
+        definitionMapper,
+        nodeMapper,
+        edgeMapper,
+        mock(WorkflowDefinitionVersionMapper.class),
+        mock(JobDefinitionMapper.class),
+        mock(ConsoleRealtimeDomainEventPublisher.class),
+        tenantGuard,
+        mock(ConsoleConfigCacheInvalidationService.class),
+        mock(WorkflowDesignLockService.class),
+        dagValidator,
+        new ObjectMapper());
   }
 
   private WorkflowDefinitionSaveRequest request() {

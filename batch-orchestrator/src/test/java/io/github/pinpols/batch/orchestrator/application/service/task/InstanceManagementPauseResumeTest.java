@@ -28,13 +28,23 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("实例 pause/resume(ADR-044)")
 class InstanceManagementPauseResumeTest {
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobInstanceTerminalStatusApplicationService terminalStatusApplicationService;
-  @Mock private RetryGovernanceService retryGovernanceService;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
 
-  @InjectMocks private InstanceManagementApplicationService service;
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobInstanceTerminalStatusApplicationService terminalStatusApplicationService;
+
+  @Mock
+  private RetryGovernanceService retryGovernanceService;
+
+  @InjectMocks
+  private InstanceManagementApplicationService service;
 
   private static JobInstanceEntity instance(String status) {
     JobInstanceEntity e = new JobInstanceEntity();

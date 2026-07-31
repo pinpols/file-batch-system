@@ -44,13 +44,12 @@ public class FileGovernanceMetricsCacheService {
     if (!cached.isEmpty()) {
       return toResponse(cached);
     }
-    Map<String, Object> computed =
-        compute(
-            tenantId,
-            arrivalThresholdSeconds,
-            processingThresholdSeconds,
-            processingMaxAgeSeconds,
-            sampleSize);
+    Map<String, Object> computed = compute(
+        tenantId,
+        arrivalThresholdSeconds,
+        processingThresholdSeconds,
+        processingMaxAgeSeconds,
+        sampleSize);
     write(tenantId, computed);
     return computed;
   }
@@ -64,21 +63,18 @@ public class FileGovernanceMetricsCacheService {
     long arrivalCount =
         fileGovernanceRepository.countArrivalDelayViolations(tenantId, arrivalThresholdSeconds);
     long arrivalMax = fileGovernanceRepository.maxArrivalDelaySeconds(tenantId);
-    long processingCount =
-        fileGovernanceRepository.countProcessingDelayViolations(
-            tenantId, processingThresholdSeconds, processingMaxAgeSeconds);
+    long processingCount = fileGovernanceRepository.countProcessingDelayViolations(
+        tenantId, processingThresholdSeconds, processingMaxAgeSeconds);
     long processingMax =
         fileGovernanceRepository.maxProcessingDelaySeconds(tenantId, processingMaxAgeSeconds);
-    List<Map<String, Object>> arrivalSamples =
-        arrivalCount > 0
-            ? fileGovernanceRepository.selectArrivalDelaySamples(
-                tenantId, arrivalThresholdSeconds, sampleSize)
-            : List.of();
-    List<Map<String, Object>> processingSamples =
-        processingCount > 0
-            ? fileGovernanceRepository.selectProcessingDelaySamples(
-                tenantId, processingThresholdSeconds, processingMaxAgeSeconds, sampleSize)
-            : List.of();
+    List<Map<String, Object>> arrivalSamples = arrivalCount > 0
+        ? fileGovernanceRepository.selectArrivalDelaySamples(
+            tenantId, arrivalThresholdSeconds, sampleSize)
+        : List.of();
+    List<Map<String, Object>> processingSamples = processingCount > 0
+        ? fileGovernanceRepository.selectProcessingDelaySamples(
+            tenantId, processingThresholdSeconds, processingMaxAgeSeconds, sampleSize)
+        : List.of();
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("tenantId", tenantId);
     response.put("arrivalDelayViolations", arrivalCount);
@@ -101,10 +97,8 @@ public class FileGovernanceMetricsCacheService {
 
   private Map<String, Object> toResponse(Map<Object, Object> cached) {
     Map<String, Object> response = new LinkedHashMap<>();
-    cached.forEach(
-        (key, value) ->
-            response.put(
-                String.valueOf(key), readJson(String.valueOf(key), String.valueOf(value))));
+    cached.forEach((key, value) ->
+        response.put(String.valueOf(key), readJson(String.valueOf(key), String.valueOf(value))));
     return response;
   }
 
@@ -121,7 +115,7 @@ public class FileGovernanceMetricsCacheService {
     try {
       return switch (key) {
         case "arrivalDelaySamples", "processingDelaySamples" ->
-            objectMapper.readValue(value, new TypeReference<List<Map<String, Object>>>() {});
+          objectMapper.readValue(value, new TypeReference<List<Map<String, Object>>>() {});
         default -> objectMapper.readValue(value, Object.class);
       };
     } catch (JsonProcessingException exception) {

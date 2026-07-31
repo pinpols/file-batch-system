@@ -28,7 +28,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class LaunchParamResolverTest {
 
-  @Mock private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+  @Mock
+  private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
 
   private LaunchParamResolver resolver;
 
@@ -39,11 +40,10 @@ class LaunchParamResolverTest {
         .thenReturn(null);
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
-    resolver =
-        new LaunchParamResolver(
-            timezoneProvider,
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
-            customTaskTypeRegistryMapper);
+    resolver = new LaunchParamResolver(
+        timezoneProvider,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        customTaskTypeRegistryMapper);
   }
 
   private CustomTaskTypeRegistryEntity descriptorEntity(String descriptorJson) {
@@ -213,9 +213,8 @@ class LaunchParamResolverTest {
   @Test
   void shouldMergeDescriptorDefaultsAsLowestPriority() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
-        .thenReturn(
-            descriptorEntity(
-                "{\"code\":\"tenant_ta_import\",\"defaults\":{\"batchSize\":500,\"region\":\"cn\"}}"));
+        .thenReturn(descriptorEntity(
+            "{\"code\":\"tenant_ta_import\",\"defaults\":{\"batchSize\":500,\"region\":\"cn\"}}"));
     JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of("region", "us"));
     LaunchRequest request = launchRequest(Map.of("timeout", 30), null);
 

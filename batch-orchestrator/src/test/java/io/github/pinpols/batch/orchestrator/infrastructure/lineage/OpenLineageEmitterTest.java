@@ -61,9 +61,8 @@ class OpenLineageEmitterTest {
 
   @Test
   void buildRunEvent_successMapsToComplete() {
-    OpenLineageEmitter emitter =
-        new OpenLineageEmitter(
-            props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+    OpenLineageEmitter emitter = new OpenLineageEmitter(
+        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
     Instant finished = Instant.parse("2026-05-30T02:00:00Z");
     Map<String, Object> ev = emitter.buildRunEvent(run("SUCCESS"), "SUCCESS", finished);
 
@@ -82,17 +81,14 @@ class OpenLineageEmitterTest {
 
   @Test
   void buildRunEvent_includesInputAndOutputDatasets() {
-    OpenLineageEmitter emitter =
-        new OpenLineageEmitter(
-            props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
-    List<OpenLineageDatasetRow> datasets =
-        List.of(
-            dataset(11L, "INPUT", "S3", "raw", "in.csv", "/in.csv"),
-            dataset(12L, "OUTPUT", "S3", "curated", "out.csv", "/out.csv"));
+    OpenLineageEmitter emitter = new OpenLineageEmitter(
+        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+    List<OpenLineageDatasetRow> datasets = List.of(
+        dataset(11L, "INPUT", "S3", "raw", "in.csv", "/in.csv"),
+        dataset(12L, "OUTPUT", "S3", "curated", "out.csv", "/out.csv"));
 
-    Map<String, Object> ev =
-        emitter.buildRunEvent(
-            run("SUCCESS"), "SUCCESS", Instant.parse("2026-05-30T02:00:00Z"), datasets);
+    Map<String, Object> ev = emitter.buildRunEvent(
+        run("SUCCESS"), "SUCCESS", Instant.parse("2026-05-30T02:00:00Z"), datasets);
 
     List<?> inputs = (List<?>) ev.get("inputs");
     List<?> outputs = (List<?>) ev.get("outputs");
@@ -114,16 +110,14 @@ class OpenLineageEmitterTest {
 
   @Test
   void buildRunEvent_treatsNonInputDatasetsAsOutputs() {
-    OpenLineageEmitter emitter =
-        new OpenLineageEmitter(
-            props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+    OpenLineageEmitter emitter = new OpenLineageEmitter(
+        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
 
-    Map<String, Object> ev =
-        emitter.buildRunEvent(
-            run("SUCCESS"),
-            "SUCCESS",
-            Instant.parse("2026-05-30T02:00:00Z"),
-            List.of(dataset(13L, "INTERMEDIATE", "LOCAL", null, "tmp.csv", null)));
+    Map<String, Object> ev = emitter.buildRunEvent(
+        run("SUCCESS"),
+        "SUCCESS",
+        Instant.parse("2026-05-30T02:00:00Z"),
+        List.of(dataset(13L, "INTERMEDIATE", "LOCAL", null, "tmp.csv", null)));
 
     assertThat((List<?>) ev.get("inputs")).isEmpty();
     assertThat((List<?>) ev.get("outputs")).hasSize(1);
@@ -136,9 +130,8 @@ class OpenLineageEmitterTest {
 
   @Test
   void buildRunEvent_failedMapsToFail() {
-    OpenLineageEmitter emitter =
-        new OpenLineageEmitter(
-            props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+    OpenLineageEmitter emitter = new OpenLineageEmitter(
+        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
     Map<String, Object> ev =
         emitter.buildRunEvent(run("FAILED"), "FAILED", Instant.parse("2026-05-30T02:00:00Z"));
     assertThat(ev.get("eventType")).isEqualTo("FAIL");

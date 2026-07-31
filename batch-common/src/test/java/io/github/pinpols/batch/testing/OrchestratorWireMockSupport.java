@@ -20,31 +20,26 @@ public final class OrchestratorWireMockSupport {
         if (server == null) {
           try {
             HttpServer httpServer = HttpServer.create(new InetSocketAddress(0), 0);
-            httpServer.createContext(
-                "/internal/",
-                exchange -> {
-                  byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
-                  exchange.getResponseHeaders().set("Content-Type", "application/json");
-                  exchange.sendResponseHeaders(200, body.length);
-                  exchange.getResponseBody().write(body);
-                  exchange.close();
-                });
+            httpServer.createContext("/internal/", exchange -> {
+              byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
+              exchange.getResponseHeaders().set("Content-Type", "application/json");
+              exchange.sendResponseHeaders(200, body.length);
+              exchange.getResponseBody().write(body);
+              exchange.close();
+            });
             httpServer.start();
             server = httpServer;
             baseUrl = "http://localhost:" + httpServer.getAddress().getPort();
           } catch (IOException ex) {
             throw new IllegalStateException("Failed to start orchestrator stub server", ex);
           }
-          Runtime.getRuntime()
-              .addShutdownHook(
-                  new Thread(
-                      () -> {
-                        if (server != null) {
-                          server.stop(0);
-                          server = null;
-                          baseUrl = null;
-                        }
-                      }));
+          Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (server != null) {
+              server.stop(0);
+              server = null;
+              baseUrl = null;
+            }
+          }));
         }
       }
     }

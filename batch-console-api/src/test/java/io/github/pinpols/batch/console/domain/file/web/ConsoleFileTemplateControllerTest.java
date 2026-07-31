@@ -49,12 +49,11 @@ class ConsoleFileTemplateControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleFileTemplateController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleFileTemplateController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -72,7 +71,8 @@ class ConsoleFileTemplateControllerTest {
   @Test
   void shouldReturn400WhenCreateRequestMissingTemplateCode() throws Exception {
     mockMvc
-        .perform(post("/api/console/file-templates").contentType(APPLICATION_JSON).content("{}"))
+        .perform(
+            post("/api/console/file-templates").contentType(APPLICATION_JSON).content("{}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -82,10 +82,9 @@ class ConsoleFileTemplateControllerTest {
   @Test
   void shouldReturn200WhenToggleTemplate() throws Exception {
     mockMvc
-        .perform(
-            patch("/api/console/file-templates/1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"enabled\":true}"))
+        .perform(patch("/api/console/file-templates/1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"enabled\":true}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }
@@ -93,10 +92,9 @@ class ConsoleFileTemplateControllerTest {
   @Test
   void shouldReturn400WhenToggleTemplateMissingTenantId() throws Exception {
     mockMvc
-        .perform(
-            patch("/api/console/file-templates/1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"enabled\":true}"))
+        .perform(patch("/api/console/file-templates/1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"enabled\":true}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -109,10 +107,9 @@ class ConsoleFileTemplateControllerTest {
         .thenReturn(Map.of("id", 1L, "tenantId", "t1"));
 
     mockMvc
-        .perform(
-            put("/api/console/file-templates/1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\"}"))
+        .perform(put("/api/console/file-templates/1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }
@@ -120,20 +117,13 @@ class ConsoleFileTemplateControllerTest {
   @Test
   void shouldReturn200WhenDraftMapping() throws Exception {
     when(applicationService.draftMapping(any()))
-        .thenReturn(
-            new FileTemplateMappingDraftResult(
-                "IMPORT",
-                "[{\"name\":\"orderNo\"}]",
-                "{\"jdbcMappedImport\":{}}",
-                null,
-                List.of()));
+        .thenReturn(new FileTemplateMappingDraftResult(
+            "IMPORT", "[{\"name\":\"orderNo\"}]", "{\"jdbcMappedImport\":{}}", null, List.of()));
 
     mockMvc
-        .perform(
-            post("/api/console/file-templates/mapping-draft")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/file-templates/mapping-draft")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {"tenantId":"t1","direction":"IMPORT","fields":[{"sourceColumn":"orderNo"}]}
                     """))
         .andExpect(status().isOk())

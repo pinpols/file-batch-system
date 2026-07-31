@@ -20,7 +20,8 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ShellTaskExecutorDryRunTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   private ShellExecutorProperties props;
   private ShellTaskExecutor executor;
@@ -38,17 +39,16 @@ class ShellTaskExecutorDryRunTest {
   @Test
   void shouldShortCircuit_whenDryRun_andNotForkProcessOrCreateWorkdir() {
     // 准备:用一个绝对不存在的命令,如果真 fork 一定 fail
-    TaskContext ctx =
-        new TaskContext(
-            "t1",
-            "job-1",
-            "ti-1",
-            "w-1",
-            Map.of(
-                "command", "/definitely/not/here/should-not-be-forked",
-                "args", List.of("--flag"),
-                "env", Map.of("FOO", "secret-value")),
-            Map.of("dryRun", true));
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of(
+            "command", "/definitely/not/here/should-not-be-forked",
+            "args", List.of("--flag"),
+            "env", Map.of("FOO", "secret-value")),
+        Map.of("dryRun", true));
 
     // 执行
     TaskResult result = executor.execute(ctx);

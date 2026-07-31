@@ -24,32 +24,30 @@ class FakeBatchPlatformSelfTest {
   @Test
   @DisplayName("handler 成功执行,5s 内收到成功 report")
   void handlerSucceeds_endToEnd(FakeBatchPlatform platform) {
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "testkit_demo";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "testkit_demo";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            int rows = ((Number) ctx.parameters().getOrDefault("rows", 0)).intValue();
-            return SdkTaskResult.ok("imported " + rows, Map.of("rows", rows));
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        int rows = ((Number) ctx.parameters().getOrDefault("rows", 0)).intValue();
+        return SdkTaskResult.ok("imported " + rows, Map.of("rows", rows));
+      }
+    };
 
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(platform.configFor("tenant-a", "worker-a"))
-            .register(handler)
-            .build();
+    BatchPlatformClient client = BatchPlatformClient.builder(
+            platform.configFor("tenant-a", "worker-a"))
+        .register(handler)
+        .build();
     client.start();
     try {
-      platform.dispatch(
-          TaskDispatchMessageBuilder.dispatch("testkit_demo")
-              .tenantId("tenant-a")
-              .taskId(101L)
-              .param("rows", 3)
-              .build());
+      platform.dispatch(TaskDispatchMessageBuilder.dispatch("testkit_demo")
+          .tenantId("tenant-a")
+          .taskId(101L)
+          .param("rows", 3)
+          .build());
 
       RecordedReport report = platform.awaitReport(101L, Duration.ofSeconds(5));
       assertThat(report.success()).isTrue();
@@ -66,30 +64,28 @@ class FakeBatchPlatformSelfTest {
   @Test
   @DisplayName("handler 抛异常,report 标记失败并带 errorCode")
   void handlerThrows_reportsFailure(FakeBatchPlatform platform) {
-    SdkTaskHandler handler =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "testkit_boom";
-          }
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "testkit_boom";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            throw new IllegalStateException("kaboom");
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        throw new IllegalStateException("kaboom");
+      }
+    };
 
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(platform.configFor("tenant-a", "worker-boom"))
-            .register(handler)
-            .build();
+    BatchPlatformClient client = BatchPlatformClient.builder(
+            platform.configFor("tenant-a", "worker-boom"))
+        .register(handler)
+        .build();
     client.start();
     try {
-      platform.dispatch(
-          TaskDispatchMessageBuilder.dispatch("testkit_boom")
-              .tenantId("tenant-a")
-              .taskId(202L)
-              .build());
+      platform.dispatch(TaskDispatchMessageBuilder.dispatch("testkit_boom")
+          .tenantId("tenant-a")
+          .taskId(202L)
+          .build());
 
       RecordedReport report = platform.awaitReport(202L, Duration.ofSeconds(5));
       assertThat(report.success()).isFalse();

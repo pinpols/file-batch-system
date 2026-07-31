@@ -46,10 +46,8 @@ class RbacMapResponseJacksonTest {
 
   @Test
   void apiKeyCreateKeepsFiveKeys() throws Exception {
-    Map<String, Object> back =
-        roundTrip(
-            new ConsoleApiKeyCreateResponse(
-                1L, "k1", "abcd1234", "raw-secret", Instant.parse("2026-07-11T00:00:00Z")));
+    Map<String, Object> back = roundTrip(new ConsoleApiKeyCreateResponse(
+        1L, "k1", "abcd1234", "raw-secret", Instant.parse("2026-07-11T00:00:00Z")));
     assertThat(back).containsOnlyKeys("id", "keyName", "keyPrefix", "rawKey", "createdAt");
     assertThat(back).containsEntry("id", 1).containsEntry("rawKey", "raw-secret");
   }

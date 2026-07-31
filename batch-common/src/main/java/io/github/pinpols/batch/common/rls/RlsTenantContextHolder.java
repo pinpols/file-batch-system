@@ -68,11 +68,9 @@ public final class RlsTenantContextHolder {
 
   /** void 重载。 */
   public static void runWithTenant(String tenantId, Runnable action) {
-    runWithTenant(
-        tenantId,
-        () -> {
-          action.run();
-          return null;
-        });
+    runWithTenant(tenantId, () -> {
+      action.run();
+      return null;
+    });
   }
 }

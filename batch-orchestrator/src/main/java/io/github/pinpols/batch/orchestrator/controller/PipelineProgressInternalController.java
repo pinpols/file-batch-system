@@ -40,13 +40,11 @@ public class PipelineProgressInternalController {
       @RequestParam("workerCodes") List<String> workerCodes) {
     Map<String, Snapshot> snapshots = cache.snapshot(tenantId, workerCodes);
     return snapshots.entrySet().stream()
-        .map(
-            e ->
-                new ProgressItem(
-                    e.getKey(),
-                    e.getValue().rowsProcessed(),
-                    e.getValue().totalRowsHint(),
-                    e.getValue().heartbeatAt()))
+        .map(e -> new ProgressItem(
+            e.getKey(),
+            e.getValue().rowsProcessed(),
+            e.getValue().totalRowsHint(),
+            e.getValue().heartbeatAt()))
         .collect(Collectors.toUnmodifiableList());
   }
 

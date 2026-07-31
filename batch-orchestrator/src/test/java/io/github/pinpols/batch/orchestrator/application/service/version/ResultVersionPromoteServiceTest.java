@@ -36,33 +36,29 @@ class ResultVersionPromoteServiceTest {
     mapper = mock(ResultVersionMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     assetPartitionService = mock(AssetPartitionService.class);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    service =
-        new ResultVersionPromoteService(
-            mapper, jobInstanceMapper, dateTimeSupport, assetPartitionService);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    service = new ResultVersionPromoteService(
+        mapper, jobInstanceMapper, dateTimeSupport, assetPartitionService);
   }
 
   @Test
   void promotePendingDemotesPriorEffectiveAndPromotes() {
-    ResultVersionEntity pending =
-        ResultVersionEntity.builder()
-            .id(2L)
-            .tenantId("t1")
-            .businessKey("job:JOB:2026-05-04")
-            .versionNo(2)
-            .status("PENDING")
-            .build();
-    ResultVersionEntity promoted =
-        ResultVersionEntity.builder()
-            .id(2L)
-            .tenantId("t1")
-            .businessKey("job:JOB:2026-05-04")
-            .versionNo(2)
-            .jobInstanceId(200L)
-            .status("EFFECTIVE")
-            .build();
+    ResultVersionEntity pending = ResultVersionEntity.builder()
+        .id(2L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .versionNo(2)
+        .status("PENDING")
+        .build();
+    ResultVersionEntity promoted = ResultVersionEntity.builder()
+        .id(2L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .versionNo(2)
+        .jobInstanceId(200L)
+        .status("EFFECTIVE")
+        .build();
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setTenantId("t1");
     instance.setId(200L);
@@ -82,14 +78,13 @@ class ResultVersionPromoteServiceTest {
 
   @Test
   void promoteRejectsNonPendingState() {
-    ResultVersionEntity row =
-        ResultVersionEntity.builder()
-            .id(1L)
-            .tenantId("t1")
-            .businessKey("job:JOB:2026-05-04")
-            .versionNo(1)
-            .status("EFFECTIVE")
-            .build();
+    ResultVersionEntity row = ResultVersionEntity.builder()
+        .id(1L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .versionNo(1)
+        .status("EFFECTIVE")
+        .build();
     when(mapper.selectById("t1", 1L)).thenReturn(row);
 
     assertThatThrownBy(() -> service.promote("t1", 1L)).isInstanceOf(BizException.class);
@@ -99,13 +94,12 @@ class ResultVersionPromoteServiceTest {
 
   @Test
   void promoteRaceLossThrowsOptimisticLockingFailure() {
-    ResultVersionEntity pending =
-        ResultVersionEntity.builder()
-            .id(3L)
-            .tenantId("t1")
-            .businessKey("job:JOB:2026-05-04")
-            .status("PENDING")
-            .build();
+    ResultVersionEntity pending = ResultVersionEntity.builder()
+        .id(3L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .status("PENDING")
+        .build();
     when(mapper.selectById("t1", 3L)).thenReturn(pending);
     when(mapper.promoteToEffective(eq("t1"), eq(3L), any())).thenReturn(0);
 
@@ -116,20 +110,18 @@ class ResultVersionPromoteServiceTest {
 
   @Test
   void rejectPendingArchivesIt() {
-    ResultVersionEntity pending =
-        ResultVersionEntity.builder()
-            .id(4L)
-            .tenantId("t1")
-            .businessKey("job:JOB:2026-05-04")
-            .status("PENDING")
-            .build();
-    ResultVersionEntity archived =
-        ResultVersionEntity.builder()
-            .id(4L)
-            .tenantId("t1")
-            .businessKey("job:JOB:2026-05-04")
-            .status("ARCHIVED")
-            .build();
+    ResultVersionEntity pending = ResultVersionEntity.builder()
+        .id(4L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .status("PENDING")
+        .build();
+    ResultVersionEntity archived = ResultVersionEntity.builder()
+        .id(4L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .status("ARCHIVED")
+        .build();
     when(mapper.selectById("t1", 4L)).thenReturn(pending, archived);
     when(mapper.rejectPending(eq("t1"), eq(4L), any())).thenReturn(1);
 

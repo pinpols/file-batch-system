@@ -27,12 +27,10 @@ public class JobInstanceTerminalChildStateReconciler {
     if (targets == null) {
       return;
     }
-    int partitions =
-        jobPartitionMapper.closeNonTerminalPartitionsForTerminalInstance(
-            tenantId, jobInstanceId, targets.partitionStatus());
-    int tasks =
-        jobTaskMapper.closeNonTerminalTasksForTerminalInstance(
-            tenantId, jobInstanceId, targets.taskStatus());
+    int partitions = jobPartitionMapper.closeNonTerminalPartitionsForTerminalInstance(
+        tenantId, jobInstanceId, targets.partitionStatus());
+    int tasks = jobTaskMapper.closeNonTerminalTasksForTerminalInstance(
+        tenantId, jobInstanceId, targets.taskStatus());
     if (partitions > 0 || tasks > 0) {
       log.info(
           "job_instance terminal child-state reconcile: tenantId={} jobInstanceId={}"
@@ -53,10 +51,10 @@ public class JobInstanceTerminalChildStateReconciler {
     return switch (st) {
       case SUCCESS -> new Targets(PartitionStatus.SUCCESS.code(), TaskStatus.SUCCESS.code());
       case FAILED, PARTIAL_FAILED ->
-          new Targets(PartitionStatus.FAILED.code(), TaskStatus.FAILED.code());
+        new Targets(PartitionStatus.FAILED.code(), TaskStatus.FAILED.code());
       case CANCELLED -> new Targets(PartitionStatus.CANCELLED.code(), TaskStatus.CANCELLED.code());
       case TERMINATED ->
-          new Targets(PartitionStatus.TERMINATED.code(), TaskStatus.TERMINATED.code());
+        new Targets(PartitionStatus.TERMINATED.code(), TaskStatus.TERMINATED.code());
       default -> null;
     };
   }

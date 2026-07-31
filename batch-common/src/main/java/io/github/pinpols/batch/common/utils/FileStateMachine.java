@@ -18,31 +18,30 @@ public final class FileStateMachine {
   private static final EnumSet<FileStatus> INITIAL_STATES =
       EnumSet.of(FileStatus.RECEIVED, FileStatus.GENERATED);
 
-  private static final Map<FileStatus, EnumSet<FileStatus>> TRANSITIONS =
-      Map.ofEntries(
-          Map.entry(
-              FileStatus.RECEIVED,
-              EnumSet.of(FileStatus.PARSING, FileStatus.FAILED, FileStatus.ARCHIVED)),
-          Map.entry(FileStatus.PARSING, EnumSet.of(FileStatus.PARSED, FileStatus.FAILED)),
-          Map.entry(FileStatus.PARSED, EnumSet.of(FileStatus.VALIDATED, FileStatus.FAILED)),
-          Map.entry(FileStatus.VALIDATED, EnumSet.of(FileStatus.LOADED, FileStatus.FAILED)),
-          Map.entry(FileStatus.LOADED, EnumSet.of(FileStatus.ARCHIVED, FileStatus.FAILED)),
-          Map.entry(
+  private static final Map<FileStatus, EnumSet<FileStatus>> TRANSITIONS = Map.ofEntries(
+      Map.entry(
+          FileStatus.RECEIVED,
+          EnumSet.of(FileStatus.PARSING, FileStatus.FAILED, FileStatus.ARCHIVED)),
+      Map.entry(FileStatus.PARSING, EnumSet.of(FileStatus.PARSED, FileStatus.FAILED)),
+      Map.entry(FileStatus.PARSED, EnumSet.of(FileStatus.VALIDATED, FileStatus.FAILED)),
+      Map.entry(FileStatus.VALIDATED, EnumSet.of(FileStatus.LOADED, FileStatus.FAILED)),
+      Map.entry(FileStatus.LOADED, EnumSet.of(FileStatus.ARCHIVED, FileStatus.FAILED)),
+      Map.entry(
+          FileStatus.GENERATED,
+          EnumSet.of(FileStatus.DISPATCHING, FileStatus.ARCHIVED, FileStatus.FAILED)),
+      Map.entry(FileStatus.DISPATCHING, EnumSet.of(FileStatus.DISPATCHED, FileStatus.FAILED)),
+      Map.entry(
+          FileStatus.DISPATCHED,
+          EnumSet.of(FileStatus.DISPATCHING, FileStatus.ARCHIVED, FileStatus.FAILED)),
+      Map.entry(FileStatus.ARCHIVED, EnumSet.of(FileStatus.DELETED)),
+      Map.entry(
+          FileStatus.FAILED,
+          EnumSet.of(
+              FileStatus.PARSING,
               FileStatus.GENERATED,
-              EnumSet.of(FileStatus.DISPATCHING, FileStatus.ARCHIVED, FileStatus.FAILED)),
-          Map.entry(FileStatus.DISPATCHING, EnumSet.of(FileStatus.DISPATCHED, FileStatus.FAILED)),
-          Map.entry(
-              FileStatus.DISPATCHED,
-              EnumSet.of(FileStatus.DISPATCHING, FileStatus.ARCHIVED, FileStatus.FAILED)),
-          Map.entry(FileStatus.ARCHIVED, EnumSet.of(FileStatus.DELETED)),
-          Map.entry(
-              FileStatus.FAILED,
-              EnumSet.of(
-                  FileStatus.PARSING,
-                  FileStatus.GENERATED,
-                  FileStatus.DISPATCHING,
-                  FileStatus.ARCHIVED)),
-          Map.entry(FileStatus.DELETED, EnumSet.noneOf(FileStatus.class)));
+              FileStatus.DISPATCHING,
+              FileStatus.ARCHIVED)),
+      Map.entry(FileStatus.DELETED, EnumSet.noneOf(FileStatus.class)));
 
   private FileStateMachine() {}
 

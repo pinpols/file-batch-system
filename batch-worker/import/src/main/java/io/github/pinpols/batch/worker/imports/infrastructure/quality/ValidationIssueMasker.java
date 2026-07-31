@@ -32,10 +32,9 @@ public class ValidationIssueMasker {
   }
 
   private boolean logMaskingEnabled(ValidationSession session) {
-    Object cfg =
-        session.context() == null
-            ? null
-            : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+    Object cfg = session.context() == null
+        ? null
+        : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
     if (!(cfg instanceof Map<?, ?> map)) {
       return false;
     }
@@ -44,10 +43,9 @@ public class ValidationIssueMasker {
   }
 
   private String maskingRuleSet(ValidationSession session) {
-    Object cfg =
-        session.context() == null
-            ? null
-            : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+    Object cfg = session.context() == null
+        ? null
+        : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
     if (!(cfg instanceof Map<?, ?> map)) {
       return null;
     }
@@ -81,12 +79,11 @@ public class ValidationIssueMasker {
     }
     List<ValidationIssue> masked = new ArrayList<>();
     for (ValidationIssue issue : issues) {
-      masked.add(
-          new ValidationIssue(
-              issue.recordNo(),
-              issue.errorCode(),
-              ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
-              maskIssueRaw(issue.rawRecord(), ruleSet)));
+      masked.add(new ValidationIssue(
+          issue.recordNo(),
+          issue.errorCode(),
+          ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
+          maskIssueRaw(issue.rawRecord(), ruleSet)));
     }
     return masked;
   }

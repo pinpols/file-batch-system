@@ -36,18 +36,16 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void offsetEffectiveHitInjectsPayload() {
-    String json =
-        "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
-            + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"EFFECTIVE_ONLY\"}]";
-    ResultVersionEntity hit =
-        ResultVersionEntity.builder()
-            .versionNo(2)
-            .status("EFFECTIVE")
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{\"recordCount\":42}")
-            .jobInstanceId(100L)
-            .businessKey("job:DAILY_PNL:2026-05-03")
-            .build();
+    String json = "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
+        + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"EFFECTIVE_ONLY\"}]";
+    ResultVersionEntity hit = ResultVersionEntity.builder()
+        .versionNo(2)
+        .status("EFFECTIVE")
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{\"recordCount\":42}")
+        .jobInstanceId(100L)
+        .businessKey("job:DAILY_PNL:2026-05-03")
+        .build();
     when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, 5, 3)))
         .thenReturn(Optional.of(hit));
 
@@ -63,9 +61,8 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void requiredMissingPutsResolutionInWaitingState() {
-    String json =
-        "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
-            + "\"scope\":\"REQUIRED\"}]";
+    String json = "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
+        + "\"scope\":\"REQUIRED\"}]";
     when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, 5, 3)))
         .thenReturn(Optional.empty());
 
@@ -82,9 +79,8 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void optionalMissingStillResolves() {
-    String json =
-        "[{\"alias\":\"market_data\",\"jobCode\":\"MARKET_DATA\",\"bizDateOffset\":-1,"
-            + "\"scope\":\"OPTIONAL\"}]";
+    String json = "[{\"alias\":\"market_data\",\"jobCode\":\"MARKET_DATA\",\"bizDateOffset\":-1,"
+        + "\"scope\":\"OPTIONAL\"}]";
     when(queryService.findEffectiveByJob("t1", "MARKET_DATA", LocalDate.of(2026, 5, 3)))
         .thenReturn(Optional.empty());
 
@@ -99,13 +95,12 @@ class CrossDayDependencyResolverTest {
     String json =
         "[{\"alias\":\"prev_5\",\"jobCode\":\"DAILY_PNL\",\"bizDateRange\":\"PREV_5_BIZ_DAYS\","
             + "\"scope\":\"REQUIRED\"}]";
-    ResultVersionEntity hit =
-        ResultVersionEntity.builder()
-            .versionNo(1)
-            .status("EFFECTIVE")
-            .payloadStorage("INLINE_JSON")
-            .payloadJson("{}")
-            .build();
+    ResultVersionEntity hit = ResultVersionEntity.builder()
+        .versionNo(1)
+        .status("EFFECTIVE")
+        .payloadStorage("INLINE_JSON")
+        .payloadJson("{}")
+        .build();
     when(queryService.findEffectiveByJob(eq("t1"), eq("DAILY_PNL"), any(LocalDate.class)))
         .thenReturn(Optional.of(hit));
 
@@ -137,9 +132,8 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void unknownStrategyTreatsAsMissing() {
-    String json =
-        "[{\"alias\":\"t1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
-            + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"BOGUS\"}]";
+    String json = "[{\"alias\":\"t1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
+        + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"BOGUS\"}]";
 
     ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
 
@@ -148,10 +142,9 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void specificVersionStrategyFiltersByVersionNo() {
-    String json =
-        "[{\"alias\":\"v1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
-            + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"SPECIFIC_VERSION\","
-            + "\"specificVersionNo\":1}]";
+    String json = "[{\"alias\":\"v1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
+        + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"SPECIFIC_VERSION\","
+        + "\"specificVersionNo\":1}]";
     ResultVersionEntity v2 = ResultVersionEntity.builder().versionNo(2).build();
     ResultVersionEntity v1 = ResultVersionEntity.builder().versionNo(1).build();
     when(queryService.listVersions("t1", "job:DAILY_PNL:2026-05-03", 50))

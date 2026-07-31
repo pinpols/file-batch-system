@@ -14,7 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DataQualityRuleApplicationServiceTest {
 
-  @Mock private DataQualityRuleMapper mapper;
+  @Mock
+  private DataQualityRuleMapper mapper;
 
   @Test
   @DisplayName("create 以调用方 tenantId 覆盖 body 租户")

@@ -36,10 +36,8 @@ record ExcelStyleOptions(
     if (templateConfig == null || templateConfig.isEmpty()) {
       return NONE;
     }
-    Map<String, Object> style =
-        helper.toMap(
-            helper.firstNonNull(
-                templateConfig.get("header_style"), templateConfig.get("headerStyle")));
+    Map<String, Object> style = helper.toMap(
+        helper.firstNonNull(templateConfig.get("header_style"), templateConfig.get("headerStyle")));
     boolean bold = booleanValue(style.get("bold"));
     byte[] background =
         parseRgb(helper.textValue(helper.firstNonNull(style.get("background"), style.get("bg"))));
@@ -47,11 +45,10 @@ record ExcelStyleOptions(
         booleanValue(helper.firstNonNull(style.get("freeze_header"), style.get("freezeHeader")));
     boolean autoWidth =
         booleanValue(helper.firstNonNull(style.get("auto_width"), style.get("autoWidth")));
-    List<HeaderGroup> groups =
-        parseGroups(
-            helper.firstNonNull(
-                templateConfig.get("header_groups"), templateConfig.get("headerGroups")),
-            helper);
+    List<HeaderGroup> groups = parseGroups(
+        helper.firstNonNull(
+            templateConfig.get("header_groups"), templateConfig.get("headerGroups")),
+        helper);
     ExcelStyleOptions options = new ExcelStyleOptions(bold, background, freeze, autoWidth, groups);
     return options.styled() ? options : NONE;
   }

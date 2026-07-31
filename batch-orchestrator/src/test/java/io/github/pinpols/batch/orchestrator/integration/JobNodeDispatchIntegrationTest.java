@@ -40,13 +40,17 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t-job-node";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 3, 1);
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private TaskOutcomeService taskOutcomeService;
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -55,8 +59,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String childCode = "CHILD_" + suffix;
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -64,30 +67,19 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, 'GENERAL', 'IT', 'MANUAL', 'UTC',
             5, 'q-it', ?, 'API', false, 'NONE',
             'NONE', 0, 0, true, 1)
-        """,
-        TENANT,
-        childCode,
-        "child job " + childCode,
-        workerGroup);
+        """, TENANT, childCode, "child job " + childCode, workerGroup);
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.workflow_definition (
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
         ) values (?, ?, 'child wf', 'DAG', 1, true)
-        """,
-        TENANT,
-        childCode);
+        """, TENANT, childCode);
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
         ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
-        """,
-        TENANT,
-        "wk-child-" + suffix,
-        workerGroup);
+        """, TENANT, "wk-child-" + suffix, workerGroup);
 
     return childCode;
   }
@@ -104,8 +96,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String requestId = "req-parent-" + suffix;
     String dedupKey = "dedup-parent-" + suffix;
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -113,70 +104,46 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         ) values (?, ?, ?, 'WORKFLOW', 'IT', 'MANUAL', 'UTC',
             5, 'q-it', 'NONE', 'API', true, 'NONE',
             'NONE', 0, 0, true, 1)
-        """,
-        TENANT,
-        parentCode,
-        "parent job " + parentCode);
+        """, TENANT, parentCode, "parent job " + parentCode);
 
     // workflow_definition for the parent
-    Long parentWfDefId =
-        jdbcTemplate.queryForObject(
-            """
+    Long parentWfDefId = jdbcTemplate.queryForObject("""
             insert into batch.workflow_definition (
                 tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
             ) values (?, ?, 'parent wf', 'DAG', 1, true)
             returning id
-            """,
-            Long.class,
-            TENANT,
-            parentCode);
+            """, Long.class, TENANT, parentCode);
 
     // JOB node: node_type = 'JOB', related_job_code = childJobCode
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.workflow_node (
             tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count,
             timeout_seconds, enabled
         ) values (?, ?, 'JOB_NODE_1', 'Child Job Node', 'JOB',
             ?, 1, 'NONE', 0, 0, true)
-        """,
-        TENANT,
-        parentWfDefId,
-        childJobCode);
+        """, TENANT, parentWfDefId, childJobCode);
 
     // 边：START → JOB_NODE_1（ALWAYS），JOB_NODE_1 → END（SUCCESS）
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.workflow_edge (
             tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
         ) values (?, ?, 'START', 'JOB_NODE_1', 'ALWAYS', true)
-        """,
-        TENANT,
-        parentWfDefId);
+        """, TENANT, parentWfDefId);
 
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.workflow_edge (
             tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
         ) values (?, ?, 'JOB_NODE_1', 'END', 'SUCCESS', true)
-        """,
-        TENANT,
-        parentWfDefId);
+        """, TENANT, parentWfDefId);
 
     // 父任务启动所需的触发请求
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, job_code, biz_date,
             dedup_key, request_status, trace_id
         ) values (?, ?, 'API', ?, ?, ?, 'ACCEPTED', 'trace-parent')
-        """,
-        TENANT,
-        requestId,
-        parentCode,
-        BIZ_DATE,
-        dedupKey);
+        """, TENANT, requestId, parentCode, BIZ_DATE, dedupKey);
 
     return new ParentSeed(parentCode, requestId, dedupKey);
   }
@@ -191,16 +158,15 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String childCode = seedChildJob(workerGroup);
     ParentSeed parent = seedParentJob(childCode);
 
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(parent.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(parent.requestId())
-            .traceId("trace-job-node-1")
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(parent.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(parent.requestId())
+        .traceId("trace-job-node-1")
+        .params(Map.of())
+        .build();
     LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
@@ -211,51 +177,38 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     assertThat(parentInstance.getExpectedPartitionCount()).isEqualTo(1);
 
     // 子 job_instance 已自动创建
-    Long childInstanceCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_instance where tenant_id = ? and job_code = ?",
-            Long.class,
-            TENANT,
-            childCode);
+    Long childInstanceCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_instance where tenant_id = ? and job_code = ?",
+        Long.class,
+        TENANT,
+        childCode);
     assertThat(childInstanceCount).isEqualTo(1L);
 
     // 在父任务范围内创建了虚拟分区（状态 = RUNNING）
     Long virtualPartitionCount =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             select count(*) from batch.job_partition
             where tenant_id = ? and job_instance_id = ? and partition_status = 'RUNNING'
-            """,
-            Long.class,
-            TENANT,
-            parentInstance.getId());
+            """, Long.class, TENANT, parentInstance.getId());
     assertThat(virtualPartitionCount).isEqualTo(1L);
 
     // 在父任务范围内创建了虚拟任务（状态 = RUNNING）
     Long virtualTaskCount =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             select count(*) from batch.job_task
             where tenant_id = ? and job_instance_id = ? and task_status = 'RUNNING'
-            """,
-            Long.class,
-            TENANT,
-            parentInstance.getId());
+            """, Long.class, TENANT, parentInstance.getId());
     assertThat(virtualTaskCount).isEqualTo(1L);
 
     // 父 workflow_node_run 中 JOB_NODE_1 为 READY 状态
-    Long nodeRunCount =
-        jdbcTemplate.queryForObject(
-            """
+    Long nodeRunCount = jdbcTemplate.queryForObject("""
             select count(*)
             from batch.workflow_node_run wnr
             join batch.workflow_run wr on wr.id = wnr.workflow_run_id
             where wr.related_job_instance_id = ?
               and wnr.node_code = 'JOB_NODE_1'
               and wnr.node_status = 'READY'
-            """,
-            Long.class,
-            parentInstance.getId());
+            """, Long.class, parentInstance.getId());
     assertThat(nodeRunCount).isEqualTo(1L);
   }
 
@@ -265,16 +218,15 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String childCode = seedChildJob(workerGroup);
     ParentSeed parent = seedParentJob(childCode);
 
-    LaunchRequest launchRequest2 =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(parent.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(parent.requestId())
-            .traceId("trace-job-node-2")
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest2 = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(parent.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(parent.requestId())
+        .traceId("trace-job-node-2")
+        .params(Map.of())
+        .build();
     launchService.launch(launchRequest2);
 
     JobInstanceEntity parentInstance =
@@ -282,23 +234,17 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     assertThat(parentInstance).isNotNull();
 
     // 查找子 job instance
-    Long childInstanceId =
-        jdbcTemplate.queryForObject(
-            "select id from batch.job_instance where tenant_id = ? and job_code = ?",
-            Long.class,
-            TENANT,
-            childCode);
+    Long childInstanceId = jdbcTemplate.queryForObject(
+        "select id from batch.job_instance where tenant_id = ? and job_code = ?",
+        Long.class,
+        TENANT,
+        childCode);
     assertThat(childInstanceId).isNotNull();
 
     // 查找子任务（属于子 job instance）
-    Long childTaskId =
-        jdbcTemplate.queryForObject(
-            """
+    Long childTaskId = jdbcTemplate.queryForObject("""
             select id from batch.job_task where tenant_id = ? and job_instance_id = ?
-            """,
-            Long.class,
-            TENANT,
-            childInstanceId);
+            """, Long.class, TENANT, childInstanceId);
     assertThat(childTaskId).isNotNull();
 
     // 模拟 Worker 拾取子任务：转为 RUNNING
@@ -308,43 +254,36 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         childTaskId);
 
     // 模拟子任务成功完成
-    TaskOutcomeCommand childSuccessOutcome =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(childTaskId)
-            .success(true)
-            .resultSummary("{}")
-            .build();
+    TaskOutcomeCommand childSuccessOutcome = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(childTaskId)
+        .success(true)
+        .resultSummary("{}")
+        .build();
     taskOutcomeService.applyTaskOutcome(childSuccessOutcome);
 
     // 子 job instance 应为 SUCCESS
-    String childStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where id = ?",
-            String.class,
-            childInstanceId);
+    String childStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where id = ?",
+        String.class,
+        childInstanceId);
     assertThat(childStatus).isEqualTo("SUCCESS");
 
     // 父 job instance 也应为 SUCCESS（通过虚拟任务信号传递）
-    String parentStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where id = ?",
-            String.class,
-            parentInstance.getId());
+    String parentStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where id = ?",
+        String.class,
+        parentInstance.getId());
     assertThat(parentStatus).isEqualTo("SUCCESS");
 
     // 父 workflow_node_run 中 JOB_NODE_1 应为 SUCCESS
-    String nodeRunStatus =
-        jdbcTemplate.queryForObject(
-            """
+    String nodeRunStatus = jdbcTemplate.queryForObject("""
             select wnr.node_status
             from batch.workflow_node_run wnr
             join batch.workflow_run wr on wr.id = wnr.workflow_run_id
             where wr.related_job_instance_id = ?
               and wnr.node_code = 'JOB_NODE_1'
-            """,
-            String.class,
-            parentInstance.getId());
+            """, String.class, parentInstance.getId());
     assertThat(nodeRunStatus).isEqualTo("SUCCESS");
   }
 
@@ -354,70 +293,61 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String childCode = seedChildJob(workerGroup);
     ParentSeed parent = seedParentJob(childCode);
 
-    LaunchRequest launchRequest3 =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(parent.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(parent.requestId())
-            .traceId("trace-job-node-3")
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest3 = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(parent.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(parent.requestId())
+        .traceId("trace-job-node-3")
+        .params(Map.of())
+        .build();
     launchService.launch(launchRequest3);
 
     JobInstanceEntity parentInstance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, parent.dedupKey());
 
-    Long childInstanceId =
-        jdbcTemplate.queryForObject(
-            "select id from batch.job_instance where tenant_id = ? and job_code = ?",
-            Long.class,
-            TENANT,
-            childCode);
+    Long childInstanceId = jdbcTemplate.queryForObject(
+        "select id from batch.job_instance where tenant_id = ? and job_code = ?",
+        Long.class,
+        TENANT,
+        childCode);
 
-    Long childTaskId =
-        jdbcTemplate.queryForObject(
-            "select id from batch.job_task where tenant_id = ? and job_instance_id = ?",
-            Long.class,
-            TENANT,
-            childInstanceId);
+    Long childTaskId = jdbcTemplate.queryForObject(
+        "select id from batch.job_task where tenant_id = ? and job_instance_id = ?",
+        Long.class,
+        TENANT,
+        childInstanceId);
 
     jdbcTemplate.update(
         "update batch.job_task set task_status = 'RUNNING', started_at = ? where id = ?",
         Timestamp.from(BatchDateTimeSupport.utcNow()),
         childTaskId);
 
-    TaskOutcomeCommand childFailureOutcome =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(childTaskId)
-            .resultSummary("{}")
-            .errorCode("ERR_CHILD")
-            .errorMessage("child task failed")
-            .build();
+    TaskOutcomeCommand childFailureOutcome = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(childTaskId)
+        .resultSummary("{}")
+        .errorCode("ERR_CHILD")
+        .errorMessage("child task failed")
+        .build();
     taskOutcomeService.applyTaskOutcome(childFailureOutcome);
 
     // 父任务应为 FAILED（子任务失败，无重试策略）
-    String parentStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where id = ?",
-            String.class,
-            parentInstance.getId());
+    String parentStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where id = ?",
+        String.class,
+        parentInstance.getId());
     assertThat(parentStatus).isEqualTo("FAILED");
 
     // 父 workflow_node_run 中 JOB_NODE_1 应为 FAILED
-    String nodeRunStatus =
-        jdbcTemplate.queryForObject(
-            """
+    String nodeRunStatus = jdbcTemplate.queryForObject("""
             select wnr.node_status
             from batch.workflow_node_run wnr
             join batch.workflow_run wr on wr.id = wnr.workflow_run_id
             where wr.related_job_instance_id = ?
               and wnr.node_code = 'JOB_NODE_1'
-            """,
-            String.class,
-            parentInstance.getId());
+            """, String.class, parentInstance.getId());
     assertThat(nodeRunStatus).isEqualTo("FAILED");
   }
 }

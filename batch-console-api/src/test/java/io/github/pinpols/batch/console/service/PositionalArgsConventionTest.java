@@ -29,76 +29,74 @@ import org.junit.jupiter.api.Test;
 class PositionalArgsConventionTest {
 
   /** 已治理的类型白名单。新增治理类型追加到此即受守护。 */
-  private static final Set<String> GUARDED_TYPES =
-      Set.of(
-          // Query records (PR-A 已纳入)
-          "JobInstanceQuery",
-          "JobDefinitionQuery",
-          "JobStepInstanceQuery",
-          "WorkflowEdgeQuery",
-          "WorkflowNodeQuery",
-          "WorkflowDefinitionQuery",
-          "WorkflowRunQuery",
-          "WorkflowNodeRunQuery",
-          "FileTemplateConfigQuery",
-          "FilePipelineQuery",
-          "FileArrivalGroupQuery",
-          "FileErrorRecordQuery",
-          "ConsoleAiAuditLogQuery",
-          "OutboxDeliveryLogQuery",
-          "DeadLetterTaskQuery",
-          "RetryScheduleQuery",
-          "OutboxEventQuery",
-          // 桶 ① 方法封装新增 Param records
-          "FinishStepRunParam",
-          "SubmitApprovalParam",
-          "ParsedRecordWriteParam",
-          "MarkFailedParam",
-          // 桶 ② 加 @Builder 治理的类型（30 个）
-          "ApprovalSubmitContext",
-          "FileExecContext",
-          "BadRecordContext",
-          "DispatchHealthUpsertCommand",
-          "PipelineStepTemplate",
-          "NodeRunOutcome",
-          "BatchDayAuditLogParam",
-          "WebhookDeliveryLogInsertParam",
-          "ArchivePolicyUpsertParam",
-          "SecurityOptionsInput",
-          "TaskOutcomeCommand",
-          "ChildLaunchContext",
-          "DagAdvanceContext",
-          "TriggerStatusInfo",
-          "SftpUploadContext",
-          "FileGovernanceCommand",
-          "ExportFormatContext",
-          "DefinitionChangeContext",
-          "ConsoleRealtimeDomainEvent",
-          "AlertEmitRequest",
-          "CreateSubscriptionCommand",
-          "UpdateSubscriptionCommand",
-          "PipelineStepDefinition",
-          "ImportAuditContext",
-          "JobDefinitionRow",
-          "LaunchRequest",
-          "CompensationSubmitCommand",
-          "ArrivalGroupGovernanceCommand",
-          // WorkerRegistryCache 内部 cache DTO
-          "Entry");
+  private static final Set<String> GUARDED_TYPES = Set.of(
+      // Query records (PR-A 已纳入)
+      "JobInstanceQuery",
+      "JobDefinitionQuery",
+      "JobStepInstanceQuery",
+      "WorkflowEdgeQuery",
+      "WorkflowNodeQuery",
+      "WorkflowDefinitionQuery",
+      "WorkflowRunQuery",
+      "WorkflowNodeRunQuery",
+      "FileTemplateConfigQuery",
+      "FilePipelineQuery",
+      "FileArrivalGroupQuery",
+      "FileErrorRecordQuery",
+      "ConsoleAiAuditLogQuery",
+      "OutboxDeliveryLogQuery",
+      "DeadLetterTaskQuery",
+      "RetryScheduleQuery",
+      "OutboxEventQuery",
+      // 桶 ① 方法封装新增 Param records
+      "FinishStepRunParam",
+      "SubmitApprovalParam",
+      "ParsedRecordWriteParam",
+      "MarkFailedParam",
+      // 桶 ② 加 @Builder 治理的类型（30 个）
+      "ApprovalSubmitContext",
+      "FileExecContext",
+      "BadRecordContext",
+      "DispatchHealthUpsertCommand",
+      "PipelineStepTemplate",
+      "NodeRunOutcome",
+      "BatchDayAuditLogParam",
+      "WebhookDeliveryLogInsertParam",
+      "ArchivePolicyUpsertParam",
+      "SecurityOptionsInput",
+      "TaskOutcomeCommand",
+      "ChildLaunchContext",
+      "DagAdvanceContext",
+      "TriggerStatusInfo",
+      "SftpUploadContext",
+      "FileGovernanceCommand",
+      "ExportFormatContext",
+      "DefinitionChangeContext",
+      "ConsoleRealtimeDomainEvent",
+      "AlertEmitRequest",
+      "CreateSubscriptionCommand",
+      "UpdateSubscriptionCommand",
+      "PipelineStepDefinition",
+      "ImportAuditContext",
+      "JobDefinitionRow",
+      "LaunchRequest",
+      "CompensationSubmitCommand",
+      "ArrivalGroupGovernanceCommand",
+      // WorkerRegistryCache 内部 cache DTO
+      "Entry");
 
   private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
 
-  private static final List<String> SCAN_MODULES =
-      List.of(
-          "batch-common",
-          "batch-trigger",
-          "batch-orchestrator",
-          "batch-worker-core",
-          "batch-worker-import",
-          "batch-worker-export",
-          "batch-worker-process",
-          "batch-worker-dispatch",
-          "batch-console-api");
+  private static final List<String> SCAN_MODULES = List.of(
+      "batch-common",
+      "batch-trigger",
+      "batch-orchestrator",
+      "batch-worker-core",
+      "batch-worker-import",
+      "batch-worker-export",
+      "batch-worker-process",
+      "batch-worker-dispatch",
+      "batch-console-api");
 
   /**
    * 规则 1：raw {@code new XxxParam(...)} 长构造（argc≥6）—— 拦白名单类型的 raw 位置参数构造。

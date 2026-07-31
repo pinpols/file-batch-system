@@ -33,9 +33,8 @@ public class AlertEscalationScheduler {
     if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
       return;
     }
-    int escalated =
-        alertEventService.escalateOverdue(
-            properties.getSlaMinutes(), properties.getMaxTier(), properties.getBatchLimit());
+    int escalated = alertEventService.escalateOverdue(
+        properties.getSlaMinutes(), properties.getMaxTier(), properties.getBatchLimit());
     if (escalated > 0) {
       log.warn("Alert escalation sweep raised {} overdue alert(s) by one tier", escalated);
     }

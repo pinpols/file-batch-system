@@ -13,8 +13,7 @@ public final class ShedLockProviderFactory {
 
   private static final String SHEDLOCK_TABLE = "batch.shedlock";
   private static final String CREATE_BATCH_SCHEMA_SQL = "CREATE SCHEMA IF NOT EXISTS batch";
-  private static final String CREATE_SHEDLOCK_TABLE_SQL =
-      """
+  private static final String CREATE_SHEDLOCK_TABLE_SQL = """
       CREATE TABLE IF NOT EXISTS batch.shedlock (
           name        VARCHAR(64)  NOT NULL PRIMARY KEY,
           lock_until  TIMESTAMPTZ  NOT NULL,
@@ -35,12 +34,11 @@ public final class ShedLockProviderFactory {
     if (autoCreateTable) {
       ensureShedLockTable(jdbcTemplate);
     }
-    return new JdbcTemplateLockProvider(
-        JdbcTemplateLockProvider.Configuration.builder()
-            .withJdbcTemplate(jdbcTemplate)
-            .withTableName(SHEDLOCK_TABLE)
-            .usingDbTime()
-            .build());
+    return new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
+        .withJdbcTemplate(jdbcTemplate)
+        .withTableName(SHEDLOCK_TABLE)
+        .usingDbTime()
+        .build());
   }
 
   private static void ensureShedLockTable(JdbcTemplate jdbcTemplate) {

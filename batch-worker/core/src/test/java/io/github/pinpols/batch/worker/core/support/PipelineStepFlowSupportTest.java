@@ -22,9 +22,8 @@ class PipelineStepFlowSupportTest {
     assertThat(PipelineStepFlowSupport.maxTransitionGuard(List.of())).isEqualTo(16);
     assertThat(PipelineStepFlowSupport.maxTransitionGuard(List.of(step("a"), step("b"))))
         .isEqualTo(16);
-    assertThat(
-            PipelineStepFlowSupport.maxTransitionGuard(
-                List.of(step("a"), step("b"), step("c"), step("d"), step("e"))))
+    assertThat(PipelineStepFlowSupport.maxTransitionGuard(
+            List.of(step("a"), step("b"), step("c"), step("d"), step("e"))))
         .isEqualTo(20);
   }
 
@@ -35,25 +34,14 @@ class PipelineStepFlowSupportTest {
     List<PipelineStepDefinition> steps = List.of(s1, s2);
     assertThat(PipelineStepFlowSupport.resolveNextStep(s1, true, steps, new HashMap<>()))
         .isEqualTo(s2);
-    assertThat(PipelineStepFlowSupport.resolveNextStep(s2, true, steps, new HashMap<>())).isNull();
+    assertThat(PipelineStepFlowSupport.resolveNextStep(s2, true, steps, new HashMap<>()))
+        .isNull();
   }
 
   @Test
   void shouldStopOnTerminalSuccessFlag() {
-    PipelineStepDefinition terminal =
-        new PipelineStepDefinition(
-            1L,
-            1L,
-            "T",
-            "t",
-            "ST",
-            1,
-            "noop",
-            Map.of("terminalOnSuccess", true),
-            60,
-            "FIXED",
-            0,
-            true);
+    PipelineStepDefinition terminal = new PipelineStepDefinition(
+        1L, 1L, "T", "t", "ST", 1, "noop", Map.of("terminalOnSuccess", true), 60, "FIXED", 0, true);
     List<PipelineStepDefinition> steps = List.of(terminal, step("NEXT"));
     assertThat(PipelineStepFlowSupport.resolveNextStep(terminal, true, steps, new HashMap<>()))
         .isNull();

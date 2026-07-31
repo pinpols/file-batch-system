@@ -103,11 +103,10 @@ class TencentCaptchaVerifierTest {
   @Test
   @DisplayName("CaptchaCode!=1 → fail,reason 带 code/msg")
   void captchaCodeNonOne_fails() {
-    StubVerifier verifier =
-        new StubVerifier(
-            properties,
-            "{\"Response\":{\"CaptchaCode\":7,\"CaptchaMsg\":\"ticket expired\"}}",
-            1234567890L);
+    StubVerifier verifier = new StubVerifier(
+        properties,
+        "{\"Response\":{\"CaptchaCode\":7,\"CaptchaMsg\":\"ticket expired\"}}",
+        1234567890L);
 
     CaptchaResult result = verifier.verify("t:r", "1.2.3.4");
 
@@ -125,18 +124,17 @@ class TencentCaptchaVerifierTest {
   @Test
   @DisplayName("postJson 抛异常 → 保守判失败,不外泄")
   void postThrows_failsSafely() {
-    TencentCaptchaVerifier verifier =
-        new TencentCaptchaVerifier(properties, MAPPER) {
-          @Override
-          protected long epochSeconds() {
-            return 1234567890L;
-          }
+    TencentCaptchaVerifier verifier = new TencentCaptchaVerifier(properties, MAPPER) {
+      @Override
+      protected long epochSeconds() {
+        return 1234567890L;
+      }
 
-          @Override
-          protected String postJson(String url, Map<String, String> headers, String body) {
-            throw new RuntimeException("connection refused");
-          }
-        };
+      @Override
+      protected String postJson(String url, Map<String, String> headers, String body) {
+        throw new RuntimeException("connection refused");
+      }
+    };
 
     assertThat(verifier.verify("t:r", "1.2.3.4").success()).isFalse();
   }
@@ -199,14 +197,8 @@ class TencentCaptchaVerifierTest {
   @Test
   @DisplayName("Authorization 头组装含 Credential scope + SignedHeaders + Signature")
   void authorization_assembledCorrectly() {
-    String auth =
-        TencentCaptchaVerifier.buildAuthorization(
-            "captcha.tencentcloudapi.com",
-            "{}",
-            1234567890L,
-            "2009-02-13",
-            "secretId",
-            "secretKey");
+    String auth = TencentCaptchaVerifier.buildAuthorization(
+        "captcha.tencentcloudapi.com", "{}", 1234567890L, "2009-02-13", "secretId", "secretKey");
 
     assertThat(auth)
         .startsWith("TC3-HMAC-SHA256 Credential=secretId/2009-02-13/captcha/tc3_request");

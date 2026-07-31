@@ -52,13 +52,26 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultTaskAssignmentServiceTest {
 
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private JobExecutionLogMapper jobExecutionLogMapper;
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private JobExecutionLogMapper jobExecutionLogMapper;
+
+  @Mock
+  private WorkerRegistryMapper workerRegistryMapper;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
 
   private DefaultTaskAssignmentService service;
   private final PartitionLeaseProperties leaseProps = new PartitionLeaseProperties();
@@ -66,18 +79,17 @@ class DefaultTaskAssignmentServiceTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new DefaultTaskAssignmentService(
-            jobTaskMapper,
-            jobPartitionMapper,
-            jobInstanceMapper,
-            jobStepInstanceMapper,
-            jobExecutionLogMapper,
-            workerRegistryMapper,
-            jobDefinitionMapper,
-            leaseProps,
-            resourceProps,
-            new SimpleMeterRegistry());
+    service = new DefaultTaskAssignmentService(
+        jobTaskMapper,
+        jobPartitionMapper,
+        jobInstanceMapper,
+        jobStepInstanceMapper,
+        jobExecutionLogMapper,
+        workerRegistryMapper,
+        jobDefinitionMapper,
+        leaseProps,
+        resourceProps,
+        new SimpleMeterRegistry());
   }
 
   // ===== assignWorker =====
@@ -327,19 +339,17 @@ class DefaultTaskAssignmentServiceTest {
     partition.setBusinessKey("biz-key");
     partition.setIdempotencyKey("idem-key");
     partition.setCurrentInvocationId("inv-1");
-    partition.setInputSnapshot(
-        """
+    partition.setInputSnapshot("""
         {"partitionPlanVersion":1,"shardIndex":2,"shardTotal":4,
          "rangeStartInclusive":500,"rangeEndExclusive":750,"expectedRows":250}
         """);
     when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
     when(jobDefinitionMapper.selectById(20L))
-        .thenReturn(
-            JobDefinitionEntity.builder()
-                .id(20L)
-                .executionMode("FULL")
-                .retryPolicy("NONE")
-                .build());
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(20L)
+            .executionMode("FULL")
+            .retryPolicy("NONE")
+            .build());
 
     EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 100L);
 
@@ -370,12 +380,10 @@ class DefaultTaskAssignmentServiceTest {
     when(jobPartitionMapper.renewLeaseBatch(any(), any(), eq(TaskStatus.RUNNING.code())))
         .thenReturn(List.of(row1, row3));
 
-    var results =
-        service.renewLeaseBatch(
-            List.of(
-                new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", "inv-1"),
-                new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "inv-2"),
-                new TaskAssignmentService.LeaseRenewCommand("ta", 3L, "w1", "inv-3")));
+    var results = service.renewLeaseBatch(List.of(
+        new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", "inv-1"),
+        new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "inv-2"),
+        new TaskAssignmentService.LeaseRenewCommand("ta", 3L, "w1", "inv-3")));
 
     assertThat(results).hasSize(3);
     assertThat(results.get(0).leaseRenewed()).isTrue();
@@ -391,13 +399,11 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("renewLeaseBatch: 入参缺失项(R3-P1-10 invocationId 等)Java 侧判 false,不进 SQL")
   void renewLeaseBatchFiltersInvalidItemsBeforeSql() {
-    var results =
-        service.renewLeaseBatch(
-            List.of(
-                new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
-                new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
-                new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
-                new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
+    var results = service.renewLeaseBatch(List.of(
+        new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
+        new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
+        new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
+        new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
 
     assertThat(results).hasSize(4);
     assertThat(results).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());

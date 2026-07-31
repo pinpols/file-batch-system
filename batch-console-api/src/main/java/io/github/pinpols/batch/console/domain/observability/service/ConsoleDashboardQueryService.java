@@ -60,14 +60,13 @@ public class ConsoleDashboardQueryService {
     result.put(
         KEY_DAILY_TREND,
         repository.jobDailyTrend(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
-                  m.put("status", row.status() == null ? UNKNOWN : row.status());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
+              m.put("status", row.status() == null ? UNKNOWN : row.status());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     return result;
   }
@@ -86,24 +85,22 @@ public class ConsoleDashboardQueryService {
     result.put(
         "byTriggerType",
         repository.triggerTypeCounts(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("type", row.type() == null ? UNKNOWN : row.type());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put("type", row.type() == null ? UNKNOWN : row.type());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     result.put(
         KEY_DAILY_TREND,
         repository.triggerDailyTrend(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     return result;
   }
@@ -124,38 +121,34 @@ public class ConsoleDashboardQueryService {
     result.put(
         "byStatus",
         repository.workerStatusCounts(resolved).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("status", row.status() == null ? UNKNOWN : row.status());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put("status", row.status() == null ? UNKNOWN : row.status());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     result.put(
         "byWorkerGroup",
         repository.workerGroupStatusCounts(resolved).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("workerGroup", row.workerGroup() == null ? UNKNOWN : row.workerGroup());
-                  m.put("status", row.status() == null ? UNKNOWN : row.status());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put("workerGroup", row.workerGroup() == null ? UNKNOWN : row.workerGroup());
+              m.put("status", row.status() == null ? UNKNOWN : row.status());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     result.put(
         "activePartitionsByWorker",
         repository.activePartitionsByWorker(resolved).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("workerCode", row.workerCode() == null ? UNKNOWN : row.workerCode());
-                  m.put(
-                      "activePartitions",
-                      row.activePartitions() == null ? 0L : row.activePartitions());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put("workerCode", row.workerCode() == null ? UNKNOWN : row.workerCode());
+              m.put(
+                  "activePartitions", row.activePartitions() == null ? 0L : row.activePartitions());
+              return m;
+            })
             .toList());
     return result;
   }
@@ -174,25 +167,23 @@ public class ConsoleDashboardQueryService {
     result.put(
         "bySeverity",
         repository.alertSeverityCounts(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("severity", row.severity() == null ? UNKNOWN : row.severity());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put("severity", row.severity() == null ? UNKNOWN : row.severity());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     result.put(
         KEY_DAILY_TREND,
         repository.alertDailyTrend(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
-                  m.put("severity", row.severity() == null ? UNKNOWN : row.severity());
-                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
+              m.put("severity", row.severity() == null ? UNKNOWN : row.severity());
+              m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+              return m;
+            })
             .toList());
     return result;
   }
@@ -201,27 +192,26 @@ public class ConsoleDashboardQueryService {
       String tenantId, String jobCode, String bizDate) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return repository.executionProgress(resolved, jobCode, bizDate).stream()
-        .map(
-            row -> {
-              Map<String, Object> item = new LinkedHashMap<>();
-              item.put("id", row.id());
-              item.put("jobCode", row.jobCode());
-              item.put("instanceNo", row.instanceNo());
-              item.put("instanceStatus", row.instanceStatus());
-              int expected = row.expectedPartitions() == null ? 0 : row.expectedPartitions();
-              int success = row.successPartitions() == null ? 0 : row.successPartitions();
-              int failed = row.failedPartitions() == null ? 0 : row.failedPartitions();
-              item.put("expectedPartitions", expected);
-              item.put("successPartitions", success);
-              item.put("failedPartitions", failed);
-              item.put("completedPartitions", success + failed);
-              item.put(
-                  "progressPercent",
-                  expected > 0 ? Math.round((success + failed) * 100.0 / expected) : 0);
-              item.put("startedAt", row.startedAt());
-              item.put("finishedAt", row.finishedAt());
-              return item;
-            })
+        .map(row -> {
+          Map<String, Object> item = new LinkedHashMap<>();
+          item.put("id", row.id());
+          item.put("jobCode", row.jobCode());
+          item.put("instanceNo", row.instanceNo());
+          item.put("instanceStatus", row.instanceStatus());
+          int expected = row.expectedPartitions() == null ? 0 : row.expectedPartitions();
+          int success = row.successPartitions() == null ? 0 : row.successPartitions();
+          int failed = row.failedPartitions() == null ? 0 : row.failedPartitions();
+          item.put("expectedPartitions", expected);
+          item.put("successPartitions", success);
+          item.put("failedPartitions", failed);
+          item.put("completedPartitions", success + failed);
+          item.put(
+              "progressPercent",
+              expected > 0 ? Math.round((success + failed) * 100.0 / expected) : 0);
+          item.put("startedAt", row.startedAt());
+          item.put("finishedAt", row.finishedAt());
+          return item;
+        })
         .toList();
   }
 
@@ -268,21 +258,20 @@ public class ConsoleDashboardQueryService {
     result.put(
         "jobs",
         repository.slaJobReport(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> item = new LinkedHashMap<>();
-                  item.put("jobCode", row.jobCode());
-                  item.put("jobName", row.jobName());
-                  item.put("totalInstances", nullToZero(row.totalInstances()));
-                  item.put("successCount", nullToZero(row.successCount()));
-                  item.put("failedCount", nullToZero(row.failedCount()));
-                  item.put("slaBreached", nullToZero(row.slaBreached()));
-                  item.put("slaOnTime", nullToZero(row.slaOnTime()));
-                  item.put("avgDurationSeconds", row.avgDurationSeconds());
-                  item.put("maxDurationSeconds", row.maxDurationSeconds());
-                  item.put("totalPartitions", nullToZero(row.totalPartitions()));
-                  return item;
-                })
+            .map(row -> {
+              Map<String, Object> item = new LinkedHashMap<>();
+              item.put("jobCode", row.jobCode());
+              item.put("jobName", row.jobName());
+              item.put("totalInstances", nullToZero(row.totalInstances()));
+              item.put("successCount", nullToZero(row.successCount()));
+              item.put("failedCount", nullToZero(row.failedCount()));
+              item.put("slaBreached", nullToZero(row.slaBreached()));
+              item.put("slaOnTime", nullToZero(row.slaOnTime()));
+              item.put("avgDurationSeconds", row.avgDurationSeconds());
+              item.put("maxDurationSeconds", row.maxDurationSeconds());
+              item.put("totalPartitions", nullToZero(row.totalPartitions()));
+              return item;
+            })
             .toList());
     return result;
   }
@@ -307,14 +296,13 @@ public class ConsoleDashboardQueryService {
     result.put(
         KEY_DAILY_TREND,
         repository.slaDailyTrend(resolved, days).stream()
-            .map(
-                row -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
-                  m.put("breached", row.breached() == null ? 0L : row.breached());
-                  m.put("onTime", row.onTime() == null ? 0L : row.onTime());
-                  return m;
-                })
+            .map(row -> {
+              Map<String, Object> m = new LinkedHashMap<>();
+              m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
+              m.put("breached", row.breached() == null ? 0L : row.breached());
+              m.put("onTime", row.onTime() == null ? 0L : row.onTime());
+              return m;
+            })
             .toList());
     return result;
   }

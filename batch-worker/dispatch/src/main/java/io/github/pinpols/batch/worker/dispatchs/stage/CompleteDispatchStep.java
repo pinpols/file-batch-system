@@ -35,7 +35,8 @@ public class CompleteDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
@@ -65,18 +66,17 @@ public class CompleteDispatchStep implements DispatchStageStep {
     detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
     detailSummary.put(KEY_RECEIPT_CODE, attrs.get(KEY_RECEIPT_CODE));
     detailSummary.put("receiptStatus", receiptStatus);
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(context.getTenantId())
-            .operationType("DISPATCH_COMPLETE")
-            .operationResult("SUCCESS")
-            .operatorType("SYSTEM")
-            .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(String.valueOf(attrs.getOrDefault("externalRequestId", "")))
-            .detailSummary(detailSummary)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(context.getTenantId())
+        .operationType("DISPATCH_COMPLETE")
+        .operationResult("SUCCESS")
+        .operatorType("SYSTEM")
+        .operatorId(context.getWorkerId())
+        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .evidenceRef(String.valueOf(attrs.getOrDefault("externalRequestId", "")))
+        .detailSummary(detailSummary)
+        .build());
     return DispatchStageResult.success(stage());
   }
 }

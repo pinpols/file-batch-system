@@ -121,10 +121,9 @@ class BusinessMultiShardRoutingLiveTest {
       st.execute(
           "CREATE TABLE IF NOT EXISTS biz.__shard_identity (only_one boolean PRIMARY KEY DEFAULT"
               + " true, shard_key text NOT NULL)");
-      st.execute(
-          "INSERT INTO biz.__shard_identity (only_one, shard_key) VALUES (true, '"
-              + key
-              + "') ON CONFLICT (only_one) DO UPDATE SET shard_key = EXCLUDED.shard_key");
+      st.execute("INSERT INTO biz.__shard_identity (only_one, shard_key) VALUES (true, '"
+          + key
+          + "') ON CONFLICT (only_one) DO UPDATE SET shard_key = EXCLUDED.shard_key");
     }
   }
 
@@ -152,10 +151,9 @@ class BusinessMultiShardRoutingLiveTest {
       throws Exception {
     try (Connection conn = platform.getConnection();
         Statement st = conn.createStatement()) {
-      st.execute(
-          "CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64)"
-              + " PRIMARY KEY, placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL"
-              + " DEFAULT now(), updated_by varchar(128))");
+      st.execute("CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64)"
+          + " PRIMARY KEY, placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL"
+          + " DEFAULT now(), updated_by varchar(128))");
       st.execute(
           "INSERT INTO batch.business_tenant_placement (tenant_id, placement_key, updated_by)"
               + " VALUES ('"
@@ -173,9 +171,8 @@ class BusinessMultiShardRoutingLiveTest {
       Map<String, String> mapping = new LinkedHashMap<>();
       try (Connection conn = platform.getConnection();
           Statement st = conn.createStatement();
-          ResultSet rs =
-              st.executeQuery(
-                  "SELECT tenant_id, placement_key FROM batch.business_tenant_placement")) {
+          ResultSet rs = st.executeQuery(
+              "SELECT tenant_id, placement_key FROM batch.business_tenant_placement")) {
         while (rs.next()) {
           mapping.put(rs.getString(1), rs.getString(2));
         }

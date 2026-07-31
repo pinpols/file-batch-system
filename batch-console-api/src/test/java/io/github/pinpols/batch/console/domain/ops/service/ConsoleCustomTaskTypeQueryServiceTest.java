@@ -18,8 +18,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleCustomTaskTypeQueryServiceTest {
 
-  @Mock private CustomTaskTypeMapper mapper;
-  @Mock private ConsoleTenantGuard tenantGuard;
+  @Mock
+  private CustomTaskTypeMapper mapper;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
 
   private ConsoleCustomTaskTypeQueryService service;
 

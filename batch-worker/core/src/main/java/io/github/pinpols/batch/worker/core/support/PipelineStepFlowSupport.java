@@ -47,14 +47,10 @@ public final class PipelineStepFlowSupport {
     }
     String selector = popSelector(attributes);
     if (!Texts.hasText(selector) && current != null) {
-      selector =
-          success
-              ? current.textParam(
-                  "onSuccessNextStepCode",
-                  "onSuccessNextStageCode",
-                  "nextStepCode",
-                  "nextStageCode")
-              : current.textParam("onFailureNextStepCode", "onFailureNextStageCode");
+      selector = success
+          ? current.textParam(
+              "onSuccessNextStepCode", "onSuccessNextStageCode", "nextStepCode", "nextStageCode")
+          : current.textParam("onFailureNextStepCode", "onFailureNextStageCode");
     }
     if (Texts.hasText(selector)) {
       PipelineStepDefinition explicitNext = findByStepCodeOrStageCode(steps, selector);

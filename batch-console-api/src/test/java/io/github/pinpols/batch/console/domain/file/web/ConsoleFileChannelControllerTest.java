@@ -47,12 +47,11 @@ class ConsoleFileChannelControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleFileChannelController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleFileChannelController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -70,7 +69,8 @@ class ConsoleFileChannelControllerTest {
   @Test
   void shouldReturn400WhenCreateRequestMissingRequired() throws Exception {
     mockMvc
-        .perform(post("/api/console/file-channels").contentType(APPLICATION_JSON).content("{}"))
+        .perform(
+            post("/api/console/file-channels").contentType(APPLICATION_JSON).content("{}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -80,10 +80,9 @@ class ConsoleFileChannelControllerTest {
   @Test
   void shouldReturn200WhenToggleChannel() throws Exception {
     mockMvc
-        .perform(
-            patch("/api/console/file-channels/1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"enabled\":false}"))
+        .perform(patch("/api/console/file-channels/1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"enabled\":false}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }
@@ -91,10 +90,9 @@ class ConsoleFileChannelControllerTest {
   @Test
   void shouldReturn400WhenToggleChannelMissingTenantId() throws Exception {
     mockMvc
-        .perform(
-            patch("/api/console/file-channels/1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"enabled\":false}"))
+        .perform(patch("/api/console/file-channels/1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"enabled\":false}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -107,10 +105,9 @@ class ConsoleFileChannelControllerTest {
         .thenReturn(Map.of("id", 1L, "tenantId", "t1"));
 
     mockMvc
-        .perform(
-            put("/api/console/file-channels/1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\"}"))
+        .perform(put("/api/console/file-channels/1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }

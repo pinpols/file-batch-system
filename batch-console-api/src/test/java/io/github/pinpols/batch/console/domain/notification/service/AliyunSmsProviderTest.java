@@ -88,25 +88,24 @@ class AliyunSmsProviderTest {
   void codeOkIsSuccess() {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     AtomicReference<Map<String, String>> sentHeaders = new AtomicReference<>();
-    AliyunSmsProvider provider =
-        new AliyunSmsProvider(properties(), objectMapper) {
-          @Override
-          protected String acsDate() {
-            return "2026-06-24T00:00:00Z";
-          }
+    AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper) {
+      @Override
+      protected String acsDate() {
+        return "2026-06-24T00:00:00Z";
+      }
 
-          @Override
-          protected String nonce() {
-            return "fixednonce";
-          }
+      @Override
+      protected String nonce() {
+        return "fixednonce";
+      }
 
-          @Override
-          protected String postJson(String url, Map<String, String> headers) {
-            sentUrl.set(url);
-            sentHeaders.set(headers);
-            return "{\"Code\":\"OK\",\"Message\":\"OK\",\"BizId\":\"x\"}";
-          }
-        };
+      @Override
+      protected String postJson(String url, Map<String, String> headers) {
+        sentUrl.set(url);
+        sentHeaders.set(headers);
+        return "{\"Code\":\"OK\",\"Message\":\"OK\",\"BizId\":\"x\"}";
+      }
+    };
 
     WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
 
@@ -128,13 +127,12 @@ class AliyunSmsProviderTest {
 
   @Test
   void nonOkCodeFails() {
-    AliyunSmsProvider provider =
-        new AliyunSmsProvider(properties(), objectMapper) {
-          @Override
-          protected String postJson(String url, Map<String, String> headers) {
-            return "{\"Code\":\"isv.MOBILE_NUMBER_ILLEGAL\",\"Message\":\"bad\"}";
-          }
-        };
+    AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper) {
+      @Override
+      protected String postJson(String url, Map<String, String> headers) {
+        return "{\"Code\":\"isv.MOBILE_NUMBER_ILLEGAL\",\"Message\":\"bad\"}";
+      }
+    };
 
     WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
 
@@ -151,13 +149,12 @@ class AliyunSmsProviderTest {
     appender.start();
     logger.addAppender(appender);
     try {
-      AliyunSmsProvider provider =
-          new AliyunSmsProvider(properties(), objectMapper) {
-            @Override
-            protected String postJson(String url, Map<String, String> headers) {
-              return "{\"Code\":\"isv.BUSINESS_LIMIT_CONTROL\"}";
-            }
-          };
+      AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper) {
+        @Override
+        protected String postJson(String url, Map<String, String> headers) {
+          return "{\"Code\":\"isv.BUSINESS_LIMIT_CONTROL\"}";
+        }
+      };
       WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
       assertThat(result.success()).isFalse();
       assertThat(appender.messages).isNotEmpty();

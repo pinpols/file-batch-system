@@ -20,8 +20,11 @@ import org.quartz.TriggerKey;
 @ExtendWith(MockitoExtension.class)
 class QuartzMisfireRecoveryListenerTest {
 
-  @Mock private Scheduler scheduler;
-  @Mock private Trigger trigger;
+  @Mock
+  private Scheduler scheduler;
+
+  @Mock
+  private Trigger trigger;
 
   @Test
   void shouldScheduleOneShotRecoveryWithOriginalFireTime() throws Exception {

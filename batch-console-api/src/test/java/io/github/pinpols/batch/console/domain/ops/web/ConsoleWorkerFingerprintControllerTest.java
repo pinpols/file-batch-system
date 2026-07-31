@@ -24,43 +24,43 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleWorkerFingerprintControllerTest {
 
-  @Mock private ConsoleWorkerFingerprintQueryService queryService;
-  @Mock private ConsoleResponseFactory responseFactory;
+  @Mock
+  private ConsoleWorkerFingerprintQueryService queryService;
 
-  @InjectMocks private ConsoleWorkerFingerprintController controller;
+  @Mock
+  private ConsoleResponseFactory responseFactory;
+
+  @InjectMocks
+  private ConsoleWorkerFingerprintController controller;
 
   @Test
   void listReturnsResponsesFromQueryService() {
-    WorkerFingerprintResponse row =
-        new WorkerFingerprintResponse(
-            1L,
-            "tx",
-            "w-1",
-            "build-2026.06.02-a",
-            "pid-42",
-            "1.4.0",
-            "ONLINE",
-            Instant.parse("2026-06-02T10:00:00Z"),
-            new WorkerCompatibility(Status.OK, ReasonCode.COMPATIBLE, "1.4.0", "v1"));
+    WorkerFingerprintResponse row = new WorkerFingerprintResponse(
+        1L,
+        "tx",
+        "w-1",
+        "build-2026.06.02-a",
+        "pid-42",
+        "1.4.0",
+        "ONLINE",
+        Instant.parse("2026-06-02T10:00:00Z"),
+        new WorkerCompatibility(Status.OK, ReasonCode.COMPATIBLE, "1.4.0", "v1"));
     when(queryService.list("tx")).thenReturn(List.of(row));
     when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintResponse>>any()))
         .thenAnswer(inv -> CommonResponse.success(inv.getArgument(0)));
 
     CommonResponse<List<WorkerFingerprintResponse>> resp = controller.list("tx");
 
-    assertThat(resp.data())
-        .singleElement()
-        .satisfies(
-            r -> {
-              assertThat(r.workerCode()).isEqualTo("w-1");
-              assertThat(r.buildId()).isEqualTo("build-2026.06.02-a");
-              assertThat(r.sdkVersion()).isEqualTo("1.4.0");
-              assertThat(r.processId()).isEqualTo("pid-42");
-              assertThat(r.status()).isEqualTo("ONLINE");
-              assertThat(r.heartbeatAt()).isEqualTo(Instant.parse("2026-06-02T10:00:00Z"));
-              assertThat(r.compatibility().status()).isEqualTo(Status.OK);
-              assertThat(r.compatibility().reasonCode()).isEqualTo(ReasonCode.COMPATIBLE);
-            });
+    assertThat(resp.data()).singleElement().satisfies(r -> {
+      assertThat(r.workerCode()).isEqualTo("w-1");
+      assertThat(r.buildId()).isEqualTo("build-2026.06.02-a");
+      assertThat(r.sdkVersion()).isEqualTo("1.4.0");
+      assertThat(r.processId()).isEqualTo("pid-42");
+      assertThat(r.status()).isEqualTo("ONLINE");
+      assertThat(r.heartbeatAt()).isEqualTo(Instant.parse("2026-06-02T10:00:00Z"));
+      assertThat(r.compatibility().status()).isEqualTo(Status.OK);
+      assertThat(r.compatibility().reasonCode()).isEqualTo(ReasonCode.COMPATIBLE);
+    });
   }
 
   @Test

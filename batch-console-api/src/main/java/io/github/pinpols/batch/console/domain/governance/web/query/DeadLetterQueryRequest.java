@@ -10,7 +10,8 @@ import lombok.EqualsAndHashCode;
 @Data
 public class DeadLetterQueryRequest extends PageQueryRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 64, message = "sourceType too long (max 64)")
   private String sourceType;

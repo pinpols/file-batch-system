@@ -65,8 +65,8 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
     String identity =
         switch (storage) {
           case PLATFORM_PG ->
-              StatefulBackendIdentity.database(
-                  environment.getRequiredProperty("spring.datasource.url"));
+            StatefulBackendIdentity.database(
+                environment.getRequiredProperty("spring.datasource.url"));
           case SQLITE -> StatefulBackendIdentity.sqlite(properties.resolveSqlitePath());
         };
     return new StatefulBackendGuard.DesiredBackend(

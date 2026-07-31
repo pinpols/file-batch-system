@@ -67,16 +67,22 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   // 否则静默 no-op 防御非数字回报。测试 watermark 用 YYYYMMDD 数字形式,语义对齐 bizDate=2026-01-15。
   private static final String CUSTOM_PLUGIN_WATERMARK = "20260115";
 
-  @Autowired private LaunchService launchService;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
-  @Autowired private ObjectMapper objectMapper;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+
+  @Autowired
+  private ObjectMapper objectMapper;
 
   @Test
   void wap_sqlTransform_publishesTargetAndCleansStaging() throws Exception {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
     ProcessE2eFixture.cleanProcessRows(jdbcTemplate);
     ProcessE2eFixture.seedDemoOrderEvents(jdbcTemplate, TENANT);
     ProcessE2eFixture.seedSqlTransformPipelineDefinition(
@@ -85,85 +91,70 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("bizDate", "2026-01-15");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-process-wap",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-process-wap",
+        params));
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logJobFlowSnapshot(
-                  jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-wap-happy");
-              Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
-              assertThat(outcome.get("task_status")).isEqualTo("SUCCESS");
-              assertThat(outcome.get("instance_status")).isEqualTo("SUCCESS");
-              assertThat(outcome.get("high_water_mark_out")).isEqualTo("3");
-            });
+        .untilAsserted(() -> {
+          E2eStatusLogger.logJobFlowSnapshot(
+              jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-wap-happy");
+          Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
+          assertThat(outcome.get("task_status")).isEqualTo("SUCCESS");
+          assertThat(outcome.get("instance_status")).isEqualTo("SUCCESS");
+          assertThat(outcome.get("high_water_mark_out")).isEqualTo("3");
+        });
 
     // Target 表写入正确
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from biz.process_account_summary where biz_date = date"
-                    + " '2026-01-15'",
-                Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from biz.process_account_summary where biz_date = date"
+                + " '2026-01-15'",
+            Integer.class))
         .isEqualTo(2);
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select total_amount::text from biz.process_account_summary where account_id='A'"
-                    + " and biz_date = date '2026-01-15'",
-                String.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select total_amount::text from biz.process_account_summary where account_id='A'"
+                + " and biz_date = date '2026-01-15'",
+            String.class))
         .isEqualTo("30.00");
 
     // staging 在 FEEDBACK 已清空
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from batch.process_staging", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from batch.process_staging", Integer.class))
         .isZero();
 
     // 5 个 pipeline_step_run 全部 SUCCESS
     Long pipelineInstanceId = loadPipelineInstanceId(seed.dedupKey());
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from batch.pipeline_step_run where pipeline_instance_id=?",
-                Integer.class,
-                pipelineInstanceId))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from batch.pipeline_step_run where pipeline_instance_id=?",
+            Integer.class,
+            pipelineInstanceId))
         .isEqualTo(5);
-    String stagedCount =
-        jdbcTemplate.queryForObject(
-            """
+    String stagedCount = jdbcTemplate.queryForObject("""
             select output_summary ->> 'stagedCount'
             from batch.pipeline_step_run
             where pipeline_instance_id = ? and stage_code = 'COMPUTE'
-            """,
-            String.class,
-            pipelineInstanceId);
+            """, String.class, pipelineInstanceId);
     assertThat(stagedCount).isEqualTo("2");
-    String publishedCount =
-        jdbcTemplate.queryForObject(
-            """
+    String publishedCount = jdbcTemplate.queryForObject("""
             select output_summary ->> 'publishedCount'
             from batch.pipeline_step_run
             where pipeline_instance_id = ? and stage_code = 'COMMIT'
-            """,
-            String.class,
-            pipelineInstanceId);
+            """, String.class, pipelineInstanceId);
     assertThat(publishedCount).isEqualTo("2");
   }
 
   @Test
   void wap_customPlugin_simpleComputeOnly_runsAll5StagesAsNoOpForOthers() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
     ProcessE2eFixture.cleanProcessRows(jdbcTemplate);
     ProcessE2eFixture.seedCustomPluginPipelineDefinition(
         jdbcTemplate, TENANT, seed.jobCode(), CUSTOM_PLUGIN_CODE, "{\"processedCount\":1}");
@@ -172,76 +163,61 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     params.put("bizDate", "2026-01-15");
     params.put("bizType", "SETTLEMENT_SUMMARY");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-process-custom",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-process-custom",
+        params));
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              E2eStatusLogger.logJobFlowSnapshot(
-                  jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-custom-plugin");
-              Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
-              assertThat(outcome.get("task_status")).isEqualTo("SUCCESS");
-              assertThat(outcome.get("instance_status")).isEqualTo("SUCCESS");
-              assertThat(outcome.get("high_water_mark_out")).isEqualTo(CUSTOM_PLUGIN_WATERMARK);
-            });
+        .untilAsserted(() -> {
+          E2eStatusLogger.logJobFlowSnapshot(
+              jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-custom-plugin");
+          Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
+          assertThat(outcome.get("task_status")).isEqualTo("SUCCESS");
+          assertThat(outcome.get("instance_status")).isEqualTo("SUCCESS");
+          assertThat(outcome.get("high_water_mark_out")).isEqualTo(CUSTOM_PLUGIN_WATERMARK);
+        });
 
     Long pipelineInstanceId = loadPipelineInstanceId(seed.dedupKey());
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from batch.pipeline_step_run where pipeline_instance_id=?",
-                Integer.class,
-                pipelineInstanceId))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from batch.pipeline_step_run where pipeline_instance_id=?",
+            Integer.class,
+            pipelineInstanceId))
         .isEqualTo(5);
-    String processedCount =
-        jdbcTemplate.queryForObject(
-            """
+    String processedCount = jdbcTemplate.queryForObject("""
             select output_summary ->> 'processedCount'
             from batch.pipeline_step_run
             where pipeline_instance_id = ? and stage_code = 'COMPUTE'
-            """,
-            String.class,
-            pipelineInstanceId);
+            """, String.class, pipelineInstanceId);
     assertThat(processedCount).isEqualTo("1");
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*)::int from batch.process_staging", Integer.class))
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*)::int from batch.process_staging", Integer.class))
         .isZero();
   }
 
   private Long loadPipelineInstanceId(String dedupKey) {
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         select pi.id
         from batch.pipeline_instance pi
         join batch.job_instance ji on ji.id = pi.related_job_instance_id
         where ji.tenant_id = ? and ji.dedup_key = ? and pi.pipeline_type = 'PROCESS'
-        """,
-        Long.class,
-        TENANT,
-        dedupKey);
+        """, Long.class, TENANT, dedupKey);
   }
 
   private Map<String, Object> loadProcessOutcome(String dedupKey) {
-    return jdbcTemplate.queryForMap(
-        """
+    return jdbcTemplate.queryForMap("""
         select t.task_status, ji.instance_status, ji.high_water_mark_out
         from batch.job_task t
         join batch.job_instance ji on ji.id = t.job_instance_id
         where ji.tenant_id = ? and ji.dedup_key = ?
-        """,
-        TENANT,
-        dedupKey);
+        """, TENANT, dedupKey);
   }
 
   /** 自定义 plugin 测试桩：只重写 compute()，其余 lifecycle 走 ProcessComputePlugin 默认 no-op。 */

@@ -42,11 +42,10 @@ class ConsolePipelineDefinitionRealtimeControllerTest {
     when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
         .thenReturn(new SseEmitter());
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsolePipelineDefinitionRealtimeController(realtimeEventHub, tenantGuard))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsolePipelineDefinitionRealtimeController(realtimeEventHub, tenantGuard))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test

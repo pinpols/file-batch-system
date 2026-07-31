@@ -11,13 +11,17 @@ import lombok.Data;
 @Data
 public class RerunRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @NotBlank
   @Size(max = 128, message = "jobCode too long (max 128)")
   private String jobCode;
 
-  @NotBlank @ValidBizDate private String bizDate;
+  @NotBlank
+  @ValidBizDate
+  private String bizDate;
+
   private Long targetId;
   private String targetInstanceNo;
   private String batchNo;
@@ -52,9 +56,8 @@ public class RerunRequest {
    */
   @Pattern(
       regexp = "^(USE_ORIGINAL_CONFIG|USE_LATEST_CONFIG|USE_SPECIFIED_VERSION)$",
-      message =
-          "configVersionPolicy must be USE_ORIGINAL_CONFIG / USE_LATEST_CONFIG /"
-              + " USE_SPECIFIED_VERSION")
+      message = "configVersionPolicy must be USE_ORIGINAL_CONFIG / USE_LATEST_CONFIG /"
+          + " USE_SPECIFIED_VERSION")
   private String configVersionPolicy;
 
   /** 仅当 {@link #configVersionPolicy} == USE_SPECIFIED_VERSION 时生效。 */

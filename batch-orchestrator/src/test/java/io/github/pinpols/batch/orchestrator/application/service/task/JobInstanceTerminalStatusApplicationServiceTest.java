@@ -38,10 +38,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 class JobInstanceTerminalStatusApplicationServiceTest {
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
-  @Mock private JobInstanceTerminalChildStateReconciler reconciler;
-  @Mock private JobLifecycleMetrics jobLifecycleMetrics;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private JobInstanceTerminalChildStateReconciler reconciler;
+
+  @Mock
+  private JobLifecycleMetrics jobLifecycleMetrics;
 
   private JobLifecycleMetricsRecorder recorder;
   private JobInstanceTerminalStatusApplicationService service;
@@ -49,9 +56,8 @@ class JobInstanceTerminalStatusApplicationServiceTest {
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    recorder =
-        new JobLifecycleMetricsRecorder(
-            jobInstanceMapper, jobDefinitionMapper, jobLifecycleMetrics);
+    recorder = new JobLifecycleMetricsRecorder(
+        jobInstanceMapper, jobDefinitionMapper, jobLifecycleMetrics);
     service =
         new JobInstanceTerminalStatusApplicationService(jobInstanceMapper, reconciler, recorder);
   }

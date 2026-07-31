@@ -93,21 +93,19 @@ public class SubscriptionRuleWebhookDispatcher {
    * 与 {@link WebhookDispatcher} 同款有界队列 + AbortPolicy:HTTP burst 投递不能跑在 Spring 事件发布线程(可能是请求/事务线程)上,
    * 否则单条 webhook 10s 超时 × 3 次重试会拖死调用方。队列满时直接丢弃(本路无持久化补偿,见类注释),仅告警。
    */
-  private final ExecutorService executor =
-      new ThreadPoolExecutor(
-          2,
-          2,
-          60L,
-          TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(QUEUE_CAPACITY),
-          runnable -> {
-            Thread thread =
-                new Thread(
-                    runnable, "console-rule-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
-          },
-          new AbortPolicy());
+  private final ExecutorService executor = new ThreadPoolExecutor(
+      2,
+      2,
+      60L,
+      TimeUnit.SECONDS,
+      new LinkedBlockingQueue<>(QUEUE_CAPACITY),
+      runnable -> {
+        Thread thread =
+            new Thread(runnable, "console-rule-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+      },
+      new AbortPolicy());
 
   @PreDestroy
   public void shutdown() {
@@ -141,14 +139,13 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
     Map<String, Object> dataMap = dispatchPolicy.asDataMap(data);
-    WebhookEventPayload payload =
-        new WebhookEventPayload(
-            tenantId,
-            normalizedEventType,
-            stream,
-            cursor,
-            emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
-            data);
+    WebhookEventPayload payload = new WebhookEventPayload(
+        tenantId,
+        normalizedEventType,
+        stream,
+        cursor,
+        emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
+        data);
     String payloadJson = JsonUtils.toJson(payload);
 
     for (Map<String, Object> rule : rules) {
@@ -201,14 +198,13 @@ public class SubscriptionRuleWebhookDispatcher {
             eventType);
         return;
       }
-      NotificationMessage message =
-          new NotificationMessage(
-              str(rule, "tenant_id"),
-              channelCode,
-              channelType,
-              str(rule, "config_json"),
-              payload,
-              payloadJson);
+      NotificationMessage message = new NotificationMessage(
+          str(rule, "tenant_id"),
+          channelCode,
+          channelType,
+          str(rule, "config_json"),
+          payload,
+          payloadJson);
       try {
         executor.submit(
             () -> deliverViaSenderWithBurstRetry(sender, message, eventType, logContext));

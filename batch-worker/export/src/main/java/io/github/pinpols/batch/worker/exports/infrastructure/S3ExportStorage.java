@@ -58,10 +58,9 @@ public class S3ExportStorage {
     }
     String targetObjectName = objectName;
     if (targetObjectName == null || targetObjectName.isBlank()) {
-      targetObjectName =
-          BatchFileConstants.EXPORT_OBJECT_PREFIX
-              + UUID.randomUUID()
-              + BatchFileConstants.BIN_SUFFIX;
+      targetObjectName = BatchFileConstants.EXPORT_OBJECT_PREFIX
+          + UUID.randomUUID()
+          + BatchFileConstants.BIN_SUFFIX;
     }
     try {
       objectStore.put(
@@ -90,10 +89,9 @@ public class S3ExportStorage {
     }
     String targetObjectName = objectName;
     if (targetObjectName == null || targetObjectName.isBlank()) {
-      targetObjectName =
-          BatchFileConstants.EXPORT_OBJECT_PREFIX
-              + UUID.randomUUID()
-              + BatchFileConstants.BIN_SUFFIX;
+      targetObjectName = BatchFileConstants.EXPORT_OBJECT_PREFIX
+          + UUID.randomUUID()
+          + BatchFileConstants.BIN_SUFFIX;
     }
     try (InputStream inputStream = Files.newInputStream(contentPath)) {
       objectStore.put(

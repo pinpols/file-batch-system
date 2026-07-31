@@ -210,14 +210,13 @@ public class DefaultDispatchStageExecutor
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
     List<PipelineStepTemplate> templates = new ArrayList<>();
     int order = 1;
-    for (DispatchStage stage :
-        List.of(
-            DispatchStage.PREPARE,
-            DispatchStage.DISPATCH,
-            DispatchStage.ACK,
-            DispatchStage.RETRY,
-            DispatchStage.COMPENSATE,
-            DispatchStage.COMPLETE)) {
+    for (DispatchStage stage : List.of(
+        DispatchStage.PREPARE,
+        DispatchStage.DISPATCH,
+        DispatchStage.ACK,
+        DispatchStage.RETRY,
+        DispatchStage.COMPENSATE,
+        DispatchStage.COMPLETE)) {
       DispatchStageStep step = stepsByStage.get(stage);
       if (step == null) {
         throw new IllegalStateException("missing dispatch step bean for stage: " + stage.name());
@@ -233,18 +232,17 @@ public class DefaultDispatchStageExecutor
             default -> Map.of();
           };
       // 使用 record 构造器创建参数对象（record 构造器不受参数数量约束）
-      PipelineStepTemplateParam param =
-          new PipelineStepTemplateParam(
-              step.stepCode(),
-              step.stepName(),
-              stage.name(),
-              order++,
-              step.implCode(),
-              stepParams,
-              0,
-              "NONE",
-              0,
-              true);
+      PipelineStepTemplateParam param = new PipelineStepTemplateParam(
+          step.stepCode(),
+          step.stepName(),
+          stage.name(),
+          order++,
+          step.implCode(),
+          stepParams,
+          0,
+          "NONE",
+          0,
+          true);
       templates.add(param.toTemplate());
     }
     return List.copyOf(templates);

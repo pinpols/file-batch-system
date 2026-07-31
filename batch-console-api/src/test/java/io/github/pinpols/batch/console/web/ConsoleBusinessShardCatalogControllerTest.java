@@ -33,8 +33,11 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @ExtendWith(MockitoExtension.class)
 class ConsoleBusinessShardCatalogControllerTest {
 
-  @Mock private ConsoleBusinessShardCatalogService service;
-  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock
+  private ConsoleBusinessShardCatalogService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -48,13 +51,11 @@ class ConsoleBusinessShardCatalogControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleBusinessShardCatalogController(
-                    service, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBusinessShardCatalogController(
+            service, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -75,12 +76,10 @@ class ConsoleBusinessShardCatalogControllerTest {
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", null, "ops:bob", null, null));
     mockMvc
-        .perform(
-            put("/api/console/ops/shard-catalog")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"placementKey\":\"shard-1\",\"host\":\"db-1\",\"port\":5432,"
-                        + "\"dbName\":\"batch_business\",\"enabled\":true}"))
+        .perform(put("/api/console/ops/shard-catalog")
+            .contentType(APPLICATION_JSON)
+            .content("{\"placementKey\":\"shard-1\",\"host\":\"db-1\",\"port\":5432,"
+                + "\"dbName\":\"batch_business\",\"enabled\":true}"))
         .andExpect(status().isOk());
     verify(service).upsert(any(BusinessShardCatalogUpsertParam.class));
   }
@@ -88,19 +87,19 @@ class ConsoleBusinessShardCatalogControllerTest {
   @Test
   void upsertShouldRejectBadKeyOrPort() throws Exception {
     mockMvc
-        .perform(
-            put("/api/console/ops/shard-catalog")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    "{\"placementKey\":\"Shard_1\",\"host\":\"db-1\",\"port\":70000,"
-                        + "\"dbName\":\"batch_business\",\"enabled\":true}"))
+        .perform(put("/api/console/ops/shard-catalog")
+            .contentType(APPLICATION_JSON)
+            .content("{\"placementKey\":\"Shard_1\",\"host\":\"db-1\",\"port\":70000,"
+                + "\"dbName\":\"batch_business\",\"enabled\":true}"))
         .andExpect(status().is4xxClientError());
   }
 
   @Test
   void deleteShouldDelegate() throws Exception {
     when(service.delete("shard-9")).thenReturn(true);
-    mockMvc.perform(delete("/api/console/ops/shard-catalog/shard-9")).andExpect(status().isOk());
+    mockMvc
+        .perform(delete("/api/console/ops/shard-catalog/shard-9"))
+        .andExpect(status().isOk());
     verify(service).delete("shard-9");
   }
 }

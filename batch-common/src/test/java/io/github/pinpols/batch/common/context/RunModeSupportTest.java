@@ -10,9 +10,8 @@ class RunModeSupportTest {
 
   @Test
   void shouldCanonicalizeLegacyAliasWhenCopying() {
-    Map<String, Object> normalized =
-        RunModeSupport.copyWithDefault(
-            Map.of(RunModeSupport.LEGACY_RUN_MODE, "retry"), RunMode.NORMAL);
+    Map<String, Object> normalized = RunModeSupport.copyWithDefault(
+        Map.of(RunModeSupport.LEGACY_RUN_MODE, "retry"), RunMode.NORMAL);
 
     assertThat(normalized)
         .containsEntry(RunModeSupport.RUN_MODE, RunMode.RETRY.code())

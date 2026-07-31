@@ -100,20 +100,19 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
         && quotaPolicy.maxRunningJobsPerTenant() > 0) {
       long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(request.getTenantId());
       int burst = quotaPolicy.burstLimit() == null ? 0 : Math.max(0, quotaPolicy.burstLimit());
-      ResourceCheck burstCheck =
-          quotaRuntimeStateService.evaluateAndReserve(
-              new QuotaRuntimeStateService.QuotaReservationRequest(
-                  new QuotaRuntimeStateService.QuotaReservationOwner(
-                      request.getTenantId(), "TENANT_JOBS", request.getTenantId()),
-                  new QuotaRuntimeStateService.QuotaReservationPolicy(
-                      quotaPolicy.quotaResetPolicy(),
-                      quotaPolicy.maxRunningJobsPerTenant(),
-                      burst,
-                      governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
-                  tenantActiveJobs,
-                  1,
-                  new QuotaRuntimeStateService.QuotaReservationReason(
-                      "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)")));
+      ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
+          new QuotaRuntimeStateService.QuotaReservationRequest(
+              new QuotaRuntimeStateService.QuotaReservationOwner(
+                  request.getTenantId(), "TENANT_JOBS", request.getTenantId()),
+              new QuotaRuntimeStateService.QuotaReservationPolicy(
+                  quotaPolicy.quotaResetPolicy(),
+                  quotaPolicy.maxRunningJobsPerTenant(),
+                  burst,
+                  governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
+              tenantActiveJobs,
+              1,
+              new QuotaRuntimeStateService.QuotaReservationReason(
+                  "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)")));
       if (!burstCheck.allowed()) {
         return applyStrategy(strategy, burstCheck.reasonCode(), burstCheck.reasonMessage());
       }
@@ -150,7 +149,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       case REJECT -> ResourceCheck.reject(reasonCode, reasonMessage);
       case QUEUE_DEFER -> ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
       case DEGRADE_PRIORITY ->
-          ResourceCheck.waitForCapacity(reasonCode + "_DEGRADED", reasonMessage);
+        ResourceCheck.waitForCapacity(reasonCode + "_DEGRADED", reasonMessage);
     };
   }
 
@@ -166,21 +165,20 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     long queueActiveJobs =
         jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
     int qburst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
-    ResourceCheck burstCheck =
-        quotaRuntimeStateService.evaluateAndReserve(
-            new QuotaRuntimeStateService.QuotaReservationRequest(
-                new QuotaRuntimeStateService.QuotaReservationOwner(
-                    request.getTenantId(), "QUEUE_JOBS", queue.queueCode()),
-                new QuotaRuntimeStateService.QuotaReservationPolicy(
-                    queue.quotaResetPolicy(),
-                    queue.maxRunningJobs(),
-                    qburst,
-                    governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
-                queueActiveJobs,
-                1,
-                new QuotaRuntimeStateService.QuotaReservationReason(
-                    "QUEUE_JOB_LIMIT",
-                    "resource queue running jobs exceed limit (including" + " burst)")));
+    ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
+        new QuotaRuntimeStateService.QuotaReservationRequest(
+            new QuotaRuntimeStateService.QuotaReservationOwner(
+                request.getTenantId(), "QUEUE_JOBS", queue.queueCode()),
+            new QuotaRuntimeStateService.QuotaReservationPolicy(
+                queue.quotaResetPolicy(),
+                queue.maxRunningJobs(),
+                qburst,
+                governance.resourceScheduler().getQuotaResetSlidingWindowHours()),
+            queueActiveJobs,
+            1,
+            new QuotaRuntimeStateService.QuotaReservationReason(
+                "QUEUE_JOB_LIMIT",
+                "resource queue running jobs exceed limit (including" + " burst)")));
     if (!burstCheck.allowed()) {
       return burstCheck;
     }

@@ -120,9 +120,8 @@ public class LaunchBatchDayService {
       return;
     }
     BatchDayUpsertContext ctx = buildUpsertContext(request, calendarCode, effectiveParams);
-    BatchDayInstanceEntity existing =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            request.tenantId(), calendarCode, request.bizDate());
+    BatchDayInstanceEntity existing = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+        request.tenantId(), calendarCode, request.bizDate());
     if (existing == null) {
       insertNewBatchDay(request, ctx, batchDaySlaDeadlineAt);
     } else {
@@ -138,21 +137,20 @@ public class LaunchBatchDayService {
     String dstPolicySnapshot = resolveDstPolicySnapshot(request.tenantId(), calendarCode);
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     boolean hasOperator = Texts.hasText(operatorId);
-    BatchDayUpsertContext ctx =
-        BatchDayUpsertContext.builder()
-            .calendarCode(calendarCode)
-            .now(now)
-            .cutoffAt(cutoffAt)
-            .timezoneSnapshot(timezoneSnapshot)
-            .dstPolicySnapshot(dstPolicySnapshot)
-            .auditOperatorId(hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM)
-            .auditOperatorType(
-                hasOperator
-                    ? AuditLogConstants.OPERATOR_TYPE_REQUEST
-                    : AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-            .catchUpLaunch(isCatchUpLaunch(request))
-            .lateAccepted(isLateAccepted(effectiveParams))
-            .build();
+    BatchDayUpsertContext ctx = BatchDayUpsertContext.builder()
+        .calendarCode(calendarCode)
+        .now(now)
+        .cutoffAt(cutoffAt)
+        .timezoneSnapshot(timezoneSnapshot)
+        .dstPolicySnapshot(dstPolicySnapshot)
+        .auditOperatorId(hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM)
+        .auditOperatorType(
+            hasOperator
+                ? AuditLogConstants.OPERATOR_TYPE_REQUEST
+                : AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+        .catchUpLaunch(isCatchUpLaunch(request))
+        .lateAccepted(isLateAccepted(effectiveParams))
+        .build();
     return ctx;
   }
 
@@ -161,40 +159,39 @@ public class LaunchBatchDayService {
     boolean pastCutoff = ctx.cutoffAt() != null && !ctx.now().isBefore(ctx.cutoffAt());
     String dayStatus = resolveCreateDayStatus(ctx, pastCutoff);
     String reasonCode = resolveCreateReasonCode(ctx, pastCutoff);
-    BatchDayInstanceEntity newDay =
-        BatchDayInstanceEntity.builder()
-            .tenantId(request.tenantId())
-            .calendarCode(ctx.calendarCode())
-            .bizDate(request.bizDate())
-            .dayStatus(dayStatus)
-            .openAt(ctx.now())
-            .cutoffAt(ctx.cutoffAt())
-            .slaDeadlineAt(batchDaySlaDeadlineAt)
-            .lateCount(ctx.lateAccepted() ? 1 : 0)
-            .catchupCount(ctx.catchUpLaunch() ? 1 : 0)
-            .timezoneSnapshot(ctx.timezoneSnapshot())
-            .dstPolicySnapshot(ctx.dstPolicySnapshot())
-            .frozen(false)
-            // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；null 也可，xml 兜 0
-            .version(0L)
-            .createdAt(ctx.now())
-            .updatedAt(ctx.now())
-            .build();
+    BatchDayInstanceEntity newDay = BatchDayInstanceEntity.builder()
+        .tenantId(request.tenantId())
+        .calendarCode(ctx.calendarCode())
+        .bizDate(request.bizDate())
+        .dayStatus(dayStatus)
+        .openAt(ctx.now())
+        .cutoffAt(ctx.cutoffAt())
+        .slaDeadlineAt(batchDaySlaDeadlineAt)
+        .lateCount(ctx.lateAccepted() ? 1 : 0)
+        .catchupCount(ctx.catchUpLaunch() ? 1 : 0)
+        .timezoneSnapshot(ctx.timezoneSnapshot())
+        .dstPolicySnapshot(ctx.dstPolicySnapshot())
+        .frozen(false)
+        // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；null 也可，xml 兜 0
+        .version(0L)
+        .createdAt(ctx.now())
+        .updatedAt(ctx.now())
+        .build();
     batchDayInstanceMapper.insert(newDay);
-    appendBatchDayAuditLog(
-        BatchDayAuditLogParam.builder()
-            .tenantId(request.tenantId())
-            .traceId(request.traceId())
-            .toDayStatus(dayStatus)
-            .calendarCode(ctx.calendarCode())
-            .bizDate(request.bizDate())
-            .reasonCode(reasonCode)
-            .operatorId(ctx.auditOperatorId())
-            .operatorType(ctx.auditOperatorType())
-            .lateCount(ctx.lateAccepted() ? 1 : 0)
-            .catchupCount(ctx.catchUpLaunch() ? 1 : 0)
-            .cutoffAt(ctx.cutoffAt())
-            .build());
+    BatchDayAuditLogParam auditLog = BatchDayAuditLogParam.builder()
+        .tenantId(request.tenantId())
+        .traceId(request.traceId())
+        .toDayStatus(dayStatus)
+        .calendarCode(ctx.calendarCode())
+        .bizDate(request.bizDate())
+        .reasonCode(reasonCode)
+        .operatorId(ctx.auditOperatorId())
+        .operatorType(ctx.auditOperatorType())
+        .lateCount(ctx.lateAccepted() ? 1 : 0)
+        .catchupCount(ctx.catchUpLaunch() ? 1 : 0)
+        .cutoffAt(ctx.cutoffAt())
+        .build();
+    appendBatchDayAuditLog(auditLog);
   }
 
   private static String resolveCreateDayStatus(BatchDayUpsertContext ctx, boolean pastCutoff) {
@@ -226,27 +223,26 @@ public class LaunchBatchDayService {
     int rows = batchDayInstanceMapper.updateWithCas(plan.updated());
     if (rows == 0) {
       // CAS 冲突：版本与 DB 不一致；抛出由外层 upsertBatchDayInstance 的重试循环捕获
-      throw new OptimisticLockingFailureException(
-          "batch_day_instance version mismatch: id="
-              + plan.updated().id()
-              + ", version="
-              + plan.updated().version());
+      throw new OptimisticLockingFailureException("batch_day_instance version mismatch: id="
+          + plan.updated().id()
+          + ", version="
+          + plan.updated().version());
     }
-    appendBatchDayAuditLog(
-        BatchDayAuditLogParam.builder()
-            .tenantId(request.tenantId())
-            .traceId(request.traceId())
-            .fromDayStatus(existing.dayStatus())
-            .toDayStatus(plan.updated().dayStatus())
-            .calendarCode(ctx.calendarCode())
-            .bizDate(request.bizDate())
-            .reasonCode(plan.reasonCode() == null ? "BATCH_DAY_UPDATED" : plan.reasonCode())
-            .operatorId(ctx.auditOperatorId())
-            .operatorType(ctx.auditOperatorType())
-            .lateCount(plan.updated().lateCount())
-            .catchupCount(plan.updated().catchupCount())
-            .cutoffAt(ctx.cutoffAt())
-            .build());
+    BatchDayAuditLogParam auditLog = BatchDayAuditLogParam.builder()
+        .tenantId(request.tenantId())
+        .traceId(request.traceId())
+        .fromDayStatus(existing.dayStatus())
+        .toDayStatus(plan.updated().dayStatus())
+        .calendarCode(ctx.calendarCode())
+        .bizDate(request.bizDate())
+        .reasonCode(plan.reasonCode() == null ? "BATCH_DAY_UPDATED" : plan.reasonCode())
+        .operatorId(ctx.auditOperatorId())
+        .operatorType(ctx.auditOperatorType())
+        .lateCount(plan.updated().lateCount())
+        .catchupCount(plan.updated().catchupCount())
+        .cutoffAt(ctx.cutoffAt())
+        .build();
+    appendBatchDayAuditLog(auditLog);
   }
 
   private BatchDayUpdatePlan planBatchDayUpdate(
@@ -278,9 +274,8 @@ public class LaunchBatchDayService {
       reasonCode = REASON_LATE_ACCEPTED;
     }
     if (ctx.catchUpLaunch()) {
-      updated =
-          updated.withCatchupCount(
-              LaunchParamResolver.safeIncrement(updated.catchupCount()), ctx.now());
+      updated = updated.withCatchupCount(
+          LaunchParamResolver.safeIncrement(updated.catchupCount()), ctx.now());
       changed = true;
       reasonCode = "CATCH_UP_LAUNCHED";
     }
@@ -383,9 +378,8 @@ public class LaunchBatchDayService {
     if (cutoffAt == null) {
       return false;
     }
-    Instant cutoffCloseAt =
-        cutoffAt.plusSeconds(
-            Math.max(0, resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode)) * 60L);
+    Instant cutoffCloseAt = cutoffAt.plusSeconds(
+        Math.max(0, resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode)) * 60L);
     return !dateTimeSupport.nowInstant().isAfter(cutoffCloseAt);
   }
 
@@ -454,9 +448,8 @@ public class LaunchBatchDayService {
     if (!Texts.hasText(calendarCode)) {
       return request;
     }
-    BatchDayInstanceEntity batchDay =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            request.tenantId(), calendarCode, request.bizDate());
+    BatchDayInstanceEntity batchDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
+        request.tenantId(), calendarCode, request.bizDate());
     if (batchDay == null || batchDay.dayStatus() == null) {
       return request;
     }
@@ -484,16 +477,15 @@ public class LaunchBatchDayService {
           "lateArrivalToleranceMin",
           resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
       emitLateArrivalAlert(request, calendarCode, batchDay, "BATCH_DAY_LATE_ACCEPTED", "WARN");
-      LaunchRequest lateAcceptedRequest =
-          LaunchRequest.builder()
-              .tenantId(request.tenantId())
-              .jobCode(request.jobCode())
-              .bizDate(request.bizDate())
-              .triggerType(TriggerType.EVENT)
-              .requestId(request.requestId())
-              .traceId(request.traceId())
-              .params(routedParams)
-              .build();
+      LaunchRequest lateAcceptedRequest = LaunchRequest.builder()
+          .tenantId(request.tenantId())
+          .jobCode(request.jobCode())
+          .bizDate(request.bizDate())
+          .triggerType(TriggerType.EVENT)
+          .requestId(request.requestId())
+          .traceId(request.traceId())
+          .params(routedParams)
+          .build();
       return lateAcceptedRequest;
     }
     // late-rejected：先 DB CAS 把当前 trigger_type 翻为 CATCH_UP. P0-2 之前 expected 仅 EVENT,
@@ -503,16 +495,11 @@ public class LaunchBatchDayService {
     routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
     routedParams.put("originalTriggerType", triggerType.code());
     emitLateArrivalAlert(request, calendarCode, batchDay, "BATCH_DAY_LATE_REJECTED", "ERROR");
-    int casRows =
-        jobMappers.triggerRequestMapper.updateTriggerType(
-            request.tenantId(),
-            request.requestId(),
-            TriggerType.CATCH_UP.code(),
-            triggerType.code());
+    int casRows = jobMappers.triggerRequestMapper.updateTriggerType(
+        request.tenantId(), request.requestId(), TriggerType.CATCH_UP.code(), triggerType.code());
     if (casRows == 0) {
-      TriggerRequestEntity latest =
-          jobMappers.triggerRequestMapper.selectByTenantAndRequestId(
-              request.tenantId(), request.requestId());
+      TriggerRequestEntity latest = jobMappers.triggerRequestMapper.selectByTenantAndRequestId(
+          request.tenantId(), request.requestId());
       if (latest == null) {
         return request;
       }
@@ -520,29 +507,27 @@ public class LaunchBatchDayService {
       if (!TriggerType.CATCH_UP.code().equals(latest.getTriggerType())) {
         return request;
       }
-      LaunchRequest catchUpRequest =
-          LaunchRequest.builder()
-              .tenantId(request.tenantId())
-              .jobCode(request.jobCode())
-              .bizDate(request.bizDate())
-              .triggerType(TriggerType.CATCH_UP)
-              .requestId(request.requestId())
-              .traceId(request.traceId())
-              .params(routedParams)
-              .build();
+      LaunchRequest catchUpRequest = LaunchRequest.builder()
+          .tenantId(request.tenantId())
+          .jobCode(request.jobCode())
+          .bizDate(request.bizDate())
+          .triggerType(TriggerType.CATCH_UP)
+          .requestId(request.requestId())
+          .traceId(request.traceId())
+          .params(routedParams)
+          .build();
       return catchUpRequest;
     }
     loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
-    LaunchRequest catchUpRequest =
-        LaunchRequest.builder()
-            .tenantId(request.tenantId())
-            .jobCode(request.jobCode())
-            .bizDate(request.bizDate())
-            .triggerType(TriggerType.CATCH_UP)
-            .requestId(request.requestId())
-            .traceId(request.traceId())
-            .params(routedParams)
-            .build();
+    LaunchRequest catchUpRequest = LaunchRequest.builder()
+        .tenantId(request.tenantId())
+        .jobCode(request.jobCode())
+        .bizDate(request.bizDate())
+        .triggerType(TriggerType.CATCH_UP)
+        .requestId(request.requestId())
+        .traceId(request.traceId())
+        .params(routedParams)
+        .build();
     return catchUpRequest;
   }
 
@@ -572,30 +557,32 @@ public class LaunchBatchDayService {
     detail.put("jobCode", request.jobCode());
     detail.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
     detail.put("requestId", request.requestId());
-    detail.put("triggerType", request.triggerType() == null ? null : request.triggerType().code());
+    detail.put(
+        "triggerType",
+        request.triggerType() == null ? null : request.triggerType().code());
     detail.put("calendarCode", calendarCode);
     detail.put("batchDayStatus", batchDay == null ? null : batchDay.dayStatus());
     detail.put(
         "batchDayCutoffAt",
-        batchDay == null || batchDay.cutoffAt() == null ? null : batchDay.cutoffAt().toString());
-    String resourceKey =
-        request.tenantId()
-            + ":"
-            + (Texts.hasText(calendarCode) ? calendarCode + ":" : "")
-            + request.jobCode()
-            + ":"
-            + (request.bizDate() == null ? "" : request.bizDate());
-    AlertEmitRequest emitRequest =
-        AlertEmitRequest.builder()
-            .tenantId(request.tenantId())
-            .serviceName("batch-orchestrator")
-            .alertType(alertType)
-            .severity(severity)
-            .title("batch day late arrival: " + alertType)
-            .detailJson(JsonUtils.toJson(detail))
-            .resourceKey(resourceKey)
-            .traceId(request.traceId())
-            .build();
+        batchDay == null || batchDay.cutoffAt() == null
+            ? null
+            : batchDay.cutoffAt().toString());
+    String resourceKey = request.tenantId()
+        + ":"
+        + (Texts.hasText(calendarCode) ? calendarCode + ":" : "")
+        + request.jobCode()
+        + ":"
+        + (request.bizDate() == null ? "" : request.bizDate());
+    AlertEmitRequest emitRequest = AlertEmitRequest.builder()
+        .tenantId(request.tenantId())
+        .serviceName("batch-orchestrator")
+        .alertType(alertType)
+        .severity(severity)
+        .title("batch day late arrival: " + alertType)
+        .detailJson(JsonUtils.toJson(detail))
+        .resourceKey(resourceKey)
+        .traceId(request.traceId())
+        .build();
     alertEventService.emit(emitRequest);
   }
 
@@ -609,22 +596,20 @@ public class LaunchBatchDayService {
     logEntity.setTraceId(p.traceId());
     logEntity.setMessage("BATCH_DAY_INSTANCE_STATE_CHANGED");
     logEntity.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-    logEntity.setExtraJson(
-        JsonUtils.toJson(
-            new LinkedHashMap<>() {
-              {
-                put("calendarCode", p.calendarCode());
-                put("bizDate", p.bizDate() == null ? null : p.bizDate().toString());
-                put("fromDayStatus", p.fromDayStatus());
-                put("toDayStatus", p.toDayStatus());
-                put("reasonCode", p.reasonCode());
-                put("operatorId", p.operatorId());
-                put("operatorType", p.operatorType());
-                put("lateCount", p.lateCount());
-                put("catchupCount", p.catchupCount());
-                put("cutoffAt", p.cutoffAt() == null ? null : p.cutoffAt().toString());
-              }
-            }));
+    logEntity.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {
+      {
+        put("calendarCode", p.calendarCode());
+        put("bizDate", p.bizDate() == null ? null : p.bizDate().toString());
+        put("fromDayStatus", p.fromDayStatus());
+        put("toDayStatus", p.toDayStatus());
+        put("reasonCode", p.reasonCode());
+        put("operatorId", p.operatorId());
+        put("operatorType", p.operatorType());
+        put("lateCount", p.lateCount());
+        put("catchupCount", p.catchupCount());
+        put("cutoffAt", p.cutoffAt() == null ? null : p.cutoffAt().toString());
+      }
+    }));
     jobExecutionLogMapper.insert(logEntity);
   }
 }

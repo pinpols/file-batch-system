@@ -26,16 +26,15 @@ import org.slf4j.MDC;
  */
 class TaskDispatcherP0HardeningTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("p.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("p.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
 
@@ -63,24 +62,21 @@ class TaskDispatcherP0HardeningTest {
   void onMessageAfterStopIsSkipped() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
-    dispatcher =
-        new TaskDispatcher(
-            config,
-            Map.of(
-                "tt",
-                new SdkTaskHandler() {
-                  @Override
-                  public String taskType() {
-                    return "tt";
-                  }
+    dispatcher = new TaskDispatcher(
+        config,
+        Map.of("tt", new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
 
-                  @Override
-                  public SdkTaskResult execute(SdkTaskContext ctx) {
-                    seenCtx.set(ctx);
-                    return SdkTaskResult.ok();
-                  }
-                }),
-            http);
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            seenCtx.set(ctx);
+            return SdkTaskResult.ok();
+          }
+        }),
+        http);
     dispatcher.stop();
 
     dispatcher.onMessage(new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
@@ -98,36 +94,32 @@ class TaskDispatcherP0HardeningTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
     CountDownLatch executed = new CountDownLatch(1);
-    dispatcher =
-        new TaskDispatcher(
-            config,
-            Map.of(
-                "tt",
-                new SdkTaskHandler() {
-                  @Override
-                  public String taskType() {
-                    return "tt";
-                  }
+    dispatcher = new TaskDispatcher(
+        config,
+        Map.of("tt", new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
 
-                  @Override
-                  public SdkTaskResult execute(SdkTaskContext ctx) {
-                    Map<String, String> snap = MDC.getCopyOfContextMap();
-                    seenMdc.set(snap);
-                    executed.countDown();
-                    return SdkTaskResult.ok();
-                  }
-                }),
-            http);
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            Map<String, String> snap = MDC.getCopyOfContextMap();
+            seenMdc.set(snap);
+            executed.countDown();
+            return SdkTaskResult.ok();
+          }
+        }),
+        http);
 
-    dispatcher.onMessage(
-        new TaskDispatchMessage(
-            42L,
-            "tx",
-            "j",
-            "tt",
-            "ti-9",
-            Map.of(),
-            Map.of("traceId", "tr-abc", "partitionInvocationId", "inv-1")));
+    dispatcher.onMessage(new TaskDispatchMessage(
+        42L,
+        "tx",
+        "j",
+        "tt",
+        "ti-9",
+        Map.of(),
+        Map.of("traceId", "tr-abc", "partitionInvocationId", "inv-1")));
 
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
     Map<String, String> mdc = seenMdc.get();
@@ -159,25 +151,22 @@ class TaskDispatcherP0HardeningTest {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
     CountDownLatch executed = new CountDownLatch(1);
-    dispatcher =
-        new TaskDispatcher(
-            config,
-            Map.of(
-                "tt",
-                new SdkTaskHandler() {
-                  @Override
-                  public String taskType() {
-                    return "tt";
-                  }
+    dispatcher = new TaskDispatcher(
+        config,
+        Map.of("tt", new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
 
-                  @Override
-                  public SdkTaskResult execute(SdkTaskContext ctx) {
-                    seenMdc.set(MDC.getCopyOfContextMap());
-                    executed.countDown();
-                    return SdkTaskResult.ok();
-                  }
-                }),
-            http);
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            seenMdc.set(MDC.getCopyOfContextMap());
+            executed.countDown();
+            return SdkTaskResult.ok();
+          }
+        }),
+        http);
 
     // 无 traceId 字段
     dispatcher.onMessage(new TaskDispatchMessage(42L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
@@ -193,33 +182,30 @@ class TaskDispatcherP0HardeningTest {
 
   @Test
   void onMessageReturnsRetryLaterWhenCapacityFullThenAcceptsAfterDrain() throws Exception {
-    BatchPlatformClientConfig cap1 =
-        BatchPlatformClientConfig.builder()
-            .baseUrl("http://localhost:0")
-            .tenantId("tx")
-            .workerCode("w-1")
-            .kafkaBootstrap("k:9092")
-            .kafkaTopicPattern("p.*")
-            .kafkaGroupId("g")
-            .maxConcurrentTasks(1)
-            .build();
+    BatchPlatformClientConfig cap1 = BatchPlatformClientConfig.builder()
+        .baseUrl("http://localhost:0")
+        .tenantId("tx")
+        .workerCode("w-1")
+        .kafkaBootstrap("k:9092")
+        .kafkaTopicPattern("p.*")
+        .kafkaGroupId("g")
+        .maxConcurrentTasks(1)
+        .build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch gate = new CountDownLatch(1);
     dispatcher = new TaskDispatcher(cap1, Map.of("tt", new GatedHandler(started, gate)), http);
 
     // msg1 占满唯一 permit,worker 线程卡在 handler 内(permit 未释放)
-    TaskDispatcher.DispatchDecision d1 =
-        dispatcher.onMessage(
-            new TaskDispatchMessage(1L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    TaskDispatcher.DispatchDecision d1 = dispatcher.onMessage(
+        new TaskDispatchMessage(1L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
     assertThat(d1).isEqualTo(TaskDispatcher.DispatchDecision.SUBMITTED);
     assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
     assertThat(dispatcher.submittedCount()).isEqualTo(1);
 
     // 容量满 → msg2 RETRY_LATER(KafkaTaskConsumer 据此 seek+pause,offset 不前移)
-    TaskDispatcher.DispatchDecision d2 =
-        dispatcher.onMessage(
-            new TaskDispatchMessage(2L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    TaskDispatcher.DispatchDecision d2 = dispatcher.onMessage(
+        new TaskDispatchMessage(2L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
     assertThat(d2).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
 
     // 放行 msg1 → permit 释放,容量恢复

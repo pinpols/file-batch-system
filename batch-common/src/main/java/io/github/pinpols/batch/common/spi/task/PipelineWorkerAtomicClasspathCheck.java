@@ -46,13 +46,12 @@ public class PipelineWorkerAtomicClasspathCheck {
   @EventListener(ApplicationReadyEvent.class)
   public void verifyClasspathIsolation() {
     if (isCanaryPresent()) {
-      throw new IllegalStateException(
-          "ADR-029 violation: atomic SPI executor ("
-              + CANARY_CLASS
-              + ") detected on pipeline worker classpath. Dual-use (shell/sql/stored-proc/http) "
-              + "executors must run only in batch-worker-atomic. Check pom.xml for stray "
-              + "batch-worker-atomic dependency. To disable this guard (atomic worker itself), set "
-              + "batch.worker.atomic.isolation-check.enabled=false.");
+      throw new IllegalStateException("ADR-029 violation: atomic SPI executor ("
+          + CANARY_CLASS
+          + ") detected on pipeline worker classpath. Dual-use (shell/sql/stored-proc/http) "
+          + "executors must run only in batch-worker-atomic. Check pom.xml for stray "
+          + "batch-worker-atomic dependency. To disable this guard (atomic worker itself), set "
+          + "batch.worker.atomic.isolation-check.enabled=false.");
     }
     log.debug(
         "ADR-029 classpath isolation OK: no atomic SPI executor in pipeline worker classpath");

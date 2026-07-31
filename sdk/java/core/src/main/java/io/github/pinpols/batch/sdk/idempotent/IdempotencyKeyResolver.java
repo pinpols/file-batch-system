@@ -27,14 +27,12 @@ final class IdempotencyKeyResolver {
    */
   static String resolve(String template, SdkTaskContext ctx) {
     Map<String, Object> params = ctx.parameters();
-    Function<String, Object> lookup =
-        field ->
-            switch (field) {
-              case "tenantId" -> ctx.tenantId();
-              case "jobCode" -> ctx.jobCode();
-              case "taskInstanceId" -> ctx.taskInstanceId();
-              default -> params.get(field);
-            };
+    Function<String, Object> lookup = field -> switch (field) {
+      case "tenantId" -> ctx.tenantId();
+      case "jobCode" -> ctx.jobCode();
+      case "taskInstanceId" -> ctx.taskInstanceId();
+      default -> params.get(field);
+    };
 
     Matcher m = PLACEHOLDER.matcher(template);
     StringBuilder out = new StringBuilder();

@@ -298,13 +298,12 @@ public final class ConsoleExcelStyles {
 
   public static void addDropdownValidation(
       Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
-    DropdownValidationSpec spec =
-        DropdownValidationSpec.builder()
-            .values(values)
-            .promptTitle(promptTitle)
-            .promptText(promptText)
-            .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
-            .build();
+    DropdownValidationSpec spec = DropdownValidationSpec.builder()
+        .values(values)
+        .promptTitle(promptTitle)
+        .promptText(promptText)
+        .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
+        .build();
     addDropdownValidation(sheet, columnIndex, spec);
   }
 
@@ -316,15 +315,14 @@ public final class ConsoleExcelStyles {
       String promptText,
       MessageSource messageSource,
       Locale locale) {
-    DropdownValidationSpec spec =
-        DropdownValidationSpec.builder()
-            .values(values)
-            .promptTitle(promptTitle)
-            .promptText(promptText)
-            .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
-            .messageSource(messageSource)
-            .locale(locale)
-            .build();
+    DropdownValidationSpec spec = DropdownValidationSpec.builder()
+        .values(values)
+        .promptTitle(promptTitle)
+        .promptText(promptText)
+        .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
+        .messageSource(messageSource)
+        .locale(locale)
+        .build();
     addDropdownValidation(sheet, columnIndex, spec);
   }
 
@@ -342,13 +340,12 @@ public final class ConsoleExcelStyles {
       String promptTitle,
       String promptText,
       int maxRow) {
-    DropdownValidationSpec spec =
-        DropdownValidationSpec.builder()
-            .values(values)
-            .promptTitle(promptTitle)
-            .promptText(promptText)
-            .maxRow(maxRow)
-            .build();
+    DropdownValidationSpec spec = DropdownValidationSpec.builder()
+        .values(values)
+        .promptTitle(promptTitle)
+        .promptText(promptText)
+        .maxRow(maxRow)
+        .build();
     addDropdownValidation(sheet, columnIndex, spec);
   }
 
@@ -434,17 +431,16 @@ public final class ConsoleExcelStyles {
     Sheet sheet = workbook.createSheet(SHEET_NAME_FIELD_GUIDE);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = createHeaderStyle(workbook);
-    List<String> headers =
-        List.of(
-            "sheet_name",
-            "field_name",
-            "required",
-            "editable",
-            "format",
-            "example",
-            "allowed_values",
-            "default_value",
-            "description");
+    List<String> headers = List.of(
+        "sheet_name",
+        "field_name",
+        "required",
+        "editable",
+        "format",
+        "example",
+        "allowed_values",
+        "default_value",
+        "description");
     writeHeaders(sheet, headers, headerStyle);
     int rowIndex = 1;
     for (Map.Entry<String, List<String>> entry : sheetColumns.entrySet()) {
@@ -536,19 +532,16 @@ public final class ConsoleExcelStyles {
             ? localize(messageSource, locale, "excel.guide.editable.no", "是否可编辑：否，请保持导出值不变")
             : localize(messageSource, locale, "excel.guide.editable.yes", "是否可编辑：是"));
     if (hasText(guide.formatHint())) {
-      lines.add(
-          localize(messageSource, locale, "excel.guide.format_prefix", "格式：")
-              + guide.formatHint().trim());
+      lines.add(localize(messageSource, locale, "excel.guide.format_prefix", "格式：")
+          + guide.formatHint().trim());
     }
     if (!guide.allowedValues().isEmpty()) {
-      lines.add(
-          localize(messageSource, locale, "excel.guide.allowed_prefix", "下拉值：")
-              + String.join(" / ", guide.allowedValues()));
+      lines.add(localize(messageSource, locale, "excel.guide.allowed_prefix", "下拉值：")
+          + String.join(" / ", guide.allowedValues()));
     }
     if (hasText(guide.example())) {
-      lines.add(
-          localize(messageSource, locale, "excel.guide.example_prefix", "示例：")
-              + guide.example().trim());
+      lines.add(localize(messageSource, locale, "excel.guide.example_prefix", "示例：")
+          + guide.example().trim());
     }
     return String.join("\n", lines);
   }
@@ -582,8 +575,9 @@ public final class ConsoleExcelStyles {
     if (guide == null || messageSource == null || locale == null) {
       return guide;
     }
-    List<String> resolvedAllowed =
-        guide.allowedValues().stream().map(v -> localizeIfKey(messageSource, locale, v)).toList();
+    List<String> resolvedAllowed = guide.allowedValues().stream()
+        .map(v -> localizeIfKey(messageSource, locale, v))
+        .toList();
     return new ColumnGuide(
         guide.required(),
         guide.readOnly(),

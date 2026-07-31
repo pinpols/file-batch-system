@@ -55,23 +55,20 @@ public class PrepareStep implements ExportStageStep {
     }
     try {
       Map<String, Object> attrs = context.getAttributes();
-      ExportPayload payload =
-          attrs.get("exportPayload") instanceof ExportPayload exportPayload
-              ? exportPayload
-              : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
+      ExportPayload payload = attrs.get("exportPayload") instanceof ExportPayload exportPayload
+          ? exportPayload
+          : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       attrs.put("exportPayload", payload);
       Map<String, Object> templateConfig = Map.of();
       // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 回退加载导出模板;
       // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
       // 约定不命中(如 *_TPL2)则 loadLatestTemplateConfig 返回空,回退原行为(清晰失败),无副作用。
-      String effectiveTemplateCode =
-          Texts.hasText(payload.templateCode())
-              ? payload.templateCode()
-              : context.getJobCode() + "_TPL";
+      String effectiveTemplateCode = Texts.hasText(payload.templateCode())
+          ? payload.templateCode()
+          : context.getJobCode() + "_TPL";
       if (Texts.hasText(effectiveTemplateCode)) {
-        templateConfig =
-            runtimeRepository.loadLatestTemplateConfig(
-                context.getTenantId(), effectiveTemplateCode, ExportWorkerType.EXPORT);
+        templateConfig = runtimeRepository.loadLatestTemplateConfig(
+            context.getTenantId(), effectiveTemplateCode, ExportWorkerType.EXPORT);
         if (!templateConfig.isEmpty()) {
           attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
@@ -92,11 +89,10 @@ public class PrepareStep implements ExportStageStep {
       String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());
       int partitionNo = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_NO), 1);
       int partitionCount = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
-      String fileName =
-          BatchFileConstants.insertPartitionTag(
-              resolveFileName(context, payload, templateConfig, fileFormatType, region),
-              partitionNo,
-              partitionCount);
+      String fileName = BatchFileConstants.insertPartitionTag(
+          resolveFileName(context, payload, templateConfig, fileFormatType, region),
+          partitionNo,
+          partitionCount);
       String finalObjectName =
           resolveObjectName(context, payload, fileName, partitionNo, partitionCount);
       String tempObjectName =
@@ -133,10 +129,9 @@ public class PrepareStep implements ExportStageStep {
     if (Texts.hasText(payload.fileName())) {
       return payload.fileName();
     }
-    String namingRule =
-        templateConfig.get("naming_rule") == null
-            ? null
-            : String.valueOf(templateConfig.get("naming_rule"));
+    String namingRule = templateConfig.get("naming_rule") == null
+        ? null
+        : String.valueOf(templateConfig.get("naming_rule"));
     String bizDate = resolveBizDate(context, payload);
     String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String extension =

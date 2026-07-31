@@ -45,8 +45,11 @@ import org.mockito.MockitoAnnotations;
  */
 class DefaultPartitionLifecycleServiceTest {
 
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
 
   private DefaultPartitionLifecycleService service;
 
@@ -270,9 +273,8 @@ class DefaultPartitionLifecycleServiceTest {
     verify(jobPartitionMapper).insertBatch(cap.capture());
     verify(jobPartitionMapper, never()).insert(any());
     assertThat(cap.getValue()).hasSize(1);
-    Map<String, Object> snapshot =
-        (Map<String, Object>)
-            JsonUtils.fromJson(cap.getValue().get(0).getInputSnapshot(), Object.class);
+    Map<String, Object> snapshot = (Map<String, Object>)
+        JsonUtils.fromJson(cap.getValue().get(0).getInputSnapshot(), Object.class);
     assertThat(snapshot.get("partitionPlanVersion")).isEqualTo(1);
     assertThat(snapshot.get("shardIndex")).isEqualTo(0);
     assertThat(snapshot.get("shardTotal")).isEqualTo(2);

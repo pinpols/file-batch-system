@@ -57,9 +57,8 @@ public class ConsoleApprovalController {
       @PathVariable String approvalNo,
       @Valid @RequestBody ApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String result =
-        approvalApplicationService.approve(
-            tenantId, approvalNo, request.getOperatorId(), request.getReason());
+    String result = approvalApplicationService.approve(
+        tenantId, approvalNo, request.getOperatorId(), request.getReason());
     auditApprovalAction(
         "approve", tenantId, approvalNo, request.getOperatorId(), request.getReason());
     return responseFactory.success(result);
@@ -73,9 +72,8 @@ public class ConsoleApprovalController {
       @PathVariable String approvalNo,
       @Valid @RequestBody ApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String result =
-        approvalApplicationService.reject(
-            tenantId, approvalNo, request.getOperatorId(), request.getReason());
+    String result = approvalApplicationService.reject(
+        tenantId, approvalNo, request.getOperatorId(), request.getReason());
     auditApprovalAction(
         "reject", tenantId, approvalNo, request.getOperatorId(), request.getReason());
     return responseFactory.success(result);
@@ -88,9 +86,8 @@ public class ConsoleApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.tenantId());
-    List<ConsoleBatchApprovalResultResponse> result =
-        approvalApplicationService.batchApprove(
-            tenantId, request.approvalNos(), request.operatorId(), request.reason());
+    List<ConsoleBatchApprovalResultResponse> result = approvalApplicationService.batchApprove(
+        tenantId, request.approvalNos(), request.operatorId(), request.reason());
     auditApprovalAction(
         "batch-approve",
         tenantId,
@@ -107,9 +104,8 @@ public class ConsoleApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.tenantId());
-    List<ConsoleBatchApprovalResultResponse> result =
-        approvalApplicationService.batchReject(
-            tenantId, request.approvalNos(), request.operatorId(), request.reason());
+    List<ConsoleBatchApprovalResultResponse> result = approvalApplicationService.batchReject(
+        tenantId, request.approvalNos(), request.operatorId(), request.reason());
     auditApprovalAction(
         "batch-reject",
         tenantId,

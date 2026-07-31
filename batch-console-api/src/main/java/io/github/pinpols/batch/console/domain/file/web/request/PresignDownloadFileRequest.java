@@ -8,8 +8,11 @@ import lombok.Data;
 @Data
 public class PresignDownloadFileRequest {
 
-  @ValidTenantId private String tenantId;
-  @NotNull private Long fileId;
+  @ValidTenantId
+  private String tenantId;
+
+  @NotNull
+  private Long fileId;
 
   /** 当文件模板设置了 download_requires_approval 或 content_encryption_enabled 时必填。 */
   @Size(max = 64, message = "approvalId too long (max 64)")

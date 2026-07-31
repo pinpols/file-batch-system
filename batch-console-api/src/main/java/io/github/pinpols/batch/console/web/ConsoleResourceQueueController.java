@@ -33,9 +33,8 @@ public class ConsoleResourceQueueController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    return responseFactory.success(
-        resourceQueueApplicationService.list(
-            tenantId, queueCode, queueType, enabled, pageNo, pageSize));
+    return responseFactory.success(resourceQueueApplicationService.list(
+        tenantId, queueCode, queueType, enabled, pageNo, pageSize));
   }
 
   @PostMapping

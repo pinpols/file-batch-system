@@ -23,9 +23,8 @@ class LineageEvidenceServiceTest {
   private final ResultVersionQueryService resultVersionQueryService =
       mock(ResultVersionQueryService.class);
   private final LineageEvidenceMapper lineageEvidenceMapper = mock(LineageEvidenceMapper.class);
-  private final LineageEvidenceService service =
-      new LineageEvidenceService(
-          resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
+  private final LineageEvidenceService service = new LineageEvidenceService(
+      resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
 
   @Test
   @SuppressWarnings("unchecked")

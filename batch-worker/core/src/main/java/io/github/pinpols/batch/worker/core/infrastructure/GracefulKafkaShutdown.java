@@ -136,9 +136,8 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
     long startNanos = System.nanoTime();
     boolean drained = false;
     try {
-      drained =
-          activeTaskLeaseRegistry.awaitDrain(
-              Duration.ofSeconds(Math.max(0L, gracefulShutdownTimeoutSeconds)));
+      drained = activeTaskLeaseRegistry.awaitDrain(
+          Duration.ofSeconds(Math.max(0L, gracefulShutdownTimeoutSeconds)));
     } catch (Exception ex) {
       log.warn("failed to await in-flight tasks drain: {}", ex.getMessage(), ex);
     }

@@ -134,9 +134,8 @@ public class PreprocessStep implements ImportStageStep {
     }
     try {
       if (importPayload != null && Texts.hasText(importPayload.templateCode())) {
-        Map<String, Object> templateConfig =
-            runtimeRepository.loadLatestTemplateConfig(
-                context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
+        Map<String, Object> templateConfig = runtimeRepository.loadLatestTemplateConfig(
+            context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
         if (!templateConfig.isEmpty()) {
           attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
@@ -156,14 +155,13 @@ public class PreprocessStep implements ImportStageStep {
       // 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退 byte[] 路径。
       // 仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径
       // (设 normalizedPayload,无临时文件开销)。
-      long directStreamObjectBytes =
-          (importPayload != null
-                  && Texts.hasText(importPayload.storagePath())
-                  && !Texts.hasText(importPayload.content())
-                  && !Texts.hasText(importPayload.contentBase64())
-                  && canStreamObjectDirect(importPayload, templateConfig))
-              ? objectSizeBytes(importPayload)
-              : -1L;
+      long directStreamObjectBytes = (importPayload != null
+              && Texts.hasText(importPayload.storagePath())
+              && !Texts.hasText(importPayload.content())
+              && !Texts.hasText(importPayload.contentBase64())
+              && canStreamObjectDirect(importPayload, templateConfig))
+          ? objectSizeBytes(importPayload)
+          : -1L;
       if (directStreamObjectBytes >= payloadProperties.getPreprocessSpoolBytes()) {
         // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
         // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
@@ -201,13 +199,12 @@ public class PreprocessStep implements ImportStageStep {
           rawBytes = cryptoService.decrypt(rawBytes);
         }
       }
-      byte[] processed =
-          ImportPreprocessPipeline.run(
-              rawBytes,
-              importPayload,
-              templateConfig,
-              batchSecurityProperties.isBypassMode(),
-              payloadProperties);
+      byte[] processed = ImportPreprocessPipeline.run(
+          rawBytes,
+          importPayload,
+          templateConfig,
+          batchSecurityProperties.isBypassMode(),
+          payloadProperties);
 
       String formatType = resolveFileFormatType(importPayload, templateConfig);
       if (isBinaryImportFormat(formatType)) {
@@ -320,10 +317,9 @@ public class PreprocessStep implements ImportStageStep {
    * payload.storagePath}。超过 {@code batch.worker.import.max-object-bytes} fail-fast 防 OOM。
    */
   private byte[] downloadObjectBytes(ImportPayload importPayload) {
-    String bucket =
-        Texts.hasText(importPayload.storageBucket())
-            ? importPayload.storageBucket()
-            : s3StorageProperties.getBucket();
+    String bucket = Texts.hasText(importPayload.storageBucket())
+        ? importPayload.storageBucket()
+        : s3StorageProperties.getBucket();
     String object = importPayload.storagePath();
     try (InputStream in = objectStore.get(bucket, object)) {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -387,10 +383,9 @@ public class PreprocessStep implements ImportStageStep {
 
   /** statObject 取对象字节数;失败(对象缺失/网络)返回 -1 → 调用方不走流式,交 byte[] 路径报明确错误。 */
   private long objectSizeBytes(ImportPayload importPayload) {
-    String bucket =
-        Texts.hasText(importPayload.storageBucket())
-            ? importPayload.storageBucket()
-            : s3StorageProperties.getBucket();
+    String bucket = Texts.hasText(importPayload.storageBucket())
+        ? importPayload.storageBucket()
+        : s3StorageProperties.getBucket();
     try {
       return objectStore.statSize(bucket, importPayload.storagePath());
     } catch (Exception ex) {
@@ -417,10 +412,9 @@ public class PreprocessStep implements ImportStageStep {
       ImportPayload importPayload,
       Map<String, Object> templateConfig,
       Object templateConfigObject) {
-    String bucket =
-        Texts.hasText(importPayload.storageBucket())
-            ? importPayload.storageBucket()
-            : s3StorageProperties.getBucket();
+    String bucket = Texts.hasText(importPayload.storageBucket())
+        ? importPayload.storageBucket()
+        : s3StorageProperties.getBucket();
     String object = importPayload.storagePath();
     Path spool = null;
     try {
@@ -553,10 +547,9 @@ public class PreprocessStep implements ImportStageStep {
     long objectBytes = slice.objectBytes();
     int partitionNo = slice.partitionNo();
     int partitionCount = slice.partitionCount();
-    String bucket =
-        Texts.hasText(importPayload.storageBucket())
-            ? importPayload.storageBucket()
-            : s3StorageProperties.getBucket();
+    String bucket = Texts.hasText(importPayload.storageBucket())
+        ? importPayload.storageBucket()
+        : s3StorageProperties.getBucket();
     String object = importPayload.storagePath();
     long rawStart = objectBytes * (partitionNo - 1) / partitionCount;
     long rawEnd =
@@ -566,12 +559,11 @@ public class PreprocessStep implements ImportStageStep {
       spool = Files.createTempFile("batch-preprocess-obj-p" + partitionNo + "-", ".raw");
       long keptBytes;
       try (InputStream in = objectStore.getFrom(bucket, object, rawStart);
-          OutputStream out =
-              Files.newOutputStream(
-                  spool,
-                  StandardOpenOption.CREATE,
-                  StandardOpenOption.TRUNCATE_EXISTING,
-                  StandardOpenOption.WRITE)) {
+          OutputStream out = Files.newOutputStream(
+              spool,
+              StandardOpenOption.CREATE,
+              StandardOpenOption.TRUNCATE_EXISTING,
+              StandardOpenOption.WRITE)) {
         keptBytes = copyPartitionRange(in, out, rawEnd - rawStart, partitionNo > 1);
       }
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
@@ -638,10 +630,9 @@ public class PreprocessStep implements ImportStageStep {
   static long copyPartitionRange(
       InputStream rawIn, OutputStream out, long sliceLen, boolean skipPartialFirstLine)
       throws IOException {
-    BufferedInputStream in =
-        rawIn instanceof BufferedInputStream buffered
-            ? buffered
-            : new BufferedInputStream(rawIn, 64 * 1024);
+    BufferedInputStream in = rawIn instanceof BufferedInputStream buffered
+        ? buffered
+        : new BufferedInputStream(rawIn, 64 * 1024);
     long consumed = 0; // 自 rawStart 起从流读出的字节数(含跳过的残行)
     long written = 0;
     int b;
@@ -778,9 +769,8 @@ public class PreprocessStep implements ImportStageStep {
       // transfer。
       long size = Files.size(decrypted);
       int initialCapacity = (int) Math.min(size, Integer.MAX_VALUE - 8);
-      try (InputStream in =
-              new BufferedInputStream(
-                  Files.newInputStream(decrypted), DECRYPT_STREAM_BUFFER_BYTES);
+      try (InputStream in = new BufferedInputStream(
+              Files.newInputStream(decrypted), DECRYPT_STREAM_BUFFER_BYTES);
           ByteArrayOutputStream out = new ByteArrayOutputStream(initialCapacity)) {
         in.transferTo(out);
         return out.toByteArray();
@@ -856,13 +846,14 @@ public class PreprocessStep implements ImportStageStep {
   }
 
   private static String decodeStrict(byte[] bytes, Charset charset) {
-    CharsetDecoder decoder =
-        charset
-            .newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT);
+    CharsetDecoder decoder = charset
+        .newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT);
     try {
-      return decoder.decode(ByteBuffer.wrap(bytes == null ? new byte[0] : bytes)).toString();
+      return decoder
+          .decode(ByteBuffer.wrap(bytes == null ? new byte[0] : bytes))
+          .toString();
     } catch (CharacterCodingException ex) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DECODE_FAILED",

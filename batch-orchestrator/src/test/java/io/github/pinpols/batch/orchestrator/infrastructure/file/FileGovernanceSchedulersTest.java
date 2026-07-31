@@ -12,9 +12,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FileGovernanceSchedulersTest {
 
-  @Mock private FileGovernanceScheduler fileGovernanceScheduler;
+  @Mock
+  private FileGovernanceScheduler fileGovernanceScheduler;
 
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
   private FileGovernanceReconcileScheduler reconcileScheduler;

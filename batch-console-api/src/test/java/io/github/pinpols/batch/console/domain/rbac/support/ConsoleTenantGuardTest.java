@@ -38,9 +38,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", "tenant-b", Set.of("ROLE_TENANT_USER")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "tenant-b", Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThat(tenantGuard.resolveTenant("tenant-b")).isEqualTo("tenant-b");
   }
@@ -65,9 +64,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", null, Set.of("ROLE_TENANT_USER")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", null, Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThatThrownBy(() -> tenantGuard.resolveTenant(null))
         .isInstanceOf(BizException.class)
@@ -84,9 +82,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", null, Set.of("ROLE_TENANT_USER")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", null, Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThatThrownBy(() -> tenantGuard.resolveTenant("victim-tenant"))
         .isInstanceOf(BizException.class)
@@ -109,9 +106,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
 
     assertThat(tenantGuard.resolveTenant("tenant-a")).isEqualTo("tenant-a");
   }
@@ -121,9 +117,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
 
     assertThatThrownBy(() -> tenantGuard.resolveTenant("")).isInstanceOf(BizException.class);
   }
@@ -133,9 +128,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThatThrownBy(() -> tenantGuard.resolveTenant("tenant-b"))
         .isInstanceOf(BizException.class);
@@ -146,9 +140,8 @@ class ConsoleTenantGuardTest {
   @Test
   void currentTenantScope_globalRole_returnsNull() {
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "ignored"));
 
     assertThat(tenantGuard.currentTenantScopeOrNull()).isNull();
   }
@@ -156,9 +149,8 @@ class ConsoleTenantGuardTest {
   @Test
   void currentTenantScope_tenantRole_returnsAuthenticatedTenant() {
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThat(tenantGuard.currentTenantScopeOrNull()).isEqualTo("tenant-a");
   }
@@ -168,9 +160,8 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("bob", null, Set.of("ROLE_TENANT_USER")), "ignored"));
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("bob", null, Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThatThrownBy(() -> tenantGuard.currentTenantScopeOrNull())
         .isInstanceOf(BizException.class)

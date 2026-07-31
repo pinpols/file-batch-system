@@ -20,13 +20,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ExtendWith(MockitoExtension.class)
 class OrchestratorDrainControllerTest {
 
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
+
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(gracefulShutdown)).build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(gracefulShutdown))
+        .build();
   }
 
   @Test

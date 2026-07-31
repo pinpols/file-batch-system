@@ -27,7 +27,8 @@ import org.springframework.beans.factory.BeanFactory;
  */
 class AtomicErrorCodeWiringTest {
 
-  @TempDir Path tempDir;
+  @TempDir
+  Path tempDir;
 
   private TaskContext ctx(Map<String, Object> params) {
     return new TaskContext("t1", "j1", "ti1", "w1", params, Map.of());

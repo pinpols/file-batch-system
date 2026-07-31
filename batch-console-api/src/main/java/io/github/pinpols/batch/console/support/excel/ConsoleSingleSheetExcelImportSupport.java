@@ -185,7 +185,8 @@ public final class ConsoleSingleSheetExcelImportSupport {
       try (InputStream sheetStream = sheetIter.next()) {
         sheetName = sheetIter.getSheetName();
         SaxSheetHandler handler = new SaxSheetHandler(columns, requiredHeaders, tenantId);
-        XMLReader xmlReader = SAXParserFactory.newDefaultInstance().newSAXParser().getXMLReader();
+        XMLReader xmlReader =
+            SAXParserFactory.newDefaultInstance().newSAXParser().getXMLReader();
         xmlReader.setContentHandler(
             new XSSFSheetXMLHandler(styles, strings, handler, new DataFormatter(), false));
         xmlReader.parse(new InputSource(sheetStream));
@@ -245,13 +246,12 @@ public final class ConsoleSingleSheetExcelImportSupport {
     public void endRow(int rowNum) {
       if (isHeaderRow) {
         headerIndex = new LinkedHashMap<>();
-        currentCells.forEach(
-            (colIdx, value) -> {
-              String header = normalize(value);
-              if (Texts.hasText(header)) {
-                headerIndex.put(header, colIdx);
-              }
-            });
+        currentCells.forEach((colIdx, value) -> {
+          String header = normalize(value);
+          if (Texts.hasText(header)) {
+            headerIndex.put(header, colIdx);
+          }
+        });
         validateHeaders(headerIndex, requiredHeaders);
         isHeaderRow = false;
         return;
@@ -369,8 +369,9 @@ public final class ConsoleSingleSheetExcelImportSupport {
 
   private static void validateHeaders(
       Map<String, Integer> headerIndex, Set<String> requiredHeaders) {
-    List<String> missingHeaders =
-        requiredHeaders.stream().filter(header -> !headerIndex.containsKey(header)).toList();
+    List<String> missingHeaders = requiredHeaders.stream()
+        .filter(header -> !headerIndex.containsKey(header))
+        .toList();
     if (!missingHeaders.isEmpty()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

@@ -32,8 +32,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkerRegistryServiceTest {
 
-  @Mock private WorkerRegistryClient client;
-  @Mock private BatchDateTimeSupport dateTimeSupport;
+  @Mock
+  private WorkerRegistryClient client;
+
+  @Mock
+  private BatchDateTimeSupport dateTimeSupport;
 
   private DefaultWorkerRegistryService service;
   private static final OffsetDateTime FIXED_NOW =

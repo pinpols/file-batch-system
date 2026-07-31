@@ -67,11 +67,14 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   // ── Scenario A: validation failure via unknown template ─────────────────────
 
@@ -87,9 +90,8 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    */
   @Test
   void scenarioA_importFailsWhenTemplateCodeIsUnknown() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -98,15 +100,14 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     params.put("bizType", "CUSTOMER");
     params.put("content", "[{\"customerNo\":\"FAIL-A-001\",\"customerName\":\"Fail User A\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-import-fail-a",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-import-fail-a",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
@@ -114,41 +115,29 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("FAILED");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("FAILED");
+        });
 
     // Job instance must reflect failure
-    String instanceStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            String.class,
-            TENANT,
-            seed.dedupKey());
+    String instanceStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        String.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
 
     // error_code on the task must be non-null
-    String errorCode =
-        jdbcTemplate.queryForObject(
-            """
+    String errorCode = jdbcTemplate.queryForObject("""
             select t.error_code from batch.job_task t
             join batch.job_instance ji on ji.id = t.job_instance_id
             where ji.tenant_id = ? and ji.dedup_key = ?
-            """,
-            String.class,
-            TENANT,
-            seed.dedupKey());
+            """, String.class, TENANT, seed.dedupKey());
     assertThat(errorCode).isNotBlank();
   }
 
@@ -175,9 +164,8 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    */
   @Test
   void scenarioB_importFailsWhenRequiredFieldIsMissing() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -189,15 +177,14 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
         "[{\"customerNo\":\"\",\"customerName\":\"Bad User\",\"customerType\":\"PERSONAL\","
             + "\"certificateNo\":\"\",\"mobileNo\":\"\",\"email\":\"\",\"status\":\"ACTIVE\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-import-fail-b",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-import-fail-b",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
@@ -205,35 +192,26 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject("""
                       select t.task_status from batch.job_task t
                       join batch.job_instance ji on ji.id = t.job_instance_id
                       where ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("FAILED");
-            });
+                      """, String.class, TENANT, seed.dedupKey());
+          assertThat(status).isEqualTo("FAILED");
+        });
 
     // Job instance failure
-    String instanceStatus =
-        jdbcTemplate.queryForObject(
-            "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            String.class,
-            TENANT,
-            seed.dedupKey());
+    String instanceStatus = jdbcTemplate.queryForObject(
+        "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        String.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
 
     // Fetch file_id associated with this job instance (may be null if pipeline aborted before file
     // creation)
-    Long fileId =
-        jdbcTemplate.queryForObject(
-            """
+    Long fileId = jdbcTemplate.queryForObject("""
             select f.id
             from batch.file_record f
             join batch.job_task t on t.job_instance_id = (
@@ -242,11 +220,7 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
             where f.tenant_id = ?
             order by f.id desc
             limit 1
-            """,
-            Long.class,
-            TENANT,
-            seed.dedupKey(),
-            TENANT);
+            """, Long.class, TENANT, seed.dedupKey(), TENANT);
 
     assertThat(fileId)
         .as("import should create a file_record before validate-stage failure")
@@ -255,43 +229,28 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(90))
         .pollInterval(Duration.ofMillis(300))
-        .untilAsserted(
-            () -> {
-              Long errCount =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          Long errCount = jdbcTemplate.queryForObject("""
                       select count(*) from batch.file_error_record
                       where tenant_id = ? and file_id = ?
-                      """,
-                      Long.class,
-                      TENANT,
-                      fileId);
-              assertThat(errCount).isNotNull().isGreaterThan(0L);
-            });
+                      """, Long.class, TENANT, fileId);
+          assertThat(errCount).isNotNull().isGreaterThan(0L);
+        });
 
-    List<Map<String, Object>> errorRecords =
-        jdbcTemplate.queryForList(
-            """
+    List<Map<String, Object>> errorRecords = jdbcTemplate.queryForList("""
             select error_code, error_stage, record_no
             from batch.file_error_record
             where tenant_id = ? and file_id = ?
-            """,
-            TENANT,
-            fileId);
+            """, TENANT, fileId);
     assertThat(errorRecords.get(0).get("error_code")).isNotNull();
     assertThat(errorRecords.get(0).get("record_no")).isNotNull();
 
     // error_code on task must be non-null regardless of pipeline stage
-    String errorCode =
-        jdbcTemplate.queryForObject(
-            """
+    String errorCode = jdbcTemplate.queryForObject("""
             select t.error_code from batch.job_task t
             join batch.job_instance ji on ji.id = t.job_instance_id
             where ji.tenant_id = ? and ji.dedup_key = ?
-            """,
-            String.class,
-            TENANT,
-            seed.dedupKey());
+            """, String.class, TENANT, seed.dedupKey());
     assertThat(errorCode).isNotBlank();
   }
 
@@ -301,12 +260,11 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    */
   @Test
   void scenarioC_retryBudgetExhaustedCreatesDeadLetter() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            new E2eScenarioFixture.LaunchPreparationSpec(
-                    jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API)
-                .retryPolicy("FIXED")
-                .retryMaxCount(2));
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        new E2eScenarioFixture.LaunchPreparationSpec(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API)
+            .retryPolicy("FIXED")
+            .retryMaxCount(2));
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -314,49 +272,38 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     params.put("bizType", "CUSTOMER");
     params.put("content", "[{\"customerNo\":\"R-001\",\"customerName\":\"Retry Probe\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-import-fail-retry",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-import-fail-retry",
+        params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
         .atMost(Duration.ofSeconds(180))
         .pollInterval(Duration.ofMillis(400))
-        .untilAsserted(
-            () -> {
-              e2eOutboxPublishSupport.publishAllPending(TENANT);
-              Long dlq =
-                  jdbcTemplate.queryForObject(
-                      """
+        .untilAsserted(() -> {
+          e2eOutboxPublishSupport.publishAllPending(TENANT);
+          Long dlq = jdbcTemplate.queryForObject("""
                       select count(*) from batch.dead_letter_task dlt
                       join batch.job_partition jp on jp.id = dlt.source_id
                       join batch.job_instance ji on ji.id = jp.job_instance_id
                       where dlt.source_type = 'JOB_PARTITION'
                         and ji.tenant_id = ? and ji.dedup_key = ?
-                      """,
-                      Long.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
-            });
+                      """, Long.class, TENANT, seed.dedupKey());
+          assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
+        });
 
     Integer partitionRetries =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             select jp.retry_count from batch.job_partition jp
             join batch.job_instance ji on ji.id = jp.job_instance_id
             where ji.tenant_id = ? and ji.dedup_key = ?
-            """,
-            Integer.class,
-            TENANT,
-            seed.dedupKey());
+            """, Integer.class, TENANT, seed.dedupKey());
     // unknown template 触发 IMPORT_LOAD_CONFIG_INVALID,被 DefaultRetryGovernanceService
     // 列入 NON_RETRYABLE_ERROR_CODES,直接进死信无重试 → retry_count=0;留 retryMaxCount(2)
     // 是验证"即使配置了重试预算,硬错也短路"。

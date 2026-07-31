@@ -36,7 +36,8 @@ public class BatchCreateTenantRequest {
   private String initConfigFrom;
 
   /** 配置初始化模式，默认 SKIP_EXISTING。仅 initConfigFrom 非空时生效。 */
-  @Nullable private InitMode initMode;
+  @Nullable
+  private InitMode initMode;
 
   @Data
   public static class TenantSpec {

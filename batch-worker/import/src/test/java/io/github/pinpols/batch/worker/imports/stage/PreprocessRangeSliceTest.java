@@ -104,9 +104,8 @@ class PreprocessRangeSliceTest {
 
   @Test
   void eligible_fixedWidthUtf8MultiPartition() {
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.UTF_8))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.UTF_8))
         .isTrue();
   }
 
@@ -119,13 +118,12 @@ class PreprocessRangeSliceTest {
 
   @Test
   void eligible_delimitedWithOptIn() {
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null,
-                Map.of("file_format_type", "DELIMITED", "partition_range_slice", "true"),
-                3,
-                4,
-                StandardCharsets.UTF_8))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null,
+            Map.of("file_format_type", "DELIMITED", "partition_range_slice", "true"),
+            3,
+            4,
+            StandardCharsets.UTF_8))
         .isTrue();
   }
 
@@ -140,37 +138,31 @@ class PreprocessRangeSliceTest {
 
   @Test
   void notEligible_singlePartitionOrBadIndex() {
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), 1, 1, StandardCharsets.UTF_8))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), 1, 1, StandardCharsets.UTF_8))
         .isFalse();
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), 5, 4, StandardCharsets.UTF_8))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), 5, 4, StandardCharsets.UTF_8))
         .isFalse();
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), null, 4, StandardCharsets.UTF_8))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), null, 4, StandardCharsets.UTF_8))
         .isFalse();
   }
 
   @Test
   void notEligible_newlineUnsafeCharset() {
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.UTF_16))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.UTF_16))
         .isFalse();
   }
 
   @Test
   void eligible_asciiAndLatin1AreNewlineSafe() {
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.US_ASCII))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.US_ASCII))
         .isTrue();
-    assertThat(
-            PreprocessStep.rangeSliceEligible(
-                null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.ISO_8859_1))
+    assertThat(PreprocessStep.rangeSliceEligible(
+            null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.ISO_8859_1))
         .isTrue();
   }
 }

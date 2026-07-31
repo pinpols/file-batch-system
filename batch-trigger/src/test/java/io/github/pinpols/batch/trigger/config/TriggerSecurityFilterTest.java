@@ -93,7 +93,8 @@ class TriggerSecurityFilterTest {
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
     assertThat(SecurityContextHolder.getContext().getAuthentication().getName())
         .isEqualTo("internal");
-    assertThat(SecurityContextHolder.getContext().getAuthentication().isAuthenticated()).isTrue();
+    assertThat(SecurityContextHolder.getContext().getAuthentication().isAuthenticated())
+        .isTrue();
   }
 
   @Test

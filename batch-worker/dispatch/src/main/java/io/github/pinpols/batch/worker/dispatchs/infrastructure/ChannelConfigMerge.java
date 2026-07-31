@@ -30,54 +30,52 @@ public final class ChannelConfigMerge {
    *   <li>非"策略类"字段（如 enabled / receipt_policy）——策略只能走列更新
    * </ul>
    */
-  private static final Set<String> ALLOWED_CONFIG_KEYS =
-      Set.of(
-          // ── 通用 ──
-          "target_endpoint",
-          "dispatch_manifest_enabled",
-          "dispatch_manifest_suffix",
-          // ADR-041 Phase1.5:投递后回读校验 opt-in 开关
-          "readback_verify_enabled",
-          // ── SFTP ──
-          "sftp_host",
-          "sftp_port",
-          "sftp_user",
-          "sftp_password",
-          "sftp_remote_directory",
-          "sftp_remote_file_name",
-          "sftp_strict_host_key_checking",
-          "sftp_known_hosts_path",
-          // ── SMTP / EMAIL ──
-          "smtp_host",
-          "smtp_port",
-          "smtp_username",
-          "smtp_password",
-          "smtp_starttls",
-          "mail_from",
-          "mail_to",
-          "mail_subject",
-          // ── OSS ──
-          "oss_bucket",
-          "oss_object_prefix",
-          "oss_object_name",
-          // ── NAS ──
-          "nas_remote_directory",
-          "nas_remote_file_name",
-          // ── API / API_PUSH / async receipt polling ──
-          "api_push_api_key",
-          "authorization",
-          "receipt_poll_url");
+  private static final Set<String> ALLOWED_CONFIG_KEYS = Set.of(
+      // ── 通用 ──
+      "target_endpoint",
+      "dispatch_manifest_enabled",
+      "dispatch_manifest_suffix",
+      // ADR-041 Phase1.5:投递后回读校验 opt-in 开关
+      "readback_verify_enabled",
+      // ── SFTP ──
+      "sftp_host",
+      "sftp_port",
+      "sftp_user",
+      "sftp_password",
+      "sftp_remote_directory",
+      "sftp_remote_file_name",
+      "sftp_strict_host_key_checking",
+      "sftp_known_hosts_path",
+      // ── SMTP / EMAIL ──
+      "smtp_host",
+      "smtp_port",
+      "smtp_username",
+      "smtp_password",
+      "smtp_starttls",
+      "mail_from",
+      "mail_to",
+      "mail_subject",
+      // ── OSS ──
+      "oss_bucket",
+      "oss_object_prefix",
+      "oss_object_name",
+      // ── NAS ──
+      "nas_remote_directory",
+      "nas_remote_file_name",
+      // ── API / API_PUSH / async receipt polling ──
+      "api_push_api_key",
+      "authorization",
+      "receipt_poll_url");
 
   /**
    * 兼容历史 seed / 手工录入的短键名；merge 时统一折叠为运行时消费的规范键。
    *
    * <p>保留别名兼容而不是继续打 WARN，避免老租户在未迁移存量 config_json 前持续刷屏。
    */
-  private static final Map<String, String> KEY_ALIASES =
-      Map.of(
-          "endpoint", "target_endpoint",
-          "bucket", "oss_bucket",
-          "prefix", "oss_object_prefix");
+  private static final Map<String, String> KEY_ALIASES = Map.of(
+      "endpoint", "target_endpoint",
+      "bucket", "oss_bucket",
+      "prefix", "oss_object_prefix");
 
   /**
    * 已是 {@code file_channel_config} 表独立列,JSON 里 redundant 出现时静默忽略,不告警。

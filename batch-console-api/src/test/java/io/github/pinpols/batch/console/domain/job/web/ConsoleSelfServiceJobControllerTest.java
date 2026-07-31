@@ -45,13 +45,11 @@ class ConsoleSelfServiceJobControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleSelfServiceJobController(
-                    selfServiceJobService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSelfServiceJobController(
+            selfServiceJobService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -61,12 +59,10 @@ class ConsoleSelfServiceJobControllerTest {
         .thenReturn("APR-20260101-001");
 
     mockMvc
-        .perform(
-            post("/api/console/self-service/jobs/rerun-request")
-                .header("Idempotency-Key", "idem-1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/self-service/jobs/rerun-request")
+            .header("Idempotency-Key", "idem-1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId":"t1",
                       "jobCode":"import-job-001",
@@ -87,12 +83,10 @@ class ConsoleSelfServiceJobControllerTest {
         .thenReturn("APR-20260101-002");
 
     mockMvc
-        .perform(
-            post("/api/console/self-service/jobs/compensation-request")
-                .header("Idempotency-Key", "idem-2")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/self-service/jobs/compensation-request")
+            .header("Idempotency-Key", "idem-2")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "tenantId":"t1",
                       "jobCode":"import-job-001",

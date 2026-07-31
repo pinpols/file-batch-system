@@ -62,14 +62,13 @@ public class ProcessStagingOrphanCleaner {
     this.processStagingMapper = processStagingMapper;
     this.properties = properties;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    this.cleanedCounter =
-        registry == null
-            ? null
-            // R7-A6-P2：dot-namespace 与全栈 (batch.worker.* / batch.outbox.*) 对齐；
-            // 原 snake_case 名 Prometheus 还能识别但与项目惯例脱节。
-            : Counter.builder("batch.worker.process.staging.orphan.cleaned.total")
-                .description("累计被 ProcessStagingOrphanCleaner 删除的孤儿 staging 行数")
-                .register(registry);
+    this.cleanedCounter = registry == null
+        ? null
+        // R7-A6-P2：dot-namespace 与全栈 (batch.worker.* / batch.outbox.*) 对齐；
+        // 原 snake_case 名 Prometheus 还能识别但与项目惯例脱节。
+        : Counter.builder("batch.worker.process.staging.orphan.cleaned.total")
+            .description("累计被 ProcessStagingOrphanCleaner 删除的孤儿 staging 行数")
+            .register(registry);
     if (registry != null) {
       registry.gauge(
           "batch.worker.process.staging.oldest.age.seconds",
@@ -187,11 +186,8 @@ public class ProcessStagingOrphanCleaner {
     try {
       Optional<Instant> oldest = Optional.ofNullable(processStagingMapper.selectMinStagedAt());
       return oldest
-          .map(
-              at ->
-                  Math.max(
-                      0d,
-                      (BatchDateTimeSupport.utcNow().toEpochMilli() - at.toEpochMilli()) / 1000d))
+          .map(at -> Math.max(
+              0d, (BatchDateTimeSupport.utcNow().toEpochMilli() - at.toEpochMilli()) / 1000d))
           .orElse(0d);
     } catch (RuntimeException ex) {
       log.warn("oldest staging age gauge query failed: {}", ex.getMessage());

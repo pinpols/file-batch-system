@@ -45,7 +45,8 @@ class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired BatchTaskExecutorRegistry registry;
+  @Autowired
+  BatchTaskExecutorRegistry registry;
 
   @Test
   @DisplayName("SPI registry 含 shell / sql / http 三类已开启的 executor")
@@ -66,15 +67,13 @@ class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
     BatchTaskExecutor shell = registry.find("shell");
     assertThat(shell).as("shell executor 已注册").isNotNull();
 
-    TaskContext ctx =
-        new TaskContext(
-            "tenant-a",
-            "atomic-e2e-shell",
-            "ti-shell-1",
-            "worker-it",
-            Map.of(
-                "command", "/bin/echo", "args", List.of("hello", "atomic"), "timeoutSeconds", 5L),
-            Map.of());
+    TaskContext ctx = new TaskContext(
+        "tenant-a",
+        "atomic-e2e-shell",
+        "ti-shell-1",
+        "worker-it",
+        Map.of("command", "/bin/echo", "args", List.of("hello", "atomic"), "timeoutSeconds", 5L),
+        Map.of());
     TaskResult result = shell.execute(ctx);
 
     assertThat(result.success()).as("echo 应成功").isTrue();
@@ -89,14 +88,13 @@ class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
     BatchTaskExecutor shell = registry.find("shell");
     assertThat(shell).isNotNull();
 
-    TaskContext ctx =
-        new TaskContext(
-            "tenant-a",
-            "atomic-e2e-shell-deny",
-            "ti-shell-2",
-            "worker-it",
-            Map.of("command", "/bin/cat", "args", List.of("/etc/hostname")),
-            Map.of());
+    TaskContext ctx = new TaskContext(
+        "tenant-a",
+        "atomic-e2e-shell-deny",
+        "ti-shell-2",
+        "worker-it",
+        Map.of("command", "/bin/cat", "args", List.of("/etc/hostname")),
+        Map.of());
     TaskResult result = shell.execute(ctx);
 
     assertThat(result.success()).isFalse();

@@ -20,44 +20,40 @@ class CalendarBizDateResolverTest {
 
   @Test
   void shouldUsePreviousBusinessDayWhenTriggeredBeforeCutoff() {
-    LocalDate bizDate =
-        resolver.resolve(
-            instant("2026-03-29T02:00:00+08:00"),
-            ZoneId.of("Asia/Shanghai"),
-            calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
+    LocalDate bizDate = resolver.resolve(
+        instant("2026-03-29T02:00:00+08:00"),
+        ZoneId.of("Asia/Shanghai"),
+        calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
 
     assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
   }
 
   @Test
   void shouldUseSameBusinessDayWhenTriggeredAfterCutoff() {
-    LocalDate bizDate =
-        resolver.resolve(
-            instant("2026-03-29T08:00:00+08:00"),
-            ZoneId.of("Asia/Shanghai"),
-            calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
+    LocalDate bizDate = resolver.resolve(
+        instant("2026-03-29T08:00:00+08:00"),
+        ZoneId.of("Asia/Shanghai"),
+        calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
 
     assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 29));
   }
 
   @Test
   void shouldSkipWhenPreviousBusinessDayIsHolidayAndRuleIsSkip() {
-    LocalDate bizDate =
-        resolver.resolve(
-            instant("2026-03-29T02:00:00+08:00"),
-            ZoneId.of("Asia/Shanghai"),
-            calendar("Asia/Shanghai", "SKIP", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
+    LocalDate bizDate = resolver.resolve(
+        instant("2026-03-29T02:00:00+08:00"),
+        ZoneId.of("Asia/Shanghai"),
+        calendar("Asia/Shanghai", "SKIP", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
 
     assertThat(bizDate).isNull();
   }
 
   @Test
   void shouldMoveToPreviousWorkdayWhenHolidayRuleRequiresIt() {
-    LocalDate bizDate =
-        resolver.resolve(
-            instant("2026-03-29T02:00:00+08:00"),
-            ZoneId.of("Asia/Shanghai"),
-            calendar("Asia/Shanghai", "PREV_WORKDAY", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
+    LocalDate bizDate = resolver.resolve(
+        instant("2026-03-29T02:00:00+08:00"),
+        ZoneId.of("Asia/Shanghai"),
+        calendar("Asia/Shanghai", "PREV_WORKDAY", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
 
     assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 27));
   }

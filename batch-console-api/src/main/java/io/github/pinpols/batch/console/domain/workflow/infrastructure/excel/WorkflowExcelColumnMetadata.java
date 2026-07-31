@@ -46,43 +46,40 @@ public final class WorkflowExcelColumnMetadata {
   public static final String GUIDE_FALSE = "FALSE";
 
   // ── 列顺序 ────────────────────────────────────────────────────────────────
-  public static final List<String> DEF_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_WORKFLOW_CODE,
-          "workflow_name",
-          COL_WORKFLOW_TYPE,
-          "version",
-          COL_ENABLED,
-          COL_DESCRIPTION);
-  public static final List<String> NODE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_WORKFLOW_CODE,
-          COL_WORKFLOW_VERSION,
-          "node_code",
-          "node_name",
-          COL_NODE_TYPE,
-          "related_job_code",
-          "related_pipeline_code",
-          "worker_group",
-          "window_code",
-          "node_order",
-          COL_RETRY_POLICY,
-          "retry_max_count",
-          "timeout_seconds",
-          "node_params",
-          COL_ENABLED);
-  public static final List<String> EDGE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_WORKFLOW_CODE,
-          COL_WORKFLOW_VERSION,
-          "from_node_code",
-          "to_node_code",
-          COL_EDGE_TYPE,
-          "condition_expr",
-          COL_ENABLED);
+  public static final List<String> DEF_COLUMNS = List.of(
+      COL_TENANT_ID,
+      COL_WORKFLOW_CODE,
+      "workflow_name",
+      COL_WORKFLOW_TYPE,
+      "version",
+      COL_ENABLED,
+      COL_DESCRIPTION);
+  public static final List<String> NODE_COLUMNS = List.of(
+      COL_TENANT_ID,
+      COL_WORKFLOW_CODE,
+      COL_WORKFLOW_VERSION,
+      "node_code",
+      "node_name",
+      COL_NODE_TYPE,
+      "related_job_code",
+      "related_pipeline_code",
+      "worker_group",
+      "window_code",
+      "node_order",
+      COL_RETRY_POLICY,
+      "retry_max_count",
+      "timeout_seconds",
+      "node_params",
+      COL_ENABLED);
+  public static final List<String> EDGE_COLUMNS = List.of(
+      COL_TENANT_ID,
+      COL_WORKFLOW_CODE,
+      COL_WORKFLOW_VERSION,
+      "from_node_code",
+      "to_node_code",
+      COL_EDGE_TYPE,
+      "condition_expr",
+      COL_ENABLED);
 
   public static final Set<String> DEF_HEADERS = Set.copyOf(DEF_COLUMNS);
   public static final Set<String> NODE_HEADERS = Set.copyOf(NODE_COLUMNS);
@@ -92,41 +89,39 @@ public final class WorkflowExcelColumnMetadata {
   // description / formatHint 现在用 excel.* i18n key,writer 传 MessageSource+Locale 时按
   // 当前请求 Locale 解析(messages.properties / messages_zh_CN.properties);example 与
   // allowedValues 保持字面量(语种无关 ID/枚举码,不需要翻译)。
-  public static final Map<String, ConsoleExcelStyles.ColumnGuide> DEF_COLUMN_GUIDES =
-      Map.ofEntries(
-          Map.entry(
-              COL_TENANT_ID,
-              optionalColumn("excel.workflow.def.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
-          Map.entry(
-              COL_WORKFLOW_CODE,
-              requiredColumn(
-                  "excel.workflow.def.workflow_code.desc", FMT_STRING_KEY, "WF_SETTLEMENT")),
-          Map.entry(
-              "workflow_name",
-              requiredColumn("excel.workflow.def.workflow_name.desc", FMT_STRING_KEY, "清算工作流")),
-          Map.entry(
-              COL_WORKFLOW_TYPE,
-              requiredColumn(
-                  "excel.workflow.def.workflow_type.desc",
-                  "excel.guide.format.enum",
-                  "DAG",
-                  "DAG",
-                  "PIPELINE",
-                  "MIXED")),
-          Map.entry(
-              "version",
-              requiredColumn("excel.workflow.def.version.desc", "excel.guide.format.integer", "1")),
-          Map.entry(
-              COL_ENABLED,
-              optionalColumn(
-                  "excel.workflow.def.enabled.desc",
-                  "excel.guide.format.boolean",
-                  GUIDE_TRUE,
-                  GUIDE_TRUE,
-                  GUIDE_FALSE)),
-          Map.entry(
-              COL_DESCRIPTION,
-              optionalColumn("excel.workflow.def.description.desc", FMT_STRING_KEY, "夜间清算编排流程")));
+  public static final Map<String, ConsoleExcelStyles.ColumnGuide> DEF_COLUMN_GUIDES = Map.ofEntries(
+      Map.entry(
+          COL_TENANT_ID,
+          optionalColumn("excel.workflow.def.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
+      Map.entry(
+          COL_WORKFLOW_CODE,
+          requiredColumn("excel.workflow.def.workflow_code.desc", FMT_STRING_KEY, "WF_SETTLEMENT")),
+      Map.entry(
+          "workflow_name",
+          requiredColumn("excel.workflow.def.workflow_name.desc", FMT_STRING_KEY, "清算工作流")),
+      Map.entry(
+          COL_WORKFLOW_TYPE,
+          requiredColumn(
+              "excel.workflow.def.workflow_type.desc",
+              "excel.guide.format.enum",
+              "DAG",
+              "DAG",
+              "PIPELINE",
+              "MIXED")),
+      Map.entry(
+          "version",
+          requiredColumn("excel.workflow.def.version.desc", "excel.guide.format.integer", "1")),
+      Map.entry(
+          COL_ENABLED,
+          optionalColumn(
+              "excel.workflow.def.enabled.desc",
+              "excel.guide.format.boolean",
+              GUIDE_TRUE,
+              GUIDE_TRUE,
+              GUIDE_FALSE)),
+      Map.entry(
+          COL_DESCRIPTION,
+          optionalColumn("excel.workflow.def.description.desc", FMT_STRING_KEY, "夜间清算编排流程")));
   public static final Map<String, ConsoleExcelStyles.ColumnGuide> NODE_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(

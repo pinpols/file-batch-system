@@ -19,7 +19,8 @@ public class RateLimitProperties {
    * requestTimeout}(500ms) 阻塞（见 {@code RedisRateLimitCircuitBreaker}）。热路径 claim/report
    * (12000/min≈200/s) 在慢故障下不再被 Redis 拖垮线程池。
    */
-  @NestedConfigurationProperty private CircuitBreaker redisCircuitBreaker = new CircuitBreaker();
+  @NestedConfigurationProperty
+  private CircuitBreaker redisCircuitBreaker = new CircuitBreaker();
 
   /**
    * 每租户每分钟最大新建（launch）请求数；<=0 表示关闭该项。 默认 3000（=50/s），远高于任何合法单租 launch 速率（launch 消费本身单线程、是吞吐瓶颈，

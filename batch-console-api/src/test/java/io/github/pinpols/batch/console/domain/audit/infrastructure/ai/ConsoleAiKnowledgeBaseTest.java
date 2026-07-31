@@ -30,10 +30,8 @@ class ConsoleAiKnowledgeBaseTest {
     EmbeddingModel model = mock(EmbeddingModel.class);
     when(model.embed(anyString())).thenAnswer(inv -> bagOfWords(inv.getArgument(0)));
     when(model.embed(anyList()))
-        .thenAnswer(
-            inv ->
-                ((List<String>) inv.getArgument(0))
-                    .stream().map(ConsoleAiKnowledgeBaseTest::bagOfWords).toList());
+        .thenAnswer(inv -> ((List<String>) inv.getArgument(0))
+            .stream().map(ConsoleAiKnowledgeBaseTest::bagOfWords).toList());
     return model;
   }
 
@@ -69,7 +67,8 @@ class ConsoleAiKnowledgeBaseTest {
     assertThat(snippets).hasSizeLessThanOrEqualTo(3);
     // 降序排序
     for (int i = 1; i < snippets.size(); i++) {
-      assertThat(snippets.get(i - 1).score()).isGreaterThanOrEqualTo(snippets.get(i).score());
+      assertThat(snippets.get(i - 1).score())
+          .isGreaterThanOrEqualTo(snippets.get(i).score());
     }
     // 命中片段应包含与查询相关的内容
     assertThat(snippets).anySatisfy(s -> assertThat(s.text().toLowerCase()).contains("outbox"));
@@ -81,14 +80,12 @@ class ConsoleAiKnowledgeBaseTest {
         new ConsoleAiKnowledgeBase(providerOf(fakeEmbeddingModel()), propertiesWithRag(true));
 
     // 告警分诊语料(08)可检索
-    assertThat(
-            base.retrieve(
-                "alert severity CRITICAL occurrenceCount alertType status OPEN escalation triage"))
+    assertThat(base.retrieve(
+            "alert severity CRITICAL occurrenceCount alertType status OPEN escalation triage"))
         .isNotEmpty();
     // DQ 规则草稿语料(09)可检索
-    List<ConsoleAiKnowledgeBase.Snippet> dq =
-        base.retrieve(
-            "data quality ruleType TABLE_LEVEL expression thresholdJson severity BLOCKER draft");
+    List<ConsoleAiKnowledgeBase.Snippet> dq = base.retrieve(
+        "data quality ruleType TABLE_LEVEL expression thresholdJson severity BLOCKER draft");
     assertThat(dq).isNotEmpty();
     assertThat(dq).anySatisfy(s -> assertThat(s.text()).contains("ruleType"));
   }

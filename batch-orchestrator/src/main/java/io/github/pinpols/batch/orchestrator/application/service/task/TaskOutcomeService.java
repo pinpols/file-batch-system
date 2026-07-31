@@ -64,12 +64,11 @@ public interface TaskOutcomeService {
 
     public static NodeRunFinishCommand success(
         NodeRunKey key, Instant startedAt, Instant finishedAt) {
-      NodeRunOutcome outcome =
-          NodeRunOutcome.builder()
-              .success(true)
-              .startedAt(startedAt)
-              .finishedAt(finishedAt)
-              .build();
+      NodeRunOutcome outcome = NodeRunOutcome.builder()
+          .success(true)
+          .startedAt(startedAt)
+          .finishedAt(finishedAt)
+          .build();
       return of(key, outcome);
     }
 

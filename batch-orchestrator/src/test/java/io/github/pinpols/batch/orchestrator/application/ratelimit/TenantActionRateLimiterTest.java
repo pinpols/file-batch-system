@@ -21,8 +21,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TenantActionRateLimiterTest {
 
-  @Mock private BatchOrchestratorGovernanceProperties governance;
-  @Mock private TokenBucketRateLimiter limiter;
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
+
+  @Mock
+  private TokenBucketRateLimiter limiter;
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -65,19 +68,17 @@ class TenantActionRateLimiterTest {
     assertThat(rl.tryConsume("t1", RateLimitAction.TASK_CLAIM)).isFalse();
     assertThat(rl.tryConsume("t1", RateLimitAction.TASK_REPORT)).isTrue();
 
-    assertThat(
-            meterRegistry
-                .get(TenantActionRateLimiter.METRIC_REJECTED)
-                .tag("action", "TASK_CLAIM")
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .get(TenantActionRateLimiter.METRIC_REJECTED)
+            .tag("action", "TASK_CLAIM")
+            .counter()
+            .count())
         .isEqualTo(1.0);
     // 放行的 action 不建计数器
-    assertThat(
-            meterRegistry
-                .find(TenantActionRateLimiter.METRIC_REJECTED)
-                .tag("action", "TASK_REPORT")
-                .counter())
+    assertThat(meterRegistry
+            .find(TenantActionRateLimiter.METRIC_REJECTED)
+            .tag("action", "TASK_REPORT")
+            .counter())
         .isNull();
   }
 

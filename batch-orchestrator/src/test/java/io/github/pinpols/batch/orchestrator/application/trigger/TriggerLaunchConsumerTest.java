@@ -49,10 +49,17 @@ import org.springframework.web.server.ResponseStatusException;
 @ExtendWith(MockitoExtension.class)
 class TriggerLaunchConsumerTest {
 
-  @Mock private LaunchApplicationService launchApplicationService;
-  @Mock private Acknowledgment ack;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock
+  private LaunchApplicationService launchApplicationService;
+
+  @Mock
+  private Acknowledgment ack;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
 
   private SimpleMeterRegistry meterRegistry;
   private TriggerLaunchConsumer consumer;
@@ -60,9 +67,8 @@ class TriggerLaunchConsumerTest {
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    consumer =
-        new TriggerLaunchConsumer(
-            launchApplicationService, meterRegistry, triggerRequestMapper, jobInstanceMapper);
+    consumer = new TriggerLaunchConsumer(
+        launchApplicationService, meterRegistry, triggerRequestMapper, jobInstanceMapper);
   }
 
   @Test
@@ -187,15 +193,14 @@ class TriggerLaunchConsumerTest {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private static LaunchEnvelope sampleEnvelope(String tenantId, String requestId) {
-    LaunchRequest request =
-        new LaunchRequest(
-            tenantId,
-            "test-job",
-            LocalDate.parse("2026-04-30"),
-            TriggerType.MANUAL,
-            requestId,
-            "trace-" + requestId,
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        tenantId,
+        "test-job",
+        LocalDate.parse("2026-04-30"),
+        TriggerType.MANUAL,
+        requestId,
+        "trace-" + requestId,
+        Map.of());
     return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
   }
 
@@ -211,7 +216,9 @@ class TriggerLaunchConsumerTest {
   }
 
   private double deduped(String tenant) {
-    return meterRegistry.counter("batch.trigger.launch.deduped.total", "tenant", tenant).count();
+    return meterRegistry
+        .counter("batch.trigger.launch.deduped.total", "tenant", tenant)
+        .count();
   }
 
   private double failed(String reason) {

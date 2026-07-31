@@ -125,14 +125,12 @@ public class TokenBucketRateLimiter {
   }
 
   private Supplier<BucketConfiguration> buildConfigSupplier(long maxPerMinute) {
-    BucketConfiguration configuration =
-        BucketConfiguration.builder()
-            .addLimit(
-                Bandwidth.builder()
-                    .capacity(maxPerMinute)
-                    .refillGreedy(maxPerMinute, REFILL_PERIOD)
-                    .build())
-            .build();
+    BucketConfiguration configuration = BucketConfiguration.builder()
+        .addLimit(Bandwidth.builder()
+            .capacity(maxPerMinute)
+            .refillGreedy(maxPerMinute, REFILL_PERIOD)
+            .build())
+        .build();
     return () -> configuration;
   }
 }

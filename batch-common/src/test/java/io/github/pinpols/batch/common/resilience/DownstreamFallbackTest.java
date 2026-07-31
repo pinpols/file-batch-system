@@ -28,52 +28,46 @@ class DownstreamFallbackTest {
   void returnsPrimaryWhenSuccess() {
     String r = fallback.callOrFallback("svc", "op", () -> "value", ex -> "fallback");
     assertThat(r).isEqualTo("value");
-    assertThat(
-            meterRegistry
-                .counter(
-                    "downstream.call.total", "service", "svc", "op", "op", "outcome", "success")
-                .count())
+    assertThat(meterRegistry
+            .counter("downstream.call.total", "service", "svc", "op", "op", "outcome", "success")
+            .count())
         .isEqualTo(1.0);
   }
 
   @Test
   void returnsFallbackWhenRestClientException() {
-    String r =
-        fallback.callOrFallback(
-            "trigger",
-            "list",
-            () -> {
-              throw new ResourceAccessException("downstream down");
-            },
-            ex -> "fallback");
+    String r = fallback.callOrFallback(
+        "trigger",
+        "list",
+        () -> {
+          throw new ResourceAccessException("downstream down");
+        },
+        ex -> "fallback");
     assertThat(r).isEqualTo("fallback");
-    assertThat(
-            meterRegistry
-                .counter(
-                    "downstream.call.total",
-                    "service",
-                    "trigger",
-                    "op",
-                    "list",
-                    "outcome",
-                    "fallback",
-                    "exception",
-                    "ResourceAccessException")
-                .count())
+    assertThat(meterRegistry
+            .counter(
+                "downstream.call.total",
+                "service",
+                "trigger",
+                "op",
+                "list",
+                "outcome",
+                "fallback",
+                "exception",
+                "ResourceAccessException")
+            .count())
         .isEqualTo(1.0);
   }
 
   @Test
   void propagatesNonRestClientException() {
-    assertThatThrownBy(
-            () ->
-                fallback.callOrFallback(
-                    "svc",
-                    "op",
-                    () -> {
-                      throw new IllegalStateException("not a rest error");
-                    },
-                    ex -> "fallback"))
+    assertThatThrownBy(() -> fallback.callOrFallback(
+            "svc",
+            "op",
+            () -> {
+              throw new IllegalStateException("not a rest error");
+            },
+            ex -> "fallback"))
         .isInstanceOf(IllegalStateException.class);
   }
 
@@ -81,38 +75,30 @@ class DownstreamFallbackTest {
   void callOrThrowSucceeds() {
     List<Integer> r = fallback.callOrThrow("svc", "op", () -> List.of(1, 2));
     assertThat(r).hasSize(2);
-    assertThat(
-            meterRegistry
-                .counter(
-                    "downstream.call.total", "service", "svc", "op", "op", "outcome", "success")
-                .count())
+    assertThat(meterRegistry
+            .counter("downstream.call.total", "service", "svc", "op", "op", "outcome", "success")
+            .count())
         .isEqualTo(1.0);
   }
 
   @Test
   void callOrThrowRecordsFailureAndRethrows() {
-    assertThatThrownBy(
-            () ->
-                fallback.callOrThrow(
-                    "trigger",
-                    "pause",
-                    () -> {
-                      throw new ResourceAccessException("dead");
-                    }))
+    assertThatThrownBy(() -> fallback.callOrThrow("trigger", "pause", () -> {
+          throw new ResourceAccessException("dead");
+        }))
         .isInstanceOf(ResourceAccessException.class);
-    assertThat(
-            meterRegistry
-                .counter(
-                    "downstream.call.total",
-                    "service",
-                    "trigger",
-                    "op",
-                    "pause",
-                    "outcome",
-                    "failure",
-                    "exception",
-                    "ResourceAccessException")
-                .count())
+    assertThat(meterRegistry
+            .counter(
+                "downstream.call.total",
+                "service",
+                "trigger",
+                "op",
+                "pause",
+                "outcome",
+                "failure",
+                "exception",
+                "ResourceAccessException")
+            .count())
         .isEqualTo(1.0);
   }
 
@@ -135,29 +121,27 @@ class DownstreamFallbackTest {
 
     // 4 次失败(minCalls=4, window=4, 100% > 50% 阈值)→ OPEN
     for (int i = 0; i < 4; i++) {
-      String r =
-          cb.callOrFallback(
-              "flaky",
-              "op",
-              () -> {
-                primaryCalls.incrementAndGet();
-                throw new ResourceAccessException("boom");
-              },
-              ex -> "fb");
+      String r = cb.callOrFallback(
+          "flaky",
+          "op",
+          () -> {
+            primaryCalls.incrementAndGet();
+            throw new ResourceAccessException("boom");
+          },
+          ex -> "fb");
       assertThat(r).isEqualTo("fb");
     }
     assertThat(primaryCalls.get()).isEqualTo(4);
 
     // 现在 OPEN:下一次调用被短路,primary 不再被触碰,直接走 fallback
-    String shortCircuited =
-        cb.callOrFallback(
-            "flaky",
-            "op",
-            () -> {
-              primaryCalls.incrementAndGet();
-              return "should-not-run";
-            },
-            ex -> "fb-open");
+    String shortCircuited = cb.callOrFallback(
+        "flaky",
+        "op",
+        () -> {
+          primaryCalls.incrementAndGet();
+          return "should-not-run";
+        },
+        ex -> "fb-open");
     assertThat(shortCircuited).isEqualTo("fb-open");
     assertThat(primaryCalls.get())
         .as("primary must not be invoked while circuit OPEN")
@@ -169,14 +153,9 @@ class DownstreamFallbackTest {
     DownstreamFallback cb =
         new DownstreamFallback(providerOf(meterRegistry), emptyProvider(), tunedProps());
     for (int i = 0; i < 4; i++) {
-      assertThatThrownBy(
-              () ->
-                  cb.callOrThrow(
-                      "flaky2",
-                      "op",
-                      () -> {
-                        throw new ResourceAccessException("boom");
-                      }))
+      assertThatThrownBy(() -> cb.callOrThrow("flaky2", "op", () -> {
+            throw new ResourceAccessException("boom");
+          }))
           .isInstanceOf(ResourceAccessException.class);
     }
     // OPEN:短路仍以 RestClientException 抛出(调用方 catch 语义不变)
@@ -264,9 +243,8 @@ class DownstreamFallbackTest {
   private static ObjectProvider<CircuitBreakerRegistry> emptyProvider() {
     ObjectProvider<CircuitBreakerRegistry> mock = org.mockito.Mockito.mock(ObjectProvider.class);
     org.mockito.Mockito.when(mock.getIfAvailable(org.mockito.ArgumentMatchers.any()))
-        .thenAnswer(
-            inv ->
-                ((java.util.function.Supplier<CircuitBreakerRegistry>) inv.getArgument(0)).get());
+        .thenAnswer(inv ->
+            ((java.util.function.Supplier<CircuitBreakerRegistry>) inv.getArgument(0)).get());
     return mock;
   }
 }

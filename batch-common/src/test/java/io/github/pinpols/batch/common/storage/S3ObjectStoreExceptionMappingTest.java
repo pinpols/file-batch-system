@@ -35,8 +35,11 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @ExtendWith(MockitoExtension.class)
 class S3ObjectStoreExceptionMappingTest {
 
-  @Mock private S3Client s3Client;
-  @Mock private S3Presigner presigner;
+  @Mock
+  private S3Client s3Client;
+
+  @Mock
+  private S3Presigner presigner;
 
   private S3ObjectStore store;
 
@@ -58,13 +61,11 @@ class S3ObjectStoreExceptionMappingTest {
   @Test
   void shouldMapEmptyErrorCode404ToObjectNotFound() {
     // 真实 HEAD 响应无 body → SDK 拿不到 errorCode，仅有 statusCode 404；必须仍判定为对象不存在。
-    S3Exception ex =
-        (S3Exception)
-            S3Exception.builder()
-                .awsErrorDetails(AwsErrorDetails.builder().errorCode("").build())
-                .message("Not Found")
-                .statusCode(404)
-                .build();
+    S3Exception ex = (S3Exception) S3Exception.builder()
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode("").build())
+        .message("Not Found")
+        .statusCode(404)
+        .build();
     when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(ex);
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectNotFoundException.class);
@@ -144,10 +145,8 @@ class S3ObjectStoreExceptionMappingTest {
         .thenThrow(new RuntimeException("boom"));
 
     byte[] data = new byte[6 * 1024 * 1024];
-    assertThatThrownBy(
-            () ->
-                store.put(
-                    "bucket", "large.csv", new ByteArrayInputStream(data), data.length, "text/csv"))
+    assertThatThrownBy(() -> store.put(
+            "bucket", "large.csv", new ByteArrayInputStream(data), data.length, "text/csv"))
         .isInstanceOf(ObjectStoreException.class);
 
     verify(s3Client).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
@@ -155,13 +154,11 @@ class S3ObjectStoreExceptionMappingTest {
   }
 
   private void stubHeadThrows(String code) {
-    S3Exception ex =
-        (S3Exception)
-            S3Exception.builder()
-                .awsErrorDetails(AwsErrorDetails.builder().errorCode(code).build())
-                .message("msg")
-                .statusCode(code.equals("NoSuchKey") ? 404 : 403)
-                .build();
+    S3Exception ex = (S3Exception) S3Exception.builder()
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode(code).build())
+        .message("msg")
+        .statusCode(code.equals("NoSuchKey") ? 404 : 403)
+        .build();
     when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(ex);
   }
 

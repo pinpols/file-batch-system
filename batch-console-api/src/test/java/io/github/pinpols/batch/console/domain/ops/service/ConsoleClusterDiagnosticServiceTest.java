@@ -35,9 +35,8 @@ class ConsoleClusterDiagnosticServiceTest {
     diagnosticMapper = mock(ConsoleClusterDiagnosticMapper.class);
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
     cacheService = passThroughCache();
-    service =
-        new ConsoleClusterDiagnosticService(
-            tenantGuard, diagnosticMapper, workerRegistryMapper, cacheService);
+    service = new ConsoleClusterDiagnosticService(
+        tenantGuard, diagnosticMapper, workerRegistryMapper, cacheService);
   }
 
   private static ConsoleQueryCacheService passThroughCache() {
@@ -186,12 +185,10 @@ class ConsoleClusterDiagnosticServiceTest {
     when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 8L))
         .thenReturn(List.of(Map.of("status", "FAILED", "count", 2L)));
     when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 8L, 120L))
-        .thenReturn(
-            List.of(
-                Map.of(
-                    "taskId", 99L,
-                    "reasonCode", "RUNNING_TASK_HEARTBEAT_STALE",
-                    "assignedWorkerCode", "w1")));
+        .thenReturn(List.of(Map.of(
+            "taskId", 99L,
+            "reasonCode", "RUNNING_TASK_HEARTBEAT_STALE",
+            "assignedWorkerCode", "w1")));
 
     Map<String, Object> result = service.instanceDiagnosis("tenant-a", 8L);
 

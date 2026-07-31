@@ -63,45 +63,40 @@ class ConsoleAssetPartitionControllerTest {
     doReturn(getSpec).when(getUriSpec).uri(anyString(), any(Object[].class));
     when(getSpec.retrieve()).thenReturn(responseSpec);
     when(responseSpec.body(AssetPartitionReadinessResponse.class))
-        .thenReturn(
-            new AssetPartitionReadinessResponse(
-                true,
-                "READY",
-                "asset-settlement-daily",
-                LocalDate.parse("2026-06-30"),
-                "2026-06-30",
-                "job:settlement_daily:2026-06-30",
-                "EFFECTIVE",
-                3,
-                9L,
-                "OBJECT_STORE",
-                "s3://bucket/path/result.csv"));
+        .thenReturn(new AssetPartitionReadinessResponse(
+            true,
+            "READY",
+            "asset-settlement-daily",
+            LocalDate.parse("2026-06-30"),
+            "2026-06-30",
+            "job:settlement_daily:2026-06-30",
+            "EFFECTIVE",
+            3,
+            9L,
+            "OBJECT_STORE",
+            "s3://bucket/path/result.csv"));
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAssetPartitionController(
-                    orchestratorInternalRestClient, tenantGuard, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAssetPartitionController(
+            orchestratorInternalRestClient, tenantGuard, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test
   void readinessShouldPassResolvedTenantAndWrapRawReadinessPayload() throws Exception {
     when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
 
-    MvcResult result =
-        mockMvc
-            .perform(
-                get("/api/console/asset-partitions/readiness")
-                    .param("tenantId", "ta")
-                    .param("jobCode", "settlement_daily")
-                    .param("bizDate", "2026-06-30"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value("SUCCESS"))
-            .andExpect(jsonPath("$.data.ready").value(true))
-            .andExpect(jsonPath("$.data.assetCode").value("asset-settlement-daily"))
-            .andExpect(jsonPath("$.data.versionNo").value(3))
-            .andReturn();
+    MvcResult result = mockMvc
+        .perform(get("/api/console/asset-partitions/readiness")
+            .param("tenantId", "ta")
+            .param("jobCode", "settlement_daily")
+            .param("bizDate", "2026-06-30"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.ready").value(true))
+        .andExpect(jsonPath("$.data.assetCode").value("asset-settlement-daily"))
+        .andExpect(jsonPath("$.data.versionNo").value(3))
+        .andReturn();
 
     assertThat(result.getResponse().getContentAsString()).contains("\"traceId\":\"trace-1\"");
     verify(tenantGuard).resolveTenant("ta");
@@ -120,11 +115,10 @@ class ConsoleAssetPartitionControllerTest {
         .resolveTenant("tb");
 
     mockMvc
-        .perform(
-            get("/api/console/asset-partitions/readiness")
-                .param("tenantId", "tb")
-                .param("jobCode", "settlement_daily")
-                .param("bizDate", "2026-06-30"))
+        .perform(get("/api/console/asset-partitions/readiness")
+            .param("tenantId", "tb")
+            .param("jobCode", "settlement_daily")
+            .param("bizDate", "2026-06-30"))
         .andExpect(status().isForbidden());
 
     verify(orchestratorInternalRestClient, org.mockito.Mockito.never()).build();

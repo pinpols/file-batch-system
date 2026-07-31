@@ -55,11 +55,10 @@ class BatchPlatformClientMetricsTest {
 
   @Test
   void notStartedClientIsUnhealthyAndMetricsReflectIt() {
-    BatchPlatformClient client =
-        BatchPlatformClient.builder(cfg())
-            .register(stub("type-a"))
-            .register(stub("type-b"))
-            .build();
+    BatchPlatformClient client = BatchPlatformClient.builder(cfg())
+        .register(stub("type-a"))
+        .register(stub("type-b"))
+        .build();
 
     assertThat(client.isHealthy()).isFalse();
     SdkClientMetrics m = client.metrics();

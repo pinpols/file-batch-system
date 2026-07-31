@@ -25,13 +25,10 @@ public class ConsoleWorkerFingerprintQueryService {
         "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":fingerprints",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<List<WorkerFingerprintResponse>>() {},
-        () ->
-            mapper.selectFingerprintsByTenant(resolved).stream()
-                .map(
-                    row ->
-                        WorkerFingerprintResponse.from(
-                            row, compatibilityEvaluator.evaluate(row.getSdkVersion())))
-                .toList());
+        () -> mapper.selectFingerprintsByTenant(resolved).stream()
+            .map(row -> WorkerFingerprintResponse.from(
+                row, compatibilityEvaluator.evaluate(row.getSdkVersion())))
+            .toList());
   }
 
   public List<WorkerFingerprintSummaryResponse> summary(String tenantId) {
@@ -40,9 +37,8 @@ public class ConsoleWorkerFingerprintQueryService {
         "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":fingerprints-summary",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<List<WorkerFingerprintSummaryResponse>>() {},
-        () ->
-            mapper.selectFingerprintSummaryByTenant(resolved).stream()
-                .map(WorkerFingerprintSummaryResponse::from)
-                .toList());
+        () -> mapper.selectFingerprintSummaryByTenant(resolved).stream()
+            .map(WorkerFingerprintSummaryResponse::from)
+            .toList());
   }
 }

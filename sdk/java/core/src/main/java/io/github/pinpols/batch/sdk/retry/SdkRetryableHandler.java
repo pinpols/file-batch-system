@@ -66,8 +66,8 @@ public final class SdkRetryableHandler implements SdkTaskHandler {
     return switch (ann.backoff()) {
       case FIXED -> SdkRetryPolicy.fixed(ann.maxAttempts(), initial);
       case EXPONENTIAL ->
-          SdkRetryPolicy.exponential(
-              ann.maxAttempts(), initial, Duration.ofMillis(ann.maxDelayMillis()));
+        SdkRetryPolicy.exponential(
+            ann.maxAttempts(), initial, Duration.ofMillis(ann.maxDelayMillis()));
     };
   }
 

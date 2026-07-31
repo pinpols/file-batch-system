@@ -29,12 +29,20 @@ import org.quartz.impl.matchers.GroupMatcher;
 @ExtendWith(MockitoExtension.class)
 class TriggerReconcilerTest {
 
-  @Mock private TriggerDefinitionLoader loader;
-  @Mock private TriggerRegistrationService registration;
-  @Mock private Scheduler scheduler;
-  @Mock private TriggerGracefulShutdown gracefulShutdown;
+  @Mock
+  private TriggerDefinitionLoader loader;
 
-  @InjectMocks private TriggerReconciler reconciler;
+  @Mock
+  private TriggerRegistrationService registration;
+
+  @Mock
+  private Scheduler scheduler;
+
+  @Mock
+  private TriggerGracefulShutdown gracefulShutdown;
+
+  @InjectMocks
+  private TriggerReconciler reconciler;
 
   @BeforeEach
   void resetDrainState() {

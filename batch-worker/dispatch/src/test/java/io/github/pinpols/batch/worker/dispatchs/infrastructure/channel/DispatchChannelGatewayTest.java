@@ -43,9 +43,8 @@ class DispatchChannelGatewayTest {
     healthService = mock(DispatchChannelHealthService.class);
     when(healthService.allowDispatch(any())).thenReturn(true);
 
-    gateway =
-        new DispatchChannelGateway(
-            List.of(httpAdapter), circuitBreaker, deliveryMetrics, healthService);
+    gateway = new DispatchChannelGateway(
+        List.of(httpAdapter), circuitBreaker, deliveryMetrics, healthService);
   }
 
   @Test
@@ -94,9 +93,8 @@ class DispatchChannelGatewayTest {
       shortBreaker.recordFailure("t1|API|ch-1");
     }
 
-    DispatchChannelGateway gatewayWithOpenCircuit =
-        new DispatchChannelGateway(
-            List.of(httpAdapter), shortBreaker, deliveryMetrics, healthService);
+    DispatchChannelGateway gatewayWithOpenCircuit = new DispatchChannelGateway(
+        List.of(httpAdapter), shortBreaker, deliveryMetrics, healthService);
 
     DispatchResult result = gatewayWithOpenCircuit.dispatch(command("t1", "API", "ch-1"));
 
@@ -227,10 +225,9 @@ class DispatchChannelGatewayTest {
   // --- helpers ---
 
   private static DispatchCommand command(String tenantId, String channelType, String channelCode) {
-    Map<String, Object> channelConfig =
-        Map.of(
-            "channel_type", channelType,
-            "channel_code", channelCode);
+    Map<String, Object> channelConfig = Map.of(
+        "channel_type", channelType,
+        "channel_code", channelCode);
     return new DispatchCommand(tenantId, "trace-1", Map.of(), channelConfig, null);
   }
 }

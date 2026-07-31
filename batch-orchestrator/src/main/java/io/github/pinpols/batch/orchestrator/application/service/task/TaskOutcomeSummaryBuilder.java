@@ -32,11 +32,10 @@ import java.util.Set;
 final class TaskOutcomeSummaryBuilder {
 
   /** 失败分片口径:FAILED / CANCELLED / TERMINATED 均计入(与 job_instance result_summary 一致)。 */
-  private static final Set<String> BROAD_FAILED_STATUSES =
-      Set.of(
-          PartitionStatus.FAILED.code(),
-          PartitionStatus.CANCELLED.code(),
-          PartitionStatus.TERMINATED.code());
+  private static final Set<String> BROAD_FAILED_STATUSES = Set.of(
+      PartitionStatus.FAILED.code(),
+      PartitionStatus.CANCELLED.code(),
+      PartitionStatus.TERMINATED.code());
 
   private TaskOutcomeSummaryBuilder() {}
 
@@ -172,7 +171,9 @@ final class TaskOutcomeSummaryBuilder {
     if (partitions == null) {
       return 0L;
     }
-    return partitions.stream().filter(p -> status.equals(p.getPartitionStatus())).count();
+    return partitions.stream()
+        .filter(p -> status.equals(p.getPartitionStatus()))
+        .count();
   }
 
   private static long countFailedPartitions(List<JobPartitionEntity> partitions) {

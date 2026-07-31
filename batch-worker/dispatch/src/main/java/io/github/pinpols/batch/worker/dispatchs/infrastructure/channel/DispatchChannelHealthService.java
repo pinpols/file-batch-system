@@ -124,13 +124,12 @@ public class DispatchChannelHealthService {
   void init() {
     // 用命名线程 + daemon=true，避免 JVM 退出时探针线程残留；ThreadFactory 序号用 AtomicInteger 保线程安全。
     AtomicInteger counter = new AtomicInteger();
-    ThreadFactory factory =
-        runnable -> {
-          Thread thread = new Thread(runnable);
-          thread.setName("dispatch-channel-probe-" + counter.incrementAndGet());
-          thread.setDaemon(true);
-          return thread;
-        };
+    ThreadFactory factory = runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setName("dispatch-channel-probe-" + counter.incrementAndGet());
+      thread.setDaemon(true);
+      return thread;
+    };
     this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
     // 中心对象存储仅在 MinIO 配置有效时由 S3AutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
     this.objectStore = objectStoreProvider.getIfAvailable();
@@ -190,16 +189,15 @@ public class DispatchChannelHealthService {
     Instant now = BatchDateTimeSupport.utcNow();
     if (success) {
       // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
-      DispatchHealthUpsertCommand successCmd =
-          DispatchHealthUpsertCommand.builder()
-              .tenantId(channel.tenantId())
-              .channelCode(channel.channelCode())
-              .channelType(channel.channelType())
-              .now(now)
-              .nextProbeAt(now.plusMillis(properties.getProbeIntervalMillis()))
-              .probeMessage(message)
-              .probeEvidence(evidence)
-              .build();
+      DispatchHealthUpsertCommand successCmd = DispatchHealthUpsertCommand.builder()
+          .tenantId(channel.tenantId())
+          .channelCode(channel.channelCode())
+          .channelType(channel.channelType())
+          .now(now)
+          .nextProbeAt(now.plusMillis(properties.getProbeIntervalMillis()))
+          .probeMessage(message)
+          .probeEvidence(evidence)
+          .build();
       repository.upsertSuccess(successCmd);
       return;
     }
@@ -209,17 +207,16 @@ public class DispatchChannelHealthService {
     // 第 2 步 recalcBackoff：按新的 failures 重算真实 next_probe_at（指数退避），
     // 该 UPDATE 作用于同一行且只读自己的 consecutive_failures 字段，无竞争。
     Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
-    DispatchHealthUpsertCommand failureCmd =
-        DispatchHealthUpsertCommand.builder()
-            .tenantId(channel.tenantId())
-            .channelCode(channel.channelCode())
-            .channelType(channel.channelType())
-            .now(now)
-            .nextProbeAt(firstFailureBackoffAt)
-            .failureThreshold(Math.max(1, circuitBreakerProperties.getFailureThreshold()))
-            .probeMessage(message)
-            .probeEvidence(evidence)
-            .build();
+    DispatchHealthUpsertCommand failureCmd = DispatchHealthUpsertCommand.builder()
+        .tenantId(channel.tenantId())
+        .channelCode(channel.channelCode())
+        .channelType(channel.channelType())
+        .now(now)
+        .nextProbeAt(firstFailureBackoffAt)
+        .failureThreshold(Math.max(1, circuitBreakerProperties.getFailureThreshold()))
+        .probeMessage(message)
+        .probeEvidence(evidence)
+        .build();
     repository.upsertFailureAndBump(failureCmd);
     // Citus:原 recalcBackoff 在 SQL 里用 power(2, consecutive_failures) 算退避——分布式 UPDATE 的
     // SET 禁止带列引用的(被判 STABLE)函数。改为读回真实新 count,在 Java 按等价公式算 next_probe_at
@@ -228,16 +225,15 @@ public class DispatchChannelHealthService {
         repository.findHealth(channel.tenantId(), channel.channelCode());
     long failures = afterFailure != null ? afterFailure.consecutiveFailures() : 1L;
     Instant recalculatedNextProbeAt = computeExponentialBackoffNextProbeAt(now, failures);
-    DispatchHealthUpsertCommand recalcCmd =
-        DispatchHealthUpsertCommand.builder()
-            .tenantId(channel.tenantId())
-            .channelCode(channel.channelCode())
-            .channelType(channel.channelType())
-            .now(now)
-            .nextProbeAt(recalculatedNextProbeAt)
-            .probeIntervalMillis(properties.getProbeIntervalMillis())
-            .maxBackoffMillis(properties.getMaxBackoffMillis())
-            .build();
+    DispatchHealthUpsertCommand recalcCmd = DispatchHealthUpsertCommand.builder()
+        .tenantId(channel.tenantId())
+        .channelCode(channel.channelCode())
+        .channelType(channel.channelType())
+        .now(now)
+        .nextProbeAt(recalculatedNextProbeAt)
+        .probeIntervalMillis(properties.getProbeIntervalMillis())
+        .maxBackoffMillis(properties.getMaxBackoffMillis())
+        .build();
     repository.recalcBackoff(recalcCmd);
   }
 
@@ -248,10 +244,8 @@ public class DispatchChannelHealthService {
    */
   private Instant computeExponentialBackoffNextProbeAt(Instant now, long failures) {
     long exponent = Math.min(Math.max(failures - 1L, 0L), 30L);
-    long backoffMillis =
-        Math.min(
-            properties.getMaxBackoffMillis(),
-            (long) (properties.getProbeIntervalMillis() * Math.pow(2, exponent)));
+    long backoffMillis = Math.min(properties.getMaxBackoffMillis(), (long)
+        (properties.getProbeIntervalMillis() * Math.pow(2, exponent)));
     return now.plusMillis(backoffMillis);
   }
 
@@ -259,9 +253,8 @@ public class DispatchChannelHealthService {
     if (!properties.isEnabled() || stopping.get()) {
       return;
     }
-    List<Map<String, Object>> rows =
-        repository.findEnabledProbeChannels(
-            properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH);
+    List<Map<String, Object>> rows = repository.findEnabledProbeChannels(
+        properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH);
     if (rows.isEmpty() || stopping.get()) {
       return;
     }
@@ -388,13 +381,12 @@ public class DispatchChannelHealthService {
         && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt())) {
       return new DispatchChannelProbeResult(false, "probe deferred until backoff expires", null);
     }
-    DispatchChannelProbeResult result =
-        RemoteFilesystemDispatchSupport.probeChannel(
-            channelConfig,
-            s3StorageProperties,
-            objectStore,
-            !securityProperties.isBypassMode(),
-            runtimeProperties);
+    DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeChannel(
+        channelConfig,
+        s3StorageProperties,
+        objectStore,
+        !securityProperties.isBypassMode(),
+        runtimeProperties);
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();

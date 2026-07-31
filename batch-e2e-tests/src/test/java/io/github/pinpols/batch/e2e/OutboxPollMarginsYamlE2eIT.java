@@ -26,7 +26,8 @@ import org.springframework.test.context.ActiveProfiles;
 @Tag("e2e")
 class OutboxPollMarginsYamlE2eIT extends AbstractIntegrationTest {
 
-  @Autowired private OutboxProperties outboxProperties;
+  @Autowired
+  private OutboxProperties outboxProperties;
 
   @Test
   void applicationTestYamlAlignsOutboxMinAndMaxPollInterval() {

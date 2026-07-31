@@ -17,14 +17,13 @@ class TaskOutcomeSummaryBuilderTest {
   @Test
   @DisplayName("buildOutputSummary: 持久化 worker outputs 和 verifierFailures")
   void buildOutputSummaryPersistsOutputsAndVerifierFailures() {
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("ta")
-            .taskId(10L)
-            .success(true)
-            .outputs(Map.of("rows", 100, "objectKey", "exports/a.csv"))
-            .verifierFailures(List.of(Map.of("code", "COUNT_MISMATCH")))
-            .build();
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("ta")
+        .taskId(10L)
+        .success(true)
+        .outputs(Map.of("rows", 100, "objectKey", "exports/a.csv"))
+        .verifierFailures(List.of(Map.of("code", "COUNT_MISMATCH")))
+        .build();
 
     Map<?, ?> summary =
         JsonUtils.fromJson(TaskOutcomeSummaryBuilder.buildOutputSummary(command, null), Map.class);
@@ -40,9 +39,8 @@ class TaskOutcomeSummaryBuilderTest {
     JobPartitionEntity partition =
         partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
 
-    Map<String, Object> outputs =
-        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-            List.of(partition), commandOutputs(Map.of("rows", 999)));
+    Map<String, Object> outputs = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+        List.of(partition), commandOutputs(Map.of("rows", 999)));
 
     assertThat(outputs).isEqualTo(Map.of("rows", 100));
   }
@@ -57,9 +55,8 @@ class TaskOutcomeSummaryBuilderTest {
     JobPartitionEntity failed =
         partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of("rows", 300));
 
-    Map<String, Object> outputs =
-        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-            List.of(first, second, failed), commandOutputs(Map.of("rows", 999)));
+    Map<String, Object> outputs = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+        List.of(first, second, failed), commandOutputs(Map.of("rows", 999)));
 
     assertThat(outputs)
         .containsEntry("partitioned", true)
@@ -67,26 +64,25 @@ class TaskOutcomeSummaryBuilderTest {
         .containsEntry("successPartitionCount", 2)
         .containsEntry("failedPartitionCount", 1L);
     assertThat(outputs.get("partitionedOutputs"))
-        .isEqualTo(
-            List.of(
-                Map.of(
-                    "partitionId",
-                    1L,
-                    "partitionNo",
-                    1,
-                    "partitionKey",
-                    "p1",
-                    "outputs",
-                    Map.of("rows", 100)),
-                Map.of(
-                    "partitionId",
-                    2L,
-                    "partitionNo",
-                    2,
-                    "partitionKey",
-                    "p2",
-                    "outputs",
-                    Map.of("rows", 200))));
+        .isEqualTo(List.of(
+            Map.of(
+                "partitionId",
+                1L,
+                "partitionNo",
+                1,
+                "partitionKey",
+                "p1",
+                "outputs",
+                Map.of("rows", 100)),
+            Map.of(
+                "partitionId",
+                2L,
+                "partitionNo",
+                2,
+                "partitionKey",
+                "p2",
+                "outputs",
+                Map.of("rows", 200))));
   }
 
   @Test
@@ -102,10 +98,8 @@ class TaskOutcomeSummaryBuilderTest {
     JobPartitionEntity terminated =
         partition(4L, 4, "p4", PartitionStatus.TERMINATED.code(), Map.of());
 
-    Map<String, Object> aggregated =
-        TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-            List.of(success, secondSuccess, failed, cancelled, terminated),
-            commandOutputs(Map.of()));
+    Map<String, Object> aggregated = TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+        List.of(success, secondSuccess, failed, cancelled, terminated), commandOutputs(Map.of()));
 
     assertThat(aggregated).containsEntry("failedPartitionCount", 3L);
   }
@@ -116,49 +110,41 @@ class TaskOutcomeSummaryBuilderTest {
     io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity jobInstance =
         new io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity();
     jobInstance.setId(77L);
-    List<JobPartitionEntity> partitions =
-        List.of(
-            partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
-            partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of()),
-            partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of()),
-            partition(4L, 4, "p4", PartitionStatus.CANCELLED.code(), Map.of()),
-            partition(5L, 5, "p5", PartitionStatus.TERMINATED.code(), Map.of()),
-            partition(6L, 6, "p6", PartitionStatus.RUNNING.code(), Map.of()));
-    TaskOutcomeCommand command =
-        TaskOutcomeCommand.builder()
-            .tenantId("ta")
-            .taskId(10L)
-            .success(false)
-            .errorCode("E_X")
-            .errorMessage("boom")
-            .build();
+    List<JobPartitionEntity> partitions = List.of(
+        partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
+        partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of()),
+        partition(3L, 3, "p3", PartitionStatus.FAILED.code(), Map.of()),
+        partition(4L, 4, "p4", PartitionStatus.CANCELLED.code(), Map.of()),
+        partition(5L, 5, "p5", PartitionStatus.TERMINATED.code(), Map.of()),
+        partition(6L, 6, "p6", PartitionStatus.RUNNING.code(), Map.of()));
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("ta")
+        .taskId(10L)
+        .success(false)
+        .errorCode("E_X")
+        .errorMessage("boom")
+        .build();
 
     // 轻量投影(与列表同一批分区状态)。
     List<io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef> statusRefs =
         partitions.stream()
-            .map(
-                p ->
-                    new io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef(
-                        p.getId(), p.getPartitionStatus()))
+            .map(p -> new io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef(
+                p.getId(), p.getPartitionStatus()))
             .toList();
-    long successCount =
-        statusRefs.stream()
-            .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
-            .count();
+    long successCount = statusRefs.stream()
+        .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
+        .count();
 
-    Map<?, ?> listBased =
-        JsonUtils.fromJson(
-            TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-                jobInstance, partitions, command),
-            Map.class);
-    Map<?, ?> countBased =
-        JsonUtils.fromJson(
-            TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-                jobInstance,
-                successCount,
-                TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
-                command),
-            Map.class);
+    Map<?, ?> listBased = JsonUtils.fromJson(
+        TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(jobInstance, partitions, command),
+        Map.class);
+    Map<?, ?> countBased = JsonUtils.fromJson(
+        TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
+            jobInstance,
+            successCount,
+            TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
+            command),
+        Map.class);
 
     assertThat(countBased.get("successPartitions")).isEqualTo(listBased.get("successPartitions"));
     assertThat(countBased.get("failedPartitions")).isEqualTo(listBased.get("failedPartitions"));

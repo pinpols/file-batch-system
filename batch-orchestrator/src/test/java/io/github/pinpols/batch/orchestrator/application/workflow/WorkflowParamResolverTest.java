@@ -48,7 +48,8 @@ class WorkflowParamResolverTest {
   void resolve_nodeOutputNested_dotPath() {
     WorkflowRunContext ctx =
         ctx(Map.of("PROCESS", Map.of("metrics", Map.of("validated", 88, "skipped", 12))), Map.of());
-    assertThat(resolver.resolve("$.nodes.PROCESS.output.metrics.validated", ctx)).isEqualTo(88);
+    assertThat(resolver.resolve("$.nodes.PROCESS.output.metrics.validated", ctx))
+        .isEqualTo(88);
     assertThat(resolver.resolve("$.nodes.PROCESS.output.metrics.skipped", ctx)).isEqualTo(12);
   }
 

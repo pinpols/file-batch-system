@@ -41,24 +41,22 @@ class PrepareStepTest {
 
     when(runtimeRepository.loadLatestTemplateConfig(
             eq("t1"), eq("TPL_1"), eq(ExportWorkerType.EXPORT)))
-        .thenReturn(
-            Map.of(
-                "file_format_type", "DELIMITED",
-                "naming_rule", "exp_${bizDate}_${tenantId}_${batchNo}_${version}"));
+        .thenReturn(Map.of(
+            "file_format_type", "DELIMITED",
+            "naming_rule", "exp_${bizDate}_${tenantId}_${batchNo}_${version}"));
 
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1",
-            "BIZ",
-            "TPL_1",
-            "B001",
-            null,
-            null,
-            "2026-03-25",
-            null,
-            Boolean.FALSE,
-            null,
-            Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1",
+        "BIZ",
+        "TPL_1",
+        "B001",
+        null,
+        null,
+        "2026-03-25",
+        null,
+        Boolean.FALSE,
+        null,
+        Map.of());
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
     ctx.setJobCode("JOB_001");
@@ -123,9 +121,8 @@ class PrepareStepTest {
     PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1", "BIZ", null, "B001", null, null, null, null, Boolean.FALSE, null, Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1", "BIZ", null, "B001", null, null, null, null, Boolean.FALSE, null, Map.of());
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
     ctx.setJobCode("JOB_001");
@@ -146,19 +143,18 @@ class PrepareStepTest {
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
         .thenReturn(Map.of("file_format_type", "DELIMITED"));
 
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1",
-            "BIZ",
-            "TPL_1",
-            "B001",
-            null,
-            null,
-            "2026-03-25",
-            null,
-            Boolean.FALSE,
-            null,
-            Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1",
+        "BIZ",
+        "TPL_1",
+        "B001",
+        null,
+        null,
+        "2026-03-25",
+        null,
+        Boolean.FALSE,
+        null,
+        Map.of());
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
     ctx.setJobCode("JOB_001");
@@ -185,19 +181,18 @@ class PrepareStepTest {
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
         .thenReturn(Map.of("file_format_type", "DELIMITED"));
 
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1",
-            "BIZ",
-            "TPL_1",
-            "B001",
-            null,
-            null,
-            "2026-03-25",
-            null,
-            Boolean.FALSE,
-            null,
-            Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1",
+        "BIZ",
+        "TPL_1",
+        "B001",
+        null,
+        null,
+        "2026-03-25",
+        null,
+        Boolean.FALSE,
+        null,
+        Map.of());
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
     ctx.setJobCode("JOB_001");
@@ -223,19 +218,18 @@ class PrepareStepTest {
         .thenReturn(Map.of("file_format_type", "JSON"));
 
     // payload 显式 objectName,走 resolveObjectName 的显式分支,需单独打标
-    ExportPayload payload =
-        new ExportPayload(
-            "FC1",
-            "BIZ",
-            "TPL_1",
-            "B001",
-            null,
-            "custom/report.json",
-            "2026-03-25",
-            null,
-            Boolean.FALSE,
-            null,
-            Map.of());
+    ExportPayload payload = new ExportPayload(
+        "FC1",
+        "BIZ",
+        "TPL_1",
+        "B001",
+        null,
+        "custom/report.json",
+        "2026-03-25",
+        null,
+        Boolean.FALSE,
+        null,
+        Map.of());
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
     ctx.setJobCode("JOB_001");

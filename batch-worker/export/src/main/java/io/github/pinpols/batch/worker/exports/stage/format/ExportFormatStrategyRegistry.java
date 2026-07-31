@@ -20,11 +20,9 @@ public class ExportFormatStrategyRegistry {
   private final Map<String, ExportFormatStrategy> strategiesByType;
 
   public ExportFormatStrategyRegistry(List<ExportFormatStrategy> strategies) {
-    this.strategiesByType =
-        strategies.stream()
-            .collect(
-                Collectors.toUnmodifiableMap(
-                    s -> s.formatType().toUpperCase(), Function.identity()));
+    this.strategiesByType = strategies.stream()
+        .collect(
+            Collectors.toUnmodifiableMap(s -> s.formatType().toUpperCase(), Function.identity()));
   }
 
   /**

@@ -46,7 +46,8 @@ public class RetryDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不重试外部投递（无副作用 → 也不需要 retry）。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     if (context == null) {
@@ -83,17 +84,15 @@ public class RetryDispatchStep implements DispatchStageStep {
         (Map<String, Object>) attrs.get(PipelineRuntimeKeys.CHANNEL_CONFIG);
     fileDispatchRepository.incrementAttempt(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
-    DispatchResult dispatchResult =
-        DispatchInvocationSupport.invokeAndRecordIdentifiers(
-            dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
+    DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
+        dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
     if (!dispatchResult.success()) {
-      int updated =
-          fileDispatchRepository.markFailed(
-              context.getTenantId(),
-              fileId,
-              dispatchPayload.channelCode(),
-              "DISPATCH_RETRY",
-              dispatchResult.message());
+      int updated = fileDispatchRepository.markFailed(
+          context.getTenantId(),
+          fileId,
+          dispatchPayload.channelCode(),
+          "DISPATCH_RETRY",
+          dispatchResult.message());
       if (updated <= 0) {
         attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
         return DispatchStageResult.failure(
@@ -113,9 +112,8 @@ public class RetryDispatchStep implements DispatchStageStep {
           dispatchResult.message(),
           ERROR_OBJECT_MAPPER);
     }
-    int updated =
-        DispatchInvocationSupport.markSent(
-            fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
+    int updated = DispatchInvocationSupport.markSent(
+        fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
     if (updated <= 0) {
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(

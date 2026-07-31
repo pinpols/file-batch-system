@@ -95,16 +95,14 @@ class DefaultLaunchServiceTest {
     when(jobInstanceMapper.insert(any())).thenReturn(1);
     workflowRunMapper = mock(WorkflowRunMapper.class);
     workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
-    jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            mock(JobPartitionMapper.class),
-            mock(JobTaskMapper.class),
-            mock(JobStepInstanceMapper.class),
-            triggerRequestMapper);
-    workflowMappers =
-        new OrchestratorWorkflowMappers(
-            mock(WorkflowNodeMapper.class), workflowRunMapper, workflowNodeRunMapper);
+    jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        mock(JobPartitionMapper.class),
+        mock(JobTaskMapper.class),
+        mock(JobStepInstanceMapper.class),
+        triggerRequestMapper);
+    workflowMappers = new OrchestratorWorkflowMappers(
+        mock(WorkflowNodeMapper.class), workflowRunMapper, workflowNodeRunMapper);
     workflowDagService = mock(WorkflowDagService.class);
     configCacheService = mock(OrchestratorConfigCacheService.class);
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
@@ -114,39 +112,36 @@ class DefaultLaunchServiceTest {
     batchDaySelfProvider = mock(ObjectProvider.class);
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
-    launchBatchDayService =
-        new LaunchBatchDayService(
-            configCacheService,
-            batchDayInstanceMapper,
-            jobExecutionLogMapper,
-            jobMappers,
+    launchBatchDayService = new LaunchBatchDayService(
+        configCacheService,
+        batchDayInstanceMapper,
+        jobExecutionLogMapper,
+        jobMappers,
+        timezoneProvider,
+        new BatchDayTimePolicyResolver(
             timezoneProvider,
-            new BatchDayTimePolicyResolver(
-                timezoneProvider,
-                new io.github.pinpols.batch.orchestrator.service.CutoffScheduleResolver()),
-            batchDaySelfProvider,
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
-            mock(
-                io.github.pinpols.batch.orchestrator.application.service.governance
-                    .AlertEventService.class));
+            new io.github.pinpols.batch.orchestrator.service.CutoffScheduleResolver()),
+        batchDaySelfProvider,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        mock(
+            io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService
+                .class));
     when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
-    launchParamResolver =
-        new LaunchParamResolver(
-            timezoneProvider,
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
-            mock(io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper.class));
-    service =
-        new DefaultLaunchService(
-            launchValidationService,
-            partitionDispatchService,
-            jobMappers,
-            workflowMappers,
-            workflowDagService,
-            launchBatchDayService,
-            batchDayGateService,
-            launchParamResolver,
-            jobExecutionLogMapper,
-            selfProvider);
+    launchParamResolver = new LaunchParamResolver(
+        timezoneProvider,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        mock(io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper.class));
+    service = new DefaultLaunchService(
+        launchValidationService,
+        partitionDispatchService,
+        jobMappers,
+        workflowMappers,
+        workflowDagService,
+        launchBatchDayService,
+        batchDayGateService,
+        launchParamResolver,
+        jobExecutionLogMapper,
+        selfProvider);
     when(selfProvider.getObject()).thenReturn(service);
     when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
         .thenReturn(
@@ -155,15 +150,14 @@ class DefaultLaunchServiceTest {
 
   @Test
   void shouldUpsertBatchDayInstanceOnFirstLaunch() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.API,
-            "req-001",
-            "trace-001",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 27),
+        TriggerType.API,
+        "req-001",
+        "trace-001",
+        Map.of());
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
     triggerRequest.setId(100L);
     triggerRequest.setDedupKey("dedup-001");
@@ -171,24 +165,22 @@ class DefaultLaunchServiceTest {
     JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
     WorkflowDefinitionEntity workflowDefinition =
         new WorkflowDefinitionEntity(200L, "t1", "WF", "wf", "FLOW", 1, true);
-    LaunchValidationService.LaunchLoadResult loaded =
-        new LaunchValidationService.LaunchLoadResult(
-            triggerRequest, jobDefinition, workflowDefinition, null);
+    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
+        triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarEntity calendar =
-        new BusinessCalendarEntity(
-            1L,
-            "t1",
-            "BIZ_CAL",
-            "biz",
-            "Asia/Shanghai",
-            "SKIP",
-            "AUTO",
-            30,
-            LocalTime.of(6, 0),
-            15,
-            120,
-            true);
+    BusinessCalendarEntity calendar = new BusinessCalendarEntity(
+        1L,
+        "t1",
+        "BIZ_CAL",
+        "biz",
+        "Asia/Shanghai",
+        "SKIP",
+        "AUTO",
+        30,
+        LocalTime.of(6, 0),
+        15,
+        120,
+        true);
 
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(200L), anyString())).thenReturn(List.of());
@@ -223,13 +215,12 @@ class DefaultLaunchServiceTest {
     assertThat(saved.bizDate()).isEqualTo(request.bizDate());
     // day_status 在 first launch 时会根据 cutoff_time 是否已到达自动初始化为 OPEN 或 CUTOFF
     Instant now = BatchDateTimeSupport.utcNow();
-    Instant cutoffAt =
-        request
-            .bizDate()
-            .plusDays(1)
-            .atTime(LocalTime.of(6, 0))
-            .atZone(ZoneId.of("Asia/Shanghai"))
-            .toInstant();
+    Instant cutoffAt = request
+        .bizDate()
+        .plusDays(1)
+        .atTime(LocalTime.of(6, 0))
+        .atZone(ZoneId.of("Asia/Shanghai"))
+        .toInstant();
     String expectedDayStatus = !now.isBefore(cutoffAt) ? "CUTOFF" : "OPEN";
     assertThat(saved.dayStatus()).isEqualTo(expectedDayStatus);
     assertThat(saved.slaDeadlineAt()).isEqualTo(expectedSlaDeadline());
@@ -237,15 +228,14 @@ class DefaultLaunchServiceTest {
 
   @Test
   void shouldPreserveExistingStatusWhenFillingMissingSlaDeadline() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.API,
-            "req-002",
-            "trace-002",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 27),
+        TriggerType.API,
+        "req-002",
+        "trace-002",
+        Map.of());
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
     triggerRequest.setId(101L);
     triggerRequest.setDedupKey("dedup-002");
@@ -253,41 +243,38 @@ class DefaultLaunchServiceTest {
     JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
     WorkflowDefinitionEntity workflowDefinition =
         new WorkflowDefinitionEntity(201L, "t1", "WF", "wf", "FLOW", 1, true);
-    LaunchValidationService.LaunchLoadResult loaded =
-        new LaunchValidationService.LaunchLoadResult(
-            triggerRequest, jobDefinition, workflowDefinition, null);
+    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
+        triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarEntity calendar =
-        new BusinessCalendarEntity(
-            2L,
-            "t1",
-            "BIZ_CAL",
-            "biz",
-            "Asia/Shanghai",
-            "SKIP",
-            "AUTO",
-            30,
-            LocalTime.of(6, 0),
-            15,
-            120,
-            true);
-    BatchDayInstanceEntity existing =
-        new BatchDayInstanceEntity(
-            88L,
-            "t1",
-            "BIZ_CAL",
-            request.bizDate(),
-            "CUTOFF",
-            Instant.parse("2026-03-28T00:00:00Z"),
-            Instant.parse("2026-03-28T00:10:00Z"),
-            null,
-            null,
-            0,
-            0,
-            "UTC",
-            0L,
-            Instant.parse("2026-03-28T00:00:00Z"),
-            Instant.parse("2026-03-28T00:10:00Z"));
+    BusinessCalendarEntity calendar = new BusinessCalendarEntity(
+        2L,
+        "t1",
+        "BIZ_CAL",
+        "biz",
+        "Asia/Shanghai",
+        "SKIP",
+        "AUTO",
+        30,
+        LocalTime.of(6, 0),
+        15,
+        120,
+        true);
+    BatchDayInstanceEntity existing = new BatchDayInstanceEntity(
+        88L,
+        "t1",
+        "BIZ_CAL",
+        request.bizDate(),
+        "CUTOFF",
+        Instant.parse("2026-03-28T00:00:00Z"),
+        Instant.parse("2026-03-28T00:10:00Z"),
+        null,
+        null,
+        0,
+        0,
+        "UTC",
+        0L,
+        Instant.parse("2026-03-28T00:00:00Z"),
+        Instant.parse("2026-03-28T00:10:00Z"));
 
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(201L), anyString())).thenReturn(List.of());
@@ -313,15 +300,14 @@ class DefaultLaunchServiceTest {
 
   @Test
   void shouldAcceptLateEventWithinTolerance() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.EVENT,
-            "req-003",
-            "trace-003",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 27),
+        TriggerType.EVENT,
+        "req-003",
+        "trace-003",
+        Map.of());
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
     triggerRequest.setId(102L);
     triggerRequest.setDedupKey("dedup-003");
@@ -330,42 +316,39 @@ class DefaultLaunchServiceTest {
     JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
     WorkflowDefinitionEntity workflowDefinition =
         new WorkflowDefinitionEntity(202L, "t1", "WF", "wf", "FLOW", 1, true);
-    LaunchValidationService.LaunchLoadResult loaded =
-        new LaunchValidationService.LaunchLoadResult(
-            triggerRequest, jobDefinition, workflowDefinition, null);
+    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
+        triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarEntity calendar =
-        new BusinessCalendarEntity(
-            3L,
-            "t1",
-            "BIZ_CAL",
-            "biz",
-            "Asia/Shanghai",
-            "SKIP",
-            "AUTO",
-            30,
-            LocalTime.of(6, 0),
-            30,
-            120,
-            true);
+    BusinessCalendarEntity calendar = new BusinessCalendarEntity(
+        3L,
+        "t1",
+        "BIZ_CAL",
+        "biz",
+        "Asia/Shanghai",
+        "SKIP",
+        "AUTO",
+        30,
+        LocalTime.of(6, 0),
+        30,
+        120,
+        true);
     Instant now = BatchDateTimeSupport.utcNow();
-    BatchDayInstanceEntity existing =
-        new BatchDayInstanceEntity(
-            89L,
-            "t1",
-            "BIZ_CAL",
-            request.bizDate(),
-            "CUTOFF",
-            now.minusSeconds(3_600),
-            now.minusSeconds(600),
-            null,
-            expectedSlaDeadline(),
-            0,
-            0,
-            "UTC",
-            0L,
-            now.minusSeconds(3_600),
-            now.minusSeconds(600));
+    BatchDayInstanceEntity existing = new BatchDayInstanceEntity(
+        89L,
+        "t1",
+        "BIZ_CAL",
+        request.bizDate(),
+        "CUTOFF",
+        now.minusSeconds(3_600),
+        now.minusSeconds(600),
+        null,
+        expectedSlaDeadline(),
+        0,
+        0,
+        "UTC",
+        0L,
+        now.minusSeconds(3_600),
+        now.minusSeconds(600));
 
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(202L), anyString())).thenReturn(List.of());
@@ -394,15 +377,14 @@ class DefaultLaunchServiceTest {
 
   @Test
   void shouldRouteLateEventOutsideToleranceToCatchUp() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.EVENT,
-            "req-004",
-            "trace-004",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 27),
+        TriggerType.EVENT,
+        "req-004",
+        "trace-004",
+        Map.of());
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
     triggerRequest.setId(103L);
     triggerRequest.setDedupKey("dedup-004");
@@ -411,41 +393,38 @@ class DefaultLaunchServiceTest {
     JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
     WorkflowDefinitionEntity workflowDefinition =
         new WorkflowDefinitionEntity(203L, "t1", "WF", "wf", "FLOW", 1, true);
-    LaunchValidationService.LaunchLoadResult loaded =
-        new LaunchValidationService.LaunchLoadResult(
-            triggerRequest, jobDefinition, workflowDefinition, null);
+    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
+        triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarEntity calendar =
-        new BusinessCalendarEntity(
-            4L,
-            "t1",
-            "BIZ_CAL",
-            "biz",
-            "Asia/Shanghai",
-            "SKIP",
-            "AUTO",
-            30,
-            LocalTime.of(6, 0),
-            30,
-            120,
-            true);
-    BatchDayInstanceEntity existing =
-        new BatchDayInstanceEntity(
-            90L,
-            "t1",
-            "BIZ_CAL",
-            request.bizDate(),
-            "FAILED",
-            Instant.parse("2026-03-27T00:00:00Z"),
-            Instant.parse("2026-03-27T06:00:00Z"),
-            null,
-            expectedSlaDeadline(),
-            0,
-            0,
-            "UTC",
-            0L,
-            Instant.parse("2026-03-27T00:00:00Z"),
-            Instant.parse("2026-03-27T06:00:00Z"));
+    BusinessCalendarEntity calendar = new BusinessCalendarEntity(
+        4L,
+        "t1",
+        "BIZ_CAL",
+        "biz",
+        "Asia/Shanghai",
+        "SKIP",
+        "AUTO",
+        30,
+        LocalTime.of(6, 0),
+        30,
+        120,
+        true);
+    BatchDayInstanceEntity existing = new BatchDayInstanceEntity(
+        90L,
+        "t1",
+        "BIZ_CAL",
+        request.bizDate(),
+        "FAILED",
+        Instant.parse("2026-03-27T00:00:00Z"),
+        Instant.parse("2026-03-27T06:00:00Z"),
+        null,
+        expectedSlaDeadline(),
+        0,
+        0,
+        "UTC",
+        0L,
+        Instant.parse("2026-03-27T00:00:00Z"),
+        Instant.parse("2026-03-27T06:00:00Z"));
 
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(203L), anyString())).thenReturn(List.of());
@@ -477,60 +456,55 @@ class DefaultLaunchServiceTest {
 
   @Test
   void shouldMarkPreparedJobFailedWhenDispatchBusinessErrorOccursAfterT1() {
-    LaunchRequest request =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.API,
-            "req-dispatch-reject",
-            "trace-dispatch-reject",
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, 3, 27),
+        TriggerType.API,
+        "req-dispatch-reject",
+        "trace-dispatch-reject",
+        Map.of());
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
     triggerRequest.setId(104L);
     triggerRequest.setDedupKey("dedup-dispatch-reject");
     JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
     WorkflowDefinitionEntity workflowDefinition =
         new WorkflowDefinitionEntity(204L, "t1", "WF", "wf", "FLOW", 1, true);
-    LaunchValidationService.LaunchLoadResult loaded =
-        new LaunchValidationService.LaunchLoadResult(
-            triggerRequest, jobDefinition, workflowDefinition, null);
-    BusinessCalendarEntity calendar =
-        new BusinessCalendarEntity(
-            5L,
-            "t1",
-            "BIZ_CAL",
-            "biz",
-            "Asia/Shanghai",
-            "SKIP",
-            "AUTO",
-            30,
-            LocalTime.of(6, 0),
-            30,
-            120,
-            true);
+    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
+        triggerRequest, jobDefinition, workflowDefinition, null);
+    BusinessCalendarEntity calendar = new BusinessCalendarEntity(
+        5L,
+        "t1",
+        "BIZ_CAL",
+        "biz",
+        "Asia/Shanghai",
+        "SKIP",
+        "AUTO",
+        30,
+        LocalTime.of(6, 0),
+        30,
+        120,
+        true);
 
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(null);
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
-    doAnswer(
-            invocation -> {
-              JobInstanceEntity entity = invocation.getArgument(0);
-              entity.setId(501L);
-              entity.setVersion(0L);
-              return 1;
-            })
+    doAnswer(invocation -> {
+          JobInstanceEntity entity = invocation.getArgument(0);
+          entity.setId(501L);
+          entity.setVersion(0L);
+          return 1;
+        })
         .when(jobInstanceMapper)
         .insert(any());
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
-    doThrow(
-            BizException.of(
-                ResultCode.BUSINESS_ERROR,
-                "error.partition.dispatch_business_error",
-                "TENANT_JOB_LIMIT",
-                "tenant quota exceeded"))
+    doThrow(BizException.of(
+            ResultCode.BUSINESS_ERROR,
+            "error.partition.dispatch_business_error",
+            "TENANT_JOB_LIMIT",
+            "tenant quota exceeded"))
         .when(partitionDispatchService)
         .dispatch(any());
 
@@ -558,11 +532,10 @@ class DefaultLaunchServiceTest {
     ArgumentCaptor<JobExecutionLogEntity> logCaptor =
         ArgumentCaptor.forClass(JobExecutionLogEntity.class);
     verify(jobExecutionLogMapper, org.mockito.Mockito.atLeastOnce()).insert(logCaptor.capture());
-    JobExecutionLogEntity log =
-        logCaptor.getAllValues().stream()
-            .filter(item -> "JOB_INSTANCE_DISPATCH_REJECTED".equals(item.getMessage()))
-            .findFirst()
-            .orElseThrow();
+    JobExecutionLogEntity log = logCaptor.getAllValues().stream()
+        .filter(item -> "JOB_INSTANCE_DISPATCH_REJECTED".equals(item.getMessage()))
+        .findFirst()
+        .orElseThrow();
     assertThat(log.getTenantId()).isEqualTo("t1");
     assertThat(log.getJobInstanceId()).isEqualTo(501L);
     assertThat(log.getLogLevel()).isEqualTo("WARN");

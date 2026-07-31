@@ -52,14 +52,13 @@ public class WeComNotificationSender implements NotificationSender {
 
   public WeComNotificationSender(ObjectMapper objectMapper, SsrfGuardedDns ssrfGuardedDns) {
     this.objectMapper = objectMapper;
-    this.httpClient =
-        new OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT)
-            .readTimeout(REQUEST_TIMEOUT)
-            .writeTimeout(REQUEST_TIMEOUT)
-            .callTimeout(CALL_TIMEOUT)
-            .dns(ssrfGuardedDns)
-            .build();
+    this.httpClient = new OkHttpClient.Builder()
+        .connectTimeout(CONNECT_TIMEOUT)
+        .readTimeout(REQUEST_TIMEOUT)
+        .writeTimeout(REQUEST_TIMEOUT)
+        .callTimeout(CALL_TIMEOUT)
+        .dns(ssrfGuardedDns)
+        .build();
   }
 
   @Override
@@ -163,7 +162,8 @@ public class WeComNotificationSender implements NotificationSender {
 
   /** HTTP POST 抽出便于单测打桩（覆盖此方法返回预置 JSON，不走真实网络）。 */
   protected WeComHttpResponse postJson(String url, String body) throws Exception {
-    Request request = new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
+    Request request =
+        new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
     try (Response response = httpClient.newCall(request).execute()) {
       String responseBody = response.body() == null ? "" : response.body().string();
       return new WeComHttpResponse(response.code(), responseBody);

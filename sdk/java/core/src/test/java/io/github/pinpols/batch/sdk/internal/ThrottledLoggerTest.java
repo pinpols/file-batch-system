@@ -115,11 +115,10 @@ class ThrottledLoggerTest {
     when(delegate.isWarnEnabled()).thenReturn(true);
     AtomicInteger emitted = new AtomicInteger();
     // 真实统计调用次数:Mockito 在并发下计数安全
-    doAnswer(
-            inv -> {
-              emitted.incrementAndGet();
-              return null;
-            })
+    doAnswer(inv -> {
+          emitted.incrementAndGet();
+          return null;
+        })
         .when(delegate)
         .warn(any(String.class), any(Object[].class));
 
@@ -131,19 +130,18 @@ class ThrottledLoggerTest {
     CountDownLatch start = new CountDownLatch(1);
     CountDownLatch done = new CountDownLatch(threads);
     for (int i = 0; i < threads; i++) {
-      pool.submit(
-          () -> {
-            try {
-              start.await();
-              for (int j = 0; j < perThread; j++) {
-                t.warn("hot", "x");
-              }
-            } catch (InterruptedException ignored) {
-              Thread.currentThread().interrupt();
-            } finally {
-              done.countDown();
-            }
-          });
+      pool.submit(() -> {
+        try {
+          start.await();
+          for (int j = 0; j < perThread; j++) {
+            t.warn("hot", "x");
+          }
+        } catch (InterruptedException ignored) {
+          Thread.currentThread().interrupt();
+        } finally {
+          done.countDown();
+        }
+      });
     }
     start.countDown();
     assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();

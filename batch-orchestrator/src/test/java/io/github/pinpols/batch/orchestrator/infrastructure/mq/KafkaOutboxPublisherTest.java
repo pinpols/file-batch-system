@@ -46,16 +46,15 @@ class KafkaOutboxPublisherTest {
     when(governance.outbox()).thenReturn(outboxProperties);
     BatchTopicResolver topicResolver =
         new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties());
-    publisher =
-        new KafkaOutboxPublisher(
-            kafkaTemplate,
-            governance,
-            eventDeliveryLogMapper,
-            topicResolver,
-            new io.github.pinpols.batch.common.i18n.BizMessageResolver(
-                new org.springframework.context.support.ResourceBundleMessageSource()),
-            new com.fasterxml.jackson.databind.ObjectMapper(),
-            Runnable::run);
+    publisher = new KafkaOutboxPublisher(
+        kafkaTemplate,
+        governance,
+        eventDeliveryLogMapper,
+        topicResolver,
+        new io.github.pinpols.batch.common.i18n.BizMessageResolver(
+            new org.springframework.context.support.ResourceBundleMessageSource()),
+        new com.fasterxml.jackson.databind.ObjectMapper(),
+        Runnable::run);
   }
 
   @Test
@@ -101,10 +100,9 @@ class KafkaOutboxPublisherTest {
   void partitionedDispatchKeyMapsLogicalPartitionsAcrossKafkaPartitions() {
     Set<Integer> kafkaPartitions = new HashSet<>();
     for (int partitionNo = 1; partitionNo <= 4; partitionNo++) {
-      String key =
-          KafkaOutboxPublisher.dispatchKafkaKey(
-              dispatchEvent("EXPORT", "outbox-dedup-key-" + partitionNo),
-              partitionedMessage(partitionNo, 4));
+      String key = KafkaOutboxPublisher.dispatchKafkaKey(
+          dispatchEvent("EXPORT", "outbox-dedup-key-" + partitionNo),
+          partitionedMessage(partitionNo, 4));
       kafkaPartitions.add(KafkaOutboxPublisher.partitionFor(key, 4));
     }
 
@@ -145,8 +143,7 @@ class KafkaOutboxPublisherTest {
     event.setAggregateId(1L);
     event.setEventType(eventType);
     event.setEventKey(eventKey);
-    event.setPayloadJson(
-        """
+    event.setPayloadJson("""
         {
           "schemaVersion":"v1",
           "tenantId":"t1",
@@ -166,8 +163,7 @@ class KafkaOutboxPublisherTest {
           "idempotencyKey":"%s",
           "dispatchAt":"2026-01-15T00:00:00Z"
         }
-        """
-            .formatted(eventKey));
+        """.formatted(eventKey));
     event.setPublishAttempt(0);
     event.setNextPublishAt(BatchDateTimeSupport.utcNow());
     event.setTraceId("trace-it-test");

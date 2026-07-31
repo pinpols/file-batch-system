@@ -67,9 +67,8 @@ public class ConsoleFileTemplateController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<FileTemplateMappingDraftResponse> draftMapping(
       @Valid @RequestBody FileTemplateMappingDraftRequest request) {
-    return responseFactory.success(
-        FileTemplateMappingDraftResponse.from(
-            fileTemplateApplicationService.draftMapping(request.toCommand())));
+    return responseFactory.success(FileTemplateMappingDraftResponse.from(
+        fileTemplateApplicationService.draftMapping(request.toCommand())));
   }
 
   /** 更新文件模板。 */

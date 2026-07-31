@@ -29,10 +29,8 @@ final class PlatformPipelineDefinitionRepository {
     if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
     }
-    Map<String, Object> config =
-        mapper.selectLatestTemplateConfig(
-            params(
-                TENANT_ID, tenantId, "templateCode", templateCode, "templateType", templateType));
+    Map<String, Object> config = mapper.selectLatestTemplateConfig(
+        params(TENANT_ID, tenantId, "templateCode", templateCode, "templateType", templateType));
     return config == null ? Map.of() : config;
   }
 
@@ -56,9 +54,8 @@ final class PlatformPipelineDefinitionRepository {
     if (pipelineDefinitionId == null) {
       return List.of();
     }
-    return mapPipelineStepDefinitions(
-        mapper.selectPipelineStepDefinitions(
-            params(PIPELINE_DEFINITION_ID, pipelineDefinitionId, "enabledOnly", true)));
+    return mapPipelineStepDefinitions(mapper.selectPipelineStepDefinitions(
+        params(PIPELINE_DEFINITION_ID, pipelineDefinitionId, "enabledOnly", true)));
   }
 
   private List<PipelineStepDefinition> mapPipelineStepDefinitions(List<Map<String, Object>> rows) {
@@ -67,21 +64,20 @@ final class PlatformPipelineDefinitionRepository {
     }
     List<PipelineStepDefinition> definitions = new ArrayList<>(rows.size());
     for (Map<String, Object> row : rows) {
-      definitions.add(
-          PipelineStepDefinition.builder()
-              .id(toLong(row.get(ID)))
-              .pipelineDefinitionId(toLong(row.get("pipeline_definition_id")))
-              .stepCode(stringValue(row.get("step_code")))
-              .stepName(stringValue(row.get("step_name")))
-              .stageCode(stringValue(row.get("stage_code")))
-              .stepOrder(toInteger(row.get("step_order")))
-              .implCode(stringValue(row.get("impl_code")))
-              .stepParams(toMap(row.get("step_params")))
-              .timeoutSeconds(toInteger(row.get("timeout_seconds")))
-              .retryPolicy(stringValue(row.get("retry_policy")))
-              .retryMaxCount(toInteger(row.get("retry_max_count")))
-              .enabled(Boolean.TRUE.equals(row.get("enabled")))
-              .build());
+      definitions.add(PipelineStepDefinition.builder()
+          .id(toLong(row.get(ID)))
+          .pipelineDefinitionId(toLong(row.get("pipeline_definition_id")))
+          .stepCode(stringValue(row.get("step_code")))
+          .stepName(stringValue(row.get("step_name")))
+          .stageCode(stringValue(row.get("stage_code")))
+          .stepOrder(toInteger(row.get("step_order")))
+          .implCode(stringValue(row.get("impl_code")))
+          .stepParams(toMap(row.get("step_params")))
+          .timeoutSeconds(toInteger(row.get("timeout_seconds")))
+          .retryPolicy(stringValue(row.get("retry_policy")))
+          .retryMaxCount(toInteger(row.get("retry_max_count")))
+          .enabled(Boolean.TRUE.equals(row.get("enabled")))
+          .build());
     }
     return Collections.unmodifiableList(definitions);
   }

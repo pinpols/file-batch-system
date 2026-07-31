@@ -51,11 +51,14 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final int TASK_COUNT = 15;
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void spiWorkerProcessesConcurrentTaskBurstWithoutLoss() {
@@ -63,24 +66,22 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
 
     long launchStart = System.nanoTime();
     for (int i = 0; i < TASK_COUNT; i++) {
-      LaunchSeed seed =
-          E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-              jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
       dedupKeys.add(seed.dedupKey());
 
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "sql");
       params.put("sql", "SELECT 1");
 
-      launchService.launch(
-          new LaunchRequest(
-              TENANT,
-              seed.jobCode(),
-              LocalDate.of(2026, 1, 15),
-              TriggerType.API,
-              seed.requestId(),
-              "e2e-tr-atomic-load-" + i,
-              params));
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          seed.jobCode(),
+          LocalDate.of(2026, 1, 15),
+          TriggerType.API,
+          seed.requestId(),
+          "e2e-tr-atomic-load-" + i,
+          params));
     }
     e2eOutboxPublishSupport.publishAllPending(TENANT);
     log.info(
@@ -113,15 +114,14 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
     for (int i = 0; i < dedupKeys.size(); i++) {
       args[i + 1] = dedupKeys.get(i);
     }
-    Integer n =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_task t"
-                + " join batch.job_instance ji on ji.id = t.job_instance_id"
-                + " where ji.tenant_id = ? and ji.dedup_key in ("
-                + inClause
-                + ") and t.task_status = 'SUCCESS'",
-            Integer.class,
-            args);
+    Integer n = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_task t"
+            + " join batch.job_instance ji on ji.id = t.job_instance_id"
+            + " where ji.tenant_id = ? and ji.dedup_key in ("
+            + inClause
+            + ") and t.task_status = 'SUCCESS'",
+        Integer.class,
+        args);
     return n == null ? 0 : n;
   }
 }

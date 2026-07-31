@@ -96,13 +96,11 @@ public class ReplicaLagMonitor {
 
   @PostConstruct
   void start() {
-    scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "replica-lag-monitor");
-              t.setDaemon(true);
-              return t;
-            });
+    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "replica-lag-monitor");
+      t.setDaemon(true);
+      return t;
+    });
     scheduler.scheduleWithFixedDelay(
         this::sampleReplayLag, initialDelayMillis, intervalMillis, TimeUnit.MILLISECONDS);
     log.info(

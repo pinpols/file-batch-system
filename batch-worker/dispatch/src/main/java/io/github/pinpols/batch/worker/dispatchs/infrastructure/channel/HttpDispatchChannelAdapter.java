@@ -36,26 +36,24 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     //    thread pool 被重建，复用价值归零，高并发下还会泄漏线程；
     // 2) 父 Client 缺 callTimeout 时，connect/read/write 各自不超时 ≠ 总时长不超时——
     //    比如 read 拉长导致总时长无界，必须显式 callTimeout 收敛。
-    Dns guardedDns =
-        new Dns() {
-          @Override
-          public List<InetAddress> lookup(String hostname) throws UnknownHostException {
-            if (securityProperties.isBypassMode()) {
-              return SYSTEM.lookup(hostname);
-            }
-            // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
-            // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。
-            return List.of(DnsResolveGuard.resolveAndValidate(hostname));
-          }
-        };
-    this.okHttpClient =
-        new OkHttpClient.Builder()
-            .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
-            .readTimeout(properties.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
-            .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
-            .callTimeout(properties.getCallTimeoutMillis(), TimeUnit.MILLISECONDS)
-            .dns(guardedDns)
-            .build();
+    Dns guardedDns = new Dns() {
+      @Override
+      public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+        if (securityProperties.isBypassMode()) {
+          return SYSTEM.lookup(hostname);
+        }
+        // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
+        // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。
+        return List.of(DnsResolveGuard.resolveAndValidate(hostname));
+      }
+    };
+    this.okHttpClient = new OkHttpClient.Builder()
+        .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
+        .readTimeout(properties.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
+        .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
+        .callTimeout(properties.getCallTimeoutMillis(), TimeUnit.MILLISECONDS)
+        .dns(guardedDns)
+        .build();
   }
 
   @Override
@@ -70,23 +68,21 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
     Map<String, Object> channelConfig = command.channelConfig();
-    String endpoint =
-        channelConfig.get("target_endpoint") == null
-            ? null
-            : String.valueOf(channelConfig.get("target_endpoint"));
+    String endpoint = channelConfig.get("target_endpoint") == null
+        ? null
+        : String.valueOf(channelConfig.get("target_endpoint"));
     if (endpoint == null || endpoint.isBlank()) {
       return new DispatchResult(false, null, null, false, false, "target endpoint missing", null);
     }
     String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    String externalRequestId =
-        command.payload().externalRequestId() != null
-                && !command.payload().externalRequestId().isBlank()
-            ? command.payload().externalRequestId()
-            : UUID.randomUUID().toString();
-    String receiptCode =
-        command.payload().receiptCode() != null && !command.payload().receiptCode().isBlank()
-            ? command.payload().receiptCode()
-            : "R-" + externalRequestId;
+    String externalRequestId = command.payload().externalRequestId() != null
+            && !command.payload().externalRequestId().isBlank()
+        ? command.payload().externalRequestId()
+        : UUID.randomUUID().toString();
+    String receiptCode = command.payload().receiptCode() != null
+            && !command.payload().receiptCode().isBlank()
+        ? command.payload().receiptCode()
+        : "R-" + externalRequestId;
     boolean acknowledged =
         "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
     boolean pending =
@@ -99,10 +95,9 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     requestPayload.put("fileRecord", command.fileRecord());
     requestPayload.put("dispatchPayload", command.payload());
 
-    Request.Builder builder =
-        new Request.Builder()
-            .url(endpoint)
-            .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON));
+    Request.Builder builder = new Request.Builder()
+        .url(endpoint)
+        .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON));
     String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
     if ("API_PUSH".equalsIgnoreCase(ct)) {
       Object apiKey = channelConfig.get("api_push_api_key");

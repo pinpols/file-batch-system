@@ -62,17 +62,15 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     if (request.getTimeoutSeconds() != null) {
       body.put("timeoutSeconds", request.getTimeoutSeconds());
     }
-    ConsoleWorkerRegistryResponse response =
-        toResponse(
-            client
-                .post()
-                .uri("/internal/workers/{workerCode}/drain", workerCode)
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(body)
-                .retrieve()
-                .body(ConsoleWorkerRegistryResponse.class));
+    ConsoleWorkerRegistryResponse response = toResponse(client
+        .post()
+        .uri("/internal/workers/{workerCode}/drain", workerCode)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+        .body(body)
+        .retrieve()
+        .body(ConsoleWorkerRegistryResponse.class));
     domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
     return response;
@@ -84,17 +82,15 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
     RestClient client = orchestratorInternalRestClient.build();
-    ConsoleWorkerRegistryResponse response =
-        toResponse(
-            client
-                .post()
-                .uri("/internal/workers/{workerCode}/force-offline", workerCode)
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(Map.of(KEY_TENANT_ID, tenantId))
-                .retrieve()
-                .body(ConsoleWorkerRegistryResponse.class));
+    ConsoleWorkerRegistryResponse response = toResponse(client
+        .post()
+        .uri("/internal/workers/{workerCode}/force-offline", workerCode)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+        .body(Map.of(KEY_TENANT_ID, tenantId))
+        .retrieve()
+        .body(ConsoleWorkerRegistryResponse.class));
     domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
     return response;
@@ -106,17 +102,15 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
     RestClient client = orchestratorInternalRestClient.build();
-    ConsoleWorkerRegistryResponse response =
-        toResponse(
-            client
-                .post()
-                .uri("/internal/workers/{workerCode}/takeover", workerCode)
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(Map.of(KEY_TENANT_ID, tenantId))
-                .retrieve()
-                .body(ConsoleWorkerRegistryResponse.class));
+    ConsoleWorkerRegistryResponse response = toResponse(client
+        .post()
+        .uri("/internal/workers/{workerCode}/takeover", workerCode)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+        .body(Map.of(KEY_TENANT_ID, tenantId))
+        .retrieve()
+        .body(ConsoleWorkerRegistryResponse.class));
     domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
     return response;
@@ -127,19 +121,16 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
     RestClient client = orchestratorInternalRestClient.build();
-    List<ConsoleWorkerClaimedTaskResponse> tasks =
-        client
-            .get()
-            .uri(
-                uriBuilder ->
-                    uriBuilder
-                        .path("/internal/workers/{workerCode}/claimed-tasks")
-                        .queryParam(KEY_TENANT_ID, resolved)
-                        .build(workerCode))
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-            .retrieve()
-            .body(new ParameterizedTypeReference<List<ConsoleWorkerClaimedTaskResponse>>() {});
+    List<ConsoleWorkerClaimedTaskResponse> tasks = client
+        .get()
+        .uri(uriBuilder -> uriBuilder
+            .path("/internal/workers/{workerCode}/claimed-tasks")
+            .queryParam(KEY_TENANT_ID, resolved)
+            .build(workerCode))
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+        .retrieve()
+        .body(new ParameterizedTypeReference<List<ConsoleWorkerClaimedTaskResponse>>() {});
     return tasks == null ? List.of() : tasks;
   }
 
@@ -149,17 +140,15 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
     RestClient client = orchestratorInternalRestClient.build();
-    ConsoleWorkerRegistryResponse response =
-        toResponse(
-            client
-                .post()
-                .uri("/internal/workers/{workerCode}/warmup", workerCode)
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(Map.of(KEY_TENANT_ID, resolved))
-                .retrieve()
-                .body(ConsoleWorkerRegistryResponse.class));
+    ConsoleWorkerRegistryResponse response = toResponse(client
+        .post()
+        .uri("/internal/workers/{workerCode}/warmup", workerCode)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+        .body(Map.of(KEY_TENANT_ID, resolved))
+        .retrieve()
+        .body(ConsoleWorkerRegistryResponse.class));
     domainEventPublisher.publishChanged(resolved, KEY_WORKERS, "worker-warmup");
     return response;
   }

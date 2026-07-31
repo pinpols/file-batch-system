@@ -35,11 +35,11 @@ public class SseTicketService {
   /** 签发一次性 ticket，绑定签发时的角色集。 */
   public String issue(String username, String tenantId, Collection<String> authorities) {
     String ticket = UUID.randomUUID().toString().replace("-", "");
-    String roles =
-        authorities == null
-            ? ""
-            : String.join(
-                ROLE_SEPARATOR, authorities.stream().filter(Texts::hasText).distinct().toList());
+    String roles = authorities == null
+        ? ""
+        : String.join(
+            ROLE_SEPARATOR,
+            authorities.stream().filter(Texts::hasText).distinct().toList());
     String value =
         username + FIELD_SEPARATOR + (tenantId == null ? "" : tenantId) + FIELD_SEPARATOR + roles;
     redisTemplate.opsForValue().set(KEY_PREFIX + ticket, value, TICKET_TTL);

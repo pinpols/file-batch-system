@@ -27,8 +27,11 @@ class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired ExportStepExecutionAdapter primaryAdapter;
-  @Autowired BatchTaskExecutorRegistry registry;
+  @Autowired
+  ExportStepExecutionAdapter primaryAdapter;
+
+  @Autowired
+  BatchTaskExecutorRegistry registry;
 
   @Test
   void registryContainsExportTaskType() {

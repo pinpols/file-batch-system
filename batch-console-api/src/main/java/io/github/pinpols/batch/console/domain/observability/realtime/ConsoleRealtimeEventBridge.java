@@ -43,14 +43,13 @@ public class ConsoleRealtimeEventBridge {
       return;
     }
     // 其余 domain event 在这里先直发本机 SSE，再同步写入 Redis Pub/Sub。
-    ConsoleSseEvent sseEvent =
-        new ConsoleSseEvent(
-            event.tenantId(),
-            event.stream(),
-            event.eventType(),
-            event.cursor(),
-            event.data(),
-            event.emittedAt());
+    ConsoleSseEvent sseEvent = new ConsoleSseEvent(
+        event.tenantId(),
+        event.stream(),
+        event.eventType(),
+        event.cursor(),
+        event.data(),
+        event.emittedAt());
     realtimeEventHub.publish(sseEvent);
     redisPublisher.publish(sseEvent);
   }

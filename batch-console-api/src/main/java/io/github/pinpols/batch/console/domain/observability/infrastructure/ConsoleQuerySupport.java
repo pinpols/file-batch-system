@@ -29,16 +29,18 @@ public final class ConsoleQuerySupport {
   public static <S, T> PageResponse<T> page(
       PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
     return new PageResponse<>(
-        total, pageRequest.pageNo(), pageRequest.pageSize(), rows.stream().map(mapper).toList());
+        total,
+        pageRequest.pageNo(),
+        pageRequest.pageSize(),
+        rows.stream().map(mapper).toList());
   }
 
   public static <S, T> PageResponse<T> cursorPage(
       PageRequest pageRequest, List<S> rows, Function<S, T> mapper, Function<S, Long> idExtractor) {
     List<T> items = rows.stream().map(mapper).toList();
-    String nextCursor =
-        rows.size() < pageRequest.pageSize() || rows.isEmpty()
-            ? null
-            : CursorCodec.encode(Map.of("id", idExtractor.apply(rows.get(rows.size() - 1))));
+    String nextCursor = rows.size() < pageRequest.pageSize() || rows.isEmpty()
+        ? null
+        : CursorCodec.encode(Map.of("id", idExtractor.apply(rows.get(rows.size() - 1))));
     return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
   }
 

@@ -41,8 +41,11 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired ImportStepExecutionAdapter primaryAdapter;
-  @Autowired BatchTaskExecutorRegistry registry;
+  @Autowired
+  ImportStepExecutionAdapter primaryAdapter;
+
+  @Autowired
+  BatchTaskExecutorRegistry registry;
 
   @Test
   void registryContainsImportTaskType() {
@@ -62,9 +65,8 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
     f.setAccessible(true);
     Object delegate = f.get(exec);
     assertThat(delegate)
-        .as(
-            "ImportTaskExecutor.delegate 必须是 Spring @Primary 注入的 ImportStepExecutionAdapter,"
-                + "证明 SPI 路径跟老路径真共用一份业务代码(不是各自实现)")
+        .as("ImportTaskExecutor.delegate 必须是 Spring @Primary 注入的 ImportStepExecutionAdapter,"
+            + "证明 SPI 路径跟老路径真共用一份业务代码(不是各自实现)")
         .isSameAs(primaryAdapter);
   }
 }

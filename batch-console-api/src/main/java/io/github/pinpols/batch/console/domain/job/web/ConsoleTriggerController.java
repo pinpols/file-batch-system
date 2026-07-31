@@ -42,32 +42,28 @@ public class ConsoleTriggerController {
   @PostMapping("/{jobCode}/register")
   public CommonResponse<ConsoleTriggerActionResponse> register(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleTriggerActionResponse.from(
-            triggerProxyService.triggerAction(tenantId, jobCode, "register")));
+    return responseFactory.success(ConsoleTriggerActionResponse.from(
+        triggerProxyService.triggerAction(tenantId, jobCode, "register")));
   }
 
   @PostMapping("/{jobCode}/unregister")
   public CommonResponse<ConsoleTriggerActionResponse> unregister(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleTriggerActionResponse.from(
-            triggerProxyService.triggerAction(tenantId, jobCode, "unregister")));
+    return responseFactory.success(ConsoleTriggerActionResponse.from(
+        triggerProxyService.triggerAction(tenantId, jobCode, "unregister")));
   }
 
   @PostMapping("/{jobCode}/pause")
   public CommonResponse<ConsoleTriggerActionResponse> pause(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleTriggerActionResponse.from(
-            triggerProxyService.triggerAction(tenantId, jobCode, "pause")));
+    return responseFactory.success(ConsoleTriggerActionResponse.from(
+        triggerProxyService.triggerAction(tenantId, jobCode, "pause")));
   }
 
   @PostMapping("/{jobCode}/resume")
   public CommonResponse<ConsoleTriggerActionResponse> resume(
       @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleTriggerActionResponse.from(
-            triggerProxyService.triggerAction(tenantId, jobCode, "resume")));
+    return responseFactory.success(ConsoleTriggerActionResponse.from(
+        triggerProxyService.triggerAction(tenantId, jobCode, "resume")));
   }
 }

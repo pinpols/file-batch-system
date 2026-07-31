@@ -53,11 +53,9 @@ public class TenantConfigCopyRequest {
     ALERT_ROUTING;
 
     // 兼容前端简写："JOB" → JOB_DEFINITION, "WORKFLOW" → WORKFLOW_DEFINITION 等
-    private static final Map<String, ConfigType> ALIAS_MAP =
-        Stream.of(values())
-            .collect(
-                Collectors.toMap(
-                    v -> v.name().replace("_DEFINITION", ""), Function.identity(), (a, b) -> a));
+    private static final Map<String, ConfigType> ALIAS_MAP = Stream.of(values())
+        .collect(Collectors.toMap(
+            v -> v.name().replace("_DEFINITION", ""), Function.identity(), (a, b) -> a));
 
     @JsonCreator
     public static ConfigType fromValue(String value) {
@@ -72,12 +70,11 @@ public class TenantConfigCopyRequest {
         if (alias != null) {
           return alias;
         }
-        throw new IllegalArgumentException(
-            "Unknown ConfigType: '"
-                + value
-                + "'. Accepted values: "
-                + ALIAS_MAP.keySet()
-                + " or full names like JOB_DEFINITION");
+        throw new IllegalArgumentException("Unknown ConfigType: '"
+            + value
+            + "'. Accepted values: "
+            + ALIAS_MAP.keySet()
+            + " or full names like JOB_DEFINITION");
       }
     }
   }

@@ -25,8 +25,11 @@ class DefaultProcessingPositionStoreTest {
   private static final String TENANT = "t1";
   private static final long INSTANCE = 1001L;
 
-  @Mock PipelineProgressMapper mapper;
-  @Mock ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meterRegistryProvider;
+  @Mock
+  PipelineProgressMapper mapper;
+
+  @Mock
+  ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meterRegistryProvider;
 
   private SimpleMeterRegistry meterRegistry;
   private DefaultProcessingPositionStore store;
@@ -55,18 +58,17 @@ class DefaultProcessingPositionStoreTest {
   @Test
   @DisplayName("load:completed=true 行返回 completed 标记,marker 字段不再有意义")
   void shouldReturnCompleted_whenRowCompleted() {
-    PipelineProgressEntity row =
-        new PipelineProgressEntity(
-            1L,
-            TENANT,
-            INSTANCE,
-            "GENERATE",
-            "stale-marker",
-            999L,
-            true,
-            OffsetDateTime.now(),
-            OffsetDateTime.now(),
-            OffsetDateTime.now());
+    PipelineProgressEntity row = new PipelineProgressEntity(
+        1L,
+        TENANT,
+        INSTANCE,
+        "GENERATE",
+        "stale-marker",
+        999L,
+        true,
+        OffsetDateTime.now(),
+        OffsetDateTime.now(),
+        OffsetDateTime.now());
     when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "GENERATE")).thenReturn(row);
 
     ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.GENERATE);
@@ -81,18 +83,17 @@ class DefaultProcessingPositionStoreTest {
   @Test
   @DisplayName("load:未完成行如实返回 marker + count")
   void shouldReturnInProgress_whenRowNotCompleted() {
-    PipelineProgressEntity row =
-        new PipelineProgressEntity(
-            2L,
-            TENANT,
-            INSTANCE,
-            "LOAD",
-            "row:12345",
-            12345L,
-            false,
-            null,
-            OffsetDateTime.now(),
-            OffsetDateTime.now());
+    PipelineProgressEntity row = new PipelineProgressEntity(
+        2L,
+        TENANT,
+        INSTANCE,
+        "LOAD",
+        "row:12345",
+        12345L,
+        false,
+        null,
+        OffsetDateTime.now(),
+        OffsetDateTime.now());
     when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
 
     ProcessingPosition pos = store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
@@ -108,16 +109,17 @@ class DefaultProcessingPositionStoreTest {
   @Test
   @DisplayName("resume skipped:命中续跑但 processedCount=0(位点在但无已提交记录)不增 skipped counter")
   void shouldNotRecordResumeSkipped_whenProcessedCountZero() {
-    PipelineProgressEntity row =
-        new PipelineProgressEntity(
-            3L, TENANT, INSTANCE, "LOAD", "row:0", 0L, false, null, OffsetDateTime.now(), null);
+    PipelineProgressEntity row = new PipelineProgressEntity(
+        3L, TENANT, INSTANCE, "LOAD", "row:0", 0L, false, null, OffsetDateTime.now(), null);
     when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(row);
 
     store.load(TENANT, INSTANCE, ProcessingStage.LOAD);
 
     // 命中次数仍计,但跳过记录数为 0 时不注册 skipped counter(避免 0 值噪声)
     assertMetric("LOAD", "load", "resumable", 1.0);
-    assertThat(meterRegistry.find(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED).counter())
+    assertThat(meterRegistry
+            .find(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
+            .counter())
         .isNull();
   }
 
@@ -183,22 +185,20 @@ class DefaultProcessingPositionStoreTest {
   }
 
   private void assertResumeSkipped(String stage, double expected) {
-    assertThat(
-            meterRegistry
-                .get(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
-                .tags("stage", stage)
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .get(DefaultProcessingPositionStore.METRIC_RESUME_SKIPPED)
+            .tags("stage", stage)
+            .counter()
+            .count())
         .isEqualTo(expected);
   }
 
   private void assertMetric(String stage, String operation, String outcome, double expected) {
-    assertThat(
-            meterRegistry
-                .get(DefaultProcessingPositionStore.METRIC_OPERATIONS)
-                .tags("stage", stage, "operation", operation, "outcome", outcome)
-                .counter()
-                .count())
+    assertThat(meterRegistry
+            .get(DefaultProcessingPositionStore.METRIC_OPERATIONS)
+            .tags("stage", stage, "operation", operation, "outcome", outcome)
+            .counter()
+            .count())
         .isEqualTo(expected);
   }
 }

@@ -23,26 +23,25 @@ public class CompensationController {
 
   @PostMapping
   public CompensationResponse submit(@RequestBody CompensationRequest request) {
-    CompensationSubmitCommand command =
-        CompensationSubmitCommand.builder()
-            .tenantId(request.tenantId())
-            .compensationType(request.compensationType())
-            .targetId(request.targetId())
-            .targetInstanceNo(request.targetInstanceNo())
-            .jobCode(request.jobCode())
-            .bizDate(request.bizDate())
-            .batchNo(request.batchNo())
-            .relatedFileId(request.relatedFileId())
-            .channelCode(request.channelCode())
-            .reason(request.reason())
-            .operatorId(request.operatorId())
-            .approvalId(request.approvalId())
-            .strategy(request.strategy())
-            .traceId(request.traceId())
-            .resultPolicy(request.resultPolicy())
-            .configVersionPolicy(request.configVersionPolicy())
-            .configVersion(request.configVersion())
-            .build();
+    CompensationSubmitCommand command = CompensationSubmitCommand.builder()
+        .tenantId(request.tenantId())
+        .compensationType(request.compensationType())
+        .targetId(request.targetId())
+        .targetInstanceNo(request.targetInstanceNo())
+        .jobCode(request.jobCode())
+        .bizDate(request.bizDate())
+        .batchNo(request.batchNo())
+        .relatedFileId(request.relatedFileId())
+        .channelCode(request.channelCode())
+        .reason(request.reason())
+        .operatorId(request.operatorId())
+        .approvalId(request.approvalId())
+        .strategy(request.strategy())
+        .traceId(request.traceId())
+        .resultPolicy(request.resultPolicy())
+        .configVersionPolicy(request.configVersionPolicy())
+        .configVersion(request.configVersion())
+        .build();
     String compensationNo = compensationService.submit(command);
     return new CompensationResponse(compensationNo);
   }

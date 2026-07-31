@@ -22,7 +22,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FileArrivalSensorPolicyTest {
 
-  @Mock private SensorFileArrivalMapper mapper;
+  @Mock
+  private SensorFileArrivalMapper mapper;
+
   private FileArrivalSensorPolicy policy;
 
   @BeforeEach
@@ -69,12 +71,10 @@ class FileArrivalSensorPolicyTest {
   @Test
   void probe_channelCodeSftp_filterSftpSourceType() {
     when(mapper.selectLatestArrival(any(), any(), any(), any())).thenReturn(null);
-    policy.probe(
-        ctx(
-            Map.of(
-                "channelCode", "sftp_bank_in",
-                "pattern", "*.csv",
-                "maxAgeSeconds", 3600)));
+    policy.probe(ctx(Map.of(
+        "channelCode", "sftp_bank_in",
+        "pattern", "*.csv",
+        "maxAgeSeconds", 3600)));
     ArgumentCaptor<String> srcCap = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<OffsetDateTime> sinceCap = ArgumentCaptor.forClass(OffsetDateTime.class);
     verify(mapper).selectLatestArrival(eq("ta"), eq("%.csv"), srcCap.capture(), sinceCap.capture());

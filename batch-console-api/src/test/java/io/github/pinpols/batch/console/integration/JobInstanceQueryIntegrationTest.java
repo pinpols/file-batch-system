@@ -23,16 +23,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldReturnEmptyWhenNoJobInstancesExist() {
-    JobInstanceQuery query =
-        JobInstanceQuery.builder()
-            .tenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis())
-            .build();
+    JobInstanceQuery query = JobInstanceQuery.builder()
+        .tenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis())
+        .build();
     List<JobInstanceEntity> results = jobInstanceMapper.selectByQuery(query);
 
     assertThat(results).isEmpty();
@@ -109,7 +110,8 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
         "INST-T1-" + BatchDateTimeSupport.utcEpochMillis(),
         traceId);
 
-    JobInstanceQuery query = JobInstanceQuery.builder().tenantId(tenantId).traceId(traceId).build();
+    JobInstanceQuery query =
+        JobInstanceQuery.builder().tenantId(tenantId).traceId(traceId).build();
     List<JobInstanceEntity> results = jobInstanceMapper.selectByQuery(query);
 
     assertThat(results).hasSize(1);
@@ -129,8 +131,10 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
           "trace-page-" + i);
     }
 
-    JobInstanceQuery query =
-        JobInstanceQuery.builder().tenantId(tenantId).pageRequest(new PageRequest(0, 3)).build();
+    JobInstanceQuery query = JobInstanceQuery.builder()
+        .tenantId(tenantId)
+        .pageRequest(new PageRequest(0, 3))
+        .build();
     List<JobInstanceEntity> page1 = jobInstanceMapper.selectByQuery(query);
 
     assertThat(page1).hasSize(3);
@@ -163,25 +167,19 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   private long ensureJobDefinitionId(String tenantId, String jobCode) {
-    Long existing =
-        jdbcTemplate.query(
-            "select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1",
-            rs -> rs.next() ? rs.getLong(1) : null,
-            tenantId,
-            jobCode);
+    Long existing = jdbcTemplate.query(
+        "select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1",
+        rs -> rs.next() ? rs.getLong(1) : null,
+        tenantId,
+        jobCode);
     if (existing != null) {
       return existing;
     }
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         INSERT INTO batch.job_definition
           (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
         VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
         RETURNING id
-        """,
-        Long.class,
-        tenantId,
-        jobCode,
-        jobCode + "-name");
+        """, Long.class, tenantId, jobCode, jobCode + "-name");
   }
 }

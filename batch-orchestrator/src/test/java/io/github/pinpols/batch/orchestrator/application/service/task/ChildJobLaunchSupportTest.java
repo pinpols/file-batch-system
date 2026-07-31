@@ -36,24 +36,40 @@ class ChildJobLaunchSupportTest {
   private static final String TENANT = "t1";
   private static final String CYCLE_KEY = "error.workflow.nested_cycle_detected";
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private OrchestratorWorkflowMappers workflowMappers;
-  @Mock private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
-  @Mock private ObjectProvider<LaunchService> launchServiceProvider;
-  @Mock private WorkflowNodePayloadBuilder payloadBuilder;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private OrchestratorWorkflowMappers workflowMappers;
+
+  @Mock
+  private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+
+  @Mock
+  private ObjectProvider<LaunchService> launchServiceProvider;
+
+  @Mock
+  private WorkflowNodePayloadBuilder payloadBuilder;
 
   private ChildJobLaunchSupport newSupport() {
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
     return new ChildJobLaunchSupport(
         jobMappers,
         workflowMappers,
@@ -98,17 +114,14 @@ class ChildJobLaunchSupportTest {
     JobInstanceEntity parent = instance(1L, "WF_A", null);
 
     // act / assert
-    assertThatThrownBy(
-            () ->
-                support.dispatchJobNode(
-                    parent, run(), resolution(), jobNode("WF_A"), "{}", "trace-1"))
+    assertThatThrownBy(() ->
+            support.dispatchJobNode(parent, run(), resolution(), jobNode("WF_A"), "{}", "trace-1"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> {
-              BizException biz = (BizException) ex;
-              assertThat(biz.getMessageKey()).isEqualTo(CYCLE_KEY);
-              assertThat(biz.getMessageArgs()).contains("WF_A");
-            });
+        .satisfies(ex -> {
+          BizException biz = (BizException) ex;
+          assertThat(biz.getMessageKey()).isEqualTo(CYCLE_KEY);
+          assertThat(biz.getMessageArgs()).contains("WF_A");
+        });
 
     // 环在任何副作用之前被拦：不写虚拟分区、不发起子作业 launch
     verifyNoInteractions(jobPartitionMapper, launchServiceProvider, taskExecutionServiceProvider);
@@ -125,16 +138,14 @@ class ChildJobLaunchSupportTest {
     when(jobInstanceMapper.selectById(TENANT, 1L)).thenReturn(instance(1L, "WF_A", null));
 
     // act / assert
-    assertThatThrownBy(
-            () ->
-                support.dispatchJobNode(wfB, run(), resolution(), jobNode("WF_A"), "{}", "trace-2"))
+    assertThatThrownBy(() ->
+            support.dispatchJobNode(wfB, run(), resolution(), jobNode("WF_A"), "{}", "trace-2"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> {
-              BizException biz = (BizException) ex;
-              assertThat(biz.getMessageKey()).isEqualTo(CYCLE_KEY);
-              assertThat(biz.getMessageArgs()).contains("WF_A");
-            });
+        .satisfies(ex -> {
+          BizException biz = (BizException) ex;
+          assertThat(biz.getMessageKey()).isEqualTo(CYCLE_KEY);
+          assertThat(biz.getMessageArgs()).contains("WF_A");
+        });
 
     verifyNoInteractions(jobPartitionMapper, launchServiceProvider, taskExecutionServiceProvider);
   }

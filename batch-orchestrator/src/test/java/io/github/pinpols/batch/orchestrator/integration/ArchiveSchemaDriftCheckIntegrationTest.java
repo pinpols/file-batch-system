@@ -21,8 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.NEVER)
 class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ArchiveSchemaDriftCheck check;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private ArchiveSchemaDriftCheck check;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @AfterEach
   void cleanup() {
@@ -80,7 +83,9 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
         mismatches.add(hot + " | hot extra=" + missingInCold + " | cold extra=" + missingInHot);
       }
     }
-    assertThat(mismatches).as("ARCHIVED_TABLES 中所有冷热表 column 必须一字不差,任一不匹配立即列出全部 diff").isEmpty();
+    assertThat(mismatches)
+        .as("ARCHIVED_TABLES 中所有冷热表 column 必须一字不差,任一不匹配立即列出全部 diff")
+        .isEmpty();
   }
 
   @Test
@@ -96,14 +101,13 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
       if (coldCols.isEmpty()) {
         continue;
       }
-      Integer pkCount =
-          jdbcTemplate.queryForObject(
-              "SELECT count(*) FROM pg_constraint c "
-                  + "JOIN pg_class t ON t.oid = c.conrelid "
-                  + "JOIN pg_namespace n ON n.oid = t.relnamespace "
-                  + "WHERE n.nspname = 'archive' AND t.relname = ? AND c.contype = 'p'",
-              Integer.class,
-              archiveTable);
+      Integer pkCount = jdbcTemplate.queryForObject(
+          "SELECT count(*) FROM pg_constraint c "
+              + "JOIN pg_class t ON t.oid = c.conrelid "
+              + "JOIN pg_namespace n ON n.oid = t.relnamespace "
+              + "WHERE n.nspname = 'archive' AND t.relname = ? AND c.contype = 'p'",
+          Integer.class,
+          archiveTable);
       if (pkCount == null || pkCount == 0) {
         missingPk.add(archiveTable);
       }

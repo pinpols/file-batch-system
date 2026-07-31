@@ -9,30 +9,28 @@ class ProcessWorkerConfigurationTest {
 
   @Test
   void capabilityTagsDefaultsToEmptyList() {
-    ProcessWorkerConfiguration configuration =
-        new ProcessWorkerConfiguration(
-            "process-node-1",
-            "PROCESS",
-            "tenant-a",
-            15_000L,
-            "batch.task.dispatch.process",
-            "batch-worker-process",
-            null);
+    ProcessWorkerConfiguration configuration = new ProcessWorkerConfiguration(
+        "process-node-1",
+        "PROCESS",
+        "tenant-a",
+        15_000L,
+        "batch.task.dispatch.process",
+        "batch-worker-process",
+        null);
 
     assertThat(configuration.capabilityTags()).isEmpty();
   }
 
   @Test
   void capabilityTagsReturnsConfiguredValues() {
-    ProcessWorkerConfiguration configuration =
-        new ProcessWorkerConfiguration(
-            "process-node-1",
-            "PROCESS",
-            "tenant-a",
-            15_000L,
-            "batch.task.dispatch.process",
-            "batch-worker-process",
-            List.of("settlement"));
+    ProcessWorkerConfiguration configuration = new ProcessWorkerConfiguration(
+        "process-node-1",
+        "PROCESS",
+        "tenant-a",
+        15_000L,
+        "batch.task.dispatch.process",
+        "batch-worker-process",
+        List.of("settlement"));
 
     assertThat(configuration.capabilityTags()).containsExactly("settlement");
   }

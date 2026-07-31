@@ -53,10 +53,9 @@ class ConsoleAtomicTaskTypeSchemaServiceTest {
   }
 
   private String requiredParam(String taskType) {
-    List<AtomicTaskTypeSchema.ParamSpec> required =
-        byType(taskType).parameters().stream()
-            .filter(AtomicTaskTypeSchema.ParamSpec::required)
-            .toList();
+    List<AtomicTaskTypeSchema.ParamSpec> required = byType(taskType).parameters().stream()
+        .filter(AtomicTaskTypeSchema.ParamSpec::required)
+        .toList();
     assertThat(required).hasSize(1);
     return required.get(0).name();
   }

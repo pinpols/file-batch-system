@@ -107,11 +107,10 @@ public class SqlTemplateExportSqlValidator {
               + violation.violatingName()
               + "'");
     }
-    throw new IllegalArgumentException(
-        "sql_template_export references disallowed schema '"
-            + violation.violatingName()
-            + "' — allowed: "
-            + allowedSchemas);
+    throw new IllegalArgumentException("sql_template_export references disallowed schema '"
+        + violation.violatingName()
+        + "' — allowed: "
+        + allowedSchemas);
   }
 
   /**

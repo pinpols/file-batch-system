@@ -109,12 +109,11 @@ public class BatchTaskExecutorRegistry {
       Map<String, BatchTaskExecutor> merged, BatchTaskExecutor exec, String source) {
     String type = exec.taskType();
     if (type == null || type.isBlank()) {
-      throw new IllegalStateException(
-          "BatchTaskExecutor "
-              + exec.getClass().getName()
-              + " returned null/blank taskType() (source="
-              + source
-              + ")");
+      throw new IllegalStateException("BatchTaskExecutor "
+          + exec.getClass().getName()
+          + " returned null/blank taskType() (source="
+          + source
+          + ")");
     }
     BatchTaskExecutor prev = merged.get(type);
     if (prev != null) {
@@ -122,15 +121,14 @@ public class BatchTaskExecutorRegistry {
         // 同一实例(同时被 Spring 收 + ServiceLoader 扫到),幂等,不重复登记
         return;
       }
-      throw new IllegalStateException(
-          "BatchTaskExecutor duplicate taskType="
-              + type
-              + ": already registered="
-              + prev.getClass().getName()
-              + ", duplicate from "
-              + source
-              + "="
-              + exec.getClass().getName());
+      throw new IllegalStateException("BatchTaskExecutor duplicate taskType="
+          + type
+          + ": already registered="
+          + prev.getClass().getName()
+          + ", duplicate from "
+          + source
+          + "="
+          + exec.getClass().getName());
     }
     merged.put(type, exec);
   }

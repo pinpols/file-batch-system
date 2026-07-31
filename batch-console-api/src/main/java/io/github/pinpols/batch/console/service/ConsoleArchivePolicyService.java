@@ -17,16 +17,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleArchivePolicyService {
 
-  private static final Set<String> VALID_TABLES =
-      Set.of(
-          "job_instance",
-          "workflow_run",
-          "job_partition",
-          "file_record",
-          "audit_log",
-          "outbox_event",
-          "event_delivery_log",
-          "webhook_delivery_log");
+  private static final Set<String> VALID_TABLES = Set.of(
+      "job_instance",
+      "workflow_run",
+      "job_partition",
+      "file_record",
+      "audit_log",
+      "outbox_event",
+      "event_delivery_log",
+      "webhook_delivery_log");
 
   private final ConsoleArchivePolicyMapper repository;
   private final ConsoleTenantGuard tenantGuard;
@@ -48,17 +47,16 @@ public class ConsoleArchivePolicyService {
     if (param.retentionDays() < 1) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.retention_days_min");
     }
-    ArchivePolicyUpsertParam upsertParam =
-        ArchivePolicyUpsertParam.builder()
-            .tenantId(resolved)
-            .targetTable(normalized)
-            .retentionDays(param.retentionDays())
-            .archiveEnabled(param.archiveEnabled())
-            .cleanupEnabled(param.cleanupEnabled())
-            .batchSize(Math.max(param.batchSize(), 100))
-            .description(param.description())
-            .operator(param.operator())
-            .build();
+    ArchivePolicyUpsertParam upsertParam = ArchivePolicyUpsertParam.builder()
+        .tenantId(resolved)
+        .targetTable(normalized)
+        .retentionDays(param.retentionDays())
+        .archiveEnabled(param.archiveEnabled())
+        .cleanupEnabled(param.cleanupEnabled())
+        .batchSize(Math.max(param.batchSize(), 100))
+        .description(param.description())
+        .operator(param.operator())
+        .build();
     repository.upsert(upsertParam);
   }
 }

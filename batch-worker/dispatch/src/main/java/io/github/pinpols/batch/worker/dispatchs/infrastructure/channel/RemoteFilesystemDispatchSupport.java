@@ -79,24 +79,23 @@ final class RemoteFilesystemDispatchSupport {
   // 池满即拒绝)。拒绝时该次 dispatch 走现有失败路径快速失败（见 copyWithTimeout 的
   // RejectedExecutionException 分支），不再无限堆积等待线程。
   private static final int NAS_COPY_MAX_THREADS = 8;
-  private static final ExecutorService NAS_COPY_EXECUTOR =
-      new ThreadPoolExecutor(
-          0,
-          NAS_COPY_MAX_THREADS,
-          60L,
-          TimeUnit.SECONDS,
-          new SynchronousQueue<>(),
-          new ThreadFactory() {
-            private final AtomicLong index = new AtomicLong();
+  private static final ExecutorService NAS_COPY_EXECUTOR = new ThreadPoolExecutor(
+      0,
+      NAS_COPY_MAX_THREADS,
+      60L,
+      TimeUnit.SECONDS,
+      new SynchronousQueue<>(),
+      new ThreadFactory() {
+        private final AtomicLong index = new AtomicLong();
 
-            @Override
-            public Thread newThread(Runnable r) {
-              Thread t = new Thread(r, "nas-copy-" + index.incrementAndGet());
-              t.setDaemon(true);
-              return t;
-            }
-          },
-          new ThreadPoolExecutor.AbortPolicy());
+        @Override
+        public Thread newThread(Runnable r) {
+          Thread t = new Thread(r, "nas-copy-" + index.incrementAndGet());
+          t.setDaemon(true);
+          return t;
+        }
+      },
+      new ThreadPoolExecutor.AbortPolicy());
 
   private RemoteFilesystemDispatchSupport() {}
 
@@ -105,19 +104,17 @@ final class RemoteFilesystemDispatchSupport {
       InputStream in, Path target, DispatchRuntimeProperties properties) throws IOException {
     Future<?> future;
     try {
-      future =
-          NAS_COPY_EXECUTOR.submit(
-              () -> {
-                try {
-                  Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-                } catch (IOException ioe) {
-                  // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
-                  // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
-                  // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
-                  // IOException)照旧命中。
-                  throw new UncheckedIOException(ioe);
-                }
-              });
+      future = NAS_COPY_EXECUTOR.submit(() -> {
+        try {
+          Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException ioe) {
+          // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
+          // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
+          // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
+          // IOException)照旧命中。
+          throw new UncheckedIOException(ioe);
+        }
+      });
     } catch (RejectedExecutionException ree) {
       // 有界池(max=8)+ SynchronousQueue 已满:当前并发 NAS dispatch 已达上限,快速失败而非排队等待,
       // 走现有失败路径(该次 dispatch 报可重试错误),不阻塞调用线程。
@@ -196,15 +193,14 @@ final class RemoteFilesystemDispatchSupport {
             directory.resolve(remoteName + DispatchManifestSupport.suffix(channelConfig));
         Path manifestTempPath =
             directory.resolve(manifestPath.getFileName() + ".tmp-" + UUID.randomUUID());
-        manifest =
-            DispatchManifestSupport.manifestPayload(
-                command,
-                target.toString(),
-                remoteName,
-                externalRequestId,
-                receiptCode,
-                payloadDigest,
-                manifestPath.toString());
+        manifest = DispatchManifestSupport.manifestPayload(
+            command,
+            target.toString(),
+            remoteName,
+            externalRequestId,
+            receiptCode,
+            payloadDigest,
+            manifestPath.toString());
         try {
           Files.write(manifestTempPath, manifest.bytes());
           movePublishedFile(manifestTempPath, manifestPath);
@@ -249,9 +245,8 @@ final class RemoteFilesystemDispatchSupport {
         && NAS_SYMLINK_WARNED.putIfAbsent(directory.toString(), Boolean.TRUE) == null) {
       // macOS 系统级 symlink (/tmp -> /private/tmp, /var -> /private/var) 是 OS 行为，
       // 不属于用户错配，降级到 INFO；非此模式才以 WARN 提示真正的可疑 symlink。
-      boolean macOsPrivatePrefix =
-          realDirectory.toString().equals("/private" + directory)
-              && (directory.startsWith("/tmp") || directory.startsWith("/var"));
+      boolean macOsPrivatePrefix = realDirectory.toString().equals("/private" + directory)
+          && (directory.startsWith("/tmp") || directory.startsWith("/var"));
       if (macOsPrivatePrefix) {
         log.info(
             "NAS directory resolved through macOS /private symlink: configured={}, real={}",
@@ -272,11 +267,10 @@ final class RemoteFilesystemDispatchSupport {
     if (Texts.hasText(sandboxRootRaw)) {
       Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
       if (!realDirectory.startsWith(sandboxRoot)) {
-        throw new SecurityException(
-            "NAS directory escapes sandbox root: real="
-                + realDirectory
-                + ", sandboxRoot="
-                + sandboxRoot);
+        throw new SecurityException("NAS directory escapes sandbox root: real="
+            + realDirectory
+            + ", sandboxRoot="
+            + sandboxRoot);
       }
     }
     return realDirectory;
@@ -310,9 +304,8 @@ final class RemoteFilesystemDispatchSupport {
       String remoteName =
           resolveRemoteFileName(channelConfig, command.fileRecord(), "oss_object_name");
       String objectName = normalizeObjectName(objectPrefix, remoteName);
-      String contentType =
-          firstText(
-              command.fileRecord(), "mime_type", BatchFileConstants.CONTENT_TYPE_OCTET_STREAM);
+      String contentType = firstText(
+          command.fileRecord(), "mime_type", BatchFileConstants.CONTENT_TYPE_OCTET_STREAM);
       // AWS SDK v2 RequestBody.fromInputStream 需要确定的 contentLength；分发流可能已解密、
       // 长度与声明值不一致，故先读入内存再以精确字节数上传（与 probeOss 的 ByteArrayInputStream 一致）。
       // 防 OOM:bounded 读到上限+1,超限说明文件过大,拒绝该 dispatch 而非把 GB 级整文件读进堆。
@@ -341,15 +334,14 @@ final class RemoteFilesystemDispatchSupport {
       if (DispatchManifestSupport.enabled(channelConfig)) {
         String manifestName = objectName + DispatchManifestSupport.suffix(channelConfig);
         String manifestRef = "oss://" + bucket + PATH_SEP + manifestName;
-        manifest =
-            DispatchManifestSupport.manifestPayload(
-                command,
-                evidence,
-                remoteName,
-                externalRequestId,
-                receiptCode,
-                payloadDigest,
-                manifestRef);
+        manifest = DispatchManifestSupport.manifestPayload(
+            command,
+            evidence,
+            remoteName,
+            externalRequestId,
+            receiptCode,
+            payloadDigest,
+            manifestRef);
         objectStore.put(
             bucket,
             manifestName,
@@ -460,10 +452,9 @@ final class RemoteFilesystemDispatchSupport {
       }
       int port = intProp(channelConfig, "sftp_port", 22);
       // S-2.6: resolve-then-connect — 用已校验的 IP 建连
-      InetSocketAddress target =
-          dnsGuardEnabled
-              ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
-              : new InetSocketAddress(host, port);
+      InetSocketAddress target = dnsGuardEnabled
+          ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
+          : new InetSocketAddress(host, port);
       try (Socket socket = new Socket()) {
         socket.connect(target, probeConnectTimeoutMillis(properties));
       }
@@ -491,10 +482,9 @@ final class RemoteFilesystemDispatchSupport {
       }
       int port = intProp(channelConfig, "smtp_port", 25);
       // S-2.6: resolve-then-connect — 用已校验的 IP 建连
-      InetSocketAddress target =
-          dnsGuardEnabled
-              ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
-              : new InetSocketAddress(host, port);
+      InetSocketAddress target = dnsGuardEnabled
+          ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
+          : new InetSocketAddress(host, port);
       try (Socket socket = new Socket()) {
         socket.connect(target, probeConnectTimeoutMillis(properties));
       }
@@ -522,11 +512,10 @@ final class RemoteFilesystemDispatchSupport {
       }
       // S-2.6: resolve-then-connect — 校验目标 IP 后把 HTTP 客户端 DNS 钉到该地址,
       // 与真实 API/API_PUSH dispatch 的 SSRF 防护保持一致。
-      OkHttpClient client =
-          new OkHttpClient.Builder()
-              .connectTimeout(Duration.ofMillis(properties.getProbeConnectTimeoutMillis()))
-              .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
-              .build();
+      OkHttpClient client = new OkHttpClient.Builder()
+          .connectTimeout(Duration.ofMillis(properties.getProbeConnectTimeoutMillis()))
+          .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
+          .build();
       if (dnsGuardEnabled) {
         String probeHost = URI.create(endpoint).getHost();
         var resolved = DnsResolveGuard.resolveAndValidate(probeHost);
@@ -573,8 +562,8 @@ final class RemoteFilesystemDispatchSupport {
       case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
       case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled, properties);
       default ->
-          new DispatchChannelProbeResult(
-              false, "unsupported health probe channel type: " + channelType, null);
+        new DispatchChannelProbeResult(
+            false, "unsupported health probe channel type: " + channelType, null);
     };
   }
 
@@ -641,7 +630,8 @@ final class RemoteFilesystemDispatchSupport {
   }
 
   private static String resolveReceiptCode(DispatchCommand command, String externalRequestId) {
-    if (command.payload().receiptCode() != null && !command.payload().receiptCode().isBlank()) {
+    if (command.payload().receiptCode() != null
+        && !command.payload().receiptCode().isBlank()) {
       return command.payload().receiptCode();
     }
     return "R-" + externalRequestId;
@@ -653,10 +643,9 @@ final class RemoteFilesystemDispatchSupport {
     if (Texts.hasText(explicit)) {
       return sanitizeFileName(explicit);
     }
-    Object original =
-        fileRecord == null
-            ? null
-            : firstNonNull(fileRecord.get("original_file_name"), fileRecord.get("file_name"));
+    Object original = fileRecord == null
+        ? null
+        : firstNonNull(fileRecord.get("original_file_name"), fileRecord.get("file_name"));
     String fallback =
         original == null ? BatchFileConstants.DEFAULT_FILE_NAME : String.valueOf(original);
     return sanitizeFileName(fallback);

@@ -54,11 +54,11 @@ class BatchInsertGeneratedKeysIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:17"))
-          .withDatabaseName("batch_sql_batch_it")
-          .withUsername("batch_user")
-          .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+          DockerImageName.parse("postgres:17"))
+      .withDatabaseName("batch_sql_batch_it")
+      .withUsername("batch_user")
+      .withPassword("batch_pass_123");
 
   private static SingleConnectionDataSource dataSource;
   private static SqlSessionFactory sqlSessionFactory;
@@ -73,20 +73,18 @@ class BatchInsertGeneratedKeysIntegrationTest {
         .locations("classpath:db/migration")
         .load()
         .migrate();
-    dataSource =
-        new SingleConnectionDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+    dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     jdbc = new JdbcTemplate(dataSource);
     // 关 FK 触发器：本 IT 只测 SQL/驱动机制，不铺 job_definition/job_instance 全量种子
     jdbc.execute("set session_replication_role = replica");
     Configuration configuration =
         new Configuration(new Environment("it", new JdbcTransactionFactory(), dataSource));
-    for (String resource :
-        List.of(
-            "mapper/JobPartitionMapper.xml",
-            "mapper/JobTaskMapper.xml",
-            "mapper/JobStepInstanceMapper.xml",
-            "mapper/OutboxEventMapper.xml")) {
+    for (String resource : List.of(
+        "mapper/JobPartitionMapper.xml",
+        "mapper/JobTaskMapper.xml",
+        "mapper/JobStepInstanceMapper.xml",
+        "mapper/OutboxEventMapper.xml")) {
       try (InputStream in = Resources.getResourceAsStream(resource)) {
         new XMLMapperBuilder(in, configuration, resource, configuration.getSqlFragments()).parse();
       }
@@ -116,22 +114,20 @@ class BatchInsertGeneratedKeysIntegrationTest {
       assertThat(partitions.get(1).getId()).isLessThan(partitions.get(2).getId());
       // 回填的 id 与 DB 行一一对应(按 partition_no 反查)
       for (JobPartitionEntity p : partitions) {
-        Long dbId =
-            jdbc.queryForObject(
-                "select id from batch.job_partition where tenant_id=? and job_instance_id=? and"
-                    + " partition_no=?",
-                Long.class,
-                p.getTenantId(),
-                p.getJobInstanceId(),
-                p.getPartitionNo());
+        Long dbId = jdbc.queryForObject(
+            "select id from batch.job_partition where tenant_id=? and job_instance_id=? and"
+                + " partition_no=?",
+            Long.class,
+            p.getTenantId(),
+            p.getJobInstanceId(),
+            p.getPartitionNo());
         assertThat(p.getId()).isEqualTo(dbId);
       }
 
       JobTaskMapper taskMapper = session.getMapper(JobTaskMapper.class);
-      List<JobTaskEntity> tasks =
-          List.of(
-              task("ta", 900L, partitions.get(0).getId()),
-              task("ta", 900L, partitions.get(1).getId()));
+      List<JobTaskEntity> tasks = List.of(
+          task("ta", 900L, partitions.get(0).getId()),
+          task("ta", 900L, partitions.get(1).getId()));
       taskMapper.insertBatch(tasks);
       assertThat(tasks).allMatch(t -> t.getId() != null);
       assertThat(tasks.get(0).getId()).isLessThan(tasks.get(1).getId());
@@ -147,41 +143,39 @@ class BatchInsertGeneratedKeysIntegrationTest {
       JobPartitionEntity p1 = partition("ta", 901L, 1);
       JobPartitionEntity p2 = partition("ta", 901L, 2);
       partitionMapper.insertBatch(List.of(p1, p2));
-      jdbc.update(
-          "update batch.job_partition set partition_status='RUNNING', worker_code='w1',"
-              + " current_invocation_id='inv-'||partition_no where job_instance_id=901");
+      jdbc.update("update batch.job_partition set partition_status='RUNNING', worker_code='w1',"
+          + " current_invocation_id='inv-'||partition_no where job_instance_id=901");
       JobTaskEntity t1 = task("ta", 901L, p1.getId());
       JobTaskEntity t2 = task("ta", 901L, p2.getId());
       taskMapper.insertBatch(List.of(t1, t2));
-      jdbc.update(
-          "update batch.job_task set task_status='RUNNING', assigned_worker_code='w1'"
-              + " where job_instance_id=901");
+      jdbc.update("update batch.job_task set task_status='RUNNING', assigned_worker_code='w1'"
+          + " where job_instance_id=901");
       jdbc.update("update batch.job_task set cancel_requested=true where id=?", t2.getId());
 
       Instant newLease = Instant.now().plus(300, ChronoUnit.SECONDS);
-      List<RenewLeaseBatchRow> rows =
-          partitionMapper.renewLeaseBatch(
-              List.of(
-                  item("ta", t1.getId(), "w1", "inv-1"),
-                  item("ta", t2.getId(), "w1", "inv-2"),
-                  // invocation 不匹配(R3-P1-10 CAS):不得续、不得出现在 RETURNING
-                  item("ta", t1.getId(), "w1", "inv-wrong")),
-              newLease,
-              "RUNNING");
+      List<RenewLeaseBatchRow> rows = partitionMapper.renewLeaseBatch(
+          List.of(
+              item("ta", t1.getId(), "w1", "inv-1"),
+              item("ta", t2.getId(), "w1", "inv-2"),
+              // invocation 不匹配(R3-P1-10 CAS):不得续、不得出现在 RETURNING
+              item("ta", t1.getId(), "w1", "inv-wrong")),
+          newLease,
+          "RUNNING");
 
       assertThat(rows).hasSize(2);
       assertThat(rows)
           .extracting(RenewLeaseBatchRow::getTaskId)
           .containsExactlyInAnyOrder(t1.getId(), t2.getId());
-      RenewLeaseBatchRow rowT2 =
-          rows.stream().filter(r -> r.getTaskId().equals(t2.getId())).findFirst().orElseThrow();
+      RenewLeaseBatchRow rowT2 = rows.stream()
+          .filter(r -> r.getTaskId().equals(t2.getId()))
+          .findFirst()
+          .orElseThrow();
       assertThat(rowT2.getCancelRequested()).isTrue();
       // lease 确实写进去了
-      Integer renewedCount =
-          jdbc.queryForObject(
-              "select count(*) from batch.job_partition where job_instance_id=901 and"
-                  + " lease_expire_at is not null",
-              Integer.class);
+      Integer renewedCount = jdbc.queryForObject(
+          "select count(*) from batch.job_partition where job_instance_id=901 and"
+              + " lease_expire_at is not null",
+          Integer.class);
       assertThat(renewedCount).isEqualTo(2);
     }
   }
@@ -197,19 +191,17 @@ class BatchInsertGeneratedKeysIntegrationTest {
               + " values ('ta','JOB_TASK',1,'IMPORT','k1','{}','NEW',0),"
               + " ('ta','JOB_TASK',2,'IMPORT','k2','{}','FAILED',1),"
               + " ('ta','JOB_TASK',3,'IMPORT','k3','{}','PUBLISHED',1)");
-      List<Long> ids =
-          jdbc.queryForList(
-              "select id from batch.outbox_event where tenant_id='ta' order by id", Long.class);
+      List<Long> ids = jdbc.queryForList(
+          "select id from batch.outbox_event where tenant_id='ta' order by id", Long.class);
 
       List<Long> won = outboxMapper.markPublishingBatch("ta", ids, "PUBLISHING", "NEW", "FAILED");
 
       // 只有 NEW/FAILED 两行被抢占;PUBLISHED 行不动(可重入集 CAS 与单条 markPublishing 一致)
       assertThat(won).containsExactlyInAnyOrder(ids.get(0), ids.get(1));
-      assertThat(
-              jdbc.queryForObject(
-                  "select publish_attempt from batch.outbox_event where id=?",
-                  Integer.class,
-                  ids.get(0)))
+      assertThat(jdbc.queryForObject(
+              "select publish_attempt from batch.outbox_event where id=?",
+              Integer.class,
+              ids.get(0)))
           .isEqualTo(1);
 
       // 阶段三:markPublishedBatch 带 PUBLISHING 守卫 —— 已 PUBLISHED 的第三行不被误改

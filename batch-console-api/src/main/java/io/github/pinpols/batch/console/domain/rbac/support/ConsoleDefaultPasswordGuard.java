@@ -51,20 +51,18 @@ public class ConsoleDefaultPasswordGuard {
   public void checkBuiltinDefaultPasswords() {
     List<ConsoleUserAccountEntity> accounts =
         userAccountMapper.selectBuiltinSystemAccounts(BUILTIN_USERNAMES);
-    List<String> stillDefault =
-        accounts.stream()
-            .filter(a -> usesFactoryDefault(a.getPasswordHash()))
-            .map(ConsoleUserAccountEntity::getUsername)
-            .collect(Collectors.toList());
+    List<String> stillDefault = accounts.stream()
+        .filter(a -> usesFactoryDefault(a.getPasswordHash()))
+        .map(ConsoleUserAccountEntity::getUsername)
+        .collect(Collectors.toList());
     if (stillDefault.isEmpty()) {
       return;
     }
     boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
     if (productionMode) {
-      throw new IllegalStateException(
-          "FATAL: 内置控制台账号 "
-              + stillDefault
-              + " 仍使用出厂默认密码 admin123,生产环境拒绝启动;请先经 reset-password / change-password 改密后再部署");
+      throw new IllegalStateException("FATAL: 内置控制台账号 "
+          + stillDefault
+          + " 仍使用出厂默认密码 admin123,生产环境拒绝启动;请先经 reset-password / change-password 改密后再部署");
     }
     log.warn(
         "⚠️ 非生产 profile:内置控制台账号 {} 仍使用出厂默认密码 admin123,首次登录会被强制改密;"

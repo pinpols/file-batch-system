@@ -39,14 +39,13 @@ public class HikariSaturationHealthIndicator implements HealthIndicator {
     int idle = pool.getIdleConnections();
     int waiting = pool.getThreadsAwaitingConnection();
     double saturation = total > 0 ? (double) active / total : 0.0;
-    Health.Builder builder =
-        (saturation >= saturationThreshold ? Health.down() : Health.up())
-            .withDetail("active", active)
-            .withDetail("idle", idle)
-            .withDetail("max", total)
-            .withDetail("waiting", waiting)
-            .withDetail("saturation", saturation)
-            .withDetail("threshold", saturationThreshold);
+    Health.Builder builder = (saturation >= saturationThreshold ? Health.down() : Health.up())
+        .withDetail("active", active)
+        .withDetail("idle", idle)
+        .withDetail("max", total)
+        .withDetail("waiting", waiting)
+        .withDetail("saturation", saturation)
+        .withDetail("threshold", saturationThreshold);
     if (waiting > 0) {
       // 有线程在排队等连接 = 池子已经事实饱和,即使 active < threshold 也下沉
       builder = Health.down().withDetails(builder.build().getDetails());

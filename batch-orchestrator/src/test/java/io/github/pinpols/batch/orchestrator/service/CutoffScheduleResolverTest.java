@@ -38,9 +38,8 @@ class CutoffScheduleResolverTest {
 
   @Test
   void exactDateOverrideTakesPriority() {
-    String spec =
-        "{\"default\":\"05:30\",\"overrides\":["
-            + "{\"date\":\"2026-12-24\",\"cutoff\":\"13:00\",\"reason\":\"圣诞夜半天班\"}]}";
+    String spec = "{\"default\":\"05:30\",\"overrides\":["
+        + "{\"date\":\"2026-12-24\",\"cutoff\":\"13:00\",\"reason\":\"圣诞夜半天班\"}]}";
     assertThat(resolver.resolveCutoffTime(spec, LocalDate.of(2026, 12, 24), baseDefault))
         .isEqualTo(LocalTime.of(13, 0));
     // 同 schedule 其它日期回到 default
@@ -50,10 +49,9 @@ class CutoffScheduleResolverTest {
 
   @Test
   void weekdayPatternRangeOverrideMatches() {
-    String spec =
-        "{\"default\":\"06:00\",\"overrides\":["
-            + "{\"weekdayPattern\":\"FRIDAY\",\"cutoff\":\"05:30\","
-            + "\"from\":\"2026-06-01\",\"to\":\"2026-08-31\"}]}";
+    String spec = "{\"default\":\"06:00\",\"overrides\":["
+        + "{\"weekdayPattern\":\"FRIDAY\",\"cutoff\":\"05:30\","
+        + "\"from\":\"2026-06-01\",\"to\":\"2026-08-31\"}]}";
     // 2026-06-12 is Friday in window
     assertThat(resolver.resolveCutoffTime(spec, LocalDate.of(2026, 6, 12), baseDefault))
         .isEqualTo(LocalTime.of(5, 30));
@@ -65,10 +63,9 @@ class CutoffScheduleResolverTest {
 
   @Test
   void exactOverrideBeatsWeekdayPattern() {
-    String spec =
-        "{\"default\":\"06:00\",\"overrides\":["
-            + "{\"weekdayPattern\":\"FRIDAY\",\"cutoff\":\"05:30\"},"
-            + "{\"date\":\"2026-12-25\",\"cutoff\":\"13:00\"}]}";
+    String spec = "{\"default\":\"06:00\",\"overrides\":["
+        + "{\"weekdayPattern\":\"FRIDAY\",\"cutoff\":\"05:30\"},"
+        + "{\"date\":\"2026-12-25\",\"cutoff\":\"13:00\"}]}";
     // 2026-12-25 is Friday — exact wins
     assertThat(resolver.resolveCutoffTime(spec, LocalDate.of(2026, 12, 25), baseDefault))
         .isEqualTo(LocalTime.of(13, 0));

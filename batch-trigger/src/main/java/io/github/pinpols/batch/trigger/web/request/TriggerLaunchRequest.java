@@ -12,9 +12,11 @@ import lombok.Data;
 @Data
 public class TriggerLaunchRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String jobCode;
+  @ValidResourceCode
+  private String jobCode;
 
   @NotNull(message = "bizDate is required")
   private LocalDate bizDate;

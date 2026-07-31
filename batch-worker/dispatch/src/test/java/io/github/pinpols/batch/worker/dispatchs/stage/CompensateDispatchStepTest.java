@@ -23,8 +23,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CompensateDispatchStepTest {
 
-  @Mock private FileDispatchRepository fileDispatchRepository;
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private FileDispatchRepository fileDispatchRepository;
+
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
   private CompensateDispatchStep step;
 
@@ -50,7 +53,8 @@ class CompensateDispatchStepTest {
   @Test
   void execute_failsWhenMarkCompensatedReturnsZero() {
     when(runtimeRepository.toLong(any())).thenReturn(10L);
-    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(0);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
+        .thenReturn(0);
 
     DispatchJobContext context = buildContext();
     DispatchStageResult result = step.execute(context);
@@ -63,7 +67,8 @@ class CompensateDispatchStepTest {
   @Test
   void execute_succeedsAndUpdatesFileStatusToFailed() {
     when(runtimeRepository.toLong(any())).thenReturn(10L);
-    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContext();
     DispatchStageResult result = step.execute(context);
@@ -78,7 +83,8 @@ class CompensateDispatchStepTest {
     // updateFileStatus 内构造 Map.of("channelCode", channelCode) 曾 NPE,把补偿冲正掩盖成 500。
     // 见 CompensateDispatchStep#execute。
     when(runtimeRepository.toLong(any())).thenReturn(10L);
-    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchPayload payload =
         new DispatchPayload("10", null, null, "target", null, null, null, null, null, null);
@@ -98,7 +104,8 @@ class CompensateDispatchStepTest {
   @Test
   void execute_writesAuditLog() {
     when(runtimeRepository.toLong(any())).thenReturn(10L);
-    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContext();
     context.setWorkerId("w1");

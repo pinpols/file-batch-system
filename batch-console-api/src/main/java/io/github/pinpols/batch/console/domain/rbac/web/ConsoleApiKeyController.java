@@ -62,16 +62,14 @@ public class ConsoleApiKeyController {
   public CommonResponse<ConsoleApiKeyCreateResponse> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateApiKeyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    ConsoleApiKeyService.CreateResult result =
-        apiKeyService.create(
-            tenantId, request.keyName(), request.scopes(), request.expiresAt(), operator);
-    return responseFactory.success(
-        new ConsoleApiKeyCreateResponse(
-            result.entity().getId(),
-            result.entity().getKeyName(),
-            result.entity().getKeyPrefix(),
-            result.rawKey(),
-            result.entity().getCreatedAt()));
+    ConsoleApiKeyService.CreateResult result = apiKeyService.create(
+        tenantId, request.keyName(), request.scopes(), request.expiresAt(), operator);
+    return responseFactory.success(new ConsoleApiKeyCreateResponse(
+        result.entity().getId(),
+        result.entity().getKeyName(),
+        result.entity().getKeyPrefix(),
+        result.rawKey(),
+        result.entity().getCreatedAt()));
   }
 
   /** 吊销 API Key。 */

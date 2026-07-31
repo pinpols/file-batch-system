@@ -8,9 +8,11 @@ import lombok.Data;
 /** 克隆作业定义请求：必须指定 newJobCode，其余字段为可选覆盖。 */
 @Data
 public class JobDefinitionCopyRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String newJobCode;
+  @ValidResourceCode
+  private String newJobCode;
 
   @Size(max = 256)
   private String jobName;

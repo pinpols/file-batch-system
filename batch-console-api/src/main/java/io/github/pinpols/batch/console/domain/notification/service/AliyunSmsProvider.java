@@ -71,7 +71,8 @@ public class AliyunSmsProvider implements SmsProvider {
   public AliyunSmsProvider(SmsProperties properties, ObjectMapper objectMapper) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    this.httpClient =
+        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
   }
 
   @Override
@@ -137,15 +138,14 @@ public class AliyunSmsProvider implements SmsProvider {
     }
 
     String url = "https://" + endpoint + CANONICAL_URI + "?" + canonicalQuery;
-    Map<String, String> headers =
-        Map.of(
-            "host", endpoint,
-            "x-acs-action", ACTION,
-            "x-acs-version", VERSION,
-            "x-acs-date", acsDate,
-            "x-acs-signature-nonce", nonce,
-            "x-acs-content-sha256", sha256Hex(""),
-            "Authorization", authorization);
+    Map<String, String> headers = Map.of(
+        "host", endpoint,
+        "x-acs-action", ACTION,
+        "x-acs-version", VERSION,
+        "x-acs-date", acsDate,
+        "x-acs-signature-nonce", nonce,
+        "x-acs-content-sha256", sha256Hex(""),
+        "Authorization", authorization);
 
     try {
       // SSRF/rebinding 防护:投递前二次解析校验 endpoint host IP 不落内网/回环/链路本地。
@@ -182,10 +182,9 @@ public class AliyunSmsProvider implements SmsProvider {
 
   /** 构造模板参数 {@code {"event": <eventType>}}，值超长截断，保持简单。 */
   private String buildTemplateParam(NotificationMessage message) {
-    String eventType =
-        (message.payload() != null && message.payload().eventType() != null)
-            ? message.payload().eventType()
-            : "UNKNOWN";
+    String eventType = (message.payload() != null && message.payload().eventType() != null)
+        ? message.payload().eventType()
+        : "UNKNOWN";
     if (eventType.length() > MAX_TEMPLATE_PARAM_CHARS) {
       eventType = eventType.substring(0, MAX_TEMPLATE_PARAM_CHARS);
     }
@@ -215,7 +214,11 @@ public class AliyunSmsProvider implements SmsProvider {
     StringBuilder canonicalHeaderStr = new StringBuilder();
     StringBuilder signedHeadersStr = new StringBuilder();
     for (Map.Entry<String, String> e : canonicalHeaders.entrySet()) {
-      canonicalHeaderStr.append(e.getKey()).append(':').append(e.getValue().trim()).append('\n');
+      canonicalHeaderStr
+          .append(e.getKey())
+          .append(':')
+          .append(e.getValue().trim())
+          .append('\n');
       if (signedHeadersStr.length() > 0) {
         signedHeadersStr.append(';');
       }
@@ -223,18 +226,17 @@ public class AliyunSmsProvider implements SmsProvider {
     }
     String signedHeaders = signedHeadersStr.toString();
 
-    String canonicalRequest =
-        HTTP_METHOD
-            + '\n'
-            + CANONICAL_URI
-            + '\n'
-            + canonicalQueryString(queryParams)
-            + '\n'
-            + canonicalHeaderStr
-            + '\n'
-            + signedHeaders
-            + '\n'
-            + hashedPayload;
+    String canonicalRequest = HTTP_METHOD
+        + '\n'
+        + CANONICAL_URI
+        + '\n'
+        + canonicalQueryString(queryParams)
+        + '\n'
+        + canonicalHeaderStr
+        + '\n'
+        + signedHeaders
+        + '\n'
+        + hashedPayload;
 
     String stringToSign = ALGORITHM + '\n' + sha256Hex(canonicalRequest);
     String signature = hmacSha256Hex(properties.getAliyunAccessKeySecret(), stringToSign);

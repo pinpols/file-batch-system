@@ -46,13 +46,12 @@ public class ConsoleMenuRegistry {
         items.add(
             new MenuItem(i.getTitle(), i.getPath(), i.getIcon(), normalizeRole(i.getMinRole())));
       }
-      groups.add(
-          new MenuGroup(
-              g.getKey(),
-              g.getTitle(),
-              g.getIcon(),
-              normalizeRole(g.getMinRole()),
-              List.copyOf(items)));
+      groups.add(new MenuGroup(
+          g.getKey(),
+          g.getTitle(),
+          g.getIcon(),
+          normalizeRole(g.getMinRole()),
+          List.copyOf(items)));
     }
     this.allGroups = List.copyOf(groups);
   }
@@ -65,8 +64,9 @@ public class ConsoleMenuRegistry {
       if (roleLevel < roleLevel(group.minRole())) {
         continue;
       }
-      List<MenuItem> visibleItems =
-          group.children().stream().filter(item -> roleLevel >= roleLevel(item.minRole())).toList();
+      List<MenuItem> visibleItems = group.children().stream()
+          .filter(item -> roleLevel >= roleLevel(item.minRole()))
+          .toList();
       if (!visibleItems.isEmpty()) {
         result.add(
             new MenuGroup(group.key(), group.title(), group.icon(), group.minRole(), visibleItems));

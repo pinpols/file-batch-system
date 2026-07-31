@@ -24,8 +24,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class LoginProtectionServiceTest {
 
-  @Mock private LoginFailureTracker failureTracker;
-  @Mock private CaptchaVerifier captchaVerifier;
+  @Mock
+  private LoginFailureTracker failureTracker;
+
+  @Mock
+  private CaptchaVerifier captchaVerifier;
 
   private LoginProtectionProperties properties;
   private LoginProtectionService service;

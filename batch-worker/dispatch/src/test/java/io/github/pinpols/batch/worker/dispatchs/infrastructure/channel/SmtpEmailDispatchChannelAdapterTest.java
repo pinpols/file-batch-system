@@ -20,35 +20,32 @@ class SmtpEmailDispatchChannelAdapterTest {
     when(environment.getActiveProfiles()).thenReturn(new String[0]);
     SmtpEmailDispatchChannelAdapter adapter =
         new SmtpEmailDispatchChannelAdapter(mock(DispatchFileContentResolver.class), environment);
-    Map<String, Object> config =
-        Map.of(
-            "smtp_host",
-            "smtp.example.test",
-            "smtp_port",
-            587,
-            "smtp_username",
-            "sender@example.test",
-            "smtp_password",
-            "secret",
-            "mail_to",
-            "receiver@example.test",
-            "smtp_connection_timeout_millis",
-            1234,
-            "smtp_timeout_millis",
-            2345,
-            "smtp_write_timeout_millis",
-            3456);
+    Map<String, Object> config = Map.of(
+        "smtp_host",
+        "smtp.example.test",
+        "smtp_port",
+        587,
+        "smtp_username",
+        "sender@example.test",
+        "smtp_password",
+        "secret",
+        "mail_to",
+        "receiver@example.test",
+        "smtp_connection_timeout_millis",
+        1234,
+        "smtp_timeout_millis",
+        2345,
+        "smtp_write_timeout_millis",
+        3456);
 
     Object mailConfig = invoke(adapter, "resolveMailConfig", new Class<?>[] {Map.class}, config);
-    MimeMessage message =
-        (MimeMessage)
-            invoke(
-                adapter,
-                "buildMimeMessage",
-                new Class<?>[] {mailConfig.getClass(), DispatchCommand.class, String.class},
-                mailConfig,
-                command(config),
-                "req-1");
+    MimeMessage message = (MimeMessage) invoke(
+        adapter,
+        "buildMimeMessage",
+        new Class<?>[] {mailConfig.getClass(), DispatchCommand.class, String.class},
+        mailConfig,
+        command(config),
+        "req-1");
 
     assertThat(message.getSession().getProperty("mail.smtp.connectiontimeout")).isEqualTo("1234");
     assertThat(message.getSession().getProperty("mail.smtp.timeout")).isEqualTo("2345");
@@ -63,18 +60,17 @@ class SmtpEmailDispatchChannelAdapterTest {
   }
 
   private static DispatchCommand command(Map<String, Object> channelConfig) {
-    DispatchPayload payload =
-        new DispatchPayload(
-            "file-1",
-            "FILE_A",
-            "EMAIL_CH",
-            "target",
-            "req-1",
-            "rcpt-1",
-            true,
-            false,
-            "NORMAL",
-            Map.of());
+    DispatchPayload payload = new DispatchPayload(
+        "file-1",
+        "FILE_A",
+        "EMAIL_CH",
+        "target",
+        "req-1",
+        "rcpt-1",
+        true,
+        false,
+        "NORMAL",
+        Map.of());
     return new DispatchCommand(
         "t1",
         "trace-1",

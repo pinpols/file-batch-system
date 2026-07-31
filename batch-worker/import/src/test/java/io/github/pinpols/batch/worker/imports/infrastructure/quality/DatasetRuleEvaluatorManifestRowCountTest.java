@@ -61,13 +61,12 @@ class DatasetRuleEvaluatorManifestRowCountTest {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
     // 模板 exact=1000(与实际一致)→ 不报;manifest 声明 500(若被采用会误报)→ 验证未被采用
-    evaluator.evaluate(
-        session(
-            Map.of("rowCountCheck", Map.of("enabled", true, "exact", 1000)),
-            500,
-            1000L,
-            issues,
-            applied));
+    evaluator.evaluate(session(
+        Map.of("rowCountCheck", Map.of("enabled", true, "exact", 1000)),
+        500,
+        1000L,
+        issues,
+        applied));
     assertThat(issues).isEmpty();
     assertThat(applied).contains("row_count_check");
   }

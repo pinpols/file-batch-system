@@ -39,8 +39,11 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultImportStageExecutorTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ImportRecordGovernanceService recordGovernanceService;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ImportRecordGovernanceService recordGovernanceService;
 
   private ImportStageStep receiveStep;
   private DefaultImportStageExecutor executor;
@@ -82,9 +85,8 @@ class DefaultImportStageExecutorTest {
   @Test
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(receiveStep.execute(any()))
-        .thenThrow(
-            BizException.of(
-                ResultCode.INVALID_ARGUMENT, "error.import.receive_failed", "channel unreachable"));
+        .thenThrow(BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.import.receive_failed", "channel unreachable"));
     ImportJobContext context = buildContext();
 
     List<ImportStageResult> results = executor.execute(context);
@@ -154,20 +156,19 @@ class DefaultImportStageExecutorTest {
     context.setTenantId("t1");
     context.setWorkerId("w1");
     context.setJobCode("JOB_001");
-    PipelineStepDefinition step =
-        new PipelineStepDefinition(
-            1L,
-            1L,
-            "IMPORT_RECEIVE",
-            "Import Receive",
-            ImportStage.RECEIVE.name(),
-            1,
-            implCode,
-            Map.of(),
-            0,
-            "NONE",
-            0,
-            true);
+    PipelineStepDefinition step = new PipelineStepDefinition(
+        1L,
+        1L,
+        "IMPORT_RECEIVE",
+        "Import Receive",
+        ImportStage.RECEIVE.name(),
+        1,
+        implCode,
+        Map.of(),
+        0,
+        "NONE",
+        0,
+        true);
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of(step));
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     return context;

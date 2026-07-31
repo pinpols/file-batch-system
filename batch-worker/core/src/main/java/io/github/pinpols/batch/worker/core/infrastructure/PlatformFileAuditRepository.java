@@ -23,34 +23,33 @@ final class PlatformFileAuditRepository {
   private final PlatformFileRuntimeMapper mapper;
 
   Long insertFileErrorRecord(FileErrorRecordParam param) {
-    Map<String, Object> values =
-        params(
-            TENANT_ID,
-            param.getTenantId(),
-            FILE_ID,
-            param.getFileId(),
-            PIPELINE_INSTANCE_ID,
-            param.getPipelineInstanceId(),
-            "pipelineStepRunId",
-            param.getPipelineStepRunId(),
-            "recordNo",
-            param.getRecordNo(),
-            "errorCode",
-            param.getErrorCode(),
-            "errorMessage",
-            truncate(param.getErrorMessage(), 1024),
-            "errorStage",
-            param.getErrorStage(),
-            "isSkipped",
-            param.isSkipped(),
-            "skipAction",
-            param.getSkipAction(),
-            "rawRecordJson",
-            toJson(param.getRawRecord()),
-            "sourceRowNum",
-            param.getSourceRowNum(),
-            "sourceColumn",
-            truncate(param.getSourceColumn(), 256));
+    Map<String, Object> values = params(
+        TENANT_ID,
+        param.getTenantId(),
+        FILE_ID,
+        param.getFileId(),
+        PIPELINE_INSTANCE_ID,
+        param.getPipelineInstanceId(),
+        "pipelineStepRunId",
+        param.getPipelineStepRunId(),
+        "recordNo",
+        param.getRecordNo(),
+        "errorCode",
+        param.getErrorCode(),
+        "errorMessage",
+        truncate(param.getErrorMessage(), 1024),
+        "errorStage",
+        param.getErrorStage(),
+        "isSkipped",
+        param.isSkipped(),
+        "skipAction",
+        param.getSkipAction(),
+        "rawRecordJson",
+        toJson(param.getRawRecord()),
+        "sourceRowNum",
+        param.getSourceRowNum(),
+        "sourceColumn",
+        truncate(param.getSourceColumn(), 256));
     mapper.insertFileErrorRecord(values);
     return toLong(values.get(ID));
   }
@@ -60,18 +59,17 @@ final class PlatformFileAuditRepository {
     if (!Texts.hasText(tenantId) || limit <= 0) {
       return List.of();
     }
-    return mapper.selectFileErrorRecords(
-        params(
-            TENANT_ID,
-            tenantId,
-            FILE_ID,
-            fileId,
-            "errorCode",
-            errorCode,
-            "errorStage",
-            errorStage,
-            "limit",
-            limit));
+    return mapper.selectFileErrorRecords(params(
+        TENANT_ID,
+        tenantId,
+        FILE_ID,
+        fileId,
+        "errorCode",
+        errorCode,
+        "errorStage",
+        errorStage,
+        "limit",
+        limit));
   }
 
   void appendAudit(FileAuditParam param) {
@@ -81,25 +79,24 @@ final class PlatformFileAuditRepository {
         || !Texts.hasText(param.getOperationResult())) {
       return;
     }
-    mapper.insertFileAuditLog(
-        params(
-            TENANT_ID,
-            param.getTenantId(),
-            FILE_ID,
-            param.getFileId(),
-            "operationType",
-            param.getOperationType(),
-            "operationResult",
-            param.getOperationResult(),
-            "operatorType",
-            defaultText(param.getOperatorType(), "SYSTEM"),
-            "operatorId",
-            param.getOperatorId(),
-            "traceId",
-            param.getTraceId(),
-            "evidenceRef",
-            param.getEvidenceRef(),
-            "detailSummaryJson",
-            toJson(param.getDetailSummary())));
+    mapper.insertFileAuditLog(params(
+        TENANT_ID,
+        param.getTenantId(),
+        FILE_ID,
+        param.getFileId(),
+        "operationType",
+        param.getOperationType(),
+        "operationResult",
+        param.getOperationResult(),
+        "operatorType",
+        defaultText(param.getOperatorType(), "SYSTEM"),
+        "operatorId",
+        param.getOperatorId(),
+        "traceId",
+        param.getTraceId(),
+        "evidenceRef",
+        param.getEvidenceRef(),
+        "detailSummaryJson",
+        toJson(param.getDetailSummary())));
   }
 }

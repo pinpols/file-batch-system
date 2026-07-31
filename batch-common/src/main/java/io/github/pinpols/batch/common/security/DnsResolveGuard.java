@@ -46,12 +46,11 @@ public final class DnsResolveGuard {
   public static InetAddress resolveAndValidate(String host) throws UnknownHostException {
     InetAddress addr = InetAddress.getByName(host);
     if (isBlocked(addr)) {
-      throw new BlockedAddressException(
-          "Resolved address "
-              + addr.getHostAddress()
-              + " for host '"
-              + host
-              + "' is in a restricted network range");
+      throw new BlockedAddressException("Resolved address "
+          + addr.getHostAddress()
+          + " for host '"
+          + host
+          + "' is in a restricted network range");
     }
     return addr;
   }

@@ -22,19 +22,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ReceiveStepBundleEnrichTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private BatchSecurityProperties batchSecurityProperties;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private BatchSecurityProperties batchSecurityProperties;
 
   private ReceiveStep receiveStep;
 
   @BeforeEach
   void setUp() {
-    receiveStep =
-        new ReceiveStep(
-            runtimeRepository,
-            batchSecurityProperties,
-            new ObjectMapper(),
-            new WorkerImportPayloadProperties());
+    receiveStep = new ReceiveStep(
+        runtimeRepository,
+        batchSecurityProperties,
+        new ObjectMapper(),
+        new WorkerImportPayloadProperties());
   }
 
   private ImportPayload payloadWithTemplateOnly(String templateCode) {
@@ -100,31 +102,30 @@ class ReceiveStepBundleEnrichTest {
 
   @Test
   void enrichFromFileRecord_doesNotOverrideFieldsPayloadAlreadyCarries() {
-    ImportPayload payload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            "TSV",
-            "GBK",
-            null,
-            null,
-            null,
-            null,
-            null,
-            "TYPE_A",
-            "my/own/path.tsv",
-            "my-bucket",
-            "T1",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Map.of());
+    ImportPayload payload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        "TSV",
+        "GBK",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "TYPE_A",
+        "my/own/path.tsv",
+        "my-bucket",
+        "T1",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        Map.of());
 
     ImportPayload enriched = receiveStep.enrichFromFileRecord(payload, fileRecord());
 

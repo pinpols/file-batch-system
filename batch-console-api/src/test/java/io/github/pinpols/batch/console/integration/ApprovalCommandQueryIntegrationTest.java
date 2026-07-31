@@ -18,9 +18,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private ApprovalCommandMapper approvalCommandMapper;
+  @Autowired
+  private ApprovalCommandMapper approvalCommandMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldReturnEmptyWhenNoApprovalsExist() {
@@ -79,8 +81,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
 
   private void insertApproval(
       String tenantId, String approvalNo, String approvalType, String actionType, String status) {
-    jdbcTemplate.update(
-        """
+    jdbcTemplate.update("""
         INSERT INTO batch.approval_command
           (tenant_id, approval_no, approval_type, action_type, target_type, target_id, payload_json,
            approval_status, requester_id, source_trace_id, source_idempotency_key, approval_reason,
@@ -88,12 +89,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
         VALUES (?, ?, ?, ?, 'JOB', '1', '{}'::jsonb,
                 ?, 'u1', 'trace-1', 'idem-1', 'reason',
                 now(), now())
-        """,
-        tenantId,
-        approvalNo,
-        approvalType,
-        actionType,
-        status);
+        """, tenantId, approvalNo, approvalType, actionType, status);
   }
 
   private void insertApprovalRich(

@@ -17,8 +17,11 @@ import org.springframework.mock.env.MockEnvironment;
 @ExtendWith(MockitoExtension.class)
 class ConsoleDefaultPasswordGuardTest {
 
-  @Mock private io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper mapper;
-  @Mock private ConsolePasswordHasher passwordHasher;
+  @Mock
+  private io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper mapper;
+
+  @Mock
+  private ConsolePasswordHasher passwordHasher;
 
   private ConsoleUserAccountEntity account(String username, String hash) {
     ConsoleUserAccountEntity e = new ConsoleUserAccountEntity();

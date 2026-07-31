@@ -33,7 +33,8 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired private S3ExportStorage storage;
+  @Autowired
+  private S3ExportStorage storage;
 
   @Test
   void shouldWriteAndDetectJsonObject() {
@@ -83,9 +84,8 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldReturnFalseForNonExistentObject() {
-    assertThat(
-            storage.objectExists(
-                "export/no-such-object-" + BatchDateTimeSupport.utcEpochMillis() + ".json"))
+    assertThat(storage.objectExists(
+            "export/no-such-object-" + BatchDateTimeSupport.utcEpochMillis() + ".json"))
         .isFalse();
   }
 
@@ -116,20 +116,17 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
     storage.writeJson(objectName, content);
 
-    try (S3Client client =
-        S3Client.builder()
-            .endpointOverride(URI.create(s3Endpoint()))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create("minioadmin", "minioadmin123")))
-            .forcePathStyle(true)
-            .region(Region.US_EAST_1)
-            .build()) {
-      byte[] bytes =
-          client
-              .getObjectAsBytes(
-                  GetObjectRequest.builder().bucket(s3Bucket()).key(objectName).build())
-              .asByteArray();
+    try (S3Client client = S3Client.builder()
+        .endpointOverride(URI.create(s3Endpoint()))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
+        .build()) {
+      byte[] bytes = client
+          .getObjectAsBytes(
+              GetObjectRequest.builder().bucket(s3Bucket()).key(objectName).build())
+          .asByteArray();
       String read = new String(bytes, StandardCharsets.UTF_8);
       assertThat(read).isEqualTo(content);
     }

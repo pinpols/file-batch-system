@@ -48,9 +48,8 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   void setUp() {
     sessionMapper = mock(BatchDayReplaySessionMapper.class);
     entryMapper = mock(BatchDayReplayEntryMapper.class);
-    BatchDateTimeSupport dateTimeSupport =
-        new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
     reconciler = new BatchDayReplayTerminalReconciler(sessionMapper, entryMapper, dateTimeSupport);
   }
 
@@ -58,24 +57,22 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @DisplayName("同 jobCode 多 entry 时按 sourceInstanceId 精确回填,不踩第一条")
   void shouldReconcileBySourceInstanceId_whenMultipleEntriesShareSameJobCode() {
     // 准备: 两条 entry,同 jobCode,不同 sourceInstanceId
-    BatchDayReplayEntryEntity entryA =
-        BatchDayReplayEntryEntity.builder()
-            .id(101L)
-            .sessionId(7L)
-            .tenantId("t1")
-            .jobCode("JOB_DUP")
-            .sourceInstanceId(5000L)
-            .status("RUNNING")
-            .build();
-    BatchDayReplayEntryEntity entryB =
-        BatchDayReplayEntryEntity.builder()
-            .id(102L)
-            .sessionId(7L)
-            .tenantId("t1")
-            .jobCode("JOB_DUP")
-            .sourceInstanceId(5001L)
-            .status("RUNNING")
-            .build();
+    BatchDayReplayEntryEntity entryA = BatchDayReplayEntryEntity.builder()
+        .id(101L)
+        .sessionId(7L)
+        .tenantId("t1")
+        .jobCode("JOB_DUP")
+        .sourceInstanceId(5000L)
+        .status("RUNNING")
+        .build();
+    BatchDayReplayEntryEntity entryB = BatchDayReplayEntryEntity.builder()
+        .id(102L)
+        .sessionId(7L)
+        .tenantId("t1")
+        .jobCode("JOB_DUP")
+        .sourceInstanceId(5001L)
+        .status("RUNNING")
+        .build();
     when(sessionMapper.selectById("t1", 7L)).thenReturn(session(7L, "RUNNING", 2));
     // 入参 jobInstanceId=5001 → 对应第二条 entry B
     when(entryMapper.selectByRerunInstanceId("t1", 5001L)).thenReturn(null);
@@ -100,16 +97,15 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @DisplayName("rerun 再入(已写过 rerun_instance_id)时按 rerun_instance_id 反查直接命中")
   void shouldReconcileByRerunInstanceId_whenAlreadyWrittenOnFirstPass() {
     // 准备
-    BatchDayReplayEntryEntity entry =
-        BatchDayReplayEntryEntity.builder()
-            .id(201L)
-            .sessionId(8L)
-            .tenantId("t1")
-            .jobCode("JOB_R")
-            .sourceInstanceId(7000L)
-            .rerunInstanceId(7100L)
-            .status("RUNNING")
-            .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(201L)
+        .sessionId(8L)
+        .tenantId("t1")
+        .jobCode("JOB_R")
+        .sourceInstanceId(7000L)
+        .rerunInstanceId(7100L)
+        .status("RUNNING")
+        .build();
     when(sessionMapper.selectById("t1", 8L)).thenReturn(session(8L, "RUNNING", 1));
     when(entryMapper.selectByRerunInstanceId("t1", 7100L)).thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(anyLong(), anyString())).thenReturn(0L);
@@ -129,15 +125,14 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @Test
   @DisplayName("source/rerun 都对不上时降级到 jobCode 线性扫保持向后兼容")
   void shouldFallBackToJobCodeScan_whenNeitherRerunNorSourceMatches() {
-    BatchDayReplayEntryEntity entry =
-        BatchDayReplayEntryEntity.builder()
-            .id(301L)
-            .sessionId(9L)
-            .tenantId("t1")
-            .jobCode("JOB_LEGACY")
-            .sourceInstanceId(null) // legacy: source 被运维清理
-            .status("RUNNING")
-            .build();
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(301L)
+        .sessionId(9L)
+        .tenantId("t1")
+        .jobCode("JOB_LEGACY")
+        .sourceInstanceId(null) // legacy: source 被运维清理
+        .status("RUNNING")
+        .build();
     when(sessionMapper.selectById("t1", 9L)).thenReturn(session(9L, "RUNNING", 1));
     when(entryMapper.selectByRerunInstanceId("t1", 8000L)).thenReturn(null);
     when(entryMapper.selectBySessionAndSourceInstanceId(9L, "t1", 8000L)).thenReturn(null);

@@ -19,16 +19,15 @@ import org.junit.jupiter.api.Test;
  */
 class KafkaTaskConsumerRebalanceTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("kafka:9092")
-          .kafkaTopicPattern("batch.task.dispatch.tx.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("kafka:9092")
+      .kafkaTopicPattern("batch.task.dispatch.tx.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .build();
 
   private TaskDispatcher dispatcher;
   private MockConsumer<String, byte[]> mockConsumer;

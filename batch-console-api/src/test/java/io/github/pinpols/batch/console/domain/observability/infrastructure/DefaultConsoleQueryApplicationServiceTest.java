@@ -29,29 +29,43 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleQueryApplicationServiceTest {
 
-  @Mock private ConsoleJobQueryService jobQueryService;
-  @Mock private ConsoleFileQueryService fileQueryService;
-  @Mock private ConsoleWorkflowQueryService workflowQueryService;
-  @Mock private ConsoleOpsQueryService opsQueryService;
-  @Mock private OperationAuditQueryService operationAuditQueryService;
-  @Mock private JobDefinitionMapper jobDefinitionMapper;
-  @Mock private PipelineDefinitionMapper pipelineDefinitionMapper;
-  @Mock private ConsoleTenantGuard tenantGuard;
+  @Mock
+  private ConsoleJobQueryService jobQueryService;
+
+  @Mock
+  private ConsoleFileQueryService fileQueryService;
+
+  @Mock
+  private ConsoleWorkflowQueryService workflowQueryService;
+
+  @Mock
+  private ConsoleOpsQueryService opsQueryService;
+
+  @Mock
+  private OperationAuditQueryService operationAuditQueryService;
+
+  @Mock
+  private JobDefinitionMapper jobDefinitionMapper;
+
+  @Mock
+  private PipelineDefinitionMapper pipelineDefinitionMapper;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
 
   private DefaultConsoleQueryApplicationService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new DefaultConsoleQueryApplicationService(
-            jobQueryService,
-            fileQueryService,
-            workflowQueryService,
-            opsQueryService,
-            operationAuditQueryService,
-            jobDefinitionMapper,
-            pipelineDefinitionMapper,
-            tenantGuard);
+    service = new DefaultConsoleQueryApplicationService(
+        jobQueryService,
+        fileQueryService,
+        workflowQueryService,
+        opsQueryService,
+        operationAuditQueryService,
+        jobDefinitionMapper,
+        pipelineDefinitionMapper,
+        tenantGuard);
   }
 
   @Test
@@ -86,7 +100,8 @@ class DefaultConsoleQueryApplicationServiceTest {
     when(fileQueryService.fileChains(any())).thenReturn(empty);
     when(fileQueryService.filePipelines(any())).thenReturn(empty);
     when(opsQueryService.auditLogs(any())).thenReturn(empty);
-    when(operationAuditQueryService.query(any(OperationAuditQueryRequest.class))).thenReturn(empty);
+    when(operationAuditQueryService.query(any(OperationAuditQueryRequest.class)))
+        .thenReturn(empty);
     when(jobQueryService.jobExecutionLogs(any())).thenReturn(empty);
     when(opsQueryService.outboxDeliveries(any())).thenReturn(empty);
     when(opsQueryService.alertEvents(any())).thenReturn(empty);

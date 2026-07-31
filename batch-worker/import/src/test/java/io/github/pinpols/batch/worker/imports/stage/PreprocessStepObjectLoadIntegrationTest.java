@@ -53,16 +53,14 @@ class PreprocessStepObjectLoadIntegrationTest {
     objectStore.start();
     bucket = objectStore.getDefaultBucket();
     client = objectStore.client();
-    presigner =
-        S3Presigner.builder()
-            .endpointOverride(URI.create(objectStore.getEndpoint()))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(
-                        objectStore.getAccessKey(), objectStore.getSecretKey())))
-            .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-            .region(Region.US_EAST_1)
-            .build();
+    presigner = S3Presigner.builder()
+        .endpointOverride(URI.create(objectStore.getEndpoint()))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create(objectStore.getAccessKey(), objectStore.getSecretKey())))
+        .serviceConfiguration(
+            S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .region(Region.US_EAST_1)
+        .build();
     objectStore.ensureBucketExists(bucket);
   }
 

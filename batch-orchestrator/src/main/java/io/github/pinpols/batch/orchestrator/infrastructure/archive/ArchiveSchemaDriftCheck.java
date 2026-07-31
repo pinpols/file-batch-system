@@ -38,46 +38,45 @@ public class ArchiveSchemaDriftCheck {
    *
    * <p>每加一张归档表必须同步在这里登记，否则 archive 列差异不被守护。
    */
-  static final List<String> ARCHIVED_TABLES =
-      List.of(
-          "outbox_event",
-          "event_delivery_log",
-          "event_outbox_retry",
-          "job_instance",
-          "job_partition",
-          "job_task",
-          "job_step_instance",
-          "pipeline_instance",
-          "pipeline_step_run",
-          // V188 (P1-4 lineage cold evidence) — file_record 冷表镜像;补齐历史文件证据链。
-          "file_record",
-          "file_dispatch_record",
-          "workflow_run",
-          "workflow_node_run",
-          "job_execution_log",
-          "compensation_command",
-          // V108 (ADR-017) — result_version 主模型；archive 镜像由 LIKE INCLUDING ALL 创建
-          "result_version",
-          // V110 (ADR-020) — batch_day_replay 聚合 + 子项；archive 镜像同样 LIKE INCLUDING ALL
-          "batch_day_replay_session",
-          "batch_day_replay_entry",
-          // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
-          // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
-          "data_quality_rule",
-          "data_quality_check",
-          // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
-          "trigger_outbox_event",
-          // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
-          "dead_letter_task",
-          // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
-          "custom_task_type_registry",
-          // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
-          "pipeline_progress",
-          // V165 (Round-1 TOP-8 / R3-5) — atomic_task_config 归档表;租户保存的 atomic 节点配置。
-          "atomic_task_config",
-          // V167 (workflow-dag-designer Polish) — workflow_definition_version 归档表;fullUpdate
-          // 全量历史快照。
-          "workflow_definition_version");
+  static final List<String> ARCHIVED_TABLES = List.of(
+      "outbox_event",
+      "event_delivery_log",
+      "event_outbox_retry",
+      "job_instance",
+      "job_partition",
+      "job_task",
+      "job_step_instance",
+      "pipeline_instance",
+      "pipeline_step_run",
+      // V188 (P1-4 lineage cold evidence) — file_record 冷表镜像;补齐历史文件证据链。
+      "file_record",
+      "file_dispatch_record",
+      "workflow_run",
+      "workflow_node_run",
+      "job_execution_log",
+      "compensation_command",
+      // V108 (ADR-017) — result_version 主模型；archive 镜像由 LIKE INCLUDING ALL 创建
+      "result_version",
+      // V110 (ADR-020) — batch_day_replay 聚合 + 子项；archive 镜像同样 LIKE INCLUDING ALL
+      "batch_day_replay_session",
+      "batch_day_replay_entry",
+      // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
+      // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
+      "data_quality_rule",
+      "data_quality_check",
+      // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
+      "trigger_outbox_event",
+      // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
+      "dead_letter_task",
+      // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
+      "custom_task_type_registry",
+      // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
+      "pipeline_progress",
+      // V165 (Round-1 TOP-8 / R3-5) — atomic_task_config 归档表;租户保存的 atomic 节点配置。
+      "atomic_task_config",
+      // V167 (workflow-dag-designer Polish) — workflow_definition_version 归档表;fullUpdate
+      // 全量历史快照。
+      "workflow_definition_version");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
@@ -110,12 +109,11 @@ public class ArchiveSchemaDriftCheck {
       }
     }
     if (driftCount > 0) {
-      throw new IllegalStateException(
-          "archive schema drift detected on "
-              + driftCount
-              + " table(s). "
-              + "Add migration to ALTER archive.* schema to match batch.* before next deploy. "
-              + "See logs above for column-level diff.");
+      throw new IllegalStateException("archive schema drift detected on "
+          + driftCount
+          + " table(s). "
+          + "Add migration to ALTER archive.* schema to match batch.* before next deploy. "
+          + "See logs above for column-level diff.");
     }
     log.info("archive schema drift check passed for {} tables", ARCHIVED_TABLES.size());
   }
@@ -162,37 +160,34 @@ public class ArchiveSchemaDriftCheck {
         // varchar(N) / numeric(P,S) 的长度/精度差异在 character_maximum_length / numeric_*,
         // data_type 不带,必须显式比对
         if (!Objects.equals(h.characterMaximumLength(), c.characterMaximumLength())) {
-          diffs.add(
-              hot
-                  + "."
-                  + col
-                  + " character_maximum_length hot="
-                  + h.characterMaximumLength()
-                  + " cold="
-                  + c.characterMaximumLength());
+          diffs.add(hot
+              + "."
+              + col
+              + " character_maximum_length hot="
+              + h.characterMaximumLength()
+              + " cold="
+              + c.characterMaximumLength());
         }
         if (!Objects.equals(h.numericPrecision(), c.numericPrecision())
             || !Objects.equals(h.numericScale(), c.numericScale())) {
-          diffs.add(
-              hot
-                  + "."
-                  + col
-                  + " numeric precision/scale hot="
-                  + h.numericPrecision()
-                  + "/"
-                  + h.numericScale()
-                  + " cold="
-                  + c.numericPrecision()
-                  + "/"
-                  + c.numericScale());
+          diffs.add(hot
+              + "."
+              + col
+              + " numeric precision/scale hot="
+              + h.numericPrecision()
+              + "/"
+              + h.numericScale()
+              + " cold="
+              + c.numericPrecision()
+              + "/"
+              + c.numericScale());
         }
         // 只报 "cold 比 hot 严格" 方向 — cold NOT NULL + hot NULLABLE 会让 NULL 行 INSERT 失败
         if ("NO".equalsIgnoreCase(c.isNullable()) && "YES".equalsIgnoreCase(h.isNullable())) {
-          diffs.add(
-              hot
-                  + "."
-                  + col
-                  + " is_nullable hot=YES cold=NO (cold rejects NULL rows hot may produce)");
+          diffs.add(hot
+              + "."
+              + col
+              + " is_nullable hot=YES cold=NO (cold rejects NULL rows hot may produce)");
         }
       }
     }
@@ -200,13 +195,12 @@ public class ArchiveSchemaDriftCheck {
       for (String d : diffs) {
         log.error("archive column type drift: {}", d);
       }
-      throw new IllegalStateException(
-          "archive column type drift detected on "
-              + diffs.size()
-              + " column(s). "
-              + "Hot vs cold (data_type or restrictive is_nullable) mismatch — "
-              + "add migration to ALTER archive.* to match batch.* before next deploy. "
-              + "See logs above for per-column diff.");
+      throw new IllegalStateException("archive column type drift detected on "
+          + diffs.size()
+          + " column(s). "
+          + "Hot vs cold (data_type or restrictive is_nullable) mismatch — "
+          + "add migration to ALTER archive.* to match batch.* before next deploy. "
+          + "See logs above for per-column diff.");
     }
     log.info("archive column type drift check passed for {} tables", ARCHIVED_TABLES.size());
   }

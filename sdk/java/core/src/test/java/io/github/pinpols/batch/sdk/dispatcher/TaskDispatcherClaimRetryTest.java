@@ -31,18 +31,17 @@ import org.junit.jupiter.api.Test;
  */
 class TaskDispatcherClaimRetryTest {
 
-  private final BatchPlatformClientConfig config =
-      BatchPlatformClientConfig.builder()
-          .baseUrl("http://localhost:0")
-          .tenantId("tx")
-          .workerCode("w-1")
-          .kafkaBootstrap("k:9092")
-          .kafkaTopicPattern("p.*")
-          .kafkaGroupId("g")
-          .maxConcurrentTasks(2)
-          .claimMax5xxRetries(3)
-          .claimRetryBaseDelay(Duration.ofMillis(1)) // 跑测试不真等 200/400/800ms
-          .build();
+  private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
+      .baseUrl("http://localhost:0")
+      .tenantId("tx")
+      .workerCode("w-1")
+      .kafkaBootstrap("k:9092")
+      .kafkaTopicPattern("p.*")
+      .kafkaGroupId("g")
+      .maxConcurrentTasks(2)
+      .claimMax5xxRetries(3)
+      .claimRetryBaseDelay(Duration.ofMillis(1)) // 跑测试不真等 200/400/800ms
+      .build();
 
   private TaskDispatcher dispatcher;
 
@@ -164,14 +163,12 @@ class TaskDispatcherClaimRetryTest {
   void claim5xxThenSuccessRunsHandlerAndReports() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicInteger calls = new AtomicInteger();
-    when(http.claim(anyLong(), anyString(), any()))
-        .thenAnswer(
-            inv -> {
-              if (calls.incrementAndGet() <= 2) {
-                throw new PlatformHttpException(502, "Bad Gateway");
-              }
-              return Map.of();
-            });
+    when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {
+      if (calls.incrementAndGet() <= 2) {
+        throw new PlatformHttpException(502, "Bad Gateway");
+      }
+      return Map.of();
+    });
     AtomicBoolean executed = new AtomicBoolean();
     dispatcher = new TaskDispatcher(config, Map.of("tt", trackedHandler(executed)), http);
 
@@ -184,7 +181,8 @@ class TaskDispatcherClaimRetryTest {
 
   @Test
   void claim5xxWithZeroRetriesGivesUpImmediately() throws Exception {
-    BatchPlatformClientConfig zeroRetry = config.toBuilder().claimMax5xxRetries(0).build();
+    BatchPlatformClientConfig zeroRetry =
+        config.toBuilder().claimMax5xxRetries(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(500, "ISE"));
@@ -222,14 +220,12 @@ class TaskDispatcherClaimRetryTest {
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicInteger calls = new AtomicInteger();
-    when(http.claim(anyLong(), anyString(), any()))
-        .thenAnswer(
-            inv -> {
-              if (calls.incrementAndGet() <= 2) {
-                throw new PlatformHttpException(404, "task gone");
-              }
-              return Map.of();
-            });
+    when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {
+      if (calls.incrementAndGet() <= 2) {
+        throw new PlatformHttpException(404, "task gone");
+      }
+      return Map.of();
+    });
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
     dispatcher.processInWorkerThread(msg()); // 404 → 1
@@ -243,7 +239,8 @@ class TaskDispatcherClaimRetryTest {
 
   @Test
   void clientErrorFailFastDisabledWhenThresholdZero() throws Exception {
-    BatchPlatformClientConfig disabled = config.toBuilder().clientErrorFailFastThreshold(0).build();
+    BatchPlatformClientConfig disabled =
+        config.toBuilder().clientErrorFailFastThreshold(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(404, "task gone"));
@@ -344,12 +341,10 @@ class TaskDispatcherClaimRetryTest {
   void claimTransportErrorThenSuccessRecovers() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicInteger calls = new AtomicInteger();
-    when(http.claim(anyLong(), anyString(), any()))
-        .thenAnswer(
-            inv -> {
-              if (calls.incrementAndGet() == 1) throw new IOException("read timeout");
-              return Map.of();
-            });
+    when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {
+      if (calls.incrementAndGet() == 1) throw new IOException("read timeout");
+      return Map.of();
+    });
     AtomicBoolean executed = new AtomicBoolean();
     dispatcher = new TaskDispatcher(config, Map.of("tt", trackedHandler(executed)), http);
 

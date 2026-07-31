@@ -33,10 +33,9 @@ class ConsoleInstanceControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleInstanceController(proxy, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleInstanceController(proxy, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .build();
   }
 
   @Test

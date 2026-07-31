@@ -63,13 +63,12 @@ public class ConsoleUserAccountController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleUserAccountResponse> create(
       @Validated @RequestBody CreateUserAccountRequest request) {
-    return responseFactory.success(
-        userAccountService.create(
-            request.getTenantId(),
-            request.getUsername(),
-            request.getPassword(),
-            request.getDisplayName(),
-            request.getAuthoritiesCsv()));
+    return responseFactory.success(userAccountService.create(
+        request.getTenantId(),
+        request.getUsername(),
+        request.getPassword(),
+        request.getDisplayName(),
+        request.getAuthoritiesCsv()));
   }
 
   @PutMapping("/{id}")

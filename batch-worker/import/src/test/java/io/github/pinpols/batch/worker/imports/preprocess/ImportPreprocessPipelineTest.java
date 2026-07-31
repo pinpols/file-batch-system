@@ -140,33 +140,32 @@ class ImportPreprocessPipelineTest {
     byte[] cipherText = cipher.doFinal(plain);
 
     Map<String, Object> template = Map.of("encrypt_type", "AES");
-    ImportPayload payload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Map.of(
-                "decryptAesKeyBase64", Base64.getEncoder().encodeToString(key),
-                "decryptAesIvBase64", Base64.getEncoder().encodeToString(iv)));
+    ImportPayload payload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        Map.of(
+            "decryptAesKeyBase64", Base64.getEncoder().encodeToString(key),
+            "decryptAesIvBase64", Base64.getEncoder().encodeToString(iv)));
 
     byte[] out = ImportPreprocessPipeline.run(cipherText, payload, template, false);
     assertThat(out).isEqualTo(plain);
@@ -206,9 +205,8 @@ class ImportPreprocessPipelineTest {
   @Test
   void verifyDigestShouldThrowWhenChecksumMismatches() {
     byte[] raw = "abc".getBytes(StandardCharsets.UTF_8);
-    Map<String, Object> step =
-        Map.of(
-            "type", "VERIFY_DIGEST", "algorithm", "SHA-256", "expectedHex", "deadbeef".repeat(8));
+    Map<String, Object> step = Map.of(
+        "type", "VERIFY_DIGEST", "algorithm", "SHA-256", "expectedHex", "deadbeef".repeat(8));
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
     assertThatThrownBy(() -> ImportPreprocessPipeline.run(raw, null, template, false))
         .isInstanceOf(ImportPreprocessException.class);
@@ -218,32 +216,32 @@ class ImportPreprocessPipelineTest {
   void implicitChecksumShouldVerifyRawBytesBeforeImplicitTransform() throws Exception {
     byte[] plain = "hello".getBytes(StandardCharsets.UTF_8);
     byte[] gz = gzip(plain);
-    String rawChecksum = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(gz));
-    ImportPayload payload =
-        new ImportPayload(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "SHA-256",
-            rawChecksum,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Map.of());
+    String rawChecksum =
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(gz));
+    ImportPayload payload = new ImportPayload(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "SHA-256",
+        rawChecksum,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        Map.of());
     Map<String, Object> template = Map.of("compress_type", "GZIP");
 
     byte[] out = ImportPreprocessPipeline.run(gz, payload, template, false);

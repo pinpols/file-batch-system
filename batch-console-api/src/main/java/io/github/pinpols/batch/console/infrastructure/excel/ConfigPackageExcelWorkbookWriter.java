@@ -227,46 +227,41 @@ public class ConfigPackageExcelWorkbookWriter {
   public ConfigPackageExcelWorkbookWriter(MessageSource messageSource) {
     this.messageSource = messageSource;
     this.supplementWriter = new ConfigPackageWorkbookSupplementWriter(messageSource);
-    this.sheetDefs =
-        List.of(
-            new SheetDef(
-                RESOURCE_QUEUE_SHEET,
-                RESOURCE_QUEUE_COLUMNS,
-                buildResourceQueueGuides(),
-                this::applyResourceQueueValidations),
-            new SheetDef(
-                BUSINESS_CALENDAR_SHEET,
-                BUSINESS_CALENDAR_COLUMNS,
-                buildBusinessCalendarGuides(),
-                this::applyBusinessCalendarValidations),
-            new SheetDef(
-                BATCH_WINDOW_SHEET,
-                BATCH_WINDOW_COLUMNS,
-                buildBatchWindowGuides(),
-                this::applyBatchWindowValidations),
-            new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
-            new SheetDef(
-                CHANNEL_SHEET,
-                CHANNEL_COLUMNS,
-                buildChannelGuides(),
-                this::applyChannelValidations),
-            new SheetDef(
-                FILE_TEMPLATE_SHEET,
-                FILE_TEMPLATE_COLUMNS,
-                buildFileTemplateGuides(),
-                this::applyFileTemplateValidations),
-            new SheetDef(
-                PIPELINE_SHEET,
-                PIPELINE_COLUMNS,
-                buildPipelineGuides(),
-                this::applyPipelineValidations),
-            new SheetDef(STEP_SHEET, STEP_COLUMNS, buildStepGuides(), this::applyStepValidations),
-            new SheetDef(
-                WF_DEF_SHEET, WF_DEF_COLUMNS, buildWfDefGuides(), this::applyWfDefValidations),
-            new SheetDef(
-                WF_NODE_SHEET, WF_NODE_COLUMNS, buildWfNodeGuides(), this::applyWfNodeValidations),
-            new SheetDef(
-                WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(), this::applyWfEdgeValidations));
+    this.sheetDefs = List.of(
+        new SheetDef(
+            RESOURCE_QUEUE_SHEET,
+            RESOURCE_QUEUE_COLUMNS,
+            buildResourceQueueGuides(),
+            this::applyResourceQueueValidations),
+        new SheetDef(
+            BUSINESS_CALENDAR_SHEET,
+            BUSINESS_CALENDAR_COLUMNS,
+            buildBusinessCalendarGuides(),
+            this::applyBusinessCalendarValidations),
+        new SheetDef(
+            BATCH_WINDOW_SHEET,
+            BATCH_WINDOW_COLUMNS,
+            buildBatchWindowGuides(),
+            this::applyBatchWindowValidations),
+        new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
+        new SheetDef(
+            CHANNEL_SHEET, CHANNEL_COLUMNS, buildChannelGuides(), this::applyChannelValidations),
+        new SheetDef(
+            FILE_TEMPLATE_SHEET,
+            FILE_TEMPLATE_COLUMNS,
+            buildFileTemplateGuides(),
+            this::applyFileTemplateValidations),
+        new SheetDef(
+            PIPELINE_SHEET,
+            PIPELINE_COLUMNS,
+            buildPipelineGuides(),
+            this::applyPipelineValidations),
+        new SheetDef(STEP_SHEET, STEP_COLUMNS, buildStepGuides(), this::applyStepValidations),
+        new SheetDef(WF_DEF_SHEET, WF_DEF_COLUMNS, buildWfDefGuides(), this::applyWfDefValidations),
+        new SheetDef(
+            WF_NODE_SHEET, WF_NODE_COLUMNS, buildWfNodeGuides(), this::applyWfNodeValidations),
+        new SheetDef(
+            WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(), this::applyWfEdgeValidations));
   }
 
   public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
@@ -376,32 +371,30 @@ public class ConfigPackageExcelWorkbookWriter {
       throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
-    List<List<Map<String, String>>> sessionData =
-        List.of(
-            session.resourceQueueRows(),
-            session.businessCalendarRows(),
-            session.batchWindowRows(),
-            session.jobRows(),
-            session.fileChannelRows(),
-            session.fileTemplateRows(),
-            session.pipelineRows(),
-            session.pipelineStepRows(),
-            session.workflowDefinitionRows(),
-            session.workflowNodeRows(),
-            session.workflowEdgeRows());
-    List<SheetResult> results =
-        List.of(
-            result.resourceQueues(),
-            result.businessCalendars(),
-            result.batchWindows(),
-            result.jobs(),
-            result.channels(),
-            result.fileTemplates(),
-            result.pipelines(),
-            result.steps(),
-            result.wfDefs(),
-            result.wfNodes(),
-            result.wfEdges());
+    List<List<Map<String, String>>> sessionData = List.of(
+        session.resourceQueueRows(),
+        session.businessCalendarRows(),
+        session.batchWindowRows(),
+        session.jobRows(),
+        session.fileChannelRows(),
+        session.fileTemplateRows(),
+        session.pipelineRows(),
+        session.pipelineStepRows(),
+        session.workflowDefinitionRows(),
+        session.workflowNodeRows(),
+        session.workflowEdgeRows());
+    List<SheetResult> results = List.of(
+        result.resourceQueues(),
+        result.businessCalendars(),
+        result.batchWindows(),
+        result.jobs(),
+        result.channels(),
+        result.fileTemplates(),
+        result.pipelines(),
+        result.steps(),
+        result.wfDefs(),
+        result.wfNodes(),
+        result.wfEdges());
     try (XSSFWorkbook wb = new XSSFWorkbook()) {
       for (int i = 0; i < sheetDefs.size(); i++) {
         SheetDef def = sheetDefs.get(i);
@@ -479,13 +472,12 @@ public class ConfigPackageExcelWorkbookWriter {
       return Map.of();
     }
     Map<String, List<String>> copied = new LinkedHashMap<>();
-    registeredImplCodesByModule.forEach(
-        (module, beans) -> {
-          if (module == null || beans == null || beans.isEmpty()) {
-            return;
-          }
-          copied.put(module, List.copyOf(beans));
-        });
+    registeredImplCodesByModule.forEach((module, beans) -> {
+      if (module == null || beans == null || beans.isEmpty()) {
+        return;
+      }
+      copied.put(module, List.copyOf(beans));
+    });
     return copied.isEmpty() ? Map.of() : Collections.unmodifiableMap(copied);
   }
 
@@ -595,35 +587,34 @@ public class ConfigPackageExcelWorkbookWriter {
    * 「填写示例」per-(sheet,column) 覆盖：仅最难字段给完整片段。值取自 e2e fixture（与 worker 解析逻辑一致）。 file_template_config 的
    * field_mappings / query_param_schema 同时给 import 和 export 两套结构。
    */
-  private static final Map<String, Map<String, String>> FILL_EXAMPLE_OVERRIDE =
-      Map.ofEntries(
-          Map.entry(
-              FILE_TEMPLATE_SHEET,
-              Map.ofEntries(
-                  Map.entry(
-                      "field_mappings",
-                      "IMPORT: "
-                          + EXAMPLE_IMPORT_FIELD_MAPPINGS
-                          + "\nEXPORT: "
-                          + EXAMPLE_EXPORT_FIELD_MAPPINGS),
-                  Map.entry(
-                      "query_param_schema",
-                      "IMPORT: "
-                          + EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA
-                          + "\nEXPORT: "
-                          + EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA),
-                  Map.entry("validation_rule_set", EXAMPLE_IMPORT_VALIDATION_RULE_SET),
-                  Map.entry("default_query_sql", EXAMPLE_EXPORT_QUERY_SQL))),
-          Map.entry(CHANNEL_SHEET, Map.of(COL_CONFIG_JSON, EXAMPLE_CHANNEL_CONFIG_JSON)),
-          Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)),
-          Map.entry(
-              STEP_SHEET,
-              Map.of(
-                  "step_params",
-                  "PROCESS: "
-                      + EXAMPLE_PROCESS_STEP_PARAMS
-                      + "\nDISPATCH: "
-                      + EXAMPLE_DISPATCH_STEP_PARAMS)));
+  private static final Map<String, Map<String, String>> FILL_EXAMPLE_OVERRIDE = Map.ofEntries(
+      Map.entry(
+          FILE_TEMPLATE_SHEET,
+          Map.ofEntries(
+              Map.entry(
+                  "field_mappings",
+                  "IMPORT: "
+                      + EXAMPLE_IMPORT_FIELD_MAPPINGS
+                      + "\nEXPORT: "
+                      + EXAMPLE_EXPORT_FIELD_MAPPINGS),
+              Map.entry(
+                  "query_param_schema",
+                  "IMPORT: "
+                      + EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA
+                      + "\nEXPORT: "
+                      + EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA),
+              Map.entry("validation_rule_set", EXAMPLE_IMPORT_VALIDATION_RULE_SET),
+              Map.entry("default_query_sql", EXAMPLE_EXPORT_QUERY_SQL))),
+      Map.entry(CHANNEL_SHEET, Map.of(COL_CONFIG_JSON, EXAMPLE_CHANNEL_CONFIG_JSON)),
+      Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)),
+      Map.entry(
+          STEP_SHEET,
+          Map.of(
+              "step_params",
+              "PROCESS: "
+                  + EXAMPLE_PROCESS_STEP_PARAMS
+                  + "\nDISPATCH: "
+                  + EXAMPLE_DISPATCH_STEP_PARAMS)));
 
   private static String guideOrEmpty(
       ConsoleExcelStyles.ColumnGuide guide,
@@ -643,59 +634,55 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   /** Per-sheet 默认「适用 Worker」（覆盖大多数列）。 */
-  private static final Map<String, String> APPLIES_TO_SHEET_DEFAULT =
-      Map.ofEntries(
-          Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
-          Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
-          Map.entry(BATCH_WINDOW_SHEET, "ALL（任意 Job/Node 引用时必填）"),
-          Map.entry(JOB_SHEET, "ALL（5 类 Worker + WORKFLOW 共用）"),
-          Map.entry(CHANNEL_SHEET, "DISPATCH 主；IMPORT.RECEIVE 次"),
-          Map.entry(FILE_TEMPLATE_SHEET, "IMPORT / EXPORT（DISPATCH 引用上游产物时间接用）"),
-          Map.entry(PIPELINE_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type）"),
-          Map.entry(
-              STEP_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type 收窄 stage_code）"),
-          Map.entry(WF_DEF_SHEET, "WORKFLOW（编排层，可组合其他 4 类 Job）"),
-          Map.entry(WF_NODE_SHEET, "WORKFLOW"),
-          Map.entry(WF_EDGE_SHEET, "WORKFLOW"));
+  private static final Map<String, String> APPLIES_TO_SHEET_DEFAULT = Map.ofEntries(
+      Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
+      Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
+      Map.entry(BATCH_WINDOW_SHEET, "ALL（任意 Job/Node 引用时必填）"),
+      Map.entry(JOB_SHEET, "ALL（5 类 Worker + WORKFLOW 共用）"),
+      Map.entry(CHANNEL_SHEET, "DISPATCH 主；IMPORT.RECEIVE 次"),
+      Map.entry(FILE_TEMPLATE_SHEET, "IMPORT / EXPORT（DISPATCH 引用上游产物时间接用）"),
+      Map.entry(PIPELINE_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type）"),
+      Map.entry(STEP_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type 收窄 stage_code）"),
+      Map.entry(WF_DEF_SHEET, "WORKFLOW（编排层，可组合其他 4 类 Job）"),
+      Map.entry(WF_NODE_SHEET, "WORKFLOW"),
+      Map.entry(WF_EDGE_SHEET, "WORKFLOW"));
 
   /**
    * Per-column 覆盖（少数 worker-specific 字段，比 sheet 默认更精确）。
    *
    * <p>没有列在这里的字段一律走 {@link #APPLIES_TO_SHEET_DEFAULT}。
    */
-  private static final Map<String, Map<String, String>> APPLIES_TO_OVERRIDE =
-      Map.ofEntries(
-          Map.entry(
-              JOB_SHEET,
-              Map.of(
-                  COL_JOB_TYPE,
-                  "决定本作业 Worker：GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW",
-                  COL_EXECUTION_HANDLER,
-                  "GENERAL（普通任务）执行 bean 名；其他 worker 不用",
-                  COL_DEFAULT_PARAMS,
-                  "IMPORT/EXPORT：用 templateCode 引用 file_template_config")),
-          Map.entry(
-              PIPELINE_SHEET,
-              Map.of(COL_PIPELINE_TYPE, "决定 Worker 类型和 stage 候选集（IMPORT/EXPORT/PROCESS/DISPATCH）")),
-          Map.entry(STEP_SHEET, Map.of(COL_STAGE_CODE, "按 pipeline_type 收窄；填非法 stage preview 报错")),
-          Map.entry(
-              FILE_TEMPLATE_SHEET,
-              Map.of(
-                  "default_query_sql", "EXPORT only（单条 SELECT）",
-                  "query_param_schema", "IMPORT 用 jdbcMappedImport / EXPORT 用 jdbcMappedExport",
-                  "field_mappings", "IMPORT 用",
-                  "naming_rule", "EXPORT 用",
-                  "header_template", "EXPORT 用",
-                  "trailer_template", "EXPORT 用")),
-          Map.entry(
-              CHANNEL_SHEET,
-              Map.of("config_json", "DISPATCH 用（endpoint + 凭据）；IMPORT.RECEIVE 用源凭据")),
-          Map.entry(
-              WF_NODE_SHEET,
-              Map.of(
-                  "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/FILE_STEP/JOB",
-                  "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）",
-                  "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
+  private static final Map<String, Map<String, String>> APPLIES_TO_OVERRIDE = Map.ofEntries(
+      Map.entry(
+          JOB_SHEET,
+          Map.of(
+              COL_JOB_TYPE,
+              "决定本作业 Worker：GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW",
+              COL_EXECUTION_HANDLER,
+              "GENERAL（普通任务）执行 bean 名；其他 worker 不用",
+              COL_DEFAULT_PARAMS,
+              "IMPORT/EXPORT：用 templateCode 引用 file_template_config")),
+      Map.entry(
+          PIPELINE_SHEET,
+          Map.of(COL_PIPELINE_TYPE, "决定 Worker 类型和 stage 候选集（IMPORT/EXPORT/PROCESS/DISPATCH）")),
+      Map.entry(STEP_SHEET, Map.of(COL_STAGE_CODE, "按 pipeline_type 收窄；填非法 stage preview 报错")),
+      Map.entry(
+          FILE_TEMPLATE_SHEET,
+          Map.of(
+              "default_query_sql", "EXPORT only（单条 SELECT）",
+              "query_param_schema", "IMPORT 用 jdbcMappedImport / EXPORT 用 jdbcMappedExport",
+              "field_mappings", "IMPORT 用",
+              "naming_rule", "EXPORT 用",
+              "header_template", "EXPORT 用",
+              "trailer_template", "EXPORT 用")),
+      Map.entry(
+          CHANNEL_SHEET, Map.of("config_json", "DISPATCH 用（endpoint + 凭据）；IMPORT.RECEIVE 用源凭据")),
+      Map.entry(
+          WF_NODE_SHEET,
+          Map.of(
+              "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/FILE_STEP/JOB",
+              "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）",
+              "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
 
   private static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
     if (guide == null || guide.allowedValues().isEmpty()) {
@@ -1010,12 +997,11 @@ public class ConfigPackageExcelWorkbookWriter {
     // registry 空时不加下拉(首次部署没 worker 启动过也能下载模板)。
     if (registeredImplCodesByModule != null && !registeredImplCodesByModule.isEmpty()) {
       List<String> options = new ArrayList<>();
-      registeredImplCodesByModule.forEach(
-          (module, beans) -> {
-            for (String bean : beans) {
-              options.add(module + ":" + bean);
-            }
-          });
+      registeredImplCodesByModule.forEach((module, beans) -> {
+        for (String bean : beans) {
+          options.add(module + ":" + bean);
+        }
+      });
       if (!options.isEmpty()) {
         addDropdownValidation(
             sheet,

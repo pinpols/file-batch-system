@@ -33,20 +33,22 @@ class DefaultWorkerSelectorTest {
   private static final String TENANT = "default-tenant";
   private static final String GROUP = "EXPORT";
 
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
+  @Mock
+  private WorkerRegistryMapper workerRegistryMapper;
 
-  @Mock private ObjectProvider<MeterRegistry> meterRegistryProvider;
+  @Mock
+  private ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  @Mock private ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
+  @Mock
+  private ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
 
   private DefaultWorkerSelector selector;
   private final ResourceSchedulerProperties props = new ResourceSchedulerProperties();
 
   @BeforeEach
   void setUp() {
-    selector =
-        new DefaultWorkerSelector(
-            workerRegistryMapper, meterRegistryProvider, props, workerRegistryCacheProvider);
+    selector = new DefaultWorkerSelector(
+        workerRegistryMapper, meterRegistryProvider, props, workerRegistryCacheProvider);
     lenient().when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
     lenient().when(workerRegistryCacheProvider.getIfAvailable()).thenReturn(null);
   }

@@ -47,7 +47,8 @@ class ObjectStoreStartupCheckTest {
     check.run(null);
     // 跑通即不抛;探针应被清理,bucket 目录下不残留 __batch-startup-probe__ 对象。
     FilesystemObjectStore store = realStore(root);
-    assertThat(store.list(BUCKET, "__batch-startup-probe__/", null, 100).objects()).isEmpty();
+    assertThat(store.list(BUCKET, "__batch-startup-probe__/", null, 100).objects())
+        .isEmpty();
   }
 
   @Test
@@ -94,14 +95,13 @@ class ObjectStoreStartupCheckTest {
     BatchObjectStore store = mock(BatchObjectStore.class);
     AtomicReference<String> probeKey = new AtomicReference<>();
     AtomicReference<byte[]> probePayload = new AtomicReference<>();
-    doAnswer(
-            invocation -> {
-              probeKey.set(invocation.getArgument(1));
-              try (InputStream in = invocation.getArgument(2)) {
-                probePayload.set(in.readAllBytes());
-              }
-              return null;
-            })
+    doAnswer(invocation -> {
+          probeKey.set(invocation.getArgument(1));
+          try (InputStream in = invocation.getArgument(2)) {
+            probePayload.set(in.readAllBytes());
+          }
+          return null;
+        })
         .when(store)
         .put(anyString(), anyString(), any(), anyLong(), anyString());
     when(store.exists(anyString(), anyString())).thenReturn(true);
@@ -109,12 +109,9 @@ class ObjectStoreStartupCheckTest {
     when(store.get(anyString(), anyString()))
         .thenAnswer(invocation -> new ByteArrayInputStream(probePayload.get()));
     when(store.list(anyString(), anyString(), any(), anyInt()))
-        .thenAnswer(
-            invocation ->
-                new ObjectListing(
-                    List.of(
-                        new ObjectSummary(probeKey.get(), PROBE_PAYLOAD_LEN, Instant.now(), "e")),
-                    null));
+        .thenAnswer(invocation -> new ObjectListing(
+            List.of(new ObjectSummary(probeKey.get(), PROBE_PAYLOAD_LEN, Instant.now(), "e")),
+            null));
     when(store.presign(anyString(), anyString(), any())).thenReturn(" ");
 
     ObjectStoreStartupCheck check = new ObjectStoreStartupCheck(store, BUCKET);
@@ -133,7 +130,8 @@ class ObjectStoreStartupCheckTest {
 
     // 内容仍由真实 get 全等校验;statSize 偏大不应误判 → 不抛即通过。
     check.run(null);
-    assertThat(realStore(root).list(BUCKET, "__batch-startup-probe__/", null, 100).objects())
+    assertThat(
+            realStore(root).list(BUCKET, "__batch-startup-probe__/", null, 100).objects())
         .isEmpty();
   }
 

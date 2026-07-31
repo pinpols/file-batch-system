@@ -67,13 +67,12 @@ public class BatchDayCutoffScheduler {
       if (localTime.isBefore(cutoffTime)) {
         continue;
       }
-      int updated =
-          batchDayInstanceMapper.markCutoff(
-              candidate.getId(),
-              candidate.getTenantId(),
-              candidate.getCalendarCode(),
-              candidate.getBizDate(),
-              now);
+      int updated = batchDayInstanceMapper.markCutoff(
+          candidate.getId(),
+          candidate.getTenantId(),
+          candidate.getCalendarCode(),
+          candidate.getBizDate(),
+          now);
       if (updated > 0) {
         log.info(
             "batch day cutoff applied: tenantId={}, calendarCode={}, bizDate={}," + " cutoffAt={}",

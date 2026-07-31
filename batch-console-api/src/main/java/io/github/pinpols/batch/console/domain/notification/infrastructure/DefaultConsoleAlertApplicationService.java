@@ -80,13 +80,12 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   private void bridgeToAlertmanager(AlertEventEntity entity, String nextStatus) {
     // M-1:与 emit 直连一致,桥接放事务提交后 —— 提交失败时 AM 不该已收到 silence/resolved。
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              dispatchBridge(entity, nextStatus);
-            }
-          });
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          dispatchBridge(entity, nextStatus);
+        }
+      });
     } else {
       dispatchBridge(entity, nextStatus);
     }

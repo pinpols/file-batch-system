@@ -37,10 +37,9 @@ public record HeartbeatDirective(
     }
     String status = asString(resp.get("platformStatus"));
     boolean drain = Boolean.TRUE.equals(resp.get("shouldDrain"));
-    List<String> paused =
-        resp.get("pausedTaskTypes") instanceof List<?> l
-            ? l.stream().map(String::valueOf).toList()
-            : List.of();
+    List<String> paused = resp.get("pausedTaskTypes") instanceof List<?> l
+        ? l.stream().map(String::valueOf).toList()
+        : List.of();
     return new HeartbeatDirective(
         status == null ? STATUS_NORMAL : status,
         asInteger(resp.get("desiredMaxConcurrent")),

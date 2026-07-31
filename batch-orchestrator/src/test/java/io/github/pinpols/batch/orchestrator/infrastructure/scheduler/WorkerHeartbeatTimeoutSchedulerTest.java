@@ -32,12 +32,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorkerHeartbeatTimeoutSchedulerTest {
 
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private WorkerRegistryMapper workerRegistryMapper;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private final WorkerDrainProperties props = new WorkerDrainProperties();
 
-  @InjectMocks private WorkerHeartbeatTimeoutScheduler scheduler;
+  @InjectMocks
+  private WorkerHeartbeatTimeoutScheduler scheduler;
 
   @BeforeEach
   void setUp() {

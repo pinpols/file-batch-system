@@ -52,12 +52,11 @@ class ConsoleJobDefinitionControllerValidationTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleJobDefinitionController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleJobDefinitionController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String createBody(String jobCode) {
@@ -75,10 +74,9 @@ class ConsoleJobDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_with_space() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/job-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(createBody("q q q")))
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("q q q")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -88,10 +86,9 @@ class ConsoleJobDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_chinese() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/job-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(createBody("中文测试")))
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("中文测试")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -99,10 +96,9 @@ class ConsoleJobDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_starts_with_digit() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/job-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(createBody("123abc")))
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("123abc")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -110,10 +106,9 @@ class ConsoleJobDefinitionControllerValidationTest {
   @Test
   void rejects_jobCode_blank() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/job-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(createBody("")))
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -125,10 +120,9 @@ class ConsoleJobDefinitionControllerValidationTest {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
 
     mockMvc
-        .perform(
-            post("/api/console/job-definitions")
-                .contentType(APPLICATION_JSON)
-                .content(createBody("valid_job_01")))
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("valid_job_01")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
@@ -139,10 +133,9 @@ class ConsoleJobDefinitionControllerValidationTest {
   void rejects_clone_newJobCode_with_space() throws Exception {
     String body = "{\"tenantId\":\"ta\",\"newJobCode\":\"q q q\"}";
     mockMvc
-        .perform(
-            post("/api/console/job-definitions/1/clone")
-                .contentType(APPLICATION_JSON)
-                .content(body))
+        .perform(post("/api/console/job-definitions/1/clone")
+            .contentType(APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }

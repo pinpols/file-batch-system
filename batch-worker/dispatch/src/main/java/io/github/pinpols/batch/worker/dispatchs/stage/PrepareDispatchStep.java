@@ -61,10 +61,9 @@ public class PrepareDispatchStep implements DispatchStageStep {
               ? dispatchPayload
               : objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
       attrs.put("dispatchPayload", payload);
-      Long fileId =
-          payload.fileId() == null || payload.fileId().isBlank()
-              ? null
-              : Long.valueOf(payload.fileId());
+      Long fileId = payload.fileId() == null || payload.fileId().isBlank()
+          ? null
+          : Long.valueOf(payload.fileId());
       if (fileId == null) {
         return DispatchStageResult.failure(
             stage(),

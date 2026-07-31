@@ -8,9 +8,11 @@ import lombok.Data;
 
 @Data
 public class QuotaPolicySaveRequest {
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
-  @ValidResourceCode private String policyCode;
+  @ValidResourceCode
+  private String policyCode;
 
   @Min(0)
   private Integer maxRunningJobsPerTenant;

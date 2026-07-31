@@ -33,9 +33,8 @@ class NotificationSenderRegistryTest {
   @DisplayName("历史误值 WECHAT 不再解析到任何 sender")
   void shouldNotResolveLegacyWechatValue() {
     // arrange
-    NotificationSenderRegistry registry =
-        new NotificationSenderRegistry(
-            List.of(new WeComNotificationSender(objectMapper, ssrfGuardedDns)));
+    NotificationSenderRegistry registry = new NotificationSenderRegistry(
+        List.of(new WeComNotificationSender(objectMapper, ssrfGuardedDns)));
 
     // act / assert
     assertThat(registry.resolve("WECHAT")).isNull();

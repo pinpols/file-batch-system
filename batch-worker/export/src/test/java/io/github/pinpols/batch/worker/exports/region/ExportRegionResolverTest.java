@@ -25,9 +25,8 @@ class ExportRegionResolverTest {
 
   @Test
   void keepsTriggerRegionWhenAllowed() {
-    String region =
-        ExportRegionResolver.resolve(
-            templateWithRegionCfg("BJ", List.of("BJ", "SH", "GD")), Map.of("region", "GD"));
+    String region = ExportRegionResolver.resolve(
+        templateWithRegionCfg("BJ", List.of("BJ", "SH", "GD")), Map.of("region", "GD"));
     assertThat(region).isEqualTo("GD");
   }
 
@@ -40,10 +39,8 @@ class ExportRegionResolverTest {
 
   @Test
   void rejectsRegionNotInDictionary() {
-    assertThatThrownBy(
-            () ->
-                ExportRegionResolver.resolve(
-                    templateWithRegionCfg(null, List.of("BJ", "SH")), Map.of("region", "XX")))
+    assertThatThrownBy(() -> ExportRegionResolver.resolve(
+            templateWithRegionCfg(null, List.of("BJ", "SH")), Map.of("region", "XX")))
         .isInstanceOf(WorkerConfigException.class)
         .hasMessageContaining("allowedRegions");
   }
@@ -51,10 +48,8 @@ class ExportRegionResolverTest {
   @Test
   void rejectsWhenNoRegionResolvedButDictionaryDeclared() {
     // 字典声明但既无触发值也无默认 → region=null 不在词表 → 拒绝
-    assertThatThrownBy(
-            () ->
-                ExportRegionResolver.resolve(
-                    templateWithRegionCfg(null, List.of("BJ", "SH")), Map.of()))
+    assertThatThrownBy(() -> ExportRegionResolver.resolve(
+            templateWithRegionCfg(null, List.of("BJ", "SH")), Map.of()))
         .isInstanceOf(WorkerConfigException.class);
   }
 
@@ -66,9 +61,8 @@ class ExportRegionResolverTest {
 
   @Test
   void noValidationWhenDictionaryEmpty() {
-    String region =
-        ExportRegionResolver.resolve(
-            templateWithRegionCfg(null, List.of()), Map.of("region", "GD"));
+    String region = ExportRegionResolver.resolve(
+        templateWithRegionCfg(null, List.of()), Map.of("region", "GD"));
     assertThat(region).isEqualTo("GD");
   }
 
@@ -83,10 +77,8 @@ class ExportRegionResolverTest {
   @Test
   void triggerOverridesDefaultButStillDictChecked() {
     // 触发值覆盖默认,但仍走字典:触发非法 → 拒绝
-    assertThatThrownBy(
-            () ->
-                ExportRegionResolver.resolve(
-                    templateWithRegionCfg("BJ", List.of("BJ", "SH")), Map.of("region", "ZZ")))
+    assertThatThrownBy(() -> ExportRegionResolver.resolve(
+            templateWithRegionCfg("BJ", List.of("BJ", "SH")), Map.of("region", "ZZ")))
         .isInstanceOf(WorkerConfigException.class);
   }
 }

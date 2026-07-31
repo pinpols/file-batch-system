@@ -60,15 +60,19 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
   // 与 ImportPipelineE2eIT 等已通过的 IT 对齐;E2E 的 worker/seed 体系默认覆盖此租户
   private static final String TENANT = "t1";
 
-  @Autowired private LaunchService launchService;
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private LaunchService launchService;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
   void tenantIdMustNotDriftAcrossEveryWritePathOfFullChain() {
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -81,40 +85,36 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
             + "\"certificateNo\":\"ID-PROPAGATION-001\",\"mobileNo\":\"13800000099\","
             + "\"email\":\"guard@example.com\",\"status\":\"ACTIVE\"}]");
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "e2e-tr-tenant-propagation",
-            params));
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-tenant-propagation",
+        params));
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     // 等待 task 完成
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              String status =
-                  jdbcTemplate.queryForObject(
-                      "select t.task_status from batch.job_task t"
-                          + " join batch.job_instance ji on ji.id = t.job_instance_id"
-                          + " where ji.tenant_id = ? and ji.dedup_key = ?",
-                      String.class,
-                      TENANT,
-                      seed.dedupKey());
-              assertThat(status).isEqualTo("SUCCESS");
-            });
+        .untilAsserted(() -> {
+          String status = jdbcTemplate.queryForObject(
+              "select t.task_status from batch.job_task t"
+                  + " join batch.job_instance ji on ji.id = t.job_instance_id"
+                  + " where ji.tenant_id = ? and ji.dedup_key = ?",
+              String.class,
+              TENANT,
+              seed.dedupKey());
+          assertThat(status).isEqualTo("SUCCESS");
+        });
 
-    Long jobInstanceId =
-        jdbcTemplate.queryForObject(
-            "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
-            Long.class,
-            TENANT,
-            seed.dedupKey());
+    Long jobInstanceId = jdbcTemplate.queryForObject(
+        "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        Long.class,
+        TENANT,
+        seed.dedupKey());
     assertThat(jobInstanceId).isNotNull();
 
     // ── 1) job_instance: 行存在且 tenant=ta ────────────────────────────────
@@ -169,9 +169,8 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
    */
   private void assertSingleTenantOnlyOrEmpty(
       String table, String where, Object[] params, String label) {
-    List<String> tenants =
-        jdbcTemplate.queryForList(
-            "select tenant_id from " + table + " where " + where, String.class, params);
+    List<String> tenants = jdbcTemplate.queryForList(
+        "select tenant_id from " + table + " where " + where, String.class, params);
     if (tenants.isEmpty()) {
       // 该表本次链路未写入,跳过(可能因路径短路 / 业务规则未触发)
       return;

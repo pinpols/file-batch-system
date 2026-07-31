@@ -74,16 +74,15 @@ public class AssetFreshnessPolicyService {
 
   FreshnessBreach evaluate(
       AssetFreshnessPolicyRecord policy, LocalDate bizDate, Instant now, ZoneId zone) {
-    Instant expectedAt = ZonedDateTime.of(bizDate, policy.expectedByLocalTime(), zone).toInstant();
+    Instant expectedAt =
+        ZonedDateTime.of(bizDate, policy.expectedByLocalTime(), zone).toInstant();
     if (now.isBefore(expectedAt)) {
       return null;
     }
-    boolean ready =
-        RlsTenantContextHolder.runWithTenant(
-            policy.tenantId(),
-            () ->
-                assetPartitionService.isJobPartitionReady(
-                    policy.tenantId(), policy.assetCode(), bizDate));
+    boolean ready = RlsTenantContextHolder.runWithTenant(
+        policy.tenantId(),
+        () -> assetPartitionService.isJobPartitionReady(
+            policy.tenantId(), policy.assetCode(), bizDate));
     if (ready) {
       return null;
     }
@@ -92,10 +91,9 @@ public class AssetFreshnessPolicyService {
     Instant staleAt = expectedAt.plusSeconds(staleAfterSeconds);
     String breachType = now.isBefore(staleAt) ? "MISSING" : "STALE";
     String alertType = "STALE".equals(breachType) ? ALERT_TYPE_STALE : ALERT_TYPE_MISSING;
-    String severity =
-        "STALE".equals(breachType)
-            ? escalateSeverity(policy.severity())
-            : safeSeverity(policy.severity());
+    String severity = "STALE".equals(breachType)
+        ? escalateSeverity(policy.severity())
+        : safeSeverity(policy.severity());
     return new FreshnessBreach(bizDate, expectedAt, staleAt, breachType, alertType, severity);
   }
 
@@ -111,22 +109,21 @@ public class AssetFreshnessPolicyService {
     detail.put("staleAt", breach.staleAt().toString());
     detail.put("breachType", breach.breachType());
     detail.put("policyId", policy.id());
-    alertEventService.emit(
-        AlertEmitRequest.builder()
-            .tenantId(policy.tenantId())
-            .serviceName("batch-orchestrator")
-            .alertType(breach.alertType())
-            .severity(breach.severity())
-            .title(
-                "Asset freshness "
-                    + breach.breachType().toLowerCase(Locale.ROOT)
-                    + ": "
-                    + policy.assetCode()
-                    + " "
-                    + breach.bizDate())
-            .detailJson(JsonUtils.toJson(detail))
-            .resourceKey(resourceKey)
-            .build());
+    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
+        .tenantId(policy.tenantId())
+        .serviceName("batch-orchestrator")
+        .alertType(breach.alertType())
+        .severity(breach.severity())
+        .title("Asset freshness "
+            + breach.breachType().toLowerCase(Locale.ROOT)
+            + ": "
+            + policy.assetCode()
+            + " "
+            + breach.bizDate())
+        .detailJson(JsonUtils.toJson(detail))
+        .resourceKey(resourceKey)
+        .build();
+    alertEventService.emit(alertRequest);
   }
 
   private boolean validPolicy(AssetFreshnessPolicyRecord policy) {

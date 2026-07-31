@@ -27,8 +27,11 @@ class DispatchSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired DispatchStepExecutionAdapter primaryAdapter;
-  @Autowired BatchTaskExecutorRegistry registry;
+  @Autowired
+  DispatchStepExecutionAdapter primaryAdapter;
+
+  @Autowired
+  BatchTaskExecutorRegistry registry;
 
   @Test
   void registryContainsDispatchTaskType() {

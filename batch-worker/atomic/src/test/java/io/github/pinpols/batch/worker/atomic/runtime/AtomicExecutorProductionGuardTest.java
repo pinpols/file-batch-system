@@ -22,11 +22,20 @@ import org.springframework.mock.env.MockEnvironment;
 @ExtendWith(MockitoExtension.class)
 class AtomicExecutorProductionGuardTest {
 
-  @Mock private ObjectProvider<SqlExecutorProperties> sqlProvider;
-  @Mock private ObjectProvider<StoredProcExecutorProperties> spProvider;
-  @Mock private ObjectProvider<HttpExecutorProperties> httpProvider;
-  @Mock private ObjectProvider<ShellExecutorProperties> shellProvider;
-  @Mock private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
+  @Mock
+  private ObjectProvider<SqlExecutorProperties> sqlProvider;
+
+  @Mock
+  private ObjectProvider<StoredProcExecutorProperties> spProvider;
+
+  @Mock
+  private ObjectProvider<HttpExecutorProperties> httpProvider;
+
+  @Mock
+  private ObjectProvider<ShellExecutorProperties> shellProvider;
+
+  @Mock
+  private ObjectProvider<SparkSubmitExecutorProperties> sparkProvider;
 
   private MockEnvironment env;
 

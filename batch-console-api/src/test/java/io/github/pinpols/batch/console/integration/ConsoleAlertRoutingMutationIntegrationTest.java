@@ -52,11 +52,10 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
         .expectStatus()
         .isOk();
 
-    var row =
-        jdbcTemplate.queryForMap(
-            "SELECT tenant_id, route_code, severity, receiver FROM batch.alert_routing_config"
-                + " WHERE route_code = ?",
-            code);
+    var row = jdbcTemplate.queryForMap(
+        "SELECT tenant_id, route_code, severity, receiver FROM batch.alert_routing_config"
+            + " WHERE route_code = ?",
+        code);
     assertThat(row.get("tenant_id")).isEqualTo("int-ar-ta");
     assertThat(row.get("route_code")).isEqualTo(code);
     assertThat(row.get("severity")).isEqualTo("WARN");
@@ -78,11 +77,10 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.alert_routing_config WHERE route_code = ?",
-            Long.class,
-            "q q q");
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.alert_routing_config WHERE route_code = ?",
+        Long.class,
+        "q q q");
     assertThat(cnt).isZero();
   }
 

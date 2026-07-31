@@ -125,16 +125,14 @@ public class GenerateStep implements ExportStageStep {
       // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
       Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
       boolean checkpointEnabled = checkpointInstanceId != null;
-      generatedFile =
-          checkpointEnabled
-              ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
-              : createGeneratedFile(context, exportPayload, fileFormatType);
+      generatedFile = checkpointEnabled
+          ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
+          : createGeneratedFile(context, exportPayload, fileFormatType);
 
       GenerateCheckpoint checkpoint = null;
       if (checkpointEnabled) {
-        ProcessingPosition pos =
-            positionStore.load(
-                context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
+        ProcessingPosition pos = positionStore.load(
+            context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
         if (pos.completed() && Files.exists(generatedFile)) {
           // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
           // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
@@ -154,30 +152,28 @@ public class GenerateStep implements ExportStageStep {
               actualSize);
           // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
         }
-        checkpoint =
-            GenerateCheckpoint.open(
-                positionStore,
-                cursorCodec,
-                context.getTenantId(),
-                checkpointInstanceId,
-                pos,
-                generatedFile);
+        checkpoint = GenerateCheckpoint.open(
+            positionStore,
+            cursorCodec,
+            context.getTenantId(),
+            checkpointInstanceId,
+            pos,
+            generatedFile);
         keepPartialFileOnFailure = true;
       }
 
       ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
-      ExportFormatContext formatCtx =
-          ExportFormatContext.builder()
-              .batch(batch)
-              .batchId(batchId)
-              .pageSize(pageSize)
-              .chunkSize(chunkSize)
-              .generatedFile(generatedFile)
-              .jobContext(context)
-              .dataPlugin(dataPlugin)
-              .dataCtx(dataCtx)
-              .checkpoint(checkpoint)
-              .build();
+      ExportFormatContext formatCtx = ExportFormatContext.builder()
+          .batch(batch)
+          .batchId(batchId)
+          .pageSize(pageSize)
+          .chunkSize(chunkSize)
+          .generatedFile(generatedFile)
+          .jobContext(context)
+          .dataPlugin(dataPlugin)
+          .dataCtx(dataCtx)
+          .checkpoint(checkpoint)
+          .build();
       long recordCount = strategy.generate(formatCtx);
 
       if (checkpoint != null) {

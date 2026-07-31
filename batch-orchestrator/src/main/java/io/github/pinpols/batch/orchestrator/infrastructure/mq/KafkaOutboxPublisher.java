@@ -162,26 +162,25 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
 
     // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
     String fallbackTopic = governance.outbox().getDefaultTopic();
-    BatchEventMessage message =
-        new BatchEventMessage(
-            "v1",
-            BatchMessageType.OUTBOX_EVENT,
-            event.getTenantId(),
-            null,
-            null,
-            null,
-            null,
-            null,
-            event.getTraceId(),
-            event.getEventKey(),
-            event.getAggregateType(),
-            governance.outbox().getProducerName(),
-            event.getEventType(),
-            fallbackTopic,
-            event.getEventKey(),
-            event.getCreatedAt(),
-            Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
-            Map.of("aggregateId", event.getAggregateId()));
+    BatchEventMessage message = new BatchEventMessage(
+        "v1",
+        BatchMessageType.OUTBOX_EVENT,
+        event.getTenantId(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        event.getTraceId(),
+        event.getEventKey(),
+        event.getAggregateType(),
+        governance.outbox().getProducerName(),
+        event.getEventType(),
+        fallbackTopic,
+        event.getEventKey(),
+        event.getCreatedAt(),
+        Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
+        Map.of("aggregateId", event.getAggregateId()));
     return kafkaTemplate
         .send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message))
         .toCompletableFuture()
@@ -257,16 +256,15 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       return null;
     }
     int targetPartition = Math.floorMod(partitionNo - 1, partitionCount);
-    String base =
-        message.tenantId()
-            + ":"
-            + message.jobCode()
-            + ":"
-            + message.instanceNo()
-            + ":part:"
-            + partitionNo
-            + "of"
-            + partitionCount;
+    String base = message.tenantId()
+        + ":"
+        + message.jobCode()
+        + ":"
+        + message.instanceNo()
+        + ":part:"
+        + partitionNo
+        + "of"
+        + partitionCount;
     for (int salt = 0; salt < 1024; salt++) {
       String candidate = base + ":k" + salt;
       if (partitionFor(candidate, partitionCount) == targetPartition) {
@@ -327,14 +325,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       Object parsed = JsonUtils.fromJson(payloadJson, Object.class);
       if (parsed instanceof Map<?, ?> map) {
         Map<String, Object> sanitized = new LinkedHashMap<>((Map<String, Object>) map);
-        sanitized
-            .entrySet()
-            .forEach(
-                entry -> {
-                  if (isSensitiveKey(entry.getKey())) {
-                    entry.setValue("***");
-                  }
-                });
+        sanitized.entrySet().forEach(entry -> {
+          if (isSensitiveKey(entry.getKey())) {
+            entry.setValue("***");
+          }
+        });
         return JsonUtils.toJson(sanitized);
       }
     } catch (RuntimeException ignored) {

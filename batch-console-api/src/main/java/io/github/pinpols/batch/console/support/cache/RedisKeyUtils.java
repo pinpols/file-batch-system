@@ -39,7 +39,8 @@ public final class RedisKeyUtils {
       return 0L;
     }
     int safeBatch = batchSize <= 0 ? 500 : batchSize;
-    ScanOptions options = ScanOptions.scanOptions().match(pattern).count(safeBatch).build();
+    ScanOptions options =
+        ScanOptions.scanOptions().match(pattern).count(safeBatch).build();
     long deleted = 0L;
     try (Cursor<String> cursor = redisTemplate.scan(options)) {
       List<String> batch = new ArrayList<>(safeBatch);

@@ -37,8 +37,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ImportRecordGovernanceServiceTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ImportErrorOutputStorage errorOutputStorage;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ImportErrorOutputStorage errorOutputStorage;
 
   private BatchSecurityProperties batchSecurityProperties;
 
@@ -349,10 +352,8 @@ class ImportRecordGovernanceServiceTest {
     ctx.getAttributes()
         .put(
             "badRecords",
-            new java.util.ArrayList<>(
-                List.of(
-                    new ImportBadRecordEntity(
-                        1L, "PARSE", "E", "m", null, false, "CONTINUE", null, null, null))));
+            new java.util.ArrayList<>(List.of(new ImportBadRecordEntity(
+                1L, "PARSE", "E", "m", null, false, "CONTINUE", null, null, null))));
 
     service.finalizeErrorOutput(ctx);
 

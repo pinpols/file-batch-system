@@ -41,9 +41,14 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired private JobTaskMapper jobTaskMapper;
-  @Autowired private OutboxEventMapper outboxEventMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
+
+  @Autowired
+  private OutboxEventMapper outboxEventMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   @DisplayName("REPORT 重投只生效一次——重复回报被终态 CAS 空转,版本只 +1")
@@ -75,14 +80,12 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
       assertThat(finishToSuccess(taskId, 0L)).isEqualTo(1);
 
       // act:GC-pause 复活的旧 leader 拿着陈旧 version=0 试图把它写成 FAILED
-      int stale =
-          jobTaskMapper.updateStatus(
-              UpdateTaskStatusParam.withDefaultTerminals()
-                  .tenantId(TENANT)
-                  .id(taskId)
-                  .taskStatus(TaskStatus.FAILED.code())
-                  .expectedVersion(0L)
-                  .build());
+      int stale = jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
+          .tenantId(TENANT)
+          .id(taskId)
+          .taskStatus(TaskStatus.FAILED.code())
+          .expectedVersion(0L)
+          .build());
 
       // assert:陈旧写被乐观锁拒绝;终态仍是新 leader 落定的 SUCCESS
       assertThat(stale).as("陈旧版本号的写入必须被 version CAS 拒绝").isEqualTo(0);
@@ -105,12 +108,11 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
       // assert:第二次空转;DB 中该 (tenant_id,event_key) 只有一行 → 下游不会重复出账
       assertThat(first).as("首次 outbox 写入应成功").isEqualTo(1);
       assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isEqualTo(0);
-      Integer rows =
-          jdbcTemplate.queryForObject(
-              "SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?",
-              Integer.class,
-              TENANT,
-              eventKey);
+      Integer rows = jdbcTemplate.queryForObject(
+          "SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?",
+          Integer.class,
+          TENANT,
+          eventKey);
       assertThat(rows).as("同一事件键全局只一行").isEqualTo(1);
     } finally {
       jdbcTemplate.update(
@@ -121,17 +123,16 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   // ── helpers ────────────────────────────────────────────────────────────
 
   private int finishToSuccess(long taskId, long expectedVersion) {
-    return jobTaskMapper.finishTask(
-        FinishTaskParam.builder()
-            .tenantId(TENANT)
-            .id(taskId)
-            .taskStatus(TaskStatus.SUCCESS.code())
-            .expectedStatus(TaskStatus.RUNNING.code())
-            .resultSummary(null)
-            .errorCode(null)
-            .errorMessage(null)
-            .expectedVersion(expectedVersion)
-            .build());
+    return jobTaskMapper.finishTask(FinishTaskParam.builder()
+        .tenantId(TENANT)
+        .id(taskId)
+        .taskStatus(TaskStatus.SUCCESS.code())
+        .expectedStatus(TaskStatus.RUNNING.code())
+        .resultSummary(null)
+        .errorCode(null)
+        .errorMessage(null)
+        .expectedVersion(expectedVersion)
+        .build());
   }
 
   private OutboxEventEntity newOutboxEvent(String eventKey) {
@@ -151,58 +152,40 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   /** 用裸 JDBC 造一条 RUNNING、version=0 的 job_task(连带最小依赖行),返回 taskId。 */
   private long insertRunningTask(String suffix) {
     String jobCode = "JOB_" + suffix;
-    Long jobDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobDefinitionId = jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_definition (
                 tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode
             ) VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', 'API')
             RETURNING id
-            """,
-            Long.class,
-            TENANT,
-            jobCode,
-            jobCode);
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            """
+            """, Long.class, TENANT, jobCode, jobCode);
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        """
             INSERT INTO batch.trigger_request (
                 tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
             ) VALUES (?, ?, 'API', ?, ?, 'LAUNCHED')
             RETURNING id
-            """,
-            Long.class,
-            TENANT,
-            "REQ_" + suffix,
-            jobCode,
-            "TR_DEDUP_" + suffix);
-    Long jobInstanceId =
-        jdbcTemplate.queryForObject(
-            """
+            """, Long.class, TENANT, "REQ_" + suffix, jobCode, "TR_DEDUP_" + suffix);
+    Long jobInstanceId = jdbcTemplate.queryForObject(
+        """
             INSERT INTO batch.job_instance (
                 tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
                 trigger_type, instance_status, dedup_key, biz_date
             ) VALUES (?, ?, ?, ?, ?, 'API', 'RUNNING', ?, CURRENT_DATE)
             RETURNING id
             """,
-            Long.class,
-            TENANT,
-            jobDefinitionId,
-            triggerRequestId,
-            jobCode,
-            "INST_" + suffix,
-            "DEDUP_" + suffix);
-    Long taskId =
-        jdbcTemplate.queryForObject(
-            """
+        Long.class,
+        TENANT,
+        jobDefinitionId,
+        triggerRequestId,
+        jobCode,
+        "INST_" + suffix,
+        "DEDUP_" + suffix);
+    Long taskId = jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_task (
                 tenant_id, job_instance_id, task_type, task_seq, task_status, version
             ) VALUES (?, ?, 'EXECUTION', 1, 'RUNNING', 0)
             RETURNING id
-            """,
-            Long.class,
-            TENANT,
-            jobInstanceId);
+            """, Long.class, TENANT, jobInstanceId);
     return taskId;
   }
 
@@ -217,20 +200,13 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void cleanupTask(long taskId) {
-    Long instanceId =
-        jdbcTemplate.queryForObject(
-            "SELECT job_instance_id FROM batch.job_task WHERE id = ?", Long.class, taskId);
+    Long instanceId = jdbcTemplate.queryForObject(
+        "SELECT job_instance_id FROM batch.job_task WHERE id = ?", Long.class, taskId);
     jdbcTemplate.update("DELETE FROM batch.job_task WHERE id = ?", taskId);
-    Long defId =
-        jdbcTemplate.queryForObject(
-            "SELECT job_definition_id FROM batch.job_instance WHERE id = ?",
-            Long.class,
-            instanceId);
-    Long trId =
-        jdbcTemplate.queryForObject(
-            "SELECT trigger_request_id FROM batch.job_instance WHERE id = ?",
-            Long.class,
-            instanceId);
+    Long defId = jdbcTemplate.queryForObject(
+        "SELECT job_definition_id FROM batch.job_instance WHERE id = ?", Long.class, instanceId);
+    Long trId = jdbcTemplate.queryForObject(
+        "SELECT trigger_request_id FROM batch.job_instance WHERE id = ?", Long.class, instanceId);
     jdbcTemplate.update("DELETE FROM batch.job_instance WHERE id = ?", instanceId);
     jdbcTemplate.update("DELETE FROM batch.trigger_request WHERE id = ?", trId);
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", defId);

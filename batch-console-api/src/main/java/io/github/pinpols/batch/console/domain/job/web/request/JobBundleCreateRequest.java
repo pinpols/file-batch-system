@@ -10,11 +10,14 @@ import lombok.Data;
 @Data
 public class JobBundleCreateRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   private InitMode mode = InitMode.SKIP_EXISTING;
 
   private boolean dryRun;
 
-  @Valid @NotNull private ConfigSyncBundlePayload bundle;
+  @Valid
+  @NotNull
+  private ConfigSyncBundlePayload bundle;
 }

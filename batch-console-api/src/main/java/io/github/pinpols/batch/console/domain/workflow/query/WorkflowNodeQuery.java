@@ -15,7 +15,10 @@ public record WorkflowNodeQuery(
 
   /** 按 workflowDefinitionId 查询全部节点，不带其他过滤条件。 */
   public static WorkflowNodeQuery ofDefinition(Long workflowDefinitionId, PageRequest pageRequest) {
-    return builder().workflowDefinitionId(workflowDefinitionId).pageRequest(pageRequest).build();
+    return builder()
+        .workflowDefinitionId(workflowDefinitionId)
+        .pageRequest(pageRequest)
+        .build();
   }
 
   /** 按租户 + workflowDefinitionId 查询全部节点。 */

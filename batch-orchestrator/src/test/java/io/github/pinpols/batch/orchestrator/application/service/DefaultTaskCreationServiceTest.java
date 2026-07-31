@@ -25,8 +25,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultTaskCreationServiceTest {
 
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
 
   private DefaultTaskCreationService service;
 
@@ -156,16 +159,14 @@ class DefaultTaskCreationServiceTest {
   void createTasks_batchInsertsTasksAndStepsOnceEach() {
     JobTaskEntity t1 = buildTask(null, "t1", "IMPORT", 1);
     JobTaskEntity t2 = buildTask(null, "t1", "EXPORT", 1);
-    when(jobTaskMapper.insertBatch(any()))
-        .thenAnswer(
-            inv -> {
-              List<JobTaskEntity> list = inv.getArgument(0);
-              long id = 100L;
-              for (JobTaskEntity t : list) {
-                t.setId(id++);
-              }
-              return list.size();
-            });
+    when(jobTaskMapper.insertBatch(any())).thenAnswer(inv -> {
+      List<JobTaskEntity> list = inv.getArgument(0);
+      long id = 100L;
+      for (JobTaskEntity t : list) {
+        t.setId(id++);
+      }
+      return list.size();
+    });
 
     List<JobTaskEntity> result = service.createTasks(List.of(t1, t2));
 
@@ -205,15 +206,13 @@ class DefaultTaskCreationServiceTest {
       tasks.add(buildTask(null, "t1", "IMPORT", i));
     }
     java.util.concurrent.atomic.AtomicLong nextId = new java.util.concurrent.atomic.AtomicLong(1L);
-    when(jobTaskMapper.insertBatch(any()))
-        .thenAnswer(
-            inv -> {
-              List<JobTaskEntity> chunk = inv.getArgument(0);
-              for (JobTaskEntity t : chunk) {
-                t.setId(nextId.getAndIncrement());
-              }
-              return chunk.size();
-            });
+    when(jobTaskMapper.insertBatch(any())).thenAnswer(inv -> {
+      List<JobTaskEntity> chunk = inv.getArgument(0);
+      for (JobTaskEntity t : chunk) {
+        t.setId(nextId.getAndIncrement());
+      }
+      return chunk.size();
+    });
 
     service.createTasks(tasks);
 
@@ -233,9 +232,8 @@ class DefaultTaskCreationServiceTest {
     stepCap.getAllValues().forEach(allSteps::addAll);
     assertThat(allSteps).hasSize(total);
     for (int i = 0; i < total; i++) {
-      assertThat(allSteps.get(i).getJobTaskId())
-          .as("step %d jobTaskId", i)
-          .isEqualTo((long) (i + 1));
+      assertThat(allSteps.get(i).getJobTaskId()).as("step %d jobTaskId", i).isEqualTo((long)
+          (i + 1));
     }
   }
 

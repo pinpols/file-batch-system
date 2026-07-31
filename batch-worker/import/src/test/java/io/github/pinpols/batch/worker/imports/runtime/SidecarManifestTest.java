@@ -13,8 +13,7 @@ class SidecarManifestTest {
   @Test
   @DisplayName("解析 file-sidecar-manifest-v1:全字段映射正确")
   void parsesFullManifest() throws Exception {
-    String json =
-        """
+    String json = """
         {
           "schemaVersion": "file-sidecar-manifest-v1",
           "fileName": "settlement_20260607.dat",

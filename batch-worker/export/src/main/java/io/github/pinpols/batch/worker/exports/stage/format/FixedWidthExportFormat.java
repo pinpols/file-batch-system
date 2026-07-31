@@ -34,7 +34,8 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
       return 0L;
     }
     int recordLength = resolveTemplateInt(ctx.jobContext(), "record_length", 0);
-    int headerRows = resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig()).headerRows();
+    int headerRows =
+        resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig()).headerRows();
 
     // ADR-038 P3:首页仅用于列解析(只读、幂等);续跑时 generatePaged 会忽略它、从 resumeCursor 续拉。
     try (ResumableExportFile file = openExportFile(ctx)) {
@@ -43,25 +44,20 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
       if (!isResuming(ctx)) {
         writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows);
       }
-      return generatePaged(
-          ctx,
-          firstPage,
-          file::flushAndSync,
-          (batch, detail, rowIndex) -> {
-            StringBuilder line = new StringBuilder();
-            for (ColumnLayout column : columns) {
-              line.append(
-                  fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
-            }
-            if (recordLength > 0) {
-              line = new StringBuilder(padRight(line.toString(), recordLength));
-            }
-            writer.write(line.toString());
-            writer.newLine();
-            if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
-              writer.flush();
-            }
-          });
+      return generatePaged(ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
+        StringBuilder line = new StringBuilder();
+        for (ColumnLayout column : columns) {
+          line.append(fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
+        }
+        if (recordLength > 0) {
+          line = new StringBuilder(padRight(line.toString(), recordLength));
+        }
+        writer.write(line.toString());
+        writer.newLine();
+        if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+          writer.flush();
+        }
+      });
     }
   }
 

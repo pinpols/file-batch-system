@@ -156,17 +156,16 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.step_definition_missing");
       return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
-    Long pipelineInstanceId =
-        runtimeRepository.createPipelineInstance(
-            new PlatformFileRuntimeRepository.CreatePipelineInstanceParam(
-                request.tenantId(),
-                pipelineDefinitionId,
-                jobCode,
-                pipelineType(),
-                fileId,
-                runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
-                resolveInitialStage(pipelineSteps),
-                traceId));
+    Long pipelineInstanceId = runtimeRepository.createPipelineInstance(
+        new PlatformFileRuntimeRepository.CreatePipelineInstanceParam(
+            request.tenantId(),
+            pipelineDefinitionId,
+            jobCode,
+            pipelineType(),
+            fileId,
+            runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
+            resolveInitialStage(pipelineSteps),
+            traceId));
     attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
     attributes.put(PipelineRuntimeKeys.JOB_CODE, jobCode);
     attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);
@@ -196,16 +195,15 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         // ADR-030 §C/G: 跑 ContentVerifier。
         //  - 软告警（fatal=false）：失败仅落 attributes.verifierFailures，pipeline 继续 SUCCESS
         //  - 硬中止（fatal=true）：把 pipeline 翻为 FAILED，错误码 VERIFIER_FATAL
-        PipelineVerifierHook.VerifierHookResult verifierResult =
-            verifierHook == null
-                ? PipelineVerifierHook.VerifierHookResult.NO_FATAL
-                : verifierHook.runVerifiers(
-                    request.tenantId(),
-                    pipelineType(),
-                    runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
-                    runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID)),
-                    successStage,
-                    attributes);
+        PipelineVerifierHook.VerifierHookResult verifierResult = verifierHook == null
+            ? PipelineVerifierHook.VerifierHookResult.NO_FATAL
+            : verifierHook.runVerifiers(
+                request.tenantId(),
+                pipelineType(),
+                runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
+                runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID)),
+                successStage,
+                attributes);
 
         if (verifierResult.fatalFailure()) {
           // §G 硬中止：DB 标 FAILED，返回失败 response 而非 success。
@@ -213,14 +211,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
           runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
           runtimeRepository.markPipelineFailed(
               pipelineInstanceId, successStage, lastSuccessfulStage(attributes));
-          String fatalCode =
-              verifierResult.firstFatalCode() == null
-                  ? "VERIFIER_FATAL"
-                  : verifierResult.firstFatalCode();
-          String fatalMessage =
-              verifierResult.firstFatalMessage() == null
-                  ? "ContentVerifier reported fatal failure"
-                  : verifierResult.firstFatalMessage();
+          String fatalCode = verifierResult.firstFatalCode() == null
+              ? "VERIFIER_FATAL"
+              : verifierResult.firstFatalCode();
+          String fatalMessage = verifierResult.firstFatalMessage() == null
+              ? "ContentVerifier reported fatal failure"
+              : verifierResult.firstFatalMessage();
           handlePipelineFailure(attributes, fatalCode, fatalMessage, null, null);
           return new StepExecutionResponse(false, fatalCode, fatalMessage);
         }
@@ -324,13 +320,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     if (Texts.hasText(targetJobCode)) {
       return targetJobCode;
     }
-    String jobCode =
-        resolveText(
-            attributes,
-            PipelineRuntimeKeys.JOB_CODE,
-            PipelineRuntimeKeys.PIPELINE_CODE,
-            "jobCode",
-            "pipelineCode");
+    String jobCode = resolveText(
+        attributes,
+        PipelineRuntimeKeys.JOB_CODE,
+        PipelineRuntimeKeys.PIPELINE_CODE,
+        "jobCode",
+        "pipelineCode");
     if (Texts.hasText(jobCode)) {
       return jobCode;
     }

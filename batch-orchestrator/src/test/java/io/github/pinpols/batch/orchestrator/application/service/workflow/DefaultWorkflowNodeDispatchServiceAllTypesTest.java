@@ -51,52 +51,81 @@ import org.springframework.beans.factory.ObjectProvider;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultWorkflowNodeDispatchServiceAllTypesTest {
 
-  @Mock private JobInstanceMapper jobInstanceMapper;
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private JobTaskMapper jobTaskMapper;
-  @Mock private JobStepInstanceMapper jobStepInstanceMapper;
-  @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private WorkflowNodeMapper workflowNodeMapper;
-  @Mock private WorkflowRunMapper workflowRunMapper;
-  @Mock private WorkflowNodeRunMapper workflowNodeRunMapper;
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Mock private SchedulePlanBuilder schedulePlanBuilder;
-  @Mock private PartitionLifecycleService partitionLifecycleService;
-  @Mock private TaskDispatchOutboxService taskDispatchOutboxService;
-  @Mock private WorkflowDagService workflowDagService;
-  @Mock private ResourceScheduler resourceScheduler;
-  @Mock private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
-  @Mock private WorkflowNodePayloadBuilder payloadBuilder;
-  @Mock private ChildJobLaunchSupport childJobLaunchSupport;
-  @Mock private CrossDayDependencyResolver crossDayDependencyResolver;
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private JobTaskMapper jobTaskMapper;
+
+  @Mock
+  private JobStepInstanceMapper jobStepInstanceMapper;
+
+  @Mock
+  private TriggerRequestMapper triggerRequestMapper;
+
+  @Mock
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
+
+  @Mock
+  private SchedulePlanBuilder schedulePlanBuilder;
+
+  @Mock
+  private PartitionLifecycleService partitionLifecycleService;
+
+  @Mock
+  private TaskDispatchOutboxService taskDispatchOutboxService;
+
+  @Mock
+  private WorkflowDagService workflowDagService;
+
+  @Mock
+  private ResourceScheduler resourceScheduler;
+
+  @Mock
+  private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+
+  @Mock
+  private WorkflowNodePayloadBuilder payloadBuilder;
+
+  @Mock
+  private ChildJobLaunchSupport childJobLaunchSupport;
+
+  @Mock
+  private CrossDayDependencyResolver crossDayDependencyResolver;
 
   private DefaultWorkflowNodeDispatchService service;
 
   @BeforeEach
   void setUp() {
-    OrchestratorJobMappers jobMappers =
-        new OrchestratorJobMappers(
-            jobInstanceMapper,
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobStepInstanceMapper,
-            triggerRequestMapper);
-    OrchestratorWorkflowMappers workflowMappers =
-        new OrchestratorWorkflowMappers(
-            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    service =
-        new DefaultWorkflowNodeDispatchService(
-            jobMappers,
-            workflowMappers,
-            schedulePlanBuilder,
-            partitionLifecycleService,
-            taskDispatchOutboxService,
-            workflowDagService,
-            resourceScheduler,
-            taskExecutionServiceProvider,
-            payloadBuilder,
-            childJobLaunchSupport,
-            crossDayDependencyResolver);
+    OrchestratorJobMappers jobMappers = new OrchestratorJobMappers(
+        jobInstanceMapper,
+        jobPartitionMapper,
+        jobTaskMapper,
+        jobStepInstanceMapper,
+        triggerRequestMapper);
+    OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
+        workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
+    service = new DefaultWorkflowNodeDispatchService(
+        jobMappers,
+        workflowMappers,
+        schedulePlanBuilder,
+        partitionLifecycleService,
+        taskDispatchOutboxService,
+        workflowDagService,
+        resourceScheduler,
+        taskExecutionServiceProvider,
+        payloadBuilder,
+        childJobLaunchSupport,
+        crossDayDependencyResolver);
     // 通用 stub:让流程能走到 nodeType 分派点
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
@@ -137,9 +166,8 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
     when(childJobLaunchSupport.dispatchJobNode(any(), any(), any(), any(), any(), any()))
         .thenReturn(1);
 
-    int result =
-        service.dispatchNode(
-            instance(), workflowRun(), new DagNodeResolution("n1", "JOB"), null, "trace");
+    int result = service.dispatchNode(
+        instance(), workflowRun(), new DagNodeResolution("n1", "JOB"), null, "trace");
 
     assertThat(result).isEqualTo(1);
     verify(childJobLaunchSupport, times(1))

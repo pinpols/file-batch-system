@@ -29,16 +29,15 @@ public class MaintenanceStateHolder {
 
   @PostConstruct
   void initFromProperties() {
-    state.set(
-        new MaintenanceState(
-            properties.isEnabled(),
-            properties.isReadOnly(),
-            properties.getMessage(),
-            properties.getEtaAt(),
-            List.copyOf(
-                properties.getAffectedServices() == null
-                    ? List.of()
-                    : properties.getAffectedServices())));
+    state.set(new MaintenanceState(
+        properties.isEnabled(),
+        properties.isReadOnly(),
+        properties.getMessage(),
+        properties.getEtaAt(),
+        List.copyOf(
+            properties.getAffectedServices() == null
+                ? List.of()
+                : properties.getAffectedServices())));
   }
 
   public MaintenanceState current() {
@@ -47,13 +46,12 @@ public class MaintenanceStateHolder {
 
   /** Admin 热更新入口。完全替换当前状态。 */
   public MaintenanceState update(MaintenanceState next) {
-    MaintenanceState normalized =
-        new MaintenanceState(
-            next.enabled(),
-            next.readOnly(),
-            next.message(),
-            next.etaAt(),
-            List.copyOf(next.affectedServices() == null ? List.of() : next.affectedServices()));
+    MaintenanceState normalized = new MaintenanceState(
+        next.enabled(),
+        next.readOnly(),
+        next.message(),
+        next.etaAt(),
+        List.copyOf(next.affectedServices() == null ? List.of() : next.affectedServices()));
     state.set(normalized);
     return normalized;
   }

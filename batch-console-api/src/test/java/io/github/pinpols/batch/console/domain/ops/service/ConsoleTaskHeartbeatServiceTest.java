@@ -19,7 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTaskHeartbeatServiceTest {
 
-  @Mock private JobTaskMapper jobTaskMapper;
+  @Mock
+  private JobTaskMapper jobTaskMapper;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 

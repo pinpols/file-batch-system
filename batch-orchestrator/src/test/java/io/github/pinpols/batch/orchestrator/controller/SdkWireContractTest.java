@@ -45,22 +45,21 @@ class SdkWireContractTest {
 
   @Test
   void registerRequestDeserializesToWorkerHeartbeatDto() throws Exception {
-    RegisterRequest sdkSide =
-        new RegisterRequest(
-            "tenant-acme",
-            "worker-1",
-            "sdk-self-hosted",
-            "RUNNING",
-            "host-a",
-            "10.0.0.1",
-            "12345",
-            "build-9",
-            "sdk-2.1.0",
-            Instant.parse("2026-05-31T10:00:00Z"),
-            List.of("echo", "sleep"),
-            3,
-            null,
-            "v2");
+    RegisterRequest sdkSide = new RegisterRequest(
+        "tenant-acme",
+        "worker-1",
+        "sdk-self-hosted",
+        "RUNNING",
+        "host-a",
+        "10.0.0.1",
+        "12345",
+        "build-9",
+        "sdk-2.1.0",
+        Instant.parse("2026-05-31T10:00:00Z"),
+        List.of("echo", "sleep"),
+        3,
+        null,
+        "v2");
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
@@ -84,30 +83,28 @@ class SdkWireContractTest {
   @Test
   void registerRequestTaskTypeDescriptorDeserializesAcrossBoundary() throws Exception {
     // Phase 3 M3.1:SDK SdkTaskTypeDescriptor → 平台 WorkerTaskTypeDescriptorDto 字段名 1:1。
-    SdkTaskTypeDescriptor descriptor =
-        new SdkTaskTypeDescriptor(
-            "tenant_acme_import",
-            "每日对账导入",
-            "v1",
-            Map.of("batchSize", 1000),
-            Map.of("type", "object", "required", List.of("sourcePath")),
-            List.of("bizDate"));
-    RegisterRequest sdkSide =
-        new RegisterRequest(
-            "tenant-acme",
-            "worker-1",
-            "sdk-self-hosted",
-            "RUNNING",
-            null,
-            null,
-            null,
-            null,
-            null,
-            Instant.parse("2026-05-31T10:00:00Z"),
-            List.of("tenant_acme_import"),
-            0,
-            List.of(descriptor),
-            "v1");
+    SdkTaskTypeDescriptor descriptor = new SdkTaskTypeDescriptor(
+        "tenant_acme_import",
+        "每日对账导入",
+        "v1",
+        Map.of("batchSize", 1000),
+        Map.of("type", "object", "required", List.of("sourcePath")),
+        List.of("bizDate"));
+    RegisterRequest sdkSide = new RegisterRequest(
+        "tenant-acme",
+        "worker-1",
+        "sdk-self-hosted",
+        "RUNNING",
+        null,
+        null,
+        null,
+        null,
+        null,
+        Instant.parse("2026-05-31T10:00:00Z"),
+        List.of("tenant_acme_import"),
+        0,
+        List.of(descriptor),
+        "v1");
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
@@ -129,21 +126,20 @@ class SdkWireContractTest {
     // Python SDK PR #320 / Java SDK fix/sdk-java-heartbeat-fields-align 对齐:
     // heartbeat 必须能携带 workerGroup / hostName / hostIp / processId / capabilityTags / buildId
     // 这 6 字段(register 时已上报,但平台回退降级 register 路径时需要它们消除字段丢失窗口)。
-    HeartbeatRequest sdkSide =
-        new HeartbeatRequest(
-            "tenant-acme",
-            "worker-1",
-            "sdk-self-hosted",
-            "RUNNING",
-            "host-a",
-            "10.0.0.1",
-            "12345",
-            "build-9",
-            Instant.parse("2026-05-31T10:05:00Z"),
-            List.of("echo", "sleep"),
-            5,
-            123_456L,
-            1_000_000L);
+    HeartbeatRequest sdkSide = new HeartbeatRequest(
+        "tenant-acme",
+        "worker-1",
+        "sdk-self-hosted",
+        "RUNNING",
+        "host-a",
+        "10.0.0.1",
+        "12345",
+        "build-9",
+        Instant.parse("2026-05-31T10:05:00Z"),
+        List.of("echo", "sleep"),
+        5,
+        123_456L,
+        1_000_000L);
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
@@ -167,21 +163,20 @@ class SdkWireContractTest {
   @Test
   void heartbeatRequestPipelineProgressFieldsAreOptional() throws Exception {
     // 2026-06-03:rowsProcessed / totalRowsHint 是可选字段,LOAD/GENERATE 之外的 stage / 空闲态都是 null
-    HeartbeatRequest sdkSide =
-        new HeartbeatRequest(
-            "tenant-acme",
-            "worker-1",
-            null,
-            "IDLE",
-            null,
-            null,
-            null,
-            null,
-            Instant.parse("2026-05-31T10:05:00Z"),
-            null,
-            0,
-            null,
-            null);
+    HeartbeatRequest sdkSide = new HeartbeatRequest(
+        "tenant-acme",
+        "worker-1",
+        null,
+        "IDLE",
+        null,
+        null,
+        null,
+        null,
+        Instant.parse("2026-05-31T10:05:00Z"),
+        null,
+        0,
+        null,
+        null);
     String json = MAPPER.writeValueAsString(sdkSide);
     // NON_NULL 序列化策略下 null 字段不应出现
     assertThat(json).doesNotContain("rowsProcessed").doesNotContain("totalRowsHint");
@@ -224,22 +219,21 @@ class SdkWireContractTest {
 
   @Test
   void reportRequestDeserializesToTaskExecutionReportDto() throws Exception {
-    ReportRequest sdkSide =
-        new ReportRequest(
-            42L,
-            "tenant-acme",
-            "worker-1",
-            "trace-abc",
-            true,
-            "OK",
-            "done",
-            "rows=5",
-            null,
-            "2026-05-31",
-            Map.of("rows", 5),
-            "inv-789",
-            null,
-            null);
+    ReportRequest sdkSide = new ReportRequest(
+        42L,
+        "tenant-acme",
+        "worker-1",
+        "trace-abc",
+        true,
+        "OK",
+        "done",
+        "rows=5",
+        null,
+        "2026-05-31",
+        Map.of("rows", 5),
+        "inv-789",
+        null,
+        null);
 
     TaskExecutionReportDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskExecutionReportDto.class);
@@ -259,22 +253,21 @@ class SdkWireContractTest {
 
   @Test
   void reportRequestFailureCarriesErrorCodeAndResultSummary() throws Exception {
-    ReportRequest sdkSide =
-        new ReportRequest(
-            42L,
-            "tenant-acme",
-            "worker-1",
-            null,
-            false,
-            null,
-            "handler failed",
-            "boom",
-            "IllegalStateException",
-            null,
-            null,
-            null,
-            "BIZ_ERROR",
-            List.of(Map.of("code", "VERIFY_FAIL", "message", "row 3 invalid")));
+    ReportRequest sdkSide = new ReportRequest(
+        42L,
+        "tenant-acme",
+        "worker-1",
+        null,
+        false,
+        null,
+        "handler failed",
+        "boom",
+        "IllegalStateException",
+        null,
+        null,
+        null,
+        "BIZ_ERROR",
+        List.of(Map.of("code", "VERIFY_FAIL", "message", "row 3 invalid")));
 
     TaskExecutionReportDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskExecutionReportDto.class);
@@ -291,47 +284,34 @@ class SdkWireContractTest {
 
   @Test
   void reportRequestUsesOutputsNotOutput() throws Exception {
-    ReportRequest sdkSide =
-        new ReportRequest(
-            1L,
-            "t",
-            "w",
-            null,
-            true,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Map.of("k", "v"),
-            null,
-            null,
-            null);
+    ReportRequest sdkSide = new ReportRequest(
+        1L, "t", "w", null, true, null, null, null, null, null, Map.of("k", "v"), null, null, null);
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
     // 平台 TaskExecutionReportDto 字段名是 outputs(复数);若 SDK 写 output(单数)
     // 平台读不到 → 节点 output 永远空。本断言守门。
     assertThat(tree.has("outputs")).as("must serialize as 'outputs' (plural)").isTrue();
-    assertThat(tree.has("output")).as("must NOT serialize as 'output' (singular)").isFalse();
+    assertThat(tree.has("output"))
+        .as("must NOT serialize as 'output' (singular)")
+        .isFalse();
   }
 
   @Test
   void reportRequestUsesErrorCodeNotErrorClass() throws Exception {
-    ReportRequest sdkSide =
-        new ReportRequest(
-            1L,
-            "t",
-            "w",
-            null,
-            false,
-            null,
-            null,
-            null,
-            "RuntimeException",
-            null,
-            null,
-            null,
-            null,
-            null);
+    ReportRequest sdkSide = new ReportRequest(
+        1L,
+        "t",
+        "w",
+        null,
+        false,
+        null,
+        null,
+        null,
+        "RuntimeException",
+        null,
+        null,
+        null,
+        null,
+        null);
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
     assertThat(tree.has("errorCode")).isTrue();
     assertThat(tree.has("errorClass")).as("废字段 errorClass 不应出现").isFalse();
@@ -342,30 +322,28 @@ class SdkWireContractTest {
   @Test
   void platformTaskDispatchMessageCarriesSchemaVersion() throws Exception {
     // 平台侧 TaskDispatchMessage 必须含 schemaVersion 字段(Phase 0 §2.1)。
-    TaskDispatchMessage platform =
-        new TaskDispatchMessage(
-            "v2",
-            "tenant-acme",
-            10L,
-            null,
-            42L,
-            "ji-01",
-            "daily-report",
-            "echo",
-            null,
-            "MEDIUM",
-            "trace-abc",
-            "idem-1",
-            Instant.parse("2026-05-31T10:00:00Z"),
-            null);
+    TaskDispatchMessage platform = new TaskDispatchMessage(
+        "v2",
+        "tenant-acme",
+        10L,
+        null,
+        42L,
+        "ji-01",
+        "daily-report",
+        "echo",
+        null,
+        "MEDIUM",
+        "trace-abc",
+        "idem-1",
+        Instant.parse("2026-05-31T10:00:00Z"),
+        null);
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
     assertThat(tree.get("schemaVersion").asText()).isEqualTo("v2");
 
     // SDK 端反序列化能识别 schemaVersion 且认可 v2。
-    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage sdk =
-        MAPPER.readValue(
-            MAPPER.writeValueAsBytes(platform),
-            io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage sdk = MAPPER.readValue(
+        MAPPER.writeValueAsBytes(platform),
+        io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
     assertThat(sdk.schemaVersion()).isEqualTo("v2");
     assertThat(sdk.isSchemaSupported()).isTrue();
   }
@@ -378,22 +356,21 @@ class SdkWireContractTest {
     // execute 静默失败(no handler for taskType=null)。SDK 全部 conformance / SampleTenantWorkerIT 都走
     // FakeBatchPlatform / TaskDispatchMessageBuilder,在进程内直接构造 SDK record、从不序列化平台的 `workerType`
     // JSON,所以测不到这条跨进程契约;sim 06 dispatch-execute 腿(真过 Kafka)是它的运行期对照。
-    TaskDispatchMessage platform =
-        new TaskDispatchMessage(
-            "v2",
-            "tenant-acme",
-            10L,
-            null,
-            42L,
-            "ji-01",
-            "daily-report",
-            "echo", // workerType:派单路由键,worker 据此选 handler
-            null,
-            "MEDIUM",
-            "trace-abc",
-            "idem-1",
-            Instant.parse("2026-05-31T10:00:00Z"),
-            null);
+    TaskDispatchMessage platform = new TaskDispatchMessage(
+        "v2",
+        "tenant-acme",
+        10L,
+        null,
+        42L,
+        "ji-01",
+        "daily-report",
+        "echo", // workerType:派单路由键,worker 据此选 handler
+        null,
+        "MEDIUM",
+        "trace-abc",
+        "idem-1",
+        Instant.parse("2026-05-31T10:00:00Z"),
+        null);
 
     // 平台序列化后的 JSON 字段名必须是 `workerType`(不是 `taskType`),这是契约方向锚点。
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
@@ -401,20 +378,18 @@ class SdkWireContractTest {
     assertThat(tree.get("workerType").asText()).isEqualTo("echo");
 
     // SDK 反序列化后,handler 路由键 taskType() 必须等于平台的 workerType —— 否则 handlers.get() 必拿 null。
-    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage sdk =
-        MAPPER.readValue(
-            MAPPER.writeValueAsBytes(platform),
-            io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage sdk = MAPPER.readValue(
+        MAPPER.writeValueAsBytes(platform),
+        io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
     assertThat(sdk.taskType())
         .as("平台 workerType 必须绑定到 SDK handler 路由键 taskType()")
         .isEqualTo("echo");
     assertThat(sdk.taskId()).isEqualTo(42L);
 
     // 向后兼容:v1 旧字段名 `taskType` 经 @JsonAlias 仍能被 SDK 解析为同一路由键。
-    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage legacy =
-        MAPPER.readValue(
-            "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}",
-            io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage legacy = MAPPER.readValue(
+        "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}",
+        io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
     assertThat(legacy.taskType()).isEqualTo("echo");
   }
 }

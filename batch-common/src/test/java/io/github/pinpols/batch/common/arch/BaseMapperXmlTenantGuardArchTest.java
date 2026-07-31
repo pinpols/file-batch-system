@@ -32,16 +32,14 @@ import org.junit.jupiter.api.Test;
  */
 public abstract class BaseMapperXmlTenantGuardArchTest {
 
-  private static final Pattern CONDITIONAL_TENANT_FILTER =
-      Pattern.compile(
-          "<if\\s+test\\s*=\\s*\"tenantId\\s*!=\\s*null[^\"]*\"\\s*>"
-              + "[^<]*tenant_id\\s*=\\s*#\\{tenantId\\}",
-          Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+  private static final Pattern CONDITIONAL_TENANT_FILTER = Pattern.compile(
+      "<if\\s+test\\s*=\\s*\"tenantId\\s*!=\\s*null[^\"]*\"\\s*>"
+          + "[^<]*tenant_id\\s*=\\s*#\\{tenantId\\}",
+      Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
   /** 每个 {@code <update>} / {@code <delete>} 语句块(含属性 + body)。 */
-  private static final Pattern WRITE_STATEMENT_BLOCK =
-      Pattern.compile(
-          "<(update|delete)\\b([^>]*)>(.*?)</\\1>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+  private static final Pattern WRITE_STATEMENT_BLOCK = Pattern.compile(
+      "<(update|delete)\\b([^>]*)>(.*?)</\\1>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
   /** 语句块内首个 {@code UPDATE batch.<t>} / {@code DELETE FROM batch.<t>} 目标表(捕获表名)。 */
   private static final Pattern BATCH_WRITE_TARGET =
@@ -112,9 +110,8 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
           .forEach(p -> scan(p, violations));
     }
     assertThat(violations)
-        .as(
-            "mapper XML 含 <if tenantId>AND tenant_id 守护 — 改为无条件,或加入子类"
-                + " knownConditionalTenantMappers() 并注明 ROLE_ADMIN 跨租理由")
+        .as("mapper XML 含 <if tenantId>AND tenant_id 守护 — 改为无条件,或加入子类"
+            + " knownConditionalTenantMappers() 并注明 ROLE_ADMIN 跨租理由")
         .isEmpty();
   }
 
@@ -147,11 +144,10 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
           .forEach(p -> scanBatchWrites(p, exemptTables, exemptStatements, violations));
     }
     assertThat(violations)
-        .as(
-            "batch.* 表的 UPDATE/DELETE 缺 tenant_id 谓词(WHERE 无 tenant_id)——潜在跨租 IDOR。"
-                + "修正:WHERE 补 AND tenant_id = #{...};若确属 by-design(系统表/run 子表无 tenant_id 列 →"
-                + " tenantExemptTables();内部后台/调度/发件箱/worker/归档/服务层已校验 →"
-                + " knownTenantlessBatchWriteStatements())须加白名单并注明理由")
+        .as("batch.* 表的 UPDATE/DELETE 缺 tenant_id 谓词(WHERE 无 tenant_id)——潜在跨租 IDOR。"
+            + "修正:WHERE 补 AND tenant_id = #{...};若确属 by-design(系统表/run 子表无 tenant_id 列 →"
+            + " tenantExemptTables();内部后台/调度/发件箱/worker/归档/服务层已校验 →"
+            + " knownTenantlessBatchWriteStatements())须加白名单并注明理由")
         .isEmpty();
   }
 
@@ -188,17 +184,16 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
       String whereRegion = where.find(target.end()) ? body.substring(where.start()) : "";
       if (!whereRegion.toLowerCase(Locale.ROOT).contains("tenant_id")) {
         int lineNo = lineOf(content, block.start());
-        violations.add(
-            xml.getFileName()
-                + ":"
-                + lineNo
-                + " ["
-                + table
-                + "] "
-                + key
-                + " — batch.* "
-                + kind
-                + (whereRegion.isEmpty() ? " 无 WHERE 子句(全表写)" : " 的 WHERE 缺 tenant_id 谓词"));
+        violations.add(xml.getFileName()
+            + ":"
+            + lineNo
+            + " ["
+            + table
+            + "] "
+            + key
+            + " — batch.* "
+            + kind
+            + (whereRegion.isEmpty() ? " 无 WHERE 子句(全表写)" : " 的 WHERE 缺 tenant_id 谓词"));
       }
     }
   }

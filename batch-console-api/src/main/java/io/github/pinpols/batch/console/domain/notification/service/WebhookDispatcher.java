@@ -80,14 +80,13 @@ public class WebhookDispatcher {
       SsrfGuardedDns ssrfGuardedDns) {
     this.webhookService = webhookService;
     this.deliveryLogRepository = deliveryLogRepository;
-    this.httpClient =
-        new OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .callTimeout(15, TimeUnit.SECONDS)
-            .dns(ssrfGuardedDns)
-            .build();
+    this.httpClient = new OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(15, TimeUnit.SECONDS)
+        .dns(ssrfGuardedDns)
+        .build();
   }
 
   // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
@@ -95,20 +94,19 @@ public class WebhookDispatcher {
   private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
   private final AtomicBoolean stopping = new AtomicBoolean(false);
 
-  private final ExecutorService executor =
-      new ThreadPoolExecutor(
-          4,
-          4,
-          60L,
-          TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(QUEUE_CAPACITY),
-          runnable -> {
-            Thread thread =
-                new Thread(runnable, "console-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
-          },
-          new AbortPolicy());
+  private final ExecutorService executor = new ThreadPoolExecutor(
+      4,
+      4,
+      60L,
+      TimeUnit.SECONDS,
+      new LinkedBlockingQueue<>(QUEUE_CAPACITY),
+      runnable -> {
+        Thread thread =
+            new Thread(runnable, "console-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+      },
+      new AbortPolicy());
 
   public void dispatchAsync(
       String tenantId,
@@ -180,14 +178,13 @@ public class WebhookDispatcher {
     if (subscriptions == null || subscriptions.isEmpty()) {
       return List.of();
     }
-    WebhookEventPayload payload =
-        new WebhookEventPayload(
-            tenantId,
-            normalizeEventType(eventType),
-            stream,
-            cursor,
-            emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
-            data);
+    WebhookEventPayload payload = new WebhookEventPayload(
+        tenantId,
+        normalizeEventType(eventType),
+        stream,
+        cursor,
+        emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
+        data);
     String payloadJson = JsonUtils.toJson(payload);
     List<PendingWebhookDelivery> pendingDeliveries = new ArrayList<>();
     for (WebhookSubscriptionEntity subscription : subscriptions) {
@@ -196,18 +193,16 @@ public class WebhookDispatcher {
           || !matches(subscription.getEventTypes(), payload.eventType())) {
         continue;
       }
-      Long deliveryLogId =
-          deliveryLogRepository.insertReturningId(
-              WebhookDeliveryLogInsertParam.builder()
-                  .tenantId(payload.tenantId())
-                  .subscriptionId(subscription.getId())
-                  .eventType(payload.eventType())
-                  .payloadJson(payloadJson)
-                  .deliveryStatus("PENDING")
-                  .attempt(0)
-                  .nextRetryAt(
-                      BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
-                  .build());
+      WebhookDeliveryLogInsertParam deliveryLogParam = WebhookDeliveryLogInsertParam.builder()
+          .tenantId(payload.tenantId())
+          .subscriptionId(subscription.getId())
+          .eventType(payload.eventType())
+          .payloadJson(payloadJson)
+          .deliveryStatus("PENDING")
+          .attempt(0)
+          .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+          .build();
+      Long deliveryLogId = deliveryLogRepository.insertReturningId(deliveryLogParam);
       pendingDeliveries.add(
           new PendingWebhookDelivery(deliveryLogId, subscription, payload, payloadJson));
     }
@@ -272,13 +267,12 @@ public class WebhookDispatcher {
     if (host != null) {
       DnsResolveGuard.resolveAndValidate(host);
     }
-    Request.Builder builder =
-        new Request.Builder()
-            .url(subscription.getCallbackUrl())
-            .header("X-Batch-Tenant-Id", payload.tenantId())
-            .header("X-Batch-Event-Type", payload.eventType())
-            .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
-            .post(RequestBody.create(payloadJson, JSON));
+    Request.Builder builder = new Request.Builder()
+        .url(subscription.getCallbackUrl())
+        .header("X-Batch-Tenant-Id", payload.tenantId())
+        .header("X-Batch-Event-Type", payload.eventType())
+        .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream())
+        .post(RequestBody.create(payloadJson, JSON));
     if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
       builder = builder.header("X-Batch-Signature", sign(payloadJson, subscription.getSecret()));
     }

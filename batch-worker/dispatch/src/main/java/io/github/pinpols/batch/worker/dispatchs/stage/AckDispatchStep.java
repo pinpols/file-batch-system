@@ -37,7 +37,8 @@ public class AckDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不更新 file_dispatch_record，跳过 ack。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
@@ -61,12 +62,11 @@ public class AckDispatchStep implements DispatchStageStep {
     boolean acknowledged = dispatchResult != null && dispatchResult.acknowledged();
     boolean pending = dispatchResult != null && dispatchResult.receiptPending();
     if (acknowledged || (receiptCode != null && !receiptCode.isBlank())) {
-      int updated =
-          fileDispatchRepository.markAcked(
-              context.getTenantId(),
-              fileId,
-              dispatchPayload.channelCode(),
-              receiptCode == null ? "ACK-" + fileId : receiptCode);
+      int updated = fileDispatchRepository.markAcked(
+          context.getTenantId(),
+          fileId,
+          dispatchPayload.channelCode(),
+          receiptCode == null ? "ACK-" + fileId : receiptCode);
       if (updated <= 0) {
         attrs.put(
             PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,

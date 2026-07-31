@@ -143,26 +143,25 @@ class SdkAbstractProcessHandlerTest {
   @DisplayName("selectInput 抛异常 → fail,异常透传")
   void shouldFail_whenSelectInputThrows() {
     // 准备
-    var h =
-        new SdkAbstractProcessHandler<Integer, String>() {
-          @Override
-          public String taskType() {
-            return "test_process";
-          }
+    var h = new SdkAbstractProcessHandler<Integer, String>() {
+      @Override
+      public String taskType() {
+        return "test_process";
+      }
 
-          @Override
-          protected Stream<Integer> selectInput(SdkTaskContext ctx) throws Exception {
-            throw new IllegalStateException("select boom");
-          }
+      @Override
+      protected Stream<Integer> selectInput(SdkTaskContext ctx) throws Exception {
+        throw new IllegalStateException("select boom");
+      }
 
-          @Override
-          protected String transform(SdkTaskContext ctx, Integer in) {
-            return "o" + in;
-          }
+      @Override
+      protected String transform(SdkTaskContext ctx, Integer in) {
+        return "o" + in;
+      }
 
-          @Override
-          protected void upsert(SdkTaskContext ctx, List<String> batch) {}
-        };
+      @Override
+      protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+    };
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -178,17 +177,16 @@ class SdkAbstractProcessHandlerTest {
   void shouldFail_whenTransformThrows() {
     // 准备 — 第 3 行抛
     List<List<String>> batches = new ArrayList<>();
-    var h =
-        handler(
-            ints(10),
-            40,
-            (ctx, i) -> {
-              if (i == 3) {
-                throw new RuntimeException("transform boom");
-              }
-              return "o" + i;
-            },
-            batches);
+    var h = handler(
+        ints(10),
+        40,
+        (ctx, i) -> {
+          if (i == 3) {
+            throw new RuntimeException("transform boom");
+          }
+          return "o" + i;
+        },
+        batches);
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -203,33 +201,32 @@ class SdkAbstractProcessHandlerTest {
   @DisplayName("upsert 抛异常 → fail")
   void shouldFail_whenUpsertThrows() {
     // 准备 — batchSize 触发首批 upsert 即抛
-    var h =
-        new SdkAbstractProcessHandler<Integer, String>() {
-          @Override
-          public String taskType() {
-            return "test_process";
-          }
+    var h = new SdkAbstractProcessHandler<Integer, String>() {
+      @Override
+      public String taskType() {
+        return "test_process";
+      }
 
-          @Override
-          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
-            return ints(50).stream();
-          }
+      @Override
+      protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+        return ints(50).stream();
+      }
 
-          @Override
-          protected String transform(SdkTaskContext ctx, Integer in) {
-            return "o" + in;
-          }
+      @Override
+      protected String transform(SdkTaskContext ctx, Integer in) {
+        return "o" + in;
+      }
 
-          @Override
-          protected void upsert(SdkTaskContext ctx, List<String> batch) throws Exception {
-            throw new IllegalArgumentException("upsert boom");
-          }
+      @Override
+      protected void upsert(SdkTaskContext ctx, List<String> batch) throws Exception {
+        throw new IllegalArgumentException("upsert boom");
+      }
 
-          @Override
-          protected int batchSize() {
-            return 40;
-          }
-        };
+      @Override
+      protected int batchSize() {
+        return 40;
+      }
+    };
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -265,26 +262,25 @@ class SdkAbstractProcessHandlerTest {
   void shouldCloseInputStream_whenProcessingCompletes() {
     // 准备
     AtomicInteger closeCalls = new AtomicInteger();
-    var h =
-        new SdkAbstractProcessHandler<Integer, String>() {
-          @Override
-          public String taskType() {
-            return "test_process";
-          }
+    var h = new SdkAbstractProcessHandler<Integer, String>() {
+      @Override
+      public String taskType() {
+        return "test_process";
+      }
 
-          @Override
-          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
-            return ints(50).stream().onClose(closeCalls::incrementAndGet);
-          }
+      @Override
+      protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+        return ints(50).stream().onClose(closeCalls::incrementAndGet);
+      }
 
-          @Override
-          protected String transform(SdkTaskContext ctx, Integer in) {
-            return "o" + in;
-          }
+      @Override
+      protected String transform(SdkTaskContext ctx, Integer in) {
+        return "o" + in;
+      }
 
-          @Override
-          protected void upsert(SdkTaskContext ctx, List<String> batch) {}
-        };
+      @Override
+      protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+    };
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -299,29 +295,28 @@ class SdkAbstractProcessHandlerTest {
   void shouldCloseInputStream_whenTransformThrowsMidIteration() {
     // 准备
     AtomicInteger closeCalls = new AtomicInteger();
-    var h =
-        new SdkAbstractProcessHandler<Integer, String>() {
-          @Override
-          public String taskType() {
-            return "test_process";
-          }
+    var h = new SdkAbstractProcessHandler<Integer, String>() {
+      @Override
+      public String taskType() {
+        return "test_process";
+      }
 
-          @Override
-          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
-            return ints(50).stream().onClose(closeCalls::incrementAndGet);
-          }
+      @Override
+      protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+        return ints(50).stream().onClose(closeCalls::incrementAndGet);
+      }
 
-          @Override
-          protected String transform(SdkTaskContext ctx, Integer in) {
-            if (in == 3) {
-              throw new RuntimeException("transform boom");
-            }
-            return "o" + in;
-          }
+      @Override
+      protected String transform(SdkTaskContext ctx, Integer in) {
+        if (in == 3) {
+          throw new RuntimeException("transform boom");
+        }
+        return "o" + in;
+      }
 
-          @Override
-          protected void upsert(SdkTaskContext ctx, List<String> batch) {}
-        };
+      @Override
+      protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+    };
 
     // 执行
     SdkTaskResult r = h.execute(ctx());
@@ -335,30 +330,29 @@ class SdkAbstractProcessHandlerTest {
   @DisplayName("不覆盖 batchSize() 时默认为 500")
   void shouldDefaultBatchSizeTo500() {
     // 准备 — 不覆盖 batchSize(),用基类默认
-    var h =
-        new SdkAbstractProcessHandler<Integer, String>() {
-          @Override
-          public String taskType() {
-            return "test_process";
-          }
+    var h = new SdkAbstractProcessHandler<Integer, String>() {
+      @Override
+      public String taskType() {
+        return "test_process";
+      }
 
-          @Override
-          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
-            return Stream.of();
-          }
+      @Override
+      protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+        return Stream.of();
+      }
 
-          @Override
-          protected String transform(SdkTaskContext ctx, Integer in) {
-            return "o" + in;
-          }
+      @Override
+      protected String transform(SdkTaskContext ctx, Integer in) {
+        return "o" + in;
+      }
 
-          @Override
-          protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+      @Override
+      protected void upsert(SdkTaskContext ctx, List<String> batch) {}
 
-          int exposedBatchSize() {
-            return batchSize();
-          }
-        };
+      int exposedBatchSize() {
+        return batchSize();
+      }
+    };
 
     // 断言
     assertThat(h.exposedBatchSize()).isEqualTo(500);

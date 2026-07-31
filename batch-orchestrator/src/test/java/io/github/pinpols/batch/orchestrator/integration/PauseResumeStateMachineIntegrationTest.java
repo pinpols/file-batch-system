@@ -22,9 +22,14 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "pause-it";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private JdbcTemplate jdbcTemplate;
-  @Autowired private InstanceManagementApplicationService instanceService;
-  @Autowired private WorkflowRunManagementApplicationService workflowRunService;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private InstanceManagementApplicationService instanceService;
+
+  @Autowired
+  private WorkflowRunManagementApplicationService workflowRunService;
 
   @Test
   void jobInstancePauseResumeUsesRealDbCasAndDoesNotReviveTerminalState() {
@@ -61,32 +66,20 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   private Long insertJobInstance(String status) {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String jobCode = "JOB-" + suffix;
-    Long jobDefId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobDefId = jdbcTemplate.queryForObject("""
             insert into batch.job_definition (
               tenant_id, job_code, job_name, job_type, schedule_type, timezone,
               enabled, created_by, updated_by
             ) values (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', true, 'it', 'it')
             returning id
-            """,
-            Long.class,
-            TENANT,
-            jobCode,
-            "job " + suffix);
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            """
+            """, Long.class, TENANT, jobCode, "job " + suffix);
+    Long triggerRequestId = jdbcTemplate.queryForObject(
+        """
             insert into batch.trigger_request (
               tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
             ) values (?, ?, 'API', ?, ?, 'LAUNCHED')
             returning id
-            """,
-            Long.class,
-            TENANT,
-            "REQ-" + suffix,
-            jobCode,
-            "TR-DEDUP-" + suffix);
+            """, Long.class, TENANT, "REQ-" + suffix, jobCode, "TR-DEDUP-" + suffix);
     return jdbcTemplate.queryForObject(
         """
         insert into batch.job_instance (
@@ -111,30 +104,19 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   private Long insertWorkflowRun(String status) {
     String suffix = Long.toUnsignedString(System.nanoTime());
     Long workflowDefId =
-        jdbcTemplate.queryForObject(
-            """
+        jdbcTemplate.queryForObject("""
             insert into batch.workflow_definition (
               tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
             ) values (?, ?, ?, 'DAG', 1, true)
             returning id
-            """,
-            Long.class,
-            TENANT,
-            "WF-" + suffix,
-            "workflow " + suffix);
+            """, Long.class, TENANT, "WF-" + suffix, "workflow " + suffix);
     return jdbcTemplate.queryForObject(
         """
         insert into batch.workflow_run (
           tenant_id, workflow_definition_id, biz_date, run_status, current_node_code, trace_id
         ) values (?, ?, ?, ?, 'N1', ?)
         returning id
-        """,
-        Long.class,
-        TENANT,
-        workflowDefId,
-        BIZ_DATE,
-        status,
-        "trace-" + suffix);
+        """, Long.class, TENANT, workflowDefId, BIZ_DATE, status, "trace-" + suffix);
   }
 
   private String statusOfJobInstance(Long id) {

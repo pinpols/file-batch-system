@@ -80,21 +80,19 @@ public class DeliverDispatchStep implements DispatchStageStep {
           "file or channel context missing",
           ERROR_OBJECT_MAPPER);
     }
-    Map<String, Object> latestRecord =
-        fileDispatchRepository.loadLatestDispatchRecord(
-            context.getTenantId(), fileId, dispatchPayload.channelCode());
+    Map<String, Object> latestRecord = fileDispatchRepository.loadLatestDispatchRecord(
+        context.getTenantId(), fileId, dispatchPayload.channelCode());
     if (latestRecord.isEmpty()) {
-      int inserted =
-          fileDispatchRepository.insertDispatchRecord(
-              new FileDispatchRepository.InsertDispatchParam(
-                  context.getTenantId(),
-                  fileId,
-                  runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-                  dispatchPayload.channelCode(),
-                  dispatchPayload.dispatchTarget(),
-                  dispatchPayload.receiptCode(),
-                  "NONE",
-                  dispatchPayload.externalRequestId()));
+      int inserted = fileDispatchRepository.insertDispatchRecord(
+          new FileDispatchRepository.InsertDispatchParam(
+              context.getTenantId(),
+              fileId,
+              runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+              dispatchPayload.channelCode(),
+              dispatchPayload.dispatchTarget(),
+              dispatchPayload.receiptCode(),
+              "NONE",
+              dispatchPayload.externalRequestId()));
       if (inserted <= 0) {
         return DispatchStageResult.failure(
             stage(),
@@ -111,14 +109,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
     // ADR-026: 演练模式下不真发外部投递，伪造一个"成功 + dry-run"的 DispatchResult，
     // 让后续 markSent / file_dispatch_record 状态推进按演练通道走。
     DryRunGuard guard = DryRunGuard.fromAttributes(attrs);
-    DispatchResult dispatchResult =
-        guard.callOrSkip(
-            "dispatch.deliver",
-            () ->
-                DispatchInvocationSupport.invokeAndRecordIdentifiers(
-                    dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload),
-            DispatchResult.success(
-                "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false));
+    DispatchResult dispatchResult = guard.callOrSkip(
+        "dispatch.deliver",
+        () -> DispatchInvocationSupport.invokeAndRecordIdentifiers(
+            dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload),
+        DispatchResult.success(
+            "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false));
     // dry-run 分支直接拿到 fake 结果，没经过 helper 的 propagate，这里补一次（真实路径会重复设置但等价）。
     DispatchInvocationSupport.propagateIdentifiers(context, dispatchResult);
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
@@ -148,9 +144,8 @@ public class DeliverDispatchStep implements DispatchStageStep {
           dispatchResult.message(),
           ERROR_OBJECT_MAPPER);
     }
-    int updated =
-        DispatchInvocationSupport.markSent(
-            fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
+    int updated = DispatchInvocationSupport.markSent(
+        fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
     if (updated <= 0) {
       return DispatchStageResult.failure(
           stage(),
@@ -192,14 +187,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
       return null;
     }
     Object traceId = context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID);
-    OptionalLong actual =
-        dispatchChannelGateway.readbackSize(
-            new DispatchCommand(
-                context.getTenantId(),
-                traceId == null ? null : String.valueOf(traceId),
-                fileRecord,
-                channelConfig,
-                dispatchPayload));
+    OptionalLong actual = dispatchChannelGateway.readbackSize(new DispatchCommand(
+        context.getTenantId(),
+        traceId == null ? null : String.valueOf(traceId),
+        fileRecord,
+        channelConfig,
+        dispatchPayload));
     if (actual.isEmpty()) {
       log.warn(
           "readback verify enabled but channel does not support readback (skipped): "

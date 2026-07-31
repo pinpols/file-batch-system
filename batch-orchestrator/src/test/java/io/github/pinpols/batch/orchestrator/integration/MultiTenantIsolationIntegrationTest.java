@@ -28,28 +28,29 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql(scripts = {PlatformTestdataSql.MULTI_TENANT_SEED})
 class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void jobInstanceCreatedForT1IsNotVisibleFromT2() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, "t1", "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, "t1", "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchRequest isolationRequest =
-        LaunchRequest.builder()
-            .tenantId("t1")
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-isolation")
-            .params(Map.of())
-            .build();
+    LaunchRequest isolationRequest = LaunchRequest.builder()
+        .tenantId("t1")
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-isolation")
+        .params(Map.of())
+        .build();
     launchService.launch(isolationRequest);
 
     // t1 can find the job instance
@@ -65,20 +66,18 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void outboxEventsCreatedForT1AreNotVisibleFromT2() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, "t1", "EXPORT", "EXPORT", TriggerType.MANUAL);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, "t1", "EXPORT", "EXPORT", TriggerType.MANUAL);
 
-    LaunchRequest outboxIsolationRequest =
-        LaunchRequest.builder()
-            .tenantId("t1")
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(TriggerType.MANUAL)
-            .requestId(seed.requestId())
-            .traceId("trace-outbox-isolation")
-            .params(Map.of())
-            .build();
+    LaunchRequest outboxIsolationRequest = LaunchRequest.builder()
+        .tenantId("t1")
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.MANUAL)
+        .requestId(seed.requestId())
+        .traceId("trace-outbox-isolation")
+        .params(Map.of())
+        .build();
     launchService.launch(outboxIsolationRequest);
 
     long t1Outbox = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, "t1", "EXPORT");
@@ -91,16 +90,14 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void tbJobDefinitionsFromSeedAreAccessibleUnderTbOnly() {
-    Long tbCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_definition where tenant_id = 'tb' and job_code like"
-                + " 'TB_%'",
-            Long.class);
-    Long t1Count =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_definition where tenant_id = 't1' and job_code like"
-                + " 'TB_%'",
-            Long.class);
+    Long tbCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_definition where tenant_id = 'tb' and job_code like"
+            + " 'TB_%'",
+        Long.class);
+    Long t1Count = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_definition where tenant_id = 't1' and job_code like"
+            + " 'TB_%'",
+        Long.class);
 
     assertThat(tbCount).isGreaterThanOrEqualTo(3L);
     assertThat(t1Count).isZero();
@@ -108,16 +105,14 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void tcJobDefinitionsFromSeedAreAccessibleUnderTcOnly() {
-    Long tcCount =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_definition where tenant_id = 'tc' and job_code like"
-                + " 'TC_%'",
-            Long.class);
-    Long t1Count =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_definition where tenant_id = 't1' and job_code like"
-                + " 'TC_%'",
-            Long.class);
+    Long tcCount = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_definition where tenant_id = 'tc' and job_code like"
+            + " 'TC_%'",
+        Long.class);
+    Long t1Count = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_definition where tenant_id = 't1' and job_code like"
+            + " 'TC_%'",
+        Long.class);
 
     assertThat(tcCount).isGreaterThanOrEqualTo(3L);
     assertThat(t1Count).isZero();
@@ -125,29 +120,25 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void quotaPoliciesAreScopedPerTenant() {
-    Long tbPolicies =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.tenant_quota_policy where tenant_id = 'tb' and policy_code"
-                + " = 'DEFAULT'",
-            Long.class);
-    Long tcPolicies =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.tenant_quota_policy where tenant_id = 'tc' and policy_code"
-                + " = 'DEFAULT'",
-            Long.class);
+    Long tbPolicies = jdbcTemplate.queryForObject(
+        "select count(*) from batch.tenant_quota_policy where tenant_id = 'tb' and policy_code"
+            + " = 'DEFAULT'",
+        Long.class);
+    Long tcPolicies = jdbcTemplate.queryForObject(
+        "select count(*) from batch.tenant_quota_policy where tenant_id = 'tc' and policy_code"
+            + " = 'DEFAULT'",
+        Long.class);
 
     assertThat(tbPolicies).isGreaterThanOrEqualTo(1L);
     assertThat(tcPolicies).isGreaterThanOrEqualTo(1L);
 
     // 验证不同租户的配额限制不同
-    Map<String, Object> tbPolicy =
-        jdbcTemplate.queryForMap(
-            "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
-                + "where tenant_id = 'tb' and policy_code = 'DEFAULT' order by id desc limit 1");
-    Map<String, Object> tcPolicy =
-        jdbcTemplate.queryForMap(
-            "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
-                + "where tenant_id = 'tc' and policy_code = 'DEFAULT' order by id desc limit 1");
+    Map<String, Object> tbPolicy = jdbcTemplate.queryForMap(
+        "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
+            + "where tenant_id = 'tb' and policy_code = 'DEFAULT' order by id desc limit 1");
+    Map<String, Object> tcPolicy = jdbcTemplate.queryForMap(
+        "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
+            + "where tenant_id = 'tc' and policy_code = 'DEFAULT' order by id desc limit 1");
 
     assertThat((Integer) tbPolicy.get("max_running_jobs_per_tenant")).isEqualTo(50);
     assertThat((Integer) tcPolicy.get("max_running_jobs_per_tenant")).isEqualTo(30);
@@ -157,12 +148,10 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void workerRegistriesAreScopedPerTenant() {
-    List<Map<String, Object>> tbWorkers =
-        jdbcTemplate.queryForList(
-            "select worker_code from batch.worker_registry where tenant_id = 'tb'");
-    List<Map<String, Object>> tcWorkers =
-        jdbcTemplate.queryForList(
-            "select worker_code from batch.worker_registry where tenant_id = 'tc'");
+    List<Map<String, Object>> tbWorkers = jdbcTemplate.queryForList(
+        "select worker_code from batch.worker_registry where tenant_id = 'tb'");
+    List<Map<String, Object>> tcWorkers = jdbcTemplate.queryForList(
+        "select worker_code from batch.worker_registry where tenant_id = 'tc'");
 
     assertThat(tbWorkers).isNotEmpty();
     assertThat(tcWorkers).isNotEmpty();
@@ -181,20 +170,18 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   void launchingT2JobDoesNotAffectT1JobCount() {
     long t1Before = countJobInstances("t1");
 
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, "t2", "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, "t2", "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchRequest t2Request =
-        LaunchRequest.builder()
-            .tenantId("t2")
-            .jobCode(seed.jobCode())
-            .bizDate(LocalDate.of(2026, 1, 15))
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-t2-launch")
-            .params(Map.of())
-            .build();
+    LaunchRequest t2Request = LaunchRequest.builder()
+        .tenantId("t2")
+        .jobCode(seed.jobCode())
+        .bizDate(LocalDate.of(2026, 1, 15))
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-t2-launch")
+        .params(Map.of())
+        .build();
     launchService.launch(t2Request);
 
     long t1After = countJobInstances("t1");
@@ -205,9 +192,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   private long countJobInstances(String tenantId) {
-    Long count =
-        jdbcTemplate.queryForObject(
-            "select count(*) from batch.job_instance where tenant_id = ?", Long.class, tenantId);
+    Long count = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_instance where tenant_id = ?", Long.class, tenantId);
     return count == null ? 0L : count;
   }
 }

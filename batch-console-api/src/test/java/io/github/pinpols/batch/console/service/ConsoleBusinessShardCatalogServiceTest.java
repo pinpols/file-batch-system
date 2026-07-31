@@ -17,8 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleBusinessShardCatalogServiceTest {
 
-  @Mock private ConsoleBusinessShardCatalogMapper catalogMapper;
-  @InjectMocks private ConsoleBusinessShardCatalogService service;
+  @Mock
+  private ConsoleBusinessShardCatalogMapper catalogMapper;
+
+  @InjectMocks
+  private ConsoleBusinessShardCatalogService service;
 
   @Test
   void listShouldDelegate() {
@@ -39,15 +42,14 @@ class ConsoleBusinessShardCatalogServiceTest {
 
   @Test
   void upsertShouldDelegate() {
-    BusinessShardCatalogUpsertParam p =
-        BusinessShardCatalogUpsertParam.builder()
-            .placementKey("shard-1")
-            .host("db-1")
-            .port(5432)
-            .dbName("batch_business")
-            .enabled(true)
-            .operator("ops:bob")
-            .build();
+    BusinessShardCatalogUpsertParam p = BusinessShardCatalogUpsertParam.builder()
+        .placementKey("shard-1")
+        .host("db-1")
+        .port(5432)
+        .dbName("batch_business")
+        .enabled(true)
+        .operator("ops:bob")
+        .build();
     service.upsert(p);
     verify(catalogMapper).upsert(p);
   }

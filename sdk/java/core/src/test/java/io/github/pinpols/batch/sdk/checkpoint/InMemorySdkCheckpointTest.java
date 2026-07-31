@@ -25,15 +25,12 @@ class InMemorySdkCheckpointTest {
 
     // assert: 读回一致
     assertThat(cp.load("task-1")).contains(state);
-    assertThat(cp.load("task-1"))
-        .get()
-        .satisfies(
-            s -> {
-              assertThat(s.breakPosition()).containsEntry("id", 42);
-              assertThat(s.succeedCount()).isEqualTo(100L);
-              assertThat(s.failCount()).isEqualTo(3L);
-              assertThat(s.completed()).isFalse();
-            });
+    assertThat(cp.load("task-1")).get().satisfies(s -> {
+      assertThat(s.breakPosition()).containsEntry("id", 42);
+      assertThat(s.succeedCount()).isEqualTo(100L);
+      assertThat(s.failCount()).isEqualTo(3L);
+      assertThat(s.completed()).isFalse();
+    });
   }
 
   @Test
@@ -48,13 +45,10 @@ class InMemorySdkCheckpointTest {
     cp.save("b", new SdkCheckpointState(Map.of("k", 9), 9L, 0L, false));
 
     // assert
-    assertThat(cp.load("a"))
-        .get()
-        .satisfies(
-            s -> {
-              assertThat(s.succeedCount()).isEqualTo(2L);
-              assertThat(s.completed()).isTrue();
-            });
+    assertThat(cp.load("a")).get().satisfies(s -> {
+      assertThat(s.succeedCount()).isEqualTo(2L);
+      assertThat(s.completed()).isTrue();
+    });
     assertThat(cp.load("b")).get().satisfies(s -> assertThat(s.succeedCount()).isEqualTo(9L));
     assertThat(cp.size()).isEqualTo(2);
   }

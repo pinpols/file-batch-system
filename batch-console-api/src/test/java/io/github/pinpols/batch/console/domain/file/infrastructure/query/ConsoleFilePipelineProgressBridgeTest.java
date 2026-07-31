@@ -38,10 +38,17 @@ class ConsoleFilePipelineProgressBridgeTest {
   private static final long PIPELINE_ID = 77L;
   private static final String TENANT = "t-obs";
 
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private FilePipelineStepRunMapper stepRunMapper;
-  @Mock private LocalizedErrorRenderer localizedErrorRenderer;
-  @Mock private ConsoleOrchestratorProxyService orchestratorProxy;
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private FilePipelineStepRunMapper stepRunMapper;
+
+  @Mock
+  private LocalizedErrorRenderer localizedErrorRenderer;
+
+  @Mock
+  private ConsoleOrchestratorProxyService orchestratorProxy;
 
   private ConsoleFileQueryService service;
 
@@ -49,13 +56,12 @@ class ConsoleFilePipelineProgressBridgeTest {
   void setUp() {
     ConsoleFileQueryMappers mappers =
         new ConsoleFileQueryMappers(null, null, null, null, stepRunMapper, null, null, null);
-    service =
-        new ConsoleFileQueryService(
-            tenantGuard,
-            mappers,
-            new BatchSecurityProperties(),
-            localizedErrorRenderer,
-            orchestratorProxy);
+    service = new ConsoleFileQueryService(
+        tenantGuard,
+        mappers,
+        new BatchSecurityProperties(),
+        localizedErrorRenderer,
+        orchestratorProxy);
   }
 
   private void stubTenant() {

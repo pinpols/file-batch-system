@@ -72,10 +72,9 @@ public class ProcessMetrics {
     if (stagedSummary == null) {
       synchronized (this) {
         if (stagedSummary == null) {
-          stagedSummary =
-              DistributionSummary.builder(STAGED_ROWS)
-                  .description("PROCESS COMPUTE 写 staging 的行数")
-                  .register(registry);
+          stagedSummary = DistributionSummary.builder(STAGED_ROWS)
+              .description("PROCESS COMPUTE 写 staging 的行数")
+              .register(registry);
         }
       }
     }
@@ -89,10 +88,9 @@ public class ProcessMetrics {
     if (publishedSummary == null) {
       synchronized (this) {
         if (publishedSummary == null) {
-          publishedSummary =
-              DistributionSummary.builder(PUBLISHED_ROWS)
-                  .description("PROCESS COMMIT 落 target 表的行数")
-                  .register(registry);
+          publishedSummary = DistributionSummary.builder(PUBLISHED_ROWS)
+              .description("PROCESS COMMIT 落 target 表的行数")
+              .register(registry);
         }
       }
     }
@@ -104,14 +102,12 @@ public class ProcessMetrics {
       return;
     }
     String ruleTag = normalize(ruleName);
-    Counter counter =
-        validationFailedByRule.computeIfAbsent(
-            ruleTag,
-            tag ->
-                Counter.builder(VALIDATION_FAILED)
-                    .description("PROCESS VALIDATE 阶段单条 rule 校验失败计数")
-                    .tags(Tags.of("ruleName", tag))
-                    .register(registry));
+    Counter counter = validationFailedByRule.computeIfAbsent(
+        ruleTag,
+        tag -> Counter.builder(VALIDATION_FAILED)
+            .description("PROCESS VALIDATE 阶段单条 rule 校验失败计数")
+            .tags(Tags.of("ruleName", tag))
+            .register(registry));
     counter.increment();
   }
 
@@ -126,10 +122,9 @@ public class ProcessMetrics {
     if (feedbackSwallowedCounter == null) {
       synchronized (this) {
         if (feedbackSwallowedCounter == null) {
-          feedbackSwallowedCounter =
-              Counter.builder(FEEDBACK_SWALLOWED)
-                  .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
-                  .register(registry);
+          feedbackSwallowedCounter = Counter.builder(FEEDBACK_SWALLOWED)
+              .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
+              .register(registry);
         }
       }
     }
@@ -144,14 +139,12 @@ public class ProcessMetrics {
     String stageTag = normalize(stage);
     String successTag = success ? "true" : "false";
     String key = stageTag + "|" + successTag;
-    Timer timer =
-        stageTimerByKey.computeIfAbsent(
-            key,
-            k ->
-                Timer.builder(STAGE_DURATION)
-                    .description("PROCESS 五段每段耗时")
-                    .tags(Tags.of("stage", stageTag, "success", successTag))
-                    .register(registry));
+    Timer timer = stageTimerByKey.computeIfAbsent(
+        key,
+        k -> Timer.builder(STAGE_DURATION)
+            .description("PROCESS 五段每段耗时")
+            .tags(Tags.of("stage", stageTag, "success", successTag))
+            .register(registry));
     timer.record(durationNanos, TimeUnit.NANOSECONDS);
   }
 

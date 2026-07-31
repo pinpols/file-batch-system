@@ -35,20 +35,8 @@ class ConsoleAssetFreshnessPolicyServiceTest {
 
   @Test
   void shouldListPoliciesWithLimitCap() {
-    AssetFreshnessPolicyEntity entity =
-        new AssetFreshnessPolicyEntity(
-            1L,
-            "t1",
-            "JOB_A",
-            "JOB",
-            LocalTime.NOON,
-            "Asia/Shanghai",
-            60,
-            1,
-            "WARN",
-            true,
-            null,
-            null);
+    AssetFreshnessPolicyEntity entity = new AssetFreshnessPolicyEntity(
+        1L, "t1", "JOB_A", "JOB", LocalTime.NOON, "Asia/Shanghai", 60, 1, "WARN", true, null, null);
     when(mapper.findByTenant("t1", "JOB_A", true, 500)).thenReturn(List.of(entity));
 
     List<AssetFreshnessPolicyEntity> result = service.list("t1", " JOB_A ", true, 999);
@@ -61,107 +49,98 @@ class ConsoleAssetFreshnessPolicyServiceTest {
 
   @Test
   void shouldCreateJobPolicyWithDefaults() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .build();
 
     service.upsert(input);
 
     verify(mapper)
-        .upsert(
-            AssetFreshnessPolicyUpsertParam.builder()
-                .tenantId("t1")
-                .assetCode("JOB_A")
-                .assetType("JOB")
-                .expectedByLocalTime(LocalTime.of(2, 0))
-                .timezone("Asia/Shanghai")
-                .staleAfterSeconds(0)
-                .lookbackDays(1)
-                .severity("WARN")
-                .enabled(true)
-                .build());
+        .upsert(AssetFreshnessPolicyUpsertParam.builder()
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .expectedByLocalTime(LocalTime.of(2, 0))
+            .timezone("Asia/Shanghai")
+            .staleAfterSeconds(0)
+            .lookbackDays(1)
+            .severity("WARN")
+            .enabled(true)
+            .build());
   }
 
   @Test
   void shouldUpdateExistingPolicyById() {
     when(mapper.updateById(any())).thenReturn(1);
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .id(9L)
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .assetType("job")
-            .expectedByLocalTime(LocalTime.of(3, 30))
-            .timezone("UTC")
-            .staleAfterSeconds(300)
-            .lookbackDays(2)
-            .severity("error")
-            .enabled(false)
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .id(9L)
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .assetType("job")
+        .expectedByLocalTime(LocalTime.of(3, 30))
+        .timezone("UTC")
+        .staleAfterSeconds(300)
+        .lookbackDays(2)
+        .severity("error")
+        .enabled(false)
+        .build();
 
     service.upsert(input);
 
     verify(mapper)
-        .updateById(
-            AssetFreshnessPolicyUpsertParam.builder()
-                .id(9L)
-                .tenantId("t1")
-                .assetCode("JOB_A")
-                .assetType("JOB")
-                .expectedByLocalTime(LocalTime.of(3, 30))
-                .timezone("UTC")
-                .staleAfterSeconds(300)
-                .lookbackDays(2)
-                .severity("ERROR")
-                .enabled(false)
-                .build());
+        .updateById(AssetFreshnessPolicyUpsertParam.builder()
+            .id(9L)
+            .tenantId("t1")
+            .assetCode("JOB_A")
+            .assetType("JOB")
+            .expectedByLocalTime(LocalTime.of(3, 30))
+            .timezone("UTC")
+            .staleAfterSeconds(300)
+            .lookbackDays(2)
+            .severity("ERROR")
+            .enabled(false)
+            .build());
   }
 
   @Test
   void shouldRejectNonJobAssetType() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("TABLE_A")
-            .assetType("TABLE")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("TABLE_A")
+        .assetType("TABLE")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .build();
 
     assertThatThrownBy(() -> service.upsert(input)).isInstanceOf(BizException.class);
   }
 
   @Test
   void shouldRejectInvalidTimezone() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .timezone("Invalid/Zone")
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .timezone("Invalid/Zone")
+        .build();
 
     assertThatThrownBy(() -> service.upsert(input))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getMessageArgs())
-                    .anyMatch(a -> a != null && a.toString().contains("timezone is invalid")));
+        .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs())
+            .anyMatch(a -> a != null && a.toString().contains("timezone is invalid")));
   }
 
   @Test
   void upsert_rejects_whenStaleAfterSecondsNegative() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .assetType("JOB")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .timezone("UTC")
-            .staleAfterSeconds(-1)
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .assetType("JOB")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .timezone("UTC")
+        .staleAfterSeconds(-1)
+        .build();
 
     assertThatThrownBy(() -> service.upsert(input))
         .isInstanceOf(BizException.class)
@@ -171,16 +150,15 @@ class ConsoleAssetFreshnessPolicyServiceTest {
 
   @Test
   void upsert_rejects_whenLookbackDaysBelowMin() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .assetType("JOB")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .timezone("UTC")
-            .staleAfterSeconds(0)
-            .lookbackDays(0)
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .assetType("JOB")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .timezone("UTC")
+        .staleAfterSeconds(0)
+        .lookbackDays(0)
+        .build();
 
     assertThatThrownBy(() -> service.upsert(input))
         .isInstanceOf(BizException.class)
@@ -190,16 +168,15 @@ class ConsoleAssetFreshnessPolicyServiceTest {
 
   @Test
   void upsert_rejects_whenLookbackDaysAboveMax() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .assetType("JOB")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .timezone("UTC")
-            .staleAfterSeconds(0)
-            .lookbackDays(32)
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .assetType("JOB")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .timezone("UTC")
+        .staleAfterSeconds(0)
+        .lookbackDays(32)
+        .build();
 
     assertThatThrownBy(() -> service.upsert(input))
         .isInstanceOf(BizException.class)
@@ -209,17 +186,16 @@ class ConsoleAssetFreshnessPolicyServiceTest {
 
   @Test
   void upsert_rejects_whenSeverityInvalid() {
-    AssetFreshnessPolicyUpsertParam input =
-        AssetFreshnessPolicyUpsertParam.builder()
-            .tenantId("t1")
-            .assetCode("JOB_A")
-            .assetType("JOB")
-            .expectedByLocalTime(LocalTime.of(2, 0))
-            .timezone("UTC")
-            .staleAfterSeconds(0)
-            .lookbackDays(1)
-            .severity("FATAL")
-            .build();
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_A")
+        .assetType("JOB")
+        .expectedByLocalTime(LocalTime.of(2, 0))
+        .timezone("UTC")
+        .staleAfterSeconds(0)
+        .lookbackDays(1)
+        .severity("FATAL")
+        .build();
 
     assertThatThrownBy(() -> service.upsert(input))
         .isInstanceOf(BizException.class)
@@ -236,9 +212,8 @@ class ConsoleAssetFreshnessPolicyServiceTest {
 
   @Test
   void shouldGetPolicyById() {
-    AssetFreshnessPolicyEntity entity =
-        new AssetFreshnessPolicyEntity(
-            1L, "t1", "JOB_A", "JOB", LocalTime.NOON, "UTC", 0, 1, "WARN", true, null, null);
+    AssetFreshnessPolicyEntity entity = new AssetFreshnessPolicyEntity(
+        1L, "t1", "JOB_A", "JOB", LocalTime.NOON, "UTC", 0, 1, "WARN", true, null, null);
     when(mapper.findById("t1", 1L)).thenReturn(Optional.of(entity));
 
     AssetFreshnessPolicyEntity result = service.get("t1", 1L);

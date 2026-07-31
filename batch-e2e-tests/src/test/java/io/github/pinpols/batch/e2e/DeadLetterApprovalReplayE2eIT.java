@@ -71,11 +71,14 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
   private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired
+  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired private ObjectMapper objectMapper;
+  @Autowired
+  private ObjectMapper objectMapper;
 
   @Value("${local.server.port}")
   private int localServerPort;
@@ -83,13 +86,12 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   @Test
   void deadLetterCanBeApprovedAndReplayedThroughConsoleHttp() throws Exception {
     String initialTraceId = traceId("dlq");
-    LaunchSeed seed =
-        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate,
-            TENANT,
-            "IMPORT",
-            "import",
-            io.github.pinpols.batch.common.enums.TriggerType.API);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate,
+        TENANT,
+        "IMPORT",
+        "import",
+        io.github.pinpols.batch.common.enums.TriggerType.API);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -103,11 +105,9 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
     long deadLetterId = seedReplayGraph(seed, initialTraceId, params);
 
-    JsonNode deadLetters =
-        getConsoleJson(
-            "/api/console/queries/dead-letters?tenantId=t1&traceId="
-                + encode(initialTraceId)
-                + "&pageNo=1&pageSize=10");
+    JsonNode deadLetters = getConsoleJson("/api/console/queries/dead-letters?tenantId=t1&traceId="
+        + encode(initialTraceId)
+        + "&pageNo=1&pageSize=10");
     JsonNode deadLetter = firstItem(deadLetters);
     String deadLetterTraceId = deadLetter.path("traceId").asText();
     assertThat(deadLetterId).isPositive();
@@ -117,34 +117,28 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
     insertReplayTemplate();
 
-    String replayApprovalNo =
-        extractDataText(
-            postConsoleJson(
-                "/api/console/jobs/dead-letters/replay",
-                """
+    String replayApprovalNo = extractDataText(postConsoleJson(
+        "/api/console/jobs/dead-letters/replay",
+        """
                 {"tenantId":"t1","deadLetterId":%d,"reason":"fix template and replay","operatorId":"%s"}
-                """
-                    .formatted(deadLetterId, APPROVAL_OPERATOR),
-                idempotencyKey("dead-letter-replay")));
+                """.formatted(deadLetterId, APPROVAL_OPERATOR),
+        idempotencyKey("dead-letter-replay")));
 
     JsonNode pendingApprovals =
-        getConsoleJson(
-            "/api/console/queries/approvals?tenantId=t1&approvalNo="
-                + encode(replayApprovalNo)
-                + "&approvalStatus=PENDING&pageNo=1&pageSize=10");
+        getConsoleJson("/api/console/queries/approvals?tenantId=t1&approvalNo="
+            + encode(replayApprovalNo)
+            + "&approvalStatus=PENDING&pageNo=1&pageSize=10");
     JsonNode pendingApproval = firstItem(pendingApprovals);
     assertThat(pendingApproval.path("approvalNo").asText()).isEqualTo(replayApprovalNo);
     assertThat(pendingApproval.path("approvalStatus").asText()).isEqualTo("PENDING");
     assertThat(pendingApproval.path("actionType").asText()).isEqualTo("DLQ_REPLAY");
 
-    JsonNode approveResponse =
-        postConsoleJson(
-            "/api/console/approvals/" + encode(replayApprovalNo) + "/approve",
-            """
+    JsonNode approveResponse = postConsoleJson(
+        "/api/console/approvals/" + encode(replayApprovalNo) + "/approve",
+        """
             {"tenantId":"t1","operatorId":"%s","reason":"approved for replay"}
-            """
-                .formatted(APPROVAL_OPERATOR),
-            idempotencyKey("dead-letter-approve"));
+            """.formatted(APPROVAL_OPERATOR),
+        idempotencyKey("dead-letter-approve"));
     String replayCommandNo = extractDataText(approveResponse);
     assertThat(replayCommandNo).isNotBlank();
 
@@ -154,26 +148,21 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(
-            () -> {
-              e2eOutboxPublishSupport.publishAllPending(TENANT);
-              JsonNode completedDeadLetter =
-                  findItemById(
-                      getConsoleJson(
-                          "/api/console/queries/dead-letters?tenantId=t1&traceId="
-                              + encode(deadLetterTraceId)
-                              + "&pageNo=1&pageSize=10"),
-                      deadLetterId);
-              assertThat(completedDeadLetter.path("replayStatus").asText()).isEqualTo("SUCCESS");
-              assertThat(completedDeadLetter.path("replayCount").asInt()).isEqualTo(1);
-            });
+        .untilAsserted(() -> {
+          e2eOutboxPublishSupport.publishAllPending(TENANT);
+          JsonNode completedDeadLetter = findItemById(
+              getConsoleJson("/api/console/queries/dead-letters?tenantId=t1&traceId="
+                  + encode(deadLetterTraceId)
+                  + "&pageNo=1&pageSize=10"),
+              deadLetterId);
+          assertThat(completedDeadLetter.path("replayStatus").asText()).isEqualTo("SUCCESS");
+          assertThat(completedDeadLetter.path("replayCount").asInt()).isEqualTo(1);
+        });
 
     JsonNode executedApproval =
-        firstItem(
-            getConsoleJson(
-                "/api/console/queries/approvals?tenantId=t1&approvalNo="
-                    + encode(replayApprovalNo)
-                    + "&pageNo=1&pageSize=10"));
+        firstItem(getConsoleJson("/api/console/queries/approvals?tenantId=t1&approvalNo="
+            + encode(replayApprovalNo)
+            + "&pageNo=1&pageSize=10"));
     assertThat(executedApproval.path("approvalStatus").asText()).isEqualTo("EXECUTED");
   }
 
@@ -235,14 +224,13 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   }
 
   private JsonNode getConsoleJson(String path) throws Exception {
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + localServerPort + path))
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId("get"))
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId("get"))
-            .GET()
-            .build();
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create("http://127.0.0.1:" + localServerPort + path))
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId("get"))
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId("get"))
+        .GET()
+        .build();
     HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
     assertThat(response.statusCode()).isBetween(200, 299);
     return objectMapper.readTree(response.body());
@@ -250,17 +238,16 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
   private JsonNode postConsoleJson(String path, String body, String idempotencyKey)
       throws Exception {
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + localServerPort + path))
-            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
-            .header(CommonConstants.DEFAULT_OPERATOR_ID_HEADER, APPROVAL_OPERATOR)
-            .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId("post"))
-            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId("post"))
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-            .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create("http://127.0.0.1:" + localServerPort + path))
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+        .header(CommonConstants.DEFAULT_OPERATOR_ID_HEADER, APPROVAL_OPERATOR)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId("post"))
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId("post"))
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+        .POST(HttpRequest.BodyPublishers.ofString(body))
+        .build();
     HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
     assertThat(response.statusCode()).isBetween(200, 299);
     return objectMapper.readTree(response.body());
@@ -308,38 +295,27 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
   private long seedReplayGraph(LaunchSeed seed, String traceId, Map<String, Object> params)
       throws Exception {
-    Long jobDefinitionId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobDefinitionId = jdbcTemplate.queryForObject("""
             select id
             from batch.job_definition
             where tenant_id = ?
               and job_code = ?
-            """,
-            Long.class,
-            TENANT,
-            seed.jobCode());
+            """, Long.class, TENANT, seed.jobCode());
     assertThat(jobDefinitionId).isNotNull();
 
-    Long triggerRequestId =
-        jdbcTemplate.queryForObject(
-            """
+    Long triggerRequestId = jdbcTemplate.queryForObject("""
             select id
             from batch.trigger_request
             where tenant_id = ?
               and request_id = ?
-            """,
-            Long.class,
-            TENANT,
-            seed.requestId());
+            """, Long.class, TENANT, seed.requestId());
     assertThat(triggerRequestId).isNotNull();
 
     String instanceNo = "inst-dlq-e2e-" + UUID.randomUUID();
     String paramsSnapshot = objectMapper.writeValueAsString(params);
     String resultSummary = "{}";
-    Long jobInstanceId =
-        jdbcTemplate.queryForObject(
-            """
+    Long jobInstanceId = jdbcTemplate.queryForObject(
+        """
             insert into batch.job_instance (
                 tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, biz_date,
                 trigger_type, instance_status, batch_no, operator_id, rerun_flag, retry_flag,
@@ -355,21 +331,20 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
             )
             returning id
             """,
-            Long.class,
-            TENANT,
-            jobDefinitionId,
-            triggerRequestId,
-            seed.jobCode(),
-            instanceNo,
-            seed.dedupKey(),
-            traceId,
-            paramsSnapshot,
-            resultSummary);
+        Long.class,
+        TENANT,
+        jobDefinitionId,
+        triggerRequestId,
+        seed.jobCode(),
+        instanceNo,
+        seed.dedupKey(),
+        traceId,
+        paramsSnapshot,
+        resultSummary);
     assertThat(jobInstanceId).isNotNull();
 
-    Long partitionId =
-        jdbcTemplate.queryForObject(
-            """
+    Long partitionId = jdbcTemplate.queryForObject(
+        """
             insert into batch.job_partition (
                 tenant_id, job_instance_id, partition_no, partition_key, partition_status,
                 worker_group, worker_code, lease_expire_at, retry_count, business_key,
@@ -380,17 +355,11 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
                 ?, ?::jsonb, null
             )
             returning id
-            """,
-            Long.class,
-            TENANT,
-            jobInstanceId,
-            seed.dedupKey() + ":partition",
-            paramsSnapshot);
+            """, Long.class, TENANT, jobInstanceId, seed.dedupKey() + ":partition", paramsSnapshot);
     assertThat(partitionId).isNotNull();
 
-    Long taskId =
-        jdbcTemplate.queryForObject(
-            """
+    Long taskId = jdbcTemplate.queryForObject(
+        """
             insert into batch.job_task (
                 tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status,
                 assigned_worker_code, task_payload, result_summary, error_code, error_message,
@@ -401,12 +370,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
                 null, null
             )
             returning id
-            """,
-            Long.class,
-            TENANT,
-            jobInstanceId,
-            partitionId,
-            paramsSnapshot);
+            """, Long.class, TENANT, jobInstanceId, partitionId, paramsSnapshot);
     assertThat(taskId).isNotNull();
 
     jdbcTemplate.update(
@@ -415,15 +379,9 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
           (tenant_id, source_type, source_id, dead_letter_reason, payload_ref,
            replay_status, replay_count, last_replay_at, last_replay_result, trace_id)
         values (?, 'JOB_PARTITION', ?, ?, ?, 'NEW', 0, null, null, ?)
-        """,
-        TENANT,
-        partitionId,
-        "manual dead letter for e2e",
-        instanceNo + ":" + taskId,
-        traceId);
+        """, TENANT, partitionId, "manual dead letter for e2e", instanceNo + ":" + taskId, traceId);
 
-    return jdbcTemplate.queryForObject(
-        """
+    return jdbcTemplate.queryForObject("""
         select id
         from batch.dead_letter_task
         where tenant_id = ?
@@ -432,10 +390,6 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
           and trace_id = ?
         order by id desc
         limit 1
-        """,
-        Long.class,
-        TENANT,
-        partitionId,
-        traceId);
+        """, Long.class, TENANT, partitionId, traceId);
   }
 }

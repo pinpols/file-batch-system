@@ -103,27 +103,23 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                 "Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
                     + " state; non-zero rate triggers ops alert.")
             .register(meterRegistry);
-    pollTimer =
-        Timer.builder("batch.outbox.poll.duration")
-            .description(
-                "Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
-                    + " queries vs slow brokers when publish.duration spikes.")
-            .publishPercentileHistogram()
-            .register(meterRegistry);
-    batchAttemptedSummary =
-        DistributionSummary.builder("batch.outbox.forward.attempted")
-            .description(
-                "Events attempted per outbox forward round — sustained values near outbox.batchSize"
-                    + " indicate saturation (backlog not draining).")
-            .publishPercentileHistogram()
-            .register(meterRegistry);
-    batchSucceededSummary =
-        DistributionSummary.builder("batch.outbox.forward.succeeded")
-            .description(
-                "Events successfully published per outbox forward round — gap vs attempted reflects"
-                    + " Kafka-side failure/retry pressure.")
-            .publishPercentileHistogram()
-            .register(meterRegistry);
+    pollTimer = Timer.builder("batch.outbox.poll.duration")
+        .description("Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
+            + " queries vs slow brokers when publish.duration spikes.")
+        .publishPercentileHistogram()
+        .register(meterRegistry);
+    batchAttemptedSummary = DistributionSummary.builder("batch.outbox.forward.attempted")
+        .description(
+            "Events attempted per outbox forward round — sustained values near outbox.batchSize"
+                + " indicate saturation (backlog not draining).")
+        .publishPercentileHistogram()
+        .register(meterRegistry);
+    batchSucceededSummary = DistributionSummary.builder("batch.outbox.forward.succeeded")
+        .description(
+            "Events successfully published per outbox forward round — gap vs attempted reflects"
+                + " Kafka-side failure/retry pressure.")
+        .publishPercentileHistogram()
+        .register(meterRegistry);
   }
 
   @Override
@@ -177,15 +173,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       List<PendingRetry> pendingRetries) {}
 
   private List<OutboxEventEntity> pollPending(SchedulePlan plan) {
-    OutboxEventQuery pendingQuery =
-        OutboxEventQuery.builder()
-            .tenantId(plan == null ? null : plan.getTenantId())
-            .pendingStatus1(OutboxPublishStatus.NEW.code())
-            .pendingStatus2(OutboxPublishStatus.FAILED.code())
-            .batchSize(governance.outbox().getBatchSize())
-            .shardTotal(plan == null ? 1 : plan.getShardTotal())
-            .shardIndex(plan == null ? 0 : plan.getShardIndex())
-            .build();
+    OutboxEventQuery pendingQuery = OutboxEventQuery.builder()
+        .tenantId(plan == null ? null : plan.getTenantId())
+        .pendingStatus1(OutboxPublishStatus.NEW.code())
+        .pendingStatus2(OutboxPublishStatus.FAILED.code())
+        .batchSize(governance.outbox().getBatchSize())
+        .shardTotal(plan == null ? 1 : plan.getShardTotal())
+        .shardIndex(plan == null ? 0 : plan.getShardIndex())
+        .build();
     long pollStartNanos = System.nanoTime();
     List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
     pollTimer.record(Duration.ofNanos(System.nanoTime() - pollStartNanos));
@@ -208,13 +203,12 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     }
     Set<Long> wonIds = new HashSet<>();
     for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
-      wonIds.addAll(
-          outboxEventMapper.markPublishingBatch(
-              entry.getKey(),
-              entry.getValue(),
-              OutboxPublishStatus.PUBLISHING.code(),
-              OutboxPublishStatus.NEW.code(),
-              OutboxPublishStatus.FAILED.code()));
+      wonIds.addAll(outboxEventMapper.markPublishingBatch(
+          entry.getKey(),
+          entry.getValue(),
+          OutboxPublishStatus.PUBLISHING.code(),
+          OutboxPublishStatus.NEW.code(),
+          OutboxPublishStatus.FAILED.code()));
     }
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
     for (OutboxEventEntity event : pendingEvents) {
@@ -225,9 +219,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         } catch (RuntimeException exception) {
           future = CompletableFuture.completedFuture(false);
         }
-        inFlight.add(
-            new InFlight(
-                event, future != null ? future : CompletableFuture.completedFuture(false)));
+        inFlight.add(new InFlight(
+            event, future != null ? future : CompletableFuture.completedFuture(false)));
       }
     }
     return inFlight;
@@ -308,34 +301,31 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    */
   private Map<FailedGroupKey, Instant> flushOutcomeGroups(OutcomeGroups groups) {
     for (Map.Entry<String, List<Long>> entry : groups.publishedByTenant().entrySet()) {
-      int updated =
-          outboxEventMapper.markPublishedBatch(
-              entry.getKey(),
-              entry.getValue(),
-              OutboxPublishStatus.PUBLISHED.code(),
-              OutboxPublishStatus.PUBLISHING.code());
+      int updated = outboxEventMapper.markPublishedBatch(
+          entry.getKey(),
+          entry.getValue(),
+          OutboxPublishStatus.PUBLISHED.code(),
+          OutboxPublishStatus.PUBLISHING.code());
       warnOnPartialUpdate("markPublished", entry.getKey(), entry.getValue().size(), updated);
     }
     for (Map.Entry<String, List<Long>> entry : groups.giveUpByTenant().entrySet()) {
-      int updated =
-          outboxEventMapper.markGiveUpBatch(
-              entry.getKey(),
-              entry.getValue(),
-              OutboxPublishStatus.GIVE_UP.code(),
-              OutboxPublishStatus.PUBLISHING.code());
+      int updated = outboxEventMapper.markGiveUpBatch(
+          entry.getKey(),
+          entry.getValue(),
+          OutboxPublishStatus.GIVE_UP.code(),
+          OutboxPublishStatus.PUBLISHING.code());
       warnOnPartialUpdate("markGiveUp", entry.getKey(), entry.getValue().size(), updated);
     }
     Map<FailedGroupKey, Instant> nextRetryAtByGroup = new LinkedHashMap<>();
     for (Map.Entry<FailedGroupKey, List<Long>> entry : groups.failedByGroup().entrySet()) {
       Instant nextRetryAt = computeNextRetryAt(entry.getKey().attemptNo(), governance.outbox());
       nextRetryAtByGroup.put(entry.getKey(), nextRetryAt);
-      int updated =
-          outboxEventMapper.markFailedBatch(
-              entry.getKey().tenantId(),
-              entry.getValue(),
-              OutboxPublishStatus.FAILED.code(),
-              nextRetryAt,
-              OutboxPublishStatus.PUBLISHING.code());
+      int updated = outboxEventMapper.markFailedBatch(
+          entry.getKey().tenantId(),
+          entry.getValue(),
+          OutboxPublishStatus.FAILED.code(),
+          nextRetryAt,
+          OutboxPublishStatus.PUBLISHING.code());
       warnOnPartialUpdate(
           "markFailed", entry.getKey().tenantId(), entry.getValue().size(), updated);
     }

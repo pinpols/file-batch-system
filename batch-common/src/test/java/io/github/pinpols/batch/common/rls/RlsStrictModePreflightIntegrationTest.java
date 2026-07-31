@@ -55,12 +55,11 @@ class RlsStrictModePreflightIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
-    POSTGRES =
-        new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-            .withDatabaseName("batch_business")
-            .withUsername("batch_user")
-            .withPassword("batch_pass_123")
-            .withUrlParam("sslmode", "disable");
+    POSTGRES = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+        .withDatabaseName("batch_business")
+        .withUsername("batch_user")
+        .withPassword("batch_pass_123")
+        .withUrlParam("sslmode", "disable");
     POSTGRES.start();
 
     HikariConfig cfg = new HikariConfig();
@@ -75,8 +74,7 @@ class RlsStrictModePreflightIntegrationTest {
 
     // 表 + 种子(transition 阶段允许直接插)
     JDBC.execute("CREATE SCHEMA IF NOT EXISTS biz");
-    JDBC.execute(
-        """
+    JDBC.execute("""
         CREATE TABLE biz.customer_account (
           id BIGSERIAL PRIMARY KEY,
           tenant_id VARCHAR(64) NOT NULL,
@@ -129,8 +127,7 @@ class RlsStrictModePreflightIntegrationTest {
   void transition_install_andSelectWithoutSet_returnsAll() {
     JDBC.execute("DROP POLICY IF EXISTS tenant_isolation_transition ON biz.customer_account");
     JDBC.execute("DROP POLICY IF EXISTS tenant_isolation_strict ON biz.customer_account");
-    JDBC.execute(
-        """
+    JDBC.execute("""
         CREATE POLICY tenant_isolation_transition ON biz.customer_account
           AS PERMISSIVE FOR ALL TO PUBLIC
           USING (
@@ -144,12 +141,10 @@ class RlsStrictModePreflightIntegrationTest {
             OR tenant_id = current_setting('app.tenant_id', true)
           )
         """);
-    Long total =
-        TX.execute(
-            status -> {
-              JDBC.execute("SET LOCAL ROLE rls_app_user");
-              return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
-            });
+    Long total = TX.execute(status -> {
+      JDBC.execute("SET LOCAL ROLE rls_app_user");
+      return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+    });
     assertThat(total).isEqualTo(3L);
   }
 
@@ -160,19 +155,17 @@ class RlsStrictModePreflightIntegrationTest {
   @DisplayName("strict policy 切换:DROP transition + CREATE strict")
   void strict_install_replacesTransition() {
     JDBC.execute("DROP POLICY IF EXISTS tenant_isolation_transition ON biz.customer_account");
-    JDBC.execute(
-        """
+    JDBC.execute("""
         CREATE POLICY tenant_isolation_strict ON biz.customer_account
           AS PERMISSIVE FOR ALL TO PUBLIC
           USING (tenant_id = current_setting('app.tenant_id', true))
           WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
         """);
     // 验证 policy 切换成功
-    Integer policyCount =
-        JDBC.queryForObject(
-            "SELECT count(*)::int FROM pg_policies WHERE schemaname='biz'"
-                + " AND tablename='customer_account' AND policyname='tenant_isolation_strict'",
-            Integer.class);
+    Integer policyCount = JDBC.queryForObject(
+        "SELECT count(*)::int FROM pg_policies WHERE schemaname='biz'"
+            + " AND tablename='customer_account' AND policyname='tenant_isolation_strict'",
+        Integer.class);
     assertThat(policyCount).isEqualTo(1);
   }
 
@@ -182,12 +175,10 @@ class RlsStrictModePreflightIntegrationTest {
   @Order(3)
   @DisplayName("strict + 漏 SET LOCAL → SELECT 返 0 行(DB 强制拦截)")
   void strict_selectWithoutSet_returnsZero() {
-    Long total =
-        TX.execute(
-            status -> {
-              JDBC.execute("SET LOCAL ROLE rls_app_user");
-              return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
-            });
+    Long total = TX.execute(status -> {
+      JDBC.execute("SET LOCAL ROLE rls_app_user");
+      return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+    });
     assertThat(total)
         .as("strict 模式漏 SET LOCAL 时 USING 谓词 tenant_id = NULL 不匹配,返 0 行")
         .isEqualTo(0L);
@@ -197,19 +188,16 @@ class RlsStrictModePreflightIntegrationTest {
   @Order(4)
   @DisplayName("strict + 漏 SET LOCAL → INSERT 抛 row-level security violation")
   void strict_insertWithoutSet_isRejected() {
-    assertThatThrownBy(
-            () ->
-                TX.execute(
-                    status -> {
-                      JDBC.execute("SET LOCAL ROLE rls_app_user");
-                      JDBC.update(
-                          "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name)"
-                              + " VALUES (?,?,?)",
-                          "ta",
-                          "ta-strict-noset",
-                          "should fail");
-                      return null;
-                    }))
+    assertThatThrownBy(() -> TX.execute(status -> {
+          JDBC.execute("SET LOCAL ROLE rls_app_user");
+          JDBC.update(
+              "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name)"
+                  + " VALUES (?,?,?)",
+              "ta",
+              "ta-strict-noset",
+              "should fail");
+          return null;
+        }))
         .rootCause()
         .hasMessageContaining("row-level security")
         .hasMessageContaining("violates");
@@ -221,17 +209,13 @@ class RlsStrictModePreflightIntegrationTest {
   @Order(5)
   @DisplayName("strict + 正确接线 → SELECT 返自己租户的 2 行(worker 路径)")
   void strict_correctlyWired_selectReturnsOwnTenant() {
-    Long total =
-        RlsTenantContextHolder.runWithTenant(
-            "ta",
-            () ->
-                TX.execute(
-                    status -> {
-                      JDBC.execute("SET LOCAL ROLE rls_app_user");
-                      RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
-                      return JDBC.queryForObject(
-                          "SELECT count(*) FROM biz.customer_account", Long.class);
-                    }));
+    Long total = RlsTenantContextHolder.runWithTenant(
+        "ta",
+        () -> TX.execute(status -> {
+          JDBC.execute("SET LOCAL ROLE rls_app_user");
+          RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
+          return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+        }));
     assertThat(total).isEqualTo(2L);
   }
 
@@ -242,38 +226,32 @@ class RlsStrictModePreflightIntegrationTest {
     // 自己租户 INSERT 成功
     RlsTenantContextHolder.runWithTenant(
         "ta",
-        () ->
-            TX.execute(
-                status -> {
-                  JDBC.execute("SET LOCAL ROLE rls_app_user");
-                  RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
-                  JDBC.update(
-                      "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name)"
-                          + " VALUES (?,?,?)",
-                      "ta",
-                      "ta-strict-own",
-                      "own tenant ok");
-                  return null;
-                }));
+        () -> TX.execute(status -> {
+          JDBC.execute("SET LOCAL ROLE rls_app_user");
+          RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
+          JDBC.update(
+              "INSERT INTO biz.customer_account (tenant_id, customer_no, customer_name)"
+                  + " VALUES (?,?,?)",
+              "ta",
+              "ta-strict-own",
+              "own tenant ok");
+          return null;
+        }));
 
     // cross-tenant INSERT 抛
-    assertThatThrownBy(
-            () ->
-                RlsTenantContextHolder.runWithTenant(
-                    "ta",
-                    () ->
-                        TX.execute(
-                            status -> {
-                              JDBC.execute("SET LOCAL ROLE rls_app_user");
-                              RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
-                              JDBC.update(
-                                  "INSERT INTO biz.customer_account (tenant_id, customer_no,"
-                                      + " customer_name) VALUES (?,?,?)",
-                                  "tb",
-                                  "tb-strict-cross",
-                                  "cross");
-                              return null;
-                            })))
+    assertThatThrownBy(() -> RlsTenantContextHolder.runWithTenant(
+            "ta",
+            () -> TX.execute(status -> {
+              JDBC.execute("SET LOCAL ROLE rls_app_user");
+              RlsTenantSessionSupport.applyIfPresent(DATASOURCE);
+              JDBC.update(
+                  "INSERT INTO biz.customer_account (tenant_id, customer_no,"
+                      + " customer_name) VALUES (?,?,?)",
+                  "tb",
+                  "tb-strict-cross",
+                  "cross");
+              return null;
+            })))
         .rootCause()
         .hasMessageContaining("row-level security");
   }
@@ -283,15 +261,13 @@ class RlsStrictModePreflightIntegrationTest {
   @Test
   @Order(7)
   @DisplayName("回滚 strict → transition:未 SET 又能读全部(兼容性恢复)")
-  @org.junit.jupiter.api.Disabled(
-      "2026-05-31 CI flake:transition policy 装好后 count 返 0(本地稳定)。"
-          + "种子可能被前序 @Order test 截断 / policy reset 时序。RLS team follow-up,不阻塞 ADR-035。")
+  @org.junit.jupiter.api.Disabled("2026-05-31 CI flake:transition policy 装好后 count 返 0(本地稳定)。"
+      + "种子可能被前序 @Order test 截断 / policy reset 时序。RLS team follow-up,不阻塞 ADR-035。")
   void rollback_strictToTransition_restoresCompat() {
     // 自包含:不依赖前面测试运行顺序,先 reset 到 strict(可能已是 strict 或 transition),再 rollback
     JDBC.execute("DROP POLICY IF EXISTS tenant_isolation_strict ON biz.customer_account");
     JDBC.execute("DROP POLICY IF EXISTS tenant_isolation_transition ON biz.customer_account");
-    JDBC.execute(
-        """
+    JDBC.execute("""
         CREATE POLICY tenant_isolation_transition ON biz.customer_account
           AS PERMISSIVE FOR ALL TO PUBLIC
           USING (
@@ -310,12 +286,10 @@ class RlsStrictModePreflightIntegrationTest {
         "ta",
         "ta-rollback-seed",
         "Rollback Seed");
-    Long total =
-        TX.execute(
-            status -> {
-              JDBC.execute("SET LOCAL ROLE rls_app_user");
-              return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
-            });
+    Long total = TX.execute(status -> {
+      JDBC.execute("SET LOCAL ROLE rls_app_user");
+      return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
+    });
     assertThat(total).as("transition policy 装好后未 SET 应返非 0 行").isGreaterThan(0L);
   }
 }

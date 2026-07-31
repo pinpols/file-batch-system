@@ -15,8 +15,11 @@ import org.mockito.MockitoAnnotations;
 
 class SchedulerQueueBacklogMetricsSchedulerTest {
 
-  @Mock private JobPartitionMapper jobPartitionMapper;
-  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
 
   private SimpleMeterRegistry meterRegistry;
   private SchedulerQueueBacklogMetricsScheduler scheduler;
@@ -25,9 +28,8 @@ class SchedulerQueueBacklogMetricsSchedulerTest {
   void setUp() {
     MockitoAnnotations.openMocks(this);
     meterRegistry = new SimpleMeterRegistry();
-    scheduler =
-        new SchedulerQueueBacklogMetricsScheduler(
-            jobPartitionMapper, meterRegistry, gracefulShutdown);
+    scheduler = new SchedulerQueueBacklogMetricsScheduler(
+        jobPartitionMapper, meterRegistry, gracefulShutdown);
     scheduler.initializeMeters();
   }
 

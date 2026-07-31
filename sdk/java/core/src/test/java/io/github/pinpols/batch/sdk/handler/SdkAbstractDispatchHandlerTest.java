@@ -22,28 +22,27 @@ class SdkAbstractDispatchHandlerTest {
   @DisplayName("5 条全成功 → success=5 failed=0 total=5 整体成功")
   void shouldDispatchAll_whenNoFailure() {
     // 准备
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of(1, 2, 3, 4, 5);
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of(1, 2, 3, 4, 5);
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return "req-" + item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return "req-" + item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            return "resp-" + request;
-          }
-        };
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        return "resp-" + request;
+      }
+    };
 
     // 执行
     SdkTaskResult result = handler.execute(ctx());
@@ -61,32 +60,31 @@ class SdkAbstractDispatchHandlerTest {
   @Test
   @DisplayName("5 条其中 2 条 push 抛异常 → success=3 failed=2,整体仍成功")
   void shouldContinueBatch_whenSomePushFails() {
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of(1, 2, 3, 4, 5);
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of(1, 2, 3, 4, 5);
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            int v = (int) request;
-            if (v == 2 || v == 4) {
-              throw new IllegalStateException("push failed for " + v);
-            }
-            return "resp-" + v;
-          }
-        };
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        int v = (int) request;
+        if (v == 2 || v == 4) {
+          throw new IllegalStateException("push failed for " + v);
+        }
+        return "resp-" + v;
+      }
+    };
 
     SdkTaskResult result = handler.execute(ctx());
 
@@ -101,28 +99,27 @@ class SdkAbstractDispatchHandlerTest {
   @Test
   @DisplayName("空 payload 列表 → success=0,整体成功")
   void shouldSucceedWithZero_whenEmptyPayload() {
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of();
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of();
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            return request;
-          }
-        };
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        return request;
+      }
+    };
 
     SdkTaskResult result = handler.execute(ctx());
 
@@ -134,31 +131,30 @@ class SdkAbstractDispatchHandlerTest {
   @Test
   @DisplayName("某条 buildRequest 抛异常 → 该条 failed,其它继续")
   void shouldContinueBatch_whenBuildRequestFails() {
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of(1, 2, 3);
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of(1, 2, 3);
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            if (item == 2) {
-              throw new IllegalArgumentException("bad item " + item);
-            }
-            return item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        if (item == 2) {
+          throw new IllegalArgumentException("bad item " + item);
+        }
+        return item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            return "resp-" + request;
-          }
-        };
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        return "resp-" + request;
+      }
+    };
 
     SdkTaskResult result = handler.execute(ctx());
 
@@ -172,35 +168,34 @@ class SdkAbstractDispatchHandlerTest {
   @Test
   @DisplayName("某条 onResponse 抛异常 → 该条 failed,其它继续")
   void shouldContinueBatch_whenOnResponseFails() {
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of(1, 2, 3);
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of(1, 2, 3);
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            return "resp-" + request;
-          }
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        return "resp-" + request;
+      }
 
-          @Override
-          protected void onResponse(SdkTaskContext c, Integer item, Object response) {
-            if (item == 3) {
-              throw new IllegalStateException("onResponse failed " + item);
-            }
-          }
-        };
+      @Override
+      protected void onResponse(SdkTaskContext c, Integer item, Object response) {
+        if (item == 3) {
+          throw new IllegalStateException("onResponse failed " + item);
+        }
+      }
+    };
 
     SdkTaskResult result = handler.execute(ctx());
 
@@ -214,28 +209,27 @@ class SdkAbstractDispatchHandlerTest {
   @Test
   @DisplayName("selectPayload 抛异常 → execute 整体失败")
   void shouldFailWhole_whenSelectPayloadThrows() {
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            throw new IllegalStateException("db down");
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        throw new IllegalStateException("db down");
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            return request;
-          }
-        };
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        return request;
+      }
+    };
 
     SdkTaskResult result = handler.execute(ctx());
 
@@ -248,33 +242,32 @@ class SdkAbstractDispatchHandlerTest {
   void shouldPassThroughResponse_fromPushToOnResponse() {
     var seenResponses = new ArrayList<Object>();
     var pushReturn = new Object();
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of(1);
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of(1);
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return item;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return item;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            return pushReturn;
-          }
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        return pushReturn;
+      }
 
-          @Override
-          protected void onResponse(SdkTaskContext c, Integer item, Object response) {
-            seenResponses.add(response);
-          }
-        };
+      @Override
+      protected void onResponse(SdkTaskContext c, Integer item, Object response) {
+        seenResponses.add(response);
+      }
+    };
 
     handler.execute(ctx());
 
@@ -287,29 +280,28 @@ class SdkAbstractDispatchHandlerTest {
   void shouldPassThroughRequest_fromBuildRequestToPush() {
     var seenRequest = new AtomicReference<Object>();
     var builtRequest = new Object();
-    var handler =
-        new SdkAbstractDispatchHandler<Integer>() {
-          @Override
-          public String taskType() {
-            return "test_dispatch";
-          }
+    var handler = new SdkAbstractDispatchHandler<Integer>() {
+      @Override
+      public String taskType() {
+        return "test_dispatch";
+      }
 
-          @Override
-          protected List<Integer> selectPayload(SdkTaskContext c) {
-            return List.of(1);
-          }
+      @Override
+      protected List<Integer> selectPayload(SdkTaskContext c) {
+        return List.of(1);
+      }
 
-          @Override
-          protected Object buildRequest(SdkTaskContext c, Integer item) {
-            return builtRequest;
-          }
+      @Override
+      protected Object buildRequest(SdkTaskContext c, Integer item) {
+        return builtRequest;
+      }
 
-          @Override
-          protected Object push(SdkTaskContext c, Object request) {
-            seenRequest.set(request);
-            return "resp";
-          }
-        };
+      @Override
+      protected Object push(SdkTaskContext c, Object request) {
+        seenRequest.set(request);
+        return "resp";
+      }
+    };
 
     handler.execute(ctx());
 

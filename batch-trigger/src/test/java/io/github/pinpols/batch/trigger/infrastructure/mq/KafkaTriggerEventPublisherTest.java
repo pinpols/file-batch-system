@@ -46,7 +46,8 @@ import org.springframework.kafka.support.SendResult;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class KafkaTriggerEventPublisherTest {
 
-  @Mock private KafkaTemplate<String, String> kafkaTemplate;
+  @Mock
+  private KafkaTemplate<String, String> kafkaTemplate;
 
   private KafkaTriggerEventPublisher publisher;
 
@@ -107,15 +108,14 @@ class KafkaTriggerEventPublisherTest {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private static LaunchEnvelope sampleEnvelope(String tenantId, String requestId) {
-    LaunchRequest request =
-        new LaunchRequest(
-            tenantId,
-            "test-job",
-            LocalDate.parse("2026-04-30"),
-            TriggerType.MANUAL,
-            requestId,
-            "trace-" + requestId,
-            Map.of());
+    LaunchRequest request = new LaunchRequest(
+        tenantId,
+        "test-job",
+        LocalDate.parse("2026-04-30"),
+        TriggerType.MANUAL,
+        requestId,
+        "trace-" + requestId,
+        Map.of());
     return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
   }
 

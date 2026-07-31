@@ -55,14 +55,13 @@ public class DingTalkNotificationSender implements NotificationSender {
 
   public DingTalkNotificationSender(ObjectMapper objectMapper, SsrfGuardedDns ssrfGuardedDns) {
     this.objectMapper = objectMapper;
-    this.httpClient =
-        new OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT)
-            .readTimeout(REQUEST_TIMEOUT)
-            .writeTimeout(REQUEST_TIMEOUT)
-            .callTimeout(CALL_TIMEOUT)
-            .dns(ssrfGuardedDns)
-            .build();
+    this.httpClient = new OkHttpClient.Builder()
+        .connectTimeout(CONNECT_TIMEOUT)
+        .readTimeout(REQUEST_TIMEOUT)
+        .writeTimeout(REQUEST_TIMEOUT)
+        .callTimeout(CALL_TIMEOUT)
+        .dns(ssrfGuardedDns)
+        .build();
   }
 
   @Override
@@ -163,10 +162,9 @@ public class DingTalkNotificationSender implements NotificationSender {
 
   /** 由 eventType + 截断后的 payloadJson 拼成简洁中文摘要。 */
   private String summarize(NotificationMessage message) {
-    String eventType =
-        (message.payload() != null && message.payload().eventType() != null)
-            ? message.payload().eventType()
-            : "UNKNOWN";
+    String eventType = (message.payload() != null && message.payload().eventType() != null)
+        ? message.payload().eventType()
+        : "UNKNOWN";
     String detail = message.payloadJson() == null ? "" : message.payloadJson();
     if (detail.length() > MAX_PAYLOAD_CHARS) {
       detail = detail.substring(0, MAX_PAYLOAD_CHARS) + "...(truncated)";
@@ -186,7 +184,8 @@ public class DingTalkNotificationSender implements NotificationSender {
 
   /** 同步 POST JSON，返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
   protected String postJson(String url, String body) throws Exception {
-    Request request = new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
+    Request request =
+        new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
     try (Response response = httpClient.newCall(request).execute()) {
       int status = response.code();
       if (status / 100 != 2) {

@@ -87,9 +87,8 @@ public class DefaultConsolePipelineDefinitionApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
     long total = pipelineDefinitionMapper.countByQuery(resolved, jobCode, pipelineType, enabled);
-    List<Map<String, Object>> items =
-        pipelineDefinitionMapper.selectByQuery(
-            resolved, jobCode, pipelineType, enabled, pageRequest);
+    List<Map<String, Object>> items = pipelineDefinitionMapper.selectByQuery(
+        resolved, jobCode, pipelineType, enabled, pageRequest);
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
@@ -128,9 +127,8 @@ public class DefaultConsolePipelineDefinitionApplicationService
   @Transactional
   public PipelineDefinitionDetailResponse update(Long id, PipelineDefinitionSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        Guard.requireFound(
-            pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
+    Map<String, Object> existing = Guard.requireFound(
+        pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put(KEY_ID, id);
@@ -160,10 +158,9 @@ public class DefaultConsolePipelineDefinitionApplicationService
         request.getDescription() != null
             ? request.getDescription()
             : existing.get(KEY_DESCRIPTION));
-    String effectiveType =
-        request.getPipelineType() != null
-            ? request.getPipelineType()
-            : (String) existing.get(KEY_PIPELINE_TYPE);
+    String effectiveType = request.getPipelineType() != null
+        ? request.getPipelineType()
+        : (String) existing.get(KEY_PIPELINE_TYPE);
     validateSteps(effectiveType, request.getSteps());
     pipelineDefinitionMapper.update(params);
 
@@ -249,9 +246,8 @@ public class DefaultConsolePipelineDefinitionApplicationService
   }
 
   private PipelineDefinitionDetailResponse loadDetailResponse(String tenantId, Long id) {
-    Map<String, Object> row =
-        Guard.requireFound(
-            pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
+    Map<String, Object> row = Guard.requireFound(
+        pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
     List<Map<String, Object>> stepRows =
         pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id);
     return toDetailResponse(row, stepRows);
@@ -292,15 +288,14 @@ public class DefaultConsolePipelineDefinitionApplicationService
       } catch (DateTimeParseException ignoredToo) {
         // 宽容 fractional seconds（0-9 位）+ 可选 T 或空格分隔符，
         // 原来枚举固定 .SSSSSS / .SSS 遇到 .SSSSS (5 位) 之类会全部异常退出。
-        DateTimeFormatter flexible =
-            new DateTimeFormatterBuilder()
-                .appendPattern("yyyy-MM-dd")
-                .appendLiteral(text.length() > 10 && text.charAt(10) == 'T' ? 'T' : ' ')
-                .appendPattern("HH:mm:ss")
-                .optionalStart()
-                .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
-                .optionalEnd()
-                .toFormatter();
+        DateTimeFormatter flexible = new DateTimeFormatterBuilder()
+            .appendPattern("yyyy-MM-dd")
+            .appendLiteral(text.length() > 10 && text.charAt(10) == 'T' ? 'T' : ' ')
+            .appendPattern("HH:mm:ss")
+            .optionalStart()
+            .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+            .optionalEnd()
+            .toFormatter();
         try {
           return LocalDateTime.parse(text, flexible).toInstant(ZoneOffset.UTC);
         } catch (DateTimeParseException ignoredFlexible) {

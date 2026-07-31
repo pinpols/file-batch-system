@@ -103,36 +103,33 @@ public class StaleCreatedLaunchRecoveryScheduler {
   }
 
   private boolean recoverOne(JobInstanceEntity jobInstance) {
-    TriggerRequestEntity triggerRequest =
-        triggerRequestMapper.selectById(
-            jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
+    TriggerRequestEntity triggerRequest = triggerRequestMapper.selectById(
+        jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
     if (triggerRequest == null
         || !BatchStatusConstants.ACCEPTED.equals(triggerRequest.getRequestStatus())) {
       return false;
     }
 
     Map<String, Object> effectiveParams = effectiveParams(jobInstance);
-    LaunchRequest request =
-        LaunchRequest.builder()
-            .tenantId(jobInstance.getTenantId())
-            .jobCode(jobInstance.getJobCode())
-            .bizDate(jobInstance.getBizDate())
-            .triggerType(TriggerType.valueOf(jobInstance.getTriggerType()))
-            .requestId(triggerRequest.getRequestId())
-            .traceId(jobInstance.getTraceId())
-            .params(effectiveParams)
-            .dataIntervalStart(jobInstance.getDataIntervalStart())
-            .dataIntervalEnd(jobInstance.getDataIntervalEnd())
-            .replaySessionId(jobInstance.getReplaySessionId())
-            .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
-            .build();
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(jobInstance.getTenantId())
+        .jobCode(jobInstance.getJobCode())
+        .bizDate(jobInstance.getBizDate())
+        .triggerType(TriggerType.valueOf(jobInstance.getTriggerType()))
+        .requestId(triggerRequest.getRequestId())
+        .traceId(jobInstance.getTraceId())
+        .params(effectiveParams)
+        .dataIntervalStart(jobInstance.getDataIntervalStart())
+        .dataIntervalEnd(jobInstance.getDataIntervalEnd())
+        .replaySessionId(jobInstance.getReplaySessionId())
+        .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
+        .build();
 
-    partitionDispatchService.dispatch(
-        PartitionDispatchService.DispatchContext.of(
-            new PartitionDispatchService.DispatchRequest(
-                request, effectiveParams, jobInstance.getTraceId()),
-            new PartitionDispatchService.DispatchRuntime(
-                jobInstance, null, List.of(), BatchDateTimeSupport.utcNow())));
+    partitionDispatchService.dispatch(PartitionDispatchService.DispatchContext.of(
+        new PartitionDispatchService.DispatchRequest(
+            request, effectiveParams, jobInstance.getTraceId()),
+        new PartitionDispatchService.DispatchRuntime(
+            jobInstance, null, List.of(), BatchDateTimeSupport.utcNow())));
     // dispatch(自带事务)提交后任务已实际恢复;reconcileLaunched 在其事务外,失败不能把本次
     // 恢复记成 failed(误导监控)——trigger_request 滞留 ACCEPTED 会由 TriggerRequestLaunchReconciler
     // (ADR-010,扫"ACCEPTED 且已有 job_instance")下一轮自愈,此处降级为 WARN。
@@ -155,9 +152,8 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> effectiveParams(JobInstanceEntity jobInstance) {
-    Map<String, Object> snapshot =
-        JsonUtils.fromJson(
-            jobInstance.getParamsSnapshot(), new TypeReference<Map<String, Object>>() {});
+    Map<String, Object> snapshot = JsonUtils.fromJson(
+        jobInstance.getParamsSnapshot(), new TypeReference<Map<String, Object>>() {});
     Object effective = snapshot.get("effectiveParams");
     if (effective instanceof Map<?, ?> map) {
       return (Map<String, Object>) map;

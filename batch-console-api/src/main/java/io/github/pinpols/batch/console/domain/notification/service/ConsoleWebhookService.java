@@ -39,12 +39,9 @@ public class ConsoleWebhookService {
   public WebhookSubscriptionEntity createSubscription(CreateSubscriptionCommand command) {
     String resolved = tenantGuard.resolveTenant(command.tenantId());
     callbackUrlValidator.validate(command.callbackUrl());
-    subscriptionRepository
-        .findByTenantAndName(resolved, command.name())
-        .ifPresent(
-            existing -> {
-              throw BizException.of(ResultCode.CONFLICT, "error.webhook.subscription_exists");
-            });
+    subscriptionRepository.findByTenantAndName(resolved, command.name()).ifPresent(existing -> {
+      throw BizException.of(ResultCode.CONFLICT, "error.webhook.subscription_exists");
+    });
     subscriptionRepository.insert(
         resolved,
         command.name(),
@@ -55,10 +52,8 @@ public class ConsoleWebhookService {
         command.operator());
     return subscriptionRepository
         .findByTenantAndName(resolved, command.name())
-        .orElseThrow(
-            () ->
-                BizException.of(
-                    ResultCode.SYSTEM_ERROR, "error.webhook.subscription_created_but_not_found"));
+        .orElseThrow(() -> BizException.of(
+            ResultCode.SYSTEM_ERROR, "error.webhook.subscription_created_but_not_found"));
   }
 
   public WebhookSubscriptionEntity updateSubscription(UpdateSubscriptionCommand command) {
@@ -77,10 +72,8 @@ public class ConsoleWebhookService {
         command.operator());
     return subscriptionRepository
         .findByTenantAndId(resolved, command.id())
-        .orElseThrow(
-            () ->
-                BizException.of(
-                    ResultCode.SYSTEM_ERROR, "error.webhook.subscription_updated_but_not_found"));
+        .orElseThrow(() -> BizException.of(
+            ResultCode.SYSTEM_ERROR, "error.webhook.subscription_updated_but_not_found"));
   }
 
   public void deleteSubscription(String tenantId, Long id) {
@@ -103,17 +96,14 @@ public class ConsoleWebhookService {
 
   private String normalizeEventTypes(String eventTypes) {
     Guard.requireText(eventTypes, "eventTypes is required");
-    String normalized =
-        Arrays.stream(eventTypes.split(","))
-            .map(String::trim)
-            .filter(value -> !value.isBlank())
-            .map(value -> value.toUpperCase(Locale.ROOT))
-            .distinct()
-            .reduce((left, right) -> left + "," + right)
-            .orElseThrow(
-                () ->
-                    BizException.of(
-                        ResultCode.INVALID_ARGUMENT, "error.webhook.event_types_required"));
+    String normalized = Arrays.stream(eventTypes.split(","))
+        .map(String::trim)
+        .filter(value -> !value.isBlank())
+        .map(value -> value.toUpperCase(Locale.ROOT))
+        .distinct()
+        .reduce((left, right) -> left + "," + right)
+        .orElseThrow(() ->
+            BizException.of(ResultCode.INVALID_ARGUMENT, "error.webhook.event_types_required"));
     return normalized;
   }
 

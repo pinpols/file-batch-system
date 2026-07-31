@@ -323,12 +323,11 @@ public final class FakeBatchPlatform implements AutoCloseable {
         sleepQuietly(100);
       }
     }
-    throw new IllegalStateException(
-        "no SDK consumer assigned to topic "
-            + DISPATCH_TOPIC
-            + " within "
-            + timeout
-            + "; did you call client.start() before dispatch()?");
+    throw new IllegalStateException("no SDK consumer assigned to topic "
+        + DISPATCH_TOPIC
+        + " within "
+        + timeout
+        + "; did you call client.start() before dispatch()?");
   }
 
   private boolean hasAssignedConsumer(Admin admin) {

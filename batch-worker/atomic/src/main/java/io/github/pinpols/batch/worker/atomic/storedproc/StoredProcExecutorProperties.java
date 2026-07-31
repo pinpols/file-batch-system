@@ -111,28 +111,27 @@ public class StoredProcExecutorProperties {
   private boolean forbidOsCapableRole = true;
 
   /** 允许的 SQL Type 名集合(给 outParams 白名单)。常用全开;不允许 OTHER / STRUCT / ARRAY 等复合。 */
-  private Set<String> allowedOutSqlTypes =
-      Set.of(
-          "BIGINT",
-          "INTEGER",
-          "SMALLINT",
-          "TINYINT",
-          "DECIMAL",
-          "NUMERIC",
-          "DOUBLE",
-          "FLOAT",
-          "REAL",
-          "VARCHAR",
-          "CHAR",
-          "NVARCHAR",
-          "NCHAR",
-          "BOOLEAN",
-          "BIT",
-          "DATE",
-          "TIME",
-          "TIMESTAMP",
-          "TIMESTAMP_WITH_TIMEZONE",
-          "REF_CURSOR", // PG REFCURSOR
-          "OTHER" // PG JSON / JSONB / UUID 等走 OTHER
-          );
+  private Set<String> allowedOutSqlTypes = Set.of(
+      "BIGINT",
+      "INTEGER",
+      "SMALLINT",
+      "TINYINT",
+      "DECIMAL",
+      "NUMERIC",
+      "DOUBLE",
+      "FLOAT",
+      "REAL",
+      "VARCHAR",
+      "CHAR",
+      "NVARCHAR",
+      "NCHAR",
+      "BOOLEAN",
+      "BIT",
+      "DATE",
+      "TIME",
+      "TIMESTAMP",
+      "TIMESTAMP_WITH_TIMEZONE",
+      "REF_CURSOR", // PG REFCURSOR
+      "OTHER" // PG JSON / JSONB / UUID 等走 OTHER
+      );
 }

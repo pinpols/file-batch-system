@@ -49,21 +49,19 @@ class BoundedContextDependencyArchTest {
   static final String SHARED_ROOT = "io.github.pinpols.batch.console.shared";
   static final String SUPPRESS_TAG = "BoundedContext";
 
-  private static final JavaClasses CLASSES =
-      new ClassFileImporter()
-          .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-          .importPackages("io.github.pinpols.batch.console..");
+  private static final JavaClasses CLASSES = new ClassFileImporter()
+      .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+      .importPackages("io.github.pinpols.batch.console..");
 
   @Test
   void noCrossBoundedContextDependency() {
     for (String ctx : BOUNDED_CONTEXTS) {
-      ArchRule rule =
-          ArchRuleDefinition.classes()
-              .that()
-              .resideInAPackage(DOMAIN_ROOT + "." + ctx + "..")
-              .and(notSuppressed())
-              .should()
-              .onlyDependOnClassesThat(allowedDependencyFor(ctx));
+      ArchRule rule = ArchRuleDefinition.classes()
+          .that()
+          .resideInAPackage(DOMAIN_ROOT + "." + ctx + "..")
+          .and(notSuppressed())
+          .should()
+          .onlyDependOnClassesThat(allowedDependencyFor(ctx));
       rule.check(CLASSES);
     }
   }
@@ -81,18 +79,17 @@ class BoundedContextDependencyArchTest {
   static boolean hasBoundedContextSuppression(JavaClass javaClass) {
     return javaClass.getAnnotations().stream()
         .filter(a -> a.getRawType().getName().equals(SuppressWarnings.class.getName()))
-        .anyMatch(
-            a -> {
-              Object value = a.getProperties().get("value");
-              if (value instanceof Object[] arr) {
-                for (Object v : arr) {
-                  if (SUPPRESS_TAG.equals(String.valueOf(v))) {
-                    return true;
-                  }
-                }
+        .anyMatch(a -> {
+          Object value = a.getProperties().get("value");
+          if (value instanceof Object[] arr) {
+            for (Object v : arr) {
+              if (SUPPRESS_TAG.equals(String.valueOf(v))) {
+                return true;
               }
-              return SUPPRESS_TAG.equals(String.valueOf(value));
-            });
+            }
+          }
+          return SUPPRESS_TAG.equals(String.valueOf(value));
+        });
   }
 
   /** 允许依赖判定:依赖类只要不在「其它 bounded context」的 domain 子包下,就放行(shared / 应用层 / 框架 / JDK 全 OK)。 */

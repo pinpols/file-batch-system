@@ -35,13 +35,11 @@ class HttpTaskExecutorDryRunTest {
     requestCount = new AtomicInteger();
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     serverPort = server.getAddress().getPort();
-    server.createContext(
-        "/",
-        exchange -> {
-          requestCount.incrementAndGet();
-          exchange.sendResponseHeaders(200, -1);
-          exchange.close();
-        });
+    server.createContext("/", exchange -> {
+      requestCount.incrementAndGet();
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
     server.start();
   }
 
@@ -56,22 +54,21 @@ class HttpTaskExecutorDryRunTest {
   void shouldShortCircuit_whenDryRun_andNotSendHttpRequest() {
     // 准备
     String url = "http://127.0.0.1:" + serverPort + "/secret-endpoint";
-    TaskContext ctx =
-        new TaskContext(
-            "t1",
-            "job-1",
-            "ti-1",
-            "w-1",
-            Map.of(
-                "method",
-                "POST",
-                "url",
-                url,
-                "headers",
-                Map.of("X-Tenant", "t1", "Authorization", "Bearer SECRET"),
-                "body",
-                "payload-with-pii"),
-            Map.of("dryRun", true));
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of(
+            "method",
+            "POST",
+            "url",
+            url,
+            "headers",
+            Map.of("X-Tenant", "t1", "Authorization", "Bearer SECRET"),
+            "body",
+            "payload-with-pii"),
+        Map.of("dryRun", true));
 
     // 执行
     TaskResult result = executor.execute(ctx);
@@ -90,11 +87,9 @@ class HttpTaskExecutorDryRunTest {
     // 关键 1:真 server 一个请求都没收到
     assertThat(requestCount.get()).isZero();
     // 关键 2:header value / body 不进 output(防泄密)
-    assertThat(result.output().values())
-        .noneMatch(
-            v -> {
-              String s = String.valueOf(v);
-              return s.contains("SECRET") || s.contains("payload-with-pii");
-            });
+    assertThat(result.output().values()).noneMatch(v -> {
+      String s = String.valueOf(v);
+      return s.contains("SECRET") || s.contains("payload-with-pii");
+    });
   }
 }

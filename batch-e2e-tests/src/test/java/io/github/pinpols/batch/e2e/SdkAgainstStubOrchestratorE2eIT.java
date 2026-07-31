@@ -116,32 +116,30 @@ class SdkAgainstStubOrchestratorE2eIT {
   @DisplayName("派单 → SDK echo handler → REPORT 成功路径")
   void sdkRoundTrip_dispatchAndReport() throws Exception {
     // 准备 — 注册 echo handler,启动 SDK 指向 stub HTTP + 真 Kafka
-    SdkTaskHandler echo =
-        new SdkTaskHandler() {
-          @Override
-          public String taskType() {
-            return "r3_6_echo";
-          }
+    SdkTaskHandler echo = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "r3_6_echo";
+      }
 
-          @Override
-          public SdkTaskResult execute(SdkTaskContext ctx) {
-            Object payload = ctx.parameters().get("payload");
-            return SdkTaskResult.ok("echoed:" + payload, Map.of("echoed", payload));
-          }
-        };
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        Object payload = ctx.parameters().get("payload");
+        return SdkTaskResult.ok("echoed:" + payload, Map.of("echoed", payload));
+      }
+    };
 
-    BatchPlatformClientConfig cfg =
-        BatchPlatformClientConfig.builder()
-            .baseUrl(stub.baseUrl())
-            .tenantId(TENANT)
-            .workerCode(WORKER)
-            .kafkaBootstrap(KAFKA.getBootstrapServers())
-            .kafkaTopicPattern(TOPIC_PATTERN)
-            .kafkaGroupId("r3-6-group")
-            .heartbeatInterval(Duration.ofSeconds(30))
-            .leaseRenewInterval(Duration.ofSeconds(30))
-            .kafkaPollInterval(Duration.ofMillis(100))
-            .build();
+    BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
+        .baseUrl(stub.baseUrl())
+        .tenantId(TENANT)
+        .workerCode(WORKER)
+        .kafkaBootstrap(KAFKA.getBootstrapServers())
+        .kafkaTopicPattern(TOPIC_PATTERN)
+        .kafkaGroupId("r3-6-group")
+        .heartbeatInterval(Duration.ofSeconds(30))
+        .leaseRenewInterval(Duration.ofSeconds(30))
+        .kafkaPollInterval(Duration.ofMillis(100))
+        .build();
 
     BatchPlatformClient client = BatchPlatformClient.builder(cfg).register(echo).build();
     client.start();
@@ -151,14 +149,15 @@ class SdkAgainstStubOrchestratorE2eIT {
       Thread.sleep(3_000);
 
       // 执行 — 真 Kafka 发派单消息
-      var msg =
-          TaskDispatchMessageBuilder.dispatch("r3_6_echo")
-              .tenantId(TENANT)
-              .taskId(424242L)
-              .param("payload", "hello-r3-6")
-              .build();
+      var msg = TaskDispatchMessageBuilder.dispatch("r3_6_echo")
+          .tenantId(TENANT)
+          .taskId(424242L)
+          .param("payload", "hello-r3-6")
+          .build();
       byte[] body = new ObjectMapper().writeValueAsBytes(msg);
-      producer.send(new ProducerRecord<>(TOPIC, String.valueOf(msg.taskId()), body)).get();
+      producer
+          .send(new ProducerRecord<>(TOPIC, String.valueOf(msg.taskId()), body))
+          .get();
 
       // 断言 — REPORT 在 30s 内到达 stub,内容正确
       RecordedReport report = stub.awaitReport(424242L, Duration.ofSeconds(30));

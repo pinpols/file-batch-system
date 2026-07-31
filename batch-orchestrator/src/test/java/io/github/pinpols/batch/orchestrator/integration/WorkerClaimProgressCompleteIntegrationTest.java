@@ -57,19 +57,26 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-  @Autowired private LaunchService launchService;
+  @Autowired
+  private LaunchService launchService;
 
-  @Autowired private TaskExecutionService taskExecutionService;
+  @Autowired
+  private TaskExecutionService taskExecutionService;
 
-  @Autowired private JobInstanceMapper jobInstanceMapper;
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
 
-  @Autowired private JobPartitionMapper jobPartitionMapper;
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
 
-  @Autowired private JobTaskMapper jobTaskMapper;
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
-  @Autowired private WorkerRegistryCache workerRegistryCache;
+  @Autowired
+  private WorkerRegistryCache workerRegistryCache;
 
   @BeforeEach
   void refreshWorkersForClaim() {
@@ -79,21 +86,19 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void worker_claim_renewLease_reportSuccess_taskAndPartitionAndInstanceReachSuccess() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     // 1) Launch
-    LaunchRequest launchRequest =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-wk-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-wk-" + seed.requestId())
+        .params(Map.of())
+        .build();
     LaunchResponse response = launchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
@@ -101,15 +106,13 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
     assertThat(jobInstance).isNotNull();
 
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+        new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
-    List<JobPartitionEntity> partitions =
-        jobPartitionMapper.selectByQuery(
-            new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
+    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
+        new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
     assertThat(partitions).isNotEmpty();
     JobPartitionEntity partition = partitions.get(0);
 
@@ -127,9 +130,8 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     assertThat(runningPartition.getCurrentInvocationId()).isNotBlank();
 
     // 3) Worker renews lease (simulates heartbeat / progress ping)
-    boolean renewed =
-        taskExecutionService.renewTaskLease(
-            TENANT, task.getId(), seed.workerCode(), runningPartition.getCurrentInvocationId());
+    boolean renewed = taskExecutionService.renewTaskLease(
+        TENANT, task.getId(), seed.workerCode(), runningPartition.getCurrentInvocationId());
     assertThat(renewed).isTrue();
 
     // A different worker should not be able to steal the lease
@@ -138,14 +140,13 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     assertThat(stolenByRogue).isFalse();
 
     // 4) Worker reports success (progress complete)
-    TaskOutcomeCommand successOutcome =
-        TaskOutcomeCommand.builder()
-            .tenantId(TENANT)
-            .taskId(task.getId())
-            .success(true)
-            .resultSummary("{\"records\":100,\"status\":\"processed\"}")
-            .partitionInvocationId(runningPartition.getCurrentInvocationId())
-            .build();
+    TaskOutcomeCommand successOutcome = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(true)
+        .resultSummary("{\"records\":100,\"status\":\"processed\"}")
+        .partitionInvocationId(runningPartition.getCurrentInvocationId())
+        .build();
     taskExecutionService.applyTaskOutcome(successOutcome);
 
     // 5) Verify task SUCCESS
@@ -163,27 +164,24 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void secondWorkerClaim_afterFirstClaim_returnsSameTask_notASecondRunning() {
-    LaunchSeed seed =
-        LaunchIntegrationFixture.prepareLaunchWithWorker(
-            jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchRequest launchRequest2 =
-        LaunchRequest.builder()
-            .tenantId(TENANT)
-            .jobCode(seed.jobCode())
-            .bizDate(BIZ_DATE)
-            .triggerType(TriggerType.API)
-            .requestId(seed.requestId())
-            .traceId("trace-wk2-" + seed.requestId())
-            .params(Map.of())
-            .build();
+    LaunchRequest launchRequest2 = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-wk2-" + seed.requestId())
+        .params(Map.of())
+        .build();
     launchService.launch(launchRequest2);
 
     JobInstanceEntity jobInstance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+    List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+        new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 

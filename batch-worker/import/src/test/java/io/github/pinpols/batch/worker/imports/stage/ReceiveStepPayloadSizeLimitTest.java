@@ -18,9 +18,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class ReceiveStepPayloadSizeLimitTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
 
-  @Mock private BatchSecurityProperties batchSecurityProperties;
+  @Mock
+  private BatchSecurityProperties batchSecurityProperties;
 
   private ReceiveStep receiveStep;
 
@@ -29,9 +31,8 @@ class ReceiveStepPayloadSizeLimitTest {
     io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties payloadProps =
         new io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties();
     payloadProps.setMaxPayloadSizeMb(1);
-    receiveStep =
-        new ReceiveStep(
-            runtimeRepository, batchSecurityProperties, new ObjectMapper(), payloadProps);
+    receiveStep = new ReceiveStep(
+        runtimeRepository, batchSecurityProperties, new ObjectMapper(), payloadProps);
     // 强制 1 MB（绕开 heap-ratio 计算结果可能更小的情况）
     ReflectionTestUtils.setField(receiveStep, "maxPayloadSizeBytes", 1L * 1024 * 1024);
   }

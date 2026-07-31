@@ -33,15 +33,14 @@ class WorkerStartupRuntimeAuditTest {
     outbox.setPublishingStaleRecoverAfterMillis(120_000);
     WorkerReportOutboxRepository repository = mock(WorkerReportOutboxRepository.class);
     when(repository.stats(anyLong())).thenReturn(new WorkerReportOutboxStats(2, 1, 0, 0));
-    WorkerStartupRuntimeAudit audit =
-        new WorkerStartupRuntimeAudit(
-            provider(workerConfiguration()),
-            runtimeState,
-            execution,
-            outbox,
-            provider(repository),
-            provider(List.of()),
-            new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+    WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(
+        provider(workerConfiguration()),
+        runtimeState,
+        execution,
+        outbox,
+        provider(repository),
+        provider(List.of()),
+        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
 
     Map<String, Object> details = audit.auditCore();
 
@@ -60,15 +59,14 @@ class WorkerStartupRuntimeAuditTest {
     runtimeState.put(registration);
     WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
     execution.setPoolSize(1);
-    WorkerStartupRuntimeAudit audit =
-        new WorkerStartupRuntimeAudit(
-            provider(workerConfiguration()),
-            runtimeState,
-            execution,
-            new WorkerReportOutboxProperties(),
-            absentProvider(),
-            provider(List.of()),
-            new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "2"));
+    WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(
+        provider(workerConfiguration()),
+        runtimeState,
+        execution,
+        new WorkerReportOutboxProperties(),
+        absentProvider(),
+        provider(List.of()),
+        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "2"));
 
     Map<String, Object> details = audit.auditCore();
 

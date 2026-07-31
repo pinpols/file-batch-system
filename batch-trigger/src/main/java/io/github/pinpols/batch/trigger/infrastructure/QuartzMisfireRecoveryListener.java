@@ -47,16 +47,16 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
         || trigger.getNextFireTime() == null) {
       return;
     }
-    Trigger recovery =
-        TriggerBuilder.newTrigger()
-            .withIdentity("misfire-recovery-" + UUID.randomUUID(), RECOVERY_GROUP)
-            .forJob(trigger.getJobKey())
-            .usingJobData(
-                QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME, trigger.getNextFireTime().getTime())
-            .startNow()
-            .withSchedule(
-                SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
-            .build();
+    Trigger recovery = TriggerBuilder.newTrigger()
+        .withIdentity("misfire-recovery-" + UUID.randomUUID(), RECOVERY_GROUP)
+        .forJob(trigger.getJobKey())
+        .usingJobData(
+            QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME,
+            trigger.getNextFireTime().getTime())
+        .startNow()
+        .withSchedule(
+            SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
+        .build();
     try {
       schedulerSupplier.get().scheduleJob(recovery);
       log.info(

@@ -126,10 +126,9 @@ public class DispatchChannelCircuitBreaker {
 
   /** 返回当前处于熔断(OPEN)状态的渠道数量。HALF_OPEN 不计入(已在试探恢复中)。 */
   public int currentOpenCircuits() {
-    return (int)
-        registry.getAllCircuitBreakers().stream()
-            .filter(cb -> cb.getState() == CircuitBreaker.State.OPEN)
-            .count();
+    return (int) registry.getAllCircuitBreakers().stream()
+        .filter(cb -> cb.getState() == CircuitBreaker.State.OPEN)
+        .count();
   }
 
   /** 轻量标记异常:无消息、不填栈,仅用于把渠道投递失败喂给 R4J 的 onError。 */

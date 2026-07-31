@@ -26,34 +26,31 @@ class DefaultConsoleReportExcelApplicationServiceTest {
     ConsoleConfigApplicationService configService = mock(ConsoleConfigApplicationService.class);
     ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
     io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient
-        orchestratorInternalRestClient =
-            mock(
-                io.github.pinpols.batch.console.domain.ops.infrastructure
-                    .OrchestratorInternalRestClient.class);
+        orchestratorInternalRestClient = mock(
+            io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient
+                .class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
             configService, queryService, orchestratorInternalRestClient, dateTimeSupport());
     when(configService.configReleases(any()))
-        .thenReturn(
-            List.of(
-                new ConsoleConfigReleaseResponse(
-                    1L,
-                    "t1",
-                    "FILE",
-                    "cfg1",
-                    "Config 1",
-                    "DRAFT",
-                    1,
-                    "{}",
-                    "{}",
-                    BatchDateTimeSupport.utcNow(),
-                    BatchDateTimeSupport.utcNow(),
-                    null,
-                    null,
-                    "u1",
-                    "u1",
-                    BatchDateTimeSupport.utcNow(),
-                    BatchDateTimeSupport.utcNow())));
+        .thenReturn(List.of(new ConsoleConfigReleaseResponse(
+            1L,
+            "t1",
+            "FILE",
+            "cfg1",
+            "Config 1",
+            "DRAFT",
+            1,
+            "{}",
+            "{}",
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow(),
+            null,
+            null,
+            "u1",
+            "u1",
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow())));
 
     // R2-P1-9: 返回类型已切到 StreamingResponseBody；通过 lambda 写出到 ByteArrayOutputStream 再校验
     var response = service.exportConfigReleases(new ConfigReleaseQueryRequest());

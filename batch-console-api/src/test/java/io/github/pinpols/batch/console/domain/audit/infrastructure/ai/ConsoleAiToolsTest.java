@@ -30,8 +30,11 @@ class ConsoleAiToolsTest {
 
   private static final String TENANT = "tenant-1";
 
-  @Mock private ConsoleQueryApplicationService queryService;
-  @Mock private ConsoleClusterDiagnosticService diagnosticService;
+  @Mock
+  private ConsoleQueryApplicationService queryService;
+
+  @Mock
+  private ConsoleClusterDiagnosticService diagnosticService;
 
   private ConsoleAiTools tools() {
     return new ConsoleAiTools(TENANT, queryService, diagnosticService, 10);
@@ -91,24 +94,22 @@ class ConsoleAiToolsTest {
 
   @Test
   void getJobExecutionLogsBindsTenantAndInstance() {
-    PageResponse<ConsoleJobExecutionLogResponse> page =
-        new PageResponse<>(
-            1,
-            1,
-            10,
-            List.of(
-                new ConsoleJobExecutionLogResponse(
-                    1L,
-                    TENANT,
-                    42L,
-                    7L,
-                    "ERROR",
-                    "EXEC",
-                    "trace-1",
-                    "NPE at line 10",
-                    null,
-                    null,
-                    Instant.now())));
+    PageResponse<ConsoleJobExecutionLogResponse> page = new PageResponse<>(
+        1,
+        1,
+        10,
+        List.of(new ConsoleJobExecutionLogResponse(
+            1L,
+            TENANT,
+            42L,
+            7L,
+            "ERROR",
+            "EXEC",
+            "trace-1",
+            "NPE at line 10",
+            null,
+            null,
+            Instant.now())));
     when(queryService.jobExecutionLogs(any())).thenReturn(page);
 
     String out = tools().getJobExecutionLogs(42L);
@@ -203,9 +204,8 @@ class ConsoleAiToolsTest {
   @Test
   void getOpenAlertsBindsTenantAndOpenStatus() {
     when(queryService.alertEvents(any()))
-        .thenReturn(
-            new PageResponse<>(
-                1, 1, 10, List.of(alert(5L, "JOB_SLA_VIOLATION", "CRITICAL", "OPEN", 7))));
+        .thenReturn(new PageResponse<>(
+            1, 1, 10, List.of(alert(5L, "JOB_SLA_VIOLATION", "CRITICAL", "OPEN", 7))));
 
     String out = tools().getOpenAlerts();
 
@@ -231,9 +231,8 @@ class ConsoleAiToolsTest {
   @Test
   void getRecentAlertsBindsTenantWithoutStatusFilter() {
     when(queryService.alertEvents(any()))
-        .thenReturn(
-            new PageResponse<>(
-                1, 1, 10, List.of(alert(9L, "ASSET_FRESHNESS_STALE", "WARN", "ACKED", 2))));
+        .thenReturn(new PageResponse<>(
+            1, 1, 10, List.of(alert(9L, "ASSET_FRESHNESS_STALE", "WARN", "ACKED", 2))));
 
     String out = tools().getRecentAlerts();
 

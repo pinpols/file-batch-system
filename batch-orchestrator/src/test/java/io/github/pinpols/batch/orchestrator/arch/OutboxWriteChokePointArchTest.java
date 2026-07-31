@@ -39,26 +39,21 @@ class OutboxWriteChokePointArchTest {
     }
     List<String> violations = new ArrayList<>();
     try (Stream<Path> files = Files.walk(mainDir)) {
-      files
-          .filter(p -> p.toString().endsWith(".java"))
-          .forEach(
-              p -> {
-                String src;
-                try {
-                  src = Files.readString(p);
-                } catch (IOException ex) {
-                  violations.add(p + " — read failed");
-                  return;
-                }
-                if (src.contains(INSERT_CALL)
-                    && !p.getFileName().toString().equals(ALLOWED_WRITER)) {
-                  violations.add(
-                      p.getFileName()
-                          + " — 直接调用 outboxEventMapper.insert(,绕过 OutboxDomainEventPublisher 的 NOT"
-                          + " EXISTS 去重(分区下 outbox 幂等承重在此 choke point,见"
-                          + " partition-idempotency-decision.md)");
-                }
-              });
+      files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+        String src;
+        try {
+          src = Files.readString(p);
+        } catch (IOException ex) {
+          violations.add(p + " — read failed");
+          return;
+        }
+        if (src.contains(INSERT_CALL) && !p.getFileName().toString().equals(ALLOWED_WRITER)) {
+          violations.add(p.getFileName()
+              + " — 直接调用 outboxEventMapper.insert(,绕过 OutboxDomainEventPublisher 的 NOT"
+              + " EXISTS 去重(分区下 outbox 幂等承重在此 choke point,见"
+              + " partition-idempotency-decision.md)");
+        }
+      });
     }
     assertThat(violations)
         .as("outbox_event 写入必须只经 OutboxDomainEventPublisher(NOT EXISTS 去重 choke point)")

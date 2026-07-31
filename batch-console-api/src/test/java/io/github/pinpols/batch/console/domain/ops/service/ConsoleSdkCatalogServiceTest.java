@@ -51,29 +51,24 @@ class ConsoleSdkCatalogServiceTest {
 
   @Test
   void docsIndexNonEmptyAndPointsAtRealFiles() {
-    assertThat(service.catalog().docs())
-        .isNotEmpty()
-        .allSatisfy(
-            d -> {
-              assertThat(d.title()).isNotBlank();
-              assertThat(Files.exists(repoRoot().resolve(d.path())))
-                  .as("doc path 必须指向真实文件: %s", d.path())
-                  .isTrue();
-            });
+    assertThat(service.catalog().docs()).isNotEmpty().allSatisfy(d -> {
+      assertThat(d.title()).isNotBlank();
+      assertThat(Files.exists(repoRoot().resolve(d.path())))
+          .as("doc path 必须指向真实文件: %s", d.path())
+          .isTrue();
+    });
   }
 
   @Test
   void allFiveLanguagesPresent() {
     assertThat(languagesByLang().keySet())
         .containsExactlyInAnyOrder("java", "python", "typescript", "rust", "go");
-    assertThat(service.catalog().languages())
-        .allSatisfy(
-            l -> {
-              assertThat(l.artifact()).isNotBlank();
-              assertThat(l.latestVersion()).isNotBlank();
-              assertThat(l.installSnippet()).isNotBlank();
-              assertThat(l.conformanceStatus()).isEqualTo("PER_PR_PARITY_ENFORCED");
-            });
+    assertThat(service.catalog().languages()).allSatisfy(l -> {
+      assertThat(l.artifact()).isNotBlank();
+      assertThat(l.latestVersion()).isNotBlank();
+      assertThat(l.installSnippet()).isNotBlank();
+      assertThat(l.conformanceStatus()).isEqualTo("PER_PR_PARITY_ENFORCED");
+    });
   }
 
   @Test

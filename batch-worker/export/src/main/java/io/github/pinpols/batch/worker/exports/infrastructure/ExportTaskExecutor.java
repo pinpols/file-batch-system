@@ -54,9 +54,8 @@ public class ExportTaskExecutor implements BatchTaskExecutor {
 
   @Override
   public TaskResult execute(TaskContext ctx) {
-    StepExecutionRequest req =
-        new StepExecutionRequest(
-            ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
+    StepExecutionRequest req = new StepExecutionRequest(
+        ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
     StepExecutionResponse resp = delegate.execute(req);
     if (resp.success()) {
       return TaskResult.ok(resp.message() == null ? "ok" : resp.message());

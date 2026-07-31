@@ -35,70 +35,57 @@ class KafkaLatencyToxicIT extends AbstractChaosIntegrationTest {
 
     // 故障消除时(无 toxic)同样配置必须能成功发出 — 防止"用例本身不可达"误报
     try (KafkaProducer<String, String> producer = new KafkaProducer<>(baseConfig)) {
-      RecordMetadata md =
-          producer
-              .send(new ProducerRecord<>("chaos-kafka-it", "k", "warmup"))
-              .get(10, TimeUnit.SECONDS);
+      RecordMetadata md = producer
+          .send(new ProducerRecord<>("chaos-kafka-it", "k", "warmup"))
+          .get(10, TimeUnit.SECONDS);
       assertThat(md).isNotNull();
     }
 
     // 注入 3s 单向延迟 — 远超 producer 配置的 2s delivery-timeout,send 必抛 TimeoutException
-    withLatency(
-        ProxyTarget.KAFKA,
-        Duration.ofMillis(3000),
-        () -> {
-          try (KafkaProducer<String, String> producer = new KafkaProducer<>(baseConfig)) {
-            assertThatThrownBy(
-                    () ->
-                        producer
-                            .send(new ProducerRecord<>("chaos-kafka-it", "k", "latency-payload"))
-                            .get(10, TimeUnit.SECONDS))
-                .isInstanceOf(ExecutionException.class)
-                .hasRootCauseInstanceOf(org.apache.kafka.common.errors.TimeoutException.class);
-          }
-        });
+    withLatency(ProxyTarget.KAFKA, Duration.ofMillis(3000), () -> {
+      try (KafkaProducer<String, String> producer = new KafkaProducer<>(baseConfig)) {
+        assertThatThrownBy(() -> producer
+                .send(new ProducerRecord<>("chaos-kafka-it", "k", "latency-payload"))
+                .get(10, TimeUnit.SECONDS))
+            .isInstanceOf(ExecutionException.class)
+            .hasRootCauseInstanceOf(org.apache.kafka.common.errors.TimeoutException.class);
+      }
+    });
   }
 
   @Test
   @DisplayName("故障消除后立即再发 → producer 恢复正常(验自愈路径,熔断 half-open 探测的 infra 前置条件)")
   void shouldRecoverImmediatelyAfterLatencyRemoved() throws Exception {
     // 注入延迟,确认失败(3s 单向 > 2s delivery-timeout)
-    withLatency(
-        ProxyTarget.KAFKA,
-        Duration.ofMillis(3000),
-        () -> {
-          try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerConfig())) {
-            assertThatThrownBy(
-                    () ->
-                        producer
-                            .send(new ProducerRecord<>("chaos-kafka-it", "k", "fail"))
-                            .get(10, TimeUnit.SECONDS))
-                .isInstanceOf(ExecutionException.class);
-          }
-        });
+    withLatency(ProxyTarget.KAFKA, Duration.ofMillis(3000), () -> {
+      try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerConfig())) {
+        assertThatThrownBy(() -> producer
+                .send(new ProducerRecord<>("chaos-kafka-it", "k", "fail"))
+                .get(10, TimeUnit.SECONDS))
+            .isInstanceOf(ExecutionException.class);
+      }
+    });
 
     // withLatency 退出后 toxic 已移除 — 立即重试必须成功
     try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerConfig())) {
-      RecordMetadata md =
-          producer
-              .send(new ProducerRecord<>("chaos-kafka-it", "k", "recovered"))
-              .get(10, TimeUnit.SECONDS);
+      RecordMetadata md = producer
+          .send(new ProducerRecord<>("chaos-kafka-it", "k", "recovered"))
+          .get(10, TimeUnit.SECONDS);
       assertThat(md.hasOffset()).isTrue();
     }
   }
 
   private Properties producerConfig() {
     Properties p = new Properties();
-    p.putAll(
-        Map.of(
-            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProxiedBootstrapServers(),
-            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-            ProducerConfig.ACKS_CONFIG, "1",
-            ProducerConfig.MAX_BLOCK_MS_CONFIG, "3000",
-            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000",
-            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "2000",
-            ProducerConfig.RETRIES_CONFIG, "0"));
+    p.putAll(Map.of(
+        ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProxiedBootstrapServers(),
+        ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+        ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+        ProducerConfig.ACKS_CONFIG, "1",
+        ProducerConfig.MAX_BLOCK_MS_CONFIG, "3000",
+        ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000",
+        ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "2000",
+        ProducerConfig.RETRIES_CONFIG, "0"));
     return p;
   }
 }

@@ -39,19 +39,16 @@ public class UpstreamReadinessChecker {
       return true;
     }
     try {
-      ReadinessResponse response =
-          orchestratorRestClient
-              .get()
-              .uri(
-                  builder ->
-                      builder
-                          .path("/internal/readiness/job")
-                          .queryParam("tenantId", tenantId)
-                          .queryParam("jobCode", upstreamJobCode)
-                          .queryParam("bizDate", bizDate)
-                          .build())
-              .retrieve()
-              .body(ReadinessResponse.class);
+      ReadinessResponse response = orchestratorRestClient
+          .get()
+          .uri(builder -> builder
+              .path("/internal/readiness/job")
+              .queryParam("tenantId", tenantId)
+              .queryParam("jobCode", upstreamJobCode)
+              .queryParam("bizDate", bizDate)
+              .build())
+          .retrieve()
+          .body(ReadinessResponse.class);
       return response != null && response.ready();
     } catch (RuntimeException e) {
       log.error(

@@ -31,9 +31,8 @@ class OutboundTrailerRecordTest {
   @Test
   @DisplayName("按 index 放 recordType/recordCount/controlTotal,fieldCount 由最大 index 推断")
   void buildValues_placesByIndex() {
-    Map<String, Object> tmpl =
-        Map.of(
-            "recordType", "T", "recordTypeIndex", 0, "recordCountIndex", 1, "controlTotalIndex", 2);
+    Map<String, Object> tmpl = Map.of(
+        "recordType", "T", "recordTypeIndex", 0, "recordCountIndex", 1, "controlTotalIndex", 2);
     assertThat(OutboundTrailerRecord.buildValues(tmpl, 1000L, new BigDecimal("50000000.00")))
         .containsExactly("T", "1000", "50000000.00");
   }

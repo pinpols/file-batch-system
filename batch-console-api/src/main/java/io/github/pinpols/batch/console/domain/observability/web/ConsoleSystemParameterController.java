@@ -43,11 +43,10 @@ public class ConsoleSystemParameterController {
   @GetMapping("/value")
   public CommonResponse<ConsoleSystemParameterValueResponse> getValue(
       @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
-    return responseFactory.success(
-        parameterService
-            .getValue(tenantId, key)
-            .map(v -> ConsoleSystemParameterValueResponse.of(key, v))
-            .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null)));
+    return responseFactory.success(parameterService
+        .getValue(tenantId, key)
+        .map(v -> ConsoleSystemParameterValueResponse.of(key, v))
+        .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null)));
   }
 
   @PutMapping

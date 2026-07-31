@@ -51,13 +51,11 @@ class ConsoleWebhookControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleWebhookController(
-                    webhookService, responseFactory, requestMetadataResolver))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleWebhookController(webhookService, responseFactory, requestMetadataResolver))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -92,12 +90,10 @@ class ConsoleWebhookControllerTest {
         .thenReturn(entity);
 
     mockMvc
-        .perform(
-            post("/api/console/webhooks")
-                .param("tenantId", "t1")
-                .contentType(APPLICATION_JSON)
-                .content(
-                    """
+        .perform(post("/api/console/webhooks")
+            .param("tenantId", "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
                     {
                       "name":"job-events",
                       "callbackUrl":"https://callback.example/webhook",

@@ -21,7 +21,8 @@ import org.springframework.boot.test.context.SpringBootTest;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private WorkerRegistryMapper workerRegistryMapper;
+  @Autowired
+  private WorkerRegistryMapper workerRegistryMapper;
 
   @Test
   void shouldSaveAndFindOnlineWorker() {
@@ -72,16 +73,14 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
     String uniqueGroup = "GROUP-IT-" + BatchDateTimeSupport.utcEpochMillis();
     WorkerRegistryEntity w1 = onlineWorker("t1", "w-grp-1-" + uniqueGroup, uniqueGroup);
     WorkerRegistryEntity w2 = onlineWorker("t1", "w-grp-2-" + uniqueGroup, uniqueGroup);
-    WorkerRegistryEntity w3 =
-        onlineWorker("t1", "w-offline-" + uniqueGroup, uniqueGroup)
-            .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity w3 = onlineWorker("t1", "w-offline-" + uniqueGroup, uniqueGroup)
+        .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
     workerRegistryMapper.saveLikeSdj(w1);
     workerRegistryMapper.saveLikeSdj(w2);
     workerRegistryMapper.saveLikeSdj(w3);
 
-    List<WorkerRegistryEntity> online =
-        workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
-            "t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
+    List<WorkerRegistryEntity> online = workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
+        "t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
 
     assertThat(online).hasSize(2);
     assertThat(online).allMatch(w -> WorkerRegistryStatus.ONLINE.code().equals(w.status()));
@@ -95,9 +94,8 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
     workerRegistryMapper.saveLikeSdj(w1);
     workerRegistryMapper.saveLikeSdj(w2);
 
-    long count =
-        workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
-            "t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
+    long count = workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
+        "t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
 
     assertThat(count).isEqualTo(2);
   }
@@ -105,14 +103,13 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldFindDrainingWorkers() {
     Instant pastDeadline = BatchDateTimeSupport.utcNow().minusSeconds(10);
-    WorkerRegistryEntity draining =
-        onlineWorker(
-                "t1", "worker-draining-search-" + BatchDateTimeSupport.utcEpochMillis(), "DEFAULT")
-            .withDrain(
-                WorkerRegistryStatus.DRAINING.code(),
-                BatchDateTimeSupport.utcNow().minusSeconds(60),
-                pastDeadline,
-                BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity draining = onlineWorker(
+            "t1", "worker-draining-search-" + BatchDateTimeSupport.utcEpochMillis(), "DEFAULT")
+        .withDrain(
+            WorkerRegistryStatus.DRAINING.code(),
+            BatchDateTimeSupport.utcNow().minusSeconds(60),
+            pastDeadline,
+            BatchDateTimeSupport.utcNow());
     workerRegistryMapper.saveLikeSdj(draining);
 
     List<WorkerRegistryEntity> drainingWorkers =

@@ -213,10 +213,9 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       }
       Duration requested = Duration.ofSeconds(sec);
       // 只允许缩短;请求 > default → 取 default(防业务越权拉长)
-      timeout =
-          requested.compareTo(props.getDefaultTimeout()) < 0
-              ? requested
-              : props.getDefaultTimeout();
+      timeout = requested.compareTo(props.getDefaultTimeout()) < 0
+          ? requested
+          : props.getDefaultTimeout();
     }
 
     // env
@@ -286,12 +285,11 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   private Path createIsolatedWorkdir(TaskContext ctx) {
     try {
       Files.createDirectories(props.getWorkdirBase());
-      String subdir =
-          String.format(
-              "%s-%s-%s",
-              safeForPath(ctx.tenantId()),
-              safeForPath(ctx.jobCode()),
-              UUID.randomUUID().toString().substring(0, 8));
+      String subdir = String.format(
+          "%s-%s-%s",
+          safeForPath(ctx.tenantId()),
+          safeForPath(ctx.jobCode()),
+          UUID.randomUUID().toString().substring(0, 8));
       Path dir = props.getWorkdirBase().resolve(subdir);
       Files.createDirectory(dir);
       return dir;
@@ -308,16 +306,13 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       return;
     }
     try (Stream<Path> paths = Files.walk(workdir)) {
-      paths
-          .sorted(Comparator.reverseOrder())
-          .forEach(
-              p -> {
-                try {
-                  Files.deleteIfExists(p);
-                } catch (IOException e) {
-                  log.warn("cleanup workdir failed: {}", p, e);
-                }
-              });
+      paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+        try {
+          Files.deleteIfExists(p);
+        } catch (IOException e) {
+          log.warn("cleanup workdir failed: {}", p, e);
+        }
+      });
     } catch (IOException e) {
       log.warn("cleanup workdir walk failed: {}", workdir, e);
     }
@@ -357,12 +352,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     String invocationId = nextInvocationId();
     try {
       // 异步读 stdout / stderr,防 buffer full block
-      Thread stdoutThread =
-          startReaderThread(
-              proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + invocationId);
-      Thread stderrThread =
-          startReaderThread(
-              proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + invocationId);
+      Thread stdoutThread = startReaderThread(
+          proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + invocationId);
+      Thread stderrThread = startReaderThread(
+          proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + invocationId);
 
       boolean finished = proc.waitFor(inv.timeout.toMillis(), TimeUnit.MILLISECONDS);
       stdoutThread.join(1000);
@@ -426,36 +419,35 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   private final ConcurrentHashMap<String, ReaderResult> readerResults = new ConcurrentHashMap<>();
 
   private Thread startReaderThread(InputStream in, int maxBytes, String name) {
-    Thread t =
-        new Thread(
-            () -> {
-              ByteArrayOutputStream buf = new ByteArrayOutputStream();
-              boolean truncated = false;
-              byte[] tmp = new byte[4096];
-              try {
-                int n;
-                while ((n = in.read(tmp)) != -1) {
-                  if (buf.size() + n > maxBytes) {
-                    int allowed = maxBytes - buf.size();
-                    if (allowed > 0) {
-                      buf.write(tmp, 0, allowed);
-                    }
-                    truncated = true;
-                    log.warn("{}: output truncated at {} bytes", name, maxBytes);
-                    // 继续 drain 防 pipe buffer 满阻塞 child
-                    while (in.read(tmp) != -1) {
-                      // discard
-                    }
-                    break;
-                  }
-                  buf.write(tmp, 0, n);
+    Thread t = new Thread(
+        () -> {
+          ByteArrayOutputStream buf = new ByteArrayOutputStream();
+          boolean truncated = false;
+          byte[] tmp = new byte[4096];
+          try {
+            int n;
+            while ((n = in.read(tmp)) != -1) {
+              if (buf.size() + n > maxBytes) {
+                int allowed = maxBytes - buf.size();
+                if (allowed > 0) {
+                  buf.write(tmp, 0, allowed);
                 }
-              } catch (IOException e) {
-                log.warn("{}: reader IO error: {}", name, e.getMessage());
+                truncated = true;
+                log.warn("{}: output truncated at {} bytes", name, maxBytes);
+                // 继续 drain 防 pipe buffer 满阻塞 child
+                while (in.read(tmp) != -1) {
+                  // discard
+                }
+                break;
               }
-              readerResults.put(name, new ReaderResult(buf.toString(), truncated));
-            },
-            name);
+              buf.write(tmp, 0, n);
+            }
+          } catch (IOException e) {
+            log.warn("{}: reader IO error: {}", name, e.getMessage());
+          }
+          readerResults.put(name, new ReaderResult(buf.toString(), truncated));
+        },
+        name);
     t.setDaemon(true);
     t.start();
     return t;

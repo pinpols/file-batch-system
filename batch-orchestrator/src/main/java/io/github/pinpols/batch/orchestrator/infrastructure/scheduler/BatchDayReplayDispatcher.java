@@ -69,7 +69,9 @@ public class BatchDayReplayDispatcher {
    * #dispatchSession} 直接 {@code dispatchEntry(...)} 同类调用,Spring AOP 不织入,REQUIRES_NEW 退化。 注入
    * {@code @Lazy self} 走代理,真正激活独立短事务,避免单条失败回滚整批。 见 CLAUDE.md Java 编码细则 #3 豁免清单。
    */
-  @Lazy @Autowired private BatchDayReplayDispatcher self;
+  @Lazy
+  @Autowired
+  private BatchDayReplayDispatcher self;
 
   @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
   @SchedulerLock(
@@ -117,9 +119,8 @@ public class BatchDayReplayDispatcher {
    * 避免单条失败回滚整批。
    */
   void dispatchSession(BatchDayReplaySessionEntity session) {
-    List<BatchDayReplayEntryEntity> pending =
-        entryMapper.selectBySessionAndStatus(
-            session.id(), ENTRY_PENDING, properties.getEntryBatchSize());
+    List<BatchDayReplayEntryEntity> pending = entryMapper.selectBySessionAndStatus(
+        session.id(), ENTRY_PENDING, properties.getEntryBatchSize());
     if (pending == null || pending.isEmpty()) {
       return;
     }
@@ -146,21 +147,20 @@ public class BatchDayReplayDispatcher {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void dispatchEntry(BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry) {
     Instant now = dateTimeSupport.nowInstant();
-    CompensationSubmitCommand command =
-        CompensationSubmitCommand.builder()
-            .tenantId(session.tenantId())
-            .compensationType("JOB")
-            .targetId(entry.sourceInstanceId())
-            .jobCode(entry.jobCode())
-            .bizDate(session.bizDate())
-            .reason("BATCH_DAY_REPLAY:" + session.reason())
-            .operatorId(session.requestedBy())
-            .resultPolicy(session.resultPolicy())
-            .configVersionPolicy(session.configVersionPolicy())
-            .configVersion(session.configVersion())
-            .replaySessionId(session.id())
-            .traceId(session.traceId())
-            .build();
+    CompensationSubmitCommand command = CompensationSubmitCommand.builder()
+        .tenantId(session.tenantId())
+        .compensationType("JOB")
+        .targetId(entry.sourceInstanceId())
+        .jobCode(entry.jobCode())
+        .bizDate(session.bizDate())
+        .reason("BATCH_DAY_REPLAY:" + session.reason())
+        .operatorId(session.requestedBy())
+        .resultPolicy(session.resultPolicy())
+        .configVersionPolicy(session.configVersionPolicy())
+        .configVersion(session.configVersion())
+        .replaySessionId(session.id())
+        .traceId(session.traceId())
+        .build();
     try {
       compensationService.submit(command);
       entryMapper.updateStatus(entry.id(), ENTRY_RUNNING, null, null, null, now, null, now);

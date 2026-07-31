@@ -38,7 +38,8 @@ public class CompensateDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
@@ -53,13 +54,12 @@ public class CompensateDispatchStep implements DispatchStageStep {
     }
     Map<String, Object> attrs = context.getAttributes();
     Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    int updated =
-        fileDispatchRepository.markCompensated(
-            context.getTenantId(),
-            fileId,
-            dispatchPayload.channelCode(),
-            "DISPATCH_COMPENSATED",
-            "compensated");
+    int updated = fileDispatchRepository.markCompensated(
+        context.getTenantId(),
+        fileId,
+        dispatchPayload.channelCode(),
+        "DISPATCH_COMPENSATED",
+        "compensated");
     if (updated <= 0) {
       return DispatchStageResult.failure(
           stage(),
@@ -77,18 +77,17 @@ public class CompensateDispatchStep implements DispatchStageStep {
     detailSummary.put("channelCode", dispatchPayload.channelCode());
     detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
     detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
-    runtimeRepository.appendAudit(
-        FileAuditParam.builder()
-            .fileId(fileId)
-            .tenantId(context.getTenantId())
-            .operationType("DISPATCH_COMPENSATE")
-            .operationResult("FAILED")
-            .operatorType("SYSTEM")
-            .operatorId(context.getWorkerId())
-            .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(null)
-            .detailSummary(detailSummary)
-            .build());
+    runtimeRepository.appendAudit(FileAuditParam.builder()
+        .fileId(fileId)
+        .tenantId(context.getTenantId())
+        .operationType("DISPATCH_COMPENSATE")
+        .operationResult("FAILED")
+        .operatorType("SYSTEM")
+        .operatorId(context.getWorkerId())
+        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .evidenceRef(null)
+        .detailSummary(detailSummary)
+        .build());
     return DispatchStageResult.success(stage());
   }
 }

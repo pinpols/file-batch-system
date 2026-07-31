@@ -58,16 +58,14 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    DataSource dataSource =
-        new DriverManagerDataSource(
-            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    DataSource dataSource = new DriverManagerDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
 
     jdbcTemplate.execute("drop schema if exists batch cascade");
     jdbcTemplate.execute("create schema batch");
     // 与 V6 pipeline_step_run 列/约束对齐(去掉对 pipeline_instance 的 FK 以自成一体,SELECT 不触父表)。
-    jdbcTemplate.execute(
-        """
+    jdbcTemplate.execute("""
         create table batch.pipeline_step_run (
           id                   bigserial primary key,
           pipeline_instance_id bigint       not null,

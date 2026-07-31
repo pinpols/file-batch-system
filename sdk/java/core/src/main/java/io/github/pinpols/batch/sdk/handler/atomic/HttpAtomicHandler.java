@@ -46,8 +46,9 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
 
   public HttpAtomicHandler(HttpAtomicConfig config) {
     this.config = Objects.requireNonNull(config, "config");
-    this.httpClient =
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(config.timeoutSeconds())).build();
+    this.httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(config.timeoutSeconds()))
+        .build();
   }
 
   @Override
@@ -83,14 +84,13 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     checkSsrf(host);
 
     // 构造请求
-    HttpRequest.Builder reqBuilder =
-        HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(config.timeoutSeconds()))
-            .method(
-                method,
-                body == null
-                    ? BodyPublishers.noBody()
-                    : BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+    HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri)
+        .timeout(Duration.ofSeconds(config.timeoutSeconds()))
+        .method(
+            method,
+            body == null
+                ? BodyPublishers.noBody()
+                : BodyPublishers.ofString(body, StandardCharsets.UTF_8));
     if (headers != null) {
       headers.forEach(reqBuilder::header);
     }

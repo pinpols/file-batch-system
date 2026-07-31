@@ -47,14 +47,13 @@ class BundleArrivalLauncherTest {
   void launchesBundleWhenGroupCarriesBundleJobCode() {
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-1", "trace-1"));
-    List<Map<String, Object>> groupFiles =
-        List.of(
-            file(
-                101,
-                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"),
-            file(
-                102,
-                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_CUST\"}"));
+    List<Map<String, Object>> groupFiles = List.of(
+        file(
+            101,
+            "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"),
+        file(
+            102,
+            "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_CUST\"}"));
 
     launcher.launchIfBundle("t1", "bundle-daily", groupFiles);
 
@@ -82,12 +81,9 @@ class BundleArrivalLauncherTest {
     // ADR-046 Phase3:分发束——文件到达带 bundleTargetRef(下游渠道),emit {sourceFileId, targetRef}
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-2", "trace-2"));
-    List<Map<String, Object>> groupFiles =
-        List.of(
-            file(
-                201, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_SFTP\"}"),
-            file(
-                202, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_OSS\"}"));
+    List<Map<String, Object>> groupFiles = List.of(
+        file(201, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_SFTP\"}"),
+        file(202, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_OSS\"}"));
 
     launcher.launchIfBundle("t1", "dispatch-eod", groupFiles);
 
@@ -114,12 +110,10 @@ class BundleArrivalLauncherTest {
     // {templateCode}(无 sourceFileId)。
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-3", "trace-3"));
-    List<Map<String, Object>> groupFiles =
-        List.of(
-            file(
-                301,
-                "{\"bundleJobCode\":\"BUNDLE_EXPORT_EOD\","
-                    + "\"bundleExportTemplates\":[\"EXP_RISK\",\"EXP_TRADE\"]}"));
+    List<Map<String, Object>> groupFiles = List.of(file(
+        301,
+        "{\"bundleJobCode\":\"BUNDLE_EXPORT_EOD\","
+            + "\"bundleExportTemplates\":[\"EXP_RISK\",\"EXP_TRADE\"]}"));
 
     launcher.launchIfBundle("t1", "export-eod", groupFiles);
 
@@ -166,11 +160,8 @@ class BundleArrivalLauncherTest {
   void propagatesLaunchExceptionSoArrivalGroupCanRetry() {
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenThrow(new RuntimeException("launch boom"));
-    List<Map<String, Object>> groupFiles =
-        List.of(
-            file(
-                101,
-                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<Map<String, Object>> groupFiles = List.of(file(
+        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(RuntimeException.class)
@@ -179,10 +170,9 @@ class BundleArrivalLauncherTest {
 
   @Test
   void rejectsMixedBundleJobCodeInSameArrivalGroup() {
-    List<Map<String, Object>> groupFiles =
-        List.of(
-            file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_A\",\"bundleTemplateCode\":\"TPL_A\"}"),
-            file(102, "{\"bundleJobCode\":\"BUNDLE_IMPORT_B\",\"bundleTemplateCode\":\"TPL_B\"}"));
+    List<Map<String, Object>> groupFiles = List.of(
+        file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_A\",\"bundleTemplateCode\":\"TPL_A\"}"),
+        file(102, "{\"bundleJobCode\":\"BUNDLE_IMPORT_B\",\"bundleTemplateCode\":\"TPL_B\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(IllegalStateException.class)
@@ -192,12 +182,9 @@ class BundleArrivalLauncherTest {
 
   @Test
   void rejectsBindingWithoutBundleJobCodeWhenGroupIsBundle() {
-    List<Map<String, Object>> groupFiles =
-        List.of(
-            file(
-                101,
-                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_A\"}"),
-            file(102, "{\"bundleTemplateCode\":\"TPL_B\"}"));
+    List<Map<String, Object>> groupFiles = List.of(
+        file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_A\"}"),
+        file(102, "{\"bundleTemplateCode\":\"TPL_B\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(IllegalStateException.class)

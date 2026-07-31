@@ -92,11 +92,10 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     this.dispatcher = dispatcher;
     this.lockingTaskExecutor = lockingTaskExecutor;
     this.properties = properties;
-    this.giveUpCounter =
-        Counter.builder("batch_webhook_delivery_give_up_total")
-            .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
-            .tags(Tags.empty())
-            .register(meterRegistry);
+    this.giveUpCounter = Counter.builder("batch_webhook_delivery_give_up_total")
+        .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
+        .tags(Tags.empty())
+        .register(meterRegistry);
   }
 
   @Override
@@ -105,19 +104,16 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       return;
     }
     stopping.set(false);
-    executor =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "webhook-delivery-relay");
-              t.setDaemon(true);
-              return t;
-            });
-    scheduledTask =
-        executor.scheduleWithFixedDelay(
-            this::poll,
-            properties.getPollIntervalMillis(),
-            properties.getPollIntervalMillis(),
-            TimeUnit.MILLISECONDS);
+    executor = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "webhook-delivery-relay");
+      t.setDaemon(true);
+      return t;
+    });
+    scheduledTask = executor.scheduleWithFixedDelay(
+        this::poll,
+        properties.getPollIntervalMillis(),
+        properties.getPollIntervalMillis(),
+        TimeUnit.MILLISECONDS);
     log.info(
         "WebhookDeliveryRelay 已启动:poll={}ms batch={} absoluteMax={}",
         properties.getPollIntervalMillis(),

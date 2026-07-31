@@ -59,9 +59,11 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired SqlTemplateExportDataPlugin sqlTemplatePlugin;
+  @Autowired
+  SqlTemplateExportDataPlugin sqlTemplatePlugin;
 
-  @Autowired GenericJdbcMappedExportDataPlugin jdbcMappedPlugin;
+  @Autowired
+  GenericJdbcMappedExportDataPlugin jdbcMappedPlugin;
 
   @BeforeEach
   void setTenantContext() {
@@ -90,8 +92,7 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
       conn.setAutoCommit(false);
 
       // --- sql_template 测试表 ---
-      stmt.execute(
-          """
+      stmt.execute("""
           CREATE TABLE IF NOT EXISTS biz.slice_demo (
               id        BIGINT PRIMARY KEY,
               tenant_id VARCHAR(64)  NOT NULL,
@@ -118,25 +119,21 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
 
       // --- jdbc_mapped 测试：biz.settlement_batch + biz.settlement_detail ---
       // 插入一条 batch（id = BATCH_ID_SEED 确保不与其他 IT 冲突）
-      stmt.execute(
-          """
+      stmt.execute("""
           INSERT INTO biz.settlement_batch
               (id, tenant_id, batch_no, biz_date, accounting_period)
           VALUES
               (%d, '%s', '%s', '2024-01-01', '2024-01')
           ON CONFLICT DO NOTHING
-          """
-              .formatted(BATCH_ID_SEED, TENANT_ID, "JDBC-MAPPED-BATCH"));
+          """.formatted(BATCH_ID_SEED, TENANT_ID, "JDBC-MAPPED-BATCH"));
 
       // 清理旧明细（幂等）
       stmt.execute("DELETE FROM biz.settlement_detail WHERE batch_id = " + BATCH_ID_SEED);
 
       // 批量插入 1000 条明细
-      StringBuilder detailBulk =
-          new StringBuilder(
-              "INSERT INTO biz.settlement_detail"
-                  + "(tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,"
-                  + " gross_amount, fee_amount, net_amount) VALUES ");
+      StringBuilder detailBulk = new StringBuilder("INSERT INTO biz.settlement_detail"
+          + "(tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,"
+          + " gross_amount, fee_amount, net_amount) VALUES ");
       for (int i = 1; i <= ROW_COUNT; i++) {
         detailBulk
             .append("('")
@@ -167,10 +164,9 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
   void sqlTemplate_fourPartitions_disjointAndComplete() throws Exception {
     // 准备: templateConfig — SELECT id FROM biz.slice_demo WHERE tenant_id=:tenantId AND
     // batch_no=:batchNo
-    Map<String, Object> templateConfig =
-        Map.of(
-            "default_query_sql",
-            "SELECT id FROM biz.slice_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo");
+    Map<String, Object> templateConfig = Map.of(
+        "default_query_sql",
+        "SELECT id FROM biz.slice_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo");
 
     // 执行: 收集各片 id 集合
     List<Set<Object>> partitions =
@@ -188,17 +184,16 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
   @DisplayName("jdbc_mapped: 4 片无重叠且合集恰好等于全量 1000 行")
   void jdbcMapped_fourPartitions_disjointAndComplete() throws Exception {
     // 准备: templateConfig — biz.settlement_batch + biz.settlement_detail
-    Map<String, Object> jdbcMappedSpec =
-        Map.of(
-            "schema", "biz",
-            "batchTable", "settlement_batch",
-            "batchTenantColumn", "tenant_id",
-            "batchNoColumn", "batch_no",
-            "batchSelectColumns", List.of("id", "batch_no", "tenant_id"),
-            "detailTable", "settlement_detail",
-            "detailFkColumn", "batch_id",
-            "detailOrderByColumn", "id",
-            "detailSelectColumns", List.of("id", "batch_id", "customer_no"));
+    Map<String, Object> jdbcMappedSpec = Map.of(
+        "schema", "biz",
+        "batchTable", "settlement_batch",
+        "batchTenantColumn", "tenant_id",
+        "batchNoColumn", "batch_no",
+        "batchSelectColumns", List.of("id", "batch_no", "tenant_id"),
+        "detailTable", "settlement_detail",
+        "detailFkColumn", "batch_id",
+        "detailOrderByColumn", "id",
+        "detailSelectColumns", List.of("id", "batch_id", "customer_no"));
 
     Map<String, Object> templateConfig = Map.of("jdbc_mapped_export", jdbcMappedSpec);
 
@@ -235,16 +230,15 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
     Map<String, Object> snapshot = new LinkedHashMap<>();
 
     while (true) {
-      ExportDataContext ctx =
-          new ExportDataContext(
-              TENANT_ID,
-              "JOB",
-              BATCH_NO,
-              "TPL",
-              templateConfig,
-              snapshot,
-              partitionNo,
-              PARTITION_COUNT);
+      ExportDataContext ctx = new ExportDataContext(
+          TENANT_ID,
+          "JOB",
+          BATCH_NO,
+          "TPL",
+          templateConfig,
+          snapshot,
+          partitionNo,
+          PARTITION_COUNT);
 
       ExportDataPlugin.DetailPage page = plugin.loadDetailPage(ctx, batchId, PAGE_SIZE, cursor);
 

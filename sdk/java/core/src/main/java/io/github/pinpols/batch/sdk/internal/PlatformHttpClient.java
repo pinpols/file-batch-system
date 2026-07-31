@@ -35,10 +35,10 @@ public class PlatformHttpClient {
 
   public PlatformHttpClient(BatchPlatformClientConfig config) {
     this.config = config;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(config.getHttpTimeout()).build();
-    this.objectMapper =
-        new ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    this.httpClient =
+        HttpClient.newBuilder().connectTimeout(config.getHttpTimeout()).build();
+    this.objectMapper = new ObjectMapper()
+        .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   }
 
   /** POST /internal/workers/register — body schema = WorkerHeartbeatDto。 */
@@ -81,13 +81,12 @@ public class PlatformHttpClient {
     String url = config.getBaseUrl() + path;
     byte[] payload = objectMapper.writeValueAsBytes(body == null ? Map.of() : body);
 
-    HttpRequest.Builder req =
-        HttpRequest.newBuilder(URI.create(url))
-            .timeout(config.getHttpTimeout())
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
-            .header("X-Batch-Tenant-Id", config.getTenantId())
-            .POST(HttpRequest.BodyPublishers.ofByteArray(payload));
+    HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))
+        .timeout(config.getHttpTimeout())
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .header("X-Batch-Tenant-Id", config.getTenantId())
+        .POST(HttpRequest.BodyPublishers.ofByteArray(payload));
     if (config.getApiKey() != null && !config.getApiKey().isBlank()) {
       req.header("X-Batch-Api-Key", config.getApiKey());
       // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。

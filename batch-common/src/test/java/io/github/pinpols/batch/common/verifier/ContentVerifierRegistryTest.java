@@ -18,23 +18,19 @@ class ContentVerifierRegistryTest {
   void verifiersForFiltersByJobTypeAndStage() {
     ContentVerifier exportAlways =
         new StubVerifier("EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), null, VerifyResult.pass());
-    ContentVerifier exportFetchOnly =
-        new StubVerifier(
-            "EXPORT_FETCH_ROW", Set.of(JobType.EXPORT), "EXPORT_FETCH", VerifyResult.pass());
+    ContentVerifier exportFetchOnly = new StubVerifier(
+        "EXPORT_FETCH_ROW", Set.of(JobType.EXPORT), "EXPORT_FETCH", VerifyResult.pass());
     ContentVerifier importOnly =
         new StubVerifier("IMPORT_SCHEMA", Set.of(JobType.IMPORT), null, VerifyResult.pass());
 
-    ContentVerifierRegistry registry =
-        new ContentVerifierRegistry(
-            providerOf(exportAlways, exportFetchOnly, importOnly), providerOf(/* no meter */ ));
+    ContentVerifierRegistry registry = new ContentVerifierRegistry(
+        providerOf(exportAlways, exportFetchOnly, importOnly), providerOf(/* no meter */ ));
 
-    assertThat(
-            registry.verifiersFor(JobType.EXPORT, "EXPORT_FETCH").stream()
-                .map(ContentVerifier::code))
+    assertThat(registry.verifiersFor(JobType.EXPORT, "EXPORT_FETCH").stream()
+            .map(ContentVerifier::code))
         .containsExactlyInAnyOrder("EXPORT_NON_EMPTY", "EXPORT_FETCH_ROW");
-    assertThat(
-            registry.verifiersFor(JobType.EXPORT, "EXPORT_FINALIZE").stream()
-                .map(ContentVerifier::code))
+    assertThat(registry.verifiersFor(JobType.EXPORT, "EXPORT_FINALIZE").stream()
+            .map(ContentVerifier::code))
         .containsExactly("EXPORT_NON_EMPTY");
     assertThat(registry.verifiersFor(JobType.IMPORT, null).stream().map(ContentVerifier::code))
         .containsExactly("IMPORT_SCHEMA");
@@ -43,12 +39,11 @@ class ContentVerifierRegistryTest {
 
   @Test
   void runRecordsTimerAndFailureCounter() {
-    StubVerifier failing =
-        new StubVerifier(
-            "EXPORT_NON_EMPTY",
-            Set.of(JobType.EXPORT),
-            null,
-            VerifyResult.fail("EXPORT_FILE_EMPTY", "no rows"));
+    StubVerifier failing = new StubVerifier(
+        "EXPORT_NON_EMPTY",
+        Set.of(JobType.EXPORT),
+        null,
+        VerifyResult.fail("EXPORT_FILE_EMPTY", "no rows"));
     SimpleMeterRegistry meter = new SimpleMeterRegistry();
     ContentVerifierRegistry registry =
         new ContentVerifierRegistry(providerOf(failing), providerOf(meter));
@@ -57,42 +52,39 @@ class ContentVerifierRegistryTest {
 
     assertThat(result.passed()).isFalse();
     assertThat(result.code()).isEqualTo("EXPORT_FILE_EMPTY");
-    assertThat(
-            meter
-                .find("batch.verifier.duration")
-                .tag("code", "EXPORT_NON_EMPTY")
-                .tag("outcome", "fail")
-                .timer())
+    assertThat(meter
+            .find("batch.verifier.duration")
+            .tag("code", "EXPORT_NON_EMPTY")
+            .tag("outcome", "fail")
+            .timer())
         .isNotNull();
-    assertThat(
-            meter
-                .find("batch.verifier.failures")
-                .tag("code", "EXPORT_NON_EMPTY")
-                .tag("reason", "EXPORT_FILE_EMPTY")
-                .counter()
-                .count())
+    assertThat(meter
+            .find("batch.verifier.failures")
+            .tag("code", "EXPORT_NON_EMPTY")
+            .tag("reason", "EXPORT_FILE_EMPTY")
+            .counter()
+            .count())
         .isEqualTo(1.0);
   }
 
   @Test
   void runSwallowsExceptionAndRecordsErrorOutcome() {
-    ContentVerifier throwing =
-        new ContentVerifier() {
-          @Override
-          public String code() {
-            return "BAD";
-          }
+    ContentVerifier throwing = new ContentVerifier() {
+      @Override
+      public String code() {
+        return "BAD";
+      }
 
-          @Override
-          public Set<JobType> appliesTo() {
-            return Set.of(JobType.EXPORT);
-          }
+      @Override
+      public Set<JobType> appliesTo() {
+        return Set.of(JobType.EXPORT);
+      }
 
-          @Override
-          public VerifyResult verify(VerifyContext context) {
-            throw new IllegalStateException("boom");
-          }
-        };
+      @Override
+      public VerifyResult verify(VerifyContext context) {
+        throw new IllegalStateException("boom");
+      }
+    };
     SimpleMeterRegistry meter = new SimpleMeterRegistry();
     ContentVerifierRegistry registry =
         new ContentVerifierRegistry(providerOf(throwing), providerOf(meter));
@@ -101,7 +93,11 @@ class ContentVerifierRegistryTest {
 
     assertThat(result.passed()).isFalse();
     assertThat(result.code()).isEqualTo("BAD_EXCEPTION");
-    assertThat(meter.find("batch.verifier.duration").tag("outcome", "error").timer().count())
+    assertThat(meter
+            .find("batch.verifier.duration")
+            .tag("outcome", "error")
+            .timer()
+            .count())
         .isEqualTo(1L);
   }
 

@@ -47,28 +47,25 @@ public class DistributedLockAspect {
     String lockKey = resolveKey(ann, method, pjp.getArgs(), signature);
 
     Instant now = BatchDateTimeSupport.utcNow();
-    LockConfiguration config =
-        new LockConfiguration(
-            now,
-            lockKey,
-            Duration.ofSeconds(ann.leaseSeconds()),
-            Duration.ofSeconds(ann.atLeastSeconds()));
+    LockConfiguration config = new LockConfiguration(
+        now,
+        lockKey,
+        Duration.ofSeconds(ann.leaseSeconds()),
+        Duration.ofSeconds(ann.atLeastSeconds()));
 
     Throwable[] thrown = new Throwable[1];
     Object[] result = new Object[1];
-    LockingTaskExecutor.TaskResult<Object> taskResult =
-        lockingTaskExecutor.executeWithLock(
-            (LockingTaskExecutor.TaskWithResult<Object>)
-                () -> {
-                  try {
-                    result[0] = pjp.proceed();
-                    return result[0];
-                  } catch (Throwable t) {
-                    thrown[0] = t;
-                    return null;
-                  }
-                },
-            config);
+    LockingTaskExecutor.TaskResult<Object> taskResult = lockingTaskExecutor.executeWithLock(
+        (LockingTaskExecutor.TaskWithResult<Object>) () -> {
+          try {
+            result[0] = pjp.proceed();
+            return result[0];
+          } catch (Throwable t) {
+            thrown[0] = t;
+            return null;
+          }
+        },
+        config);
 
     if (thrown[0] != null) {
       throw thrown[0];

@@ -56,11 +56,10 @@ public class ConsoleTenantSelfServiceController {
       @RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     // 历史 wire：系统参数缺失时对应键不出现（record 用 @JsonInclude(NON_NULL) 省略 null 保持一致）。
-    return responseFactory.success(
-        new ConsoleTenantUsageSummaryResponse(
-            parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null),
-            parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null),
-            parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null)));
+    return responseFactory.success(new ConsoleTenantUsageSummaryResponse(
+        parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null),
+        parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null),
+        parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null)));
   }
 
   /** 提交配额扩容申请（记录为系统参数，等待管理员审批）。 */
@@ -72,10 +71,9 @@ public class ConsoleTenantSelfServiceController {
       @Valid @RequestBody QuotaChangeRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
     String requestKey = "tenant.quota-request." + dateTimeSupport.currentEpochMillis();
-    String requestValue =
-        String.format(
-            "{\"field\":\"%s\",\"requestedValue\":%d,\"reason\":\"%s\",\"operator\":\"%s\"}",
-            request.field(), request.requestedValue(), request.reason(), operator);
+    String requestValue = String.format(
+        "{\"field\":\"%s\",\"requestedValue\":%d,\"reason\":\"%s\",\"operator\":\"%s\"}",
+        request.field(), request.requestedValue(), request.reason(), operator);
     parameterService.upsert(
         tenantId, requestKey, requestValue, "Quota change request from " + operator, operator);
     return responseFactory.success(requestKey);

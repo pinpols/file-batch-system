@@ -80,11 +80,8 @@ class ConsoleArchivePolicyServiceTest {
     assertThatThrownBy(() -> service.upsert(invalid))
         .isInstanceOf(BizException.class)
         // i18n: BizException.getMessage() 返回 messageKey,改用 messageArgs 检查渲染前的 args 文本
-        .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getMessageArgs())
-                    .anyMatch(
-                        a -> a != null && a.toString().contains("target_table must be one of")));
+        .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs())
+            .anyMatch(a -> a != null && a.toString().contains("target_table must be one of")));
   }
 
   @Test

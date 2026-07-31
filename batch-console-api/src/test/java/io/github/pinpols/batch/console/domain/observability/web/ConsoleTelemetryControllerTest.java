@@ -35,11 +35,10 @@ class ConsoleTelemetryControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleTelemetryController(responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTelemetryController(responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   @Test
@@ -57,20 +56,18 @@ class ConsoleTelemetryControllerTest {
   @Test
   void rejectsEmptyEventsList() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/telemetry/events")
-                .contentType(APPLICATION_JSON)
-                .content("{\"app\":\"console\",\"events\":[]}"))
+        .perform(post("/api/console/telemetry/events")
+            .contentType(APPLICATION_JSON)
+            .content("{\"app\":\"console\",\"events\":[]}"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void rejectsMissingApp() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/telemetry/events")
-                .contentType(APPLICATION_JSON)
-                .content("{\"events\":[{\"type\":\"info\",\"name\":\"x\"}]}"))
+        .perform(post("/api/console/telemetry/events")
+            .contentType(APPLICATION_JSON)
+            .content("{\"events\":[{\"type\":\"info\",\"name\":\"x\"}]}"))
         .andExpect(status().isBadRequest());
   }
 }

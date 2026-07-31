@@ -74,9 +74,8 @@ class FailureClassifierTest {
     assertThat(classifier.classify(null, new DataIntegrityViolationException("duplicate key")))
         .isEqualTo(FailureClass.DATA_QUALITY);
     // 即使被包在更外层的运行时异常里,遍历 cause 链也要命中 DATA_QUALITY。
-    assertThat(
-            classifier.classify(
-                null, new RuntimeException("wrap", new DataIntegrityViolationException("uk"))))
+    assertThat(classifier.classify(
+            null, new RuntimeException("wrap", new DataIntegrityViolationException("uk"))))
         .isEqualTo(FailureClass.DATA_QUALITY);
   }
 

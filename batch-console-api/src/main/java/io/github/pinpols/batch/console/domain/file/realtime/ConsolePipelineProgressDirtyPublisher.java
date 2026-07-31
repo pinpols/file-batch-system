@@ -45,19 +45,18 @@ public class ConsolePipelineProgressDirtyPublisher {
   private static final String EVENT_TYPE = "pipeline-progress-dirty";
   private static final String REASON_STEP_PROGRESS = "STEP_PROGRESS";
   private static final int MAX_TRACKED_KEYS = 10_000;
-  private static final String DIRTY_QUERY =
-      "select pr.tenant_id,"
-          + " pr.pipeline_instance_id,"
-          + " pi.related_job_instance_id,"
-          + " max(pr.updated_at) as updated_at"
-          + " from batch.pipeline_progress pr"
-          + " join batch.pipeline_instance pi"
-          + "   on pi.tenant_id = pr.tenant_id"
-          + "  and pi.id = pr.pipeline_instance_id"
-          + " where pr.updated_at >= :since"
-          + " group by pr.tenant_id, pr.pipeline_instance_id, pi.related_job_instance_id"
-          + " order by max(pr.updated_at) asc"
-          + " limit :limit";
+  private static final String DIRTY_QUERY = "select pr.tenant_id,"
+      + " pr.pipeline_instance_id,"
+      + " pi.related_job_instance_id,"
+      + " max(pr.updated_at) as updated_at"
+      + " from batch.pipeline_progress pr"
+      + " join batch.pipeline_instance pi"
+      + "   on pi.tenant_id = pr.tenant_id"
+      + "  and pi.id = pr.pipeline_instance_id"
+      + " where pr.updated_at >= :since"
+      + " group by pr.tenant_id, pr.pipeline_instance_id, pi.related_job_instance_id"
+      + " order by max(pr.updated_at) asc"
+      + " limit :limit";
 
   private final NamedParameterJdbcTemplate jdbc;
   private final ConsoleRealtimeDomainEventPublisher eventPublisher;
@@ -92,13 +91,11 @@ public class ConsolePipelineProgressDirtyPublisher {
     throttleMillis = Math.max(intervalMillis, throttleMillis);
     batchSize = Math.max(1, Math.min(batchSize, 2_000));
 
-    scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "pipeline-progress-dirty-publisher");
-              t.setDaemon(true);
-              return t;
-            });
+    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "pipeline-progress-dirty-publisher");
+      t.setDaemon(true);
+      return t;
+    });
     scheduler.scheduleWithFixedDelay(
         this::pollSafely, initialDelayMillis, intervalMillis, TimeUnit.MILLISECONDS);
     log.info(
@@ -145,13 +142,12 @@ public class ConsolePipelineProgressDirtyPublisher {
 
   void pollOnce() {
     Instant since = lastSeen.minusMillis(lookbackOverlapMillis);
-    List<DirtyProgressRow> rows =
-        jdbc.query(
-            DIRTY_QUERY,
-            new MapSqlParameterSource()
-                .addValue("since", Timestamp.from(since))
-                .addValue("limit", batchSize),
-            this::mapDirtyProgressRow);
+    List<DirtyProgressRow> rows = jdbc.query(
+        DIRTY_QUERY,
+        new MapSqlParameterSource()
+            .addValue("since", Timestamp.from(since))
+            .addValue("limit", batchSize),
+        this::mapDirtyProgressRow);
     if (rows.isEmpty()) {
       return;
     }

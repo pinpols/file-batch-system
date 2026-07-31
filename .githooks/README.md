@@ -8,7 +8,7 @@ git config core.hooksPath .githooks
 
 ## 当前 hook
 
-### `pre-commit` — Spotless auto-format
+### `pre-commit` — Spotless auto-format（Palantir Java Format）
 
 每次 `git commit` 前：
 1. 检查 staged Java 文件

@@ -51,12 +51,11 @@ class ConsoleJobBundleControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleJobBundleController(applicationService, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleJobBundleController(applicationService, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   // @Idempotent 全局拦截器在 standalone MockMvc 不装;Idempotency 缺失场景见
@@ -65,17 +64,15 @@ class ConsoleJobBundleControllerTest {
   @Test
   void createShouldForwardToApplicationService() throws Exception {
     when(applicationService.create(any(JobBundleCreateRequest.class)))
-        .thenReturn(
-            new ConsoleJobBundleResultResponse(
-                "t1",
-                ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
-                new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
+        .thenReturn(new ConsoleJobBundleResultResponse(
+            "t1",
+            ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+            new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
     mockMvc
-        .perform(
-            post("/api/console/jobs/bundle/create")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"mode\":\"UPSERT\",\"bundle\":{}}"))
+        .perform(post("/api/console/jobs/bundle/create")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"mode\":\"UPSERT\",\"bundle\":{}}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     ArgumentCaptor<JobBundleCreateRequest> captor =
@@ -96,14 +93,12 @@ class ConsoleJobBundleControllerTest {
   void exportShouldReturnBundlePayload() throws Exception {
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     when(applicationService.exportBundle("t1", "JOB_A"))
-        .thenReturn(
-            new ConsoleJobBundleExportResponse(
-                "t1", "JOB_A", ConsoleJobBundleSummaryResponse.from(bundle), bundle));
+        .thenReturn(new ConsoleJobBundleExportResponse(
+            "t1", "JOB_A", ConsoleJobBundleSummaryResponse.from(bundle), bundle));
     mockMvc
-        .perform(
-            get("/api/console/jobs/bundle/export")
-                .param("tenantId", "t1")
-                .param("jobCode", "JOB_A"))
+        .perform(get("/api/console/jobs/bundle/export")
+            .param("tenantId", "t1")
+            .param("jobCode", "JOB_A"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.tenantId").value("t1"));
   }
@@ -112,22 +107,20 @@ class ConsoleJobBundleControllerTest {
   void importShouldRejectEmptyTargetTenantIds() throws Exception {
     // BE Request 上 targetTenantIds 是 @NotEmpty;空数组 → 400
     mockMvc
-        .perform(
-            post("/api/console/jobs/bundle/import")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
-                .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"targetTenantIds\":[],\"bundle\":{}}"))
+        .perform(post("/api/console/jobs/bundle/import")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"targetTenantIds\":[],\"bundle\":{}}"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void importShouldForwardToApplicationService() throws Exception {
     when(applicationService.importBundle(any(JobBundleImportRequest.class)))
-        .thenReturn(
-            new ConsoleJobBundleResultResponse(
-                "t1",
-                ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
-                new TenantConfigBatchInitResponse("op-1", 2, 2, 0, false, List.of())));
+        .thenReturn(new ConsoleJobBundleResultResponse(
+            "t1",
+            ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+            new TenantConfigBatchInitResponse("op-1", 2, 2, 0, false, List.of())));
     mockMvc
         .perform(
             post("/api/console/jobs/bundle/import")

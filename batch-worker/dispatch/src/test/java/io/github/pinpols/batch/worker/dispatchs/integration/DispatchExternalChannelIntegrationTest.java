@@ -59,11 +59,10 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final GenericContainer<?> SFTP_SERVER =
-      new GenericContainer<>(SFTP_IMAGE)
-          .withExposedPorts(22)
-          .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")
-          .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
+  private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(SFTP_IMAGE)
+      .withExposedPorts(22)
+      .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")
+      .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
 
   private static final GreenMail GREEN_MAIL = new GreenMail(ServerSetupTest.SMTP);
 
@@ -84,7 +83,8 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     GREEN_MAIL.stop();
   }
 
-  @Autowired private DispatchChannelGateway gateway;
+  @Autowired
+  private DispatchChannelGateway gateway;
 
   @Test
   void shouldDispatchFileToRealMinioObjectStorage() throws Exception {
@@ -104,30 +104,27 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
             .build(),
         RequestBody.fromBytes(content));
 
-    DispatchResult result =
-        dispatch(
-            tenantId,
-            Map.of(
-                "tenant_id", tenantId,
-                "channel_type", "OSS",
-                "channel_code", channelCode,
-                "oss_bucket", s3Bucket(),
-                "oss_object_name", targetObject),
-            fileRecord(sourceObject, "OSS", s3Bucket(), "input.txt", "text/plain"),
-            payload("file-oss", channelCode, "req-oss", "rc-oss"));
+    DispatchResult result = dispatch(
+        tenantId,
+        Map.of(
+            "tenant_id", tenantId,
+            "channel_type", "OSS",
+            "channel_code", channelCode,
+            "oss_bucket", s3Bucket(),
+            "oss_object_name", targetObject),
+        fileRecord(sourceObject, "OSS", s3Bucket(), "input.txt", "text/plain"),
+        payload("file-oss", channelCode, "req-oss", "rc-oss"));
 
     assertThat(result.success()).isTrue();
     assertThat(result.evidenceRef()).isEqualTo("oss://" + s3Bucket() + "/" + targetObject);
 
-    assertThat(
-            s3Client.headObject(
-                HeadObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build()))
+    assertThat(s3Client.headObject(
+            HeadObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build()))
         .isNotNull();
-    byte[] downloaded =
-        s3Client
-            .getObjectAsBytes(
-                GetObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build())
-            .asByteArray();
+    byte[] downloaded = s3Client
+        .getObjectAsBytes(
+            GetObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build())
+        .asByteArray();
     assertThat(downloaded).isEqualTo(content);
   }
 
@@ -141,22 +138,21 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     String remoteFileName = "dispatch-" + UUID.randomUUID() + ".txt";
     String remotePath = "/home/" + SFTP_USER + "/upload/" + remoteFileName;
 
-    DispatchResult result =
-        dispatch(
-            tenantId,
-            Map.ofEntries(
-                Map.entry("tenant_id", tenantId),
-                Map.entry("channel_type", "SFTP"),
-                Map.entry("channel_code", channelCode),
-                Map.entry("sftp_host", SFTP_SERVER.getHost()),
-                Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
-                Map.entry("sftp_user", SFTP_USER),
-                Map.entry("sftp_password", SFTP_PASSWORD),
-                Map.entry("sftp_remote_directory", "/upload/"),
-                Map.entry("sftp_remote_file_name", remoteFileName),
-                Map.entry("sftp_strict_host_key_checking", "no")),
-            fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain"),
-            payload("file-sftp", channelCode, "req-sftp", "rc-sftp"));
+    DispatchResult result = dispatch(
+        tenantId,
+        Map.ofEntries(
+            Map.entry("tenant_id", tenantId),
+            Map.entry("channel_type", "SFTP"),
+            Map.entry("channel_code", channelCode),
+            Map.entry("sftp_host", SFTP_SERVER.getHost()),
+            Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
+            Map.entry("sftp_user", SFTP_USER),
+            Map.entry("sftp_password", SFTP_PASSWORD),
+            Map.entry("sftp_remote_directory", "/upload/"),
+            Map.entry("sftp_remote_file_name", remoteFileName),
+            Map.entry("sftp_strict_host_key_checking", "no")),
+        fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain"),
+        payload("file-sftp", channelCode, "req-sftp", "rc-sftp"));
 
     assertThat(result.success()).isTrue();
     assertThat(result.evidenceRef()).contains("sftp://");
@@ -175,23 +171,22 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     byte[] content = ("mail-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
     Files.write(localFile, content);
 
-    DispatchResult result =
-        dispatch(
-            tenantId,
-            Map.ofEntries(
-                Map.entry("tenant_id", tenantId),
-                Map.entry("channel_type", "EMAIL"),
-                Map.entry("channel_code", channelCode),
-                Map.entry("smtp_host", "127.0.0.1"),
-                Map.entry("smtp_port", ServerSetupTest.SMTP.getPort()),
-                Map.entry("smtp_username", SMTP_USER),
-                Map.entry("smtp_password", SMTP_PASSWORD),
-                Map.entry("smtp_starttls", false),
-                Map.entry("mail_from", SMTP_USER),
-                Map.entry("mail_to", SMTP_RECIPIENT),
-                Map.entry("mail_subject", "Dispatch smoke " + channelCode)),
-            fileRecord(localFile.toString(), "LOCAL", null, "attachment.txt", "text/plain"),
-            payload("file-email", channelCode, "req-email", "rc-email"));
+    DispatchResult result = dispatch(
+        tenantId,
+        Map.ofEntries(
+            Map.entry("tenant_id", tenantId),
+            Map.entry("channel_type", "EMAIL"),
+            Map.entry("channel_code", channelCode),
+            Map.entry("smtp_host", "127.0.0.1"),
+            Map.entry("smtp_port", ServerSetupTest.SMTP.getPort()),
+            Map.entry("smtp_username", SMTP_USER),
+            Map.entry("smtp_password", SMTP_PASSWORD),
+            Map.entry("smtp_starttls", false),
+            Map.entry("mail_from", SMTP_USER),
+            Map.entry("mail_to", SMTP_RECIPIENT),
+            Map.entry("mail_subject", "Dispatch smoke " + channelCode)),
+        fileRecord(localFile.toString(), "LOCAL", null, "attachment.txt", "text/plain"),
+        payload("file-email", channelCode, "req-email", "rc-email"));
 
     assertThat(result.success()).isTrue();
     assertThat(result.evidenceRef()).isEqualTo("mailto:" + SMTP_RECIPIENT);
@@ -214,9 +209,8 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   private S3Client s3Client() {
     return S3Client.builder()
         .endpointOverride(URI.create(s3Endpoint()))
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .credentialsProvider(StaticCredentialsProvider.create(
+            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
         .forcePathStyle(true)
         .region(Region.US_EAST_1)
         .build();
@@ -268,8 +262,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
       Map<String, Object> channelConfig,
       Map<String, Object> fileRecord,
       DispatchPayload payload) {
-    return gateway.dispatch(
-        new DispatchCommand(
-            tenantId, "trace-" + UUID.randomUUID(), fileRecord, channelConfig, payload));
+    return gateway.dispatch(new DispatchCommand(
+        tenantId, "trace-" + UUID.randomUUID(), fileRecord, channelConfig, payload));
   }
 }

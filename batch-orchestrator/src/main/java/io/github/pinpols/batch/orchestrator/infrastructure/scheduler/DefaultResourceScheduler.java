@@ -227,15 +227,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     int tenantActivePartitions = resolveTenantActivePartitions(request);
     int queueActiveJobs = resolveQueueActiveJobs(request, queue);
     int queueActivePartitions = resolveQueueActivePartitions(request, queue);
-    long fairnessScore =
-        resolveFairnessScore(
-            new FairnessScoreContext(
-                new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight),
-                new FairnessLoad(
-                    tenantActiveJobs,
-                    tenantActivePartitions,
-                    queueActiveJobs,
-                    queueActivePartitions)));
+    long fairnessScore = resolveFairnessScore(new FairnessScoreContext(
+        new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight),
+        new FairnessLoad(
+            tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions)));
     fairnessScore += resolveAgingBonus(request);
     decision.setTenantWeight(tenantWeight);
     decision.setQueueWeight(queueWeight);
@@ -294,16 +289,14 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return 0;
     }
     String tenantId = request.getTenantId();
-    long count =
-        cachedCount(
-            "tp:" + tenantId,
-            () ->
-                jobPartitionMapper.countActiveByTenant(
-                    tenantId,
-                    PartitionStatus.WAITING.code(),
-                    PartitionStatus.READY.code(),
-                    PartitionStatus.RUNNING.code(),
-                    PartitionStatus.RETRYING.code()));
+    long count = cachedCount(
+        "tp:" + tenantId,
+        () -> jobPartitionMapper.countActiveByTenant(
+            tenantId,
+            PartitionStatus.WAITING.code(),
+            PartitionStatus.READY.code(),
+            PartitionStatus.RUNNING.code(),
+            PartitionStatus.RETRYING.code()));
     return safeNarrow(count);
   }
 
@@ -316,10 +309,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
     String tenantId = request.getTenantId();
     String queueCode = queue.queueCode();
-    long count =
-        cachedCount(
-            "qj:" + tenantId + ":" + queueCode,
-            () -> jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, queueCode));
+    long count = cachedCount(
+        "qj:" + tenantId + ":" + queueCode,
+        () -> jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, queueCode));
     return safeNarrow(count);
   }
 
@@ -333,19 +325,16 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
     String tenantId = request.getTenantId();
     String workerGroup = queue.workerGroup();
-    long count =
-        cachedCount(
-            "qp:" + tenantId + ":" + workerGroup,
-            () ->
-                jobPartitionMapper.countActiveByTenantAndWorkerGroup(
-                    CountActiveByGroupParam.builder()
-                        .tenantId(tenantId)
-                        .workerGroup(workerGroup)
-                        .waitingStatus(PartitionStatus.WAITING.code())
-                        .readyStatus(PartitionStatus.READY.code())
-                        .runningStatus(PartitionStatus.RUNNING.code())
-                        .retryingStatus(PartitionStatus.RETRYING.code())
-                        .build()));
+    long count = cachedCount(
+        "qp:" + tenantId + ":" + workerGroup,
+        () -> jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
+            .tenantId(tenantId)
+            .workerGroup(workerGroup)
+            .waitingStatus(PartitionStatus.WAITING.code())
+            .readyStatus(PartitionStatus.READY.code())
+            .runningStatus(PartitionStatus.RUNNING.code())
+            .retryingStatus(PartitionStatus.RETRYING.code())
+            .build()));
     return safeNarrow(count);
   }
 
@@ -360,11 +349,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         };
     int normalizedPriority =
         weights.priority() == null ? 5 : Math.max(1, Math.min(weights.priority(), 9));
-    long loadPenalty =
-        (long) load.tenantActiveJobs()
-            + load.tenantActivePartitions()
-            + load.queueActiveJobs()
-            + load.queueActivePartitions();
+    long loadPenalty = (long) load.tenantActiveJobs()
+        + load.tenantActivePartitions()
+        + load.queueActiveJobs()
+        + load.queueActivePartitions();
     return bandWeight * 10_000L
         + (long) normalizedPriority * 1_000L
         + (long) weights.tenantWeight() * 100L
@@ -379,10 +367,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         || !resourceSchedulerProperties.isPriorityAgingEnabled()) {
       return 0L;
     }
-    long waitedSeconds =
-        Math.max(
-            0L,
-            Duration.between(request.getWaitingSince(), dateTimeSupport.nowInstant()).toSeconds());
+    long waitedSeconds = Math.max(
+        0L,
+        Duration.between(request.getWaitingSince(), dateTimeSupport.nowInstant())
+            .toSeconds());
     long stepSeconds = Math.max(1L, resourceSchedulerProperties.getPriorityAgingStepSeconds());
     long steps = waitedSeconds / stepSeconds;
     long bonus = steps * Math.max(0L, resourceSchedulerProperties.getPriorityAgingBonusPerStep());

@@ -28,8 +28,11 @@ import org.quartz.Trigger;
 @ExtendWith(MockitoExtension.class)
 class TriggerSchedulerFacadeTest {
 
-  @Mock private TriggerDefinitionLoader triggerDefinitionLoader;
-  @Mock private Scheduler scheduler;
+  @Mock
+  private TriggerDefinitionLoader triggerDefinitionLoader;
+
+  @Mock
+  private Scheduler scheduler;
 
   private TriggerSchedulerFacade facade;
 

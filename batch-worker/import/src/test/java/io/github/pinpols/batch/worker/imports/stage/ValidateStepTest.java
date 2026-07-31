@@ -43,41 +43,46 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ValidateStepTest {
 
-  @Mock private PlatformFileRuntimeRepository runtimeRepository;
-  @Mock private ImportRecordGovernanceService governance;
-  @Mock private ImportDataQualityService qualityService;
+  @Mock
+  private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Mock
+  private ImportRecordGovernanceService governance;
+
+  @Mock
+  private ImportDataQualityService qualityService;
 
   private ImportWorkerConfiguration workerConfig;
   private ObjectMapper objectMapper;
   private ValidateStep step;
-  @TempDir Path tempDir;
+
+  @TempDir
+  Path tempDir;
 
   private final List<Path> tempPaths = new ArrayList<>();
 
   @BeforeEach
   void setUp() {
-    workerConfig =
-        new ImportWorkerConfiguration(
-            "wc",
-            "wt",
-            "tenant",
-            5_000L,
-            "topic",
-            "cg",
-            List.of(),
-            new FileProcessing(true, 1000, 1000, 2),
-            Boolean.FALSE);
+    workerConfig = new ImportWorkerConfiguration(
+        "wc",
+        "wt",
+        "tenant",
+        5_000L,
+        "topic",
+        "cg",
+        List.of(),
+        new FileProcessing(true, 1000, 1000, 2),
+        Boolean.FALSE);
     objectMapper = new ObjectMapper();
     ControlTotalEvaluator controlTotalEvaluator =
         new ControlTotalEvaluator(new ValidationConfigSupport(objectMapper));
-    step =
-        new ValidateStep(
-            runtimeRepository,
-            governance,
-            qualityService,
-            workerConfig,
-            controlTotalEvaluator,
-            objectMapper);
+    step = new ValidateStep(
+        runtimeRepository,
+        governance,
+        qualityService,
+        workerConfig,
+        controlTotalEvaluator,
+        objectMapper);
   }
 
   @AfterEach
@@ -110,7 +115,9 @@ class ValidateStepTest {
   void shouldFail_whenParsedRecordsFileMissing() {
     ImportJobContext ctx = baseContext();
     ctx.getAttributes()
-        .put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, tempDir.resolve("ghost.ndjson").toString());
+        .put(
+            PipelineRuntimeKeys.PARSED_RECORDS_PATH,
+            tempDir.resolve("ghost.ndjson").toString());
 
     ImportStageResult result = step.execute(ctx);
 
@@ -143,7 +150,8 @@ class ValidateStepTest {
     Path validated =
         Path.of((String) ctx.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
     tempPaths.add(validated);
-    long count = Files.readAllLines(validated).stream().filter(l -> !l.isBlank()).count();
+    long count =
+        Files.readAllLines(validated).stream().filter(l -> !l.isBlank()).count();
     assertThat(count).isEqualTo(3);
     verify(runtimeRepository).updateFileStatus(eq(99L), eq("VALIDATED"), any());
   }

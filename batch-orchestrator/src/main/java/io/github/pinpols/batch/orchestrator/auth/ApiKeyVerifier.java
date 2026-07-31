@@ -114,7 +114,9 @@ public class ApiKeyVerifier {
    * {@code @Async}, 必须经 Spring 代理调用才异步。原先 {@code this.touchAsync()} 是同类自调用,绕过代理 → @Async 失效 → DB 写
    * + PBKDF2(50-200ms CPU)在请求线程同步执行,峰值流量会耗尽 Tomcat 线程池。改走 {@code self.xxx()}。
    */
-  @Lazy @Autowired private ApiKeyVerifier self;
+  @Lazy
+  @Autowired
+  private ApiKeyVerifier self;
 
   /**
    * 生产构造器(Spring):系统时钟。
@@ -145,14 +147,13 @@ public class ApiKeyVerifier {
     this.ticker = ticker;
     this.instantSource = instantSource;
     this.meterRegistry = meterRegistry;
-    this.verifyCache =
-        Caffeine.newBuilder()
-            .ticker(ticker)
-            .expireAfterWrite(Duration.ofMinutes(VERIFY_CACHE_TTL_MINUTES))
-            .maximumSize(VERIFY_CACHE_MAX_SIZE)
-            // O4:开启统计,供 CaffeineCacheMetrics 读命中率/逐出/加载耗时。
-            .recordStats()
-            .build();
+    this.verifyCache = Caffeine.newBuilder()
+        .ticker(ticker)
+        .expireAfterWrite(Duration.ofMinutes(VERIFY_CACHE_TTL_MINUTES))
+        .maximumSize(VERIFY_CACHE_MAX_SIZE)
+        // O4:开启统计,供 CaffeineCacheMetrics 读命中率/逐出/加载耗时。
+        .recordStats()
+        .build();
   }
 
   /**
@@ -231,15 +232,13 @@ public class ApiKeyVerifier {
   private void maybeTouch(Long id) {
     long now = ticker.read();
     boolean[] doWrite = {false};
-    lastTouchNanos.compute(
-        id,
-        (k, prev) -> {
-          if (prev != null && now - prev < TOUCH_MIN_INTERVAL_NANOS) {
-            return prev; // 窗口内,跳过写库
-          }
-          doWrite[0] = true;
-          return now;
-        });
+    lastTouchNanos.compute(id, (k, prev) -> {
+      if (prev != null && now - prev < TOUCH_MIN_INTERVAL_NANOS) {
+        return prev; // 窗口内,跳过写库
+      }
+      doWrite[0] = true;
+      return now;
+    });
     if (doWrite[0]) {
       self.touchAsync(id);
     }
@@ -280,11 +279,10 @@ public class ApiKeyVerifier {
   static boolean scopesAllow(String scopesField, String requiredScope) {
     if (requiredScope == null || requiredScope.isBlank()) return true;
     if (scopesField == null || scopesField.isBlank()) return false;
-    Set<String> scopes =
-        Arrays.stream(scopesField.split("[,\\s]+"))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .collect(Collectors.toSet());
+    Set<String> scopes = Arrays.stream(scopesField.split("[,\\s]+"))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toSet());
     return scopes.contains(SCOPE_WILDCARD) || scopes.contains(requiredScope);
   }
 

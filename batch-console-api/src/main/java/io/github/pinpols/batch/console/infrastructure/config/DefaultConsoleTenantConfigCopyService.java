@@ -154,20 +154,17 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     JobDefinitionSpec job = jobs.get(0);
     bundle.setPipelineDefinitions(
         filter(all.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode())));
-    bundle.setWorkflowDefinitions(
-        filter(
-            all.getWorkflowDefinitions(),
-            w ->
-                w.getNodes() != null
-                    && w.getNodes().stream().anyMatch(n -> jobCode.equals(n.getRelatedJobCode()))));
+    bundle.setWorkflowDefinitions(filter(
+        all.getWorkflowDefinitions(),
+        w -> w.getNodes() != null
+            && w.getNodes().stream().anyMatch(n -> jobCode.equals(n.getRelatedJobCode()))));
     bundle.setResourceQueues(
         filter(all.getResourceQueues(), q -> equalsNullable(job.getQueueCode(), q.getQueueCode())));
     bundle.setBatchWindows(
         filter(all.getBatchWindows(), w -> equalsNullable(job.getWindowCode(), w.getWindowCode())));
-    bundle.setBusinessCalendars(
-        filter(
-            all.getBusinessCalendars(),
-            c -> equalsNullable(job.getCalendarCode(), c.getCalendarCode())));
+    bundle.setBusinessCalendars(filter(
+        all.getBusinessCalendars(),
+        c -> equalsNullable(job.getCalendarCode(), c.getCalendarCode())));
     bundle.setFileTemplates(
         filter(all.getFileTemplates(), t -> equalsNullable(job.getBizType(), t.getBizType())));
     bundle.setFileChannels(
@@ -336,9 +333,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<PipelineDefinitionSpec> readPipelineDefinitions(String tenantId) {
-    List<Map<String, Object>> entities =
-        pipelineDefinitionMapper.selectByQuery(
-            tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> entities = pipelineDefinitionMapper.selectByQuery(
+        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<PipelineDefinitionSpec> specs = new ArrayList<>(entities.size());
     for (Map<String, Object> e : entities) {
       PipelineDefinitionSpec s = new PipelineDefinitionSpec();
@@ -379,9 +375,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<FileChannelSpec> readFileChannels(String tenantId) {
-    List<Map<String, Object>> entities =
-        fileChannelConfigMapper.selectByQuery(
-            tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> entities = fileChannelConfigMapper.selectByQuery(
+        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<FileChannelSpec> specs = new ArrayList<>(entities.size());
     for (Map<String, Object> e : entities) {
       FileChannelSpec s = new FileChannelSpec();
@@ -400,9 +395,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<FileTemplateSpec> readFileTemplates(String tenantId) {
-    List<Map<String, Object>> entities =
-        fileTemplateConfigMapper.selectByQuery(
-            FileTemplateConfigQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE)));
+    List<Map<String, Object>> entities = fileTemplateConfigMapper.selectByQuery(
+        FileTemplateConfigQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE)));
     List<FileTemplateSpec> specs = new ArrayList<>(entities.size());
     for (Map<String, Object> e : entities) {
       FileTemplateSpec s = new FileTemplateSpec();
@@ -452,9 +446,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<ResourceQueueSpec> readResourceQueues(String tenantId) {
-    List<Map<String, Object>> rows =
-        resourceQueueMapper.selectByQuery(
-            tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> rows = resourceQueueMapper.selectByQuery(
+        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<ResourceQueueSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       ResourceQueueSpec s = new ResourceQueueSpec();
@@ -497,9 +490,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<BusinessCalendarSpec> readBusinessCalendars(String tenantId) {
-    List<Map<String, Object>> rows =
-        businessCalendarMapper.selectByQuery(
-            tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> rows = businessCalendarMapper.selectByQuery(
+        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<BusinessCalendarSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       BusinessCalendarSpec s = new BusinessCalendarSpec();
@@ -530,9 +522,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<TenantQuotaPolicySpec> readQuotaPolicies(String tenantId) {
-    List<Map<String, Object>> rows =
-        tenantQuotaPolicyMapper.selectByQuery(
-            tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> rows = tenantQuotaPolicyMapper.selectByQuery(
+        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<TenantQuotaPolicySpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       TenantQuotaPolicySpec s = new TenantQuotaPolicySpec();
@@ -549,9 +540,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<AlertRoutingSpec> readAlertRoutings(String tenantId) {
-    List<Map<String, Object>> rows =
-        alertRoutingConfigMapper.selectByQuery(
-            tenantId, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> rows = alertRoutingConfigMapper.selectByQuery(
+        tenantId, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<AlertRoutingSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       AlertRoutingSpec s = new AlertRoutingSpec();

@@ -43,9 +43,8 @@ public class ConsoleAiTools {
   }
 
   @Tool(
-      description =
-          "查询指定 job 实例的当前状态、jobCode、失败分类(failureClass)、起止时间与结果摘要。"
-              + "用户提到某个具体实例 id 或问「某次执行为什么失败」时调用。")
+      description = "查询指定 job 实例的当前状态、jobCode、失败分类(failureClass)、起止时间与结果摘要。"
+          + "用户提到某个具体实例 id 或问「某次执行为什么失败」时调用。")
   public String getJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
     ConsoleJobInstanceResponse instance = queryService.jobInstance(tenantId, jobInstanceId);
     if (instance == null) {
@@ -80,24 +79,21 @@ public class ConsoleAiTools {
       return "当前租户近期无 FAILED 实例。";
     }
     return page.items().stream()
-        .map(
-            instance ->
-                "id="
-                    + instance.id()
-                    + " jobCode="
-                    + instance.jobCode()
-                    + " failureClass="
-                    + nullToDash(instance.failureClass())
-                    + " finishedAt="
-                    + instance.finishedAt())
+        .map(instance -> "id="
+            + instance.id()
+            + " jobCode="
+            + instance.jobCode()
+            + " failureClass="
+            + nullToDash(instance.failureClass())
+            + " finishedAt="
+            + instance.finishedAt())
         .collect(Collectors.joining("\n"));
   }
 
   @Tool(
-      description =
-          "返回当前租户的集群健康诊断快照(只读,固定阈值):ShedLock 定时任务租约、Worker 注册一致性、"
-              + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
-              + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
+      description = "返回当前租户的集群健康诊断快照(只读,固定阈值):ShedLock 定时任务租约、Worker 注册一致性、"
+          + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
+          + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
   public String getClusterDiagnostics() {
     if (diagnosticService == null) {
       return "集群诊断服务当前不可用(诊断能力未装配)。";
@@ -148,18 +144,16 @@ public class ConsoleAiTools {
   }
 
   @Tool(
-      description =
-          "列出当前租户当前未决(status=OPEN)的告警事件,用于告警分诊:按 severity(CRITICAL/ERROR/WARN/INFO)与"
-              + "影响排序、对同类反复告警(看 occurrenceCount 去重归并)、概括当前告警态势并给处置/升级建议。"
-              + "用户问『现在有哪些告警 / 该先处理哪个 / 告警态势 / 要不要升级』这类问题时调用。无需参数。")
+      description = "列出当前租户当前未决(status=OPEN)的告警事件,用于告警分诊:按 severity(CRITICAL/ERROR/WARN/INFO)与"
+          + "影响排序、对同类反复告警(看 occurrenceCount 去重归并)、概括当前告警态势并给处置/升级建议。"
+          + "用户问『现在有哪些告警 / 该先处理哪个 / 告警态势 / 要不要升级』这类问题时调用。无需参数。")
   public String getOpenAlerts() {
     return renderAlerts(queryAlerts("OPEN"), "当前租户暂无未决(OPEN)告警。");
   }
 
   @Tool(
-      description =
-          "列出当前租户最近的告警事件(不限状态,含 OPEN/ACKED/SUPPRESSED/CLOSED),用于回顾近期告警态势、"
-              + "识别反复出现(occurrenceCount 高)或已处置的告警。用户问『最近有哪些告警 / 告警历史 / 某类告警是不是反复出现』时调用。无需参数。")
+      description = "列出当前租户最近的告警事件(不限状态,含 OPEN/ACKED/SUPPRESSED/CLOSED),用于回顾近期告警态势、"
+          + "识别反复出现(occurrenceCount 高)或已处置的告警。用户问『最近有哪些告警 / 告警历史 / 某类告警是不是反复出现』时调用。无需参数。")
   public String getRecentAlerts() {
     return renderAlerts(queryAlerts(null), "当前租户近期无告警记录。");
   }

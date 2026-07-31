@@ -51,11 +51,9 @@ public record SdkTaskContext(
     cancellation = cancellation == null ? new CancellationSignal() : cancellation;
     progress = progress == null ? new ProgressReporter() : progress;
     // ADR-037: 默认空协调器(内存断点 + 默认限流),让未走续跑模板的 handler 调 commit/checkpoint 也 null-safe。
-    commitCoordinator =
-        commitCoordinator == null
-            ? new SdkCommitCoordinator(
-                String.valueOf(taskId), null, progress, cancellation, true, 1)
-            : commitCoordinator;
+    commitCoordinator = commitCoordinator == null
+        ? new SdkCommitCoordinator(String.valueOf(taskId), null, progress, cancellation, true, 1)
+        : commitCoordinator;
   }
 
   /** 10 参兼容构造器 —— ADR-037 前的构造方式继续可用,commit 走默认协调器。 */

@@ -7,7 +7,8 @@ import lombok.Data;
 @Data
 public class ApprovalActionRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 
   @Size(max = 64, message = "operatorId too long (max 64)")
   private String operatorId;

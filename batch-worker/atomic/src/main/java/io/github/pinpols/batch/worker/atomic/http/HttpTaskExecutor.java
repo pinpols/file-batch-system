@@ -114,13 +114,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       synchronized (this) {
         c = sharedClient;
         if (c == null) {
-          c =
-              new OkHttpClient.Builder()
-                  .followRedirects(false) // 重定向 target 不会再过 validateHost/dns 校验,显式禁
-                  .followSslRedirects(false)
-                  .retryOnConnectionFailure(false) // 重试由本类 runWithRetry 控制,避免双重重试
-                  .dns(guardedDns())
-                  .build();
+          c = new OkHttpClient.Builder()
+              .followRedirects(false) // 重定向 target 不会再过 validateHost/dns 校验,显式禁
+              .followSslRedirects(false)
+              .retryOnConnectionFailure(false) // 重试由本类 runWithRetry 控制,避免双重重试
+              .dns(guardedDns())
+              .build();
           sharedClient = c;
         }
       }
@@ -205,12 +204,11 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       return runWithRetry(ctx, inv);
     } catch (HttpValidationException ex) {
       // 域名/IP/SSRF/方法白名单 vs 入参格式问题:都分流到 SECURITY_REJECTED / CONFIG_INVALID
-      boolean security =
-          ex.getMessage() != null
-              && (ex.getMessage().contains("blocked")
-                  || ex.getMessage().contains("allowedHostPatterns")
-                  || ex.getMessage().contains("allowlist")
-                  || ex.getMessage().contains("resolves to blocked"));
+      boolean security = ex.getMessage() != null
+          && (ex.getMessage().contains("blocked")
+              || ex.getMessage().contains("allowedHostPatterns")
+              || ex.getMessage().contains("allowlist")
+              || ex.getMessage().contains("resolves to blocked"));
       return AtomicErrorCode.fail(
           security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID,
           ex.getMessage());
@@ -407,9 +405,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         String user = Objects.toString(auth.get("username"), "");
         // ADR-039 P1:password 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
         String pass = CredentialEnvResolver.resolve(Objects.toString(auth.get("password"), ""));
-        String token =
-            Base64.getEncoder()
-                .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
+        String token = Base64.getEncoder()
+            .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
         headers.put("Authorization", "Basic " + token);
       }
       case "bearer" -> {
@@ -480,10 +477,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         }
         // 失败路径:只透传 error_code,不带成功 output(保持与原 TaskResult.fail 语义对齐)
         String existingCode = (String) result.output().get(AtomicErrorCode.OUTPUT_KEY);
-        AtomicErrorCode code =
-            existingCode == null
-                ? AtomicErrorCode.EXECUTION_FAILED
-                : AtomicErrorCode.valueOf(existingCode);
+        AtomicErrorCode code = existingCode == null
+            ? AtomicErrorCode.EXECUTION_FAILED
+            : AtomicErrorCode.valueOf(existingCode);
         return AtomicErrorCode.fail(code, result.message());
       } catch (IOException ex) {
         // OkHttp 同步 execute 把超时/连接失败/被 dns 守护拦截(UnknownHostException)统一抛 IOException。
@@ -515,14 +511,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   private TaskResult runOnce(Invocation inv, int attempt) throws IOException {
     // 共享客户端的 dns 回调做 resolve-then-connect SSRF 校验(防 rebinding);followRedirects=false
     // 已在 client() 构造期设定(重定向 target 不会再过 validateHost/dns 校验)。
-    OkHttpClient call =
-        client()
-            .newBuilder()
-            .connectTimeout(inv.timeout)
-            .readTimeout(inv.timeout)
-            .writeTimeout(inv.timeout)
-            .callTimeout(inv.timeout)
-            .build();
+    OkHttpClient call = client()
+        .newBuilder()
+        .connectTimeout(inv.timeout)
+        .readTimeout(inv.timeout)
+        .writeTimeout(inv.timeout)
+        .callTimeout(inv.timeout)
+        .build();
 
     Request.Builder req = new Request.Builder().url(inv.uri.toString());
     Headers.Builder headers = new Headers.Builder();

@@ -57,11 +57,10 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectStatus()
         .isOk();
 
-    var row =
-        jdbcTemplate.queryForMap(
-            "SELECT tenant_id, job_code, pipeline_type, biz_type FROM batch.pipeline_definition"
-                + " WHERE job_code = ?",
-            code);
+    var row = jdbcTemplate.queryForMap(
+        "SELECT tenant_id, job_code, pipeline_type, biz_type FROM batch.pipeline_definition"
+            + " WHERE job_code = ?",
+        code);
     assertThat(row.get("tenant_id")).isEqualTo("int-pd-ta");
     assertThat(row.get("pipeline_type")).isEqualTo("IMPORT");
     assertThat(row.get("biz_type")).isEqualTo("settlement");
@@ -83,11 +82,8 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.pipeline_definition WHERE job_code = ?",
-            Long.class,
-            "q q q");
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.pipeline_definition WHERE job_code = ?", Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 
@@ -104,9 +100,8 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectStatus()
         .isBadRequest();
 
-    Long cnt =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM batch.pipeline_definition WHERE job_code = ?", Long.class, code);
+    Long cnt = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.pipeline_definition WHERE job_code = ?", Long.class, code);
     assertThat(cnt).isZero();
   }
 

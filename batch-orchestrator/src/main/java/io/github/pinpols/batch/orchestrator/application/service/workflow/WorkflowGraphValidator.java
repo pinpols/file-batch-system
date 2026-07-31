@@ -68,33 +68,17 @@ public class WorkflowGraphValidator {
    *
    * <p>未列业务（GENERAL / WORKFLOW）跳过 V5/V12 检查（ADR-025 §V5/V12 行规定向后兼容）。
    */
-  private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE =
-      Map.of(
-          "IMPORT",
-              Set.of(
-                  "fileId",
-                  "recordCount",
-                  "parsedCount",
-                  "validatedCount",
-                  "skippedCount",
-                  "bizDate"),
-          "EXPORT",
-              Set.of(
-                  "fileId",
-                  "objectName",
-                  "recordCount",
-                  "fileSizeBytes",
-                  "checksumValue",
-                  "bizDate"),
-          "PROCESS",
-              Set.of(
-                  "processedCount",
-                  "stagedCount",
-                  "publishedCount",
-                  "batchKey",
-                  "highWaterMarkOut"),
-          "DISPATCH",
-              Set.of("fileId", "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
+  private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE = Map.of(
+      "IMPORT",
+          Set.of(
+              "fileId", "recordCount", "parsedCount", "validatedCount", "skippedCount", "bizDate"),
+      "EXPORT",
+          Set.of(
+              "fileId", "objectName", "recordCount", "fileSizeBytes", "checksumValue", "bizDate"),
+      "PROCESS",
+          Set.of("processedCount", "stagedCount", "publishedCount", "batchKey", "highWaterMarkOut"),
+      "DISPATCH",
+          Set.of("fileId", "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
 
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
@@ -174,18 +158,16 @@ public class WorkflowGraphValidator {
     for (WorkflowEdgeEntity e : edges) {
       if (e == null) continue;
       if (Texts.hasText(e.getFromNodeCode()) && !byCode.containsKey(e.getFromNodeCode())) {
-        errors.add(
-            issue(
-                "V14",
-                "edge from_node_code references missing node: " + e.getFromNodeCode(),
-                e.getFromNodeCode()));
+        errors.add(issue(
+            "V14",
+            "edge from_node_code references missing node: " + e.getFromNodeCode(),
+            e.getFromNodeCode()));
       }
       if (Texts.hasText(e.getToNodeCode()) && !byCode.containsKey(e.getToNodeCode())) {
-        errors.add(
-            issue(
-                "V14",
-                "edge to_node_code references missing node: " + e.getToNodeCode(),
-                e.getToNodeCode()));
+        errors.add(issue(
+            "V14",
+            "edge to_node_code references missing node: " + e.getToNodeCode(),
+            e.getToNodeCode()));
       }
     }
   }
@@ -239,9 +221,8 @@ public class WorkflowGraphValidator {
       while (m.find()) {
         String referenced = m.group(1);
         if (!byCode.containsKey(referenced)) {
-          errors.add(
-              issue(
-                  "V4", "node_params DSL references missing node: " + referenced, n.getNodeCode()));
+          errors.add(issue(
+              "V4", "node_params DSL references missing node: " + referenced, n.getNodeCode()));
         }
       }
     }
@@ -257,26 +238,24 @@ public class WorkflowGraphValidator {
       JoinMode joinMode = parseJoinMode(n.getNodeParams());
       if (joinMode == null) continue;
       if (joinMode.allOf && incomingCount < 2) {
-        errors.add(
-            issue(
-                "V9",
-                "GATEWAY join_mode=ALL_OF requires ≥2 incoming, got " + incomingCount,
-                n.getNodeCode()));
+        errors.add(issue(
+            "V9",
+            "GATEWAY join_mode=ALL_OF requires ≥2 incoming, got " + incomingCount,
+            n.getNodeCode()));
       }
       if (joinMode.nOfM != null) {
         int n1 = joinMode.nOfM[0];
         int m1 = joinMode.nOfM[1];
         if (n1 > m1 || m1 != incomingCount) {
-          errors.add(
-              issue(
-                  "V10",
-                  "GATEWAY join_mode=N_OF_M ("
-                      + n1
-                      + "/"
-                      + m1
-                      + ") inconsistent with incoming count "
-                      + incomingCount,
-                  n.getNodeCode()));
+          errors.add(issue(
+              "V10",
+              "GATEWAY join_mode=N_OF_M ("
+                  + n1
+                  + "/"
+                  + m1
+                  + ") inconsistent with incoming count "
+                  + incomingCount,
+              n.getNodeCode()));
         }
       }
     }
@@ -292,9 +271,8 @@ public class WorkflowGraphValidator {
         continue;
       }
       try {
-        JobDefinitionEntity def =
-            jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
-                node.getTenantId(), jobCode, true);
+        JobDefinitionEntity def = jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+            node.getTenantId(), jobCode, true);
         if (def != null) {
           result.put(jobCode, def);
         }
@@ -355,58 +333,53 @@ public class WorkflowGraphValidator {
       String outputKey = m.group(2);
       // V8 — OPTIONAL 节点输出被引用
       if (optionalNodes.contains(referencedNodeCode)) {
-        errors.add(
-            issue(
-                "V8",
-                "node_params references output of OPTIONAL upstream node "
-                    + referencedNodeCode
-                    + " (cross-day OPTIONAL → REQUIRED contagion)",
-                node.getNodeCode()));
+        errors.add(issue(
+            "V8",
+            "node_params references output of OPTIONAL upstream node "
+                + referencedNodeCode
+                + " (cross-day OPTIONAL → REQUIRED contagion)",
+            node.getNodeCode()));
       }
       WorkflowNodeEntity refNode = nodesByCode.get(referencedNodeCode);
       if (refNode == null) {
         // V4 已经报；这里跳过 V5/V12
         continue;
       }
-      JobDefinitionEntity refJobDef =
-          refNode.getRelatedJobCode() == null
-              ? null
-              : jobDefByCode.get(refNode.getRelatedJobCode());
+      JobDefinitionEntity refJobDef = refNode.getRelatedJobCode() == null
+          ? null
+          : jobDefByCode.get(refNode.getRelatedJobCode());
       if (refJobDef == null) {
         // 未关联 job_definition → 跳过 V5/V12（向后兼容）
         continue;
       }
-      Set<String> contract =
-          KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE.get(
-              refJobDef.jobType() == null ? "" : refJobDef.jobType().toUpperCase(Locale.ROOT));
+      Set<String> contract = KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE.get(
+          refJobDef.jobType() == null ? "" : refJobDef.jobType().toUpperCase(Locale.ROOT));
       if (contract == null) {
         // jobType 不在内置 contract（如 GENERAL / WORKFLOW）→ 跳过
         continue;
       }
       // V5
       if (!contract.contains(outputKey)) {
-        warnings.add(
-            warning(
-                "V5",
-                "DSL ref $.nodes."
-                    + referencedNodeCode
-                    + ".output."
-                    + outputKey
-                    + " not in known output contract for jobType="
-                    + refJobDef.jobType(),
-                node.getNodeCode()));
+        warnings.add(warning(
+            "V5",
+            "DSL ref $.nodes."
+                + referencedNodeCode
+                + ".output."
+                + outputKey
+                + " not in known output contract for jobType="
+                + refJobDef.jobType(),
+            node.getNodeCode()));
       } else {
         // V12 占位 — contract type info 留 worker SPI 扩展（@WorkerOutputContract 注解未来注入）；
         // 当前只对 contract-hit 输出 key 记一条信息级 hint，避免 type 误判
-        warnings.add(
-            warning(
-                "V12",
-                "DSL ref $.nodes."
-                    + referencedNodeCode
-                    + ".output."
-                    + outputKey
-                    + " hits contract; type-check pending worker SPI",
-                node.getNodeCode()));
+        warnings.add(warning(
+            "V12",
+            "DSL ref $.nodes."
+                + referencedNodeCode
+                + ".output."
+                + outputKey
+                + " hits contract; type-check pending worker SPI",
+            node.getNodeCode()));
       }
     }
   }
@@ -426,9 +399,8 @@ public class WorkflowGraphValidator {
       if (Texts.hasText(def.timezone())) timezones.add(def.timezone());
     }
     if (calendars.size() > 1) {
-      warnings.add(
-          warning(
-              "V15", "workflow nodes reference jobs with mixed calendarCode: " + calendars, null));
+      warnings.add(warning(
+          "V15", "workflow nodes reference jobs with mixed calendarCode: " + calendars, null));
     }
     if (timezones.size() > 1) {
       warnings.add(
@@ -530,14 +502,12 @@ public class WorkflowGraphValidator {
     }
     Map<String, Object> params;
     try {
-      params =
-          Texts.hasText(node.getNodeParams())
-              ? JsonUtils.fromJson(node.getNodeParams(), SENSOR_MAP_TYPE)
-              : Map.of();
+      params = Texts.hasText(node.getNodeParams())
+          ? JsonUtils.fromJson(node.getNodeParams(), SENSOR_MAP_TYPE)
+          : Map.of();
     } catch (Exception e) {
-      errors.add(
-          issue(
-              "V16", "WAIT node_params JSON parse failed: " + e.getMessage(), node.getNodeCode()));
+      errors.add(issue(
+          "V16", "WAIT node_params JSON parse failed: " + e.getMessage(), node.getNodeCode()));
       return;
     }
     if (params == null) params = Map.of();
@@ -548,11 +518,10 @@ public class WorkflowGraphValidator {
       return;
     }
     if (!SENSOR_TYPES.contains(sensorType)) {
-      errors.add(
-          issue(
-              "V16-b",
-              "WAIT sensor_type invalid: " + sensorType + " (allowed: " + SENSOR_TYPES + ")",
-              node.getNodeCode()));
+      errors.add(issue(
+          "V16-b",
+          "WAIT sensor_type invalid: " + sensorType + " (allowed: " + SENSOR_TYPES + ")",
+          node.getNodeCode()));
       return;
     }
 
@@ -572,26 +541,20 @@ public class WorkflowGraphValidator {
       errors.add(issue("V16-d", "WAIT poll_interval_seconds missing or <=0", node.getNodeCode()));
     }
     if (timeout != null && pollInterval != null && timeout <= pollInterval) {
-      errors.add(
-          issue(
-              "V16-d",
-              "WAIT timeout_seconds must be greater than poll_interval_seconds",
-              node.getNodeCode()));
+      errors.add(issue(
+          "V16-d",
+          "WAIT timeout_seconds must be greater than poll_interval_seconds",
+          node.getNodeCode()));
     }
 
     String onTimeout = asString(params.get("on_timeout"));
     if (!Texts.hasText(onTimeout)) {
       errors.add(issue("V16-e", "WAIT on_timeout missing", node.getNodeCode()));
     } else if (!SENSOR_TIMEOUT_ACTIONS.contains(onTimeout)) {
-      errors.add(
-          issue(
-              "V16-e",
-              "WAIT on_timeout invalid: "
-                  + onTimeout
-                  + " (allowed: "
-                  + SENSOR_TIMEOUT_ACTIONS
-                  + ")",
-              node.getNodeCode()));
+      errors.add(issue(
+          "V16-e",
+          "WAIT on_timeout invalid: " + onTimeout + " (allowed: " + SENSOR_TIMEOUT_ACTIONS + ")",
+          node.getNodeCode()));
     }
   }
 
@@ -661,11 +624,10 @@ public class WorkflowGraphValidator {
     try {
       deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
     } catch (Exception parseFailure) {
-      errors.add(
-          issue(
-              "V6",
-              "cross_day_dependencies JSON parse failed: " + parseFailure.getMessage(),
-              node.getNodeCode()));
+      errors.add(issue(
+          "V6",
+          "cross_day_dependencies JSON parse failed: " + parseFailure.getMessage(),
+          node.getNodeCode()));
       return;
     }
     if (deps == null) return;
@@ -678,15 +640,14 @@ public class WorkflowGraphValidator {
       if (Texts.hasText(dep.bizDateRange())) {
         Integer days = parseRangeDays(dep.bizDateRange());
         if (days != null && days > MAX_RANGE_DAYS) {
-          errors.add(
-              issue(
-                  "V7",
-                  "cross_day_dep range "
-                      + dep.bizDateRange()
-                      + " exceeds max "
-                      + MAX_RANGE_DAYS
-                      + " days",
-                  node.getNodeCode()));
+          errors.add(issue(
+              "V7",
+              "cross_day_dep range "
+                  + dep.bizDateRange()
+                  + " exceeds max "
+                  + MAX_RANGE_DAYS
+                  + " days",
+              node.getNodeCode()));
         }
       }
     }

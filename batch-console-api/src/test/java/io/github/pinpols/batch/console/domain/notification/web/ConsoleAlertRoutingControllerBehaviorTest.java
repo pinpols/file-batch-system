@@ -47,11 +47,11 @@ class ConsoleAlertRoutingControllerBehaviorTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleAlertRoutingController(service, responseFactory))
-            .setControllerAdvice(exceptionHandler)
-            .setValidator(validator)
-            .build();
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAlertRoutingController(service, responseFactory))
+        .setControllerAdvice(exceptionHandler)
+        .setValidator(validator)
+        .build();
   }
 
   private String saveBody(String routeCode) {
@@ -72,13 +72,12 @@ class ConsoleAlertRoutingControllerBehaviorTest {
     when(service.list(eq("ta"), eq("RT_A"), eq("ops"), eq("WARN"), eq(true), eq(1), eq(20)))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
-        .perform(
-            get("/api/console/alert-routings")
-                .param("tenantId", "ta")
-                .param("routeCode", "RT_A")
-                .param("team", "ops")
-                .param("severity", "WARN")
-                .param("enabled", "true"))
+        .perform(get("/api/console/alert-routings")
+            .param("tenantId", "ta")
+            .param("routeCode", "RT_A")
+            .param("team", "ops")
+            .param("severity", "WARN")
+            .param("enabled", "true"))
         .andExpect(status().isOk());
     verify(service).list("ta", "RT_A", "ops", "WARN", true, 1, 20);
   }
@@ -90,10 +89,9 @@ class ConsoleAlertRoutingControllerBehaviorTest {
     when(service.create(any(AlertRoutingSaveRequest.class)))
         .thenReturn(Map.of("id", 1L, "route_code", "RT_NEW"));
     mockMvc
-        .perform(
-            post("/api/console/alert-routings")
-                .contentType(APPLICATION_JSON)
-                .content(saveBody("RT_NEW")))
+        .perform(post("/api/console/alert-routings")
+            .contentType(APPLICATION_JSON)
+            .content(saveBody("RT_NEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.route_code").value("RT_NEW"));
   }
@@ -102,10 +100,9 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   void updateShouldPassPathId() throws Exception {
     when(service.update(eq(7L), any(AlertRoutingSaveRequest.class))).thenReturn(Map.of("id", 7L));
     mockMvc
-        .perform(
-            put("/api/console/alert-routings/7")
-                .contentType(APPLICATION_JSON)
-                .content(saveBody("RT_U")))
+        .perform(put("/api/console/alert-routings/7")
+            .contentType(APPLICATION_JSON)
+            .content(saveBody("RT_U")))
         .andExpect(status().isOk());
     verify(service).update(eq(7L), any(AlertRoutingSaveRequest.class));
   }
@@ -113,10 +110,9 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   @Test
   void toggleShouldDelegate() throws Exception {
     mockMvc
-        .perform(
-            post("/api/console/alert-routings/9/toggle")
-                .param("tenantId", "ta")
-                .param("enabled", "false"))
+        .perform(post("/api/console/alert-routings/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "false"))
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", false);
   }

@@ -76,7 +76,8 @@ public class LoadStep implements ImportStageStep {
   @Override
   public ImportStageResult execute(ImportJobContext context) {
     // ADR-026: 演练模式不写目标存储；以 validated path 行数为预估让 PROCESS / FEEDBACK 拿到完整 attribute
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+        .isDryRun()) {
       long expected = estimateDryRunLoadedCount(context);
       return markLoaded(context, expected);
     }
@@ -100,10 +101,9 @@ public class LoadStep implements ImportStageStep {
       ImportPayload importPayload =
           attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload item ? item : null;
       Object fileRecord = attrs.get(PipelineRuntimeKeys.FILE_RECORD);
-      String sourceFileName =
-          fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
-              ? String.valueOf(row.get(KEY_FILE_NAME))
-              : context.getFileId();
+      String sourceFileName = fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
+          ? String.valueOf(row.get(KEY_FILE_NAME))
+          : context.getFileId();
       ImportLoadPlugin plugin =
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
@@ -256,15 +256,14 @@ public class LoadStep implements ImportStageStep {
         || cap == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC) {
       return;
     }
-    throw new WorkerConfigException(
-        "ADR-038 续跑开关开 (batch.worker.checkpoint.enabled=true) 但 plugin "
-            + plugin.id()
-            + " 未声明幂等能力 (idempotencyCapability="
-            + cap
-            + ")。跨库无 1PC,崩溃窗口重做 chunk 会双写。"
-            + "请让 plugin override idempotencyCapability() 返回 IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
-            + "IDEMPOTENT_BY_PLUGIN_LOGIC,或关闭续跑开关。"
-            + "详见 docs/runbook/platform-worker-checkpoint-howto.md §前置校验。");
+    throw new WorkerConfigException("ADR-038 续跑开关开 (batch.worker.checkpoint.enabled=true) 但 plugin "
+        + plugin.id()
+        + " 未声明幂等能力 (idempotencyCapability="
+        + cap
+        + ")。跨库无 1PC,崩溃窗口重做 chunk 会双写。"
+        + "请让 plugin override idempotencyCapability() 返回 IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
+        + "IDEMPOTENT_BY_PLUGIN_LOGIC,或关闭续跑开关。"
+        + "详见 docs/runbook/platform-worker-checkpoint-howto.md §前置校验。");
   }
 
   private boolean isPartitionReplaceCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {
@@ -295,12 +294,11 @@ public class LoadStep implements ImportStageStep {
     if (partitionCount <= 1L) {
       return;
     }
-    throw new WorkerConfigException(
-        "PARTITION_REPLACE_COPY cannot run with partitionCount="
-            + partitionCount
-            + ": each worker partition would clear the same target partition before COPY, which can"
-            + " leave partial data. Use shard_strategy=NONE for this template, or split input into"
-            + " independent files with distinct logical partitions.");
+    throw new WorkerConfigException("PARTITION_REPLACE_COPY cannot run with partitionCount="
+        + partitionCount
+        + ": each worker partition would clear the same target partition before COPY, which can"
+        + " leave partial data. Use shard_strategy=NONE for this template, or split input into"
+        + " independent files with distinct logical partitions.");
   }
 
   // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────
@@ -316,9 +314,8 @@ public class LoadStep implements ImportStageStep {
     if (checkpointDegradedByMultiPartition(context)) {
       return null;
     }
-    Long pipelineInstanceId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    Long pipelineInstanceId = runtimeRepository.toLong(
+        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     if (pipelineInstanceId == null || pipelineInstanceId <= 0L) {
       return null;
     }
@@ -444,27 +441,23 @@ public class LoadStep implements ImportStageStep {
   private ImportLoadContext buildLoadContext(
       ImportJobContext context, ImportPayload importPayload, String sourceFileName) {
     Map<String, Object> tc = templateConfigMap(context);
-    String batchNo =
-        importPayload == null || !Texts.hasText(importPayload.batchNo())
-            ? context.getBizDate()
-            : importPayload.batchNo();
-    String bizType =
-        importPayload != null && Texts.hasText(importPayload.bizType())
-            ? importPayload.bizType()
-            : context.getJobCode();
+    String batchNo = importPayload == null || !Texts.hasText(importPayload.batchNo())
+        ? context.getBizDate()
+        : importPayload.batchNo();
+    String bizType = importPayload != null && Texts.hasText(importPayload.bizType())
+        ? importPayload.bizType()
+        : context.getJobCode();
     String templateCode = importPayload != null ? importPayload.templateCode() : null;
     // 地区(per-run):从触发 payload 的 metadata.region 取(可选);模板 defaultRegion 回退 + 字典校验在 plugin。
-    String region =
-        importPayload != null && importPayload.metadata() != null
-            ? metaString(importPayload.metadata(), "region")
-            : null;
+    String region = importPayload != null && importPayload.metadata() != null
+        ? metaString(importPayload.metadata(), "region")
+        : null;
     return new ImportLoadContext(
         context.getTenantId(),
         context.getJobCode(),
-        String.valueOf(
-            context
-                .getAttributes()
-                .getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId())),
+        String.valueOf(context
+            .getAttributes()
+            .getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId())),
         context.getWorkerId(),
         sourceFileName,
         batchNo,

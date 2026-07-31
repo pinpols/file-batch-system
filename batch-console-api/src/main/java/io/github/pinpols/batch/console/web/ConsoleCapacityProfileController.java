@@ -31,27 +31,24 @@ public class ConsoleCapacityProfileController {
       @RequestParam(value = "groupBy", required = false, defaultValue = "TENANT") String groupBy,
       @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<CapacityProfileResponse> resp =
-        proxyClient()
-            .get()
-            .uri(
-                uriBuilder -> {
-                  var builder =
-                      uriBuilder
-                          .path("/internal/orchestrator/capacity-profile")
-                          .queryParam("tenantId", resolved)
-                          .queryParam("groupBy", groupBy)
-                          .queryParam("limit", limit);
-                  if (from != null && !from.isBlank()) {
-                    builder.queryParam("from", from);
-                  }
-                  if (to != null && !to.isBlank()) {
-                    builder.queryParam("to", to);
-                  }
-                  return builder.build();
-                })
-            .retrieve()
-            .body(typedResponse());
+    CommonResponse<CapacityProfileResponse> resp = proxyClient()
+        .get()
+        .uri(uriBuilder -> {
+          var builder = uriBuilder
+              .path("/internal/orchestrator/capacity-profile")
+              .queryParam("tenantId", resolved)
+              .queryParam("groupBy", groupBy)
+              .queryParam("limit", limit);
+          if (from != null && !from.isBlank()) {
+            builder.queryParam("from", from);
+          }
+          if (to != null && !to.isBlank()) {
+            builder.queryParam("to", to);
+          }
+          return builder.build();
+        })
+        .retrieve()
+        .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 

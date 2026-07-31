@@ -6,5 +6,6 @@ import lombok.Data;
 @Data
 public class ForceOfflineWorkerRequest {
 
-  @ValidTenantId private String tenantId;
+  @ValidTenantId
+  private String tenantId;
 }

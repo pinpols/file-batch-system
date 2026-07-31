@@ -115,10 +115,9 @@ class AbstractTaskConsumerTest {
     String p1 = JsonUtils.toJson(m1);
     String p2 = JsonUtils.toJson(m2);
     when(executor.executeBatchDetailed(any(), anyString()))
-        .thenReturn(
-            List.of(
-                BatchItemExecution.completed(0, m1, new WorkerExecutionResult("1", true, "ok")),
-                BatchItemExecution.failed(1, m2, new IllegalArgumentException("bad item"))));
+        .thenReturn(List.of(
+            BatchItemExecution.completed(0, m1, new WorkerExecutionResult("1", true, "ok")),
+            BatchItemExecution.failed(1, m2, new IllegalArgumentException("bad item"))));
 
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(p1, p2));
@@ -137,16 +136,12 @@ class AbstractTaskConsumerTest {
     String firstPayload = JsonUtils.toJson(first);
     String secondPayload = " " + firstPayload;
     when(executor.executeBatchDetailed(any(), anyString()))
-        .thenReturn(
-            List.of(
-                BatchItemExecution.failed(0, first, new IllegalArgumentException("first failed")),
-                BatchItemExecution.completed(
-                    1, second, new WorkerExecutionResult("1", true, "ok"))));
+        .thenReturn(List.of(
+            BatchItemExecution.failed(0, first, new IllegalArgumentException("first failed")),
+            BatchItemExecution.completed(1, second, new WorkerExecutionResult("1", true, "ok"))));
 
-    boolean result =
-        (boolean)
-            ReflectionTestUtils.invokeMethod(
-                consumer, "doConsumeBatch", List.of(firstPayload, secondPayload));
+    boolean result = (boolean) ReflectionTestUtils.invokeMethod(
+        consumer, "doConsumeBatch", List.of(firstPayload, secondPayload));
 
     assertThat(result).isTrue();
     verify(dlq).publish(org.mockito.ArgumentMatchers.eq(firstPayload), any(), any(), any());
@@ -186,22 +181,8 @@ class AbstractTaskConsumerTest {
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null, "worker-A");
 
     // Message targets worker-B, but this consumer is worker-A
-    TaskDispatchMessage msg =
-        new TaskDispatchMessage(
-            "v2",
-            "t1",
-            1L,
-            null,
-            1L,
-            null,
-            null,
-            "IMPORT",
-            "worker-B",
-            null,
-            "tr",
-            "k",
-            null,
-            null);
+    TaskDispatchMessage msg = new TaskDispatchMessage(
+        "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-B", null, "tr", "k", null, null);
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
@@ -215,22 +196,8 @@ class AbstractTaskConsumerTest {
     when(executor.execute(any(), any())).thenReturn(new WorkerExecutionResult("1", true, "ok"));
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null, "worker-A");
 
-    TaskDispatchMessage msg =
-        new TaskDispatchMessage(
-            "v2",
-            "t1",
-            1L,
-            null,
-            1L,
-            null,
-            null,
-            "IMPORT",
-            "worker-A",
-            null,
-            "tr",
-            "k",
-            null,
-            null);
+    TaskDispatchMessage msg = new TaskDispatchMessage(
+        "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-A", null, "tr", "k", null, null);
     ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
     verify(executor).execute(any(), anyString());
@@ -277,12 +244,10 @@ class AbstractTaskConsumerTest {
   @Test
   void doConsume_clearsMdcAfterSuccessfulExecution() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
-    when(executor.execute(any(), any()))
-        .thenAnswer(
-            inv -> {
-              MDC.put("tenantId", "should-be-cleared");
-              return new WorkerExecutionResult("1", true, "ok");
-            });
+    when(executor.execute(any(), any())).thenAnswer(inv -> {
+      MDC.put("tenantId", "should-be-cleared");
+      return new WorkerExecutionResult("1", true, "ok");
+    });
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
     ReflectionTestUtils.invokeMethod(consumer, "doConsume", buildImportMessage());
@@ -339,14 +304,16 @@ class AbstractTaskConsumerTest {
     // ✅ base
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
     // ✅ node-direct（自己的 workerCode）
-    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches())
+        .isTrue();
     // ✅ TENANT 后缀（一段后缀）
     assertThat(p.matcher("batch.task.dispatch.import.default-tenant").matches()).isTrue();
     // ✅ PRIORITY 后缀
     assertThat(p.matcher("batch.task.dispatch.import.high").matches()).isTrue();
 
     // ❌ 别人的 node-direct（双段 .node.<otherCode>）
-    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-2").matches()).isFalse();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-2").matches())
+        .isFalse();
     // ❌ 不同 workerType 的 base
     assertThat(p.matcher("batch.task.dispatch.export").matches()).isFalse();
     // ❌ TENANT 后缀里有 dot（双段非 node 形态）
@@ -377,7 +344,8 @@ class AbstractTaskConsumerTest {
     Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
-    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches())
+        .isTrue();
     // FIXED 模式不订阅任何 tenant/priority 后缀
     assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isFalse();
     assertThat(p.matcher("batch.task.dispatch.import.high").matches()).isFalse();
@@ -397,7 +365,8 @@ class AbstractTaskConsumerTest {
     Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
-    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches())
+        .isTrue();
     // ✅ allowlist 中的租户
     assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isTrue();
     assertThat(p.matcher("batch.task.dispatch.import.t2").matches()).isTrue();
@@ -418,7 +387,8 @@ class AbstractTaskConsumerTest {
     Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
-    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches())
+        .isTrue();
     assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isFalse();
   }
 
@@ -451,48 +421,47 @@ class AbstractTaskConsumerTest {
 
     WorkerConfiguration cfg = workerConfiguration(workerType, workerCode);
 
-    AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
-          @Override
-          protected AbstractWorkerLoop workerLoop() {
-            return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport()) {
-              @Override
-              protected WorkerConfiguration workerConfiguration() {
-                return cfg;
-              }
-
-              @Override
-              protected String workerGroup() {
-                return "test";
-              }
-
-              @Override
-              protected int workerPort() {
-                return 0;
-              }
-            };
-          }
-
+    AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
+      @Override
+      protected AbstractWorkerLoop workerLoop() {
+        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport()) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return cfg;
           }
 
           @Override
-          protected TaskDispatchExecutor taskDispatchExecutor() {
-            return executorArg;
+          protected String workerGroup() {
+            return "test";
           }
 
           @Override
-          public String listenerId() {
-            return "test-listener";
-          }
-
-          @Override
-          protected DeadLetterPublisher deadLetterPublisher() {
-            return dlqArg;
+          protected int workerPort() {
+            return 0;
           }
         };
+      }
+
+      @Override
+      protected WorkerConfiguration workerConfiguration() {
+        return cfg;
+      }
+
+      @Override
+      protected TaskDispatchExecutor taskDispatchExecutor() {
+        return executorArg;
+      }
+
+      @Override
+      public String listenerId() {
+        return "test-listener";
+      }
+
+      @Override
+      protected DeadLetterPublisher deadLetterPublisher() {
+        return dlqArg;
+      }
+    };
     return consumer;
   }
 

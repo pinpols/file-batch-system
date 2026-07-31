@@ -32,7 +32,10 @@ public class S3HealthIndicator implements HealthIndicator {
       s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
       return Health.up().withDetail("bucket", bucket).withDetail("exists", true).build();
     } catch (NoSuchBucketException ex) {
-      return Health.up().withDetail("bucket", bucket).withDetail("exists", false).build();
+      return Health.up()
+          .withDetail("bucket", bucket)
+          .withDetail("exists", false)
+          .build();
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(S3HealthIndicator.class, "catch:Exception", ex);
       return Health.down(ex).withDetail("bucket", bucket).build();

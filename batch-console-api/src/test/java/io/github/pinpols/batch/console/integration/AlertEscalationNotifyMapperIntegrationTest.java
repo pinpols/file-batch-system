@@ -25,9 +25,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private AlertEventMapper alertEventMapper;
+  @Autowired
+  private AlertEventMapper alertEventMapper;
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void shouldSelectOnlyEscalatedPendingOpenRowsThenStopAfterWatermarkBump() {
@@ -63,7 +65,8 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
     // 期望水位线=5 与实际 0 不符 → CAS 不命中,0 行
     int marked = alertEventMapper.markEscalationNotified(tenantId, alertId, 5, 1);
     assertThat(marked).isZero();
-    assertThat(alertEventMapper.selectById(tenantId, alertId).getEscalationNotifiedTier()).isZero();
+    assertThat(alertEventMapper.selectById(tenantId, alertId).getEscalationNotifiedTier())
+        .isZero();
   }
 
   @Test
@@ -102,11 +105,10 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
         tier,
         Timestamp.from(BatchDateTimeSupport.utcNow()),
         notifiedTier);
-    Long id =
-        jdbcTemplate.queryForObject(
-            "select id from batch.alert_event where tenant_id = ? order by id desc limit 1",
-            Long.class,
-            tenantId);
+    Long id = jdbcTemplate.queryForObject(
+        "select id from batch.alert_event where tenant_id = ? order by id desc limit 1",
+        Long.class,
+        tenantId);
     return id == null ? -1L : id;
   }
 }

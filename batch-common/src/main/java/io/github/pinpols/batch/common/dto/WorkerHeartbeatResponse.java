@@ -44,9 +44,8 @@ public record WorkerHeartbeatResponse(
    */
   public static WorkerHeartbeatResponse fromWorkerState(
       String workerStatus, Integer maxConcurrent) {
-    boolean draining =
-        WorkerRegistryStatus.DRAINING.name().equals(workerStatus)
-            || WorkerRegistryStatus.DECOMMISSIONED.name().equals(workerStatus);
+    boolean draining = WorkerRegistryStatus.DRAINING.name().equals(workerStatus)
+        || WorkerRegistryStatus.DECOMMISSIONED.name().equals(workerStatus);
     return new WorkerHeartbeatResponse(
         draining ? STATUS_DRAINING : STATUS_NORMAL, maxConcurrent, draining, List.of(), null);
   }
