@@ -109,7 +109,7 @@ public class AssetFreshnessPolicyService {
     detail.put("staleAt", breach.staleAt().toString());
     detail.put("breachType", breach.breachType());
     detail.put("policyId", policy.id());
-    alertEventService.emit(AlertEmitRequest.builder()
+    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
         .tenantId(policy.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(breach.alertType())
@@ -122,7 +122,8 @@ public class AssetFreshnessPolicyService {
             + breach.bizDate())
         .detailJson(JsonUtils.toJson(detail))
         .resourceKey(resourceKey)
-        .build());
+        .build();
+    alertEventService.emit(alertRequest);
   }
 
   private boolean validPolicy(AssetFreshnessPolicyRecord policy) {

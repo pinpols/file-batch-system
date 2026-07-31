@@ -178,7 +178,7 @@ public class LaunchBatchDayService {
         .updatedAt(ctx.now())
         .build();
     batchDayInstanceMapper.insert(newDay);
-    appendBatchDayAuditLog(BatchDayAuditLogParam.builder()
+    BatchDayAuditLogParam auditLog = BatchDayAuditLogParam.builder()
         .tenantId(request.tenantId())
         .traceId(request.traceId())
         .toDayStatus(dayStatus)
@@ -190,7 +190,8 @@ public class LaunchBatchDayService {
         .lateCount(ctx.lateAccepted() ? 1 : 0)
         .catchupCount(ctx.catchUpLaunch() ? 1 : 0)
         .cutoffAt(ctx.cutoffAt())
-        .build());
+        .build();
+    appendBatchDayAuditLog(auditLog);
   }
 
   private static String resolveCreateDayStatus(BatchDayUpsertContext ctx, boolean pastCutoff) {
@@ -227,7 +228,7 @@ public class LaunchBatchDayService {
           + ", version="
           + plan.updated().version());
     }
-    appendBatchDayAuditLog(BatchDayAuditLogParam.builder()
+    BatchDayAuditLogParam auditLog = BatchDayAuditLogParam.builder()
         .tenantId(request.tenantId())
         .traceId(request.traceId())
         .fromDayStatus(existing.dayStatus())
@@ -240,7 +241,8 @@ public class LaunchBatchDayService {
         .lateCount(plan.updated().lateCount())
         .catchupCount(plan.updated().catchupCount())
         .cutoffAt(ctx.cutoffAt())
-        .build());
+        .build();
+    appendBatchDayAuditLog(auditLog);
   }
 
   private BatchDayUpdatePlan planBatchDayUpdate(

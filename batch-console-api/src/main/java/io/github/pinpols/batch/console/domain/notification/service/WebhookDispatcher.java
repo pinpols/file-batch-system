@@ -193,16 +193,16 @@ public class WebhookDispatcher {
           || !matches(subscription.getEventTypes(), payload.eventType())) {
         continue;
       }
-      Long deliveryLogId =
-          deliveryLogRepository.insertReturningId(WebhookDeliveryLogInsertParam.builder()
-              .tenantId(payload.tenantId())
-              .subscriptionId(subscription.getId())
-              .eventType(payload.eventType())
-              .payloadJson(payloadJson)
-              .deliveryStatus("PENDING")
-              .attempt(0)
-              .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
-              .build());
+      WebhookDeliveryLogInsertParam deliveryLogParam = WebhookDeliveryLogInsertParam.builder()
+          .tenantId(payload.tenantId())
+          .subscriptionId(subscription.getId())
+          .eventType(payload.eventType())
+          .payloadJson(payloadJson)
+          .deliveryStatus("PENDING")
+          .attempt(0)
+          .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
+          .build();
+      Long deliveryLogId = deliveryLogRepository.insertReturningId(deliveryLogParam);
       pendingDeliveries.add(
           new PendingWebhookDelivery(deliveryLogId, subscription, payload, payloadJson));
     }

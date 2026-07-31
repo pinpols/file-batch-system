@@ -248,11 +248,11 @@ public class WorkflowDagValidator {
 
   /** selectByQuery 用 LIKE 模糊匹配 code,这里取精确相等那条(已按 version desc,id desc 排序 → live 行在前)。 */
   private WorkflowDefinitionEntity findLiveDefinitionByCode(String tenantId, String workflowCode) {
-    List<WorkflowDefinitionEntity> matches =
-        workflowDefinitionMapper.selectByQuery(WorkflowDefinitionQuery.builder()
-            .tenantId(tenantId)
-            .workflowCode(workflowCode)
-            .build());
+    WorkflowDefinitionQuery query = WorkflowDefinitionQuery.builder()
+        .tenantId(tenantId)
+        .workflowCode(workflowCode)
+        .build();
+    List<WorkflowDefinitionEntity> matches = workflowDefinitionMapper.selectByQuery(query);
     for (WorkflowDefinitionEntity d : matches) {
       if (workflowCode.equals(d.getWorkflowCode())) {
         return d;

@@ -207,7 +207,7 @@ public class WorkflowRunManagementApplicationService {
     detail.put("workflowRunId", run.getId());
     detail.put("nodeCode", nodeCode);
     detail.put("operatorId", operatorId);
-    alertService.emit(AlertEmitRequest.builder()
+    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
         .tenantId(run.getTenantId())
         .serviceName("batch-orchestrator")
         .alertType("WORKFLOW_NODE_MANUAL_SKIP")
@@ -216,7 +216,8 @@ public class WorkflowRunManagementApplicationService {
         .resourceKey(resourceKey)
         .detailJson(JsonUtils.toJson(detail))
         .traceId(null)
-        .build());
+        .build();
+    alertService.emit(alertRequest);
   }
 
   /** 把 run 切到 TERMINATED：SQL 期望前态守护 + 同事务发 outbox 终态事件。 */

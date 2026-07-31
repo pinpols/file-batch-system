@@ -151,13 +151,14 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
           futures.add(pool.submit(() -> {
             await(startGate);
             try {
-              taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+              TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
                   .tenantId(TENANT)
                   .taskId(shard.taskId())
                   .success(true)
                   .resultSummary("{\"records\":1}")
                   .partitionInvocationId(invocation)
-                  .build());
+                  .build();
+              taskExecutionService.applyTaskOutcome(outcome);
             } catch (RuntimeException ex) {
               classify(ex, deadlocks, benignConflicts);
             }
@@ -220,13 +221,14 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
       resetShardToRunning(shards.get(i), fannedOut.seed().workerCode(), settleInvocations[i]);
     }
     for (int i = 0; i < shards.size(); i++) {
-      taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+      TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
           .tenantId(TENANT)
           .taskId(shards.get(i).taskId())
           .success(true)
           .resultSummary("{\"records\":1}")
           .partitionInvocationId(settleInvocations[i])
-          .build());
+          .build();
+      taskExecutionService.applyTaskOutcome(outcome);
     }
 
     for (Shard shard : shards) {
