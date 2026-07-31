@@ -75,10 +75,10 @@ public class DispatchReceiptPollScheduler {
   void initializeMeters() {
     this.httpClient =
         new OkHttpClient.Builder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .readTimeout(Duration.ofSeconds(15))
-            .writeTimeout(Duration.ofSeconds(5))
-            .callTimeout(Duration.ofSeconds(30))
+            .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+            .readTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))
+            .writeTimeout(Duration.ofMillis(properties.getWriteTimeoutMillis()))
+            .callTimeout(Duration.ofMillis(properties.getCallTimeoutMillis()))
             .dns(guardedDns())
             .build();
     meterRegistry.gauge("batch.dispatch.receipt.poll.failures", pollFailures);

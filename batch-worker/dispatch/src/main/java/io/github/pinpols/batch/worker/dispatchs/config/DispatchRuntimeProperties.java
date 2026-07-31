@@ -19,4 +19,10 @@ public class DispatchRuntimeProperties {
 
   /** OSS 内联上传的最大对象大小，单位 MiB。 */
   private int ossMaxInlineMib = 512;
+
+  /** HTTP/SMTP 健康探测的连接超时，单位毫秒。 */
+  private long probeConnectTimeoutMillis = 5_000L;
+
+  /** HTTP 健康探测的读取超时，单位毫秒。 */
+  private long probeReadTimeoutMillis = 5_000L;
 }

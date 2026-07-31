@@ -6,11 +6,12 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import java.time.Duration;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,10 +41,22 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
-@RequiredArgsConstructor
 public class ImportTaskExecutor implements BatchTaskExecutor {
 
   private final ImportStepExecutionAdapter delegate;
+  private final WorkerExecutionTimeoutProperties timeoutProperties;
+
+  /** 保留旧构造函数，兼容无 Spring 的 SDK/单测调用方。 */
+  public ImportTaskExecutor(ImportStepExecutionAdapter delegate) {
+    this(delegate, new WorkerExecutionTimeoutProperties());
+  }
+
+  @Autowired
+  public ImportTaskExecutor(
+      ImportStepExecutionAdapter delegate, WorkerExecutionTimeoutProperties timeoutProperties) {
+    this.delegate = delegate;
+    this.timeoutProperties = timeoutProperties;
+  }
 
   @Override
   public String taskType() {
@@ -57,7 +70,7 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
         Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET),
         false, // 文件 IMPORT 通常一次性,不视为幂等
         true,
-        Duration.ofMinutes(30) // import 大文件可能跑久
+        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()) // import 大文件可能跑久
         );
   }
 

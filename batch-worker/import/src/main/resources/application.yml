@@ -36,6 +36,8 @@ batch:
         enabled: true
     # Worker 类型（IMPORT/EXPORT/DISPATCH）：用于统一行为/注册/指标标签
     type: IMPORT
+    execution:
+      capability-timeout-seconds: ${BATCH_WORKER_IMPORT_CAPABILITY_TIMEOUT_SECONDS:1800}
     # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
     max-concurrent-tasks: ${BATCH_WORKER_IMPORT_MAX_CONCURRENT_TASKS:6}
     # P2-5 worker 端 Kafka 订阅模式：

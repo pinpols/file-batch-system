@@ -364,6 +364,15 @@ batch:
 
   # Worker 通用配置（import / export / dispatch 共用）
   worker:
+    execution:
+      # worker 任务执行回退超时（秒）；任务自身声明 timeoutSeconds 时优先使用任务值。
+      default-timeout-seconds: ${BATCH_WORKER_EXECUTION_DEFAULT_TIMEOUT_SECONDS:1800}
+      # SPI 能力元数据中的建议超时（秒），各 worker 可在自身 application.yml 覆盖。
+      capability-timeout-seconds: ${BATCH_WORKER_EXECUTION_CAPABILITY_TIMEOUT_SECONDS:1800}
+      max-timeout-seconds: ${BATCH_WORKER_EXECUTION_MAX_TIMEOUT_SECONDS:7200}
+      cancel-grace-seconds: ${BATCH_WORKER_EXECUTION_CANCEL_GRACE_SECONDS:30}
+      shutdown-grace-seconds: ${BATCH_WORKER_EXECUTION_SHUTDOWN_GRACE_SECONDS:5}
+      daemon-threads: ${BATCH_WORKER_EXECUTION_DAEMON_THREADS:false}
     lease:
       # 租约续约间隔（毫秒）：worker 定期刷新租约防止被回收
       renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
