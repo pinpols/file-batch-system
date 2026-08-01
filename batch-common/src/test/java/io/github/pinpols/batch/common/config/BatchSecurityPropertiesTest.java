@@ -101,7 +101,7 @@ class BatchSecurityPropertiesTest {
     ReflectionTestUtils.setField(props, "environment", env);
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("shipped weak password");
+        .hasMessageContaining("known weak password");
   }
 
   @Test
