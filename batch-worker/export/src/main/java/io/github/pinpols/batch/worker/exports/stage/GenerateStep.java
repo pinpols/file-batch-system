@@ -27,12 +27,17 @@ import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategy;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCheckpoint;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -328,8 +333,21 @@ public class GenerateStep implements ExportStageStep {
           case "FIXED_WIDTH" -> BatchFileConstants.TXT_SUFFIX;
           default -> BatchFileConstants.JSON_SUFFIX;
         };
-    return Files.createTempFile(
-        BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()), suffix);
+    Path dir = privateExportDirectory();
+    try {
+      return Files.createTempFile(
+          dir,
+          BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()),
+          suffix,
+          ownerOnlyFileAttribute());
+    } catch (UnsupportedOperationException ignored) {
+      Path path = Files.createTempFile(
+          dir,
+          BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()),
+          suffix);
+      setOwnerOnlyPermissions(path);
+      return path;
+    }
   }
 
   /**
@@ -377,9 +395,50 @@ public class GenerateStep implements ExportStageStep {
           case "FIXED_WIDTH" -> BatchFileConstants.TXT_SUFFIX;
           default -> BatchFileConstants.JSON_SUFFIX;
         };
+    Path path = privateExportDirectory().resolve("inst-" + pipelineInstanceId + suffix);
+    if (Files.notExists(path)) {
+      createOwnerOnlyFile(path);
+    } else {
+      setOwnerOnlyPermissions(path);
+    }
+    return path;
+  }
+
+  private static Path privateExportDirectory() throws Exception {
     Path dir = Path.of(System.getProperty("java.io.tmpdir"), "file-batch-export");
     Files.createDirectories(dir);
-    return dir.resolve("inst-" + pipelineInstanceId + suffix);
+    setOwnerOnlyPermissions(dir);
+    return dir;
+  }
+
+  private static FileAttribute<Set<PosixFilePermission>> ownerOnlyFileAttribute() {
+    return PosixFilePermissions.asFileAttribute(
+        Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+  }
+
+  private static void setOwnerOnlyPermissions(Path path) {
+    try {
+      Files.setPosixFilePermissions(
+          path,
+          Files.isDirectory(path)
+              ? Set.of(
+                  PosixFilePermission.OWNER_READ,
+                  PosixFilePermission.OWNER_WRITE,
+                  PosixFilePermission.OWNER_EXECUTE)
+              : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+    } catch (UnsupportedOperationException ignored) {
+      // Windows ACLs are managed by the host; the file is still created in the private staging dir.
+    } catch (IOException ignored) {
+      // Permission hardening must not make export unavailable on filesystems without POSIX attrs.
+    }
+  }
+
+  private static void createOwnerOnlyFile(Path path) throws IOException {
+    try {
+      Files.createFile(path, ownerOnlyFileAttribute());
+    } catch (UnsupportedOperationException ignored) {
+      Files.createFile(path);
+    }
   }
 
   /** 幂等跳过(GENERATE 已完成且文件仍在):不重生成,仅补齐下游 STORE/FEEDBACK 需要的 attribute。 */

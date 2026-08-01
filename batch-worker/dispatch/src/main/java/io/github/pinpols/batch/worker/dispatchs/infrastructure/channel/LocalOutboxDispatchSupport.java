@@ -5,11 +5,16 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -56,6 +61,10 @@ final class LocalOutboxDispatchSupport {
         endpoint = System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox";
       }
       Path directory = resolveLocalDirectory(endpoint, properties);
+      boolean privateTarget = isDefaultOutboxEndpoint(endpoint);
+      if (privateTarget) {
+        hardenPrivateDirectory(directory);
+      }
       String channelCode = sanitizeFileSegment(
           String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE)));
       Path envelopePath = directory.resolve(channelCode + "-" + externalRequestId + ".json");
@@ -77,7 +86,7 @@ final class LocalOutboxDispatchSupport {
         envelope.put("transportStubDetail", stubDetail == null ? "" : stubDetail);
       }
       byte[] envelopeBytes = JsonUtils.toJson(envelope).getBytes(StandardCharsets.UTF_8);
-      Files.write(envelopePath, envelopeBytes);
+      writeOutboxFile(envelopePath, envelopeBytes, privateTarget);
       DispatchManifestSupport.ManifestPayload manifest = null;
       if (DispatchManifestSupport.enabled(channelConfig)) {
         Path manifestPath = directory.resolve(
@@ -90,7 +99,7 @@ final class LocalOutboxDispatchSupport {
             receiptCode,
             DispatchManifestSupport.digest(envelopeBytes),
             manifestPath.toString());
-        Files.write(manifestPath, manifest.bytes());
+        writeOutboxFile(manifestPath, manifest.bytes(), privateTarget);
       }
 
       String message = transportStub
@@ -128,6 +137,48 @@ final class LocalOutboxDispatchSupport {
       }
     }
     return realDirectory;
+  }
+
+  private static void hardenPrivateDirectory(Path directory) {
+    try {
+      Files.setPosixFilePermissions(
+          directory,
+          Set.of(
+              PosixFilePermission.OWNER_READ,
+              PosixFilePermission.OWNER_WRITE,
+              PosixFilePermission.OWNER_EXECUTE));
+    } catch (UnsupportedOperationException | IOException ignored) {
+      // The default directory is still isolated by the host filesystem on non-POSIX platforms.
+    }
+  }
+
+  private static boolean isDefaultOutboxEndpoint(String endpoint) {
+    return (System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox").equals(endpoint);
+  }
+
+  private static void writeOutboxFile(Path path, byte[] bytes, boolean privateTarget)
+      throws IOException {
+    if (!privateTarget) {
+      Files.write(path, bytes);
+      return;
+    }
+    if (Files.notExists(path)) {
+      try {
+        Files.createFile(
+            path,
+            PosixFilePermissions.asFileAttribute(
+                Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)));
+      } catch (UnsupportedOperationException ignored) {
+        Files.createFile(path);
+      }
+    }
+    try {
+      Files.setPosixFilePermissions(
+          path, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+    } catch (UnsupportedOperationException ignored) {
+      // Windows ACLs are managed by the host.
+    }
+    Files.write(path, bytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
   }
 
   private static String sanitizeFileSegment(String raw) {

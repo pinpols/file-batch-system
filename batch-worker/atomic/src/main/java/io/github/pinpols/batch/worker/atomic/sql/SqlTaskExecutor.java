@@ -21,8 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanFactory;
@@ -69,10 +67,6 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   static final String PARAM_DS_BEAN = "dataSourceBean";
   static final String PARAM_STMT_TIMEOUT = "statementTimeoutSeconds";
   static final String PARAM_AUTO_COMMIT = "autoCommit";
-
-  // 简化的语句类型识别 — 取首关键字
-  private static final Pattern FIRST_KEYWORD =
-      Pattern.compile("^\\s*(--[^\\n]*\\n|/\\*.*?\\*/|\\s)*(\\w+)", Pattern.DOTALL);
 
   private final SqlExecutorProperties props;
   private final BeanFactory beanFactory;
@@ -379,9 +373,9 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
   /** 取首关键字粗分类语句类型。三道闸模型下<b>不再做类型白名单校验</b>,本方法仅用于判定"是否全是 SELECT"以走只读事务 + statement_timeout 优化。 */
   static String detectStatementType(String stmt) {
-    Matcher m = FIRST_KEYWORD.matcher(stmt);
-    if (!m.find()) return "UNKNOWN";
-    String kw = m.group(2).toUpperCase(Locale.ROOT);
+    String kw = firstKeyword(stmt);
+    if (kw == null) return "UNKNOWN";
+    kw = kw.toUpperCase(Locale.ROOT);
     return switch (kw) {
       case "SELECT", "WITH", "EXPLAIN", "SHOW" -> "SELECT";
       case "INSERT" -> "INSERT";
@@ -403,6 +397,45 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       case "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "SET" -> "TX";
       default -> "OTHER";
     };
+  }
+
+  /** 跳过前导注释并读取关键字,避免使用可被超长注释触发回溯的正则表达式。 */
+  private static String firstKeyword(String stmt) {
+    if (stmt == null) {
+      return null;
+    }
+    int index = 0;
+    while (index < stmt.length()) {
+      while (index < stmt.length() && Character.isWhitespace(stmt.charAt(index))) {
+        index++;
+      }
+      if (index >= stmt.length()) {
+        return null;
+      }
+      if (stmt.startsWith("--", index)) {
+        int lineEnd = stmt.indexOf('\n', index + 2);
+        index = lineEnd < 0 ? stmt.length() : lineEnd + 1;
+        continue;
+      }
+      if (stmt.startsWith("/*", index)) {
+        int commentEnd = stmt.indexOf("*/", index + 2);
+        if (commentEnd < 0) {
+          return null;
+        }
+        index = commentEnd + 2;
+        continue;
+      }
+      int keywordStart = index;
+      while (index < stmt.length()) {
+        char c = stmt.charAt(index);
+        if (!(Character.isLetterOrDigit(c) || c == '_')) {
+          break;
+        }
+        index++;
+      }
+      return keywordStart == index ? null : stmt.substring(keywordStart, index);
+    }
+    return null;
   }
 
   /**
