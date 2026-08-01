@@ -167,7 +167,7 @@ public class BatchDayGateService {
         request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
     if (updated == 0) {
       log.warn(
-          "updateAcceptance(WAITING) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          "updateAcceptance(WAITING) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
           request.tenantId(),
           request.requestId());
     }
@@ -180,7 +180,7 @@ public class BatchDayGateService {
         request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
     if (updated == 0) {
       log.warn(
-          "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
           request.tenantId(),
           request.requestId());
     }

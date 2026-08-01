@@ -58,16 +58,18 @@ public final class ConfigPackageGuidanceContent {
     JsonNode root;
     try (InputStream in = ConfigPackageGuidanceContent.class.getResourceAsStream(RESOURCE)) {
       if (in == null) {
-        throw new IllegalStateException("缺少配置包指南资源: " + RESOURCE);
+        throw new IllegalStateException(
+            "Configuration package guidance resource is missing: " + RESOURCE);
       }
       root = mapper.readTree(in);
     } catch (IOException e) {
-      throw new IllegalStateException("无法解析配置包指南资源: " + RESOURCE, e);
+      throw new IllegalStateException(
+          "Failed to parse configuration package guidance resource: " + RESOURCE, e);
     }
 
     JsonNode fragmentsNode = root.get("fragments");
     if (fragmentsNode == null || !fragmentsNode.isObject()) {
-      throw new IllegalStateException(RESOURCE + " 缺少 fragments 对象");
+      throw new IllegalStateException(RESOURCE + " is missing the fragments object");
     }
     Map<String, String> fragments = new LinkedHashMap<>();
     fragmentsNode
@@ -76,7 +78,7 @@ public final class ConfigPackageGuidanceContent {
 
     JsonNode sheetsNode = root.get("sheets");
     if (sheetsNode == null || !sheetsNode.isObject()) {
-      throw new IllegalStateException(RESOURCE + " 缺少 sheets 对象");
+      throw new IllegalStateException(RESOURCE + " is missing the sheets object");
     }
     Map<String, Sheet> sheets = new LinkedHashMap<>();
     sheetsNode
@@ -89,7 +91,8 @@ public final class ConfigPackageGuidanceContent {
   private static Sheet parseSheet(String name, JsonNode node, Map<String, String> fragments) {
     JsonNode headersNode = node.get("headers");
     if (headersNode == null || !headersNode.isArray()) {
-      throw new IllegalStateException(RESOURCE + " sheet '" + name + "' 缺少 headers 数组");
+      throw new IllegalStateException(
+          RESOURCE + " sheet '" + name + "' is missing the headers array");
     }
     String[] headers = new String[headersNode.size()];
     for (int i = 0; i < headersNode.size(); i++) {
@@ -98,7 +101,7 @@ public final class ConfigPackageGuidanceContent {
 
     JsonNode rowsNode = node.get("rows");
     if (rowsNode == null || !rowsNode.isArray()) {
-      throw new IllegalStateException(RESOURCE + " sheet '" + name + "' 缺少 rows 数组");
+      throw new IllegalStateException(RESOURCE + " sheet '" + name + "' is missing the rows array");
     }
     List<String[]> rows = new ArrayList<>(rowsNode.size());
     for (JsonNode rowNode : rowsNode) {
@@ -119,8 +122,8 @@ public final class ConfigPackageGuidanceContent {
       String key = m.group(1);
       String value = fragments.get(key);
       if (value == null) {
-        throw new IllegalStateException(
-            RESOURCE + " sheet '" + sheetName + "' 引用未知 fragment 占位符: ${" + key + "}");
+        throw new IllegalStateException(RESOURCE + " sheet '" + sheetName
+            + "' references an unknown fragment placeholder: ${" + key + "}");
       }
       m.appendReplacement(sb, Matcher.quoteReplacement(value));
     }
@@ -132,7 +135,7 @@ public final class ConfigPackageGuidanceContent {
   public String fragment(String key) {
     String value = fragments.get(key);
     if (value == null) {
-      throw new IllegalStateException(RESOURCE + " 缺少 fragment: " + key);
+      throw new IllegalStateException(RESOURCE + " is missing fragment: " + key);
     }
     return value;
   }
@@ -141,7 +144,7 @@ public final class ConfigPackageGuidanceContent {
   public Sheet sheet(String name) {
     Sheet sheet = sheets.get(name);
     if (sheet == null) {
-      throw new IllegalStateException(RESOURCE + " 缺少 sheet: " + name);
+      throw new IllegalStateException(RESOURCE + " is missing sheet: " + name);
     }
     return sheet;
   }

@@ -13,11 +13,11 @@ public record ShardAssignment(int shardTotal, int shardIndex) {
 
   public ShardAssignment {
     if (shardTotal < 1) {
-      throw new IllegalArgumentException("shardTotal 必须 >= 1，当前：" + shardTotal);
+      throw new IllegalArgumentException("shardTotal must be >= 1; actual value: " + shardTotal);
     }
     if (shardIndex < 0 || shardIndex >= shardTotal) {
       throw new IllegalArgumentException(
-          "shardIndex 必须在 [0, shardTotal=" + shardTotal + ") 区间，当前：" + shardIndex);
+          "shardIndex must be in [0, shardTotal=" + shardTotal + "); actual value: " + shardIndex);
     }
   }
 

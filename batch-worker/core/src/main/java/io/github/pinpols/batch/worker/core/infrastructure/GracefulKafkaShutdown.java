@@ -120,7 +120,7 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
         workerRegistryService.deactivate(registration);
       } catch (Exception ex) {
         log.warn(
-            "failed to deactivate worker on shutdown (心跳超时回退): workerId={}, cause={}",
+            "failed to deactivate worker on shutdown (heartbeat timeout fallback): workerId={}, cause={}",
             registration.getWorkerId(),
             ex.getMessage());
       }

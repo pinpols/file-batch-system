@@ -249,7 +249,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         if (!publishToDlqSafely(payload, ex.getMessage())) {
           // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
           log.error(
-              "{} DLQ 写入失败，不提交偏移量以便消息重新投递: taskId={}",
+              "{} failed to write to the DLQ; offset will not be committed so the message can be redelivered: taskId={}",
               workerConfiguration().workerType(),
               message.taskId());
           return false;
@@ -497,7 +497,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       return true;
     } catch (Exception dlqEx) {
       log.error(
-          "{} DLQ 发布失败: dlqError={}",
+          "{} failed to publish to the DLQ: dlqError={}",
           workerConfiguration().workerType(),
           dlqEx.getMessage(),
           dlqEx);

@@ -134,8 +134,8 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
       return;
     }
     throw new IllegalStateException(
-        "FATAL: batch.console.security.enabled=false 在 prod-like profile 下被禁止。"
-            + "如需联调请用 batch.security.bypass-mode 单一开关。");
+        "FATAL: batch.console.security.enabled=false is forbidden in production-like profiles."
+            + " Use the single batch.security.bypass-mode switch for integration testing.");
   }
 
   /**
@@ -152,15 +152,16 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
     }
     for (String origin : corsAllowedOrigins) {
       if (origin == null || origin.isBlank()) {
-        throw new IllegalStateException("FATAL: batch.console.security.cors-allowed-origins 含空白条目,"
-            + "必须是显式 origin(如 https://console.example.com)");
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.cors-allowed-origins contains a blank entry;"
+                + " each value must be an explicit origin (for example, https://console.example.com)");
       }
       String trimmed = origin.trim();
       if ("*".equals(trimmed) || "null".equalsIgnoreCase(trimmed)) {
         throw new IllegalStateException("FATAL: batch.console.security.cors-allowed-origins='"
             + trimmed
-            + "' 被禁止 —— allowCredentials=true 与通配符 origin 不兼容(W3C CORS 规范),"
-            + "必须显式列具体 origin。");
+            + "' is forbidden: allowCredentials=true is incompatible with wildcard origins (W3C CORS);"
+            + " list explicit origins instead.");
       }
     }
   }
@@ -176,12 +177,12 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
     }
     if (!loginEncryption.isEnabled()) {
       throw new IllegalStateException(
-          "FATAL: batch.console.security.login-encryption.enabled=false 在 prod-like profile 下被禁止");
+          "FATAL: batch.console.security.login-encryption.enabled=false is forbidden in production-like profiles");
     }
     if (!loginEncryption.isRequired()) {
       throw new IllegalStateException(
-          "FATAL: batch.console.security.login-encryption.required=false 在 prod-like profile 下被禁止"
-              + "（仅 dev / test profile 可关以兼容 API direct e2e）");
+          "FATAL: batch.console.security.login-encryption.required=false is forbidden in production-like profiles"
+              + " (it may be disabled only in dev / test profiles for API direct e2e compatibility)");
     }
   }
 }

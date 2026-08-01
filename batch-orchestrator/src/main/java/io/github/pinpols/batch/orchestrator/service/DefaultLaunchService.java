@@ -138,7 +138,7 @@ public class DefaultLaunchService implements LaunchService {
         loaded.existingInstance().getId());
     if (updated == 0) {
       log.warn(
-          "updateAcceptance(DUPLICATE) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          "updateAcceptance(DUPLICATE) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
           request.tenantId(),
           request.requestId());
     }
@@ -183,7 +183,7 @@ public class DefaultLaunchService implements LaunchService {
         prepared.jobInstance().getId());
     if (updated == 0) {
       log.warn(
-          "updateAcceptance(LAUNCHED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          "updateAcceptance(LAUNCHED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
           request.tenantId(),
           request.requestId());
     }
@@ -242,7 +242,7 @@ public class DefaultLaunchService implements LaunchService {
           jobInstance.getId());
       if (updated == 0) {
         log.warn(
-            "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+            "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
             request.tenantId(),
             request.requestId());
       }
@@ -605,7 +605,7 @@ public class DefaultLaunchService implements LaunchService {
         existingInstance.getId());
     if (updated == 0) {
       log.warn(
-          "updateAcceptance(DUPLICATE) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          "updateAcceptance(DUPLICATE) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
           request.tenantId(),
           request.requestId());
     }

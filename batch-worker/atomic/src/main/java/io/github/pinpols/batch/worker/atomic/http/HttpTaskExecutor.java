@@ -326,7 +326,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     try {
       resolved = InetAddress.getAllByName(host);
     } catch (UnknownHostException e) {
-      throw new HttpValidationException("host不能解析: " + host + " (" + e.getMessage() + ")");
+      throw new HttpValidationException(
+          "host cannot be resolved: " + host + " (" + e.getMessage() + ")");
     }
     for (InetAddress addr : resolved) {
       if (isBlockedAddress(addr)) {

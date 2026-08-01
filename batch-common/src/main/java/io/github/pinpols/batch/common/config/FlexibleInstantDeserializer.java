@@ -81,6 +81,7 @@ public class FlexibleInstantDeserializer extends StdScalarDeserializer<Instant> 
     } catch (DateTimeParseException ignored) {
       // 继续尝试下一种解析方式
     }
-    return (Instant) ctxt.handleWeirdStringValue(Instant.class, text, "无法解析为 Instant 的字符串");
+    return (Instant)
+        ctxt.handleWeirdStringValue(Instant.class, text, "Value cannot be parsed as an Instant");
   }
 }

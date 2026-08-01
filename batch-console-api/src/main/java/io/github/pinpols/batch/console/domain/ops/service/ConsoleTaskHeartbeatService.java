@@ -46,7 +46,8 @@ public class ConsoleTaskHeartbeatService {
     try {
       return objectMapper.readTree(raw);
     } catch (JsonProcessingException e) {
-      log.warn("job_task heartbeat_details 解析失败(taskId={}): {}", taskId, e.getMessage());
+      log.warn(
+          "Failed to parse job_task heartbeat_details (taskId={}): {}", taskId, e.getMessage());
       return null;
     }
   }

@@ -111,7 +111,7 @@ public class AlertEscalationNotifier {
         properties.getPollIntervalMillis(),
         TimeUnit.MILLISECONDS);
     log.info(
-        "AlertEscalationNotifier 已启动:poll={}ms batch={}",
+        "AlertEscalationNotifier started: poll={}ms batch={}",
         properties.getPollIntervalMillis(),
         properties.getBatchSize());
   }
@@ -141,7 +141,7 @@ public class AlertEscalationNotifier {
     executor.shutdown();
     try {
       if (!executor.awaitTermination(15, TimeUnit.SECONDS)) {
-        log.warn("AlertEscalationNotifier 未在 15s 内完成关闭,强制中断");
+        log.warn("AlertEscalationNotifier did not shut down within 15s; forcing interruption");
         executor.shutdownNow();
       }
     } catch (InterruptedException e) {
@@ -171,7 +171,7 @@ public class AlertEscalationNotifier {
         return;
       }
       log.warn(
-          "AlertEscalationNotifier DB 瞬时异常,下轮重试: {}",
+          "AlertEscalationNotifier transient DB failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
@@ -180,7 +180,7 @@ public class AlertEscalationNotifier {
         log.info("AlertEscalationNotifier poll skipped during shutdown: {}", t.getMessage());
         return;
       }
-      log.error("AlertEscalationNotifier 异常", t);
+      log.error("AlertEscalationNotifier failed", t);
     } finally {
       running.set(false);
     }
@@ -210,7 +210,7 @@ public class AlertEscalationNotifier {
     if (batch.isEmpty()) {
       return;
     }
-    log.debug("AlertEscalationNotifier 本轮取 {} 条待通知升级告警", batch.size());
+    log.debug("AlertEscalationNotifier loaded {} escalation notifications", batch.size());
     for (AlertEventEntity alert : batch) {
       if (stopping.get()) {
         return;
@@ -220,7 +220,7 @@ public class AlertEscalationNotifier {
       } catch (Throwable t) {
         // 单条异常不能拖累整批;水位线未推进,下轮会重试
         log.error(
-            "AlertEscalationNotifier 单条通知异常: alertId={} tenantId={}",
+            "AlertEscalationNotifier failed to deliver one notification: alertId={} tenantId={}",
             alert.getId(),
             alert.getTenantId(),
             t);

@@ -62,8 +62,8 @@ public class PartitionLeaseProperties {
     }
     if (expireSeconds >= maxPollSec / 2) {
       log.warn(
-          "batch.partition-lease.expire-seconds ({}s) 接近 max-poll-interval 一半 ({}s)；"
-              + " rebalance 期间 lease 重叠风险升高，建议调小到 1/3 以下。",
+          "batch.partition-lease.expire-seconds ({}s) is close to half of max-poll-interval ({}s);"
+              + " lease overlap risk increases during rebalance; reduce it below one third.",
           expireSeconds,
           maxPollSec);
     }

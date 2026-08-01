@@ -170,7 +170,9 @@ public class WorkerReportOutboxRepository {
         updated = sqliteMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
       }
       if (updated == 0) {
-        log.warn("worker report outbox updateGiveUp 0 行受影响,行已被其它实例接管: id={}", id);
+        log.warn(
+            "Worker report Outbox updateGiveUp affected 0 rows; another instance took over the event: id={}",
+            id);
       }
       log.warn(
           "worker report outbox give up after {} attempts: id={}, cause={}",
@@ -190,7 +192,9 @@ public class WorkerReportOutboxRepository {
         updated = sqliteMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
       }
       if (updated == 0) {
-        log.warn("worker report outbox updateRetry 0 行受影响,行已被其它实例接管: id={}", id);
+        log.warn(
+            "Worker report Outbox updateRetry affected 0 rows; another instance took over the event: id={}",
+            id);
       }
       log.warn(
           "worker report outbox publish failed: id={}, attempt={}/{}, nextAttemptAt={}, cause={}",
@@ -212,7 +216,9 @@ public class WorkerReportOutboxRepository {
       updated = sqliteMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
     }
     if (updated == 0) {
-      log.warn("worker report outbox giveUpRow 0 行受影响,行已被其它实例接管: id={}", id);
+      log.warn(
+          "Worker report Outbox giveUpRow affected 0 rows; another instance took over the event: id={}",
+          id);
     }
     log.warn("worker report outbox marked GIVE_UP: id={}, reason={}", id, reason);
   }

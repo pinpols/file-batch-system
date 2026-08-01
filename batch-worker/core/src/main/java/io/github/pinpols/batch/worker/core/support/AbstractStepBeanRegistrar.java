@@ -87,7 +87,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
         }
       });
       if (collected.isEmpty()) {
-        log.info("step registry snapshot refreshed: module={}, count=0 (未发现 bean)", module);
+        log.info("step registry snapshot refreshed: module={}, count=0 (no beans found)", module);
         return;
       }
       // 关键：用业务侧的 step.implCode() 做登记键而非 Spring bean name。运行时

@@ -16,7 +16,7 @@ class S3AutoConfigurationTest {
     assertThatThrownBy(
             () -> S3AutoConfiguration.validateCredentialsInProduction(properties, environment))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("对象存储凭据未配置");
+        .hasMessageContaining("object-storage credentials are not configured");
   }
 
   @Test
@@ -29,7 +29,7 @@ class S3AutoConfigurationTest {
     assertThatThrownBy(
             () -> S3AutoConfiguration.validateCredentialsInProduction(properties, environment))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("已知 MinIO 默认凭据");
+        .hasMessageContaining("known MinIO default credentials");
   }
 
   @Test

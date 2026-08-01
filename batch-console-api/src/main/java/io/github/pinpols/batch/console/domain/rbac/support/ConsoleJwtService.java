@@ -155,17 +155,18 @@ public class ConsoleJwtService {
       String jwtSecret = properties.getJwtSecret();
       if (!Texts.hasText(jwtSecret)) {
         throw new IllegalStateException(
-            "FATAL: batch.console.security.jwt-secret 为空，生产环境必须通过环境变量或密钥管理注入真实密钥");
+            "FATAL: batch.console.security.jwt-secret is empty; production requires a real secret injected through an environment variable or secret manager");
       }
       String lower = jwtSecret.toLowerCase(Locale.ROOT);
       if (lower.contains("change-me") || lower.contains("change_me")) {
         throw new IllegalStateException(
-            "FATAL: batch.console.security.jwt-secret 仍包含默认占位符，" + "生产环境必须通过环境变量或密钥管理注入真实密钥");
+            "FATAL: batch.console.security.jwt-secret still contains the default placeholder; "
+                + "production requires a real secret injected through an environment variable or secret manager");
       }
       // P1-8：jwt-secret 长度强度回退（HS256 最小 256 bit / 32 ASCII 字符）
       if (jwtSecret.length() < 32) {
         throw new IllegalStateException(
-            "FATAL: batch.console.security.jwt-secret 长度不足 32 字符，HS256 弱密钥风险");
+            "FATAL: batch.console.security.jwt-secret is shorter than 32 characters; HS256 secret is too weak");
       }
     } else {
       // 非 prod:不 fail-fast(本地/联调要能起),但默认/弱 jwt-secret 仍在用就显式 WARN——
@@ -176,8 +177,9 @@ public class ConsoleJwtService {
           || lower.contains("change-me")
           || lower.contains("change_me")
           || jwtSecret.length() < 32) {
-        log.warn("⚠️ 非生产 profile:batch.console.security.jwt-secret 仍为默认/弱密钥,生产前务必经 env / "
-            + "secret-manager 注入 ≥32 字符强密钥(prod-like profile 下会 fail-fast 拒绝启动)");
+        log.warn(
+            "Non-production profile: batch.console.security.jwt-secret still uses a default or weak secret; inject a real secret via env / "
+                + "secret manager with at least 32 characters (production-like profiles fail fast)");
       }
     }
     SecretKey key = signingKey();

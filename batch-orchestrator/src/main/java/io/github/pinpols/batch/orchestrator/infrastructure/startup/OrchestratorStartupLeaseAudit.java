@@ -66,9 +66,10 @@ public class OrchestratorStartupLeaseAudit {
           && terminalActiveChildren == 0
           && leasesExpired == 0
           && outboxStuck == 0) {
-        log.info("启动运行态审计通过（orchestrator）：无 stale worker / drain overdue / active decommissioned"
-            + " claims / invalid capability_tags / terminal active children / 过期租约 / 长期停滞"
-            + " PUBLISHING");
+        log.info(
+            "Startup runtime audit passed (orchestrator): no stale worker, overdue drain, or active decommissioned"
+                + " claims / invalid capability_tags / terminal active children / expired leases / long-stuck"
+                + " PUBLISHING");
         return;
       }
 
@@ -81,19 +82,19 @@ public class OrchestratorStartupLeaseAudit {
           && leasesExpired == 0
           && outboxStuck == 0) {
         log.info(
-            "启动运行态审计（orchestrator）：terminalActiveChildren={}（将由"
-                + " JobInstanceTerminalChildStateReconciler 收敛，其余项为 0）",
+            "Startup runtime audit (orchestrator): terminalActiveChildren={} (will be reconciled by"
+                + " JobInstanceTerminalChildStateReconciler; all other counters are 0)",
             terminalActiveChildren);
         return;
       }
 
       log.warn(
-          "启动运行态审计发现残留（orchestrator）：drainingStale={}, staleOnlineWorkers={},"
+          "Startup runtime audit found residual state (orchestrator): drainingStale={}, staleOnlineWorkers={},"
               + " decommissionedActiveClaims={}, invalidCapabilityTags={},"
               + " terminalActiveChildren={}, leasesExpired={}, outboxStuck={}"
-              + "—— 本次审计仅告警，修复交给 WorkerDrainTimeoutScheduler / PartitionLeaseReclaimScheduler"
+              + "; this audit only reports the condition; recovery is handled by WorkerDrainTimeoutScheduler / PartitionLeaseReclaimScheduler"
               + " / OutboxPollScheduler / JobInstanceTerminalChildStateReconciler 关联路径自动完成；"
-              + "如非预期请排查对应调度器状态。",
+              + ". Check the corresponding scheduler state if this is unexpected.",
           drainingStale,
           staleOnlineWorkers,
           decommissionedActiveClaims,
@@ -103,7 +104,7 @@ public class OrchestratorStartupLeaseAudit {
           outboxStuck);
     } catch (RuntimeException ex) {
       // 审计失败不阻塞应用启动；可能是首次启动时部分表未建（Flyway 还没跑完）
-      log.warn("启动租约审计执行失败（不影响启动）：{}", ex.getMessage());
+      log.warn("Startup lease audit failed (startup continues): {}", ex.getMessage());
     }
   }
 }

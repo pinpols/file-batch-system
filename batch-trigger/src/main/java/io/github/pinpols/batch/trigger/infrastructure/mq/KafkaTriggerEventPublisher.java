@@ -48,7 +48,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       payload = JsonUtils.toJson(envelope);
     } catch (RuntimeException ex) {
       log.error(
-          "KafkaTriggerEventPublisher 序列化 envelope 失败: tenantId={} requestId={}",
+          "KafkaTriggerEventPublisher failed to serialize envelope: tenantId={} requestId={}",
           envelope.launchRequest().tenantId(),
           envelope.launchRequest().requestId(),
           ex);
@@ -77,7 +77,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           .send(record)
           .get(kafkaProperties.getSendTimeoutSeconds(), TimeUnit.SECONDS);
       log.debug(
-          "KafkaTriggerEventPublisher 发送成功: topic={} key={} partition={} offset={}",
+          "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
           topic,
           messageKey,
           result.getRecordMetadata().partition(),

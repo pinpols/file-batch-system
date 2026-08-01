@@ -41,7 +41,7 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
   public void run(ApplicationArguments args) {
     if (bucket == null || bucket.isBlank()) {
       throw new IllegalStateException(
-          "object store startup check: bucket 未配置(batch.storage.s3.bucket)");
+          "object store startup check: bucket is not configured (batch.storage.s3.bucket)");
     }
     String key = PROBE_PREFIX + UUID.randomUUID();
     byte[] payload = ("batch-startup-probe-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
@@ -98,7 +98,7 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
         + bucket
         + ", probeKey="
         + key
-        + "。请核对 endpoint/凭据/bucket 权限,以及该 S3 兼容后端是否需要 path-style / checksum 配置。";
+        + ". Check the endpoint, credentials, and bucket permissions, and whether this S3-compatible backend requires path-style or checksum configuration.";
     return cause == null ? new IllegalStateException(msg) : new IllegalStateException(msg, cause);
   }
 }

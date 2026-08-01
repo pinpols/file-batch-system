@@ -109,7 +109,7 @@ public class OrchestratorKafkaConsumerConfiguration {
               cause instanceof BizException || cause instanceof IllegalArgumentException;
           if (businessLevel) {
             log.warn(
-                "TriggerLaunchConsumer 业务错跳过: topic={} partition={} offset={} key={} cause={}",
+                "TriggerLaunchConsumer skipped a business error: topic={} partition={} offset={} key={} cause={}",
                 record.topic(),
                 record.partition(),
                 record.offset(),
@@ -117,7 +117,7 @@ public class OrchestratorKafkaConsumerConfiguration {
                 cause.getMessage());
           } else {
             log.error(
-                "TriggerLaunchConsumer 消息已超出重试上限: topic={} partition={} offset={}"
+                "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
                     + " key={} value={} cause={}",
                 record.topic(),
                 record.partition(),

@@ -32,7 +32,7 @@ class ConsoleSecurityPropertiesTest {
     p.setCorsAllowedOrigins(List.of("*"));
     assertThatThrownBy(p::validateCorsAllowedOrigins)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("通配符 origin");
+        .hasMessageContaining("wildcard origins");
   }
 
   @Test
@@ -48,7 +48,7 @@ class ConsoleSecurityPropertiesTest {
     p.setCorsAllowedOrigins(List.of("https://ok.example.com", "   "));
     assertThatThrownBy(p::validateCorsAllowedOrigins)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("空白条目");
+        .hasMessageContaining("blank entry");
   }
 
   @Test

@@ -256,14 +256,15 @@ public class LoadStep implements ImportStageStep {
         || cap == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC) {
       return;
     }
-    throw new WorkerConfigException("ADR-038 续跑开关开 (batch.worker.checkpoint.enabled=true) 但 plugin "
-        + plugin.id()
-        + " 未声明幂等能力 (idempotencyCapability="
-        + cap
-        + ")。跨库无 1PC,崩溃窗口重做 chunk 会双写。"
-        + "请让 plugin override idempotencyCapability() 返回 IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
-        + "IDEMPOTENT_BY_PLUGIN_LOGIC,或关闭续跑开关。"
-        + "详见 docs/runbook/platform-worker-checkpoint-howto.md §前置校验。");
+    throw new WorkerConfigException(
+        "ADR-038 checkpoint is enabled (batch.worker.checkpoint.enabled=true), but plugin "
+            + plugin.id()
+            + " does not declare an idempotency capability (idempotencyCapability="
+            + cap
+            + "). Without a cross-database 1PC, replaying a chunk after a crash can write duplicates. "
+            + "Override idempotencyCapability() in the plugin to return IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
+            + "IDEMPOTENT_BY_PLUGIN_LOGIC, or disable checkpointing. "
+            + "See docs/runbook/platform-worker-checkpoint-howto.md for the prerequisite validation.");
   }
 
   private boolean isPartitionReplaceCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {

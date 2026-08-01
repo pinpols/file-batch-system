@@ -60,13 +60,15 @@ public class ConsoleDefaultPasswordGuard {
     }
     boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
     if (productionMode) {
-      throw new IllegalStateException("FATAL: 内置控制台账号 "
+      throw new IllegalStateException("FATAL: built-in console account "
           + stillDefault
-          + " 仍使用出厂默认密码 admin123,生产环境拒绝启动;请先经 reset-password / change-password 改密后再部署");
+          + " still uses the factory default password admin123; production startup is forbidden."
+          + " Change the password through reset-password / change-password before deployment");
     }
     log.warn(
-        "⚠️ 非生产 profile:内置控制台账号 {} 仍使用出厂默认密码 admin123,首次登录会被强制改密;"
-            + "生产部署前务必改密(prod profile 下会 fail-fast 拒绝启动)",
+        "Non-production profile: built-in console account {} still uses the factory default password admin123;"
+            + " the first login will require a password change. Production deployment must change it"
+            + " (production profiles fail fast)",
         stillDefault);
   }
 

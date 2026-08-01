@@ -42,7 +42,7 @@ class BatchSecurityPropertiesTest {
     BatchSecurityProperties props = newProps("prod", true);
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true 在生产 profile 下被禁止");
+        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
   }
 
   @Test
@@ -50,7 +50,7 @@ class BatchSecurityPropertiesTest {
     BatchSecurityProperties props = newProps("staging", true);
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true 在生产 profile 下被禁止");
+        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
   }
 
   @Test
@@ -101,7 +101,7 @@ class BatchSecurityPropertiesTest {
     ReflectionTestUtils.setField(props, "environment", env);
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("默认弱口令");
+        .hasMessageContaining("shipped weak password");
   }
 
   @Test
@@ -110,7 +110,7 @@ class BatchSecurityPropertiesTest {
     // 生产默认值为空时必须先以“未配置”失败，避免依赖任何内置凭据。
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("为空");
+        .hasMessageContaining("is empty");
   }
 
   @Test
@@ -119,7 +119,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("CHANGE_ME_STRONG_INTERNAL_SECRET");
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("仍为占位符");
+        .hasMessageContaining("is still a placeholder");
   }
 
   @Test
@@ -128,7 +128,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("change-me-something");
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("占位符");
+        .hasMessageContaining("placeholder");
   }
 
   @Test
@@ -137,7 +137,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("changeme123456789");
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("占位符");
+        .hasMessageContaining("placeholder");
   }
 
   @Test
@@ -146,7 +146,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("todo-replace-with-real");
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("占位符");
+        .hasMessageContaining("placeholder");
   }
 
   // ─── 长度强度校验 ────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("short15-chars-x"); // 15 chars < MIN_SECRET_LENGTH=16
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("密钥强度不足");
+        .hasMessageContaining("secret is too weak");
   }
 
   @Test
@@ -166,7 +166,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret(""); // blank
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("为空");
+        .hasMessageContaining("is empty");
   }
 
   // ─── 通过场景 ────────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("strong-non-default-secret-2026");
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true 在生产 profile 下被禁止");
+        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
   }
 
   @Test
@@ -235,7 +235,7 @@ class BatchSecurityPropertiesTest {
     props.setInternalSecret("strong-non-default-secret-2026");
     assertThatThrownBy(props::validateSecuritySettings)
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bypass-mode=true 在生产 profile 下被禁止");
+        .hasMessageContaining("bypass-mode=true is forbidden in a production profile");
   }
 
   @Test

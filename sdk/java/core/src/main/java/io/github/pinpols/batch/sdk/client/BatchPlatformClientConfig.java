@@ -312,8 +312,8 @@ public class BatchPlatformClientConfig {
       throw new IllegalStateException(message);
     }
     log.warn(
-        "[R3-4 WARN-mode] strictTimingValidation=false, 跳过 fail-fast — {} "
-            + "(临时口子;尽快修正 config,strictTimingValidation 不建议长期 false)",
+        "[R3-4 WARN-mode] strictTimingValidation=false; skipping fail-fast - {} "
+            + "(temporary exception; fix the config promptly; strictTimingValidation should not remain false long term)",
         message);
   }
 }
