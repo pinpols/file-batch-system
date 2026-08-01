@@ -301,6 +301,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     PackageExcelSession session = loadSession(uploadToken);
     List<Map<String, String>> rows = sheetRowsByName(session).get(sheetName);
     Guard.require(rows != null, "unknown sheet: " + sheetName);
+    Guard.require(rowNo >= 2, "row out of range: " + rowNo);
     int idx = rowNo - 2;
     Guard.require(idx >= 0 && idx < rows.size(), "row out of range: " + rowNo);
     Map<String, String> target = rows.get(idx);

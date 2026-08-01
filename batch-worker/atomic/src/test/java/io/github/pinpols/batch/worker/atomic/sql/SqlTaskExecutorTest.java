@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.atomic.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -209,6 +210,14 @@ class SqlTaskExecutorTest {
       assertThat(SqlTaskExecutor.detectStatementType("-- header\n  SELECT 1")).isEqualTo("SELECT");
       assertThat(SqlTaskExecutor.detectStatementType("/* block */  UPDATE t SET x = 1"))
           .isEqualTo("UPDATE");
+    }
+
+    @Test
+    void rejectsUnterminatedBlockCommentWithoutRegexBacktracking() {
+      String statement = "/*" + "*".repeat(100_000);
+      assertTimeoutPreemptively(
+          java.time.Duration.ofSeconds(2),
+          () -> assertThat(SqlTaskExecutor.detectStatementType(statement)).isEqualTo("UNKNOWN"));
     }
   }
 

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigPackageExcelApplicationService;
@@ -70,6 +71,16 @@ class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegr
         token, ConfigPackageExcelValidator.CHANNEL_SHEET, 2, Map.of("not_a_real_column", "x"));
     assertThat(patched.errorRows())
         .anyMatch(r -> ConfigPackageExcelValidator.CHANNEL_SHEET.equals(r.sheetName()));
+  }
+
+  @Test
+  void shouldRejectRowNumberBeforeHeaderWithoutIntegerUnderflow() {
+    String tenantId = "excel-patch-tc";
+    String token = importStore.save(session(tenantId, List.of(channelRow(tenantId, "Channel"))));
+
+    assertThatThrownBy(() -> service.patchRow(
+            token, ConfigPackageExcelValidator.CHANNEL_SHEET, Integer.MIN_VALUE, Map.of()))
+        .hasMessage("error.common.invalid_argument_detail");
   }
 
   private static PackageExcelSession session(
