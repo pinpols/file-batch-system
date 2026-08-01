@@ -133,7 +133,7 @@ public class TriggerOutboxRelay {
     scheduledTask = scheduler.scheduleWithFixedDelay(
         this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
     log.info(
-        "TriggerOutboxRelay 已启动:poll={}ms batch={} backoff_max={}s",
+        "TriggerOutboxRelay started: poll={}ms batch={} backoff_max={}s",
         properties.getPollIntervalMillis(),
         properties.getBatchSize(),
         MAX_BACKOFF_SECONDS);
@@ -162,17 +162,18 @@ public class TriggerOutboxRelay {
       pendingEvents.set(pending);
       stalePublishingEvents.set(stale);
       if (pending == 0 && stale == 0) {
-        log.info("启动运行态审计通过（trigger）：trigger_outbox 无待发积压 / stale PUBLISHING");
+        log.info(
+            "Startup runtime audit passed (trigger): no pending or stale PUBLISHING trigger_outbox events");
       } else {
         log.warn(
-            "启动运行态审计发现残留（trigger）：triggerOutboxPending={},"
-                + " triggerOutboxStalePublishing={}—— 本次审计仅告警，修复交给"
-                + " TriggerOutboxRelay 第一轮 stale reset / publish 自动完成。",
+            "Startup runtime audit found residual events (trigger): triggerOutboxPending={},"
+                + " triggerOutboxStalePublishing={}; this audit only reports the condition."
+                + " The first TriggerOutboxRelay stale-reset/publish cycle will recover it.",
             pending,
             stale);
       }
     } catch (RuntimeException ex) {
-      log.warn("启动运行态审计执行失败（trigger，不影响启动）：{}", ex.getMessage());
+      log.warn("Startup runtime audit failed (trigger; startup continues): {}", ex.getMessage());
     }
   }
 
@@ -192,7 +193,7 @@ public class TriggerOutboxRelay {
           (LockingTaskExecutor.Task) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
       log.warn(
-          "TriggerOutboxRelay DB 瞬时异常,下轮重试: {}",
+          "TriggerOutboxRelay transient DB failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
@@ -201,7 +202,7 @@ public class TriggerOutboxRelay {
         log.info("TriggerOutboxRelay poll skipped during shutdown: {}", t.getMessage());
         return;
       }
-      log.error("TriggerOutboxRelay 异常", t);
+      log.error("TriggerOutboxRelay failed", t);
     } finally {
       running.set(false);
     }
@@ -240,7 +241,7 @@ public class TriggerOutboxRelay {
     if (batch.isEmpty()) {
       return;
     }
-    log.debug("TriggerOutboxRelay 本轮取 {} 条待发", batch.size());
+    log.debug("TriggerOutboxRelay loaded {} pending events", batch.size());
     for (TriggerOutboxEventEntity event : batch) {
       if (shouldStopPolling()) {
         return;
@@ -250,7 +251,7 @@ public class TriggerOutboxRelay {
       } catch (Throwable t) {
         // 单条异常不能拖累整批;失败已写库,异常本身只为 ERROR 日志
         log.error(
-            "TriggerOutboxRelay 单条投递异常: id={} tenantId={} requestId={}",
+            "TriggerOutboxRelay failed to publish event: id={} tenantId={} requestId={}",
             event.getId(),
             event.getTenantId(),
             event.getRequestId(),
@@ -292,7 +293,7 @@ public class TriggerOutboxRelay {
     } catch (IllegalArgumentException ex) {
       // payload 反序列化失败 = 数据问题,不可能靠重试解决,直接 GIVE_UP
       log.error(
-          "TriggerOutboxRelay 反序列化 payload 失败,标 GIVE_UP: id={} requestId={}",
+          "TriggerOutboxRelay failed to deserialize payload; marking GIVE_UP: id={} requestId={}",
           event.getId(),
           event.getRequestId(),
           ex);
@@ -303,7 +304,9 @@ public class TriggerOutboxRelay {
           BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
           OutboxPublishStatus.PUBLISHING.code());
       if (updated == 0) {
-        log.warn("TriggerOutboxRelay markFailed(GIVE_UP) 0 行受影响,行已被其它实例接管: id={}", event.getId());
+        log.warn(
+            "TriggerOutboxRelay markFailed(GIVE_UP) affected 0 rows; another instance took over the event: id={}",
+            event.getId());
       }
       if (giveUpCounter != null) {
         giveUpCounter.increment();
@@ -322,7 +325,9 @@ public class TriggerOutboxRelay {
           OutboxPublishStatus.PUBLISHED.code(),
           OutboxPublishStatus.PUBLISHING.code());
       if (updated == 0) {
-        log.warn("TriggerOutboxRelay markPublished 0 行受影响,行已被其它实例接管: id={}", event.getId());
+        log.warn(
+            "TriggerOutboxRelay markPublished affected 0 rows; another instance took over the event: id={}",
+            event.getId());
       }
       return true;
     } else {
@@ -345,7 +350,9 @@ public class TriggerOutboxRelay {
             BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
             OutboxPublishStatus.PUBLISHING.code());
         if (updated == 0) {
-          log.warn("TriggerOutboxRelay markFailed(GIVE_UP) 0 行受影响,行已被其它实例接管: id={}", event.getId());
+          log.warn(
+              "TriggerOutboxRelay markFailed(GIVE_UP) affected 0 rows; another instance took over the event: id={}",
+              event.getId());
         }
         if (giveUpCounter != null) {
           giveUpCounter.increment();
@@ -360,7 +367,9 @@ public class TriggerOutboxRelay {
           retryAt,
           OutboxPublishStatus.PUBLISHING.code());
       if (updated == 0) {
-        log.warn("TriggerOutboxRelay markFailed(FAILED) 0 行受影响,行已被其它实例接管: id={}", event.getId());
+        log.warn(
+            "TriggerOutboxRelay markFailed(FAILED) affected 0 rows; another instance took over the event: id={}",
+            event.getId());
       }
       return false;
     }
@@ -394,7 +403,7 @@ public class TriggerOutboxRelay {
         "stale PUBLISHING reset by TriggerOutboxRelay",
         properties.getPublishingTimeoutSeconds());
     if (reset > 0) {
-      log.warn("TriggerOutboxRelay 重置 {} 条滞留 PUBLISHING 为 FAILED", reset);
+      log.warn("TriggerOutboxRelay reset {} stale PUBLISHING events to FAILED", reset);
     }
   }
 

@@ -201,7 +201,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     Integer requiredMajor = SdkVersions.parseMajor(requiredMinVersion);
     if (requiredMajor == null) {
       log.warn(
-          "tenant {} 配置的 {}=\"{}\" 解析不出主版本,跳过最低 SDK 版本门禁",
+          "Could not parse the major version from tenant {} setting {}=\"{}\"; skipping the minimum SDK version gate",
           request.tenantId(),
           MIN_SDK_VERSION_PARAM_KEY,
           requiredMinVersion);
@@ -210,7 +210,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     Integer reportedMajor = SdkVersions.parseMajor(reportedSdkVersion);
     if (reportedMajor == null) {
       log.warn(
-          "worker {} 上报的 sdkVersion=\"{}\" 解析不出主版本,跳过最低 SDK 版本门禁",
+          "Could not parse the major version from worker {} sdkVersion=\"{}\"; skipping the minimum SDK version gate",
           request.workerCode(),
           reportedSdkVersion);
       return;

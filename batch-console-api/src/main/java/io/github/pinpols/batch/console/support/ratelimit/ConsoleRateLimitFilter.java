@@ -62,7 +62,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       String ip = resolveClientIp(request);
       String key = "login:ip:" + ip;
       if (!tryAcquireFailOpen(key, properties.getLoginIpLimitPerMinute(), "login", ip)) {
-        log.warn("登录限流触发：ip={} path={}", ip, path);
+        log.warn("Login rate limit triggered: ip={} path={}", ip, path);
         responseWriter.write(
             response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
         return;
@@ -76,7 +76,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         String key = "sensitive:user:" + username;
         if (!tryAcquireFailOpen(
             key, properties.getSensitiveOpUserLimitPerMinute(), "sensitive", username)) {
-          log.warn("敏感操作限流触发：user={} path={}", username, path);
+          log.warn("Sensitive-operation rate limit triggered: user={} path={}", username, path);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
           return;
@@ -91,7 +91,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         String key = "expensive:user:" + username;
         if (!tryAcquireFailOpen(
             key, properties.getExpensiveOpUserLimitPerMinute(), "expensive", username)) {
-          log.warn("昂贵操作限流触发：user={} path={}", username, path);
+          log.warn("Expensive-operation rate limit triggered: user={} path={}", username, path);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
           return;
@@ -106,7 +106,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         String key = "fileop:user:" + username;
         if (!tryAcquireFailOpen(
             key, properties.getFileOpUserLimitPerMinute(), "fileop", username)) {
-          log.warn("文件操作限流触发：user={} path={}", username, path);
+          log.warn("File-operation rate limit triggered: user={} path={}", username, path);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
           return;

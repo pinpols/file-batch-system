@@ -210,7 +210,7 @@ public class DefaultTriggerService implements TriggerService {
           command.getTenantId(), command.getRequestId(), "LAUNCHED", "PROCESSING");
       if (launched <= 0) {
         log.warn(
-            "updateRequestStatusConditional(LAUNCHED) 0 行受影响,行状态已非 PROCESSING:"
+            "updateRequestStatusConditional(LAUNCHED) affected 0 rows; the row is no longer PROCESSING:"
                 + " tenantId={} requestId={}",
             command.getTenantId(),
             command.getRequestId());
@@ -230,7 +230,7 @@ public class DefaultTriggerService implements TriggerService {
         launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED", "PENDING");
     if (accepted <= 0) {
       log.warn(
-          "updateRequestStatusConditional(ACCEPTED) 0 行受影响,行状态已非 PENDING: tenantId={}"
+          "updateRequestStatusConditional(ACCEPTED) affected 0 rows; the row is no longer PENDING: tenantId={}"
               + " requestId={}",
           launchRequest.tenantId(),
           launchRequest.requestId());

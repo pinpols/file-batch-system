@@ -115,7 +115,8 @@ public class AlertmanagerEmitPublisher {
     executor.shutdown();
     try {
       if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn("AlertmanagerEmitPublisher 线程池未在 5s 内 drain 完,强制中断");
+        log.warn(
+            "AlertmanagerEmitPublisher executor did not drain within 5s; forcing interruption");
         executor.shutdownNow();
       }
     } catch (InterruptedException e) {

@@ -38,7 +38,8 @@ public class AdminTestDataCleanupController {
       @RequestParam
           @Pattern(
               regexp = PREFIX_PATTERN,
-              message = "prefix 必须字母开头,3-33 字符,只能含字母/数字/-(禁 _,SQL LIKE 单字符通配符)")
+              message =
+                  "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
           String prefix) {
     rejectProductionProfile();
     if (prefix == null || prefix.isBlank()) {
@@ -50,7 +51,10 @@ public class AdminTestDataCleanupController {
   @DeleteMapping("/by-ids")
   public Map<String, Integer> cleanupByExactIds(
       @RequestParam
-          @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$", message = "ids 必须字母开头,逗号分隔,长度 3-256")
+          @Pattern(
+              regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
+              message =
+                  "ids must start with a letter, be comma-separated, and contain 3-256 characters")
           String ids) {
     rejectProductionProfile();
     if (ids == null || ids.isBlank()) {

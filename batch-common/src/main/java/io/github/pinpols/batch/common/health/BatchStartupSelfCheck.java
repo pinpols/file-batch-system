@@ -143,10 +143,12 @@ public class BatchStartupSelfCheck {
   private void reportResult(List<String> problems) {
     String ctx = properties.getContextName();
     if (problems.isEmpty()) {
-      log.info("启动自检通过（{}）：配置项对应的 schema / 表 / 列 / Flyway 均满足预期。", ctx);
+      log.info(
+          "Startup self-check passed ({}): configured schemas, tables, columns, and Flyway state match expectations.",
+          ctx);
       return;
     }
-    log.error("启动自检发现问题（{}）（请按下列项逐一处理）：", ctx);
+    log.error("Startup self-check found problems ({}); address each item below:", ctx);
     for (String p : problems) {
       log.error(" - {}", p);
     }

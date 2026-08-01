@@ -67,7 +67,7 @@ public class ConsoleAdminTestDataController {
   void validateProfile() {
     if (BatchProfileSupport.isProductionProfile(environment)) {
       throw new IllegalStateException(
-          "ConsoleAdminTestDataController 不允许在生产 profile 启用 — 移除 active profile 或换 dev/test/local");
+          "ConsoleAdminTestDataController must not be enabled in production profiles - remove the active production profile or use dev/test/local");
     }
   }
 
@@ -85,7 +85,8 @@ public class ConsoleAdminTestDataController {
       @RequestParam
           @Pattern(
               regexp = PREFIX_PATTERN,
-              message = "prefix 必须字母开头,3-33 字符,只能含字母/数字/-(禁 _,SQL LIKE 单字符通配符)")
+              message =
+                  "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
           String prefix) {
     if (prefix == null || prefix.isBlank()) {
       // Spring validation 已拦,这里再硬挡一次,防止反射调用绕过 @Pattern
@@ -109,7 +110,10 @@ public class ConsoleAdminTestDataController {
       aggregateId = "#ids")
   public CommonResponse<Map<String, Integer>> cleanupByExactIds(
       @RequestParam
-          @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$", message = "ids 必须字母开头,逗号分隔,长度 3-256")
+          @Pattern(
+              regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$",
+              message =
+                  "ids must start with a letter, be comma-separated, and contain 3-256 characters")
           String ids) {
     if (ids == null || ids.isBlank()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");

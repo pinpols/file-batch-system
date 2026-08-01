@@ -86,7 +86,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
   private void warnIfNotUpdated(int updatedRows, LaunchRequest request) {
     if (updatedRows == 0) {
       log.warn(
-          "updateAcceptance(REJECTED) 0 行受影响,行已是终态: tenantId={} requestId={}",
+          "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
           request.tenantId(),
           request.requestId());
     }

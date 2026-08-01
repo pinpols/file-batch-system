@@ -127,7 +127,7 @@ public class OutboxPollScheduler {
     // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
     if (outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
         && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal())) {
-      throw new IllegalStateException("Outbox 分片配置非法：shardIndex="
+      throw new IllegalStateException("Invalid Outbox shard configuration: shardIndex="
           + outbox.getShardIndex()
           + " 必须在 [0, shardTotal="
           + outbox.getShardTotal()
@@ -142,7 +142,7 @@ public class OutboxPollScheduler {
         this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(initialDelay));
     ShardAssignment initial = shardAssignmentProvider.current();
     log.info(
-        "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x mode={} shard={}/{}",
+        "OutboxPollScheduler started (adaptive mode): min={}ms max={}ms backoff={}x mode={} shard={}/{}",
         outbox.getMinPollIntervalMillis(),
         outbox.getPollIntervalMillis(),
         outbox.getBackoffMultiplier(),
@@ -164,13 +164,13 @@ public class OutboxPollScheduler {
     try {
       ShardAssignment assignment = shardAssignmentProvider.current();
       if (!shardAssignmentProvider.canPoll()) {
-        log.warn("Outbox 轮询跳过：分片协调后端不可用");
+        log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
         return;
       }
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) () -> doPoll(assignment), lockConfig(assignment));
     } catch (Throwable t) {
-      log.error("Outbox 轮询异常", t);
+      log.error("Outbox poll failed", t);
     } finally {
       running.set(false);
     }
@@ -194,7 +194,7 @@ public class OutboxPollScheduler {
     try {
       ShardAssignment assignment = shardAssignmentProvider.current();
       if (!shardAssignmentProvider.canPoll()) {
-        log.warn("Outbox 轮询跳过：分片协调后端不可用");
+        log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
         return;
       }
       lockingTaskExecutor.executeWithLock(
@@ -204,18 +204,18 @@ public class OutboxPollScheduler {
       // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
       // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
       log.warn(
-          "Outbox 轮询数据库瞬时异常，下轮重试: {}",
+          "Outbox poll transient database failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
-      log.debug("Outbox 轮询数据库异常详细堆栈", dae);
+      log.debug("Outbox poll database exception", dae);
     } catch (OutOfMemoryError oom) {
       // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
-      log.error("Outbox 轮询遭遇 OOM，进程可能需要重启", oom);
+      log.error("Outbox poll encountered an OOM; the process may need to restart", oom);
       throw oom;
     } catch (Throwable t) {
       // 其他异常（Kafka 故障、序列化错误等）—— 真异常用 ERROR
-      log.error("Outbox 轮询异常（非数据库类）", t);
+      log.error("Outbox poll failed (non-database exception)", t);
     } finally {
       running.set(false);
       scheduleNext(holder[0]);
@@ -224,12 +224,12 @@ public class OutboxPollScheduler {
 
   private ScheduleForwarderResult executeAdvance(ShardAssignment assignment) {
     if (gracefulShutdown.isDraining()) {
-      log.info("Outbox 轮询跳过：orchestrator 正在 draining");
+      log.info("Skipping Outbox poll: orchestrator is draining");
       return null;
     }
     if (!outboxPublishCircuitBreaker.allowNow()) {
       circuitSkippedPollsCounter.increment();
-      log.warn("Outbox 投递熔断已打开：跳过推进（cooldown 中）");
+      log.warn("Outbox publish circuit breaker is open: skipping advancement (cooldown active)");
       return null;
     }
     OutboxProperties outbox = governance.outbox();
@@ -237,7 +237,8 @@ public class OutboxPollScheduler {
     resetStalePublishingEvents(outbox);
     if (!shardAssignmentProvider.canPoll()) {
       log.warn(
-          "Outbox 轮询跳过：动态分片协调后端不可用，保留 assignment total={} index={}，" + "等待 fencing 协调恢复后再继续",
+          "Skipping Outbox poll: dynamic shard coordination backend is unavailable; retaining assignment total={} index={}"
+              + " and waiting for fencing coordination to recover",
           assignment.shardTotal(),
           assignment.shardIndex());
       return null;
@@ -257,16 +258,16 @@ public class OutboxPollScheduler {
           OutboxPublishStatus.FAILED.code(),
           outbox.getPublishingTimeoutSeconds());
       if (reset > 0) {
-        log.warn("重置 {} 条滞留 PUBLISHING 状态的 outbox 事件为 FAILED", reset);
+        log.warn("Reset {} stale PUBLISHING Outbox events to FAILED", reset);
       }
     } catch (DataAccessException ex) {
       // 瞬时 PG 不可用，下轮自然重试；ERROR 留给真异常
       log.warn(
-          "重置滞留 PUBLISHING 事件失败（数据库瞬时异常，下轮重试）: {}",
+          "Failed to reset stale PUBLISHING events (transient database failure; retrying on the next cycle): {}",
           ex.getMostSpecificCause() == null
               ? ex.getMessage()
               : ex.getMostSpecificCause().getMessage());
-      log.debug("重置滞留 PUBLISHING 事件异常详细堆栈", ex);
+      log.debug("Failed to reset stale PUBLISHING events", ex);
     }
   }
 
@@ -298,7 +299,7 @@ public class OutboxPollScheduler {
     }
     currentIntervalMillis.set(nextDelay);
     log.debug(
-        "Outbox 下次轮询延迟 {}ms（attempted={}）",
+        "Next Outbox poll delayed by {}ms (attempted={})",
         nextDelay,
         result == null ? "n/a" : result.attemptedEvents());
 
@@ -310,7 +311,7 @@ public class OutboxPollScheduler {
           this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
     } catch (RejectedExecutionException ex) {
       if (gracefulShutdown.isDraining() || executor.getScheduledExecutor().isShutdown()) {
-        log.debug("Outbox 下次轮询跳过：调度器正在关闭");
+        log.debug("Skipping the next Outbox poll: scheduler is shutting down");
         return;
       }
       throw ex;

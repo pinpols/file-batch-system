@@ -97,7 +97,7 @@ public class TriggerLaunchConsumer {
     } catch (RuntimeException ex) {
       // payload 反序列化失败 = 数据问题/协议演进未兼容;记 metric + ack 跳过,避免无限重试堆积
       log.error(
-          "TriggerLaunchConsumer 反序列化失败,跳过: topic={} partition={} offset={} key={}",
+          "TriggerLaunchConsumer failed to deserialize the message; skipping: topic={} partition={} offset={} key={}",
           record.topic(),
           record.partition(),
           record.offset(),
@@ -109,7 +109,8 @@ public class TriggerLaunchConsumer {
     }
     if (envelope == null || envelope.launchRequest() == null) {
       log.warn(
-          "TriggerLaunchConsumer envelope/launchRequest 为 null,跳过: offset={}", record.offset());
+          "TriggerLaunchConsumer envelope/launchRequest is null; skipping: offset={}",
+          record.offset());
       counter(METRIC_FAILED, "reason", "empty_envelope").increment();
       ack.acknowledge();
       return;
@@ -140,7 +141,7 @@ public class TriggerLaunchConsumer {
         writeBackTriggerRequestLaunched(boundTenantId, boundRequest.requestId(), response);
       }
       log.info(
-          "TriggerLaunchConsumer launch 成功: tenantId={} requestId={} instanceNo={}",
+          "TriggerLaunchConsumer launch succeeded: tenantId={} requestId={} instanceNo={}",
           tenantId,
           request.requestId(),
           response == null ? null : response.instanceNo());
@@ -149,7 +150,7 @@ public class TriggerLaunchConsumer {
     } catch (ResponseStatusException ex) {
       if (ex.getStatusCode().value() == 409) {
         log.info(
-            "TriggerLaunchConsumer 重复 requestId 被 dedup 回退,视为成功: tenantId={} requestId={}",
+            "TriggerLaunchConsumer duplicate requestId was deduplicated; treating it as success: tenantId={} requestId={}",
             tenantId,
             request.requestId());
         counter(METRIC_DEDUPED, "tenant", tenantTag).increment();
@@ -158,7 +159,7 @@ public class TriggerLaunchConsumer {
       }
       if (ex.getStatusCode().value() == 429) {
         log.warn(
-            "TriggerLaunchConsumer 限流被拒,不 ack 让 Kafka 重投: tenantId={} requestId={}",
+            "TriggerLaunchConsumer was rate limited; leaving the message unacknowledged for Kafka retry: tenantId={} requestId={}",
             tenantId,
             request.requestId());
         counter(METRIC_FAILED, "tenant", tenantTag, "reason", "rate_limited").increment();
@@ -176,7 +177,7 @@ public class TriggerLaunchConsumer {
       // 业务级拒收(jobCode 不存在 / 跨租 / 字段缺失等)— 不可恢复,重投只是无效复制。
       // 必须 ack 让 offset 前进,否则同 partition 后续合法消息全被阻塞(poison message)。
       log.warn(
-          "TriggerLaunchConsumer 业务拒收(ack drop,不重投): tenantId={} requestId={} code={} message={}",
+          "TriggerLaunchConsumer rejected a business message (ack and drop; no retry): tenantId={} requestId={} code={} message={}",
           tenantId,
           request.requestId(),
           ex.getCode(),
@@ -185,7 +186,7 @@ public class TriggerLaunchConsumer {
       ack.acknowledge();
     } catch (RuntimeException ex) {
       log.error(
-          "TriggerLaunchConsumer launch 失败: tenantId={} requestId={}",
+          "TriggerLaunchConsumer launch failed: tenantId={} requestId={}",
           tenantId,
           request.requestId(),
           ex);
@@ -227,14 +228,14 @@ public class TriggerLaunchConsumer {
           triggerRequestMapper.updateAcceptance(tenantId, requestId, "LAUNCHED", jobInstanceId);
       if (updated == 0) {
         log.warn(
-            "TriggerLaunchConsumer updateAcceptance(LAUNCHED) 0 行受影响,行已是终态或被其它路径接管:"
+            "TriggerLaunchConsumer updateAcceptance(LAUNCHED) affected 0 rows; the row is terminal or was taken over by another path:"
                 + " tenantId={} requestId={}",
             tenantId,
             requestId);
       }
     } catch (RuntimeException ex) {
       log.warn(
-          "TriggerLaunchConsumer 回写 trigger_request LAUNCHED 失败(best-effort,主路径已 ack): tenantId={}"
+          "TriggerLaunchConsumer failed to update trigger_request to LAUNCHED (best effort; main path already acked): tenantId={}"
               + " requestId={} error={}",
           tenantId,
           requestId,

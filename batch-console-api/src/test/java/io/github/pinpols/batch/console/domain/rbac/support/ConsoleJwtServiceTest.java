@@ -140,7 +140,7 @@ class ConsoleJwtServiceTest {
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
     assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("仍包含默认占位符");
+        .hasMessageContaining("still contains the default placeholder");
   }
 
   @Test
@@ -150,7 +150,7 @@ class ConsoleJwtServiceTest {
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
     assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("长度不足 32 字符");
+        .hasMessageContaining("shorter than 32 characters");
   }
 
   @Test
@@ -160,7 +160,7 @@ class ConsoleJwtServiceTest {
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
     assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("为空");
+        .hasMessageContaining("is empty");
   }
 
   @Test

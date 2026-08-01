@@ -305,7 +305,7 @@ public class FileGovernanceScheduler {
     if (requiredFiles.isEmpty()) {
       log.warn(
           "skip arrival group with empty requiredFileSet: tenantId={}, fileGroupCode={},"
-              + " arrivedCount={} — metadata 不全,无法判定触发条件;请补 requiredFileSet 或置终态",
+              + " arrivedCount={} - metadata is incomplete, so the trigger condition cannot be determined; add requiredFileSet or set a terminal state",
           key.tenantId(),
           key.fileGroupCode(),
           arrivedFiles.size());

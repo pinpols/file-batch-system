@@ -215,39 +215,47 @@ public class ConsoleClusterDiagnosticService {
       findings.add(finding(
           "ERROR",
           "INSTANCE_HAS_NO_CHILDREN",
-          "实例仍处于活跃状态,但没有分区和任务记录。",
-          List.of("检查 launch T1/T2 是否中断", "使用实例重试或重新触发同一 requestId"),
+          "The instance is still active, but has no partition or task records.",
+          List.of(
+              "Check whether launch T1/T2 was interrupted",
+              "Retry the instance or retrigger the same requestId"),
           Map.of("instanceStatus", instanceStatus)));
     }
     if (isTerminal(instanceStatus) && (activePartitions > 0 || activeTasks > 0)) {
       findings.add(finding(
           "ERROR",
           "TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN",
-          "实例已终态,但仍存在活跃分区或任务。",
-          List.of("优先检查 orchestrator 终态推进日志", "必要时通过受控恢复接口处理子节点"),
+          "The instance is terminal, but active partitions or tasks still exist.",
+          List.of(
+              "Check orchestrator terminal-state progression logs first",
+              "Use the controlled recovery endpoint for child nodes if needed"),
           Map.of("activePartitions", activePartitions, "activeTasks", activeTasks)));
     }
     if (isActive(instanceStatus) && onlineWorkersForGroup == 0) {
       findings.add(finding(
           "WARN",
           "NO_ONLINE_WORKER_FOR_GROUP",
-          "实例所属 workerGroup 当前没有 ONLINE worker。",
-          List.of("启动或恢复该 workerGroup 的 worker", "必要时调整 job_definition.worker_group"),
+          "The instance's workerGroup has no ONLINE worker.",
+          List.of(
+              "Start or recover a worker in that workerGroup",
+              "Adjust job_definition.worker_group if needed"),
           Map.of("workerGroup", stringValue(instance.get("workerGroup"), ""))));
     }
     if (activeOutboxEvents > 0) {
       findings.add(finding(
           "WARN",
           "OUTBOX_EVENTS_NOT_TERMINAL",
-          "该实例相关 outbox 事件仍未全部发布完成。",
-          List.of("查看 Outbox 页面", "对 FAILED/GIVE_UP 事件使用受控 republish"),
+          "Not all outbox events for this instance have been published.",
+          List.of("Open the Outbox page", "Use controlled republish for FAILED/GIVE_UP events"),
           Map.of("activeOutboxEvents", activeOutboxEvents, "statusCounts", outboxStatusCounts)));
     }
     workerIssues.forEach(issue -> findings.add(finding(
         "WARN",
         stringValue(issue.get("reasonCode"), "TASK_WORKER_ISSUE"),
-        "活跃任务存在 worker 分配或心跳异常。",
-        List.of("查看 worker 注册状态与心跳", "等待 lease 回收后重试或取消分区"),
+        "Active tasks have a worker assignment or heartbeat problem.",
+        List.of(
+            "Check worker registration status and heartbeats",
+            "Retry or cancel partitions after the lease is reclaimed"),
         issue)));
 
     Map<String, Object> result = new LinkedHashMap<>();

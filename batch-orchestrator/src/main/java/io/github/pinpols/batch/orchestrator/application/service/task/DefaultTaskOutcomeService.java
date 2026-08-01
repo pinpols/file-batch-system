@@ -153,9 +153,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     try {
       collaborators.workflowNodeDispatchServiceProvider().getIfAvailable();
     } catch (Exception ex) {
-      log.error("WorkflowNodeDispatchService 延迟注入解析失败，可能存在循环依赖: {}", ex.getMessage());
+      log.error(
+          "Failed to resolve lazy WorkflowNodeDispatchService injection; a circular dependency may exist: {}",
+          ex.getMessage());
       throw new IllegalStateException(
-          "WorkflowNodeDispatchService ObjectProvider 解析失败，请检查循环依赖", ex);
+          "Failed to resolve WorkflowNodeDispatchService from ObjectProvider; check for circular dependencies",
+          ex);
     }
   }
 

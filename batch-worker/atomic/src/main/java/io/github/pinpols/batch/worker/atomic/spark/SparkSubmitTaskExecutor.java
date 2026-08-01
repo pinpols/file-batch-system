@@ -194,15 +194,17 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
 
     String master = optionalString(params.get(PARAM_MASTER), props.getDefaultMaster());
     if (master.isBlank()) {
-      throw new SparkValidationException("master 未指定且无 defaultMaster 配置");
+      throw new SparkValidationException(
+          "master is not specified and no defaultMaster is configured");
     }
     validateMasterAllowed(master);
     String deployMode = optionalString(params.get(PARAM_DEPLOY_MODE), props.getDefaultDeployMode());
     if ("cluster".equalsIgnoreCase(deployMode)) {
       // #3:cluster 模式 driver 在远端,spark-submit 提交完即 exit=0(=已提交,非已完成)。
       // 远端终态轮询未实现前直接拒绝,**不让 cluster 静默假成功**。需要时按类注释接状态轮询后再放开。
-      throw new SparkValidationException("deployMode=cluster 暂不支持(远端 driver 终态轮询未实现,会误判'已提交'为成功);"
-          + "请用 client 模式,或接入 YARN/K8s/REST 状态轮询后再启用");
+      throw new SparkValidationException(
+          "deployMode=cluster is not supported yet (remote driver terminal-state polling is not implemented and would misreport 'submitted' as success);"
+              + " use client mode, or enable it after adding YARN/K8s/REST status polling");
     }
     String mainClass = optionalString(params.get(PARAM_MAIN_CLASS), "");
     String name = optionalString(params.get(PARAM_NAME), "");
@@ -248,7 +250,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     boolean ok = allow.stream().anyMatch(appResource::startsWith);
     if (!ok) {
       throw new SparkValidationException(
-          "appResource 不在允许前缀白名单内: " + appResource + ", allowed=" + allow);
+          "appResource does not match an allowed prefix: " + appResource + ", allowed=" + allow);
     }
   }
 
@@ -258,7 +260,8 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       return; // 未配置 = 不校验(仅限本地;生产务必收紧)
     }
     if (allow.stream().noneMatch(master::startsWith)) {
-      throw new SparkValidationException("master 不在允许前缀白名单内: " + master + ", allowed=" + allow);
+      throw new SparkValidationException(
+          "master does not match an allowed prefix: " + master + ", allowed=" + allow);
     }
   }
 
@@ -267,14 +270,14 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       return Map.of();
     }
     if (!(raw instanceof Map<?, ?> map)) {
-      throw new SparkValidationException("sparkConf 必须是 map of string→string");
+      throw new SparkValidationException("sparkConf must be a map of string to string");
     }
     Set<String> allowedPrefixes = props.getAllowedConfKeyPrefixes();
     Map<String, String> conf = new LinkedHashMap<>();
     for (Map.Entry<?, ?> e : map.entrySet()) {
       String k = String.valueOf(e.getKey());
       if (!allowedPrefixes.isEmpty() && allowedPrefixes.stream().noneMatch(k::startsWith)) {
-        throw new SparkValidationException("sparkConf key 不在允许前缀白名单内: " + k);
+        throw new SparkValidationException("sparkConf key does not match an allowed prefix: " + k);
       }
       conf.put(k, String.valueOf(e.getValue()));
     }
@@ -286,21 +289,21 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       return List.of();
     }
     if (!(raw instanceof List<?> list)) {
-      throw new SparkValidationException("appArgs 必须是 list of string");
+      throw new SparkValidationException("appArgs must be a list of strings");
     }
     if (list.size() > props.getMaxAppArgs()) {
       throw new SparkValidationException(
-          "appArgs 个数超限: " + list.size() + " > " + props.getMaxAppArgs());
+          "appArgs count exceeds the limit: " + list.size() + " > " + props.getMaxAppArgs());
     }
     List<String> allowRegex = props.getAppArgRegexAllowlist();
     List<String> args = new ArrayList<>(list.size());
     for (Object o : list) {
       if (o == null) {
-        throw new SparkValidationException("appArgs 含 null 元素");
+        throw new SparkValidationException("appArgs contains a null element");
       }
       String arg = String.valueOf(o);
       if (!allowRegex.isEmpty() && allowRegex.stream().noneMatch(arg::matches)) {
-        throw new SparkValidationException("appArg 不匹配任何允许正则: " + arg);
+        throw new SparkValidationException("appArg does not match any allowed pattern: " + arg);
       }
       args.add(arg);
     }
@@ -315,10 +318,10 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     try {
       seconds = Long.parseLong(String.valueOf(raw));
     } catch (NumberFormatException ex) {
-      throw new SparkValidationException("timeoutSeconds 必须是整数: " + raw);
+      throw new SparkValidationException("timeoutSeconds must be an integer: " + raw);
     }
     if (seconds <= 0) {
-      throw new SparkValidationException("timeoutSeconds 必须为正");
+      throw new SparkValidationException("timeoutSeconds must be positive");
     }
     return Duration.ofSeconds(seconds);
   }
@@ -332,7 +335,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     try {
       process = pb.start();
     } catch (IOException e) {
-      throw new UncheckedIOException("spark-submit 启动失败: " + e.getMessage(), e);
+      throw new UncheckedIOException("spark-submit failed to start: " + e.getMessage(), e);
     }
     String taskId = ctx.taskInstanceId() == null ? ("anon-" + process.pid()) : ctx.taskInstanceId();
     running.put(taskId, process);

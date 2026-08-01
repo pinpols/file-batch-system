@@ -74,15 +74,17 @@ public class BatchTaskExecutorRegistry {
 
     if (byType.isEmpty()) {
       log.warn(
-          "BatchTaskExecutorRegistry 启动:无任何 BatchTaskExecutor 注册(Pipeline 任务仍走 @Primary 路径,但原子任务"
-              + " SPI 未启用)");
+          "BatchTaskExecutorRegistry started with no BatchTaskExecutor registered (pipeline tasks still use the @Primary path;"
+              + " atomic task SPI is disabled)");
     } else {
       log.info(
-          "BatchTaskExecutorRegistry 启动:已注册 {} 个 taskType: {}", byType.size(), byType.keySet());
+          "BatchTaskExecutorRegistry started with {} registered task types: {}",
+          byType.size(),
+          byType.keySet());
     }
     if (!filteredOut.isEmpty()) {
       log.info(
-          "BatchTaskExecutorRegistry: 过滤掉 {} 个未启用 taskType: {} (启用白名单: {})",
+          "BatchTaskExecutorRegistry filtered {} disabled task types: {} (enabled allowlist: {})",
           filteredOut.size(),
           filteredOut,
           enabledFilter);

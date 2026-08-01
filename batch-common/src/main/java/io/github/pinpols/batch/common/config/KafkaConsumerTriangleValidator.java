@@ -50,27 +50,27 @@ public class KafkaConsumerTriangleValidator {
       throw new IllegalStateException(
           "FATAL: spring.kafka.consumer.properties.heartbeat.interval.ms ("
               + heartbeatIntervalMs
-              + "ms) 必须 ≤ session.timeout.ms / 3 ("
+              + "ms) must be <= session.timeout.ms / 3 ("
               + (sessionTimeoutMs / 3)
-              + "ms)。Kafka 协议硬约束: 心跳间隔过长会被 broker 误判为失联触发 rebalance。");
+              + "ms). Kafka protocol constraint: a long heartbeat interval can make the broker treat the consumer as disconnected and trigger a rebalance.");
     }
     if (sessionTimeoutMs >= maxPollIntervalMs) {
       throw new IllegalStateException("FATAL: spring.kafka.consumer.properties.session.timeout.ms ("
           + sessionTimeoutMs
-          + "ms) 必须 < max.poll.interval.ms ("
+          + "ms) must be < max.poll.interval.ms ("
           + maxPollIntervalMs
-          + "ms)。session.timeout 早于 max-poll 触发会破坏 rebalance 语义。");
+          + "ms). A session timeout before max-poll triggers can break rebalance semantics.");
     }
     if (!partitionAssignmentStrategy.contains("CooperativeStickyAssignor")) {
       throw new IllegalStateException(
-          "FATAL: spring.kafka.consumer.properties.partition.assignment.strategy 当前 ["
+          "FATAL: spring.kafka.consumer.properties.partition.assignment.strategy is currently ["
               + partitionAssignmentStrategy
-              + "],必须包含 CooperativeStickyAssignor。"
-              + " 默认 RangeAssignor 会在 worker rolling update 时触发 stop-the-world rebalance,"
-              + " partition 全暂停。详见 docs/runbook/kafka-consumer-rolling-upgrade.md。");
+              + "]; it must include CooperativeStickyAssignor."
+              + " The default RangeAssignor triggers a stop-the-world rebalance during worker rolling updates,"
+              + " pausing all partitions. See docs/runbook/kafka-consumer-rolling-upgrade.md.");
     }
     log.info(
-        "Kafka consumer 三角校验通过: session.timeout={}ms heartbeat.interval={}ms max.poll.interval={}ms"
+        "Kafka consumer triangle validation passed: session.timeout={}ms heartbeat.interval={}ms max.poll.interval={}ms"
             + " partition.assignment.strategy={}",
         sessionTimeoutMs,
         heartbeatIntervalMs,

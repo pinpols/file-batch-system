@@ -40,7 +40,7 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
       long cacheTtlMs,
       LongSupplier clockMs) {
     if (repository == null || fallback == null) {
-      throw new IllegalArgumentException("repository 与 fallback 不能为空");
+      throw new IllegalArgumentException("repository and fallback must not be null");
     }
     this.repository = repository;
     this.fallback = fallback;

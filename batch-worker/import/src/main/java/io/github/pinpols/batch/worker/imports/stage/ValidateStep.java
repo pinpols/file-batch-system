@@ -200,7 +200,7 @@ public class ValidateStep implements ImportStageStep {
       }
     } catch (NumberFormatException | JsonProcessingException e) {
       log.warn(
-          "manifest expectedRecordCount 读取失败,跳过行数对账: tenantId={} fileId={} cause={}",
+          "Failed to read manifest expectedRecordCount; skipping record-count reconciliation: tenantId={} fileId={} cause={}",
           context.getTenantId(),
           fileIdRaw,
           e.getMessage());

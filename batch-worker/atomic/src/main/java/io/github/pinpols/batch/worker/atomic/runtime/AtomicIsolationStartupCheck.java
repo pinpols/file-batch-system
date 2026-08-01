@@ -89,10 +89,10 @@ public class AtomicIsolationStartupCheck {
         "===== ADR-029 dual-use SPI executor(s) ENABLED: {} ===== "
             + "This worker can run arbitrary commands/SQL/stored-procs. "
             + "MINIMAL-PRIVILEGE deployment is REQUIRED: "
-            + "(1) 独立低权限 DB role —— 只给平台库 claim/lease,绝不连业务库; "
-            + "(2) 独立 ServiceAccount —— 最小 IAM,不复用平台共享 SA; "
-            + "(3) 出口 NetworkPolicy —— default-deny egress,仅放行 DNS/平台库/Kafka/显式 SPI 目标; "
-            + "(4) 独立受限 secret —— 不含业务库/MinIO 凭据。 "
+            + "(1) use a dedicated low-privilege DB role - grant access only to platform claim/lease tables; never connect to business databases; "
+            + "(2) use a dedicated ServiceAccount - grant minimum IAM permissions; do not reuse the shared platform SA; "
+            + "(3) use an egress NetworkPolicy - default-deny egress, allowing only DNS/platform DB/Kafka/explicit SPI targets; "
+            + "(4) use a dedicated restricted secret - it must not contain business DB or MinIO credentials. "
             + "Set {}=true after isolation is verified to silence the fail-fast gate.",
         enabledDualUse,
         PROP_ISOLATION_ACKNOWLEDGED);

@@ -82,7 +82,7 @@ class ConsoleAdminTestDataControllerTest {
         new ConsoleAdminTestDataController(cleanupService(), rf, environment);
     assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(prodCtl, "validateProfile"))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("不允许在生产 profile 启用");
+        .hasMessageContaining("must not be enabled in production profiles");
   }
 
   @Test

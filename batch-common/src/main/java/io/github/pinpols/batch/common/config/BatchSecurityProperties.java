@@ -48,17 +48,19 @@ public class BatchSecurityProperties implements EnvironmentAware {
     boolean prod = isProductionProfile();
     if (bypassMode && prod) {
       throw new IllegalStateException(
-          "FATAL: batch.security.bypass-mode=true 在生产 profile 下被禁止。" + " 请移除该配置或使用非生产 profile。");
+          "FATAL: batch.security.bypass-mode=true is forbidden in a production profile."
+              + " Remove this setting or use a non-production profile.");
     }
     if (bypassMode) {
-      log.warn("batch.security.bypass-mode=true — 全链路安全旁路已启用，仅限本地/联调/E2E 使用");
+      log.warn(
+          "batch.security.bypass-mode=true - full-chain security bypass is enabled; local/integration/E2E use only");
     }
     if (prod) {
       validateNotPlaceholder("batch.security.internal-secret", internalSecret);
       if ("internal-secret".equals(internalSecret)) {
         throw new IllegalStateException(
-            "FATAL: 生产环境 batch.security.internal-secret 仍为默认值 'internal-secret'，"
-                + "请通过 secret manager 或环境变量注入强密钥");
+            "FATAL: production batch.security.internal-secret still uses the default value 'internal-secret';"
+                + " inject a strong secret through a secret manager or environment variable");
       }
       validateNotPlaceholder(
           "POSTGRES_PASSWORD", environment.getProperty("spring.datasource.password"));
@@ -89,8 +91,8 @@ public class BatchSecurityProperties implements EnvironmentAware {
   private void warnIfKnownInsecureDefault(String key, String value, String shippedDefault) {
     if (shippedDefault.equals(value)) {
       log.warn(
-          "⚠️ 非生产 profile:{} 仍为出厂默认占位符,生产前务必经 env / secret-manager 注入真实强密钥"
-              + "(prod-like profile 下会 fail-fast 拒绝启动)",
+          "Non-production profile: {} still uses the shipped placeholder; inject a real high-entropy secret through env / secret manager"
+              + " before production (production-like profiles fail fast)",
           key);
     }
   }
@@ -99,7 +101,9 @@ public class BatchSecurityProperties implements EnvironmentAware {
   private void warnIfKnownWeakDbPassword(String key, String value) {
     if (value != null && KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
       log.warn(
-          "⚠️ 非生产 profile:{} 仍为出厂默认弱口令,生产前务必注入真实凭据" + "(prod-like profile 下会 fail-fast 拒绝启动)", key);
+          "Non-production profile: {} still uses the shipped weak password; inject real credentials before production"
+              + " (production-like profiles fail fast)",
+          key);
     }
   }
 
@@ -113,7 +117,8 @@ public class BatchSecurityProperties implements EnvironmentAware {
     }
     if (KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
       throw new IllegalStateException(
-          "FATAL: 生产环境数据库密码 " + key + " 仍为默认弱口令,请通过 secret manager 或环境变量注入真实凭据");
+          "FATAL: production database password " + key
+              + " still uses a known weak password; inject real credentials through a secret manager or environment variable");
     }
   }
 
@@ -126,25 +131,26 @@ public class BatchSecurityProperties implements EnvironmentAware {
 
   private void validateNotPlaceholder(String key, String value) {
     if (value == null || value.isBlank()) {
-      throw new IllegalStateException(
-          "FATAL: 生产环境密钥未配置: " + key + " 为空，请通过 secret manager 或环境变量注入真实凭据");
+      throw new IllegalStateException("FATAL: production secret is not configured: " + key
+          + " is empty; inject a real credential through a secret manager or environment variable");
     }
     // 归一化：trim + lowercase + 去掉 _ / - 后比对占位符前缀，覆盖 CHANGE_ME / change-me / changeme 等变体
     String normalized = value.trim().toLowerCase().replaceAll("[_\\-]", "");
     for (String prefix : PLACEHOLDER_PREFIXES) {
       if (normalized.startsWith(prefix)) {
-        throw new IllegalStateException(
-            "FATAL: 生产环境密钥未配置: " + key + " 仍为占位符 ('" + value + "')，请通过 secret manager 或环境变量注入真实凭据");
+        throw new IllegalStateException("FATAL: production secret is not configured: " + key
+            + " is still a placeholder ('" + value
+            + "'); inject a real credential through a secret manager or environment variable");
       }
     }
     if (value.trim().length() < MIN_SECRET_LENGTH) {
-      throw new IllegalStateException("FATAL: 生产环境密钥强度不足: "
+      throw new IllegalStateException("FATAL: production secret is too weak: "
           + key
-          + " 长度="
+          + " length="
           + value.trim().length()
-          + " < 最小要求 "
+          + " < minimum "
           + MIN_SECRET_LENGTH
-          + "，请用 secret manager 注入足够熵的密钥");
+          + "; inject a high-entropy secret through a secret manager");
     }
   }
 

@@ -115,7 +115,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
         properties.getPollIntervalMillis(),
         TimeUnit.MILLISECONDS);
     log.info(
-        "WebhookDeliveryRelay 已启动:poll={}ms batch={} absoluteMax={}",
+        "WebhookDeliveryRelay started: poll={}ms batch={} absoluteMax={}",
         properties.getPollIntervalMillis(),
         properties.getBatchSize(),
         properties.getAbsoluteMaxAttempts());
@@ -158,7 +158,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     executor.shutdown();
     try {
       if (!executor.awaitTermination(15, TimeUnit.SECONDS)) {
-        log.warn("WebhookDeliveryRelay 未在 15s 内完成关闭,强制中断");
+        log.warn("WebhookDeliveryRelay did not shut down within 15s; forcing interruption");
         executor.shutdownNow();
       }
     } catch (InterruptedException e) {
@@ -189,7 +189,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
         return;
       }
       log.warn(
-          "WebhookDeliveryRelay DB 瞬时异常,下轮重试: {}",
+          "WebhookDeliveryRelay transient DB failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
@@ -198,7 +198,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
         log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", t.getMessage());
         return;
       }
-      log.error("WebhookDeliveryRelay 异常", t);
+      log.error("WebhookDeliveryRelay failed", t);
     } finally {
       running.set(false);
     }
@@ -230,7 +230,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     if (batch.isEmpty()) {
       return;
     }
-    log.debug("WebhookDeliveryRelay 本轮取 {} 条待重投", batch.size());
+    log.debug("WebhookDeliveryRelay loaded {} events for retry", batch.size());
     for (WebhookDeliveryLogEntity row : batch) {
       if (stopping.get()) {
         return;
@@ -240,7 +240,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       } catch (Throwable t) {
         // 单条异常不能拖累整批;失败已写库,异常本身只为 ERROR 日志
         log.error(
-            "WebhookDeliveryRelay 单条重投异常: id={} tenantId={} subscriptionId={}",
+            "WebhookDeliveryRelay failed to retry one delivery: id={} tenantId={} subscriptionId={}",
             row.getId(),
             row.getTenantId(),
             row.getSubscriptionId(),
@@ -261,7 +261,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     if (subscription.isEmpty() || !Boolean.TRUE.equals(subscription.get().getEnabled())) {
       // 订阅被删 / 禁用 → 数据问题,直接 GIVE_UP 不再重试
       log.warn(
-          "WebhookDeliveryRelay 跳过失效 subscription: id={} tenantId={} subscriptionId={}",
+          "WebhookDeliveryRelay skipped an invalid subscription: id={} tenantId={} subscriptionId={}",
           row.getId(),
           row.getTenantId(),
           row.getSubscriptionId());
@@ -277,7 +277,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     } catch (IllegalArgumentException ex) {
       // payload 反序列化失败 = 数据问题,不可能靠重试解决,直接 GIVE_UP
       log.error(
-          "WebhookDeliveryRelay 反序列化 payload 失败,标 GIVE_UP: id={} tenantId={}",
+          "WebhookDeliveryRelay failed to deserialize payload; marking GIVE_UP: id={} tenantId={}",
           row.getId(),
           row.getTenantId(),
           ex);
@@ -296,7 +296,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     if (result.success()) {
       deliveryLogRepository.markRetrySuccess(row.getId(), nextAttempt, result.httpStatus());
       log.info(
-          "WebhookDeliveryRelay 重投成功: id={} tenantId={} attempt={}",
+          "WebhookDeliveryRelay retry succeeded: id={} tenantId={} attempt={}",
           row.getId(),
           row.getTenantId(),
           nextAttempt);
@@ -308,7 +308,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
           row.getId(), nextAttempt, result.httpStatus(), result.errorSummary());
       giveUpCounter.increment();
       log.warn(
-          "WebhookDeliveryRelay 达到上限,标 GIVE_UP: id={} tenantId={} attempt={} max={}",
+          "WebhookDeliveryRelay reached the retry limit; marking GIVE_UP: id={} tenantId={} attempt={} max={}",
           row.getId(),
           row.getTenantId(),
           nextAttempt,
@@ -321,7 +321,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     deliveryLogRepository.markRetryFailure(
         row.getId(), nextAttempt, result.httpStatus(), result.errorSummary(), nextRetryAt);
     log.debug(
-        "WebhookDeliveryRelay 重投失败,排程下次: id={} tenantId={} attempt={} nextRetryAt={}",
+        "WebhookDeliveryRelay retry failed; scheduling the next attempt: id={} tenantId={} attempt={} nextRetryAt={}",
         row.getId(),
         row.getTenantId(),
         nextAttempt,

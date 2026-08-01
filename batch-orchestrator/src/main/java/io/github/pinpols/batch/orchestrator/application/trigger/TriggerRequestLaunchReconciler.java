@@ -71,7 +71,7 @@ public class TriggerRequestLaunchReconciler {
       rows = triggerRequestMapper.selectStaleAcceptedWithJobInstance(olderThan, batch);
     } catch (RuntimeException ex) {
       log.warn(
-          "trigger launch reconciler 扫描失败,下轮重试: olderThan={} batchSize={} error={}",
+          "Trigger launch reconciler scan failed; retrying on the next cycle: olderThan={} batchSize={} error={}",
           olderThan,
           batch,
           ex.getMessage());
@@ -96,7 +96,7 @@ public class TriggerRequestLaunchReconciler {
         }
       } catch (RuntimeException ex) {
         log.warn(
-            "trigger launch reconciler 单行回写失败: tenantId={} requestId={} jobInstanceId={} error={}",
+            "Trigger launch reconciler failed to update one row: tenantId={} requestId={} jobInstanceId={} error={}",
             row.getTenantId(),
             row.getRequestId(),
             row.getJobInstanceId(),

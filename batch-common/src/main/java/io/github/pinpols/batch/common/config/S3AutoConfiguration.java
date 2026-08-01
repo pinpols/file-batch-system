@@ -102,12 +102,13 @@ public class S3AutoConfiguration {
         properties.getSecretKey() == null ? "" : properties.getSecretKey().trim();
     if (accessKey.isEmpty() || secretKey.isEmpty()) {
       throw new IllegalStateException(
-          "FATAL: 生产环境对象存储凭据未配置，请通过 BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY 注入");
+          "FATAL: production object-storage credentials are not configured; inject them through BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY");
     }
     if ("minioadmin".equals(accessKey)
         || "minioadmin".equals(secretKey)
         || "minioadmin123".equals(secretKey)) {
-      throw new IllegalStateException("FATAL: 生产环境对象存储仍使用已知 MinIO 默认凭据，请注入真实凭据");
+      throw new IllegalStateException(
+          "FATAL: production object storage still uses known MinIO default credentials; inject real credentials");
     }
   }
 

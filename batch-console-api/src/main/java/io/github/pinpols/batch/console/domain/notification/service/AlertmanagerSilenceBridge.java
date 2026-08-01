@@ -115,7 +115,8 @@ public class AlertmanagerSilenceBridge {
     executor.shutdown();
     try {
       if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn("AlertmanagerSilenceBridge 线程池未在 5s 内 drain 完,强制中断");
+        log.warn(
+            "AlertmanagerSilenceBridge executor did not drain within 5s; forcing interruption");
         executor.shutdownNow();
       }
     } catch (InterruptedException e) {

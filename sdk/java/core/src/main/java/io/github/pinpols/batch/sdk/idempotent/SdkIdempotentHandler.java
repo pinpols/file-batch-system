@@ -70,8 +70,8 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
       return delegate;
     }
     if (store == null) {
-      throw new IllegalStateException(
-          "handler taskType=" + source.taskType() + " 声明了 @Idempotent 但未注入 SdkIdempotencyStore");
+      throw new IllegalStateException("handler taskType=" + source.taskType()
+          + " declares @Idempotent but no SdkIdempotencyStore was injected");
     }
     return new SdkIdempotentHandler(delegate, store, ann);
   }

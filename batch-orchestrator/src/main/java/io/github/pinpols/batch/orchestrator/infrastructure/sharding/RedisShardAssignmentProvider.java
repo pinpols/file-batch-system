@@ -53,7 +53,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   public RedisShardAssignmentProvider(
       StringRedisTemplate redis, String memberId, Duration memberTtl) {
     if (memberId == null || memberId.isBlank()) {
-      throw new IllegalArgumentException("memberId 不能为空");
+      throw new IllegalArgumentException("memberId must not be blank");
     }
     this.redis = redis;
     this.memberId = memberId;
@@ -74,7 +74,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       coordinationHealthy.set(false);
       log.warn(
           "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
-              + "— DYNAMIC sharding 将持续退化为单实例直至 Redis 恢复",
+              + "- DYNAMIC sharding will remain degraded to a single instance until Redis recovers",
           memberId,
           ex.toString());
     }
@@ -147,7 +147,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       coordinationHealthy.set(false);
       ShardAssignment fallback = lastKnown.get();
       log.warn(
-          "Redis shard coordinator 查询失败，fallback 到上次值 total={} index={}: {}",
+          "Redis shard coordinator query failed; falling back to the previous assignment total={} index={}: {}",
           fallback.shardTotal(),
           fallback.shardIndex(),
           ex.toString());

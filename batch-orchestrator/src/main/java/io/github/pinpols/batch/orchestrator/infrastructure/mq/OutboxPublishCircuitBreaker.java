@@ -169,7 +169,7 @@ public class OutboxPublishCircuitBreaker {
       // 本地已知熔断开→继续拒;否则放行,Redis 恢复后 evalLong 自然重新同步集群态。
       recordFailOpen();
       log.warn(
-          "Outbox 熔断器:Redis 不可达,allowNow fail-open 回落缓存态(openUntilMs={}):{}",
+          "Outbox circuit breaker: Redis is unreachable; allowNow fails open to the cached state (openUntilMs={}): {}",
           snapshot.openUntilMs(),
           ex.getMessage());
       return snapshot.openUntilMs() <= now;
@@ -206,7 +206,9 @@ public class OutboxPublishCircuitBreaker {
       // Redis 不可达时 best-effort：本轮不更新集群熔断态,保留本地 state,重置半开标记避免泄漏,
       // 不向 OutboxPollScheduler 抛异常(否则每轮栽在 Redis 上,把 Redis 故障放大成投递停摆)。
       recordFailOpen();
-      log.warn("Outbox 熔断器:Redis 不可达,onAdvanceResult 跳过集群态更新:{}", ex.getMessage());
+      log.warn(
+          "Outbox circuit breaker: Redis is unreachable; skipping cluster-state update in onAdvanceResult: {}",
+          ex.getMessage());
       halfOpenProbing.compareAndSet(true, false);
       return;
     }

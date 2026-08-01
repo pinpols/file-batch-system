@@ -122,8 +122,8 @@ public class ResultVersionWriter {
         if (partialFailed) {
           promotionPolicy = PROMOTION_MANUAL_APPROVAL;
           log.warn(
-              "PARTIAL_FAILED terminal → result_version 落 PENDING（不自动 EFFECTIVE,防部分结果被下游"
-                  + "静默消费）: tenantId={}, businessKey={}, jobInstanceId={}",
+              "PARTIAL_FAILED terminal -> result_version set to PENDING (not automatically EFFECTIVE; prevents downstream"
+                  + " consumption of partial results): tenantId={}, businessKey={}, jobInstanceId={}",
               tenantId,
               businessKey,
               instance.getId());

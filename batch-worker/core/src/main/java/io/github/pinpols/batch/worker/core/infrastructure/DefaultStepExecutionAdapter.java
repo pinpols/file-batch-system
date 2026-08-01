@@ -102,7 +102,9 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
         return typed;
       }
     } catch (RuntimeException ex) {
-      log.warn("task payload 非合法 JSON 对象,以空参数执行: {}", ex.getMessage());
+      log.warn(
+          "Task payload is not a valid JSON object; executing with empty parameters: {}",
+          ex.getMessage());
     }
     return Map.of();
   }
