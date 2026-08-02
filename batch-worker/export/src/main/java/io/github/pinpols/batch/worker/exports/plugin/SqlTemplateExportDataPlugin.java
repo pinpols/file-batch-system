@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
@@ -36,7 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
-  public static final String PLUGIN_ID = "sql_template_export";
+  public static final String PLUGIN_ID = WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE;
 
   private final NamedParameterJdbcTemplate jdbc;
   private final DataSource businessDataSource;

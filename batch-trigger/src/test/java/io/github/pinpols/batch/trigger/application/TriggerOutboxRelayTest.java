@@ -17,6 +17,7 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -161,7 +162,7 @@ class TriggerOutboxRelayTest {
 
     verify(publisher)
         .publish(
-            eq("batch.trigger.launch.v1"),
+            eq(BatchTopics.TRIGGER_LAUNCH_V1),
             eq("tenant-a:req-1"),
             any(LaunchEnvelope.class),
             eq("trace-1"));
@@ -290,7 +291,7 @@ class TriggerOutboxRelayTest {
     event.setId(id);
     event.setTenantId("tenant-a");
     event.setRequestId("req-1");
-    event.setTopic("batch.trigger.launch.v1");
+    event.setTopic(BatchTopics.TRIGGER_LAUNCH_V1);
     event.setPayload(payload);
     event.setPublishStatus(OutboxPublishStatus.NEW.code());
     event.setPublishAttempt(0);

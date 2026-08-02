@@ -51,6 +51,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ValidateStep implements ImportStageStep {
 
+  private static final String ERROR_CODE_NO_STREAM = "IMPORT_VALIDATE_NO_STREAM";
+
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String ERR_SKIP_THRESHOLD_EXCEEDED = "IMPORT_SKIP_THRESHOLD_EXCEEDED";
   private static final String MSG_SKIP_THRESHOLD_EXCEEDED = "skip threshold exceeded";
@@ -77,7 +79,7 @@ public class ValidateStep implements ImportStageStep {
     if (!Texts.hasText(parsedRecordsPath)) {
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_VALIDATE_NO_STREAM",
+          ERROR_CODE_NO_STREAM,
           "error.import.validate.no_stream",
           new Object[] {"parsed records path missing"},
           "parsed records path missing",
@@ -90,7 +92,7 @@ public class ValidateStep implements ImportStageStep {
     if (!Files.exists(parsedRecordsPath)) {
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_VALIDATE_NO_STREAM",
+          ERROR_CODE_NO_STREAM,
           "error.import.validate.no_stream",
           new Object[] {"parsed records file missing"},
           "parsed records file missing",

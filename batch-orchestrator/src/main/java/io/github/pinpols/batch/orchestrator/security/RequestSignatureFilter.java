@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.security;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
@@ -29,7 +30,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class RequestSignatureFilter extends OncePerRequestFilter {
 
-  private static final String HEADER_API_KEY = "X-Batch-Api-Key";
+  private static final String HEADER_API_KEY = CommonConstants.BATCH_API_KEY_HEADER;
   private static final String HEADER_TIMESTAMP = "X-Batch-Timestamp";
   private static final String HEADER_NONCE = "X-Batch-Nonce";
   private static final String HEADER_SIGNATURE = "X-Batch-Signature";

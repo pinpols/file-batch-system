@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.event;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -42,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
 
   /** V80 默认 topic;trigger 当前唯一事件类型 = trigger.launch.v1。 */
-  private static final String DEFAULT_TOPIC = "batch.trigger.launch.v1";
+  private static final String DEFAULT_TOPIC = BatchTopics.TRIGGER_LAUNCH_V1;
 
   private final TriggerOutboxEventMapper triggerOutboxEventMapper;
 

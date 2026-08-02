@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.version;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -230,8 +231,8 @@ public class ResultVersionWriter {
         return PROMOTION_AUTO_LATEST;
       }
       String value = String.valueOf(resultPolicy);
-      if ("KEEP_BOTH".equalsIgnoreCase(value)
-          || "MANUAL_CONFIRM_EFFECTIVE".equalsIgnoreCase(value)) {
+      if (ResultVersionPolicy.KEEP_BOTH.code().equalsIgnoreCase(value)
+          || ResultVersionPolicy.MANUAL_CONFIRM_EFFECTIVE.code().equalsIgnoreCase(value)) {
         return PROMOTION_MANUAL_APPROVAL;
       }
       return PROMOTION_AUTO_LATEST;

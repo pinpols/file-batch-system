@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
@@ -36,9 +37,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class InternalAuthFilter extends OncePerRequestFilter {
 
-  private static final String HEADER_SECRET = "X-Internal-Secret";
-  private static final String HEADER_API_KEY = "X-Batch-Api-Key";
-  private static final String HEADER_TENANT = "X-Batch-Tenant-Id";
+  private static final String HEADER_SECRET = CommonConstants.INTERNAL_SECRET_HEADER;
+  private static final String HEADER_API_KEY = CommonConstants.BATCH_API_KEY_HEADER;
+  private static final String HEADER_TENANT = CommonConstants.BATCH_TENANT_ID_HEADER;
 
   /** Filter 校验通过后写入,controller 通过 {@code request.getAttribute} 取。 */
   public static final String ATTR_RESOLVED_TENANT_ID = "batch.auth.resolvedTenantId";

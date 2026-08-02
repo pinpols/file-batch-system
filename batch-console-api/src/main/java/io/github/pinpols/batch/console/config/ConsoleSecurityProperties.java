@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
@@ -29,7 +30,7 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
   private boolean enabled = true;
 
   /** 租户标识 header 名。前端 / 网关在请求里带 → 后端按此值路由。 */
-  private String tenantHeader = "X-Tenant-Id";
+  private String tenantHeader = CommonConstants.DEFAULT_TENANT_ID_HEADER;
 
   /** 用户标识 header 名（bypass-mode 测试钩子，便于按 header 注入测试用户身份）。 */
   private String userHeader = "X-Console-User";

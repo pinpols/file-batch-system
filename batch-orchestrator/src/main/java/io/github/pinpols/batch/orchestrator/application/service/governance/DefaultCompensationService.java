@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.CompensationCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
@@ -453,7 +453,7 @@ public class DefaultCompensationService implements CompensationService {
     triggerRequest.setBizDate(request.target().bizDate());
     triggerRequest.setDedupKey(
         request.target().tenantId() + ":compensation:" + request.commandNo() + ":" + requestId);
-    triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
+    triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
     triggerRequest.setTraceId(request.traceId());
     jobMappers.triggerRequestMapper.insert(triggerRequest);
     LaunchRequest launchRequest = LaunchRequest.builder()

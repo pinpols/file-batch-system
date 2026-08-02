@@ -1,6 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
+import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
+import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
+import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
+import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -48,20 +54,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BatchDayReplayService {
 
-  static final String STATUS_PENDING_APPROVAL = "PENDING_APPROVAL";
-  static final String STATUS_RUNNING = "RUNNING";
+  static final String STATUS_PENDING_APPROVAL = ConfigLifecycleStatus.PENDING_APPROVAL.code();
+  static final String STATUS_RUNNING = BatchLifecycleStatus.RUNNING.code();
   static final String STATUS_SUCCEEDED = "SUCCEEDED";
-  static final String STATUS_PARTIAL_FAILED = "PARTIAL_FAILED";
+  static final String STATUS_PARTIAL_FAILED = JobInstanceStatus.PARTIAL_FAILED.code();
   static final String STATUS_CANCELLED = "CANCELLED";
 
   static final String ENTRY_PENDING = "PENDING";
   static final String ENTRY_SUCCEEDED = "SUCCEEDED";
   static final String ENTRY_FAILED = "FAILED";
-
-  static final String SCOPE_ALL = "ALL";
-  static final String SCOPE_ALL_FAILED = "ALL_FAILED";
-  static final String SCOPE_SUBSET = "SUBSET_JOB_CODES";
-  static final String SCOPE_OUTPUTS_ONLY = "OUTPUTS_ONLY";
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
@@ -93,8 +94,10 @@ public class BatchDayReplayService {
         .bizDate(command.bizDate())
         .scope(scope)
         .scopePayload(buildScopePayload(command, scope))
-        .resultPolicy(defaultIfBlank(command.resultPolicy(), "CREATE_NEW_VERSION"))
-        .configVersionPolicy(defaultIfBlank(command.configVersionPolicy(), "USE_ORIGINAL_CONFIG"))
+        .resultPolicy(
+            defaultIfBlank(command.resultPolicy(), ResultVersionPolicy.CREATE_NEW_VERSION.code()))
+        .configVersionPolicy(defaultIfBlank(
+            command.configVersionPolicy(), ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code()))
         .configVersion(command.configVersion())
         .reason(command.reason())
         .status(initialStatus)
@@ -151,9 +154,10 @@ public class BatchDayReplayService {
     Instant now = dateTimeSupport.nowInstant();
     String scope = normalizeScope(command.scope());
     List<BatchDayReplayEntryEntity> entries = materializeEntries(command, scope, now);
-    String resultPolicy = defaultIfBlank(command.resultPolicy(), "CREATE_NEW_VERSION");
-    String configVersionPolicy =
-        defaultIfBlank(command.configVersionPolicy(), "USE_ORIGINAL_CONFIG");
+    String resultPolicy =
+        defaultIfBlank(command.resultPolicy(), ResultVersionPolicy.CREATE_NEW_VERSION.code());
+    String configVersionPolicy = defaultIfBlank(
+        command.configVersionPolicy(), ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code());
     Map<Long, String> versionBusinessKeys = loadVersionBusinessKeys(command, scope);
     List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries = entries.stream()
         .map(entry -> toPreviewEntry(command, scope, entry, versionBusinessKeys))
@@ -254,7 +258,7 @@ public class BatchDayReplayService {
   @Transactional
   public BatchDayReplaySessionEntity executeOutputsOnly(String tenantId, Long sessionId) {
     BatchDayReplaySessionEntity session = loadOrThrow(tenantId, sessionId);
-    if (!SCOPE_OUTPUTS_ONLY.equals(session.scope())) {
+    if (!BatchDayReplayScope.OUTPUTS_ONLY.code().equals(session.scope())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.outputs_only_scope_required");
     }
@@ -328,7 +332,7 @@ public class BatchDayReplayService {
 
   private String normalizeScope(String scope) {
     String upper = scope.trim().toUpperCase(Locale.ROOT);
-    if (!List.of(SCOPE_ALL, SCOPE_ALL_FAILED, SCOPE_SUBSET, SCOPE_OUTPUTS_ONLY).contains(upper)) {
+    if (BatchDayReplayScope.fromCodeOrNull(upper) == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_scope");
     }
     return upper;
@@ -336,22 +340,27 @@ public class BatchDayReplayService {
 
   private List<BatchDayReplayEntryEntity> materializeEntries(
       BatchDayReplaySubmitCommand command, String scope, Instant now) {
-    if (SCOPE_OUTPUTS_ONLY.equals(scope)) {
+    BatchDayReplayScope scopeType = BatchDayReplayScope.fromCodeOrNull(scope);
+    if (scopeType == BatchDayReplayScope.OUTPUTS_ONLY) {
       return materializeOutputsOnlyEntries(command, now);
     }
     List<String> statuses =
-        switch (scope) {
-          case SCOPE_ALL -> List.of("SUCCESS", "FAILED", "PARTIAL_FAILED");
-          case SCOPE_ALL_FAILED -> List.of("FAILED", "PARTIAL_FAILED");
-          case SCOPE_SUBSET -> List.of("SUCCESS", "FAILED", "PARTIAL_FAILED");
-          default -> List.of();
+        switch (scopeType) {
+          case ALL, SUBSET_JOB_CODES ->
+            List.of(
+                BatchLifecycleStatus.SUCCESS.code(),
+                BatchLifecycleStatus.FAILED.code(),
+                JobInstanceStatus.PARTIAL_FAILED.code());
+          case ALL_FAILED ->
+            List.of(BatchLifecycleStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code());
+          case OUTPUTS_ONLY -> List.of();
         };
-    List<String> jobCodes = SCOPE_SUBSET.equals(scope)
+    List<String> jobCodes = scopeType == BatchDayReplayScope.SUBSET_JOB_CODES
             && command.jobCodes() != null
             && !command.jobCodes().isEmpty()
         ? command.jobCodes()
         : List.of();
-    if (SCOPE_SUBSET.equals(scope) && jobCodes.isEmpty()) {
+    if (scopeType == BatchDayReplayScope.SUBSET_JOB_CODES && jobCodes.isEmpty()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
     }
@@ -434,10 +443,10 @@ public class BatchDayReplayService {
 
   private String buildScopePayload(BatchDayReplaySubmitCommand command, String scope) {
     Map<String, Object> payload = new LinkedHashMap<>();
-    if (SCOPE_SUBSET.equals(scope) && command.jobCodes() != null) {
+    if (BatchDayReplayScope.SUBSET_JOB_CODES.code().equals(scope) && command.jobCodes() != null) {
       payload.put("jobCodes", command.jobCodes());
     }
-    if (SCOPE_OUTPUTS_ONLY.equals(scope) && command.versionIds() != null) {
+    if (BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope) && command.versionIds() != null) {
       payload.put("versionIds", command.versionIds());
     }
     return payload.isEmpty() ? null : JsonUtils.toJson(payload);
@@ -448,8 +457,10 @@ public class BatchDayReplayService {
       String scope,
       BatchDayReplayEntryEntity entry,
       Map<Long, String> versionBusinessKeys) {
-    String action = SCOPE_OUTPUTS_ONLY.equals(scope) ? "PROMOTE_RESULT_VERSION" : "RERUN_INSTANCE";
-    String businessKey = SCOPE_OUTPUTS_ONLY.equals(scope)
+    String action = BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
+        ? "PROMOTE_RESULT_VERSION"
+        : "RERUN_INSTANCE";
+    String businessKey = BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
         ? versionBusinessKeys.getOrDefault(entry.resultVersionId(), "")
         : "job:" + entry.jobCode() + ":" + command.bizDate();
     return new BatchDayReplayPreviewResponse.PreviewEntry(
@@ -519,7 +530,7 @@ public class BatchDayReplayService {
 
   private Map<Long, String> loadVersionBusinessKeys(
       BatchDayReplaySubmitCommand command, String scope) {
-    if (!SCOPE_OUTPUTS_ONLY.equals(scope)
+    if (!BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
         || command.versionIds() == null
         || command.versionIds().isEmpty()) {
       return Map.of();

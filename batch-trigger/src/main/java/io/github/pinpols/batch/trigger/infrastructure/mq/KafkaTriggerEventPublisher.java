@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure.mq;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -30,8 +31,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
-  private static final String HEADER_TRACE_ID = "X-Trace-Id";
-  private static final String HEADER_TENANT_ID = "X-Tenant-Id";
+  private static final String HEADER_TRACE_ID = CommonConstants.DEFAULT_TRACE_ID_HEADER;
+  private static final String HEADER_TENANT_ID = CommonConstants.DEFAULT_TENANT_ID_HEADER;
   private static final String HEADER_ENVELOPE_VERSION = "X-Envelope-Version";
 
   private final KafkaTemplate<String, String> triggerKafkaTemplate;

@@ -14,6 +14,8 @@ import java.util.Map;
 /** Parses fixed-width text files into NDJSON records. */
 public class FixedWidthFormatParser implements FormatParser {
 
+  private static final String ERROR_CODE_FIXED_WIDTH_INVALID = "IMPORT_PARSE_FIXED_INVALID";
+
   private final ParseSupport support;
 
   public FixedWidthFormatParser(ParseSupport support) {
@@ -71,7 +73,7 @@ public class FixedWidthFormatParser implements FormatParser {
           support.recordParseError(
               context,
               recordNo,
-              "IMPORT_PARSE_FIXED_INVALID",
+              ERROR_CODE_FIXED_WIDTH_INVALID,
               "line shorter than record_length",
               line);
           continue;
@@ -94,7 +96,7 @@ public class FixedWidthFormatParser implements FormatParser {
                   .row(row)
                   .preserveLogicalRow(preserveLogicalRow)
                   .recordNo(recordNo)
-                  .errorCode("IMPORT_PARSE_FIXED_INVALID")
+                  .errorCode(ERROR_CODE_FIXED_WIDTH_INVALID)
                   .rawRecord(row)
                   .build();
           support.writeParsedRecord(writeParam);
@@ -102,7 +104,7 @@ public class FixedWidthFormatParser implements FormatParser {
           SwallowedExceptionLogger.warn(FixedWidthFormatParser.class, "catch:Exception", exception);
 
           support.recordParseError(
-              context, recordNo, "IMPORT_PARSE_FIXED_INVALID", exception.getMessage(), line);
+              context, recordNo, ERROR_CODE_FIXED_WIDTH_INVALID, exception.getMessage(), line);
         }
       }
     }
