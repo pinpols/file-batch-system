@@ -31,6 +31,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DatasetRuleEvaluator {
 
+  private static final String ERROR_CODE_ROW_COUNT = "IMPORT_VALIDATE_ROW_COUNT";
+
   private final ValidationConfigSupport configSupport;
 
   public void evaluate(ValidationSession session) {
@@ -100,7 +102,7 @@ public class DatasetRuleEvaluator {
       }
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_ROW_COUNT",
+          ERROR_CODE_ROW_COUNT,
           "row count mismatch, expected="
               + exactCount
               + (fromManifest ? " (manifest)" : "")
@@ -112,7 +114,7 @@ public class DatasetRuleEvaluator {
     if (minCount != null && actualCount < minCount) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_ROW_COUNT",
+          ERROR_CODE_ROW_COUNT,
           "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
           Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
       return;
@@ -120,7 +122,7 @@ public class DatasetRuleEvaluator {
     if (maxCount != null && actualCount > maxCount) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_ROW_COUNT",
+          ERROR_CODE_ROW_COUNT,
           "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
           Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
     }

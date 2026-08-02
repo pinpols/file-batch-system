@@ -61,6 +61,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ParseStep implements ImportStageStep {
 
+  private static final String ERROR_CODE_PARSE_FAILED = "IMPORT_PARSE_FAILED";
+
   private static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
   private static final String FORMAT_EXCEL = "EXCEL";
 
@@ -198,7 +200,7 @@ public class ParseStep implements ImportStageStep {
           context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
       log.warn(
           "parse stage business error: tenantId={}, fileId={}, key={}", tid, fid, biz.getMessage());
-      return ImportStageResult.failure(stage(), "IMPORT_PARSE_FAILED", biz, ERROR_OBJECT_MAPPER);
+      return ImportStageResult.failure(stage(), ERROR_CODE_PARSE_FAILED, biz, ERROR_OBJECT_MAPPER);
     } catch (Exception ex) {
       if (stagingFile != null) {
         deleteQuietly(stagingFile);
@@ -213,7 +215,7 @@ public class ParseStep implements ImportStageStep {
       log.debug("parse stage failed stack: tenantId={}, fileId={}", tid, fid, ex);
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_PARSE_FAILED",
+          ERROR_CODE_PARSE_FAILED,
           "error.import.parse.failed",
           new Object[] {ex.getMessage()},
           ex.getMessage(),

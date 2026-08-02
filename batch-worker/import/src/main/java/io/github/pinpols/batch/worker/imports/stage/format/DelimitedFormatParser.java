@@ -27,6 +27,7 @@ import java.util.Set;
 public class DelimitedFormatParser implements FormatParser {
 
   private static final String KEY_SCHEMA_FIELDS = PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS;
+  private static final String ERROR_CODE_LINE_INVALID = "IMPORT_PARSE_LINE_INVALID";
 
   private final ParseSupport support;
 
@@ -91,8 +92,7 @@ public class DelimitedFormatParser implements FormatParser {
         recordNo++;
         try {
           if (row.length == 0 || isAllBlank(row)) {
-            support.recordParseError(
-                context, recordNo, "IMPORT_PARSE_LINE_INVALID", "empty line", "");
+            support.recordParseError(context, recordNo, ERROR_CODE_LINE_INVALID, "empty line", "");
             continue;
           }
           Map<String, String> rowMap = new LinkedHashMap<>();
@@ -107,7 +107,7 @@ public class DelimitedFormatParser implements FormatParser {
                   .row(rowMap)
                   .preserveLogicalRow(preserveLogicalRow)
                   .recordNo(recordNo)
-                  .errorCode("IMPORT_PARSE_LINE_INVALID")
+                  .errorCode(ERROR_CODE_LINE_INVALID)
                   .rawRecord(rowMap)
                   .build();
           support.writeParsedRecord(writeParam);
@@ -115,7 +115,7 @@ public class DelimitedFormatParser implements FormatParser {
           SwallowedExceptionLogger.warn(DelimitedFormatParser.class, "catch:Exception", exception);
 
           support.recordParseError(
-              context, recordNo, "IMPORT_PARSE_LINE_INVALID", exception.getMessage(), row);
+              context, recordNo, ERROR_CODE_LINE_INVALID, exception.getMessage(), row);
         }
       }
     } finally {

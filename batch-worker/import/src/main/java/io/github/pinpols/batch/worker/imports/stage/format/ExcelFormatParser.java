@@ -54,6 +54,7 @@ import org.xml.sax.XMLReader;
 public class ExcelFormatParser implements FormatParser {
 
   private static final int MAX_EXCEL_COLUMNS = 1000;
+  private static final String ERROR_CODE_EXCEL_INVALID = "IMPORT_PARSE_EXCEL_INVALID";
 
   // 当 byte[] 大于此阈值,改走"先落 temp file → OPCPackage.open(File)"路径,避免 POI
   // 内部 ByteArrayInputStream → ZipInputStream → 全量缓冲 造成第二份堆内拷贝。
@@ -440,7 +441,7 @@ public class ExcelFormatParser implements FormatParser {
                 .row(rowMap)
                 .preserveLogicalRow(preserveLogicalRow)
                 .recordNo(recordNo)
-                .errorCode("IMPORT_PARSE_EXCEL_INVALID")
+                .errorCode(ERROR_CODE_EXCEL_INVALID)
                 .rawRecord(rowMap)
                 .build();
         support.writeParsedRecord(writeParam);
@@ -452,7 +453,7 @@ public class ExcelFormatParser implements FormatParser {
         support.recordParseError(
             context,
             recordNo,
-            "IMPORT_PARSE_EXCEL_INVALID",
+            ERROR_CODE_EXCEL_INVALID,
             ex.getMessage(),
             cells,
             new SourceLocator((long) currentPhysicalRow, resolveErrorColumn()));

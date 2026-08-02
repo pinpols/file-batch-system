@@ -49,6 +49,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class PreprocessStep implements ImportStageStep {
 
+  private static final String ERROR_CODE_PREPROCESS_INVALID = "IMPORT_PREPROCESS_INVALID";
+  private static final String ERROR_CODE_OBJECT_LOAD_FAILED =
+      "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED";
+
   /**
    * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB， 通过 {@code
    * batch.worker.import.preprocess-spool-bytes} 调整（设 0 关闭 spool）。
@@ -107,7 +111,7 @@ public class PreprocessStep implements ImportStageStep {
     if (context == null) {
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_PREPROCESS_INVALID",
+          ERROR_CODE_PREPROCESS_INVALID,
           "error.import.preprocess.invalid",
           new Object[] {"context is null"},
           "context is null",
@@ -126,7 +130,7 @@ public class PreprocessStep implements ImportStageStep {
                 && !Texts.hasText(importPayload.storagePath())))) {
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_PREPROCESS_INVALID",
+          ERROR_CODE_PREPROCESS_INVALID,
           "error.import.preprocess.invalid",
           new Object[] {"raw payload is blank"},
           "raw payload is blank",
@@ -353,7 +357,7 @@ public class PreprocessStep implements ImportStageStep {
       // 对象缺失 / 拉取失败 → 走 PREPROCESS 优雅失败(execute 的 catch 转 ImportStageResult.failure),
       // 而非直接抛出未映射异常未捕获异常。
       throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED",
+          ERROR_CODE_OBJECT_LOAD_FAILED,
           "failed to load import object from storage (bucket="
               + bucket
               + ", object="
@@ -454,7 +458,7 @@ public class PreprocessStep implements ImportStageStep {
         }
       }
       throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED",
+          ERROR_CODE_OBJECT_LOAD_FAILED,
           "failed to stream import object from storage (bucket="
               + bucket
               + ", object="

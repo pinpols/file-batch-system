@@ -27,6 +27,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class RegisterStep implements ExportStageStep {
 
+  private static final String ERROR_CODE_REGISTER_INVALID = "EXPORT_REGISTER_INVALID";
+
   private static final String KEY_OBJECT_NAME = "objectName";
 
   private static final Set<String> RESERVED_METADATA_KEYS =
@@ -62,7 +64,7 @@ public class RegisterStep implements ExportStageStep {
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
       return ExportStageResult.failure(
           stage(),
-          "EXPORT_REGISTER_INVALID",
+          ERROR_CODE_REGISTER_INVALID,
           "error.export.register.invalid",
           new Object[] {"objectName missing"},
           "objectName missing",
@@ -75,7 +77,7 @@ public class RegisterStep implements ExportStageStep {
         || !(batchObject instanceof Map<?, ?> batch)) {
       return ExportStageResult.failure(
           stage(),
-          "EXPORT_REGISTER_INVALID",
+          ERROR_CODE_REGISTER_INVALID,
           "error.export.register.invalid",
           new Object[] {"export context missing"},
           "export context missing",

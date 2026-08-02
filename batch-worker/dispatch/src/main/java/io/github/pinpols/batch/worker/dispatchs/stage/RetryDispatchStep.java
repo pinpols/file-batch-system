@@ -25,6 +25,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class RetryDispatchStep implements DispatchStageStep {
 
+  private static final String ERROR_CODE_RETRY_FAILED = "DISPATCH_RETRY_FAILED";
+
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
   private final PlatformFileRuntimeRepository runtimeRepository;
@@ -97,7 +99,7 @@ public class RetryDispatchStep implements DispatchStageStep {
         attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
         return DispatchStageResult.failure(
             stage(),
-            "DISPATCH_RETRY_FAILED",
+            ERROR_CODE_RETRY_FAILED,
             "error.dispatch.retry.failed",
             new Object[] {"failed to mark failed"},
             "failed to mark failed",
@@ -106,7 +108,7 @@ public class RetryDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
           stage(),
-          "DISPATCH_RETRY_FAILED",
+          ERROR_CODE_RETRY_FAILED,
           "error.dispatch.retry.failed",
           new Object[] {dispatchResult.message()},
           dispatchResult.message(),
@@ -118,7 +120,7 @@ public class RetryDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
           stage(),
-          "DISPATCH_RETRY_FAILED",
+          ERROR_CODE_RETRY_FAILED,
           "error.dispatch.retry.failed",
           new Object[] {"failed to mark retry sent"},
           "failed to mark retry sent",
