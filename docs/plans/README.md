@@ -1,4 +1,16 @@
-# r3 Validation Infrastructure Plans
+# 阶段计划
+
+近期工程化计划与能力对照：
+
+| 文档 | 用途 |
+|---|---|
+| [backend-borrowings-and-improvements-2026-07.md](./backend-borrowings-and-improvements-2026-07.md) | 后端工程化借鉴、已落地能力与剩余治理项 |
+| [spring-boot-engineering-patterns-plan-2026-08-02.md](./spring-boot-engineering-patterns-plan-2026-08-02.md) | Spring Boot 工程化样板落地计划 |
+| [engineering-benchmark-comparison-2026-08-02.md](./engineering-benchmark-comparison-2026-08-02.md) | BFS 与优秀系统的工程能力对照表 |
+
+历史验证基础设施计划：
+
+## r3 Validation Infrastructure Plans
 
 补 `scripts/sim/` 之外的验证维度。详见 `docs/architecture/` 关于本系统验证分层的总图。
 
