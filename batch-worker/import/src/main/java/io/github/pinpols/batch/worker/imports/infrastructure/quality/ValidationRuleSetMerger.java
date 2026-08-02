@@ -23,6 +23,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ValidationRuleSetMerger {
 
+  private static final String ERROR_CODE_REQUIRED = "IMPORT_VALIDATE_REQUIRED";
+
   private final ValidationConfigSupport configSupport;
 
   public Map<String, Object> merge(Object templateConfigObject) {
@@ -54,15 +56,13 @@ public class ValidationRuleSetMerger {
     Map<String, Object> derived = new LinkedHashMap<>();
     for (Object item : list) {
       Map<String, Object> mapping = configSupport.toMap(item);
-      if (mapping.isEmpty()) {
-        continue;
-      }
-      String name = stringValue(mapping.get("name"));
-      if (!Texts.hasText(name)) {
-        continue;
-      }
-      if (booleanValue(firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false)) {
-        derived.put(name, Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
+      if (!mapping.isEmpty()) {
+        String name = stringValue(mapping.get("name"));
+        if (Texts.hasText(name)
+            && booleanValue(
+                firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false)) {
+          derived.put(name, Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, ERROR_CODE_REQUIRED));
+        }
       }
     }
     return derived;
