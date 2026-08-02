@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * <p>限流在 Redis 故障时仍保持 fail-open，但连续故障后不再让每个请求同步等待 Redis。冷却期只允许一个
  * 请求探测恢复，其余请求直接放行。状态仅用于保护当前进程，不承担跨实例的安全决策。
  */
-@Component
+@Component("consoleRedisRateLimitCircuitBreaker")
 public class RedisRateLimitCircuitBreaker {
 
   private final ConsoleRateLimitProperties properties;
