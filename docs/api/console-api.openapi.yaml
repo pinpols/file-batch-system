@@ -13721,7 +13721,35 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleDeadLetterTaskResponse'
-      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, files, filePipelines, auditLogs, operationAudits, executionLogs, outboxDeliveries, alerts, deadLetters]
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleTraceTimelineItem'
+      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, files, filePipelines, auditLogs, operationAudits, executionLogs, outboxDeliveries, alerts, deadLetters, timeline]
+    ConsoleTraceTimelineItem:
+      type: object
+      properties:
+        source:
+          type: string
+        eventType:
+          type: string
+        referenceId:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+          nullable: true
+      required: [source, eventType, occurredAt]
     ConsoleWorkflowTopologyResponse:
       type: object
       properties:

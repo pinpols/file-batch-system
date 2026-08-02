@@ -23,4 +23,5 @@ public record ConsoleTraceSnapshotResponse(
     List<ConsoleJobExecutionLogResponse> executionLogs,
     List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
     List<ConsoleAlertEventResponse> alerts,
-    List<ConsoleDeadLetterTaskResponse> deadLetters) {}
+    List<ConsoleDeadLetterTaskResponse> deadLetters,
+    List<ConsoleTraceTimelineItem> timeline) {}

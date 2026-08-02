@@ -43,6 +43,12 @@ public class ConsoleRateLimitProperties {
    */
   private int fileOpUserLimitPerMinute = 60;
 
+  /** Redis 连续失败多少次后进入本进程短路窗口，仍保持限流 fail-open。 */
+  private int redisFailureThreshold = 3;
+
+  /** Redis 限流短路窗口，窗口内请求不再同步访问 Redis。 */
+  private int redisCircuitOpenSeconds = 15;
+
   /**
    * 文件操作路径前缀白名单（任一前缀命中即按 {@link #fileOpUserLimitPerMinute} 限流）。 覆盖整个 {@code /api/console/files/}
    * 子树；未认证的 presign 下载（{@code fs-download}）因取不到用户名而自然跳过。 可经 {@code

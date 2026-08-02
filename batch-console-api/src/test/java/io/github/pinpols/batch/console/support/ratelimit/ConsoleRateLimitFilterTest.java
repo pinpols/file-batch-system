@@ -49,7 +49,11 @@ class ConsoleRateLimitFilterTest {
     props.setLoginIpLimitPerMinute(3);
     props.setSensitiveOpUserLimitPerMinute(5);
     filter = new ConsoleRateLimitFilter(
-        rateLimiter, props, responseWriter, new ConsoleSecurityProperties());
+        rateLimiter,
+        props,
+        responseWriter,
+        new ConsoleSecurityProperties(),
+        RedisRateLimitCircuitBreaker.forTesting(props));
   }
 
   // ── disabled ──────────────────────────────────────────────────────────────
@@ -59,7 +63,11 @@ class ConsoleRateLimitFilterTest {
     ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
     disabledProps.setEnabled(false);
     ConsoleRateLimitFilter disabledFilter = new ConsoleRateLimitFilter(
-        rateLimiter, disabledProps, responseWriter, new ConsoleSecurityProperties());
+        rateLimiter,
+        disabledProps,
+        responseWriter,
+        new ConsoleSecurityProperties(),
+        RedisRateLimitCircuitBreaker.forTesting(disabledProps));
 
     MockHttpServletRequest request = loginRequest("1.2.3.4");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -114,8 +122,12 @@ class ConsoleRateLimitFilterTest {
     trustProps.setTrustForwardedHeaders(true);
     ConsoleRateLimitProperties limitProps = new ConsoleRateLimitProperties();
     limitProps.setLoginIpLimitPerMinute(3);
-    ConsoleRateLimitFilter trustingFilter =
-        new ConsoleRateLimitFilter(rateLimiter, limitProps, responseWriter, trustProps);
+    ConsoleRateLimitFilter trustingFilter = new ConsoleRateLimitFilter(
+        rateLimiter,
+        limitProps,
+        responseWriter,
+        trustProps,
+        RedisRateLimitCircuitBreaker.forTesting(limitProps));
 
     when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
 

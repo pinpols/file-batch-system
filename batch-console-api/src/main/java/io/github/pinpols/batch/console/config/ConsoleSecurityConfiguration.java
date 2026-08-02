@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityHeader
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceModeFilter;
 import io.github.pinpols.batch.console.support.ratelimit.ConsoleRateLimitFilter;
+import io.github.pinpols.batch.console.support.ratelimit.RedisRateLimitCircuitBreaker;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -60,8 +61,10 @@ public class ConsoleSecurityConfiguration {
   public ConsoleRateLimitFilter consoleRateLimitFilter(
       SlidingWindowRateLimiter rateLimiter,
       ConsoleRateLimitProperties rateLimitProperties,
-      ConsoleSecurityResponseWriter responseWriter) {
-    return new ConsoleRateLimitFilter(rateLimiter, rateLimitProperties, responseWriter, properties);
+      ConsoleSecurityResponseWriter responseWriter,
+      RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker) {
+    return new ConsoleRateLimitFilter(
+        rateLimiter, rateLimitProperties, responseWriter, properties, redisRateLimitCircuitBreaker);
   }
 
   /**
