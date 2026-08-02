@@ -20,6 +20,7 @@ final class ValidationCoercions {
   static final String KEY_ALLOWED_VALUES = "allowedValues";
   static final String KEY_ERROR_CODE = "errorCode";
   static final String MSG_ACTUAL_SUFFIX = ", actual=";
+  static final String ERROR_CODE_NULL = "IMPORT_VALIDATE_NULL";
 
   private ValidationCoercions() {}
 
@@ -139,7 +140,7 @@ final class ValidationCoercions {
 
   static String defaultErrorCode(String field, Map<String, Object> rule) {
     if (booleanValue(firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull")), false)) {
-      return "IMPORT_VALIDATE_NULL";
+      return ERROR_CODE_NULL;
     }
     if (firstNonNull(rule.get("minLength"), rule.get("maxLength")) != null) {
       return "IMPORT_VALIDATE_LENGTH";

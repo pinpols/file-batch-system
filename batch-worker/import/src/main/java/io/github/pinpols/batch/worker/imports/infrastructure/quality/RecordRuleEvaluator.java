@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
+import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.ERROR_CODE_NULL;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_ALLOWED_VALUES;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_ERROR_CODE;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_MAX;
@@ -83,8 +84,7 @@ public class RecordRuleEvaluator {
     for (String field :
         stringList(firstNonNull(nullCheck.get("fields"), nullCheck.get("requiredFields")))) {
       if (!Texts.hasText(stringValue(row.get(field)))) {
-        return new ValidationIssue(
-            recordNo, "IMPORT_VALIDATE_NULL", field + " must not be null", row);
+        return new ValidationIssue(recordNo, ERROR_CODE_NULL, field + " must not be null", row);
       }
     }
     return null;

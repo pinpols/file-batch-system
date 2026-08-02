@@ -32,6 +32,7 @@ import org.springframework.stereotype.Component;
 public class DatasetRuleEvaluator {
 
   private static final String ERROR_CODE_ROW_COUNT = "IMPORT_VALIDATE_ROW_COUNT";
+  private static final String ERROR_CODE_SCHEMA = "IMPORT_VALIDATE_SCHEMA";
 
   private final ValidationConfigSupport configSupport;
 
@@ -244,7 +245,7 @@ public class DatasetRuleEvaluator {
     if (!missingFields.isEmpty()) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_SCHEMA",
+          ERROR_CODE_SCHEMA,
           "schema missing required fields: " + String.join(",", missingFields),
           Map.of("requiredFields", requiredFields, "actualFields", schemaFields)));
       return;
@@ -260,7 +261,7 @@ public class DatasetRuleEvaluator {
       if (!unexpectedFields.isEmpty()) {
         datasetIssues.add(new ValidationIssue(
             null,
-            "IMPORT_VALIDATE_SCHEMA",
+            ERROR_CODE_SCHEMA,
             "schema contains unexpected fields: " + String.join(",", unexpectedFields),
             Map.of("allowedFields", allowedFields, "actualFields", schemaFields)));
       }
