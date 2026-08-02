@@ -199,7 +199,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   }
 
   private String resolveTenantId(HttpServletRequest request) {
-    String tenantId = request.getHeader("X-Tenant-Id");
+    String tenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     return Texts.hasText(tenantId) ? tenantId.trim() : "_";
   }
 

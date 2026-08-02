@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
+import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -44,7 +45,7 @@ public class BatchDayReplayTerminalReconciler {
   private static final String ENTRY_RUNNING = "RUNNING";
   private static final String SESSION_RUNNING = "RUNNING";
   private static final String SESSION_SUCCEEDED = "SUCCEEDED";
-  private static final String SESSION_PARTIAL_FAILED = "PARTIAL_FAILED";
+  private static final String SESSION_PARTIAL_FAILED = BatchStatusConstants.PARTIAL_FAILED;
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;

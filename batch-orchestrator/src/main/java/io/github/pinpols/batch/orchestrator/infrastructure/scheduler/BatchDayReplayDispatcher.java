@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.common.constants.BatchReplayConstants;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
@@ -52,7 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BatchDayReplayDispatcher {
 
   private static final String STATUS_RUNNING = "RUNNING";
-  private static final String SCOPE_OUTPUTS_ONLY = "OUTPUTS_ONLY";
+  private static final String SCOPE_OUTPUTS_ONLY = BatchReplayConstants.SCOPE_OUTPUTS_ONLY;
   private static final String ENTRY_PENDING = "PENDING";
   private static final String ENTRY_RUNNING = "RUNNING";
   private static final String ENTRY_FAILED = "FAILED";

@@ -52,7 +52,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private static final Pattern NAMED_PARAMETER = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
 
   /** 业务参数走 payload.metadata,展开为 :metadata_&lt;key&gt;。前缀公开,避免与内置参数冲突。 */
-  private static final String METADATA_PARAM_PREFIX = "metadata_";
+  private static final String METADATA_PARAM_PREFIX =
+      SqlTransformComputeConstants.METADATA_PARAM_PREFIX;
 
   private static final String PARAM_BATCH_KEY = "batchKey";
   private static final String PARAM_TENANT_ID = "tenantId";

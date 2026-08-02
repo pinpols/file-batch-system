@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
+import io.github.pinpols.batch.common.constants.BatchReplayConstants;
+import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -48,10 +50,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BatchDayReplayService {
 
-  static final String STATUS_PENDING_APPROVAL = "PENDING_APPROVAL";
+  static final String STATUS_PENDING_APPROVAL = BatchStatusConstants.PENDING_APPROVAL;
   static final String STATUS_RUNNING = "RUNNING";
   static final String STATUS_SUCCEEDED = "SUCCEEDED";
-  static final String STATUS_PARTIAL_FAILED = "PARTIAL_FAILED";
+  static final String STATUS_PARTIAL_FAILED = BatchStatusConstants.PARTIAL_FAILED;
   static final String STATUS_CANCELLED = "CANCELLED";
 
   static final String ENTRY_PENDING = "PENDING";
@@ -61,7 +63,7 @@ public class BatchDayReplayService {
   static final String SCOPE_ALL = "ALL";
   static final String SCOPE_ALL_FAILED = "ALL_FAILED";
   static final String SCOPE_SUBSET = "SUBSET_JOB_CODES";
-  static final String SCOPE_OUTPUTS_ONLY = "OUTPUTS_ONLY";
+  static final String SCOPE_OUTPUTS_ONLY = BatchReplayConstants.SCOPE_OUTPUTS_ONLY;
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;

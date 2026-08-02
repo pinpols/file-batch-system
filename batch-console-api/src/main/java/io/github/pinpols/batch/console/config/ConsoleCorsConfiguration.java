@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -46,11 +47,12 @@ public class ConsoleCorsConfiguration {
         HttpHeaders.AUTHORIZATION,
         HttpHeaders.CONTENT_TYPE,
         HttpHeaders.ACCEPT,
-        "X-Tenant-Id",
+        CommonConstants.DEFAULT_TENANT_ID_HEADER,
         "X-Idempotency-Key",
         "X-Request-Id",
         "X-XSRF-TOKEN"));
-    cfg.setExposedHeaders(List.of("X-Request-Id", "X-Trace-Id"));
+    cfg.setExposedHeaders(List.of(
+        CommonConstants.DEFAULT_REQUEST_ID_HEADER, CommonConstants.DEFAULT_TRACE_ID_HEADER));
     cfg.setAllowCredentials(true); // HttpOnly cookie 必需
     cfg.setMaxAge(3600L); // preflight 缓存 1h
     source.registerCorsConfiguration("/api/console/**", cfg);

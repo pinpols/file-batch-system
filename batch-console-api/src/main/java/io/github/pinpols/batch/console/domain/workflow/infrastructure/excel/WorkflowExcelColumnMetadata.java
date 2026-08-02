@@ -4,6 +4,7 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.o
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.requiredColumn;
 
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import java.util.List;
 import java.util.Map;
@@ -25,20 +26,21 @@ public final class WorkflowExcelColumnMetadata {
   private static final String FMT_STRING_KEY = "excel.guide.format.string";
 
   // ── sheet 名 ──────────────────────────────────────────────────────────────
-  public static final String DEF_SHEET = "workflow_definition";
-  public static final String NODE_SHEET = "workflow_node";
-  public static final String EDGE_SHEET = "workflow_edge";
+  public static final String DEF_SHEET = ConfigPackageExcelValidator.WF_DEF_SHEET;
+  public static final String NODE_SHEET = ConfigPackageExcelValidator.WF_NODE_SHEET;
+  public static final String EDGE_SHEET = ConfigPackageExcelValidator.WF_EDGE_SHEET;
 
   // ── 字典字段名 ────────────────────────────────────────────────────────────
   public static final String COL_DESCRIPTION = "description";
   public static final String COL_ENABLED = "enabled";
   public static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
-  public static final String COL_WORKFLOW_CODE = "workflow_code";
-  public static final String COL_NODE_TYPE = "node_type";
-  public static final String COL_EDGE_TYPE = "edge_type";
-  public static final String COL_WORKFLOW_TYPE = "workflow_type";
-  public static final String COL_WORKFLOW_VERSION = "workflow_version";
-  public static final String COL_RETRY_POLICY = "retry_policy";
+  public static final String COL_WORKFLOW_CODE = ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
+  public static final String COL_NODE_TYPE = ConfigPackageExcelValidator.COL_NODE_TYPE;
+  public static final String COL_EDGE_TYPE = ConfigPackageExcelValidator.COL_EDGE_TYPE;
+  public static final String COL_WORKFLOW_TYPE = ConfigPackageExcelValidator.COL_WORKFLOW_TYPE;
+  public static final String COL_WORKFLOW_VERSION =
+      ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
+  public static final String COL_RETRY_POLICY = ConfigPackageExcelValidator.COL_RETRY_POLICY;
   public static final String EDGE_SUCCESS = "SUCCESS";
   public static final String GUIDE_STR = "字符串";
   public static final String GUIDE_TRUE = "TRUE";

@@ -44,14 +44,21 @@ public final class FileTemplateExcelRowParser {
   private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
   private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
 
-  private static final String COL_TEMPLATE_TYPE = "template_type";
-  private static final String COL_FILE_FORMAT_TYPE = "file_format_type";
-  private static final String COL_CHECKSUM_TYPE = "checksum_type";
-  private static final String COL_COMPRESS_TYPE = "compress_type";
-  private static final String COL_ENCRYPT_TYPE = "encrypt_type";
-  private static final String COL_WITH_BOM = "with_bom";
-  private static final String COL_STREAMING_ENABLED = "streaming_enabled";
-  private static final String COL_DOWNLOAD_REQUIRES_APPROVAL = "download_requires_approval";
+  private static final String COL_TEMPLATE_TYPE =
+      ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE;
+  private static final String COL_FILE_FORMAT_TYPE =
+      ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE;
+  private static final String COL_CHECKSUM_TYPE =
+      ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE;
+  private static final String COL_COMPRESS_TYPE =
+      ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE;
+  private static final String COL_ENCRYPT_TYPE =
+      ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE;
+  private static final String COL_WITH_BOM = ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM;
+  private static final String COL_STREAMING_ENABLED =
+      ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED;
+  private static final String COL_DOWNLOAD_REQUIRES_APPROVAL =
+      ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL;
   private static final String COL_ENABLED = "enabled";
   private static final String COL_DESCRIPTION = "description";
 

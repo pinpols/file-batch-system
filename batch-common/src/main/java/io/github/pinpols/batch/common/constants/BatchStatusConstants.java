@@ -16,6 +16,7 @@ public final class BatchStatusConstants {
   public static final String PARTIAL_FAILED = "PARTIAL_FAILED";
   public static final String START = "START";
   public static final String END = "END";
+  public static final String PENDING_APPROVAL = "PENDING_APPROVAL";
 
   private BatchStatusConstants() {}
 }

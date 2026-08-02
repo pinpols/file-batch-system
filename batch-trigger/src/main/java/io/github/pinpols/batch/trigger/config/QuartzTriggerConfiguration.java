@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.config;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,7 +47,8 @@ public class QuartzTriggerConfiguration {
       BatchSecurityProperties securityProperties) {
     return builder
         .baseUrl(properties.getBaseUrl())
-        .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+        .defaultHeader(
+            CommonConstants.INTERNAL_SECRET_HEADER, securityProperties.getInternalSecret())
         .build();
   }
 }
