@@ -10,6 +10,38 @@
 
 滚动合并中的变更入口；冻结发版时整段下移到正式版本标题下。
 
+> 最近两个月（2026-06-03 至 2026-08-03）的变更已覆盖：2026-06-03 至 2026-06-24 见 `1.1.0`，2026-06-25 至 2026-07-13 的主线能力见 `1.2.0`；本节补录 2026-07-14 至 2026-08-03 的未发布变更。
+
+### Added
+
+- **Spring Boot 运行时治理**：补充启动失败诊断（FailureAnalyzer）、配置边界校验、自动装配条件测试、生命周期 phase、readiness/drain 状态和脱敏 `batchruntime` 诊断端点；Feature Switch registry 成为配置登记与 CI 校验入口。
+- **控制面可观测性**：新增执行时间线读模型与 trace snapshot `timeline`，补齐 Redis 限流连续失败短路、Worker lease 熔断状态、消费背压 pause/resume、outbox/限流/租约告警及对应运维文档。
+- **工程化对照与上线计划**：补充 Spring Boot 工程化计划、BFS 与 Kubernetes/Spring Batch/Kafka Connect/Quartz 等系统的能力对照表和上线前验证边界。
+
+### Changed
+
+- **调度器统一为 Quartz**：移除 HashedWheelTimer 运行路径、Wheel 配置、指标、迁移脚本和测试；当前 trigger 统一使用 Quartz JDBC JobStore。Wheel 评估文档保留为历史记录，见 ADR-033。
+- **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。
+- **安全门禁与依赖治理**：强化 Helm workload 安全检查、生产凭据 fail-close、SQL 解析边界、文件完整性校验和依赖许可证/安全扫描；示例项目与 SDK 依赖同步安全修复。
+- **Worker 与控制面稳定性**：收紧 Pipeline 定义只读访问，修复 orchestrator HA 协调和 retry schedule 状态转换，稳定 Docker Sim、E2E fixture 与多模块构建链路。
+- **代码和文档规范**：统一后端错误/告警消息为英文，收口运行时常量、Java 格式化、FQN 违约和代码规模统计；README、工程计划、Runbook 和架构边界文档同步更新。
+
+### Fixed
+
+- 修复文件接收/分发完整性检查、存储边界和下游异常路径，避免低报 size、越界读取和不完整文件继续流转。
+- 修复 retry schedule 状态推进、HA 协调失败路径、Pipeline 定义越权写入和 SDK worker direct-dispatch topic 漂移。
+- 修复 Rust SDK `quinn-proto` 安全依赖、Go SDK 依赖、E2E pipeline fixture 以及多个本地 Sim/验收环境问题。
+- 修复后合并 CI 的静态分析、Spring Bean 装配、依赖许可证和安全门禁回归。
+
+### Removed
+
+- 移除 Wheel scheduler 代码路径及其双引擎切换逻辑；未来只有在 Quartz 容量或生产故障指标达到 ADR-033 阈值后，才重新评估成熟开源时间轮实现，不自研调度内核。
+
+### Docs
+
+- 新增/更新后端借鉴改造计划、Spring Boot 工程化计划、工程能力对照表、Feature Switch registry、观测栈、checkpoint how-to、上线 readiness 和代码规模统计。
+- 明确 Wheel 已撤销、Quartz 为当前唯一调度器，并修正历史 Wheel 评估文档的过时表述。
+
 ---
 
 ## [1.2.0] - 2026-07-13
