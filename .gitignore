@@ -4,6 +4,8 @@
 .env.test
 .env.prod
 .env.*.local
+.ruff_cache/
+/.remember
 .local/
 # biz 分片真凭据不入库,只提交 *.env.example 模板
 secrets/biz-shards/*.env
@@ -47,3 +49,6 @@ reports/sonar/
 # Eclipse JDT / vscode-java per-module build output
 **/bin/
 .be-acceptance-state
+
+# 本地验收脚本生成的汇总报告不入库
+docs/backlog/be-acceptance-*.md

@@ -27,6 +27,34 @@ BFS 的定位必须先固定,否则"学习优秀系统"很容易滑成范围膨�
 2. **只增强 BFS 主链的可靠性、可诊断性和可运维性,不扩张产品边界。**
 3. **不破坏现有承重墙:MyBatis 显式 SQL、outbox 同事务、CAS 状态机、多租隔离、worker 协议。**
 
+### 1.1 复核:成熟组件复用与 BFS 自研边界
+
+本节是对“哪些能力应复用成熟方案、哪些能力仍需 BFS 自己实现”的逐项核查结果。它与
+[`bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md`](./bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md)
+共同作为后续评审的取舍依据。
+
+| 能力 | 成熟方案/组件承担的部分 | BFS 保留的领域部分 | 当前取舍状态 |
+|---|---|---|---|
+| Quartz 与自有调度路径 | Quartz 负责 cron、calendar、misfire 和 JDBC 集群调度；不自研时间轮 | readiness、bizDate、业务窗口、dedup、准入和批量日语义 | **统一使用 Quartz**；Wheel ADR-033 已撤销，禁止维护第二套完整调度器 |
+| DAG / Workflow | 借鉴 Airflow、Temporal、DolphinScheduler 的表达和运维视图 | 仅编排 BFS 的 job、file、partition、审批和补偿 | 保留领域 DAG；不引入通用 workflow/saga 引擎，不做图灵完备 workflow code |
+| 配置中心 | 环境级配置由 env、Helm 和部署系统管理；缓存使用 Redis | `system_parameter`、领域配置、版本、审批、租户隔离和审计 | 保留轻量 DB + Redis；明确不引入 Nacos、Apollo、Spring Cloud Config |
+| 限流 / 配额 | Bucket4j、Redis、Resilience4j 承担通用令牌桶、熔断和退避 | tenant/job/queue 配额、公平性、pending cap 和业务拒绝原因 | 通用算法复用成熟库；业务准入策略由 BFS 维护 |
+| 通知 / 告警 | Prometheus + Alertmanager 负责技术告警、分组和路由；Webhook 作为交付适配 | 批次通知、审批通知、租户订阅、投递审计和业务渠道 | 两层并存；`alert_routing_config` 当前不是运行时 Alertmanager 路由，动态迁移暂缓 |
+| 审计 | Loki/OpenSearch/SIEM 等负责技术日志和安全分析 | 重跑、审批、取消、配置变更、租户操作和结果取证 | 业务审计必须落库；不把 BFS 扩成通用合规审计平台 |
+| 观测页面 | OTel、Prometheus、Grafana、Loki、Tempo、Alertmanager 负责基础观测 | job、batch day、partition、task、readiness、replay 的业务查询和操作视图 | 基础设施复用成熟栈；业务控制面视图保留自研 |
+| Checkpoint / Restart | 借鉴 Spring Batch 的 chunk、skip、retry、ExecutionContext 思路 | 文件位点、pipeline stage、幂等版本、worker report 和租户业务事务边界 | 部分吸收；不引入 Spring Batch JobRepository 替换 BFS 协议 |
+| Retry | Spring Retry、Resilience4j 负责技术异常的退避、重试和熔断 | task 状态 CAS、attempt、DLQ、replay、人工重试和终态保护 | 技术重试复用库；业务重试状态机保留自研 |
+| Compensation | 借鉴 Temporal Saga 的声明式步骤和幂等思想 | 文件删除、下游冲销、补偿审批、补偿 checkpoint 和审计 | 只保留 BFS 范围内的补偿节点；不做通用 Saga 引擎或跨系统 1PC |
+| AI | Spring AI、provider SDK、模型服务承担模型接入 | 只读查询、建议、成本计量、权限、审计和降级 | 默认关闭、只读、不写主链；不训练模型、不做自治运维 |
+| 容量画像 | Prometheus/Grafana 和数据库/Kafka/MinIO exporter 提供指标 | BFS 热表、outbox、worker、批量窗口的容量趋势和验收报告 | 只做基础容量画像；不做 FinOps、云账单分摊或业务金额成本裁定 |
+
+逐项核查结论:
+
+1. **已明确取舍**:调度器、DAG、配置中心、限流、观测、Checkpoint、Retry、Compensation、AI、容量画像。
+2. **需要特别防止误读**:通知能力是“Alertmanager 技术告警 + BFS 业务通知”两层模型；`alert_routing_config` 已有配置表但当前不生效，不能宣传为动态路由已完成。
+3. **当前文档状态**:通知与审计的统一边界已收敛到 [`notification-and-audit-boundary.md`](../architecture/notification-and-audit-boundary.md)；治理表、日志采集和 Checkpoint 仍由各自的细节文档维护，实现状态以代码、测试和路线图的最新核查为准。
+4. **历史文档优先级**:[`maturity-assessment.md`](../architecture/maturity-assessment.md) 明确是 2026-04-26 历史快照，其中的 Wheel 行动项不代表当前决策；当前调度结论以 ADR-033 的 `Superseded` 状态和本节为准。
+
 ## 2. 总体结论
 
 BFS 已经不是早期脚手架系统,很多成熟系统的核心理念已经吸收过:

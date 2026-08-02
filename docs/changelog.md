@@ -1,10 +1,16 @@
-# 变更记录（CLAUDE.md 规范条款变化）
+# 变更记录（规范与架构权威条款变化）
 
-> 本文件只记录 **CLAUDE.md 编码规范条款本身** 的变化（命名约定、版本策略、领域字典、模块边界、架构硬约束等文档自身内容变动）。
+> 本文件只记录 **CLAUDE.md 编码规范条款及其对应架构权威约束** 的变化（命名约定、版本策略、领域字典、模块边界、架构硬约束、ADR 状态等文档自身内容变动）。
 >
 > Feature 完成、bug 修复、运维操作、临时数据动作等项目演进信息**不要**写到这里——那些以 git commit + PR 描述 + 对应模块文档（`docs/architecture/*.md`、`docs/runbook/*.md`、`docs/analysis/*.md`）为权威记录。
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
+
+### 2026-08-03
+- **ADR-033 调度器边界校正**：明确 Hashed Wheel 方案已撤回，当前生产调度基线为 Quartz；只有达到明确的容量或时序门槛才重新评估时间轮。若重新评估，时间轮核心必须采用成熟开源实现（例如 Netty `HashedWheelTimer`），不得在 BFS 内自行实现核心调度算法；BFS 只负责业务语义适配、持久化、幂等、租户隔离、故障转移和可观测性。
+
+### 2026-07-23
+- **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。
 
 ### 2026-07-09
 - **CLAUDE.md §构建 改为统一走 Maven Wrapper(`./mvnw`)**:仓库新增 Maven Wrapper 3.3.4(`only-script` 模式,钉死 Maven 3.9.16),7 个 CI workflow 的 `mvn` 调用全部切 `./mvnw`,消除 runner 预装 Maven 版本漂移;对齐配对仓库 file-batch-processor 的既有实践。本地系统 mvn(enforcer 要求 ≥3.9.0)仍可用,但版本一致性以 wrapper 为准。`scripts/ci/*.sh` 内的 mvn 调用暂未切换(后续跟进)。
@@ -12,12 +18,29 @@
 ### 2026-06-29
 - **CLAUDE.md §模块 边界表述澄清**：把开头的"9 模块 Maven multi-module"改为"根 Maven reactor 9 个 module path + 平台运行时固定 10 个逻辑模块"，避免把 Maven 聚合路径数、worker 子模块数、SDK 三件套与运行时服务边界混在一起。明确 `sdk/java/{core,spring,testkit}` 已纳入根 reactor，但属于 ADR-035 SDK 发布 / 测试 / Spring 适配模块，不属于平台运行时固定 10 模块；Go / Python / Rust / TypeScript SDK 仍是独立语言工具链。
 
+### 2026-06-23
+- **CLAUDE.md §文档与术语治理**：全仓文档统一模块、领域和运行时术语，修正架构真相、ADR 索引、API 契约及待办索引中的漂移、重复和口语化表述；权威定义以 `docs/architecture/`、`docs/design/` 和 `docs/agent-baseline.md` 为准。
+- **CLAUDE.md §模块边界**：六类 Worker 统一收敛到 `batch-worker/` 父目录下管理，根 reactor、CI、脚本和文档中的模块路径必须保持一致；Worker 之间按业务职责隔离，不得通过目录调整改变运行时边界。
+
+### 2026-06-22
+- **CLAUDE.md §分支用途**：Citus 分布式轨道停止开发并降为只读参考，唯一常驻开发分支为 `main`；不得从 `citus` 向 `main` 合并，相关实验资产保留在文档和脚本中。
+- **CLAUDE.md §模块边界**：Worker 模块目录层级调整为统一的 `batch-worker/` 父目录结构，并同步约束 Maven、CI 和本地脚本引用，避免路径别名和模块清单分叉。
+
 ### 2026-06-14
 - **CLAUDE.md §分支用途 改写:`citus` 分支冻结为只读参考**。原"2 条常驻活分支(main + citus 并排活跃轨道,定期 main→citus 同步)"改为"唯一常驻活分支 = main;citus 冻结(reference-only,停止同步,不再开发)"。决策依据:多租峰值流量单机压测(`docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md`)实测瓶颈在控制面分层并发(launch 消费 + worker 认领,已修 20→62/s),**PG 写有 10-15× 余量、零锁争用 → Citus 解决的是未来才有的写墙,当前非杠杆**;且 biz 分区先于 biz 分片、真要上有 Azure 托管 Citus 路径 B。citus 降级为"时间点 POC + 薄保险",快照 tag `citus-poc-2026-06-14`;耐久学习资产在 `docs/{backlog,analysis,runbook,design}` + `scripts/db/citus/01-distribute.sql`,不在活分支。新增**解冻流程**(重审 main delta Citus 正确性 + 重跑 distribute + 重跑 sim)。`citus → main` 永不合(一直如此,不变)。main 的「新多租大表复合 PK 前瞻」规则继续生效以压低将来解冻成本。
 
 ### 2026-06-10
 - **CLAUDE.md §架构硬约束 新增「UNIQUE = upsert 幂等契约关键约束」**:全仓 56 处 `ON CONFLICT` 把幂等承重在全局 UNIQUE 上,改任何 UNIQUE 列集(分区/分片/重建/迁移)= 语义变更而非运维操作,动手前必须 `grep 'on conflict'` 全量核对 + 幂等语义评审。背景:2026-06-10 分区脚本实跑,分区键被迫进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)`,orchestrator outbox 写入全失败、主链中断后回滚(PR #448)。此前该假设是隐性的——本条款将其显式化为权威约束。
 - **CLAUDE.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫(`docs/analysis/scaling-state-and-biz-path-2026-06-14.md` §2,2026-06-10 复核仍成立)确认存量 23 张表单列 PK 是最大迁移阻塞(复合化重构估 12-20 周,`useGeneratedKeys` 已从 43 涨到 49 处),新表收敛控制阻塞面增速。小字典/配置/系统表豁免。存量表**不迁移**(等 Citus 触发门槛满足后按 POC 推进)。
+
+### 2026-06-07
+- **CLAUDE.md §多租隔离**：明确租户子表可以在满足父表租户约束、外键/查询链路绑定和审计覆盖的前提下采用继承租户上下文的例外；例外必须登记，不能据此放宽业务入口的 `tenant_id` 校验。
+
+### 2026-06-06
+- **CLAUDE.md §测试命名**：集成测试类统一使用 `*IntegrationTest` 命名；`*IT` 仅作为历史兼容例外，并需在代码或文档中说明原因，避免测试发现规则和仓库命名约定分裂。
+
+### 2026-06-02
+- **CLAUDE.md §Java 编码细则**：补齐全限定类名（FQN）使用边界，生产代码和普通测试不得以内联 FQN 绕过 import 规范；仅保留规范明确的框架、冲突消解或测试隔离例外。
 
 ### 2026-06-01
 - **CLAUDE.md §Java 编码细则 #3 添测试豁免**:`@Autowired` field 注入除了原有的 `@Lazy self` AOP workaround 例外,新增第二类豁免 — `@SpringBootTest` IT 测试。理由:全仓 IT 测继承 `AbstractIntegrationTest` 走 Spring 测试惯例,77 处 `@Autowired private Foo foo;` 已是事实标准,Spring `@SpringBootTest` 下构造器注入需要额外 ParameterResolver 协调且生态不偏好。本规则只豁免 IT 测试,生产代码继续严格执行构造器注入。最近 2 天扫到 17 处看似违反实为这条豁免覆盖,不予迁移。
