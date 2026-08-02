@@ -134,7 +134,7 @@ public record JdbcMappedImportSpec(
       return out;
     }
     String jsonText = extractJsonText(raw);
-    if (jsonText != null && Texts.hasText(jsonText)) {
+    if (Texts.hasText(jsonText)) {
       try {
         return objectMapper.readValue(jsonText, Map.class);
       } catch (Exception ignored) {
@@ -240,7 +240,7 @@ public record JdbcMappedImportSpec(
       list = l;
     } else {
       String text = extractJsonText(raw);
-      if (text == null || !Texts.hasText(text)) {
+      if (!Texts.hasText(text)) {
         return List.of();
       }
       try {
