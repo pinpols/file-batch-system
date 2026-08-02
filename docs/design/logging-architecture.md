@@ -1,6 +1,8 @@
 # 日志体系架构
 
 > 本文档描述 batch-platform 系统的完整日志体系，包括后端应用日志、业务审计日志、前端埋点日志的采集、存储与观测方案。
+>
+> **边界说明**：通知、技术告警、运行日志和业务审计的职责总表以 [`../architecture/notification-and-audit-boundary.md`](../architecture/notification-and-audit-boundary.md) 为准；本文只维护日志采集与存储实现细节。
 
 ---
 

@@ -2,6 +2,8 @@
 
 > **结论先行**：本文档列出系统里**几对名字看起来像、容易被误认为重叠**的 governance 表，逐对说明各自管什么、归哪个 module、以及为什么不合并。读到代码或表名感觉"这俩是不是干一件事"时，**先来这里查一遍**。
 
+> **统一边界入口**：通知与审计的整体职责、成熟组件复用边界和运维判定顺序，以 [`notification-and-audit-boundary.md`](./notification-and-audit-boundary.md) 为准；本文补充治理表的字段和所有权细节。
+
 ---
 
 ## 1. `config_approval` vs `approval_command`

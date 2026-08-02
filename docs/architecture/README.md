@@ -21,9 +21,10 @@
 | 11 | [quartz-replacement-evaluation.md](./quartz-replacement-evaluation.md) | Quartz 替换可行性评估 + 落地路径 | 同上，看决策上下文 |
 | 12 | [pipeline-vs-workflow-boundary.md](./pipeline-vs-workflow-boundary.md) | `pipeline_*` 与 `workflow_*` 职责边界（命名相似但不重叠） | 看到 pipeline / workflow 表名困惑时 |
 | 13 | [governance-tables-boundary.md](./governance-tables-boundary.md) | `config_approval` vs `approval_command` / `subscription_rule` vs `alert_routing_config` 职责边界 | 看到 governance 表对疑似重叠时 |
-| 14 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
-| 15 | [architecture-truth.md](./architecture-truth.md) | 2026-04-09 架构快照（已过期，仅保留历史对照） | 审计历史判断来源 |
-| 16 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
+| 14 | [notification-and-audit-boundary.md](./notification-and-audit-boundary.md) | 通知、技术告警、运行日志、业务审计的统一职责与复用边界 | 判断告警/通知/审计归属时 |
+| 15 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
+| 16 | [architecture-truth.md](./architecture-truth.md) | 2026-04-09 架构快照（已过期，仅保留历史对照） | 审计历史判断来源 |
+| 17 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
 
 ## 角色路径
 
@@ -32,7 +33,7 @@
 | 新人入门 | 01 → 02 → 03 |
 | 运维 / SRE | 08 → 09 → [`../runbook/`](../runbook/README.md) |
 | 业务开发 | 07 → 06 → [`../design/`](../design/README.md) |
-| 架构改动 | 12（全 ADR）→ 写新 ADR |
+| 架构改动 | 12 / 14（全 ADR）→ 写新 ADR |
 
 ## 与其他子目录的分工
 
