@@ -1,10 +1,14 @@
 package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.scheduling")
 public class BatchSchedulingProperties {
 
@@ -14,9 +18,11 @@ public class BatchSchedulingProperties {
    * <p>orchestrator 现有 ~55 个 `@Scheduled` bean 共享本池；默认 16 给 3-4 个并发长任务（archive / snapshot / sla
    * 扫描）+ heartbeat 类轻任务留出余量。设小了高频心跳会被长任务卡住。
    */
+  @Min(value = 1, message = "batch.scheduling.pool-size must be at least 1")
   private int poolSize = 16;
 
   /** 调度线程名前缀。 */
+  @NotBlank(message = "batch.scheduling.thread-name-prefix must not be blank")
   private String threadNamePrefix = "batch-scheduler-";
 
   /**
@@ -41,6 +47,7 @@ public class BatchSchedulingProperties {
    * <p>默认 120s 给 `OutboxArchiveScheduler`（lockAtMost=30min）/ `SuccessInstanceArchiveScheduler`
    * （lockAtMost=2h）等长任务正常退出窗口；超时仍会强制中断，不会无限卡住。
    */
+  @Min(value = 0, message = "batch.scheduling.await-termination-seconds must not be negative")
   private int awaitTerminationSeconds = 120;
 
   /** 开始关闭后，已调度的周期任务是否继续执行。 */
