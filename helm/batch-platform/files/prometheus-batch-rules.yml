@@ -291,6 +291,30 @@ groups:
           summary: "Outbox events transitioned to GIVE_UP terminal state"
           description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then run scripts/ops/heal-stuck-outbox.sh or POST /internal/outbox/republish."
 
+      - alert: BatchOutboxCircuitBreakerOpen
+        expr: batch_outbox_circuit_open == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox publish circuit breaker is open"
+          description: "The cluster-wide outbox publish circuit is open and delivery is paused. Check Kafka reachability, Redis circuit state, and the outbox backlog before restarting workers."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/playbooks/outbox-stuck-publishing.md"
+
+      - alert: BatchOutboxCircuitBreakerFailOpen
+        expr: rate(batch_outbox_circuit_failopen_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox circuit breaker is failing open because Redis is unavailable"
+          description: "The outbox circuit breaker is using cached state while Redis is unreachable. Delivery is not necessarily lost, but protection state is no longer cluster-authoritative."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/playbooks/redis-shedlock-down.md"
+
       - alert: BatchDeadLetterBacklogHigh
         expr: batch_dead_letter_tasks_pending > 100
         for: 30m
@@ -723,6 +747,30 @@ groups:
           summary: "Worker lease circuit open"
           description: "worker lease 熔断打开 > 0.01/s 持续 5m,该 worker 即将被踢出。看 worker_id 维度 + 心跳通道。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-lease-circuit-open"
+
+      - alert: WorkerLeaseCircuitCurrentlyOpen
+        expr: batch_worker_lease_circuit_open == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Worker lease renew circuit is currently open"
+          description: "The worker is currently skipping lease renewals until a half-open probe succeeds. Verify orchestrator reachability and task reclaim pressure; a historical open counter alone is not sufficient to identify this state."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-lease-circuit-open"
+
+      - alert: WorkerBackpressureSaturated
+        expr: batch_worker_semaphore_available == 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Worker concurrency permits are exhausted"
+          description: "A worker has had no available execution permits for 10 minutes and is pausing Kafka consumption. Check task latency, downstream dependencies, and max-concurrent-tasks before increasing capacity."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/playbooks/worker-backpressure-saturated.md"
 
       - alert: ProcessStagingOldestAgeHigh
         # process 模块 staging 区最老文件超过 1h → 孤儿文件没被消费

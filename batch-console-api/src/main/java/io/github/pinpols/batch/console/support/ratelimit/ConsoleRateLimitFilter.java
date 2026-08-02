@@ -11,7 +11,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpMethod;
@@ -34,7 +33,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p>超限时返回 HTTP 429，响应体为标准 {@code CommonResponse} 格式。
  */
 @Slf4j
-@RequiredArgsConstructor
 public class ConsoleRateLimitFilter extends OncePerRequestFilter {
 
   private static final String LOGIN_PATH = "/api/console/auth/login";
@@ -44,6 +42,20 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
   private final ConsoleRateLimitProperties properties;
   private final ConsoleSecurityResponseWriter responseWriter;
   private final ConsoleSecurityProperties securityProperties;
+  private final RedisRateLimitCircuitBreaker redisCircuitBreaker;
+
+  public ConsoleRateLimitFilter(
+      SlidingWindowRateLimiter rateLimiter,
+      ConsoleRateLimitProperties properties,
+      ConsoleSecurityResponseWriter responseWriter,
+      ConsoleSecurityProperties securityProperties,
+      RedisRateLimitCircuitBreaker redisCircuitBreaker) {
+    this.rateLimiter = rateLimiter;
+    this.properties = properties;
+    this.responseWriter = responseWriter;
+    this.securityProperties = securityProperties;
+    this.redisCircuitBreaker = redisCircuitBreaker;
+  }
 
   @Override
   protected void doFilterInternal(
@@ -138,9 +150,15 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
    */
   private boolean tryAcquireFailOpen(
       String key, int limitPerMinute, String category, String identity) {
+    if (!redisCircuitBreaker.allowRedisCall()) {
+      return true;
+    }
     try {
-      return rateLimiter.tryAcquire(key, limitPerMinute);
+      boolean allowed = rateLimiter.tryAcquire(key, limitPerMinute);
+      redisCircuitBreaker.recordSuccess();
+      return allowed;
     } catch (DataAccessException ex) {
+      redisCircuitBreaker.recordFailure();
       log.warn(
           "rate limiter Redis unavailable — fail-open: category={}, identity={}, cause={}",
           category,

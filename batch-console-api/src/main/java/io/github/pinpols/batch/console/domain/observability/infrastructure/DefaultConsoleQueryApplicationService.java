@@ -52,6 +52,7 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxDeli
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceTimelineItem;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
@@ -76,8 +77,11 @@ import io.github.pinpols.batch.console.web.query.OutboxDeliveryLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.RetryScheduleQueryRequest;
 import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -115,7 +119,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     if (normalizedTraceId.isEmpty()) {
       return new ConsoleTraceSnapshotResponse(
           "", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-          List.of(), List.of(), List.of(), List.of());
+          List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     JobInstanceQueryRequest jobRequest = traceRequest(new JobInstanceQueryRequest());
@@ -165,19 +169,201 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     deadLetterRequest.setTenantId(tenantId);
     deadLetterRequest.setTraceId(normalizedTraceId);
 
+    List<ConsoleJobInstanceResponse> jobInstances = jobInstances(jobRequest).items();
+    List<ConsoleWorkflowRunResponse> workflowRuns =
+        workflowRuns(workflowRequest).items();
+    List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns =
+        workflowNodeRuns(workflowNodeRequest).items();
+    List<ConsoleFileRecordResponse> files = fileChains(fileRequest).items();
+    List<ConsoleFilePipelineResponse> filePipelines =
+        filePipelines(pipelineRequest).items();
+    List<ConsoleAuditLogResponse> auditLogs = auditLogs(auditRequest).items();
+    List<io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse>
+        operationAudits =
+            operationAuditQueryService.query(operationAuditRequest).items();
+    List<ConsoleJobExecutionLogResponse> executionLogs =
+        jobExecutionLogs(executionLogRequest).items();
+    List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries =
+        outboxDeliveries(outboxRequest).items();
+    List<ConsoleAlertEventResponse> alerts = alertEvents(alertRequest).items();
+    List<ConsoleDeadLetterTaskResponse> deadLetters =
+        deadLetters(deadLetterRequest).items();
+
     return new ConsoleTraceSnapshotResponse(
         normalizedTraceId,
-        jobInstances(jobRequest).items(),
-        workflowRuns(workflowRequest).items(),
-        workflowNodeRuns(workflowNodeRequest).items(),
-        fileChains(fileRequest).items(),
-        filePipelines(pipelineRequest).items(),
-        auditLogs(auditRequest).items(),
-        operationAuditQueryService.query(operationAuditRequest).items(),
-        jobExecutionLogs(executionLogRequest).items(),
-        outboxDeliveries(outboxRequest).items(),
-        alertEvents(alertRequest).items(),
-        deadLetters(deadLetterRequest).items());
+        jobInstances,
+        workflowRuns,
+        workflowNodeRuns,
+        files,
+        filePipelines,
+        auditLogs,
+        operationAudits,
+        executionLogs,
+        outboxDeliveries,
+        alerts,
+        deadLetters,
+        buildTimeline(
+            normalizedTraceId,
+            jobInstances,
+            workflowRuns,
+            workflowNodeRuns,
+            files,
+            filePipelines,
+            auditLogs,
+            operationAudits,
+            executionLogs,
+            outboxDeliveries,
+            alerts,
+            deadLetters));
+  }
+
+  private static List<ConsoleTraceTimelineItem> buildTimeline(
+      String traceId,
+      List<ConsoleJobInstanceResponse> jobInstances,
+      List<ConsoleWorkflowRunResponse> workflowRuns,
+      List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns,
+      List<ConsoleFileRecordResponse> files,
+      List<ConsoleFilePipelineResponse> filePipelines,
+      List<ConsoleAuditLogResponse> auditLogs,
+      List<io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse>
+          operationAudits,
+      List<ConsoleJobExecutionLogResponse> executionLogs,
+      List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
+      List<ConsoleAlertEventResponse> alerts,
+      List<ConsoleDeadLetterTaskResponse> deadLetters) {
+    List<ConsoleTraceTimelineItem> items = new ArrayList<>();
+    jobInstances.forEach(item -> addTimeline(
+        items,
+        "JOB_INSTANCE",
+        "STATUS",
+        item.id(),
+        item.instanceStatus(),
+        item.jobCode(),
+        firstNonNull(item.startedAt(), item.finishedAt()),
+        traceId));
+    workflowRuns.forEach(item -> addTimeline(
+        items,
+        "WORKFLOW_RUN",
+        "STATUS",
+        item.id(),
+        item.runStatus(),
+        item.currentNodeCode(),
+        firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt()),
+        traceId));
+    workflowNodeRuns.forEach(item -> addTimeline(
+        items,
+        "WORKFLOW_NODE_RUN",
+        "STATUS",
+        item.id(),
+        item.nodeStatus(),
+        item.nodeCode(),
+        firstNonNull(item.startedAt(), item.finishedAt()),
+        traceId));
+    files.forEach(item -> addTimeline(
+        items,
+        "FILE_RECORD",
+        "STATUS",
+        item.id(),
+        item.fileStatus(),
+        item.fileName(),
+        item.createdAt(),
+        traceId));
+    filePipelines.forEach(item -> addTimeline(
+        items,
+        "FILE_PIPELINE",
+        "STATUS",
+        item.id(),
+        item.runStatus(),
+        item.currentStage(),
+        firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt()),
+        traceId));
+    auditLogs.forEach(item -> addTimeline(
+        items,
+        "FILE_AUDIT",
+        item.operationType(),
+        item.id(),
+        item.operationResult(),
+        item.detailSummary(),
+        item.createdAt(),
+        item.traceId()));
+    operationAudits.forEach(item -> addTimeline(
+        items,
+        "OPERATION_AUDIT",
+        item.action(),
+        item.id(),
+        item.result(),
+        item.errorMessage(),
+        item.createdAt(),
+        item.traceId()));
+    executionLogs.forEach(item -> addTimeline(
+        items,
+        "EXECUTION_LOG",
+        item.logType(),
+        item.id(),
+        item.logLevel(),
+        item.message(),
+        item.createdAt(),
+        item.traceId()));
+    outboxDeliveries.forEach(item -> addTimeline(
+        items,
+        "OUTBOX_DELIVERY",
+        item.eventType(),
+        item.id(),
+        item.deliveryStatus(),
+        item.errorMessage(),
+        firstNonNull(item.createdAt(), item.updatedAt()),
+        item.traceId()));
+    alerts.forEach(item -> addTimeline(
+        items,
+        "ALERT",
+        item.alertType(),
+        item.id(),
+        item.status(),
+        item.title(),
+        firstNonNull(item.lastSeenAt(), item.createdAt(), item.updatedAt()),
+        item.traceId()));
+    deadLetters.forEach(item -> addTimeline(
+        items,
+        "DEAD_LETTER",
+        item.sourceType(),
+        item.id(),
+        item.replayStatus(),
+        item.deadLetterReason(),
+        firstNonNull(item.createdAt(), item.updatedAt()),
+        item.traceId()));
+    items.sort(Comparator.comparing(
+            ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(
+            ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(
+            ConsoleTraceTimelineItem::referenceId,
+            Comparator.nullsLast(Comparator.naturalOrder())));
+    return List.copyOf(items);
+  }
+
+  private static void addTimeline(
+      List<ConsoleTraceTimelineItem> items,
+      String source,
+      String eventType,
+      Long referenceId,
+      String status,
+      String message,
+      java.time.Instant occurredAt,
+      String traceId) {
+    if (occurredAt != null) {
+      items.add(new ConsoleTraceTimelineItem(
+          source, eventType, referenceId, status, message, occurredAt, traceId));
+    }
+  }
+
+  @SafeVarargs
+  private static <T> T firstNonNull(T... values) {
+    for (T value : values) {
+      if (Objects.nonNull(value)) {
+        return value;
+      }
+    }
+    return null;
   }
 
   private <T extends io.github.pinpols.batch.console.web.query.PageQueryRequest> T traceRequest(

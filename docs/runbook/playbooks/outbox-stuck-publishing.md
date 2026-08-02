@@ -11,7 +11,7 @@
 
 ## 怎么发现
 
-- **Prometheus alert**:TODO(待补 `BatchOutboxStalePublishingHigh`,阈值建议 stale 行 > 50 持续 2 min)
+- **Prometheus alert**:`BatchOutboxStalePublishingStuck` 覆盖 stale PUBLISHING 行；`BatchOutboxCircuitBreakerOpen` 覆盖集群级投递暂停；`BatchOutboxCircuitBreakerFailOpen` 覆盖 Redis 不可达时保护状态降级。stale 行本身已是状态型告警，不再重复增加同语义的数量阈值告警。
 - **Grafana**:TODO。临时看:
   - 自定义 query:`SELECT count(*) FROM batch.outbox_event WHERE publish_status='PUBLISHING' AND updated_at < now() - interval '2 minutes'`
   - `batch_outbox_publish_failures_total`(由 `OutboxPublishCircuitBreaker` 喂),若持续涨 → 上游 Kafka 写失败
@@ -140,7 +140,7 @@ commit;
 ## 事后
 
 - **写 incident-response 关联本剧本**:`incident-response.md` 追加 P2 行,链接本文件。
-- **alert 缺失**:`BatchOutboxStalePublishingHigh`(stale 行数阈值)、`BatchOutboxCircuitBreakerOpen` 必须补。
+- **alert 覆盖**:`BatchOutboxStalePublishingStuck`、`BatchOutboxCircuitBreakerOpen`、`BatchOutboxCircuitBreakerFailOpen` 已回填到 Compose 与 Helm 规则文件；若需区分业务规模，再基于真实基线调整现有阈值，不复制规则。
 - **判断要不要调阈值**:
   - 经常自愈 → `publishing-timeout-seconds` 默认值可能偏大,缩短可更快回收
   - 熔断器 cooldown 期内积压暴涨 → `failure-threshold` 太低,容易误触

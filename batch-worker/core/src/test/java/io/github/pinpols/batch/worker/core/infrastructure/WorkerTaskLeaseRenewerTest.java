@@ -49,6 +49,7 @@ class WorkerTaskLeaseRenewerTest {
     // 用 1 让熔断 OPEN 后每个 tick 都半开探测，单测才能验证连续失败与清理路径
     leaseProps.setCircuitHalfOpenTickInterval(1);
     renewer = new WorkerTaskLeaseRenewer(registry, client, provider, leaseProps);
+    renewer.subscribeLeaseRemoval();
   }
 
   @Test
@@ -106,6 +107,7 @@ class WorkerTaskLeaseRenewerTest {
     assertThat(renewer.isRenewCircuitOpen()).isTrue();
     assertThat(meter.find("batch.worker.lease.circuit.open.total").counter().count())
         .isEqualTo(1.0);
+    assertThat(meter.find("batch.worker.lease.circuit.open").gauge().value()).isEqualTo(1.0);
     verify(registry, never()).markLost(anyString());
   }
 

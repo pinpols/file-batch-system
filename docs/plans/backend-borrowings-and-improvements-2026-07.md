@@ -79,13 +79,20 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 
 以下不是「补外部框架的功能」,是「把已有能力做到生产级扎实」——按收益/投入排序。多数已在两轮审计中定位,此处系统化。
 
-### 2.1 可观测性:从「有指标」到「降级可见」(P1,基础已落地)
+### 2.1 可观测性:从「有指标」到「降级可见」(P1,已落地并持续收口)
 
 审计核心结论曾指出:**保护基础设施的行为逻辑测得扎实,但「降级发生了/保护旁路了」这一层系统性缺失**。目前已补 outbox 熔断 OPEN gauge、限流拒绝/fail-open counter、apikey 缓存命中率、advisory lock 争用 Timer，以及启动自检的 ApplicationStartup/Micrometer 观测、trigger/worker readiness 和脱敏运行态诊断端点。**继续方向**:
 
-- 把散落的指标收敛成「控制面健康仪表盘」的语义(而非一堆孤立 metric);
-- 关键降级(outbox 集群熔断、限流 fail-open、Redis 慢故障)接告警规则,而非只在日志;
+- 把散落的指标收敛成「控制面健康仪表盘」的语义(而非一堆孤立 metric);本轮补齐 worker 续租熔断当前状态、消费背压 pause/resume 事件,并保留低基数标签约束;
+- 关键降级(outbox 集群熔断、Redis fail-open、worker lease 熔断、消费许可耗尽)已接告警规则,而非只在日志;Compose 与 Helm 规则同步;
 - 执行时间线(见 1.1)作为诊断的一等入口。
+
+本轮代码落点:
+
+- `WorkerTaskLeaseRenewer` 暴露 `batch.worker.lease.circuit.open` 当前状态 gauge,与历史发生次数 counter 分离,避免把“曾经打开”误判成“当前仍不可达”;
+- `AbstractTaskConsumer` 暴露 `batch.worker.consumer.pause.total` / `resume.total`,配合 `batch.worker.semaphore.available` 识别真实背压;
+- `BatchOutboxCircuitBreaker` 已有 `batch.outbox.circuit.open` / `failopen.total`,本轮在 Compose/Helm 规则中补齐当前 OPEN 与 Redis fail-open 告警;
+- 对 Redis、Kafka rebalance、PG failover 运行手册的告警名称与实际指标做了校准,没有为缺少可靠指标的判断硬造规则。
 
 ### 2.2 Checkpoint / 断点续跑(P1→P2,部分已落地)
 
