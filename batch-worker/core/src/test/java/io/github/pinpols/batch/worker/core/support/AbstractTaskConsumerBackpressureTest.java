@@ -20,6 +20,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -73,6 +74,8 @@ class AbstractTaskConsumerBackpressureTest {
 
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
     AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
@@ -139,6 +142,11 @@ class AbstractTaskConsumerBackpressureTest {
     allowFinish.countDown();
     f1.get();
     verify(container, times(1)).resume();
+    assertThat(meterRegistry.find("batch.worker.consumer.pause.total").counter().count())
+        .isEqualTo(1.0);
+    assertThat(
+            meterRegistry.find("batch.worker.consumer.resume.total").counter().count())
+        .isEqualTo(1.0);
   }
 
   @Test

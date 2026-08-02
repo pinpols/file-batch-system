@@ -11,7 +11,7 @@
 
 ## 怎么发现
 
-- **Prometheus alert**:TODO(待补 `KafkaConsumerLagHigh`、`KafkaRebalanceTimedOut`)
+- **Prometheus alert**:`BatchKafkaConsumerLagHigh` 覆盖 worker group lag；Kafka rebalance 状态没有由应用稳定导出的统一低基数指标，`PreparingRebalance` / `CompletingRebalance` 仍需用 consumer-groups 命令和 broker 日志确认，不能仅凭 lag 告警断定 rebalance 卡死。
 - **Grafana**:TODO。临时看:
   - `kafka_consumer_records_lag_max` 持续 > 1000
   - `kafka_consumer_coordinator_rebalance_total` 在短时间内陡增 → rebalance 抖
@@ -131,7 +131,7 @@
 ## 事后
 
 - **写 incident-response 关联本剧本**:`incident-response.md` 表里追加 P2 行(单 group lag 通常不算全平台 P1)。
-- **alert 缺失**:必须补 `KafkaConsumerLagHigh{group=...}`、`KafkaRebalanceFrequency`(单位时间内 rebalance 次数)。
+- **观测边界**:`BatchKafkaConsumerLagHigh` 已覆盖 lag；rebalance 频率和状态仍以 Kafka consumer-groups / broker 日志为准，只有部署稳定 exporter 指标后再增加频率告警。
 - **判断要不要调阈值**:
   - 业务消息处理时长 P99 接近 `max.poll.interval.ms` 默认 5 min → 拆分消息或调大该参数
   - 单 partition 反复出毒消息 → 检查 producer 端序列化,排查上游(`OutboxPollScheduler` 投递的 payload)

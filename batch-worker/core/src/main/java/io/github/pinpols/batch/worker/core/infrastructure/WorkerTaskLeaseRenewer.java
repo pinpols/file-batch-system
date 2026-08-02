@@ -6,6 +6,7 @@ import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
@@ -44,6 +45,7 @@ public class WorkerTaskLeaseRenewer {
   private static final String METRIC_CONSECUTIVE = "batch.worker.lease.consecutive_failures";
   private static final String METRIC_FAST_RETRY = "batch.worker.lease.fast_retry";
   private static final String METRIC_CIRCUIT_OPEN = "batch.worker.lease.circuit.open.total";
+  private static final String METRIC_CIRCUIT_STATE = "batch.worker.lease.circuit.open";
 
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
   private final TaskExecutionClient taskExecutionClient;
@@ -75,6 +77,12 @@ public class WorkerTaskLeaseRenewer {
   @PostConstruct
   void subscribeLeaseRemoval() {
     activeTaskLeaseRegistry.registerRemovalListener(consecutiveFailures::remove);
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry != null) {
+      Gauge.builder(METRIC_CIRCUIT_STATE, circuitOpen, open -> open.get() ? 1.0 : 0.0)
+          .description("Current worker lease renew circuit state (1=open, 0=closed)")
+          .register(registry);
+    }
   }
 
   @Scheduled(fixedDelayString = "${batch.worker.lease.renew-interval-millis:10000}")

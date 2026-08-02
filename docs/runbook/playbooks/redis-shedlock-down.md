@@ -11,7 +11,7 @@
 
 ## 怎么发现
 
-- **Prometheus alert**:TODO(待 ops 团队补 `BatchRedisDown` / `BatchShedLockAcquireFail`)
+- **Prometheus alert**:`BatchOutboxCircuitBreakerFailOpen` 表示 outbox 熔断器因 Redis 不可达而回落到本地缓存态；`BatchRedisMemoryUsageHigh` / `BatchRedisConnectedClientsHigh` 用于容量侧信号。ShedLock 本身没有可靠的统一 acquire-failure 指标，不能把日志关键字冒充 Prometheus 告警，仍需按下方 Redis 探活与锁表检查定位。
 - **Grafana**:TODO。临时看:
   - `lettuce_command_completion_seconds_count{command="SET"}` 不再增长
   - orchestrator 日志中 `RedisConnectionFailureException` 出现频率
@@ -134,7 +134,7 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
 
 - **写 incident-response 关联本剧本**:在 `docs/runbook/incident-response.md` 表里追加 P1 行。
 - **思考默认 provider 选择**:本仓 2026-05-28 默认切 `redis`(批注见 `BatchShedLockAutoConfiguration`),如果半年内 Redis 已 down 过 2 次 → 考虑默认回 `jdbc`,把 redis 当性能优化的可选项。
-- **alert 缺失**:`BatchRedisDown` / `BatchShedLockAcquireFail` 必须补;`BatchShedLockJdbcFallbackActive`(告知 ops 当前正在降级)更佳。
+- **观测边界**:`BatchOutboxCircuitBreakerFailOpen` 已覆盖 Redis 降级可见性；ShedLock acquire 失败仍以 Redis 探活、锁状态查询和日志为准，后续只有在能稳定产生低基数失败事件时才新增独立告警。
 - **剧本走不通**:Redis 又活了但锁没释放(`job-lock:<env>:shedlock:<env>:<lockName>` key 有残留 TTL),手动 `DEL` 该 key,补一篇 `redis-shedlock-stuck-lock.md`。
 
 ## 关联

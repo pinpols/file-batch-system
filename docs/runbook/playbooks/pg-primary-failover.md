@@ -11,7 +11,7 @@
 
 ## 怎么发现
 
-- **Prometheus alert**:TODO(待 ops 团队补 `BatchPgPrimaryDown` / `HikariCpConnectionTimeout` 告警)
+- **Prometheus alert**:`HikariCpAcquireTimeout` / `HikariCpConnectionExhausted` 覆盖应用连接池故障；`PostgresReplicationStopped`、`PostgresReplicationLagHigh`、`PostgresReplicationLagCritical` 覆盖复制链路。主库网络/进程是否真正 down 仍必须用 `pg_isready` 与容器状态确认，不能把连接池超时直接等同于主库故障。
 - **Grafana 面板**:TODO(待补)。临时看 `actuator/prometheus`:
   - `hikaricp_connections_pending{datasource="platform"}` 持续 > 0
   - `hikaricp_connections_timeout_total` 单分钟内陡增
@@ -141,7 +141,7 @@
 - **看是否要调阈值**:
   - 切主后 `OutboxPollScheduler` 出现大量 stale PUBLISHING → 把 `publishing-timeout-seconds` 调小,加快自愈
   - Hikari 池等待大量超时 → 调 `spring.datasource.platform.hikari.connection-timeout`(默认 30s 偏长,P0 故障期希望 fail-fast)
-- **alert 缺失**:本剧本 TODO 的 `BatchPgPrimaryDown` / `BatchReplicaLag` alert 必须补;补完后回填 alert 名到本文档。
+- **观测边界**:现有应用与 postgres-exporter 告警已覆盖连接池和复制滞后；主库 down 的最终裁定仍依赖 `pg_isready`，后续只有引入稳定的 `pg_up`/服务发现标签后才新增主库可用性告警。
 - **剧本走不通**:如果遇到「promote 成功但业务连不上新主」「replica lag 永远收不敛」→ 补一篇 `pg-replica-rebuild.md`。
 
 ## 关联

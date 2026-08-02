@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
@@ -143,6 +144,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  private volatile Counter backpressurePauseCounter;
+  private volatile Counter backpressureResumeCounter;
 
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
@@ -523,6 +526,15 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
               Tags.of("workerType", workerConfiguration().workerType()),
               captured,
               Semaphore::availablePermits);
+          String workerType = workerConfiguration().workerType();
+          backpressurePauseCounter = Counter.builder("batch.worker.consumer.pause.total")
+              .description("Kafka listener pause events caused by exhausted worker permits")
+              .tag("workerType", workerType)
+              .register(registry);
+          backpressureResumeCounter = Counter.builder("batch.worker.consumer.resume.total")
+              .description("Kafka listener resume events after worker permits became available")
+              .tag("workerType", workerType)
+              .register(registry);
         }
       }
       return semaphore;
@@ -538,6 +550,10 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     try {
       if (!container.isPauseRequested()) {
         container.pause();
+        Counter counter = backpressurePauseCounter;
+        if (counter != null) {
+          counter.increment();
+        }
       }
     } catch (Exception ex) {
       log.warn(
@@ -554,6 +570,10 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     try {
       if (container.isPauseRequested()) {
         container.resume();
+        Counter counter = backpressureResumeCounter;
+        if (counter != null) {
+          counter.increment();
+        }
       }
     } catch (Exception ex) {
       log.warn(

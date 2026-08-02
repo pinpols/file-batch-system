@@ -49,6 +49,24 @@ GENERATE 的 markCompleted 让别的 partition 误判已完成 + 确定化文件
 Prometheus 规则 `BatchWorkerCheckpointPersistenceFailed` 会在 5 分钟窗口出现失败时告警，并沿现有
 `alert_group=worker` 静态路由发送；收到告警后应停止扩大灰度，先检查平台 PostgreSQL 和 worker 日志。
 
+### 生产证据口径(P0 上线门)
+
+上线前在 staging 用一条单分区大任务完成一次“中途停止 → lease 回收 → 重派 → 终态”的真实链路，并保存以下三类证据：
+
+1. **续跑确实发生**：
+   ```promql
+   sum by (stage) (increase(batch_worker_checkpoint_operations_total{operation="load",outcome="resumable"}[1h]))
+   sum by (stage) (increase(batch_worker_checkpoint_resume_skipped_records_total[1h]))
+   ```
+2. **位点没有持续失败**：
+   ```promql
+   sum by (stage, operation) (increase(batch_worker_checkpoint_operations_total{outcome="failure"}[1h]))
+   ```
+   结果必须为 0；若非 0，不能用“任务最后成功”替代位点失败证据。
+3. **业务结果不重复**：保存任务终态、业务表唯一键计数、导出文件 checksum/size；Import 需要证明重复窗口由幂等约束吸收，Export 需要证明截断后最终文件与基准文件一致。
+
+首周按天记录上述查询的 24h `increase()`，并按 `stage` 比较 `resumable` 与 `failure`。只要出现持续 `failure`、`resumable` 长期为 0 或文件指纹不一致，就暂停扩大流量并回滚开关；不能仅凭 `batch.pipeline_progress` 行数增长认定生产续跑正确。
+
 ## 同事务约束(important)
 
 ADR-038 §决策二要求「chunk 业务写 + 位点更新同事务」。实际实施:

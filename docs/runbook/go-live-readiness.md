@@ -46,7 +46,9 @@
 
 ### E 可观测验收
 - [ ] OTel trace 端到端贯通:trigger → orchestrator → worker → report
-- [ ] 关键 SLO 大盘 + 告警规则(吞吐/延迟/outbox 积压/DLQ/PG 锁/Kafka lag)
+- [ ] 关键 SLO 大盘 + 告警规则(吞吐/延迟/outbox 积压/DLQ/PG 锁/Kafka lag/worker lease 熔断/消费背压)
+- [ ] worker 背压验收:确认 `batch_worker_semaphore_available`、pause/resume 事件和 `WorkerBackpressureSaturated` 告警均可采集,按 [`worker-backpressure-saturated.md`](playbooks/worker-backpressure-saturated.md) 完成一次受控演练
+- [ ] checkpoint 证据:确认 `batch.worker.checkpoint.operations.total` 的 `load/resumable`、`advance/failure`、`complete/failure` 可查询,并按 [`platform-worker-checkpoint-howto.md`](platform-worker-checkpoint-howto.md) 记录首周命中率与跳过行数
 - [ ] health / liveness 探针 + 优雅停机预算实测(drain 期间 lease 保活、不丢在飞)
 
 ## 3. Phase 2 — 割接演练
