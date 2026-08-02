@@ -1,4 +1,4 @@
-> 注:本文为实施前时点快照,wheel scheduler 现已落地并切为默认,以代码与 ADR-033 为准。
+> **历史说明**：本文是 Wheel 实施前的评估快照。Wheel 方案曾完成设计并进入评估，但已于 2026-07-23 撤销并从运行路径移除；当前生产统一使用 Quartz JDBC JobStore。请以当前代码和 [`ADR-033`](./adr/ADR-033-quartz-to-wheel-scheduler.md) 的 `Superseded` 状态为准。
 
 # Quartz 替换为时间轮的可执行方案
 
