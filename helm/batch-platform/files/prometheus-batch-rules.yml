@@ -315,6 +315,30 @@ groups:
           description: "The outbox circuit breaker is using cached state while Redis is unreachable. Delivery is not necessarily lost, but protection state is no longer cluster-authoritative."
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/playbooks/redis-shedlock-down.md"
 
+      - alert: ConsoleRateLimitRedisCircuitOpen
+        expr: batch_console_rate_limit_redis_circuit_opened == 1
+        for: 2m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: console
+        annotations:
+          summary: "Console Redis rate-limit circuit is open"
+          description: "Console rate limiting is fail-open and bypassing Redis for this process. Check Redis latency/reachability and confirm upstream WAF protection is active."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/playbooks/redis-shedlock-down.md"
+
+      - alert: ConsoleRateLimitRedisFailure
+        expr: rate(batch_console_rate_limit_redis_failure_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: console
+        annotations:
+          summary: "Console Redis rate-limit calls are failing"
+          description: "Console rate-limit Redis calls have failed continuously for 5 minutes. The local circuit may be fail-open; verify Redis and WAF capacity before treating traffic as protected."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/playbooks/redis-shedlock-down.md"
+
       - alert: BatchDeadLetterBacklogHigh
         expr: batch_dead_letter_tasks_pending > 100
         for: 30m

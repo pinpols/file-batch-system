@@ -189,6 +189,20 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.console.security.rate-limit.redis-failure-threshold
+    module: console-api
+    env:
+      - BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.security.rate-limit.redis-circuit-open-seconds
+    module: console-api
+    env:
+      - BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.request-signing.enabled
     module: orchestrator
     env:

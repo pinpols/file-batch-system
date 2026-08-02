@@ -122,6 +122,10 @@ batch:
       jwt-ttl: ${BATCH_CONSOLE_JWT_TTL:PT2H}
       # Redis 中会话状态保留时长
       session-state-ttl: ${BATCH_CONSOLE_SESSION_STATE_TTL:P30D}
+      rate-limit:
+        # Redis 限流连续失败后本进程短路，保持 fail-open 但避免重复等待慢 Redis
+        redis-failure-threshold: ${BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD:3}
+        redis-circuit-open-seconds: ${BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS:15}
     # PWA Web Push (VAPID) — 移动端告警/审批推送。VAPID 公私钥需先 generate 再注入。
     push:
       enabled: ${BATCH_CONSOLE_PUSH_ENABLED:false}

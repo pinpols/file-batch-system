@@ -202,7 +202,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         outboxDeliveries,
         alerts,
         deadLetters,
-        buildTimeline(
+        buildTimeline(new TraceTimelineSources(
             normalizedTraceId,
             jobInstances,
             workflowRuns,
@@ -214,10 +214,152 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
             executionLogs,
             outboxDeliveries,
             alerts,
-            deadLetters));
+            deadLetters)));
   }
 
-  private static List<ConsoleTraceTimelineItem> buildTimeline(
+  private static List<ConsoleTraceTimelineItem> buildTimeline(TraceTimelineSources sources) {
+    String traceId = sources.traceId();
+    List<ConsoleJobInstanceResponse> jobInstances = sources.jobInstances();
+    List<ConsoleWorkflowRunResponse> workflowRuns = sources.workflowRuns();
+    List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns = sources.workflowNodeRuns();
+    List<ConsoleFileRecordResponse> files = sources.files();
+    List<ConsoleFilePipelineResponse> filePipelines = sources.filePipelines();
+    List<ConsoleAuditLogResponse> auditLogs = sources.auditLogs();
+    List<io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse>
+        operationAudits = sources.operationAudits();
+    List<ConsoleJobExecutionLogResponse> executionLogs = sources.executionLogs();
+    List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries = sources.outboxDeliveries();
+    List<ConsoleAlertEventResponse> alerts = sources.alerts();
+    List<ConsoleDeadLetterTaskResponse> deadLetters = sources.deadLetters();
+    List<ConsoleTraceTimelineItem> items = new ArrayList<>();
+    jobInstances.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "JOB_INSTANCE",
+            "STATUS",
+            item.id(),
+            item.instanceStatus(),
+            item.jobCode(),
+            firstNonNull(item.startedAt(), item.finishedAt()),
+            traceId)));
+    workflowRuns.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "WORKFLOW_RUN",
+            "STATUS",
+            item.id(),
+            item.runStatus(),
+            item.currentNodeCode(),
+            firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt()),
+            traceId)));
+    workflowNodeRuns.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "WORKFLOW_NODE_RUN",
+            "STATUS",
+            item.id(),
+            item.nodeStatus(),
+            item.nodeCode(),
+            firstNonNull(item.startedAt(), item.finishedAt()),
+            traceId)));
+    files.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "FILE_RECORD",
+            "STATUS",
+            item.id(),
+            item.fileStatus(),
+            item.fileName(),
+            item.createdAt(),
+            traceId)));
+    filePipelines.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "FILE_PIPELINE",
+            "STATUS",
+            item.id(),
+            item.runStatus(),
+            item.currentStage(),
+            firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt()),
+            traceId)));
+    auditLogs.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "FILE_AUDIT",
+            item.operationType(),
+            item.id(),
+            item.operationResult(),
+            item.detailSummary(),
+            item.createdAt(),
+            item.traceId())));
+    operationAudits.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "OPERATION_AUDIT",
+            item.action(),
+            item.id(),
+            item.result(),
+            item.errorMessage(),
+            item.createdAt(),
+            item.traceId())));
+    executionLogs.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "EXECUTION_LOG",
+            item.logType(),
+            item.id(),
+            item.logLevel(),
+            item.message(),
+            item.createdAt(),
+            item.traceId())));
+    outboxDeliveries.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "OUTBOX_DELIVERY",
+            item.eventType(),
+            item.id(),
+            item.deliveryStatus(),
+            item.errorMessage(),
+            firstNonNull(item.createdAt(), item.updatedAt()),
+            item.traceId())));
+    alerts.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "ALERT",
+            item.alertType(),
+            item.id(),
+            item.status(),
+            item.title(),
+            firstNonNull(item.lastSeenAt(), item.createdAt(), item.updatedAt()),
+            item.traceId())));
+    deadLetters.forEach(item -> addTimeline(
+        items,
+        new ConsoleTraceTimelineItem(
+            "DEAD_LETTER",
+            item.sourceType(),
+            item.id(),
+            item.replayStatus(),
+            item.deadLetterReason(),
+            firstNonNull(item.createdAt(), item.updatedAt()),
+            item.traceId())));
+    items.sort(Comparator.comparing(
+            ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(
+            ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(
+            ConsoleTraceTimelineItem::referenceId,
+            Comparator.nullsLast(Comparator.naturalOrder())));
+    return List.copyOf(items);
+  }
+
+  private static void addTimeline(
+      List<ConsoleTraceTimelineItem> items, ConsoleTraceTimelineItem timelineItem) {
+    if (timelineItem.occurredAt() != null) {
+      items.add(timelineItem);
+    }
+  }
+
+  private record TraceTimelineSources(
       String traceId,
       List<ConsoleJobInstanceResponse> jobInstances,
       List<ConsoleWorkflowRunResponse> workflowRuns,
@@ -230,131 +372,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
       List<ConsoleJobExecutionLogResponse> executionLogs,
       List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
       List<ConsoleAlertEventResponse> alerts,
-      List<ConsoleDeadLetterTaskResponse> deadLetters) {
-    List<ConsoleTraceTimelineItem> items = new ArrayList<>();
-    jobInstances.forEach(item -> addTimeline(
-        items,
-        "JOB_INSTANCE",
-        "STATUS",
-        item.id(),
-        item.instanceStatus(),
-        item.jobCode(),
-        firstNonNull(item.startedAt(), item.finishedAt()),
-        traceId));
-    workflowRuns.forEach(item -> addTimeline(
-        items,
-        "WORKFLOW_RUN",
-        "STATUS",
-        item.id(),
-        item.runStatus(),
-        item.currentNodeCode(),
-        firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt()),
-        traceId));
-    workflowNodeRuns.forEach(item -> addTimeline(
-        items,
-        "WORKFLOW_NODE_RUN",
-        "STATUS",
-        item.id(),
-        item.nodeStatus(),
-        item.nodeCode(),
-        firstNonNull(item.startedAt(), item.finishedAt()),
-        traceId));
-    files.forEach(item -> addTimeline(
-        items,
-        "FILE_RECORD",
-        "STATUS",
-        item.id(),
-        item.fileStatus(),
-        item.fileName(),
-        item.createdAt(),
-        traceId));
-    filePipelines.forEach(item -> addTimeline(
-        items,
-        "FILE_PIPELINE",
-        "STATUS",
-        item.id(),
-        item.runStatus(),
-        item.currentStage(),
-        firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt()),
-        traceId));
-    auditLogs.forEach(item -> addTimeline(
-        items,
-        "FILE_AUDIT",
-        item.operationType(),
-        item.id(),
-        item.operationResult(),
-        item.detailSummary(),
-        item.createdAt(),
-        item.traceId()));
-    operationAudits.forEach(item -> addTimeline(
-        items,
-        "OPERATION_AUDIT",
-        item.action(),
-        item.id(),
-        item.result(),
-        item.errorMessage(),
-        item.createdAt(),
-        item.traceId()));
-    executionLogs.forEach(item -> addTimeline(
-        items,
-        "EXECUTION_LOG",
-        item.logType(),
-        item.id(),
-        item.logLevel(),
-        item.message(),
-        item.createdAt(),
-        item.traceId()));
-    outboxDeliveries.forEach(item -> addTimeline(
-        items,
-        "OUTBOX_DELIVERY",
-        item.eventType(),
-        item.id(),
-        item.deliveryStatus(),
-        item.errorMessage(),
-        firstNonNull(item.createdAt(), item.updatedAt()),
-        item.traceId()));
-    alerts.forEach(item -> addTimeline(
-        items,
-        "ALERT",
-        item.alertType(),
-        item.id(),
-        item.status(),
-        item.title(),
-        firstNonNull(item.lastSeenAt(), item.createdAt(), item.updatedAt()),
-        item.traceId()));
-    deadLetters.forEach(item -> addTimeline(
-        items,
-        "DEAD_LETTER",
-        item.sourceType(),
-        item.id(),
-        item.replayStatus(),
-        item.deadLetterReason(),
-        firstNonNull(item.createdAt(), item.updatedAt()),
-        item.traceId()));
-    items.sort(Comparator.comparing(
-            ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparing(
-            ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparing(
-            ConsoleTraceTimelineItem::referenceId,
-            Comparator.nullsLast(Comparator.naturalOrder())));
-    return List.copyOf(items);
-  }
-
-  private static void addTimeline(
-      List<ConsoleTraceTimelineItem> items,
-      String source,
-      String eventType,
-      Long referenceId,
-      String status,
-      String message,
-      java.time.Instant occurredAt,
-      String traceId) {
-    if (occurredAt != null) {
-      items.add(new ConsoleTraceTimelineItem(
-          source, eventType, referenceId, status, message, occurredAt, traceId));
-    }
-  }
+      List<ConsoleDeadLetterTaskResponse> deadLetters) {}
 
   @SafeVarargs
   private static <T> T firstNonNull(T... values) {
