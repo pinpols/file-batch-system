@@ -253,9 +253,15 @@ DB (job_task: READY)
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [测试文档索引](docs/testing/README.md) | 测试计划、覆盖矩阵、门禁规则和测试报告总入口 |
 | [API 文档索引](docs/api/README.md) | 控制台接口协议、OpenAPI 和对接说明 |
+| [工程化借鉴与改进计划](docs/plans/backend-borrowings-and-improvements-2026-07.md) | 已落地能力、剩余治理项与上线前验证计划 |
+| [Spring Boot 工程化样板计划](docs/plans/spring-boot-engineering-patterns-plan-2026-08-02.md) | 配置、自动装配、生命周期、可观测和测试工程化对照 |
+| [优秀系统工程化对照表](docs/plans/engineering-benchmark-comparison-2026-08-02.md) | BFS 与 Spring Boot、Kubernetes、Spring Batch、Kafka Connect 等能力对照 |
 | [本地开发](docs/runbook/local-development.md) | 环境搭建、调试、常见问题 |
 | [安全扫描](docs/runbook/security-scan.md) | 本地漏洞自测组合：secret、依赖、SAST、镜像、ZAP |
+| [特性开关](docs/runbook/feature-switches.md) | 跨模块开关登记、配置注入、灰度和回滚 |
+| [观测栈](docs/runbook/observability-stack.md) | Prometheus / Loki / Tempo / OTel 部署与排障 |
 | [Docker 部署](docs/runbook/docker-deployment.md) | 容器化部署指南 |
+| [代码量统计](docs/stats/loc-2026-08-02-lean.md) | 当前代码规模与精简逻辑行统计口径 |
 | [控制台侧边栏菜单树](docs/design/console-sidebar-menu-tree.md) | 前端 sidebar 分组、页面可见角色与操作权限边界 |
 | [观测栈 Docker 环境](docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
