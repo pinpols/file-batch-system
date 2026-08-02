@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.common.config;
 
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 对象存储加密装饰层开关（Phase 2 §5）。绑定前缀 {@code batch.storage.encryption}。
@@ -11,6 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * manual encryption 迁移到装饰层后再切 {@code true}。
  */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.storage.encryption")
 public class ObjectStoreEncryptionProperties {
 
@@ -25,5 +28,8 @@ public class ObjectStoreEncryptionProperties {
    *
    * <p>后续若改成临时文件或分片加密，可放宽该限制。
    */
+  @Min(
+      value = 1,
+      message = "batch.storage.encryption.max-in-memory-encrypt-bytes must be at least 1")
   private long maxInMemoryEncryptBytes = 32L * 1024 * 1024;
 }

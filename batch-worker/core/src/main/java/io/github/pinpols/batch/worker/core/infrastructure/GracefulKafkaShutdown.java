@@ -13,6 +13,10 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.availability.AvailabilityChangeEvent;
+import org.springframework.boot.availability.ReadinessState;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -46,7 +50,8 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedEvent> {
+public class GracefulKafkaShutdown
+    implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 
   private static final String METRIC_DURATION = "batch.worker.drain.duration_seconds";
   private static final String METRIC_INITIAL_LEASES = "batch.worker.drain.initial_active_leases";
@@ -57,6 +62,7 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  private ApplicationEventPublisher eventPublisher;
 
   @Value("${batch.worker.graceful-shutdown.timeout-seconds:120}")
   private long gracefulShutdownTimeoutSeconds;
@@ -75,7 +81,13 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
   }
 
   @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.eventPublisher = applicationEventPublisher;
+  }
+
+  @Override
   public void onApplicationEvent(ContextClosedEvent event) {
+    publishReadinessRefusal();
     // 关闭顺序的意图：
     // 1) 先把 worker 标记为 DRAINING（best-effort），让 orchestrator 在调度层面减少派发
     // 2) 再停止 Kafka listener，避免继续拉取新任务
@@ -105,6 +117,17 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
 
     awaitDrainAndRecord();
     deactivateAll(registrations);
+  }
+
+  private void publishReadinessRefusal() {
+    if (eventPublisher == null) {
+      return;
+    }
+    try {
+      AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.REFUSING_TRAFFIC);
+    } catch (RuntimeException ex) {
+      log.warn("failed to publish worker readiness refusal: {}", ex.getMessage());
+    }
   }
 
   /**

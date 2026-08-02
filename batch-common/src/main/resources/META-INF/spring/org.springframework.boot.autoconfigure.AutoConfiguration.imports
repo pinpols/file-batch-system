@@ -15,5 +15,6 @@ io.github.pinpols.batch.common.config.BatchObservabilityAutoConfiguration
 io.github.pinpols.batch.common.config.BatchRestClientAutoConfiguration
 io.github.pinpols.batch.common.persistence.mybatis.BatchMybatisAuditAutoConfiguration
 io.github.pinpols.batch.common.health.BatchHealthAutoConfiguration
+io.github.pinpols.batch.common.diagnostics.BatchDiagnosticsAutoConfiguration
 io.github.pinpols.batch.common.lock.BatchDistributedLockAutoConfiguration
 io.github.pinpols.batch.common.config.KafkaConsumerTriangleValidator

@@ -1,18 +1,22 @@
 package io.github.pinpols.batch.common.health;
 
+import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /** 声明式启动自检：在 {@code ApplicationReadyEvent} 后校验 schema / 表 / 列与（可选）Flyway 状态，仅写日志、不阻断启动。 */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.startup-self-check")
 public class BatchStartupSelfCheckProperties {
 
   private boolean enabled = true;
 
   /** 日志前缀语境，如 {@code orchestrator}、{@code trigger}。 */
+  @NotBlank(message = "batch.startup-self-check.context-name must not be blank")
   private String contextName = "应用";
 
   /** 若存在 Flyway bean，是否在启动时执行 {@link org.flywaydb.core.Flyway#validate()}。 */

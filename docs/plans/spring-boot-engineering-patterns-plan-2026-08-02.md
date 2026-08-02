@@ -329,14 +329,17 @@ BFS 要学 Spring Boot 的不是「更多注解」,而是这套成熟工程化�
 
 ## 8. 全量收口实施计划（2026-08-02）
 
-本节把前面的借鉴建议转成可执行的完整收口计划。当前 PR 已完成第一批：
+本节把前面的借鉴建议转成可执行的完整收口计划。本轮 PR 已将八个方向全部落到代码、测试或 CI 门禁：
 
 - `BatchStartupFailureAnalyzer` 已注册并覆盖生产密钥、对象存储和安全旁路等 fail-close 异常。
-- `BatchLifecyclePhases` 已用于共享调度器、Trigger Outbox scheduler 和 Webhook relay。
-- `BatchSchedulingProperties`、`TriggerOutboxRelayProperties` 已增加边界校验。
-- 对应编译和 9 个定向测试已通过。
+- `BatchLifecyclePhases` 已用于共享调度器、Trigger Outbox scheduler、Webhook relay 和 worker drain。
+- 调度、Trigger relay、存储、文件系统、加密和启动自检配置已增加边界校验。
+- startup self-check 已接入 `ApplicationStartup` 与 Micrometer duration 指标。
+- trigger/worker drain 已发布 Spring Boot readiness 状态；新增只读、脱敏的 `batchruntime` Actuator 端点。
+- feature-switch registry 已由 CI 校验，防止开关和生产环境变量遗漏登记。
+- 全量 reactor 编译、受影响模块完整测试、配置同步、Helm 同步、SQL 边界和 workflow lint 均已通过。
 
-以下项目仍属于计划，完成前不得在验收报告中标记为已完成。
+本节剩余的是上线前环境证据，不是未实现代码：远端 full-gate、生产 Helm 实际 Secret 注入、滚动发布/强杀恢复演练，以及按系统边界明确“不拆业务 starter”。这些必须在目标环境执行，不能用本地单测替代。
 
 ### 8.1 执行顺序
 
@@ -455,4 +458,4 @@ BFS 要学 Spring Boot 的不是「更多注解」,而是这套成熟工程化�
 
 ### 8.5 完成定义
 
-只有当上述 P0、P1、P2 工作包全部有代码、测试、部署配置和验收证据，并更新本文件状态表后，才可以将本计划标记为“全部完成”。当前 PR #866 只覆盖第一批 P0 子集，不能视为本节全部完成。
+本 PR 的代码实现和本地验证已完成；上线验收仍以远端 full-gate、目标环境部署和恢复演练证据为准。P2-C 不拆分业务 starter 是经过边界评估后的明确结论：平台能力继续留在 `batch-common`/SDK，job instance、batch day、task CAS、outbox 和插件状态机不抽成通用 starter。
