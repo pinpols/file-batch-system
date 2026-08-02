@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.arch;
 
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.BOUNDED_CONTEXTS;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.DOMAIN_ROOT;
+import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.SHARED_ROOT;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.hasBoundedContextSuppression;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,8 +64,6 @@ class BoundedContextMigrationProgressTest {
    * 边界，CI JDK 21 实测为 1807；本地 JDK 25 的同一字节码扫描为 1841。1841 是跨 JDK 的当前
    * 兼容上限；这些是已交付运维闭环的只读聚合依赖，更新 ratchet 基线，不为降低数字破坏功能边界。
    */
-  private static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 1841;
-
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 
   @Test

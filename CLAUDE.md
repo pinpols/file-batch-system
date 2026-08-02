@@ -119,7 +119,7 @@ CI `pr-gate` 拦截漂移。
 | 3 | 依赖注入**只用构造器**(`@RequiredArgsConstructor`);**禁** `@Autowired` field / setter 注入。**两类豁免**:① `@Lazy @Autowired private SelfType self;` AOP 自调用 workaround(全仓 9 处);② `@SpringBootTest` IT 测试(全仓 ~77 处沿用 Spring 测试惯例,新 IT 可继续 `@Autowired private Foo foo;`,不强制改构造器) | 生产代码 `@Autowired private Foo foo;` |
 | 4 | `@Transactional` **只放 Service 公共方法**,不放 Controller / Mapper;**禁** `Propagation.NEVER` 之外的非默认传播 | `@Transactional` 在 Controller |
 | 5 | 业务异常一律 `BizException.of(ResultCode.X, "error.<scope>.<reason>", args...)`,**禁** `new BizException(code, literal)` / `throw new RuntimeException(...)` | 抛裸 `IllegalArgumentException` |
-| 6 | Controller 返回值一律 `CommonResponse<T>`(走 `ResponseFactory.success()`),**禁**直接返回 DTO 或自封装 envelope | `return user;` |
+| 6 | `batch-console-api` 对外 Console REST Controller 返回值一律 `CommonResponse<T>`(走 `ResponseFactory.success()`),**禁**直接返回 DTO 或自封装 envelope；`/internal/**` 服务间接口按已登记的 DTO 协议返回，禁止为套 envelope 破坏 Worker / Trigger / SDK 兼容性 | `return user;` |
 | 7 | 日志**用占位符**,不用字符串拼接;ERROR 级必须带 `traceId` / 业务 ID;循环里不打 INFO | `log.info("user=" + u)` |
 | 8 | `@Builder` 加到普通 class 必须配 `@NoArgsConstructor` + `@AllArgsConstructor`(或 `@Tolerate`)回退空参,否则破坏 Jackson / MyBatis 反射 | 裸 `@Builder` + 隐式空参 class |
 | 9 | if-chain / switch **≥ 3 分支**必须改 `Map<String, Handler>` 路由表 | 4 个 `else if` 散排 |

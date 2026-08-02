@@ -290,7 +290,7 @@ public class BizException extends RuntimeException {
 
 ### 6.1 统一响应包装
 
-所有 API 返回 `CommonResponse<T>`：
+`batch-console-api` 的对外 Console API 统一返回 `CommonResponse<T>`。`/internal/**` 是服务间协议边界，按已登记的 DTO / Map 协议返回，不额外套 Console envelope；否则会破坏 Worker、Trigger、SDK 的既有协议兼容性：
 
 ```java
 public record CommonResponse<T>(
@@ -304,7 +304,7 @@ public record CommonResponse<T>(
 }
 ```
 
-### 6.2 Controller 写法
+### 6.2 Console Controller 写法
 
 ```java
 @GetMapping("/jobs")

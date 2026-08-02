@@ -52,16 +52,16 @@ public class LegacyCrossContextHelper { ... }
 - metric 测试单独统计豁免数,**不计入** violation 总数,但会打印 `suppressed edges: N`
 - 评审纪律:每个豁免都要在注释里写「为什么 + 何时清理」
 
-## 当前状态(2026-05-30)
+## 当前状态(2026-08-03)
 
 - `domain/<ctx>/` 子包尚未拉齐(当前是 `domain/{command,entity,param,query,view}` 横切布局)
-- 守护测试 `@Disabled`,作为目标基线锁定语义
-- metric 测试输出 `total cross-context violations: 0`(因 ctx 子包还没建)
-- Stage 1 迁移过程中,metric 会先升后降;降到 0 后删 `@Disabled` 启用守护
+- 守护测试已启用 ratchet 门禁,当前基线为 `1841` 条跨 context 直接依赖,不得新增
+- metric 测试持续输出违规矩阵,用于迁移进度和边界回归核对
+- Stage 1 迁移过程中,基线应逐步下调;降到 0 后把 ratchet 切换为严格 ArchUnit 规则
 
 ## 升级路径
 
 1. 拉一个 ctx 子包(例:先迁 `job`)→ metric 输出第一批违规数
 2. 逐步把 cross-ctx 直引替换为 application service / event / shared
-3. metric 归 0 → 删 `BoundedContextDependencyArchTest` 顶部 `@Disabled`
+3. metric 归 0 → 将 `BoundedContextDependencyArchTest` 从 ratchet 切换为严格 ArchUnit 规则
 4. 进入 Stage 2:开始拆独立模块(`console-push-api` / `console-notification-api` 等)
