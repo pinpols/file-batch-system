@@ -14,12 +14,31 @@
              'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
     </sql>
     <!--
-      带「同终态幂等自写放行」的变体:并发 / 重复 REPORT 下,状态机对已终态实例会 NOOP 回原终态,
-      此时 updateProgress / updateStatus 会用相同终态做自写(version CAS 推进)。这条自写必须放行,
-      否则会误触发 STATE_CONFLICT。仅放行「写回同一终态」,跨终态 / 复活仍被拦。
+      带「同终态幂等自写」和「陈旧失败收敛」放行的变体:并发 / 重复 REPORT 下,状态机对已终态实例会 NOOP
+      回原终态,此时 updateProgress / updateStatus 会用相同终态做自写(version CAS 推进)。updateProgress 另外
+      支持受限的失败收敛:重试/补偿可能
+      在旧 FAILED 写入后完成全部分区;仅当本次写入是 SUCCESS、计数为全成功且数据库中不存在非 SUCCESS 分区时,
+      才允许失败终态收敛为成功。取消、终止和仍有失败/未完成分区的跨终态写入仍被拦。
     -->
     <sql id="NotFromTerminalAllowSelf">
         and (instance_status = #{instanceStatus}
+             or instance_status not in
+                ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
+                 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'))
+    </sql>
+    <sql id="NotFromTerminalAllowSelfForProgress">
+        and (instance_status = #{instanceStatus}
+             or (instance_status in ('FAILED', 'PARTIAL_FAILED', 'FAILED_DRY_RUN')
+                 and #{instanceStatus} in ('SUCCESS', 'SUCCESS_DRY_RUN')
+                 and #{successPartitionCount} &gt; 0
+                 and #{failedPartitionCount} = 0
+                 and not exists (
+                     select 1
+                     from batch.job_partition jp
+                     where jp.tenant_id = #{tenantId}
+                       and jp.job_instance_id = #{id}
+                       and jp.partition_status &lt;&gt; 'SUCCESS'
+                 ))
              or instance_status not in
                 ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
                  'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'))
@@ -262,7 +281,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
-          <include refid="NotFromTerminalAllowSelf"/>
+          <include refid="NotFromTerminalAllowSelfForProgress"/>
     </update>
 
     <update id="markRunning">

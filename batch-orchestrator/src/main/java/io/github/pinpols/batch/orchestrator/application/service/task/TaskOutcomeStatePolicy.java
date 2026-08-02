@@ -88,6 +88,32 @@ final class TaskOutcomeStatePolicy {
     return dryRun ? JobInstanceStatus.SUCCESS_DRY_RUN.code() : JobInstanceStatus.SUCCESS.code();
   }
 
+  /**
+   * 允许把陈旧的失败终态收敛为成功。
+   *
+   * <p>失败终态通常不可复活，但重试/补偿可能在旧失败写入后完成最后一个分区。只有当本次实时分区
+   * 统计已经证明全部分区成功且没有 DAG 后继节点时，才允许修正；取消和终止永远不走此路径。
+   */
+  static boolean shouldPromoteTerminalFailure(
+      String currentStatus,
+      String resolvedStatus,
+      long successCount,
+      long failedCount,
+      boolean allPartitionsFinished,
+      boolean dagContinues) {
+    boolean currentIsFailure = JobInstanceStatus.FAILED.code().equals(currentStatus)
+        || JobInstanceStatus.PARTIAL_FAILED.code().equals(currentStatus)
+        || JobInstanceStatus.FAILED_DRY_RUN.code().equals(currentStatus);
+    boolean resolvedIsSuccess = JobInstanceStatus.SUCCESS.code().equals(resolvedStatus)
+        || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(resolvedStatus);
+    return currentIsFailure
+        && resolvedIsSuccess
+        && successCount > 0
+        && failedCount == 0
+        && allPartitionsFinished
+        && !dagContinues;
+  }
+
   static boolean isDryRun(JobInstanceEntity instance) {
     return instance != null && Boolean.TRUE.equals(instance.getDryRun());
   }

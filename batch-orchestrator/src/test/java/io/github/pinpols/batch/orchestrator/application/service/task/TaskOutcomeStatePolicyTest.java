@@ -54,4 +54,23 @@ class TaskOutcomeStatePolicyTest {
     assertThat(TaskOutcomeStatePolicy.isDryRun(instance)).isTrue();
     assertThat(TaskOutcomeStatePolicy.isDryRun(null)).isFalse();
   }
+
+  @Test
+  void promotesOnlyStaleFailureWithAllPartitionsSuccessful() {
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+            "FAILED", "SUCCESS", 1, 0, true, false))
+        .isTrue();
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+            "PARTIAL_FAILED", "SUCCESS", 1, 0, true, false))
+        .isTrue();
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+            "FAILED", "SUCCESS", 1, 1, true, false))
+        .isFalse();
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+            "FAILED", "SUCCESS", 1, 0, false, false))
+        .isFalse();
+    assertThat(TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+            "CANCELLED", "SUCCESS", 1, 0, true, false))
+        .isFalse();
+  }
 }

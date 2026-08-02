@@ -8,8 +8,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -46,6 +48,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -260,5 +263,58 @@ class DefaultTaskOutcomeServiceTest {
     // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
     assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
         .isEqualTo(1L);
+  }
+
+  @Test
+  void applyTaskOutcome_promotesStaleFailedInstanceWhenAllPartitionsSucceeded() {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(1L);
+    task.setTenantId("t1");
+    task.setJobInstanceId(10L);
+    task.setJobPartitionId(99L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("w1");
+    task.setVersion(1L);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(99L);
+    partition.setTenantId("t1");
+    partition.setJobInstanceId(10L);
+    partition.setPartitionStatus(PartitionStatus.RUNNING.code());
+    partition.setVersion(1L);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(10L);
+    instance.setTenantId("t1");
+    instance.setInstanceStatus("FAILED");
+    instance.setVersion(2L);
+    instance.setDryRun(false);
+
+    when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
+    when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+    when(jobTaskMapper.finishTask(any())).thenReturn(1);
+    when(jobPartitionMapper.markStatus(any())).thenReturn(1);
+    when(jobPartitionMapper.selectStatusRefsByInstance("t1", 10L))
+        .thenReturn(List.of(new PartitionStatusRef(99L, PartitionStatus.SUCCESS.code())));
+    when(jobTaskMapper.selectNodeAssignmentsByInstance(eq("t1"), eq(10L)))
+        .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
+    when(stateMachine.transition(any(), anyString()))
+        .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));
+    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
+
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .workerId("w1")
+        .success(true)
+        .build();
+    service.applyTaskOutcome(command);
+
+    ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam>
+        captor = ArgumentCaptor.forClass(
+            io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam.class);
+    verify(jobInstanceMapper).updateProgress(captor.capture());
+    assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
   }
 }
