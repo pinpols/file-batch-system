@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
@@ -177,7 +178,7 @@ public class BatchDayGateService {
 
   private void reject(LaunchRequest request, BatchDayInstanceEntity previous, String reason) {
     int updated = triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+        request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
     if (updated == 0) {
       log.warn(
           "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",

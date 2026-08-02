@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
+import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
@@ -145,7 +146,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
    * RerunRequest.@Pattern / @Positive 守住。
    */
   private void validateRerunPolicy(RerunRequest request) {
-    if ("USE_SPECIFIED_VERSION".equals(request.getConfigVersionPolicy())
+    if (ConfigVersionPolicy.USE_SPECIFIED_VERSION.code().equals(request.getConfigVersionPolicy())
         && request.getConfigVersion() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
     }

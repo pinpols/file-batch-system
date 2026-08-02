@@ -12,9 +12,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
@@ -70,7 +70,7 @@ class ConsoleBatchDayReplayControllerTest {
     // orchestrator 返 CommonResponse<...> envelope；控制器按类型化 body 反序列化后 forwardOrchestrator 透传 data。
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
         .thenReturn(CommonResponse.success(
-            Map.of("id", 1, "status", BatchStatusConstants.PENDING_APPROVAL)));
+            Map.of("id", 1, "status", ConfigLifecycleStatus.PENDING_APPROVAL.code())));
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
             orchestratorInternalRestClient, tenantGuard, responseFactory))

@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -267,7 +267,7 @@ public class ChildJobLaunchSupport {
     triggerRequest.setJobCode(refJobCode);
     triggerRequest.setBizDate(jobInstance.getBizDate());
     triggerRequest.setDedupKey(childDedupKey);
-    triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
+    triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
     triggerRequest.setTraceId(traceId);
     jobMappers.triggerRequestMapper.insert(triggerRequest);
     return childRequestId;

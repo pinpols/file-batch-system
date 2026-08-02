@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -49,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleConfigApprovalApplicationService
     implements ConsoleConfigApprovalApplicationService {
 
-  private static final String PENDING_APPROVAL = BatchStatusConstants.PENDING_APPROVAL;
+  private static final String PENDING_APPROVAL = ConfigLifecycleStatus.PENDING_APPROVAL.code();
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String STATUS_PENDING = "PENDING";

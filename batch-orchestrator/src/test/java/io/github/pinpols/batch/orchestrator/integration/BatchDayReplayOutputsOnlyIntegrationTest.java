@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.constants.BatchReplayConstants;
+import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
@@ -124,7 +124,7 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
         .tenantId(TENANT)
         .calendarCode(CALENDAR)
         .bizDate(BIZ_DATE)
-        .scope(BatchReplayConstants.SCOPE_OUTPUTS_ONLY)
+        .scope(BatchDayReplayScope.OUTPUTS_ONLY.code())
         .versionIds(List.of(v2Id, v3Id))
         .resultPolicy("MANUAL_CONFIRM_EFFECTIVE")
         .configVersionPolicy("USE_ORIGINAL_CONFIG")

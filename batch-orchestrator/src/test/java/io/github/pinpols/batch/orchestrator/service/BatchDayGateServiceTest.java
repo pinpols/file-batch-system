@@ -10,8 +10,9 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -99,7 +100,7 @@ class BatchDayGateServiceTest {
     assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.REJECT);
     assertThat(decision.reasonCode()).isEqualTo("BATCH_DAY_FROZEN");
     verify(triggerRequestMapper)
-        .updateAcceptance("t1", "req-1", BatchStatusConstants.REJECTED, null);
+        .updateAcceptance("t1", "req-1", TriggerRequestStatus.REJECTED.code(), null);
     verify(jobExecutionLogMapper).insert(any());
     // 不会查 calendar 也不会查前一日
     verify(configCacheService, never()).findEnabledBusinessCalendar(any(), any());
@@ -138,10 +139,11 @@ class BatchDayGateServiceTest {
     ArgumentCaptor<BatchDayWaitingLaunchEntity> waitingCaptor =
         ArgumentCaptor.forClass(BatchDayWaitingLaunchEntity.class);
     verify(waitingLaunchMapper).insert(waitingCaptor.capture());
-    assertThat(waitingCaptor.getValue().waitStatus()).isEqualTo(BatchStatusConstants.WAITING);
+    assertThat(waitingCaptor.getValue().waitStatus())
+        .isEqualTo(BatchLifecycleStatus.WAITING.code());
     assertThat(waitingCaptor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, 5, 5));
     verify(triggerRequestMapper)
-        .updateAcceptance("t1", "req-1", BatchStatusConstants.WAITING, null);
+        .updateAcceptance("t1", "req-1", BatchLifecycleStatus.WAITING.code(), null);
     verify(jobExecutionLogMapper).insert(any());
   }
 
@@ -161,7 +163,7 @@ class BatchDayGateServiceTest {
     assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.REJECT);
     verify(waitingLaunchMapper, never()).insert(any());
     verify(triggerRequestMapper)
-        .updateAcceptance("t1", "req-1", BatchStatusConstants.REJECTED, null);
+        .updateAcceptance("t1", "req-1", TriggerRequestStatus.REJECTED.code(), null);
     verify(jobExecutionLogMapper).insert(any());
   }
 

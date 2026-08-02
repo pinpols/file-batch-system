@@ -16,8 +16,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.constants.BatchReplayConstants;
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
+import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
+import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
@@ -239,20 +239,20 @@ class BatchDayReplayServiceTest {
             resultVersion(12L, "job:JOB_B:2026-05-04", 101L)));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4)))
-        .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchReplayConstants.SCOPE_OUTPUTS_ONLY));
+        .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code()));
 
     BatchDayReplaySessionEntity result = service.submit(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
         .bizDate(LocalDate.of(2026, 5, 4))
-        .scope(BatchReplayConstants.SCOPE_OUTPUTS_ONLY)
+        .scope(BatchDayReplayScope.OUTPUTS_ONLY.code())
         .versionIds(List.of(11L, 12L))
         .reason("regulatory restate")
         .requestedBy("ops")
         .autoApprove(true)
         .build());
 
-    assertThat(result.scope()).isEqualTo(BatchReplayConstants.SCOPE_OUTPUTS_ONLY);
+    assertThat(result.scope()).isEqualTo(BatchDayReplayScope.OUTPUTS_ONLY.code());
     verify(entryMapper).insertBatch(anyList());
     verify(jobInstanceMapper, never())
         .selectBatchDayCandidates(anyString(), anyString(), any(), anyList(), anyList());
@@ -267,7 +267,7 @@ class BatchDayReplayServiceTest {
         .tenantId("t1")
         .calendarCode("CAL")
         .bizDate(LocalDate.of(2026, 5, 4))
-        .scope(BatchReplayConstants.SCOPE_OUTPUTS_ONLY)
+        .scope(BatchDayReplayScope.OUTPUTS_ONLY.code())
         .versionIds(List.of(11L))
         .reason("regulatory restate")
         .requestedBy("ops")
@@ -288,7 +288,8 @@ class BatchDayReplayServiceTest {
   @Test
   void approveAdvancesPendingToRunning() {
     when(sessionMapper.selectById("t1", 1L))
-        .thenReturn(sessionAt("t1", 1L, BatchStatusConstants.PENDING_APPROVAL, "ALL_FAILED"))
+        .thenReturn(
+            sessionAt("t1", 1L, ConfigLifecycleStatus.PENDING_APPROVAL.code(), "ALL_FAILED"))
         .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"));
     when(sessionMapper.updateStatus(
             eq("t1"), eq(1L), eq("RUNNING"), anyList(), any(), any(), eq("approver"), any()))
@@ -333,8 +334,8 @@ class BatchDayReplayServiceTest {
   @Test
   void executeOutputsOnlyPromotesEachEntryAndCompletesSession() {
     when(sessionMapper.selectById("t1", 5L))
-        .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchReplayConstants.SCOPE_OUTPUTS_ONLY))
-        .thenReturn(sessionAt("t1", 5L, "SUCCEEDED", BatchReplayConstants.SCOPE_OUTPUTS_ONLY));
+        .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code()))
+        .thenReturn(sessionAt("t1", 5L, "SUCCEEDED", BatchDayReplayScope.OUTPUTS_ONLY.code()));
     BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
         .id(1L)
         .sessionId(5L)
@@ -374,8 +375,8 @@ class BatchDayReplayServiceTest {
         .thenReturn(sessionAt(
             "t1",
             5L,
-            BatchStatusConstants.PENDING_APPROVAL,
-            BatchReplayConstants.SCOPE_OUTPUTS_ONLY));
+            ConfigLifecycleStatus.PENDING_APPROVAL.code(),
+            BatchDayReplayScope.OUTPUTS_ONLY.code()));
 
     assertThatThrownBy(() -> service.executeOutputsOnly("t1", 5L)).isInstanceOf(BizException.class);
   }

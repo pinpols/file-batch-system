@@ -15,7 +15,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
@@ -109,7 +109,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .updateStatus(
             eq("t1"),
             eq(8L),
-            eq(BatchStatusConstants.PARTIAL_FAILED),
+            eq(JobInstanceStatus.PARTIAL_FAILED.code()),
             anyList(),
             any(),
             any(),

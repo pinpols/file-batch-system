@@ -14,12 +14,12 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
@@ -527,7 +527,7 @@ class DefaultLaunchServiceTest {
         .contains("TENANT_JOB_LIMIT")
         .contains("tenant quota exceeded");
     verify(triggerRequestMapper)
-        .updateAcceptance("t1", "req-dispatch-reject", BatchStatusConstants.REJECTED, 501L);
+        .updateAcceptance("t1", "req-dispatch-reject", TriggerRequestStatus.REJECTED.code(), 501L);
 
     ArgumentCaptor<JobExecutionLogEntity> logCaptor =
         ArgumentCaptor.forClass(JobExecutionLogEntity.class);

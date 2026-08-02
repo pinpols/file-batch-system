@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
@@ -282,7 +283,7 @@ public class BatchDaySettleScheduler {
         request.setJobCode(candidate.getJobCode());
         request.setBizDate(batchDay.bizDate());
         request.setDedupKey(dedupKey);
-        request.setRequestStatus("ACCEPTED");
+        request.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
         request.setTraceId(IdGenerator.newTraceId());
         triggerRequestMapper.insert(request);
       }
@@ -343,7 +344,8 @@ public class BatchDaySettleScheduler {
     }
     String status = request.getRequestStatus();
     return status == null
-        || (!"LAUNCHED".equalsIgnoreCase(status) && !"REJECTED".equalsIgnoreCase(status));
+        || (!TriggerRequestStatus.LAUNCHED.code().equalsIgnoreCase(status)
+            && !TriggerRequestStatus.REJECTED.code().equalsIgnoreCase(status));
   }
 
   private String buildCatchUpDedupKey(

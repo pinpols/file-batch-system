@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
+import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -36,7 +36,7 @@ class OpsMapResponseJacksonTest {
     row.put("tenantId", "ta");
     row.put("configType", "JOB");
     row.put("configKey", "job-a");
-    row.put("configStatus", BatchStatusConstants.PENDING_APPROVAL);
+    row.put("configStatus", ConfigLifecycleStatus.PENDING_APPROVAL.code());
     row.put("approval", approvalRow);
 
     Map<String, Object> back = roundTrip(ConsoleConfigApprovalDetailResponse.from(row));
