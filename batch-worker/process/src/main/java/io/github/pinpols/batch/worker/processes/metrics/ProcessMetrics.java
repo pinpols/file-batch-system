@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,7 +52,7 @@ public class ProcessMetrics {
   // 显式 @Autowired:类内有 2 个构造器(public + private),Spring 4.3+ "exactly
   // one constructor" 自动推断不成立,必须显式标主装配 ctor;CLAUDE.md §Java #3 豁免
   // 构造器上的 @Autowired(只禁 field/setter)。
-  @org.springframework.beans.factory.annotation.Autowired
+  @Autowired
   public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.registry = meterRegistryProvider.getIfAvailable();
   }
