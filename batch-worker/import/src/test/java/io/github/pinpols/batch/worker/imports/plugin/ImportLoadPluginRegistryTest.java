@@ -66,11 +66,11 @@ class ImportLoadPluginRegistryTest {
   @Test
   void shouldSupportMultipleDistinctPlugins() {
     ImportLoadPlugin p1 = stubPlugin("jdbc_mapped");
-    ImportLoadPlugin p2 = stubPlugin("sql_template_export");
+    ImportLoadPlugin p2 = stubPlugin(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
     ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(p1, p2));
 
     assertThat(registry.require("jdbc_mapped")).isSameAs(p1);
-    assertThat(registry.require("sql_template_export")).isSameAs(p2);
+    assertThat(registry.require(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE)).isSameAs(p2);
   }
 
   // --- helpers ---

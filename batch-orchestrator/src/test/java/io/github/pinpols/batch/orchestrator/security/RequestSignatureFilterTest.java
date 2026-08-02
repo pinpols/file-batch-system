@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.orchestrator.config.InternalRequestProperties;
 import io.github.pinpols.batch.orchestrator.security.RequestSignatureVerifier.Result;
 import jakarta.servlet.FilterChain;
@@ -40,7 +41,7 @@ class RequestSignatureFilterTest {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report");
     req.setContent("{\"tenantId\":\"t1\"}".getBytes());
     if (withApiKey) {
-      req.addHeader("X-Batch-Api-Key", "key-1");
+      req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
       req.addHeader("X-Batch-Timestamp", "1700000000000");
       req.addHeader("X-Batch-Nonce", "n1");
       req.addHeader("X-Batch-Signature", "sig");
@@ -68,7 +69,7 @@ class RequestSignatureFilterTest {
   @DisplayName("GET 读请求 → 直通")
   void getPassthrough() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/10/claimed");
-    req.addHeader("X-Batch-Api-Key", "key-1");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
     newFilter(true).doFilter(req, new MockHttpServletResponse(), chain);
     verify(chain).doFilter(any(), any());
     verifyNoInteractions(verifier);
@@ -107,7 +108,7 @@ class RequestSignatureFilterTest {
       }
     };
     req.setContent(new byte[2048]);
-    req.addHeader("X-Batch-Api-Key", "key-1");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
     MockHttpServletResponse resp = new MockHttpServletResponse();
 
     newFilter(true).doFilter(req, resp, chain);

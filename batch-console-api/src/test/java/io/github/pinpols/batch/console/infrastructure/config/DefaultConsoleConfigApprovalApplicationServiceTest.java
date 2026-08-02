@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
@@ -57,7 +58,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
 
   @Test
   void shouldApproveAndPublishRelease() {
-    ConfigReleaseEntity release = release("PENDING_APPROVAL");
+    ConfigReleaseEntity release = release(BatchStatusConstants.PENDING_APPROVAL);
     when(configApprovalMapper.selectById("t1", 9L))
         .thenReturn(Map.of(
             "id", 9L,
@@ -75,7 +76,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
 
     Map<String, Object> result = service.approve(9L, request);
 
-    assertThat(result).containsEntry("configStatus", "PENDING_APPROVAL");
+    assertThat(result).containsEntry("configStatus", BatchStatusConstants.PENDING_APPROVAL);
     verify(configApprovalMapper).approve(anyMap());
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());

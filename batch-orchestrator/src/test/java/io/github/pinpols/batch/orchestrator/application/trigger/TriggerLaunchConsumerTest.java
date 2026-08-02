@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
@@ -87,7 +88,7 @@ class TriggerLaunchConsumerTest {
   @Test
   void consume_invalidJson_acksAndSkips() {
     ConsumerRecord<String, String> record =
-        new ConsumerRecord<>("batch.trigger.launch.v1", 0, 0L, "key", "{not-json");
+        new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "key", "{not-json");
 
     consumer.consume(record, ack);
 
@@ -206,7 +207,7 @@ class TriggerLaunchConsumerTest {
 
   private static ConsumerRecord<String, String> record(LaunchEnvelope envelope) {
     String value = envelope == null ? "null" : JsonUtils.toJson(envelope);
-    return new ConsumerRecord<>("batch.trigger.launch.v1", 0, 0L, "key", value);
+    return new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "key", value);
   }
 
   private double consumed(String tenant, String outcome) {

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
@@ -100,7 +101,7 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
     FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
     request.setTenantId("t1");
     request.setLoadTargetRef("jdbc_mapped");
-    request.setExportDataRef("sql_template_export");
+    request.setExportDataRef(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
 
     service.update(1L, request);
 
@@ -109,7 +110,7 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
     verify(mapper).upsertFileTemplateConfig(captor.capture());
     assertThat(captor.getValue().getPluginRefs().getLoadTargetRef()).isEqualTo("jdbc_mapped");
     assertThat(captor.getValue().getPluginRefs().getExportDataRef())
-        .isEqualTo("sql_template_export");
+        .isEqualTo(WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
   }
 
   @Test

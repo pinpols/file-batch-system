@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
@@ -66,13 +67,13 @@ class KafkaTriggerEventPublisherTest {
         .thenReturn(CompletableFuture.completedFuture(sendResult));
 
     TriggerEventPublisher.PublishResult result =
-        publisher.publish("batch.trigger.launch.v1", "tenant-a:req-1", envelope, "trace-1");
+        publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-1", envelope, "trace-1");
 
     assertThat(result.success()).isTrue();
     ArgumentCaptor<ProducerRecord<String, String>> captor = ArgumentCaptor.captor();
     verify(kafkaTemplate).send(captor.capture());
     ProducerRecord<String, String> sent = captor.getValue();
-    assertThat(sent.topic()).isEqualTo("batch.trigger.launch.v1");
+    assertThat(sent.topic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
     assertThat(sent.key()).isEqualTo("tenant-a:req-1");
     assertThat(headerValue(sent, "X-Trace-Id")).isEqualTo("trace-1");
     assertThat(headerValue(sent, "X-Tenant-Id")).isEqualTo("tenant-a");
@@ -82,7 +83,7 @@ class KafkaTriggerEventPublisherTest {
   @Test
   void publish_nullEnvelope_failsWithoutSending() {
     TriggerEventPublisher.PublishResult result =
-        publisher.publish("batch.trigger.launch.v1", "key", null, "trace");
+        publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "key", null, "trace");
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorMessage()).contains("null");
@@ -99,7 +100,7 @@ class KafkaTriggerEventPublisherTest {
         .thenReturn(failed);
 
     TriggerEventPublisher.PublishResult result =
-        publisher.publish("batch.trigger.launch.v1", "tenant-a:req-2", envelope, "trace-2");
+        publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-2", envelope, "trace-2");
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorMessage()).contains("kafka send");
@@ -122,14 +123,14 @@ class KafkaTriggerEventPublisherTest {
   private static SendResult<String, String> sendResult(int partition, long offset) {
     org.apache.kafka.clients.producer.RecordMetadata metadata =
         new org.apache.kafka.clients.producer.RecordMetadata(
-            new TopicPartition("batch.trigger.launch.v1", partition),
+            new TopicPartition(BatchTopics.TRIGGER_LAUNCH_V1, partition),
             offset,
             0,
             RecordBatch.NO_TIMESTAMP,
             0,
             0);
     return new SendResult<>(
-        new ProducerRecord<>("batch.trigger.launch.v1", "key", "value"), metadata);
+        new ProducerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, "key", "value"), metadata);
   }
 
   private static String headerValue(ProducerRecord<String, String> record, String name) {

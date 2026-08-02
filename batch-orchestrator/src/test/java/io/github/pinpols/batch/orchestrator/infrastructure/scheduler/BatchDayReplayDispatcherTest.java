@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.constants.BatchReplayConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
@@ -85,7 +86,7 @@ class BatchDayReplayDispatcherTest {
   @Test
   void outputsOnlySessionsAreSkippedByDispatcher() {
     BatchDayReplaySessionEntity outputs =
-        sessionAt(7L, "OUTPUTS_ONLY", "RUNNING", "CREATE_NEW_VERSION");
+        sessionAt(7L, BatchReplayConstants.SCOPE_OUTPUTS_ONLY, "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(outputs));
     dispatcher.scheduledDispatch();
     verify(entryMapper, never()).selectBySessionAndStatus(anyLong(), anyString(), anyInt());

@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -63,7 +64,7 @@ class ConsoleConfigApprovalControllerTest {
             "tenantId",
             "ta",
             "configStatus",
-            "PENDING_APPROVAL",
+            BatchStatusConstants.PENDING_APPROVAL,
             "approval",
             Map.of("id", 100L, "approvalStatus", "PENDING")));
     mockMvc
@@ -73,7 +74,7 @@ class ConsoleConfigApprovalControllerTest {
             .content("{\"tenantId\":\"ta\",\"operatorId\":\"admin\",\"reason\":\"go\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.releaseId").value(7))
-        .andExpect(jsonPath("$.data.configStatus").value("PENDING_APPROVAL"))
+        .andExpect(jsonPath("$.data.configStatus").value(BatchStatusConstants.PENDING_APPROVAL))
         .andExpect(jsonPath("$.data.approval.approvalStatus").value("PENDING"));
     verify(service).submit(eq(7L), any(ConfigReleaseApprovalSubmitRequest.class));
   }
@@ -87,13 +88,13 @@ class ConsoleConfigApprovalControllerTest {
             "tenantId",
             "ta",
             "configStatus",
-            "PENDING_APPROVAL",
+            BatchStatusConstants.PENDING_APPROVAL,
             "approval",
             Map.of("id", 100L, "approvalStatus", "PENDING")));
     mockMvc
         .perform(get("/api/console/config/releases/7/approval").param("tenantId", "ta"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.configStatus").value("PENDING_APPROVAL"))
+        .andExpect(jsonPath("$.data.configStatus").value(BatchStatusConstants.PENDING_APPROVAL))
         .andExpect(jsonPath("$.data.approval.approvalStatus").value("PENDING"));
     verify(service).detail("ta", 7L);
   }

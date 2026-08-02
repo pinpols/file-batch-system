@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
@@ -38,8 +39,8 @@ class InternalAuthFilterTest {
   @Test
   void apiKeyHitPasses() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/heartbeat");
-    req.addHeader("X-Batch-Api-Key", "raw-key");
-    req.addHeader("X-Batch-Tenant-Id", "tx");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
     // /internal/workers/* + /internal/tasks/* 现在走 verifyWithScope(worker.execute)
     when(verifier.verifyWithScope("raw-key", "tx", "worker.execute"))
         .thenReturn(
@@ -57,9 +58,9 @@ class InternalAuthFilterTest {
   @Test
   void apiKeyProvidedButMissReturns401NoSecretFallback() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
-    req.addHeader("X-Batch-Api-Key", "raw-key");
-    req.addHeader("X-Batch-Tenant-Id", "tx");
-    req.addHeader("X-Internal-Secret", "super-secret"); // 即使有 secret 也不 fallback
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
+    req.addHeader(CommonConstants.INTERNAL_SECRET_HEADER, "super-secret"); // 即使有 secret 也不 fallback
     when(verifier.verifyWithScope(any(), any(), anyString())).thenReturn(Optional.empty());
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
@@ -73,7 +74,7 @@ class InternalAuthFilterTest {
   @Test
   void apiKeyWithoutTenantHeaderReturns401() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/heartbeat");
-    req.addHeader("X-Batch-Api-Key", "raw-key");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
     when(verifier.verifyWithScope("raw-key", null, "worker.execute")).thenReturn(Optional.empty());
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
@@ -86,8 +87,8 @@ class InternalAuthFilterTest {
   @Test
   void apiKeyCannotReachNonWorkerInternalEndpoint() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/instances/launch");
-    req.addHeader("X-Batch-Api-Key", "raw-key");
-    req.addHeader("X-Batch-Tenant-Id", "tx");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
@@ -103,8 +104,8 @@ class InternalAuthFilterTest {
     // GET 读端点用 verifyWithAnyScope(read, execute);只读 key 应放行
     MockHttpServletRequest req =
         new MockHttpServletRequest("GET", "/internal/workers/W1/claimed-tasks");
-    req.addHeader("X-Batch-Api-Key", "raw-key");
-    req.addHeader("X-Batch-Tenant-Id", "tx");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
     when(verifier.verifyWithAnyScope("raw-key", "tx", "worker.read", "worker.execute"))
         .thenReturn(Optional.of(
             new ApiKeyEntity(1L, "tx", "n", "worker.read", true, null, "h", "s", "pbkdf2")));
@@ -121,8 +122,8 @@ class InternalAuthFilterTest {
   void mutationEndpointRejectsReadOnlyKey() throws Exception {
     // POST 写端点仍走 verifyWithScope(worker.execute);只读 key 不满足 → 401
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
-    req.addHeader("X-Batch-Api-Key", "raw-key");
-    req.addHeader("X-Batch-Tenant-Id", "tx");
+    req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "raw-key");
+    req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
     when(verifier.verifyWithScope("raw-key", "tx", "worker.execute")).thenReturn(Optional.empty());
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
@@ -138,7 +139,7 @@ class InternalAuthFilterTest {
   @Test
   void legacySecretPasses() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
-    req.addHeader("X-Internal-Secret", "super-secret");
+    req.addHeader(CommonConstants.INTERNAL_SECRET_HEADER, "super-secret");
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
@@ -151,7 +152,7 @@ class InternalAuthFilterTest {
   @Test
   void wrongSecretReturns401() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
-    req.addHeader("X-Internal-Secret", "wrong");
+    req.addHeader(CommonConstants.INTERNAL_SECRET_HEADER, "wrong");
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
@@ -198,7 +199,7 @@ class InternalAuthFilterTest {
   void verifierMayBeNullForBackwardsCompat() throws Exception {
     InternalAuthFilter f = new InternalAuthFilter(props, null);
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
-    req.addHeader("X-Internal-Secret", "super-secret");
+    req.addHeader(CommonConstants.INTERNAL_SECRET_HEADER, "super-secret");
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
     f.doFilterInternal(req, resp, chain);
