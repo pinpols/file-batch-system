@@ -326,3 +326,133 @@ BFS 要学 Spring Boot 的不是「更多注解」,而是这套成熟工程化�
 - 自动装配与开关变更有窄上下文测试兜底。
 
 这比引入一个新框架更适合当前 BFS:不改变核心领域模型,但显著提高生产可控性。
+
+## 8. 全量收口实施计划（2026-08-02）
+
+本节把前面的借鉴建议转成可执行的完整收口计划。当前 PR 已完成第一批：
+
+- `BatchStartupFailureAnalyzer` 已注册并覆盖生产密钥、对象存储和安全旁路等 fail-close 异常。
+- `BatchLifecyclePhases` 已用于共享调度器、Trigger Outbox scheduler 和 Webhook relay。
+- `BatchSchedulingProperties`、`TriggerOutboxRelayProperties` 已增加边界校验。
+- 对应编译和 9 个定向测试已通过。
+
+以下项目仍属于计划，完成前不得在验收报告中标记为已完成。
+
+### 8.1 执行顺序
+
+| 阶段 | 工作包 | 主要代码落点 | 完成门槛 |
+|---|---|---|---|
+| P0-A | 自动装配条件矩阵 | `batch-common/src/test`、`sdk/java/spring/src/test` | enabled/disabled、缺依赖、自定义 bean、生产 fail-close 四类上下文测试通过 |
+| P0-B | 配置边界统一校验 | `batch-common` 存储、安全、Kafka、RLS、调度配置类 | 非法值绑定阶段失败；正常默认配置和 local/prod 配置均能绑定 |
+| P1-A | 健康组与 readiness | `batch-defaults.yml`、各服务管理配置、`BatchHealthAutoConfiguration` | liveness 只表达进程存活；readiness 表达可安全接收调度流量；startup 自检不泄露敏感信息 |
+| P1-B | 可用性状态接入 | `OrchestratorGracefulShutdown`、worker/trigger/console 生命周期组件 | drain、关键依赖持续不可达、RLS 自检失败时发布 `REFUSING_TRAFFIC`；恢复路径有测试 |
+| P1-C | 领域诊断端点 | `batch-common` diagnostics/actuator、orchestrator health | storage、outbox、worker、feature switch 能返回脱敏状态、原因和建议动作 |
+| P1-D | 配置登记源治理 | `feature-switch-registry.yml`、配置 metadata、Helm/Compose/CI 脚本 | 新增开关或生产必填变量未登记时 CI 失败；文档和部署模板由登记源校验 |
+| P2-A | 装配解释能力 | `batch-common` diagnostics/condition | 能解释实际 storage backend、dispatch adapter、lock provider 和开关来源 |
+| P2-B | 启动阶段观测 | 各服务 Application 配置、startup self-check | Flyway、RLS、Kafka、storage、scheduler 初始化有耗时和结果字段 |
+| P2-C | Starter 边界收口 | `batch-common`、`sdk/java/spring` 及必要 Maven 模块 | 只拆平台能力；业务状态机、CAS、MyBatis SQL 不因 starter 化迁移 |
+
+### 8.2 每个工作包的实现要求
+
+#### P0-A：自动装配条件矩阵
+
+为每个已有 `@AutoConfiguration` 建立最小 `ApplicationContextRunner` 测试矩阵：
+
+1. 依赖存在且开关开启时，验证 bean 数量、bean 类型和装配顺序。
+2. 依赖缺失或开关关闭时，验证不会误装配，也不会触发无关连接探测。
+3. 用户提供同类型 bean 时，验证 `@ConditionalOnMissingBean` 生效。
+4. `prod` profile 缺密钥、弱 KMS、错误存储后端时，验证 fail-close 和 FailureAnalyzer 文案。
+
+重点覆盖 `BatchObjectStoreAutoConfiguration`、`BatchObjectCryptoAutoConfiguration`、`S3AutoConfiguration`、`BatchShedLockAutoConfiguration`、`BatchHealthAutoConfiguration` 和 Java SDK starter。测试必须使用 fake bean，不依赖真实 PG、Redis、Kafka 或 S3。
+
+#### P0-B：配置边界统一校验
+
+优先处理会造成资源失控、错误路由或安全降级的配置：
+
+- 存储：endpoint、bucket、超时、multipart threshold/part size、filesystem root 和扫描上限。
+- 安全：bypass、internal secret、JWT/KMS 引用、生产数据库凭据。
+- Kafka：bootstrap、topic、group、poll/timeout 和重试次数。
+- RLS/租户：schema、租户上下文开关和豁免表白名单。
+- worker/lease：并发数、续租周期、lease TTL、report/outbox 批量大小。
+
+校验分为两层：通用数值/格式约束使用 Bean Validation；涉及 profile、多个字段关系或外部资源的约束保留显式 fail-fast 检查。不得把生产凭据写入 `ConstraintViolation`、metadata 或诊断响应。
+
+#### P1-A/P1-B：健康组与可用性
+
+统一三种状态语义：
+
+- `liveness`：只判断 JVM/Spring 上下文是否还能工作，不因 Redis、Kafka、PG 或 S3 短暂故障触发重启。
+- `readiness`：判断是否能安全接收 launch、claim、relay、lease/report 等新流量；进入 drain 时必须为拒绝流量。
+- `startup`：表达启动期迁移、RLS、topic、bucket 和关键安全检查结果，不替代 liveness。
+
+实现时必须复核每个服务的管理端口、Helm probe、Docker healthcheck 和本地脚本，保证路径与端口一致。对 readiness 的依赖探测使用超时和缓存，不能让健康探针本身打满连接池。
+
+#### P1-C：领域诊断端点
+
+诊断响应只允许包含：
+
+- effective backend/provider 名称；
+- enabled/disabled、状态、最近检查时间和耗时；
+- 脱敏后的 endpoint host、bucket/root 摘要、配置来源；
+- 可执行的修复建议和关联 metric 名称。
+
+禁止返回 secret、JWT/KMS 原文、API key、完整本地文件路径、租户业务数据和下游响应体。端点默认只在管理端口暴露，并沿用现有管理端认证和网络隔离规则。
+
+#### P1-D：登记源和部署一致性
+
+以 `feature-switch-registry.yml` 作为开关的唯一登记源，至少登记：key、默认值、允许 profile、是否允许运行期变更、敏感级别、负责人和回滚方式。由脚本生成或校验：
+
+- configuration metadata 与配置键字典；
+- Helm required values、Secret/ConfigMap 注入项；
+- Compose 示例环境变量；
+- CI required-vars 和生产安全门禁。
+
+历史配置键暂不重命名；新增键必须登记，废弃键必须标注迁移截止版本，避免一次性改动造成部署回滚困难。
+
+#### P2-A/P2-B：解释与启动观测
+
+装配解释和启动观测都必须是只读能力。推荐字段：`component`、`selectedImplementation`、`selectionReason`、`source`、`durationMs`、`status`、`failureCode`。实现优先复用 Spring Boot 的 `ConditionEvaluationReport`、`ApplicationStartup` 和现有 startup self-check，不重复造一套容器生命周期。
+
+启动阶段只记录阶段名称、结果、耗时和错误码；禁止把完整异常请求、密钥或大段下游响应写入 startup step 或结构化日志。
+
+#### P2-C：Starter 边界
+
+只有在 P0/P1 的条件测试、配置 metadata 和诊断协议稳定后才拆 starter。允许拆出的内容是 storage、observability、internal-security、worker SDK 等平台能力；禁止把 job instance、batch day、task CAS、outbox 状态推进和 worker 业务插件拆成通用 starter。
+
+### 8.3 测试与验收矩阵
+
+每个阶段都必须同时具备代码测试和部署配置验证：
+
+| 层级 | 必测内容 |
+|---|---|
+| 单元测试 | properties 边界、FailureAnalyzer、phase 顺序、脱敏、状态转换 |
+| Context 测试 | auto-config 条件、用户覆盖、profile fail-close、无关依赖不装配 |
+| 集成测试 | PG/RLS、Redis/ShedLock、Kafka outbox、S3/MinIO、管理端 health/readiness |
+| E2E/Sim | 启动失败、手工 drain、依赖不可达、恢复、优雅停机、五类 worker 主链路 |
+| 静态门禁 | FQN、危险 API、日志敏感字段、配置未登记、Helm required vars、依赖安全扫描 |
+| 生产演练 | 滚动发布、readiness 摘流量、长任务 drain、强杀后恢复、旧配置回滚 |
+
+最终验收必须满足：
+
+- `mvn verify` 与仓库 `full-gate` 全绿；
+- 所有新增配置在 metadata、默认 yml、Helm/Compose、文档和 CI 中可追溯；
+- 管理端健康端点不泄露凭据，且 probe 在下游短暂故障时不会错误重启服务；
+- 关闭期间不再出现连接工厂已 STOPPING 后 relay、scheduler、lease 或 report 继续访问；
+- 五类 worker 的 startup、readiness、drain、恢复和失败路径均有证据；
+- 任何单项失败都能按工作包回滚，不需要回滚 job/task 核心状态机。
+
+### 8.4 PR 拆分与回滚
+
+建议按以下顺序拆 PR，避免一个大 PR 同时改变配置、探针和生命周期：
+
+1. `P0-A/P0-B`：自动装配测试与配置边界校验。
+2. `P1-A/P1-B`：health group、readiness 和 drain 状态。
+3. `P1-C/P1-D`：领域诊断端点和 registry/CI 一致性。
+4. `P2-A/P2-B`：装配解释和启动阶段观测。
+5. `P2-C`：在前四个 PR 稳定后再做 starter 边界拆分。
+
+每个 PR 必须先在本地完成定向测试，再等待 full-gate；未通过的 PR 不合并。回滚优先关闭新增诊断/观测开关，配置校验只允许回退到上一版已验证约束，不得通过重新开启生产 bypass 或弱默认凭据来“恢复服务”。
+
+### 8.5 完成定义
+
+只有当上述 P0、P1、P2 工作包全部有代码、测试、部署配置和验收证据，并更新本文件状态表后，才可以将本计划标记为“全部完成”。当前 PR #866 只覆盖第一批 P0 子集，不能视为本节全部完成。
