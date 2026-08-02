@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -24,7 +25,7 @@ public class BatchSchedulingProperties {
    * <p>Spring 会先停止 phase 更高的组件。Redis LettuceConnectionFactory 默认 phase 为 0，所以把调度器放在较高
    * phase，可确保定时任务先停止并排水，再销毁 Redis 连接。
    */
-  private int phase = 1_073_741_823;
+  private int phase = BatchLifecyclePhases.MANAGED_SCHEDULER;
 
   /**
    * 服务关闭时，共享调度器是否等待正在执行的任务完成。

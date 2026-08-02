@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.TaskScheduler;
@@ -20,7 +21,7 @@ class BatchSchedulingAutoConfigurationTest {
     TaskScheduler taskScheduler =
         new BatchSchedulingAutoConfiguration().taskScheduler(properties, errorHandlerProvider);
 
-    assertThat(properties.getPhase()).isEqualTo(1_073_741_823);
+    assertThat(properties.getPhase()).isEqualTo(BatchLifecyclePhases.MANAGED_SCHEDULER);
     assertThat(properties.isWaitForTasksToCompleteOnShutdown()).isTrue();
     assertThat(properties.getAwaitTerminationSeconds()).isEqualTo(120);
     assertThat(taskScheduler).isInstanceOf(ThreadPoolTaskScheduler.class);

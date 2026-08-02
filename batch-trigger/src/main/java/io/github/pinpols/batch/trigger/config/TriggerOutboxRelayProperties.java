@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.config;
 
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -42,5 +43,5 @@ public class TriggerOutboxRelayProperties {
    * <p>Spring 停机时高 phase 先停。Redis LettuceConnectionFactory 默认 phase=0；这里显式高 phase， 保证 relay
    * 调度线程先取消并 drain，再销毁 Redis 连接。
    */
-  private int schedulerPhase = 1_073_741_823;
+  private int schedulerPhase = BatchLifecyclePhases.MANAGED_SCHEDULER;
 }
