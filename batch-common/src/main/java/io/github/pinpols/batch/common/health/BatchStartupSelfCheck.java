@@ -2,17 +2,23 @@ package io.github.pinpols.batch.common.health;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.metrics.ApplicationStartup;
+import org.springframework.core.metrics.StartupStep;
 
 /** 通用启动自检：检查项完全由 {@link BatchStartupSelfCheckProperties} 配置，避免各模块复制 JDBC 校验逻辑。 */
 @Slf4j
@@ -34,14 +40,20 @@ public class BatchStartupSelfCheck {
   private final InformationSchemaMapper informationSchemaMapper;
   private final BatchStartupSelfCheckProperties properties;
   private final ObjectProvider<Flyway> flyway;
+  private final ConfigurableApplicationContext applicationContext;
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
   public BatchStartupSelfCheck(
       InformationSchemaMapper informationSchemaMapper,
       BatchStartupSelfCheckProperties properties,
-      ObjectProvider<Flyway> flyway) {
+      ObjectProvider<Flyway> flyway,
+      ConfigurableApplicationContext applicationContext,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.informationSchemaMapper = informationSchemaMapper;
     this.properties = properties;
     this.flyway = flyway;
+    this.applicationContext = applicationContext;
+    this.meterRegistryProvider = meterRegistryProvider;
   }
 
   @EventListener(ApplicationReadyEvent.class)
@@ -50,17 +62,41 @@ public class BatchStartupSelfCheck {
       return;
     }
 
+    long startedNanos = System.nanoTime();
     List<String> problems = new ArrayList<>();
-    Flyway fw = flyway.getIfAvailable();
+    ApplicationStartup startup = applicationContext.getApplicationStartup();
+    StartupStep step = startup.start("batch.startup.self-check");
+    step.tag("context", properties::getContextName);
+    try {
+      Flyway fw = flyway.getIfAvailable();
 
-    runFlywayValidate(fw, problems);
-    runRequiredFlywayVersions(fw, problems);
-    runConfiguredSchemas(problems);
-    runConfiguredTables(problems);
-    runConfiguredColumns(problems);
-    runQuartzStandardTables(problems);
+      runFlywayValidate(fw, problems);
+      runRequiredFlywayVersions(fw, problems);
+      runConfiguredSchemas(problems);
+      runConfiguredTables(problems);
+      runConfiguredColumns(problems);
+      runQuartzStandardTables(problems);
 
-    reportResult(problems);
+      reportResult(problems);
+      step.tag("status", problems.isEmpty() ? "passed" : "failed");
+      step.tag("problemCount", Integer.toString(problems.size()));
+    } finally {
+      step.end();
+      recordDuration(startedNanos, problems);
+    }
+  }
+
+  private void recordDuration(long startedNanos, List<String> problems) {
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return;
+    }
+    Timer.builder("batch.startup.self_check.duration")
+        .description("Batch startup schema and migration self-check duration")
+        .tag("context", properties.getContextName())
+        .tag("status", problems.isEmpty() ? "passed" : "failed")
+        .register(registry)
+        .record(System.nanoTime() - startedNanos, TimeUnit.NANOSECONDS);
   }
 
   private void runFlywayValidate(Flyway fw, List<String> problems) {

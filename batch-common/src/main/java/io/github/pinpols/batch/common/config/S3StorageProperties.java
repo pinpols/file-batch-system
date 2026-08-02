@@ -1,7 +1,10 @@
 package io.github.pinpols.batch.common.config;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 对象存储（S3 协议）连接配置。绑定前缀 {@code batch.storage.s3}。
@@ -10,12 +13,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 兼容）等——换后端只改本配置，不换 SDK、不改业务代码。
  */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.storage.s3")
 public class S3StorageProperties {
 
+  @NotBlank(message = "batch.storage.s3.endpoint must not be blank")
   private String endpoint;
+
   private String accessKey;
   private String secretKey;
+
+  @NotBlank(message = "batch.storage.s3.bucket must not be blank")
   private String bucket;
 
   /**
@@ -31,21 +39,25 @@ public class S3StorageProperties {
   private boolean autoCreateBucket = true;
 
   /** 建立 TCP 连接超时（ms）。后端挂/不可达时快速失败，不拖慢 worker 线程。 */
+  @Min(value = 1, message = "batch.storage.s3.connect-timeout-ms must be at least 1")
   private long connectTimeoutMs = 5000L;
 
   /**
    * socket 空闲超时（ms）。Apache HTTP client 的 {@code socketTimeout} 对读写统一生效——大文件 put/get 时 socket
    * 空闲超过此值即断,无独立的 write timeout 可配。
    */
+  @Min(value = 1, message = "batch.storage.s3.read-timeout-ms must be at least 1")
   private long readTimeoutMs = 30000L;
 
   /** 大对象上传是否启用 multipart。 */
   private boolean multipartEnabled = true;
 
   /** 文件大小达到该阈值后使用 multipart。默认 64MiB。 */
+  @Min(value = 1, message = "batch.storage.s3.multipart-threshold-bytes must be at least 1")
   private long multipartThresholdBytes = 64L * 1024 * 1024;
 
   /** multipart 单 part 大小。S3 要求非最后 part 至少 5MiB，默认 16MiB。 */
+  @Min(value = 1, message = "batch.storage.s3.multipart-part-size-bytes must be at least 1")
   private int multipartPartSizeBytes = 16 * 1024 * 1024;
 
   /** 客户端最大尝试次数(含首次)。{@code <=0} 表示不覆盖、走 AWS SDK 默认(standard 模式 3 次)。批量洪峰下可调高扛瞬时 503/限流。 */

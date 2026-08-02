@@ -144,6 +144,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-config-defaults-sync.py --check
 
+      - name: Validate feature switch registry
+        shell: bash
+        run: python3 scripts/ci/check-feature-switch-registry.py
+
       - name: Verify Helm env switch sync
         shell: bash
         run: python3 scripts/ci/check-helm-env-sync.py

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -140,7 +141,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
   /** 先于 Redis/ShedLock 等默认 phase 组件停止，避免关闭过程中继续申请分布式锁。 */
   @Override
   public int getPhase() {
-    return Integer.MAX_VALUE;
+    return BatchLifecyclePhases.FIRST_TO_STOP_RELAY;
   }
 
   private void stopExecutor(String source) {

@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.config;
 
+import jakarta.validation.constraints.Min;
 import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 文件系统对象存储后端配置（Phase 2 §4 / §8）。绑定前缀 {@code batch.storage.filesystem}。
@@ -14,6 +16,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 纯本地盘则强制单主机或 {@code partitionCount=1}（见 {@code docs/runbook/object-storage-filesystem.md}）。
  */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.storage.filesystem")
 public class FilesystemStorageProperties {
 
@@ -40,5 +43,6 @@ public class FilesystemStorageProperties {
   private Duration defaultPresignTtl = Duration.ofMinutes(5);
 
   /** list 单次最多扫描的文件数。避免宽 prefix / bucket 根目录在本地盘或 NAS 上变成无界 IO。 */
+  @Min(value = 0, message = "batch.storage.filesystem.max-list-scan-entries must not be negative")
   private long maxListScanEntries = 200_000L;
 }

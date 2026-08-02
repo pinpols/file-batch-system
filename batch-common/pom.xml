@@ -127,6 +127,12 @@
             <artifactId>spring-boot-health</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- 只编译 Actuator 自定义端点注解；运行期由各应用的 actuator starter 提供。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <!-- Spring Retry：关键 DB 写路径的瞬时错误（死锁 40P01 / 序列化失败 40001 / 连接抖动）
              自动重试。@EnableRetry 在 batch-common 的 auto-config 里开启 -->
         <dependency>

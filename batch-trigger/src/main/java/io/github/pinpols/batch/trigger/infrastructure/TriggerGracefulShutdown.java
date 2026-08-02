@@ -7,6 +7,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
+import org.springframework.boot.availability.AvailabilityChangeEvent;
+import org.springframework.boot.availability.ReadinessState;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
@@ -23,10 +27,17 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TriggerGracefulShutdown implements ApplicationListener<ContextClosedEvent> {
+public class TriggerGracefulShutdown
+    implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 
   private final Scheduler scheduler;
   private final TriggerDrainState drainState;
+  private ApplicationEventPublisher eventPublisher;
+
+  @Override
+  public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    this.eventPublisher = applicationEventPublisher;
+  }
 
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {
@@ -46,6 +57,7 @@ public class TriggerGracefulShutdown implements ApplicationListener<ContextClose
 
   public void startDraining(String source) throws SchedulerException {
     if (drainState.startDraining(source)) {
+      publishReadiness(ReadinessState.REFUSING_TRAFFIC);
       log.info("Trigger graceful shutdown — switching scheduler to standby, source={}", source);
       scheduler.standby();
     }
@@ -58,6 +70,18 @@ public class TriggerGracefulShutdown implements ApplicationListener<ContextClose
     if (drainState.stopDraining(source)) {
       log.info("Trigger drain cancelled — restarting scheduler, source={}", source);
       scheduler.start();
+      publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
+    }
+  }
+
+  private void publishReadiness(ReadinessState state) {
+    if (eventPublisher == null) {
+      return;
+    }
+    try {
+      AvailabilityChangeEvent.publish(eventPublisher, this, state);
+    } catch (RuntimeException ex) {
+      log.warn("failed to publish trigger readiness state {}: {}", state, ex.getMessage());
     }
   }
 
