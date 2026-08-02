@@ -534,6 +534,25 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .stateMachine()
         .transition(freshInstance != null ? freshInstance : jobInstance, instanceEvent)
         .toState();
+    if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
+        freshInstance != null ? freshInstance.getInstanceStatus() : jobInstance.getInstanceStatus(),
+        instanceEvent,
+        successCount,
+        failedCount,
+        allPartitionsFinished,
+        dagContinues)) {
+      // 重试/补偿可能在旧失败终态写入后完成全部分区。此时子状态已证明失败是陈旧结果，允许受限收敛为 SUCCESS。
+      instanceStatus = instanceEvent;
+      log.info(
+          "promoting stale failed job instance to success after all partitions completed:"
+              + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
+          command.tenantId(),
+          jobInstance.getId(),
+          freshInstance != null
+              ? freshInstance.getInstanceStatus()
+              : jobInstance.getInstanceStatus(),
+          successCount);
+    }
     // ADR-012: instance 级 failure_class 仅在终态且失败类（FAILED / PARTIAL_FAILED）时填；
     // SUCCESS 终态保持 NULL。来源 = 当前命令本次推断的 class（合并 worker 上报 + classifier 回退）。
     String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
