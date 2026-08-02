@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,6 +26,7 @@ public class RedisRateLimitCircuitBreaker {
   private final Counter failureCounter;
   private final Counter openCounter;
 
+  @Autowired
   public RedisRateLimitCircuitBreaker(
       ConsoleRateLimitProperties properties, ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this(properties, meterRegistryProvider.getIfAvailable());
