@@ -33,6 +33,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class DeliverDispatchStep implements DispatchStageStep {
 
+  private static final String ERROR_CODE_SEND_FAILED = "DISPATCH_SEND_FAILED";
+  private static final String ERROR_CODE_READBACK_MISMATCH = "DISPATCH_READBACK_MISMATCH";
+
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
   private final PlatformFileRuntimeRepository runtimeRepository;
@@ -138,7 +141,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
           dispatchResult.message());
       return DispatchStageResult.failure(
           stage(),
-          "DISPATCH_SEND_FAILED",
+          ERROR_CODE_SEND_FAILED,
           "error.dispatch.deliver.send_failed",
           new Object[] {dispatchResult.message()},
           dispatchResult.message(),
@@ -149,7 +152,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     if (updated <= 0) {
       return DispatchStageResult.failure(
           stage(),
-          "DISPATCH_SEND_FAILED",
+          ERROR_CODE_SEND_FAILED,
           "error.dispatch.deliver.send_failed",
           new Object[] {"failed to mark sent"},
           "failed to mark sent",
@@ -213,11 +216,11 @@ public class DeliverDispatchStep implements DispatchStageStep {
         context.getTenantId(),
         fileId,
         dispatchPayload.channelCode(),
-        "DISPATCH_READBACK_MISMATCH",
+        ERROR_CODE_READBACK_MISMATCH,
         "readback size " + actual.getAsLong() + " != expected " + expected);
     return DispatchStageResult.failure(
         stage(),
-        "DISPATCH_READBACK_MISMATCH",
+        ERROR_CODE_READBACK_MISMATCH,
         "error.dispatch.readback.mismatch",
         new Object[] {expected, actual.getAsLong()},
         "readback size mismatch",

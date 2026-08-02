@@ -48,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleConfigApprovalApplicationService
     implements ConsoleConfigApprovalApplicationService {
 
-  private static final String PENDING_APPROVAL = "PENDING_APPROVAL";
+  private static final String PENDING_APPROVAL = ConfigLifecycleStatus.PENDING_APPROVAL.code();
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String STATUS_PENDING = "PENDING";

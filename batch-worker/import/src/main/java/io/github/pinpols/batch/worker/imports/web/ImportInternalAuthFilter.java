@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.web;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -28,7 +29,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ImportInternalAuthFilter extends OncePerRequestFilter {
 
-  private static final String HEADER_SECRET = "X-Internal-Secret";
+  private static final String HEADER_SECRET = CommonConstants.INTERNAL_SECRET_HEADER;
 
   private static final String UNAUTHORIZED_BODY =
       "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid X-Internal-Secret\"}";

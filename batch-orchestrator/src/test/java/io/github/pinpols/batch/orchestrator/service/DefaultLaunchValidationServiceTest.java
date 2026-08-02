@@ -9,9 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
@@ -129,7 +129,7 @@ class DefaultLaunchValidationServiceTest {
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(BatchStatusConstants.REJECTED), any());
+        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
   }
 
   @Test
@@ -145,7 +145,7 @@ class DefaultLaunchValidationServiceTest {
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper)
-        .updateAcceptance(eq("ta"), eq("req-001"), eq(BatchStatusConstants.REJECTED), any());
+        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
   }
 
   @Test

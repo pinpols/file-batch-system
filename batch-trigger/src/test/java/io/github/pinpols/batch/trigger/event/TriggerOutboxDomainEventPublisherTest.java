@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
+import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import java.util.Map;
@@ -62,7 +63,7 @@ class TriggerOutboxDomainEventPublisherTest {
     assertThat(id).isEqualTo(42L);
     assertThat(row.getTenantId()).isEqualTo("tenant-A");
     assertThat(row.getRequestId()).isEqualTo("req-abc-123");
-    assertThat(row.getTopic()).isEqualTo("batch.trigger.launch.v1");
+    assertThat(row.getTopic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
     assertThat(row.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
     assertThat(row.getPublishAttempt()).isZero();
     assertThat(row.getTraceId()).isEqualTo("trace-xyz");

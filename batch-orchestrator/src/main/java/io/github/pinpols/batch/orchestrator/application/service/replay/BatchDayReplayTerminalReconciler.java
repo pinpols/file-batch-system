@@ -44,7 +44,7 @@ public class BatchDayReplayTerminalReconciler {
   private static final String ENTRY_RUNNING = "RUNNING";
   private static final String SESSION_RUNNING = "RUNNING";
   private static final String SESSION_SUCCEEDED = "SUCCEEDED";
-  private static final String SESSION_PARTIAL_FAILED = "PARTIAL_FAILED";
+  private static final String SESSION_PARTIAL_FAILED = JobInstanceStatus.PARTIAL_FAILED.code();
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;

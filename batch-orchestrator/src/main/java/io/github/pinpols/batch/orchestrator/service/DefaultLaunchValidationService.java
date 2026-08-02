@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.utils.Guard;
@@ -55,7 +55,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     if (jobDefinition == null) {
       warnIfNotUpdated(
           triggerRequestMapper.updateAcceptance(
-              request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null),
+              request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null),
           request);
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }
@@ -69,7 +69,10 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       if (workflowDefinition == null) {
         warnIfNotUpdated(
             triggerRequestMapper.updateAcceptance(
-                request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null),
+                request.tenantId(),
+                request.requestId(),
+                TriggerRequestStatus.REJECTED.code(),
+                null),
             request);
         throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found_for_job");
       }

@@ -11,6 +11,9 @@ public final class CommonConstants {
   public static final String ADMIN_TENANT_ID = "admin";
   public static final String DEFAULT_TIMEZONE_ID = "Asia/Shanghai";
   public static final String DEFAULT_TRACE_ID_HEADER = "X-Trace-Id";
+  public static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
+  public static final String BATCH_API_KEY_HEADER = "X-Batch-Api-Key";
+  public static final String BATCH_TENANT_ID_HEADER = "X-Batch-Tenant-Id";
   public static final String DEFAULT_REQUEST_ID_HEADER = "X-Request-Id";
   public static final String DEFAULT_TENANT_ID_HEADER = "X-Tenant-Id";
   public static final String DEFAULT_OPERATOR_ID_HEADER = "X-Operator-Id";

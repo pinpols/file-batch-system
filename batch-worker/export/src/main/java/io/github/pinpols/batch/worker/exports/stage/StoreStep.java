@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 public class StoreStep implements ExportStageStep {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final String ERROR_CODE_STORE_INVALID = "EXPORT_STORE_INVALID";
 
   private final S3ExportStorage s3ExportStorage;
   private final BatchObjectCryptoService cryptoService;
@@ -50,7 +51,7 @@ public class StoreStep implements ExportStageStep {
     if (!(generatedFilePath instanceof String pathText) || !Texts.hasText(pathText)) {
       return ExportStageResult.failure(
           stage(),
-          "EXPORT_STORE_INVALID",
+          ERROR_CODE_STORE_INVALID,
           "error.export.store.invalid",
           new Object[] {"export data missing"},
           "export data missing",
@@ -64,7 +65,7 @@ public class StoreStep implements ExportStageStep {
       if (!Files.exists(generatedFile)) {
         return ExportStageResult.failure(
             stage(),
-            "EXPORT_STORE_INVALID",
+            ERROR_CODE_STORE_INVALID,
             "error.export.store.invalid",
             new Object[] {"generated file missing"},
             "generated file missing",

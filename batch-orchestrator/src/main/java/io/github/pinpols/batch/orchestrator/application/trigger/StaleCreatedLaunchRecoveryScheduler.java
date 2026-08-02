@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -106,7 +106,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
     TriggerRequestEntity triggerRequest = triggerRequestMapper.selectById(
         jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
     if (triggerRequest == null
-        || !BatchStatusConstants.ACCEPTED.equals(triggerRequest.getRequestStatus())) {
+        || !TriggerRequestStatus.ACCEPTED.code().equals(triggerRequest.getRequestStatus())) {
       return false;
     }
 

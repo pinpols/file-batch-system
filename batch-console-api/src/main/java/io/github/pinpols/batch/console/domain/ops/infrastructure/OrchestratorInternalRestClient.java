@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
@@ -30,7 +31,7 @@ import org.springframework.web.client.RestClient;
 public class OrchestratorInternalRestClient {
 
   /** orchestrator-side {@code InternalAuthFilter} 期望的鉴权 header 名（保持单一字面量来源）。 */
-  public static final String X_INTERNAL_SECRET_HEADER = "X-Internal-Secret";
+  public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
   /**
    * P2-1(2026-05-16):RestClient.Builder bean 是 prototype,但字段注入只解析一次, 整个单例生命周期内复用同一 builder,并发

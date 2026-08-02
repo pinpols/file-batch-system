@@ -19,6 +19,8 @@ import org.xml.sax.InputSource;
 /** Parses XML payloads into NDJSON records. */
 public class XmlFormatParser implements FormatParser {
 
+  private static final String ERROR_CODE_XML_INVALID = "IMPORT_PARSE_XML_INVALID";
+
   private final ParseSupport support;
 
   public XmlFormatParser(ParseSupport support) {
@@ -73,7 +75,7 @@ public class XmlFormatParser implements FormatParser {
                 .row(row)
                 .preserveLogicalRow(preserveLogicalRow)
                 .recordNo(recordNo)
-                .errorCode("IMPORT_PARSE_XML_INVALID")
+                .errorCode(ERROR_CODE_XML_INVALID)
                 .rawRecord(row)
                 .build();
         support.writeParsedRecord(writeParam);
@@ -81,7 +83,7 @@ public class XmlFormatParser implements FormatParser {
         SwallowedExceptionLogger.warn(XmlFormatParser.class, "catch:Exception", exception);
 
         support.recordParseError(
-            context, recordNo, "IMPORT_PARSE_XML_INVALID", exception.getMessage(), element);
+            context, recordNo, ERROR_CODE_XML_INVALID, exception.getMessage(), element);
       }
     }
     return recordNo;

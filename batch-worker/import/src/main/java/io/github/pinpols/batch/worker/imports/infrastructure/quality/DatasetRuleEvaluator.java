@@ -31,6 +31,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DatasetRuleEvaluator {
 
+  private static final String ERROR_CODE_ROW_COUNT = "IMPORT_VALIDATE_ROW_COUNT";
+  private static final String ERROR_CODE_SCHEMA = "IMPORT_VALIDATE_SCHEMA";
+
   private final ValidationConfigSupport configSupport;
 
   public void evaluate(ValidationSession session) {
@@ -100,7 +103,7 @@ public class DatasetRuleEvaluator {
       }
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_ROW_COUNT",
+          ERROR_CODE_ROW_COUNT,
           "row count mismatch, expected="
               + exactCount
               + (fromManifest ? " (manifest)" : "")
@@ -112,7 +115,7 @@ public class DatasetRuleEvaluator {
     if (minCount != null && actualCount < minCount) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_ROW_COUNT",
+          ERROR_CODE_ROW_COUNT,
           "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
           Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
       return;
@@ -120,7 +123,7 @@ public class DatasetRuleEvaluator {
     if (maxCount != null && actualCount > maxCount) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_ROW_COUNT",
+          ERROR_CODE_ROW_COUNT,
           "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
           Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
     }
@@ -242,7 +245,7 @@ public class DatasetRuleEvaluator {
     if (!missingFields.isEmpty()) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_SCHEMA",
+          ERROR_CODE_SCHEMA,
           "schema missing required fields: " + String.join(",", missingFields),
           Map.of("requiredFields", requiredFields, "actualFields", schemaFields)));
       return;
@@ -258,7 +261,7 @@ public class DatasetRuleEvaluator {
       if (!unexpectedFields.isEmpty()) {
         datasetIssues.add(new ValidationIssue(
             null,
-            "IMPORT_VALIDATE_SCHEMA",
+            ERROR_CODE_SCHEMA,
             "schema contains unexpected fields: " + String.join(",", unexpectedFields),
             Map.of("allowedFields", allowedFields, "actualFields", schemaFields)));
       }

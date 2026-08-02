@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.trigger;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -224,8 +225,8 @@ public class TriggerLaunchConsumer {
           jobInstanceId = jobInstance.getId();
         }
       }
-      int updated =
-          triggerRequestMapper.updateAcceptance(tenantId, requestId, "LAUNCHED", jobInstanceId);
+      int updated = triggerRequestMapper.updateAcceptance(
+          tenantId, requestId, TriggerRequestStatus.LAUNCHED.code(), jobInstanceId);
       if (updated == 0) {
         log.warn(
             "TriggerLaunchConsumer updateAcceptance(LAUNCHED) affected 0 rows; the row is terminal or was taken over by another path:"

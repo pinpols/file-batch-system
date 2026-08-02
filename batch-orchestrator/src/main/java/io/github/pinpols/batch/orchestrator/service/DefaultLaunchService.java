@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
@@ -134,7 +135,7 @@ public class DefaultLaunchService implements LaunchService {
     int updated = jobMappers.triggerRequestMapper.updateAcceptance(
         request.tenantId(),
         request.requestId(),
-        BatchStatusConstants.DUPLICATE,
+        TriggerRequestStatus.DUPLICATE.code(),
         loaded.existingInstance().getId());
     if (updated == 0) {
       log.warn(
@@ -179,7 +180,7 @@ public class DefaultLaunchService implements LaunchService {
     int updated = jobMappers.triggerRequestMapper.updateAcceptance(
         request.tenantId(),
         request.requestId(),
-        BatchStatusConstants.LAUNCHED,
+        TriggerRequestStatus.LAUNCHED.code(),
         prepared.jobInstance().getId());
     if (updated == 0) {
       log.warn(
@@ -238,7 +239,7 @@ public class DefaultLaunchService implements LaunchService {
       int updated = jobMappers.triggerRequestMapper.updateAcceptance(
           request.tenantId(),
           request.requestId(),
-          BatchStatusConstants.REJECTED,
+          TriggerRequestStatus.REJECTED.code(),
           jobInstance.getId());
       if (updated == 0) {
         log.warn(
@@ -442,7 +443,8 @@ public class DefaultLaunchService implements LaunchService {
     snapshot.put(
         "resultPolicy",
         firstNonBlank(
-            stringValue(effectiveParams.get("_rerunResultPolicy")), "CREATE_NEW_VERSION"));
+            stringValue(effectiveParams.get("_rerunResultPolicy")),
+            ResultVersionPolicy.CREATE_NEW_VERSION.code()));
     snapshot.put(
         "configVersionPolicy",
         firstNonBlank(
@@ -601,7 +603,7 @@ public class DefaultLaunchService implements LaunchService {
     int updated = jobMappers.triggerRequestMapper.updateAcceptance(
         request.tenantId(),
         request.requestId(),
-        BatchStatusConstants.DUPLICATE,
+        TriggerRequestStatus.DUPLICATE.code(),
         existingInstance.getId());
     if (updated == 0) {
       log.warn(

@@ -79,7 +79,8 @@ public record SqlTransformComputeSpec(
       "partitionKey",
       "bizDate");
 
-  private static final String METADATA_PARAM_PREFIX = "metadata_";
+  private static final String METADATA_PARAM_PREFIX =
+      SqlTransformComputeConstants.METADATA_PARAM_PREFIX;
 
   public static SqlTransformComputeSpec parse(
       Map<String, Object> stepParams, ObjectMapper objectMapper) {

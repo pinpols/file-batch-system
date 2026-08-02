@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
@@ -33,7 +34,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class TriggerSecurityFilterTest {
 
   private static final String SECRET = "trigger-internal-secret";
-  private static final String HEADER = "X-Internal-Secret";
+  private static final String HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
   private BatchSecurityProperties securityProperties;
   private TriggerSecurityConfiguration.InternalSecretFilter filter;

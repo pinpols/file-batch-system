@@ -57,7 +57,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
 
   @Test
   void shouldApproveAndPublishRelease() {
-    ConfigReleaseEntity release = release("PENDING_APPROVAL");
+    ConfigReleaseEntity release = release(ConfigLifecycleStatus.PENDING_APPROVAL.code());
     when(configApprovalMapper.selectById("t1", 9L))
         .thenReturn(Map.of(
             "id", 9L,
@@ -75,7 +75,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
 
     Map<String, Object> result = service.approve(9L, request);
 
-    assertThat(result).containsEntry("configStatus", "PENDING_APPROVAL");
+    assertThat(result).containsEntry("configStatus", ConfigLifecycleStatus.PENDING_APPROVAL.code());
     verify(configApprovalMapper).approve(anyMap());
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());

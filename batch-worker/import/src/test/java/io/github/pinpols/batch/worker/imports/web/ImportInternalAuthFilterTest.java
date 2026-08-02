@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -27,7 +28,7 @@ class ImportInternalAuthFilterTest {
         new MockHttpServletRequest("POST", "/internal/import/events/object-arrival");
     req.setRequestURI("/internal/import/events/object-arrival");
     if (secretHeader != null) {
-      req.addHeader("X-Internal-Secret", secretHeader);
+      req.addHeader(CommonConstants.INTERNAL_SECRET_HEADER, secretHeader);
     }
     return req;
   }

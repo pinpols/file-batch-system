@@ -79,7 +79,7 @@ public class ParseSupport {
       return out;
     }
     String text = jsonText(value);
-    if (text != null && Texts.hasText(text)) {
+    if (Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, new TypeReference<Map<String, Object>>() {});
       } catch (Exception ignored) {

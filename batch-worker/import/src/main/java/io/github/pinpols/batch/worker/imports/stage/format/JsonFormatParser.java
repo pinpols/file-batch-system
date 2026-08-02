@@ -15,6 +15,7 @@ import java.util.Map;
 public class JsonFormatParser implements FormatParser {
 
   private static final String KEY_RECORDS = "records";
+  private static final String ERROR_CODE_JSON_INVALID = "IMPORT_PARSE_JSON_INVALID";
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   private final ParseSupport support;
@@ -132,7 +133,7 @@ public class JsonFormatParser implements FormatParser {
           .row(row)
           .preserveLogicalRow(preserveLogicalRow)
           .recordNo(recordNo)
-          .errorCode("IMPORT_PARSE_JSON_INVALID")
+          .errorCode(ERROR_CODE_JSON_INVALID)
           .rawRecord(node)
           .build();
       support.writeParsedRecord(writeParam);
@@ -140,7 +141,7 @@ public class JsonFormatParser implements FormatParser {
       SwallowedExceptionLogger.warn(JsonFormatParser.class, "catch:Exception", exception);
 
       support.recordParseError(
-          context, recordNo, "IMPORT_PARSE_JSON_INVALID", exception.getMessage(), node);
+          context, recordNo, ERROR_CODE_JSON_INVALID, exception.getMessage(), node);
     }
   }
 }
