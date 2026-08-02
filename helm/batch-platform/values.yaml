@@ -138,6 +138,8 @@ consoleApi:
     rateLimit:
       expensiveOpUserLimitPerMinute: 10
       fileOpUserLimitPerMinute: 60
+      redisFailureThreshold: 3
+      redisCircuitOpenSeconds: 15
   # SSE 客户端断开 + Spring graceful shutdown drain；preStop sleep 让 k8s Service endpoints
   # 收敛后再发 SIGTERM，避免 SLB 把新流量打到正退出的 pod。
   gracefulShutdown:

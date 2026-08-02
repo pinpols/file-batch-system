@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-08-02 | `GET /api/console/queries/trace-snapshot` 响应新增 `timeline`：按 `occurredAt` 排序聚合 job instance、workflow、file pipeline、审计、execution log、outbox、alert 和 dead-letter 的只读诊断项。每项仅含 `source/eventType/referenceId/status/message/occurredAt/traceId`，不携带文件正文、SQL、请求头、密钥或下游响应；原有领域列表和查询语义不变。同步更新 OpenAPI 与前端生成类型。 |
 | 2026-07-16 | **取证导出安全与资源边界收口**：`POST /api/console/forensic/export` 不再信任请求体 `requestedBy`，审计操作者统一取当前认证请求的 operator metadata；导出日期范围限制为最多 31 天、审计明细最多 100000 行。`GET /api/console/forensic/export/{exportId}/download` 改为流式转发 ZIP，避免 Console 将完整文件读入 `byte[]`；响应路径与二进制 wire 格式不变。 |
 | 2026-07-13 | **修正 `GET /api/console/file-templates`(`listFileTemplates`)幽灵过滤参数**:删除后端根本不存在的 query 参数 `fileType`(Spring 静默忽略,前端传了也无过滤效果),补齐 `FileTemplateQueryRequest` 真实绑定的过滤字段 `templateName`/`templateType`/`bizType`/`keyword`(`templateCode`/`enabled` 本就正确保留)。仅改 OpenAPI + 本协议,后端未动;**前端需随后在 batch-console 仓 `gen:api` 重生成客户端并把 `?fileType` 调用切换到 `templateType` 等真实字段**。 |
 | 2026-07-12 | **worker 执行可观测性 4 类后端缺口补齐(纯加法字段,前端契约不变)**:① **实时已处理行数服务端桥接**:`GET /api/console/queries/pipeline-progress?pipelineInstanceId=...` 的 `steps[].rowsProcessed` 语义增强——某 step 运行中且持久 `pipeline_progress.processed_count` 为空(未开 checkpoint)时,服务端按 `pipeline_instance.related_job_instance_id → job_instance → job_partition(RUNNING/RETRYING)` 解析当前 worker_code,再查 orchestrator 进程内 `PipelineStageProgressCache` 补上实时行数;桥接完全在服务端完成(前端仍按 pipelineInstanceId 查,不按 workerCode),cache 也无则保持 `null`。**不做 total/百分比**(`totalRowsHint` 仍恒 null,并由此前误coerce 的 `0` 修正为真 `null`,与 nullable schema 对齐)。② **当前文件名透出**:同端点 `data` 新增顶层 `fileId`/`fileName`(pipeline 级,一 instance 一文件,`left join batch.file_record`;EXPORT 等无源文件为 null),观测不再只有裸 fileId 数字。③ **FAILED 分区失败原因**:`ConsoleJobPartitionResponse` 新增 `errorCode`/`errorMessage`(nullable),来源为 `job_partition` LEFT JOIN LATERAL 该分区最近一次带错误的 `job_task`(不落分区表列、不加迁移、不涉 archive 对齐),非失败分区为 null。④ **作业入口→pipeline 观测跳转**:`ConsoleJobStepInstanceResponse` 新增 `relatedPipelineInstanceId`(nullable),由 `job_step_instance` 反查 `pipeline_instance.related_job_instance_id` 得到(文件类 job 才有值),让前端作业详情 step 进度列可跳转 pipeline 观测(此前硬编码 `—`)。全部为响应加法字段,`required` 不变;仅改 mapper 查询 + DTO + service 边界,无 controller path/入参变更、无 DDL 变更。 |
@@ -1075,6 +1076,7 @@ Notes:
 - `GET /api/console/queries/file-templates/{templateCode}`
 - `GET /api/console/queries/files/{id}`
 - `GET /api/console/queries/file-pipelines/{id}`
+- `GET /api/console/queries/trace-snapshot` — 按租户和 `traceId` 聚合跨域排障快照；除原有领域列表外，`data.timeline` 提供按 `occurredAt` 排序的只读时间线项。
 - Query endpoints must return typed list DTOs or documented view objects. Avoid raw entity lists and anonymous maps in new query APIs.
 - `execution-logs` is a UI alias for `audits` and uses the same response shape.
 - `channel-receipts` is a receipt-focused alias of `file-dispatches`; it uses the same request fields and response DTO, but gives the frontend a stable semantic entrypoint for receipt tracking.
@@ -1097,6 +1099,8 @@ Notes:
 | `/query/workflow-node-runs` | `workflowRunId`, `nodeCode`, `nodeStatus` (exact) | exact |
 | `/query/outbox-retries` | `retryStatus`, `eventKey` (exact) | exact |
 | `/query/outbox-deliveries` | `deliveryStatus`, `eventType`, `eventKey` (exact) | exact |
+
+`trace-snapshot.timeline` 是诊断投影，不是新的事实表，也不改变各领域状态机的写入责任。时间线项的 `message` 只允许摘要字段；前端应按 `source/eventType/status` 展示，不能把它当作可重放事件流。
 
 ### Streaming
 

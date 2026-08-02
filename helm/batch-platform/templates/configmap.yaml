@@ -68,6 +68,8 @@ data:
   BATCH_CONSOLE_SECURITY_LOGIN_ENCRYPTION_REQUIRED: {{ (.Values.security.loginEncryption).required | default "false" | quote }}
   BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE: {{ (((.Values.consoleApi).security).rateLimit).expensiveOpUserLimitPerMinute | default 10 | quote }}
   BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE: {{ (((.Values.consoleApi).security).rateLimit).fileOpUserLimitPerMinute | default 60 | quote }}
+  BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD: {{ (((.Values.consoleApi).security).rateLimit).redisFailureThreshold | default 3 | quote }}
+  BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS: {{ (((.Values.consoleApi).security).rateLimit).redisCircuitOpenSeconds | default 15 | quote }}
   BATCH_CONSOLE_AI_ENABLED: {{ ((.Values.consoleApi).ai).enabled | default false | quote }}
   BATCH_CONSOLE_AI_PROVIDER: {{ ((.Values.consoleApi).ai).provider | default "anthropic" | quote }}
   BATCH_SCHEDULER_WORKER_CACHE_ENABLED: {{ (.Values.orchestrator.workerCache).enabled | default true | quote }}
