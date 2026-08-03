@@ -1,20 +1,20 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
-import io.github.pinpols.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayCatchUpRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
+import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
+import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
+import io.github.pinpols.batch.console.shared.command.RerunRequest;
+import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
+import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

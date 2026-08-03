@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerAppli
 import io.github.pinpols.batch.console.domain.ops.web.request.DrainWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.request.ForceOfflineWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerClaimedTaskResponse;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;

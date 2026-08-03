@@ -18,7 +18,7 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCa
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.ApprovalSubmitContext;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.TriggerInternalRestClient;
+import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

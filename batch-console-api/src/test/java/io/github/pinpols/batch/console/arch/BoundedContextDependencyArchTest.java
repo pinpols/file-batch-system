@@ -45,7 +45,7 @@ class BoundedContextDependencyArchTest {
   static final String DOMAIN_ROOT = "io.github.pinpols.batch.console.domain";
   static final String SHARED_ROOT = "io.github.pinpols.batch.console.shared";
   static final String SUPPRESS_TAG = "BoundedContext";
-  static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 927;
+  static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 875;
 
   private static final JavaClasses CLASSES = new ClassFileImporter()
       .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

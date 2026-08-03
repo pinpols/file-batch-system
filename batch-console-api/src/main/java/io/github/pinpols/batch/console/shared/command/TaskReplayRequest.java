@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.job.web.request;
+package io.github.pinpols.batch.console.shared.command;
 
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotNull;

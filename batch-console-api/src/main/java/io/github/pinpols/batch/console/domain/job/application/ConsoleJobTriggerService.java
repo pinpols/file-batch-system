@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
-import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
+import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import java.util.List;
 import java.util.Map;
 

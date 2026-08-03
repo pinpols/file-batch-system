@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.infrastructure;
+package io.github.pinpols.batch.console.shared.client;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
