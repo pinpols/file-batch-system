@@ -84,6 +84,11 @@
 - 将仅负责租户作用域非空 fail-fast 断言的 `TenantScope` 移入 `shared.query`，保留 `BizException(FORBIDDEN)` 错误契约；全局管理员和按父 ID 反查的合法 null 路径不使用该工具。
 - 跨域直接依赖降至 **1204**，本批减少 **9 条**；ratchet 已下调至 1204。
 
+第十二批完成后：
+
+- 将仅承载 `username/tenantId/authorities` 的不可变认证身份载荷 `ConsolePrincipal` 移入 `shared.security`；JWT 签发/解析、认证过滤器、授权策略和租户守卫仍归 rbac。
+- 跨域直接依赖降至 **1196**，本批减少 **8 条**；ratchet 已下调至 1196。
+
 ## 第一阶段：清单与分类
 
 执行：

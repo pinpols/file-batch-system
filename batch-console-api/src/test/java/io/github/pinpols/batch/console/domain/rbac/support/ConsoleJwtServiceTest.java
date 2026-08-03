@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.time.Duration;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;

@@ -22,6 +22,7 @@
 - **有界上下文 Phase 9**：audit 查询和 observability 查询/实时流改依赖 `TenantIdResolver`，保持租户、聚合和 SSE 语义不变；跨域依赖从 1293 降至 1266，ratchet 同步下调。
 - **有界上下文 Phase 10**：将无状态横切审计声明 `AuditAction` 移至 `shared.audit`，由各领域 Controller 复用，`AuditAspect` 仍归 audit context；HTTP、鉴权、审计事务和租户解析语义不变，跨域依赖从 1266 降至 1213，ratchet 同步下调。
 - **有界上下文 Phase 11**：将租户作用域非空断言 `TenantScope` 移至 `shared.query`，保留 `FORBIDDEN error.tenant.context_missing` fail-fast 契约；跨域依赖从 1213 降至 1204，ratchet 同步下调。
+- **有界上下文 Phase 12**：将不可变认证身份载荷 `ConsolePrincipal` 移至 `shared.security`，认证过滤器、JWT、授权策略和租户守卫仍归 rbac；认证字段和权限语义不变，跨域依赖从 1204 降至 1196，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

@@ -10,7 +10,6 @@ import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicatio
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal;
 import io.github.pinpols.batch.console.domain.rbac.web.request.ChangeOwnPasswordRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthProfileResponse;
@@ -19,6 +18,7 @@ import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleLoginPubl
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleStreamTicketResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

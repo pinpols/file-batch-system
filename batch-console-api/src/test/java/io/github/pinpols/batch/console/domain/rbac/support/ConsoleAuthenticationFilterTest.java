@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.observability.service.SseTicketService;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
 import java.util.List;
 import java.util.Set;

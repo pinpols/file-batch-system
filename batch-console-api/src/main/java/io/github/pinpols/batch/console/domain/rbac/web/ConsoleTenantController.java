@@ -9,7 +9,6 @@ import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantApplicat
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantApplicationService.CreateTenantCommand;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantApplicationService.TenantSpec;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantReadinessService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal;
 import io.github.pinpols.batch.console.domain.rbac.web.request.BatchCreateTenantRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.request.CreateTenantRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.request.UpdateTenantRequest;
@@ -19,6 +18,7 @@ import io.github.pinpols.batch.console.domain.rbac.web.response.ProvisionTenantR
 import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
