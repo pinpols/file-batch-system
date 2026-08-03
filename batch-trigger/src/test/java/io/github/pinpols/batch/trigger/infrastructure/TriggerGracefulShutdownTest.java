@@ -63,14 +63,14 @@ class TriggerGracefulShutdownTest {
   }
 
   @Test
-  void shouldShutdownOnContextClosed() throws SchedulerException {
+  void shouldStandbyOnContextClosed() throws SchedulerException {
     when(scheduler.isShutdown()).thenReturn(false);
     ContextClosedEvent event = mock(ContextClosedEvent.class);
 
     shutdown.onApplicationEvent(event);
 
     assertThat(shutdown.isDraining()).isTrue();
-    verify(scheduler).shutdown(false);
+    verify(scheduler).standby();
   }
 
   @Test
@@ -86,6 +86,6 @@ class TriggerGracefulShutdownTest {
     shutdown.stop();
     shutdown.stop();
 
-    verify(scheduler).shutdown(false);
+    verify(scheduler).standby();
   }
 }

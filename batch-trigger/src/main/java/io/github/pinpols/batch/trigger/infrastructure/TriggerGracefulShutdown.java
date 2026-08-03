@@ -38,7 +38,6 @@ public class TriggerGracefulShutdown
   private final Scheduler scheduler;
   private final TriggerDrainState drainState;
   private final AtomicBoolean lifecycleRunning = new AtomicBoolean(true);
-  private final AtomicBoolean schedulerShutdown = new AtomicBoolean(false);
   private ApplicationEventPublisher eventPublisher;
 
   @Override
@@ -58,12 +57,11 @@ public class TriggerGracefulShutdown
       return;
     }
     try {
-      if (!schedulerShutdown.compareAndSet(false, true) || scheduler.isShutdown()) {
+      if (scheduler.isShutdown()) {
         return;
       }
       startDraining("context-closed");
-      scheduler.shutdown(false);
-      log.info("Trigger scheduler shutdown complete");
+      log.info("Trigger scheduler standby complete");
     } catch (SchedulerException e) {
       log.warn("Error during trigger graceful shutdown: {}", e.getMessage(), e);
     }
