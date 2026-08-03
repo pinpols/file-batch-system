@@ -49,6 +49,12 @@
 - 实时 Controller 暂保留具体守卫，避免只改注入类型却触发 API 文档门禁；不改变端点、权限和事件推送协议。
 - 跨域直接依赖降至 **1357**，本批减少 **17 条**；ratchet 已下调至 1357。
 
+第六批完成后：
+
+- file 的文件主服务、Channel、Template、Download 和 Query 服务改依赖 `TenantIdResolver`。
+- Pipeline 实时 Controller 暂保留具体守卫，避免只改注入类型却触发 API 文档门禁；文件租户校验语义不变。
+- 跨域直接依赖降至 **1329**，本批减少 **28 条**；ratchet 已下调至 1329。
+
 ## 第一阶段：清单与分类
 
 执行：

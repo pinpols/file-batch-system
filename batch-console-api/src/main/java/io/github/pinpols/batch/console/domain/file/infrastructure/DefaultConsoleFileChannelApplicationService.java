@@ -14,7 +14,7 @@ import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsert
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelUpdateRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +28,7 @@ public class DefaultConsoleFileChannelApplicationService
     implements ConsoleFileChannelApplicationService {
 
   private final FileChannelConfigMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @Override

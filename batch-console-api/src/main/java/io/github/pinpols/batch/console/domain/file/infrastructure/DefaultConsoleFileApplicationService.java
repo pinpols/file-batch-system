@@ -18,10 +18,10 @@ import io.github.pinpols.batch.console.domain.file.web.request.RedispatchFileReq
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
@@ -61,7 +61,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
   // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final FileRecordMapper fileRecordMapper;
   private final BatchObjectStore objectStore;
   private final S3StorageProperties s3StorageProperties;

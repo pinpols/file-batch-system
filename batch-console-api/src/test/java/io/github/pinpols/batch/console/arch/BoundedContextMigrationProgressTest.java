@@ -85,6 +85,8 @@ class BoundedContextMigrationProgressTest {
    *
    * <p>2026-08-03(Phase 5):notification 的租户感知 Service 改依赖 TenantIdResolver，实时 Controller 暂保留
    * 具体守卫以避免 API 门禁误报，实测降至 1357。
+   *
+   * <p>2026-08-03(Phase 6):file 的文件服务和查询服务改依赖 TenantIdResolver，实时 Controller 暂保留具体守卫，实测降至 1329。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

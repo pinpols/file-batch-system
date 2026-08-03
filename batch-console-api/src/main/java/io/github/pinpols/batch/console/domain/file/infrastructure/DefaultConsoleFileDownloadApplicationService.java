@@ -14,9 +14,9 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -53,7 +53,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 public class DefaultConsoleFileDownloadApplicationService
     implements ConsoleFileDownloadApplicationService {
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final FileRecordMapper fileRecordMapper;
   private final FileErrorRecordMapper fileErrorRecordMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;

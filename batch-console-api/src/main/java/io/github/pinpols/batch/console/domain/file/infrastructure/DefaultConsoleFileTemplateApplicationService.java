@@ -19,7 +19,7 @@ import io.github.pinpols.batch.console.domain.file.web.query.FileTemplateQueryRe
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -50,7 +50,7 @@ public class DefaultConsoleFileTemplateApplicationService
   private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
   private final FileTemplateConfigMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ObjectMapper objectMapper;
 
