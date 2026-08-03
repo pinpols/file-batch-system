@@ -4,6 +4,8 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.controller.OutboxCleanupResponse;
+import io.github.pinpols.batch.orchestrator.controller.OutboxRepublishResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
@@ -40,7 +42,7 @@ public class OutboxOpsApplicationService {
    * @return key=published / giveUp 的删除条数;dryRun 时是预估候选数
    */
   @Transactional
-  public Map<String, Integer> cleanup(
+  public OutboxCleanupResponse cleanup(
       String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
     Instant cutoff = BatchDateTimeSupport.utcNow().minus(retainDays, ChronoUnit.DAYS);
     int published;
@@ -63,15 +65,15 @@ public class OutboxOpsApplicationService {
             "dryRun", dryRun,
             "publishedAffected", published,
             "giveUpAffected", giveUp));
-    return Map.of("published", published, "giveUp", giveUp);
+    return new OutboxCleanupResponse(published, giveUp);
   }
 
   /** 重投递:把指定 id 中、FAILED/GIVE_UP 的事件 reset 回 NEW;dryRun=true 时只 count 不改。 */
   @Transactional
-  public int republish(
+  public OutboxRepublishResponse republish(
       String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
     if (ids == null || ids.isEmpty()) {
-      return 0;
+      return new OutboxRepublishResponse(0, 0, dryRun ? 1 : 0);
     }
     int affected;
     if (dryRun) {
@@ -88,17 +90,17 @@ public class OutboxOpsApplicationService {
             "requestedIds", ids.size(),
             "affected", affected,
             "dryRun", dryRun));
-    return affected;
+    return new OutboxRepublishResponse(ids.size(), affected, dryRun ? 1 : 0);
   }
 
   // ── 向后兼容入口(老 controller 路径,无 dryRun/operatorId)──────────────────────────
   @Transactional
-  public Map<String, Integer> cleanup(String tenantId, int retainDays) {
+  public OutboxCleanupResponse cleanup(String tenantId, int retainDays) {
     return cleanup(tenantId, retainDays, false, null, null);
   }
 
   @Transactional
-  public int republish(String tenantId, List<Long> ids) {
+  public OutboxRepublishResponse republish(String tenantId, List<Long> ids) {
     return republish(tenantId, ids, false, null, null);
   }
 
