@@ -75,7 +75,9 @@ public final class ChannelConfigMerge {
   private static final Map<String, String> KEY_ALIASES = Map.of(
       "endpoint", "target_endpoint",
       "bucket", "oss_bucket",
-      "prefix", "oss_object_prefix");
+      "prefix", "oss_object_prefix",
+      // 历史 LOCAL seed 使用 local_directory；运行时统一消费 target_endpoint。
+      "local_directory", "target_endpoint");
 
   /**
    * 已是 {@code file_channel_config} 表独立列,JSON 里 redundant 出现时静默忽略,不告警。
@@ -86,8 +88,15 @@ public final class ChannelConfigMerge {
    * <p>本集合标记"已知 redundant 列字段"——既不允许 overlay 覆盖列(列优先,通过 line 119 normalized 不加入这些 key 实现),也不告警。运维
    * audit 时识别真正的策略攻击,不应被这种已知 redundant 噪声淹没。新增控制类列字段时同步加入。
    */
-  private static final Set<String> LEGACY_REDUNDANT_KEYS =
-      Set.of("receipt_policy", "receipt_polling_window_seconds", "enabled", "channel_type");
+  private static final Set<String> LEGACY_REDUNDANT_KEYS = Set.of(
+      "receipt_policy",
+      "receipt_polling_window_seconds",
+      "enabled",
+      "channel_type",
+      // LOCAL 输出文件名由 envelope 的 externalRequestId 生成，历史字段不再参与路由。
+      "local_file_name",
+      // 渠道编码来自表列，不能由 config_json overlay。
+      "channel_code");
 
   private ChannelConfigMerge() {}
 

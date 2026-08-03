@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,22 @@ class TriggerGracefulShutdownTest {
     shutdown.onApplicationEvent(event);
 
     assertThat(shutdown.isDraining()).isTrue();
-    verify(scheduler).shutdown(true);
+    verify(scheduler).shutdown(false);
+  }
+
+  @Test
+  void quartzStopsAtTheEarliestLifecyclePhase() {
+    assertThat(shutdown.getPhase()).isEqualTo(BatchLifecyclePhases.FIRST_TO_STOP_RELAY);
+    assertThat(shutdown.isAutoStartup()).isTrue();
+  }
+
+  @Test
+  void lifecycleStopIsIdempotent() throws SchedulerException {
+    when(scheduler.isShutdown()).thenReturn(false);
+
+    shutdown.stop();
+    shutdown.stop();
+
+    verify(scheduler).shutdown(false);
   }
 }

@@ -78,4 +78,17 @@ class ChannelConfigMergeTest {
     assertThat(merged.get("oss_object_prefix")).isEqualTo("tb/outbound/statement/");
     assertThat(merged).doesNotContainKeys("endpoint", "bucket", "prefix");
   }
+
+  @Test
+  void shouldNormalizeLegacyLocalDirectoryAndIgnoreLocalFileName() {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put(
+        "config_json",
+        Map.of("local_directory", "/tmp/batch/outbox", "local_file_name", "result.csv"));
+
+    Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
+
+    assertThat(merged.get("target_endpoint")).isEqualTo("/tmp/batch/outbox");
+    assertThat(merged).doesNotContainKeys("local_directory", "local_file_name");
+  }
 }

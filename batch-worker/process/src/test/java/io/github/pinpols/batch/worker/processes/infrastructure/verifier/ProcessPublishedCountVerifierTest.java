@@ -38,6 +38,22 @@ class ProcessPublishedCountVerifierTest {
   }
 
   @Test
+  void passesWhenNoRowsWereProcessed() {
+    assertThat(verifier
+            .verify(contextWith(Map.of("publishedCount", 0, "processedCount", 0)))
+            .passed())
+        .isTrue();
+  }
+
+  @Test
+  void doesNotTreatMalformedProcessedCountAsEmptyInput() {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("publishedCount", 0);
+    payload.put("processedCount", "unknown");
+    assertThat(verifier.verify(contextWith(payload)).passed()).isFalse();
+  }
+
+  @Test
   void parsesStringNumber() {
     assertThat(verifier.verify(contextWith(Map.of("publishedCount", "5"))).passed())
         .isTrue();

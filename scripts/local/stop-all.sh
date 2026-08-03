@@ -3,7 +3,7 @@
 # stop-all.sh - 停止本地 batch 平台 Java 进程
 # 说明：
 # 1) 停止顺序：三个 worker -> trigger / console -> orchestrator（与 start-all 对称）。
-# 2) 每阶段 SIGTERM 后等待，再对本阶段残留 kill -9，然后进入下一阶段。
+# 2) 每阶段 SIGTERM 后等待，再对本阶段残留 kill -9，然后进入下一阶段；默认等待 30s，允许 STOP_WAIT_SEC 覆盖。
 # 3) PID 文件：TAB 三列或旧版空格两列；读入内存后按阶段消费。
 # 4) 再用 ps+awk 按 jar 路径子串匹配（避免 pgrep 正则问题）。
 # 5) 可选 STOP_DOCKER=1 停止 Docker Compose（仅 stop，不 down）。
@@ -19,6 +19,7 @@ PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
 APP_LOG_DIR="$(log_current_dir "$ROOT" app app)"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
+DEFAULT_STOP_WAIT_SEC=30
 
 # 全量扫描顺序（回退轮询）；分阶段停止时按 PHASE 使用子集
 RUNTIME_JAVA_NAMES=(
@@ -208,8 +209,8 @@ stop_phase() {
   _scan_runtime_and_legacy_for_names "$@"
   local k1=$killed
   if ((k1 > k0)); then
-    echo "  等待本阶段进程退出（${STOP_WAIT_SEC:-5}s）..."
-    sleep "${STOP_WAIT_SEC:-5}"
+    echo "  等待本阶段进程退出（${STOP_WAIT_SEC:-$DEFAULT_STOP_WAIT_SEC}s）..."
+    sleep "${STOP_WAIT_SEC:-$DEFAULT_STOP_WAIT_SEC}"
     _force_kill_names "$@"
   fi
 }

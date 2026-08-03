@@ -105,6 +105,36 @@ WHERE pd.id = psd.pipeline_definition_id
   AND psd.impl_code = m.legacy;
 
 -- ----------------------------------------------------------------------------
+-- 3b. 配置包可能只有 job_definition 没有对应 pipeline_definition；为可运行的
+--     EXPORT / DISPATCH job 补最小 pipeline，避免 launch 在“job 存在但 pipeline
+--     不存在”时落成 NOT_FOUND。已有 pipeline 不覆盖。
+-- ----------------------------------------------------------------------------
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type,
+    worker_group, version, enabled, description
+)
+SELECT jd.tenant_id,
+       jd.job_code,
+       jd.job_name || ' pipeline',
+       jd.job_type,
+       jd.biz_type,
+       jd.worker_group,
+       1,
+       jd.enabled,
+       'sim-e2e bootstrap generated pipeline'
+FROM batch.job_definition jd
+WHERE jd.tenant_id IN ('ta','tb','tc')
+  AND jd.job_type IN ('EXPORT','DISPATCH')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM batch.pipeline_definition pd
+      WHERE pd.tenant_id = jd.tenant_id
+        AND pd.job_code = jd.job_code
+        AND pd.version = 1
+  )
+ON CONFLICT (tenant_id, job_code, version) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
 -- 4. IMPORT pipeline 补齐 5-step:RECEIVE / PREPROCESS / PARSE / VALIDATE / LOAD
 --     (FEEDBACK 不强补,worker 端不在最小可跑路径)
 -- ----------------------------------------------------------------------------
@@ -172,6 +202,47 @@ INSERT INTO batch.pipeline_step_definition (
 )
 SELECT pd_id, step_code, step_name, stage_code, step_order, impl_code,
        '{}'::jsonb, 300, 'NONE', 0, TRUE
+FROM missing
+ON CONFLICT (pipeline_definition_id, step_code) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- 5b. DISPATCH pipeline 补齐 PREPARE / DISPATCH / ACK / RETRY / COMPENSATE / COMPLETE
+-- ----------------------------------------------------------------------------
+WITH targets AS (
+    SELECT pd.id AS pd_id
+    FROM batch.pipeline_definition pd
+    WHERE pd.tenant_id IN ('ta','tb','tc')
+      AND pd.pipeline_type = 'DISPATCH'
+), missing AS (
+    SELECT t.pd_id, s.stage_code, s.step_order, s.step_code, s.step_name, s.impl_code
+    FROM targets t
+    CROSS JOIN (VALUES
+        ('PREPARE',    1, 'STEP_PREPARE',    '分发准备', 'DISPATCH_PREPARE'),
+        ('DISPATCH',   2, 'STEP_DISPATCH',   '实际分发', 'DISPATCH_DISPATCH'),
+        ('ACK',        3, 'STEP_ACK',        '回执确认', 'DISPATCH_ACK'),
+        ('RETRY',      4, 'STEP_RETRY',      '失败重试', 'DISPATCH_RETRY'),
+        ('COMPENSATE', 5, 'STEP_COMPENSATE', '补偿处理', 'DISPATCH_COMPENSATE'),
+        ('COMPLETE',   6, 'STEP_COMPLETE',   '分发完成', 'DISPATCH_COMPLETE')
+    ) AS s(stage_code, step_order, step_code, step_name, impl_code)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM batch.pipeline_step_definition x
+        WHERE x.pipeline_definition_id = t.pd_id
+          AND x.stage_code = s.stage_code
+    )
+)
+INSERT INTO batch.pipeline_step_definition (
+    pipeline_definition_id, step_code, step_name, stage_code, step_order,
+    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count, enabled
+)
+SELECT pd_id, step_code, step_name, stage_code, step_order, impl_code,
+       CASE stage_code
+         WHEN 'ACK' THEN '{"onSuccessNextStageCode":"COMPLETE"}'::jsonb
+         WHEN 'RETRY' THEN '{"onFailureNextStageCode":"COMPENSATE"}'::jsonb
+         WHEN 'COMPENSATE' THEN '{"terminalOnSuccess":true}'::jsonb
+         WHEN 'COMPLETE' THEN '{"terminalOnSuccess":true}'::jsonb
+         ELSE '{}'::jsonb
+       END,
+       300, 'NONE', 0, TRUE
 FROM missing
 ON CONFLICT (pipeline_definition_id, step_code) DO NOTHING;
 
@@ -381,6 +452,27 @@ SET query_param_schema = '{
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'tc'
   AND template_code = 'TC_IMPORT_RISK_SCORE_TPL';
+
+-- 旧 Excel/seed 可能把规则写成数组、把默认日历写成下划线；当前 worker
+-- 统一消费 fieldRules 对象和连字符日历编码，基础租户也必须与克隆租户一致。
+UPDATE batch.file_template_config t
+SET validation_rule_set = jsonb_build_object(
+      'fieldRules', COALESCE(
+        (SELECT jsonb_object_agg(m->>'name', jsonb_build_object(
+            'required', true, 'errorCode', 'IMPORT_VALIDATE_REQUIRED'))
+           FROM jsonb_array_elements(t.field_mappings) AS m
+          WHERE COALESCE((m->>'required')::boolean, false)),
+        '{}'::jsonb)),
+    updated_at = CURRENT_TIMESTAMP
+WHERE t.tenant_id IN ('ta', 'tb', 'tc')
+  AND jsonb_typeof(t.field_mappings) = 'array'
+  AND jsonb_typeof(t.validation_rule_set) = 'array';
+
+UPDATE batch.job_definition
+SET calendar_code = 'default-calendar',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id IN ('ta', 'tb', 'tc')
+  AND calendar_code = 'default_calendar';
 
 UPDATE batch.file_template_config
 SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',

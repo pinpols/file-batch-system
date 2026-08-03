@@ -244,6 +244,23 @@ def patch_file_template_config(ws) -> int:
             if cell.value != rendered:
                 cell.value = rendered
                 fixed += 1
+            if "validation_rule_set" in idx and template_type == "IMPORT":
+                # 旧 fixture 写入了数组，当前 worker 契约是 fieldRules 对象。
+                rules = {
+                    item["name"]: {
+                        "required": True,
+                        "errorCode": "IMPORT_VALIDATE_REQUIRED",
+                    }
+                    for item in mappings
+                    if item.get("required") is True
+                }
+                validation = json.dumps(
+                    {"fieldRules": rules}, ensure_ascii=False, separators=(",", ":")
+                )
+                validation_cell = row[idx["validation_rule_set"]]
+                if validation_cell.value != validation:
+                    validation_cell.value = validation
+                    fixed += 1
         else:
             cell = row[idx["field_mappings"]]
             patched = ensure_mapping_names(cell.value, template_type)

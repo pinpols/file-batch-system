@@ -19,11 +19,53 @@ INSERT INTO batch.job_definition (
     previous_day_dependency_scope, job_group_code, retry_policy_by_class
 ) VALUES (
     'tb', 'TB_DISPATCH_STAGE5_FAIL_ONCE', 'TB dispatch stage5 fail once', 'DISPATCH', 'DISPATCH_STAGE5', 'MANUAL', NULL,
-    'Asia/Shanghai', 5, 'tb_dispatch_queue', 'DISPATCH', 'default_calendar', 'always_open',
+    'Asia/Shanghai', 5, 'tb_dispatch_queue', 'DISPATCH', 'default-calendar', 'always_open',
     'API', false, 'NONE', 'NONE', 0, 3600, 'statementDispatchHandler', '{}', '{}', 1,
     true, 'Stage 5 dispatch HTTP 500 terminal failure', 'sim-e2e', 'sim-e2e', 'FULL', NULL,
     'INHERIT', NULL, NULL
 ) ON CONFLICT (tenant_id, job_code) DO NOTHING;
+
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type,
+    worker_group, version, enabled, description
+) VALUES (
+    'tb', 'TB_DISPATCH_STAGE5_FAIL_ONCE', 'TB dispatch stage5 fail once pipeline',
+    'DISPATCH', 'DISPATCH_STAGE5', 'DISPATCH', 1, true,
+    'Stage 5 dispatch failure and compensation pipeline'
+) ON CONFLICT (tenant_id, job_code, version) DO UPDATE
+SET enabled = EXCLUDED.enabled,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+WITH pd AS (
+    SELECT id
+    FROM batch.pipeline_definition
+    WHERE tenant_id = 'tb'
+      AND job_code = 'TB_DISPATCH_STAGE5_FAIL_ONCE'
+      AND version = 1
+), steps(stage_code, step_order, step_code, step_name, impl_code, step_params) AS (
+    VALUES
+      ('PREPARE',    1, 'STEP_PREPARE',    '分发准备', 'DISPATCH_PREPARE', '{}'::jsonb),
+      ('DISPATCH',   2, 'STEP_DISPATCH',   '实际分发', 'DISPATCH_DISPATCH', '{}'::jsonb),
+      ('ACK',        3, 'STEP_ACK',        '回执确认', 'DISPATCH_ACK', '{"onSuccessNextStageCode":"COMPLETE"}'::jsonb),
+      ('RETRY',      4, 'STEP_RETRY',      '失败重试', 'DISPATCH_RETRY', '{"onFailureNextStageCode":"COMPENSATE"}'::jsonb),
+      ('COMPENSATE', 5, 'STEP_COMPENSATE', '补偿处理', 'DISPATCH_COMPENSATE', '{"terminalOnSuccess":true}'::jsonb),
+      ('COMPLETE',   6, 'STEP_COMPLETE',   '分发完成', 'DISPATCH_COMPLETE', '{"terminalOnSuccess":true}'::jsonb)
+)
+INSERT INTO batch.pipeline_step_definition (
+    pipeline_definition_id, step_code, step_name, stage_code, step_order,
+    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count, enabled
+)
+SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
+       steps.impl_code, steps.step_params, 300, 'NONE', 0, true
+FROM pd CROSS JOIN steps
+ON CONFLICT (pipeline_definition_id, step_code) DO UPDATE
+SET stage_code = EXCLUDED.stage_code,
+    step_order = EXCLUDED.step_order,
+    impl_code = EXCLUDED.impl_code,
+    step_params = EXCLUDED.step_params,
+    enabled = EXCLUDED.enabled,
+    updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO batch.file_channel_config (
     tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
