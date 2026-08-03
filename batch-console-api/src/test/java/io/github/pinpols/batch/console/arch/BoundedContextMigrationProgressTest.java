@@ -96,6 +96,8 @@ class BoundedContextMigrationProgressTest {
    *
    * <p>2026-08-03(Phase 10):无状态横切审计声明 {@code AuditAction} 移入 {@code shared.audit}，供各领域 Controller 复用；切面仍由
    * audit context 持有，HTTP 和审计事务语义不变，实测降至 1213。
+   *
+   * <p>2026-08-03(Phase 11):租户作用域非空断言 {@code TenantScope} 移入 {@code shared.query}，保留 fail-fast 语义，实测降至 1204。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

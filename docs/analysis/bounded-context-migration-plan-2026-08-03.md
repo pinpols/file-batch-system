@@ -79,6 +79,11 @@
 - 同步所有 Controller 与审计切面引用，OpenAPI 仅更新内部变更记录，不改变路由或 schema。
 - 跨域直接依赖降至 **1213**，本批减少 **53 条**；ratchet 已下调至 1213。
 
+第十一批完成后：
+
+- 将仅负责租户作用域非空 fail-fast 断言的 `TenantScope` 移入 `shared.query`，保留 `BizException(FORBIDDEN)` 错误契约；全局管理员和按父 ID 反查的合法 null 路径不使用该工具。
+- 跨域直接依赖降至 **1204**，本批减少 **9 条**；ratchet 已下调至 1204。
+
 ## 第一阶段：清单与分类
 
 执行：
