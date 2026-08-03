@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -73,6 +74,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   private final SqlExecutorProperties props;
   private final DataSourceResolver dataSourceResolver;
 
+  @Autowired
   public SqlTaskExecutor(
       SqlExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
     this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
