@@ -91,6 +91,8 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 7):job 的定义、日历、窗口、Bundle 和自服务改依赖 TenantIdResolver，Controller 暂保留具体守卫，实测降至 1295。
    *
    * <p>2026-08-03(Phase 8):workflow 查询服务改依赖 TenantIdResolver，3 个实时 Controller 暂保留具体守卫，实测降至 1293。
+   *
+   * <p>2026-08-03(Phase 9):audit 查询和 observability 查询/实时流改依赖 TenantIdResolver，实测降至 1266。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

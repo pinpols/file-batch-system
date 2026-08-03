@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaStatsView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.StatusCountView;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,12 +25,12 @@ public class ConsoleDashboardQueryService {
   private static final String UNKNOWN = "UNKNOWN";
 
   private final ConsoleDashboardQueryMapper repository;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleQueryCacheService cacheService;
 
   public ConsoleDashboardQueryService(
       ConsoleDashboardQueryMapper repository,
-      ConsoleTenantGuard tenantGuard,
+      TenantIdResolver tenantGuard,
       ConsoleQueryCacheService cacheService) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;

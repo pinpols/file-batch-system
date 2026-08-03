@@ -5,8 +5,8 @@ import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.TenantScope;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>读路径走只读副本(`@Transactional(readOnly = true)` + 默认 DataSource 路由策略)。
  *
- * <p><b>租户隔离</b>:必须经 {@link ConsoleTenantGuard#resolveTenant(String)} 解析后再下发 Mapper, 否则租户用户传
+ * <p><b>租户隔离</b>:必须经 {@link TenantIdResolver#resolveTenant(String)} 解析后再下发 Mapper, 否则租户用户传
  * null/blank tenantId 即可绕过 SQL 租户过滤拿全租户审计(P0 越权)。 全局角色(ADMIN/AUDITOR/CONFIG_ADMIN)必须显式传
  * tenantId,租户角色 JWT 强制覆盖请求值。
  */
@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OperationAuditQueryService {
 
   private final OperationAuditMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
 
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,7 +37,7 @@ public class ConsoleOpsSummaryRealtimeStream {
   private final ConsoleRealtimeEventHub realtimeEventHub;
   private final ConsoleRealtimeRedisPublisher redisPublisher;
   private final ConsoleRealtimeCursorFactory cursorFactory;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final BatchDateTimeSupport dateTimeSupport;
   // P0:scheduledRefreshes 在 finally 里有 remove,但异常 / cancel 路径下仍可能漏删,
   // 加 maximumSize 回退防止租户基数增长后无界堆积。
@@ -56,7 +56,7 @@ public class ConsoleOpsSummaryRealtimeStream {
       ConsoleRealtimeEventHub realtimeEventHub,
       ConsoleRealtimeRedisPublisher redisPublisher,
       ConsoleRealtimeCursorFactory cursorFactory,
-      ConsoleTenantGuard tenantGuard,
+      TenantIdResolver tenantGuard,
       BatchDateTimeSupport dateTimeSupport,
       @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
     this.opsApplicationService = opsApplicationService;

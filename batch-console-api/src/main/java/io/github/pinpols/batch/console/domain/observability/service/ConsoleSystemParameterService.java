@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.observability.service;
 
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleSystemParameterMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleSystemParameterService {
 
   private final ConsoleSystemParameterMapper repository;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final StringRedisTemplate redisTemplate;
 
   private static final String CACHE_PREFIX = "sys-param:";

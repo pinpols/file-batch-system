@@ -54,7 +54,6 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCat
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceTimelineItem;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
@@ -70,6 +69,7 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkf
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.web.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;
@@ -101,7 +101,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   private final OperationAuditQueryService operationAuditQueryService;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
 
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
