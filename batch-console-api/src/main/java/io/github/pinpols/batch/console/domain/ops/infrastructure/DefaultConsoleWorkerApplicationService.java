@@ -36,8 +36,7 @@ import org.springframework.web.client.RestClient;
  * <p>写操作统一广播 {@code publishChanged(workers)} + {@code publishSummaryRefresh}， 让前端 worker
  * 列表与仪表盘实时刷新。
  *
- * <p>所有下游请求都带 {@code Idempotency-Key / Request-Id / Trace-Id} 三件套 （与 {@link ConsoleJobOpsSupport}
- * 保持一致的 BFF 调用协议）。
+ * <p>所有下游请求都带 {@code Idempotency-Key / Request-Id / Trace-Id} 三件套，保持统一的 BFF 调用协议。
  */
 @Service
 @RequiredArgsConstructor

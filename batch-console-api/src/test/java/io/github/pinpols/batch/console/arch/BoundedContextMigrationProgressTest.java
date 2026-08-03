@@ -115,6 +115,8 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 18):将跨 Job、治理和 Ops 使用的命令请求 DTO 移入 {@code shared.command}，保持请求字段、校验和 REST 协议不变，实测降至 893。
    *
    * <p>2026-08-03(Phase 19):将编排器和触发器内部 HTTP Client 适配器移入 {@code shared.client}，调用方不再依赖 Ops 基础设施实现，保持认证、熔断、错误映射和下游协议不变，实测降至 875。
+   *
+   * <p>2026-08-03(Phase 20):新增 {@code ConsoleJobOperationsPort}，Job 的审批、恢复和触发服务改依赖应用端口；审批、HTTP、事件和事务实现仍由 Ops 组件持有，实测降至 708。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

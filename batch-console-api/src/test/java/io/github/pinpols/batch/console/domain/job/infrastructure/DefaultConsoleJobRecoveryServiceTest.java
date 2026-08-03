@@ -11,11 +11,11 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.ApprovalSubmitContext;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.CompensationPayload;
+import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
+import io.github.pinpols.batch.console.shared.command.CompensationPayload;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
 import io.github.pinpols.batch.console.shared.command.RerunRequest;
@@ -35,7 +35,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   private static final String IDEMPOTENCY = "idem-1";
 
   @Mock
-  private ConsoleJobOpsSupport ops;
+  private ConsoleJobOperationsPort ops;
 
   @InjectMocks
   private DefaultConsoleJobRecoveryService service;
