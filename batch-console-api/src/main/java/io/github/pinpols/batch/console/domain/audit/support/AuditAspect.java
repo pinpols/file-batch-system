@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -138,8 +139,7 @@ public class AuditAspect {
 
   /** 业务异常抽取 errorCode:BizException 走 ResultCode.name(),其他 → 异常类 simpleName。 */
   private static String resolveErrorCode(Throwable ex) {
-    if (ex instanceof io.github.pinpols.batch.common.exception.BizException biz
-        && biz.getCode() != null) {
+    if (ex instanceof BizException biz && biz.getCode() != null) {
       return biz.getCode().name();
     }
     return ex.getClass().getSimpleName();

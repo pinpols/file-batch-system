@@ -77,6 +77,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowType;
+import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleMetaQueryMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleMetaEnumItem;
@@ -104,16 +105,14 @@ public class ConsoleMetaQueryService {
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleQueryCacheService cacheService;
   private final MessageSource messageSource;
-  private final io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper
-      stepRegistryQueryMapper;
+  private final StepRegistryQueryMapper stepRegistryQueryMapper;
 
   public ConsoleMetaQueryService(
       ConsoleMetaQueryMapper repository,
       ConsoleTenantGuard tenantGuard,
       ConsoleQueryCacheService cacheService,
       MessageSource messageSource,
-      io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper
-          stepRegistryQueryMapper) {
+      StepRegistryQueryMapper stepRegistryQueryMapper) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;
     this.cacheService = cacheService;
