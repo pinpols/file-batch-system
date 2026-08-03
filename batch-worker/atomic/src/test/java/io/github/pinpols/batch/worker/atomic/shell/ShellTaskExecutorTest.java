@@ -10,6 +10,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -180,6 +184,21 @@ class ShellTaskExecutorTest {
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("timed out");
       assertThat(r.error()).isInstanceOf(ShellTaskExecutor.ShellTimeoutException.class);
+    }
+
+    @Test
+    void cancelTerminatesRunningProcess() throws Exception {
+      ExecutorService executorService = Executors.newSingleThreadExecutor();
+      try {
+        Future<TaskResult> result = executorService.submit(() ->
+            executor.execute(ctxWithParams(Map.of("command", "/bin/sleep", "args", List.of("5")))));
+        Thread.sleep(150);
+        executor.cancel("ti-1");
+
+        assertThat(result.get(3, TimeUnit.SECONDS).success()).isFalse();
+      } finally {
+        executorService.shutdownNow();
+      }
     }
 
     @Test

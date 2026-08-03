@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;

@@ -46,7 +46,6 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobStepIns
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryScheduleResponse;
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
@@ -66,6 +65,7 @@ import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleOutboxDeliveryLogResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse;
 import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse;
+import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.web.query.ApprovalCommandQueryRequest;
@@ -125,10 +125,7 @@ public class ConsoleQueryController {
   public CommonResponse<List<ConsolePipelineProgressItemResponse>> workerPipelineProgress(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("workerCodes") List<String> workerCodes) {
-    return responseFactory.success(
-        orchestratorProxy.pipelineProgress(tenantId, workerCodes).stream()
-            .map(ConsolePipelineProgressItemResponse::from)
-            .toList());
+    return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
   }
 
   /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */

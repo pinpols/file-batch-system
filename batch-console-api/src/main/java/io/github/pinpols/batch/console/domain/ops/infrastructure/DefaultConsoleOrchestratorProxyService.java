@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -182,7 +183,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public Map<String, Integer> outboxCleanup(String tenantId, int retainDays) {
+  public OutboxCleanupProxyResponse outboxCleanup(String tenantId, int retainDays) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -196,11 +197,11 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .queryParam("retainDays", retainDays)
                 .build())
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+            .body(OutboxCleanupProxyResponse.class));
   }
 
   @Override
-  public Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids) {
+  public OutboxRepublishProxyResponse outboxRepublish(String tenantId, List<Long> ids) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -214,7 +215,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .build())
             .body(Map.of("ids", ids == null ? List.of() : ids))
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+            .body(OutboxRepublishProxyResponse.class));
   }
 
   @Override
@@ -351,7 +352,8 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public List<Map<String, Object>> pipelineProgress(String tenantId, List<String> workerCodes) {
+  public List<ConsolePipelineProgressItemResponse> pipelineProgress(
+      String tenantId, List<String> workerCodes) {
     if (workerCodes == null || workerCodes.isEmpty()) {
       return List.of();
     }
@@ -369,7 +371,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .queryParam("workerCodes", workerCodesParam)
                 .build())
             .retrieve()
-            .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {}),
+            .body(new ParameterizedTypeReference<List<ConsolePipelineProgressItemResponse>>() {}),
         ex -> List.of());
   }
 

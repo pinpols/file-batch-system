@@ -9,6 +9,8 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
+import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -28,6 +30,7 @@ import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -83,14 +86,18 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$");
 
   private final StoredProcExecutorProperties props;
-  private final BeanFactory beanFactory;
-  private final DataSource defaultDataSource;
+  private final DataSourceResolver dataSourceResolver;
 
+  @Autowired
   public StoredProcTaskExecutor(
       StoredProcExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
+    this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
+  }
+
+  public StoredProcTaskExecutor(
+      StoredProcExecutorProperties props, DataSourceResolver dataSourceResolver) {
     this.props = props;
-    this.beanFactory = beanFactory;
-    this.defaultDataSource = defaultDataSource;
+    this.dataSourceResolver = dataSourceResolver;
   }
 
   @Override
@@ -206,8 +213,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     // dataSource — 覆盖 bean 名必须在白名单内
     String requestedDsBean = stringParam(params, PARAM_DS_BEAN, null);
     String dsBeanName = resolveDataSourceBean(requestedDsBean);
-    DataSource ds =
-        dsBeanName == null ? defaultDataSource : beanFactory.getBean(dsBeanName, DataSource.class);
+    DataSource ds = dataSourceResolver.resolve(dsBeanName);
 
     boolean autoCommit = props.isDefaultAutoCommit();
     Object ac = params.get(PARAM_AUTO_COMMIT);

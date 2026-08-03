@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQu
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.web.response.AiAuditLogResponse;
+import io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
 import io.github.pinpols.batch.console.domain.file.web.query.FileArrivalGroupQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
@@ -74,6 +75,7 @@ import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;
 import io.github.pinpols.batch.console.web.query.OutboxDeliveryLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.OutboxRetryLogQueryRequest;
+import io.github.pinpols.batch.console.web.query.PageQueryRequest;
 import io.github.pinpols.batch.console.web.query.RetryScheduleQueryRequest;
 import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
 import java.util.ArrayList;
@@ -177,9 +179,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     List<ConsoleFilePipelineResponse> filePipelines =
         filePipelines(pipelineRequest).items();
     List<ConsoleAuditLogResponse> auditLogs = auditLogs(auditRequest).items();
-    List<io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse>
-        operationAudits =
-            operationAuditQueryService.query(operationAuditRequest).items();
+    List<ConsoleOperationAuditResponse> operationAudits =
+        operationAuditQueryService.query(operationAuditRequest).items();
     List<ConsoleJobExecutionLogResponse> executionLogs =
         jobExecutionLogs(executionLogRequest).items();
     List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries =
@@ -224,8 +225,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     List<ConsoleFileRecordResponse> files = sources.files();
     List<ConsoleFilePipelineResponse> filePipelines = sources.filePipelines();
     List<ConsoleAuditLogResponse> auditLogs = sources.auditLogs();
-    List<io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse>
-        operationAudits = sources.operationAudits();
+    List<ConsoleOperationAuditResponse> operationAudits = sources.operationAudits();
     List<ConsoleJobExecutionLogResponse> executionLogs = sources.executionLogs();
     List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries = sources.outboxDeliveries();
     List<ConsoleAlertEventResponse> alerts = sources.alerts();
@@ -366,8 +366,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
       List<ConsoleFileRecordResponse> files,
       List<ConsoleFilePipelineResponse> filePipelines,
       List<ConsoleAuditLogResponse> auditLogs,
-      List<io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse>
-          operationAudits,
+      List<ConsoleOperationAuditResponse> operationAudits,
       List<ConsoleJobExecutionLogResponse> executionLogs,
       List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
       List<ConsoleAlertEventResponse> alerts,
@@ -383,8 +382,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     return null;
   }
 
-  private <T extends io.github.pinpols.batch.console.web.query.PageQueryRequest> T traceRequest(
-      T request) {
+  private <T extends PageQueryRequest> T traceRequest(T request) {
     request.setPageNo(1);
     request.setPageSize(TRACE_SNAPSHOT_PAGE_SIZE);
     return request;

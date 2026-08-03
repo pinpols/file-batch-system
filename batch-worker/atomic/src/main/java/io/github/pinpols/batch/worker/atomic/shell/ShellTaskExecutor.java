@@ -85,6 +85,9 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
   private final ShellExecutorProperties props;
 
+  /** taskInstanceId -> running process, used by the cooperative cancel contract. */
+  private final Map<String, Process> running = new ConcurrentHashMap<>();
+
   /** 包私有测试钩子:value 是否包含真正的 {@code ..} 父目录段。 */
   static boolean hasParentDirRef(String arg) {
     return arg != null && PARENT_DIR_REF.matcher(arg).find();
@@ -113,6 +116,15 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         false, // shell 任务不视为幂等(side-effects 未知),失败需人工 review
         true, // 支持 cancel(destroyForcibly)
         props.getDefaultTimeout());
+  }
+
+  @Override
+  public void cancel(String taskInstanceId) {
+    Process process = running.get(taskInstanceId);
+    if (process != null) {
+      destroyProcessTree(process);
+      log.info("shell executor cancel requested: taskInstanceId={}", taskInstanceId);
+    }
   }
 
   @Override
@@ -350,6 +362,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
     // 每次 invocation 唯一 id,避免 PID 复用导致 reader map key 串台
     String invocationId = nextInvocationId();
+    String taskInstanceId = ctx.taskInstanceId();
+    if (taskInstanceId != null && !taskInstanceId.isBlank()) {
+      running.put(taskInstanceId, proc);
+    }
     try {
       // 异步读 stdout / stderr,防 buffer full block
       Thread stdoutThread = startReaderThread(
@@ -398,6 +414,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       Thread.currentThread().interrupt();
       destroyProcessTree(proc);
       return AtomicErrorCode.fail(AtomicErrorCode.KILLED, "interrupted", ie);
+    } finally {
+      if (taskInstanceId != null && !taskInstanceId.isBlank()) {
+        running.remove(taskInstanceId, proc);
+      }
     }
   }
 

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -20,7 +21,7 @@ final class ValidationCoercions {
   static final String KEY_ALLOWED_VALUES = "allowedValues";
   static final String KEY_ERROR_CODE = "errorCode";
   static final String MSG_ACTUAL_SUFFIX = ", actual=";
-  static final String ERROR_CODE_NULL = "IMPORT_VALIDATE_NULL";
+  static final String ERROR_CODE_NULL = ImportValidationErrorCode.NULL.code();
 
   private ValidationCoercions() {}
 
@@ -143,24 +144,24 @@ final class ValidationCoercions {
       return ERROR_CODE_NULL;
     }
     if (firstNonNull(rule.get("minLength"), rule.get("maxLength")) != null) {
-      return "IMPORT_VALIDATE_LENGTH";
+      return ImportValidationErrorCode.LENGTH.code();
     }
     if (firstNonNull(rule.get("regex"), rule.get("pattern")) != null) {
-      return "IMPORT_VALIDATE_REGEX";
+      return ImportValidationErrorCode.REGEX.code();
     }
     if (firstNonNull(rule.get(KEY_MIN), rule.get(KEY_MAX)) != null) {
-      return "IMPORT_VALIDATE_RANGE";
+      return ImportValidationErrorCode.RANGE.code();
     }
     if (firstNonNull(rule.get(KEY_ALLOWED_VALUES), rule.get("enum")) != null) {
       if ("customerType".equals(field)) {
-        return "IMPORT_VALIDATE_TYPE_INVALID";
+        return ImportValidationErrorCode.TYPE_INVALID.code();
       }
       if ("status".equals(field)) {
-        return "IMPORT_VALIDATE_STATUS_INVALID";
+        return ImportValidationErrorCode.STATUS_INVALID.code();
       }
-      return "IMPORT_VALIDATE_ALLOWED_VALUES";
+      return ImportValidationErrorCode.ALLOWED_VALUES.code();
     }
-    return "IMPORT_VALIDATE_RULE";
+    return ImportValidationErrorCode.RULE.code();
   }
 
   static String digest(String algorithm, String content) {

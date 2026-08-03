@@ -10,7 +10,6 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxStat
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -45,22 +44,20 @@ public class DefaultConsoleOutboxOpsApplicationService
   @Override
   public ConsoleOutboxCleanupResponse cleanup(String tenantId, int retainDays) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Integer> result = orchestratorProxy.outboxCleanup(resolved, retainDays);
-    int pub = result.getOrDefault("published", 0);
-    int giveUp = result.getOrDefault("giveUp", 0);
+    OutboxCleanupProxyResponse result = orchestratorProxy.outboxCleanup(resolved, retainDays);
     domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-cleanup");
     cacheService.evictDashboard(resolved);
-    return new ConsoleOutboxCleanupResponse(resolved, retainDays, pub, giveUp);
+    return new ConsoleOutboxCleanupResponse(
+        resolved, retainDays, result.published(), result.giveUp());
   }
 
   @Override
   public ConsoleOutboxRepublishResponse republish(String tenantId, List<Long> ids) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Integer> result = orchestratorProxy.outboxRepublish(resolved, ids);
-    int reset = result.getOrDefault("reset", 0);
+    OutboxRepublishProxyResponse result = orchestratorProxy.outboxRepublish(resolved, ids);
     domainEventPublisher.publishChanged(resolved, "outbox-retries", "outbox-republish");
     domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-republish");
     cacheService.evictDashboard(resolved);
-    return new ConsoleOutboxRepublishResponse(resolved, ids.size(), reset);
+    return new ConsoleOutboxRepublishResponse(resolved, ids.size(), result.reset());
   }
 }

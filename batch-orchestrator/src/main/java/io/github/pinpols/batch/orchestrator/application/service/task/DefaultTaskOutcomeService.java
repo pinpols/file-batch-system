@@ -47,7 +47,6 @@ import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -480,8 +479,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     List<NodePartitionAssignment> nodeAssignments =
         jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
             command.tenantId(), task.getJobInstanceId());
-    NodePartitionProgress nodeProgress =
-        resolveNodePartitionProgress(statusRefs, nodeAssignments, currentNodeCode, workflowRun);
+    NodePartitionProgressCalculator.Result nodeProgress = NodePartitionProgressCalculator.calculate(
+        statusRefs, nodeAssignments, currentNodeCode, workflowRun);
     Set<String> activeNodes = workflowRun == null
         ? new LinkedHashSet<>()
         : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
@@ -797,7 +796,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       JobInstanceEntity childJobInstance,
       String childInstanceStatus,
       TaskOutcomeCommand childCommand) {
-    Long parentVirtualTaskId = extractParentVirtualTaskId(childJobInstance.getParamsSnapshot());
+    Long parentVirtualTaskId =
+        ParentVirtualTaskIdResolver.resolve(childJobInstance.getParamsSnapshot());
     if (parentVirtualTaskId == null) {
       return;
     }
@@ -817,40 +817,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .outputs(nodeSuccess ? childCommand.outputs() : null)
         .build();
     self.applyTaskOutcome(parentCommand);
-  }
-
-  @SuppressWarnings("unchecked")
-  private Long extractParentVirtualTaskId(String paramsSnapshot) {
-    if (paramsSnapshot == null || paramsSnapshot.isBlank()) {
-      return null;
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(paramsSnapshot, Object.class);
-      if (!(parsed instanceof Map<?, ?> snapshotMap)) {
-        return null;
-      }
-      Object effectiveParams = ((Map<String, Object>) snapshotMap).get("effectiveParams");
-      if (!(effectiveParams instanceof Map<?, ?> effectiveMap)) {
-        return null;
-      }
-      Object value = ((Map<String, Object>) effectiveMap).get("_parentVirtualTaskId");
-      return TaskOutcomePayloadSupport.toPositiveLong(value);
-    } catch (IllegalArgumentException badJson) {
-      // 真·"数据格式问题"：JsonUtils 把 Jackson 的 JsonProcessingException 包成 IllegalArgumentException。
-      // 静默是 OK 的（payload 由上游写入，bad data 触发数据修复路径而非崩溃）。
-      SwallowedExceptionLogger.warn(DefaultTaskOutcomeService.class, "catch:bad_json", badJson);
-      return null;
-    } catch (RuntimeException unexpected) {
-      // R2-P2-6 子项:宽 catch + warn 把代码缺陷(NPE/ClassCastException 等 map navigation 错误)
-      // 掩盖成"数据问题",return null 后父 workflow node 永远等不到完成信号 → 长期停滞。
-      // 升级到 ERROR + 完整 stack,**并抛出**让上游事务回滚 / 调度重试,而非让父任务永久挂起。
-      log.error(
-          "extractParentVirtualTaskId failed unexpectedly (likely code defect, not bad data):"
-              + " paramsSnapshot length={}",
-          paramsSnapshot == null ? -1 : paramsSnapshot.length(),
-          unexpected);
-      throw unexpected;
-    }
   }
 
   private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
@@ -881,49 +847,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return nodeType == null || nodeType.isBlank() ? WorkflowNodeType.TASK.code() : nodeType;
   }
 
-  private NodePartitionProgress resolveNodePartitionProgress(
-      List<PartitionStatusRef> statusRefs,
-      List<NodePartitionAssignment> assignments,
-      String nodeCode,
-      WorkflowRunEntity workflowRun) {
-    if (nodeCode == null || nodeCode.isBlank()) {
-      return new NodePartitionProgress(0, 0, 0, Set.of());
-    }
-    // perf(#5): 只需 partitionId -> status 映射,来自轻量投影而非全量 job_partition 实体。
-    Map<Long, String> statusById = new LinkedHashMap<>();
-    for (PartitionStatusRef ref : statusRefs) {
-      if (ref == null || ref.id() == null) {
-        continue;
-      }
-      statusById.put(ref.id(), ref.partitionStatus());
-    }
-    Set<Long> nodePartitionIds = new LinkedHashSet<>();
-    for (NodePartitionAssignment assignment : assignments) {
-      if (assignment == null || assignment.jobPartitionId() == null) {
-        continue;
-      }
-      String taskNodeCode = resolveTaskNodeCode(assignment.nodeCode(), workflowRun, nodeCode);
-      if (nodeCode.equals(taskNodeCode)) {
-        nodePartitionIds.add(assignment.jobPartitionId());
-      }
-    }
-    long nodeSuccessCount = 0L;
-    long nodeFailedCount = 0L;
-    for (Long partitionId : nodePartitionIds) {
-      String status = statusById.get(partitionId);
-      if (status == null) {
-        continue;
-      }
-      if (PartitionStatus.SUCCESS.code().equals(status)) {
-        nodeSuccessCount++;
-      } else if (PartitionStatus.FAILED.code().equals(status)) {
-        nodeFailedCount++;
-      }
-    }
-    return new NodePartitionProgress(
-        nodePartitionIds.size(), nodeSuccessCount, nodeFailedCount, nodePartitionIds);
-  }
-
   /**
    * perf(#5): 按需全量读取该 instance 的 {@code job_partition}(含 {@code output_summary} 大列),只用于「节点完成 /
    * 实例终态」的产出聚合。与常规 REPORT 计数路径(轻量投影)隔离,避免每次 REPORT 都拉全量。
@@ -931,25 +854,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private List<JobPartitionEntity> loadPartitions(TaskOutcomeCommand command, JobTaskEntity task) {
     return jobMappers.jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
-  }
-
-  private String resolveTaskNodeCode(
-      String payloadNodeCode, WorkflowRunEntity workflowRun, String fallbackNodeCode) {
-    // payloadNodeCode 由 SQL 侧 task_payload ->> 'workflowNodeCode' 抽取,等价于原
-    // payloadStringValue(task.getTaskPayload(), "workflowNodeCode")。空/缺失时沿用原 fallback。
-    if (payloadNodeCode != null && !payloadNodeCode.isBlank()) {
-      return payloadNodeCode;
-    }
-    if (workflowRun != null
-        && workflowRun.getCurrentNodeCode() != null
-        && !workflowRun.getCurrentNodeCode().isBlank()) {
-      Set<String> activeNodes =
-          TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
-      if (activeNodes.size() == 1) {
-        return activeNodes.iterator().next();
-      }
-    }
-    return fallbackNodeCode;
   }
 
   static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
@@ -988,14 +892,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return current == null || current.getRunSeq() == null ? 1 : current.getRunSeq() + 1;
   }
 
-  private record NodePartitionProgress(
-      int partitionCount, long successCount, long failedCount, Set<Long> partitionIds) {
-
-    private boolean allFinished() {
-      return partitionCount > 0 && successCount + failedCount == partitionCount;
-    }
-  }
-
   @Builder
   private record DagAdvanceContext(
       TaskOutcomeCommand command,
@@ -1003,7 +899,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun,
       String currentNodeCode,
-      NodePartitionProgress nodeProgress,
+      NodePartitionProgressCalculator.Result nodeProgress,
       Map<String, Object> nodeOutputs,
       Set<String> activeNodes,
       Instant finishedAt) {}

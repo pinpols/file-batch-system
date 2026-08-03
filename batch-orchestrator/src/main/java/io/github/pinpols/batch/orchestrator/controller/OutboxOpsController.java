@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.service.governance.OutboxOpsApplicationService;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,7 +32,7 @@ public class OutboxOpsController {
    * @return key=published / giveUp 的删除条数(dryRun=true 时返回预估条数, 不实际删除)
    */
   @PostMapping("/cleanup")
-  public Map<String, Integer> cleanup(
+  public OutboxCleanupResponse cleanup(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("retainDays") int retainDays,
       @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
@@ -45,16 +44,12 @@ public class OutboxOpsController {
 
   /** 重投递 FAILED / GIVE_UP 事件(reset 为 NEW,由 OutboxForwarder 重发);dryRun=true 只返回 candidate 数。 */
   @PostMapping("/republish")
-  public Map<String, Integer> republish(
+  public OutboxRepublishResponse republish(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
       @RequestBody RepublishRequest request) {
-    int affected = outboxOpsApplicationService.republish(
+    return outboxOpsApplicationService.republish(
         tenantId, request.ids(), dryRun, request.operatorId(), request.reason());
-    return Map.of(
-        "requested", request.ids() == null ? 0 : request.ids().size(),
-        "reset", affected,
-        "dryRun", dryRun ? 1 : 0);
   }
 
   public record OutboxOpsRequest(String operatorId, String reason) {}

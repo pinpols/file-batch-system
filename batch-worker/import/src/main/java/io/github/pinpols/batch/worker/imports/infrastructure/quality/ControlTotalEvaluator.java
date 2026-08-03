@@ -7,6 +7,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +92,7 @@ public class ControlTotalEvaluator {
     if (booleanValue(rule.get("blocker"), false)) {
       return new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_CONTROL_TOTAL",
+          ImportValidationErrorCode.CONTROL_TOTAL.code(),
           "control-total mismatch, declared="
               + declared.toPlainString()
               + ", actual="
