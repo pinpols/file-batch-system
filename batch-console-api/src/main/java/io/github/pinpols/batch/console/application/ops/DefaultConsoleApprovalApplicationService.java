@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.infrastructure;
+package io.github.pinpols.batch.console.application.ops;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;

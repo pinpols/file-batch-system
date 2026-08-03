@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.service;
+package io.github.pinpols.batch.console.application.ops;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;

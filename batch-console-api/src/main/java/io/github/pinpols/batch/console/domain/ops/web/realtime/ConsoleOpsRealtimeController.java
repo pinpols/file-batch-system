@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.web.realtime;
 
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleOpsSummaryRealtimeStream;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -25,7 +25,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ConsoleOpsRealtimeController {
 
-  private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
+  private final ConsoleOpsSummaryRealtimePort summaryRealtimeStream;
 
   @GetMapping(value = "/summary/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter summaryEvents(

@@ -1,11 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.validation;
 
-import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
-import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.application.workflow.WorkflowJobReferencePort;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -60,7 +58,7 @@ public class WorkflowDagValidator {
   public static final int MAX_NODES = 200;
 
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
+  private final WorkflowJobReferencePort workflowJobReferencePort;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
 
@@ -242,8 +240,7 @@ public class WorkflowDagValidator {
   }
 
   private boolean isWorkflowTypeJob(String tenantId, String jobCode) {
-    JobDefinitionEntity job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-    return job != null && JobType.WORKFLOW.code().equalsIgnoreCase(job.getJobType());
+    return workflowJobReferencePort.isWorkflowType(tenantId, jobCode);
   }
 
   /** selectByQuery 用 LIKE 模糊匹配 code,这里取精确相等那条(已按 version desc,id desc 排序 → live 行在前)。 */

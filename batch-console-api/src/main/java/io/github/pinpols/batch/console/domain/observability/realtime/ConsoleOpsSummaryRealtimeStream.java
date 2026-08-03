@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
@@ -26,7 +27,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * <p>负责订阅首屏摘要，并在关键写操作后推送最新快照。
  */
 @Service
-public class ConsoleOpsSummaryRealtimeStream {
+public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtimePort {
 
   private static final String STREAM = "ops-summary";
   private static final String EVENT_TYPE = "ops-summary-updated";

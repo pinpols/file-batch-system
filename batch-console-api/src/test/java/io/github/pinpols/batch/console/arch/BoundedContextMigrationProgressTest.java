@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.arch;
 
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.BOUNDED_CONTEXTS;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.DOMAIN_ROOT;
-import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.SHARED_ROOT;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.hasBoundedContextSuppression;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,7 +28,7 @@ import org.junit.jupiter.api.Test;
 /**
  * P1-A Stage 1 迁移进度 metric。
  *
- * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,并校验不超过 ratchet 基线。
+ * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,并校验严格为 0。
  * 通过 {@code -DboundedContext.report=<path>} 可额外生成逐类 TSV 清单,供迁移批次评审使用。
  *
  * <p>每次跑测试都能看到迁移进度,例如:
@@ -41,13 +40,12 @@ import org.junit.jupiter.api.Test;
  *   ...
  * </pre>
  *
- * <p>{@link BoundedContextDependencyArchTest} 当前已经以 ratchet 模式启用;依赖数降到 0 后再切换严格隔离规则。
+ * <p>{@link BoundedContextDependencyArchTest} 当前已切换为严格隔离规则;本测试保留逐类清单输出能力。
  */
 class BoundedContextMigrationProgressTest {
 
   /**
-   * 2026-06-21 基线:当前 console bounded context 直接依赖违规数。这个测试作为 ratchet 护栏防新增债务;每次迁移减少后必须同步下调预算。降到 0
-   * 后把 {@link BoundedContextDependencyArchTest} 切换为严格规则。
+   * 2026-06-21 起的历史迁移记录：本测试曾作为 ratchet 护栏防止新增债务；Phase 28 完成后切换为严格 0 断言。
    *
    * <p>基线对齐 main 实测 1711(原 capture 写 1697 是 de-stale 前的旧快照,合 main 后域代码增加到 1711)。
    *
@@ -131,6 +129,8 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 26):将 File、Job 和 Workflow 共用的 {@code EnabledPatchRequest} 移入 {@code shared.command}，保持字段、校验和 REST 契约不变，实测降至 50。
    *
    * <p>2026-08-03(Phase 27):将 SSE ticket 和系统参数应用服务提升到 {@code application.observability}，保留 Redis 一次性消费、角色绑定、缓存和租户校验语义，实测降至 29。
+   *
+   * <p>2026-08-03(Phase 28):将 Ops 运维摘要实时流改依赖应用层订阅端口，为 Workflow DAG 校验提取最小 Job 引用端口，保留 SSE、缓存、拓扑校验和租户查询语义，实测降至 0，并切换严格隔离门禁。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 
@@ -208,9 +208,8 @@ class BoundedContextMigrationProgressTest {
     sorted.forEach((k, v) -> System.out.println("[BoundedContext]   " + k + " : " + v));
     writeInventoryIfRequested(inventoryRows);
     assertThat(total)
-        .as("bounded-context cross dependencies must not increase; lower this budget as migration"
-            + " progresses")
-        .isLessThanOrEqualTo(MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS);
+        .as("bounded-context cross dependencies must be eliminated")
+        .isZero();
   }
 
   private static void writeInventoryIfRequested(List<String> rows) {

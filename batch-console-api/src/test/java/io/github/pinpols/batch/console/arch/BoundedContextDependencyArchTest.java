@@ -30,10 +30,8 @@ import org.junit.jupiter.api.Test;
  * <p>豁免机制:类或方法上加 {@code @SuppressWarnings("BoundedContext")} 可在过渡期单点放行,但必须在 commit message 或
  * javadoc 里写明计划清理时间。
  *
- * <p><b>当前状态</b>:Stage 1 尚未完成,本测试以 ratchet 门禁运行,只允许历史基线内的跨域依赖。配套 {@link
- * BoundedContextMigrationProgressTest} 输出当前违规矩阵,作为迁移进度 metric。
- *
- * <p>违规数降到 0 后,将把 ratchet 切换为严格 ArchUnit 规则。详见 {@code docs/architecture/p0-p1-p2-roadmap.md} § P1-A。
+ * <p><b>当前状态</b>:Stage 1 已完成,本测试以严格 0 断言运行。配套 {@link BoundedContextMigrationProgressTest}
+ * 继续输出逐类清单,用于边界回归诊断。
  */
 class BoundedContextDependencyArchTest {
 
@@ -45,18 +43,16 @@ class BoundedContextDependencyArchTest {
   static final String DOMAIN_ROOT = "io.github.pinpols.batch.console.domain";
   static final String SHARED_ROOT = "io.github.pinpols.batch.console.shared";
   static final String SUPPRESS_TAG = "BoundedContext";
-  static final int MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS = 29;
-
   private static final JavaClasses CLASSES = new ClassFileImporter()
       .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
       .importPackages("io.github.pinpols.batch.console..");
 
   @Test
-  void crossBoundedContextDependenciesStayWithinBaseline() {
+  void crossBoundedContextDependenciesAreForbidden() {
     int total = countCrossContextViolations(CLASSES);
     assertThat(total)
-        .as("bounded-context cross dependencies must not increase from the migration baseline")
-        .isLessThanOrEqualTo(MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS);
+        .as("bounded-context cross dependencies must be eliminated")
+        .isZero();
   }
 
   static int countCrossContextViolations(JavaClasses classes) {

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.console.application.ops.DefaultConsoleOpsApplicationService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;

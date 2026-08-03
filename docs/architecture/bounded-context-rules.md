@@ -55,13 +55,13 @@ public class LegacyCrossContextHelper { ... }
 ## 当前状态(2026-08-03)
 
 - `domain/<ctx>/` 子包尚未拉齐(当前是 `domain/{command,entity,param,query,view}` 横切布局)
-- 守护测试已启用 ratchet 门禁,当前基线为 `29` 条跨 context 直接依赖,不得新增
+- 守护测试已切换为严格门禁,当前跨 context 直接依赖为 `0` 条
 - metric 测试持续输出违规矩阵,用于迁移进度和边界回归核对
-- Stage 1 迁移过程中,基线应逐步下调;降到 0 后把 ratchet 切换为严格 ArchUnit 规则
+- Stage 1 已完成;后续新增跨 context 直接依赖必须直接失败
 
 ## 升级路径
 
 1. 拉一个 ctx 子包(例:先迁 `job`)→ metric 输出第一批违规数
 2. 逐步把 cross-ctx 直引替换为 application service / event / shared
-3. metric 归 0 → 将 `BoundedContextDependencyArchTest` 从 ratchet 切换为严格 ArchUnit 规则
+3. metric 已归 0 → `BoundedContextDependencyArchTest` 使用严格 0 断言，继续由 metric 测试输出逐类清单
 4. 进入 Stage 2:开始拆独立模块(`console-push-api` / `console-notification-api` 等)

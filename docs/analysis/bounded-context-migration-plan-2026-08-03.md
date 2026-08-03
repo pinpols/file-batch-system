@@ -168,6 +168,12 @@
 - 将 SSE ticket 和系统参数应用服务提升到 `application.observability`，使 RBAC、Governance 和 Observability Web 依赖应用层能力，不直接依赖观测域服务实现。
 - 保留 Redis ticket 一次性消费、角色绑定、系统参数缓存、租户解析和 REST 路由语义；跨域直接依赖降至 **29**，本批减少 **21 条**；ratchet 已下调至 29。
 
+第二十八批完成后：
+
+- Ops 运维摘要实时流改依赖应用层订阅端口；Workflow DAG 校验通过最小 Job 引用端口查询 Job 类型，Mapper 和实体仍由基础设施适配器持有。
+- 保留 SSE 首屏快照、心跳、缓存、拓扑校验、跨 Workflow 环检测和租户查询语义；跨域直接依赖降至 **0**，本批减少 **29 条**。
+- `BoundedContextDependencyArchTest` 已从 ratchet 切换为严格 0 断言；后续新增跨域直接依赖立即失败。
+
 ## 第一阶段：清单与分类
 
 执行：
@@ -229,4 +235,4 @@ bash scripts/ci/report-bounded-context-dependencies.sh logs/bounded-context/depe
 
 ## 最终收口
 
-当依赖数为 0 时，删除 ratchet 预算，恢复严格 ArchUnit 规则，并开始评估是否拆分独立 Console 模块。
+Phase 28 已完成严格 0 收口。后续只允许通过应用层端口、共享无状态契约或领域事件跨上下文通信；任何新增直接依赖由严格门禁阻断。

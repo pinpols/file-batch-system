@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleOpsSummaryRealtimeStream;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -23,8 +23,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ConsoleOpsRealtimeControllerTest {
 
-  private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream =
-      mock(ConsoleOpsSummaryRealtimeStream.class);
+  private final ConsoleOpsSummaryRealtimePort summaryRealtimeStream =
+      mock(ConsoleOpsSummaryRealtimePort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;
