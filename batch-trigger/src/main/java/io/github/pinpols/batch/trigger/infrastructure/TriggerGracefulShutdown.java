@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
+import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.Scheduler;
@@ -12,6 +14,7 @@ import org.springframework.boot.availability.ReadinessState;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
 
@@ -28,10 +31,13 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class TriggerGracefulShutdown
-    implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
+    implements ApplicationListener<ContextClosedEvent>,
+        ApplicationEventPublisherAware,
+        SmartLifecycle {
 
   private final Scheduler scheduler;
   private final TriggerDrainState drainState;
+  private final AtomicBoolean lifecycleRunning = new AtomicBoolean(true);
   private ApplicationEventPublisher eventPublisher;
 
   @Override
@@ -41,18 +47,53 @@ public class TriggerGracefulShutdown
 
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {
+    stop();
+  }
+
+  /** Quartz 必须先于数据源停止，避免 misfire 线程在连接池关闭后继续取连接。 */
+  @Override
+  public void stop() {
+    if (!lifecycleRunning.compareAndSet(true, false)) {
+      return;
+    }
     try {
       if (scheduler.isShutdown()) {
         return;
       }
       startDraining("context-closed");
-      log.info(
-          "Trigger graceful shutdown — shutting down scheduler" + " (waitForJobsToComplete=true)");
-      scheduler.shutdown(true);
-      log.info("Trigger scheduler shutdown complete");
+      log.info("Trigger scheduler standby complete");
     } catch (SchedulerException e) {
       log.warn("Error during trigger graceful shutdown: {}", e.getMessage(), e);
     }
+  }
+
+  @Override
+  public void stop(Runnable callback) {
+    try {
+      stop();
+    } finally {
+      callback.run();
+    }
+  }
+
+  @Override
+  public void start() {
+    lifecycleRunning.set(true);
+  }
+
+  @Override
+  public boolean isRunning() {
+    return lifecycleRunning.get();
+  }
+
+  @Override
+  public boolean isAutoStartup() {
+    return true;
+  }
+
+  @Override
+  public int getPhase() {
+    return BatchLifecyclePhases.FIRST_TO_STOP_RELAY;
   }
 
   public void startDraining(String source) throws SchedulerException {

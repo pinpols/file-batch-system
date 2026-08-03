@@ -17,6 +17,7 @@ import io.github.pinpols.batch.worker.exports.stage.ExportStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,18 @@ public class ExportStepExecutionAdapter
 
   private final ExportStageExecutor exportStageExecutor;
   private final ObjectMapper objectMapper;
+
+  // 同一 pipeline 实例的重复投递可能在同一 worker 进程并发执行；checkpoint 文件是实例级资源，
+  // 必须把 GENERATE 到 COMPLETE 整条链路串行化，避免一个执行清理文件时另一个执行仍在读写。
+  private static final ReentrantLock[] PIPELINE_LOCKS = createPipelineLocks();
+
+  private static ReentrantLock[] createPipelineLocks() {
+    ReentrantLock[] locks = new ReentrantLock[64];
+    for (int i = 0; i < locks.length; i++) {
+      locks[i] = new ReentrantLock();
+    }
+    return locks;
+  }
 
   public ExportStepExecutionAdapter(
       ExportStageExecutor exportStageExecutor,
@@ -70,7 +83,19 @@ public class ExportStepExecutionAdapter
 
   @Override
   protected List<ExportStageResult> executeStages(ExportJobContext context) {
-    return exportStageExecutor.execute(context);
+    Long pipelineInstanceId = runtimeRepository()
+        .toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
+      return exportStageExecutor.execute(context);
+    }
+    ReentrantLock lock =
+        PIPELINE_LOCKS[Math.floorMod(pipelineInstanceId.hashCode(), PIPELINE_LOCKS.length)];
+    lock.lock();
+    try {
+      return exportStageExecutor.execute(context);
+    } finally {
+      lock.unlock();
+    }
   }
 
   @Override

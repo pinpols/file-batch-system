@@ -99,6 +99,26 @@ BEGIN
   FROM batch.workflow_definition_version v
   JOIN batch.workflow_definition swd ON swd.id=v.workflow_definition_id AND swd.tenant_id=p_src
   JOIN batch.workflow_definition dwd ON dwd.tenant_id=p_dst AND dwd.workflow_code=swd.workflow_code;
+
+  -- 当前契约使用连字符日历编码；兼容历史 fixture 中的下划线写法，避免触发时找不到日历。
+  UPDATE batch.job_definition
+     SET calendar_code = 'default-calendar'
+   WHERE tenant_id = p_dst
+     AND calendar_code = 'default_calendar';
+
+  -- 旧导入 fixture 将校验规则写成数组，worker 的规则合并器消费 fieldRules 对象。
+  -- 按 field_mappings 中声明的 required 字段生成规范结构，避免数组被丢弃并刷 WARN。
+  UPDATE batch.file_template_config t
+     SET validation_rule_set = jsonb_build_object(
+       'fieldRules', COALESCE(
+         (SELECT jsonb_object_agg(m->>'name', jsonb_build_object(
+             'required', true, 'errorCode', 'IMPORT_VALIDATE_REQUIRED'))
+            FROM jsonb_array_elements(t.field_mappings) AS m
+           WHERE COALESCE((m->>'required')::boolean, false)),
+         '{}'::jsonb))
+   WHERE t.tenant_id = p_dst
+     AND jsonb_typeof(t.field_mappings) = 'array'
+     AND jsonb_typeof(t.validation_rule_set) = 'array';
 END $$ LANGUAGE plpgsql;
 
 -- 执行:10 租户 = ta/tb/tc + 7 克隆。profile 分布:retail×3 / bank×2 / risk×2

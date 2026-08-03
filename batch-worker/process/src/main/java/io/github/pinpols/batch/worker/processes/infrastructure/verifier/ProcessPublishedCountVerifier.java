@@ -10,12 +10,13 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
- * ADR-030 示例 verifier：PROCESS 任务必须 publish 出至少一条记录。
+ * ADR-030 示例 verifier：有输入记录的 PROCESS 任务必须 publish 出至少一条记录。
  *
  * <p>判定逻辑：PROCESS worker 完成 5-stage WAP 后，{@code publishedCount} 为 0 而非空（即 worker 明确"我没发布任何东西"）→ 记
  * {@code PROCESS_PUBLISHED_ZERO} 失败。
  *
- * <p>豁免：当 {@code publishedCount} 为 null（worker 未上报这个字段），视为非 publish 阶段，pass。
+ * <p>豁免：当 {@code publishedCount} 为 null（worker 未上报这个字段），或明确上报
+ * {@code processedCount=0}（空输入），视为不适用，pass。
  */
 @Component
 public class ProcessPublishedCountVerifier implements ContentVerifier {
@@ -41,9 +42,14 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
     if (count > 0) {
       return VerifyResult.pass();
     }
+    Object processedRaw = context.property("processedCount");
+    if (isZero(processedRaw)) {
+      // 无输入行时没有可发布结果，不能把空批次误判为发布失败。
+      return VerifyResult.pass();
+    }
     Map<String, Object> evidence = new LinkedHashMap<>();
     evidence.put("publishedCount", count);
-    evidence.put("processedCount", context.property("processedCount"));
+    evidence.put("processedCount", processedRaw);
     evidence.put("batchKey", context.property("batchKey"));
     return VerifyResult.fail(
         "PROCESS_PUBLISHED_ZERO", "PROCESS task reported success but publishedCount=0", evidence);
@@ -57,6 +63,20 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
       return Long.parseLong(value.toString().trim());
     } catch (NumberFormatException ignored) {
       return -1L;
+    }
+  }
+
+  private static boolean isZero(Object value) {
+    if (value instanceof Number n) {
+      return n.longValue() == 0;
+    }
+    if (value == null) {
+      return false;
+    }
+    try {
+      return Long.parseLong(value.toString().trim()) == 0;
+    } catch (NumberFormatException ignored) {
+      return false;
     }
   }
 }
