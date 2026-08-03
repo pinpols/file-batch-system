@@ -1,8 +1,8 @@
-package io.github.pinpols.batch.console.domain.observability.web.response;
+package io.github.pinpols.batch.console.shared.view;
 
-import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.instantValue;
-import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
+import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.instantValue;
+import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.longValue;
+import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.stringValue;
 
 import java.time.Instant;
 import java.util.Map;

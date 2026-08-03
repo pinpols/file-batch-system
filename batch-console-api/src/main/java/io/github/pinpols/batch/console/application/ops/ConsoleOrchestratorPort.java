@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
+import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import java.io.IOException;
