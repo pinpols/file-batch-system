@@ -39,9 +39,9 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
+import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;
 import java.time.Instant;
 import java.util.List;
