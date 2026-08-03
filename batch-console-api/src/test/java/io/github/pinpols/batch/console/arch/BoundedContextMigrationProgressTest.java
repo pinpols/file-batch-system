@@ -12,8 +12,15 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -22,7 +29,8 @@ import org.junit.jupiter.api.Test;
 /**
  * P1-A Stage 1 迁移进度 metric。
  *
- * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,不做 assert。
+ * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,并校验不超过 ratchet 基线。
+ * 通过 {@code -DboundedContext.report=<path>} 可额外生成逐类 TSV 清单,供迁移批次评审使用。
  *
  * <p>每次跑测试都能看到迁移进度,例如:
  *
@@ -33,13 +41,13 @@ import org.junit.jupiter.api.Test;
  *   ...
  * </pre>
  *
- * <p>启用守护测试 {@link BoundedContextDependencyArchTest} 的前提:本测试输出 0。
+ * <p>{@link BoundedContextDependencyArchTest} 当前已经以 ratchet 模式启用;依赖数降到 0 后再切换严格隔离规则。
  */
 class BoundedContextMigrationProgressTest {
 
   /**
-   * 2026-06-21 基线:当前 console bounded context 直接依赖违规数。这个测试先作为 ratchet 护栏防新增债务;每次迁移减少后必须同步下调预算。降到 0
-   * 后删除本预算并启用 {@link BoundedContextDependencyArchTest}。
+   * 2026-06-21 基线:当前 console bounded context 直接依赖违规数。这个测试作为 ratchet 护栏防新增债务;每次迁移减少后必须同步下调预算。降到 0
+   * 后把 {@link BoundedContextDependencyArchTest} 切换为严格规则。
    *
    * <p>基线对齐 main 实测 1711(原 capture 写 1697 是 de-stale 前的旧快照,合 main 后域代码增加到 1711)。
    *
@@ -63,8 +71,26 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-02(#868):observability timeline 与 rate-limit degradation 观测接入 console 查询/ops
    * 边界，CI JDK 21 实测为 1807；本地 JDK 25 的同一字节码扫描为 1841。1841 是跨 JDK 的当前
    * 兼容上限；这些是已交付运维闭环的只读聚合依赖，更新 ratchet 基线，不为降低数字破坏功能边界。
+   *
+   * <p>2026-08-03(Phase 1):将无业务状态的 ConsoleQuerySupport 与租户解析 Port 移入 shared.query，移除
+   * file / ops / workflow / job 查询服务对 observability 工具类的直接依赖，实测降至 1480。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
+
+  private static final Map<String, String> LAYER_CATEGORIES = Map.ofEntries(
+      Map.entry("entity", "PERSISTENCE"),
+      Map.entry("mapper", "PERSISTENCE"),
+      Map.entry("application", "APPLICATION"),
+      Map.entry("service", "APPLICATION"),
+      Map.entry("command", "CONTRACT"),
+      Map.entry("dto", "CONTRACT"),
+      Map.entry("param", "CONTRACT"),
+      Map.entry("query", "CONTRACT"),
+      Map.entry("view", "CONTRACT"),
+      Map.entry("web", "WEB_OR_REALTIME"),
+      Map.entry("realtime", "WEB_OR_REALTIME"),
+      Map.entry("infrastructure", "ADAPTER_OR_SUPPORT"),
+      Map.entry("support", "ADAPTER_OR_SUPPORT"));
 
   @Test
   void reportCurrentViolationCount() {
@@ -73,6 +99,7 @@ class BoundedContextMigrationProgressTest {
         .importPackages("io.github.pinpols.batch.console..");
 
     Map<String, Integer> matrix = new TreeMap<>();
+    List<String> inventoryRows = new ArrayList<>();
     int total = 0;
     int suppressed = 0;
 
@@ -91,6 +118,19 @@ class BoundedContextMigrationProgressTest {
         if (depCtx == null || depCtx.equals(srcCtx)) {
           continue;
         }
+        String sourceLayer = layerOf(src.getPackageName());
+        String targetLayer = layerOf(depPkg);
+        String status = srcSuppressed ? "SUPPRESSED" : "ACTIVE";
+        inventoryRows.add(String.join(
+            "\t",
+            status,
+            srcCtx,
+            src.getName(),
+            sourceLayer,
+            depCtx,
+            dep.getTargetClass().getName(),
+            targetLayer,
+            LAYER_CATEGORIES.getOrDefault(targetLayer, "OTHER")));
         if (srcSuppressed) {
           suppressed++;
           continue;
@@ -109,14 +149,32 @@ class BoundedContextMigrationProgressTest {
     System.out.println("[BoundedContext] total cross-context violations: " + total);
     System.out.println("[BoundedContext] suppressed (whitelisted) edges: " + suppressed);
     sorted.forEach((k, v) -> System.out.println("[BoundedContext]   " + k + " : " + v));
-    if (total == 0) {
-      System.out.println("[BoundedContext] No violations detected — safe to remove @Disabled from "
-          + "BoundedContextDependencyArchTest.");
-    }
+    writeInventoryIfRequested(inventoryRows);
     assertThat(total)
         .as("bounded-context cross dependencies must not increase; lower this budget as migration"
             + " progresses")
         .isLessThanOrEqualTo(MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS);
+  }
+
+  private static void writeInventoryIfRequested(List<String> rows) {
+    String reportPath = System.getProperty("boundedContext.report");
+    if (reportPath == null || reportPath.isBlank()) {
+      return;
+    }
+    try {
+      Path path = Path.of(reportPath);
+      if (path.getParent() != null) {
+        Files.createDirectories(path.getParent());
+      }
+      List<String> output = new ArrayList<>(rows.size() + 1);
+      output.add(
+          "status\tsource_context\tsource_class\tsource_layer\ttarget_context\ttarget_class\ttarget_layer\tcategory");
+      rows.stream().sorted().forEach(output::add);
+      Files.write(path, output, StandardCharsets.UTF_8);
+      System.out.println("[BoundedContext] inventory written: " + path);
+    } catch (IOException exception) {
+      throw new UncheckedIOException("failed to write bounded-context inventory", exception);
+    }
   }
 
   private static String boundedContextOf(String pkg) {
@@ -127,5 +185,16 @@ class BoundedContextMigrationProgressTest {
     int dot = tail.indexOf('.');
     String head = dot < 0 ? tail : tail.substring(0, dot);
     return CTX_SET.contains(head) ? head : null;
+  }
+
+  private static String layerOf(String pkg) {
+    String tail = pkg.substring(DOMAIN_ROOT.length() + 1);
+    int firstDot = tail.indexOf('.');
+    if (firstDot < 0) {
+      return "(root)";
+    }
+    String layers = tail.substring(firstDot + 1);
+    int secondDot = layers.indexOf('.');
+    return secondDot < 0 ? layers : layers.substring(0, secondDot);
   }
 }

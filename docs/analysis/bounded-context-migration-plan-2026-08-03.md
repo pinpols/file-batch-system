@@ -1,0 +1,88 @@
+# Bounded Context 依赖治理计划（2026-08-03）
+
+## 目标
+
+将 `batch-console-api` 当前 1841 条跨 context 直接依赖逐步降到 0，并最终启用严格 ArchUnit 隔离规则。
+
+本治理不改变外部 API、数据库表结构、租户模型、状态机、Outbox 语义或事务边界。所有改动按独立 PR 推进，每批可单独回滚。
+
+## 初始基线
+
+- context：`job`、`workflow`、`file`、`ops`、`governance`、`notification`、`audit`、`rbac`、`observability`
+- 当前跨域直接依赖：1841 条（JDK 25 字节码扫描上限）
+- 初始门禁：ratchet，依赖数不得超过 1841
+- 当前高频依赖边：
+  - `job -> ops`：236
+  - `ops -> observability`：197
+  - `file -> observability`：162
+  - `observability -> ops`：110
+  - `ops -> job`：98
+
+第一批完成后：
+
+- `ConsoleQuerySupport` 移入 `shared.query`，租户解析抽为 `TenantIdResolver` Port。
+- 跨域直接依赖降至 **1480**，减少 **361 条**。
+- 当前 ratchet 已下调至 1480。
+
+## 第一阶段：清单与分类
+
+执行：
+
+```bash
+bash scripts/ci/report-bounded-context-dependencies.sh
+```
+
+默认输出到 `target/bounded-context/dependencies.tsv`，也可以显式指定路径：
+
+```bash
+bash scripts/ci/report-bounded-context-dependencies.sh logs/bounded-context/dependencies.tsv
+```
+
+每条记录包含 source/target context、类名、包层级、依赖类别和豁免状态。依赖类别：
+
+| 类别 | 含义 | 首批处理策略 |
+|---|---|---|
+| `PERSISTENCE` | Entity / Mapper 直接依赖 | 最高风险，先确认数据所有权 |
+| `APPLICATION` | Application Service / Service | 优先抽 Port 或受控 Facade |
+| `CONTRACT` | Query / DTO / View / Param | 优先治理只读聚合 |
+| `WEB_OR_REALTIME` | Controller / SSE 依赖 | 不直接跨域引用，改用应用层查询 |
+| `ADAPTER_OR_SUPPORT` | Infrastructure / Support | 按实际业务归属拆分 |
+
+## 第二阶段：低风险只读依赖
+
+优先处理 `CONTRACT` 和只读 `APPLICATION` 依赖，顺序如下：
+
+1. `observability` 聚合查询对 `ops`、`file`、`job` 的直接引用。
+2. `ops` 的 Dashboard / 健康摘要查询对其他领域的直接引用。
+3. `audit` 的告警只读查询依赖。
+
+改法：
+
+- 由数据拥有 context 暴露只读 Application Service / Query Port。
+- 返回专用 DTO，不跨域暴露 Entity、Mapper 或内部 Query。
+- 不改变 SQL 结果、分页、租户条件和读写分离策略。
+
+## 第三阶段：写路径与事务依赖
+
+处理配置复制、审批、补偿、任务状态推进等写路径：
+
+- 每张表和状态机只保留一个拥有 context。
+- 跨域写入通过 Application Service、领域事件或受控编排入口完成。
+- 保持同事务 Outbox、CAS、幂等键、租户校验和终态防复活语义。
+
+## 第四阶段：包与模块收口
+
+只在依赖关系已经收敛后整理包结构、Mapper XML namespace、Spring Bean 和测试包路径。禁止先搬包再用大量白名单掩盖依赖。
+
+## 每批验收
+
+- ratchet 数量下降，且没有新增豁免。
+- `./mvnw -pl batch-console-api -am test`
+- 全量 `ArchTest`、`ConventionTest`、`GuardTest`。
+- OpenAPI 路径和响应契约无漂移。
+- 租户隔离、事务、Outbox、CAS、幂等和关键链路回归通过。
+- 变更只涉及当前批次，不混入无关重构。
+
+## 最终收口
+
+当依赖数为 0 时，删除 ratchet 预算，恢复严格 ArchUnit 规则，并开始评估是否拆分独立 Console 模块。

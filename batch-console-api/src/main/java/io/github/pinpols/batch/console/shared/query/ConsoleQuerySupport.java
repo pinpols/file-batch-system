@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.infrastructure;
+package io.github.pinpols.batch.console.shared.query;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -77,8 +76,8 @@ public final class ConsoleQuerySupport {
     return row;
   }
 
-  public static String resolveTenant(ConsoleTenantGuard tenantGuard, String requestTenantId) {
-    return tenantGuard.resolveTenant(requestTenantId);
+  public static String resolveTenant(TenantIdResolver tenantResolver, String requestTenantId) {
+    return tenantResolver.resolveTenant(requestTenantId);
   }
 
   public static Instant parseInstant(String value, String fieldName) {
