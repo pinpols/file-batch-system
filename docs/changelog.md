@@ -15,6 +15,7 @@
 - **有界上下文 Phase 2**：将通用 `SimpleOptionView` 提取到 `shared.view`，将集群诊断投影 `ShedLockView` / `DeliveryStatusCountView` 收回 `ops.view.cluster`，同步 MyBatis 映射和测试引用；跨域依赖从 1480 降至 1464，ratchet 同步下调。
 - **有界上下文 Phase 3**：将纯实时事件载荷 `ConsoleRealtimeDomainEvent` 提取到 `shared.event`，保留 observability 的发布器与 SSE/Redis 桥接基础设施；跨域依赖从 1464 降至 1449，ratchet 同步下调。
 - **有界上下文 Phase 4**：Ops 侧只依赖 `TenantIdResolver` / `TenantScopeResolver` Port，`ConsoleTenantGuard` 仍为唯一实现，保持租户安全语义不变；跨域依赖从 1449 降至 1374，ratchet 同步下调。
+- **有界上下文 Phase 5**：notification 的租户感知 Service 改依赖 `TenantIdResolver`，实时 Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1374 降至 1357，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

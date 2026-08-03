@@ -22,7 +22,7 @@ import io.github.pinpols.batch.console.domain.notification.service.WebhookEventP
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -78,7 +78,7 @@ public class DefaultConsoleNotificationApplicationService
   private static final String COL_CONFIG_JSON = "config_json";
   private static final String TEST_EVENT_TYPE = "TEST";
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver metadataResolver;
   private final NotificationChannelMapper channelMapper;
   private final SubscriptionRuleMapper ruleMapper;

@@ -82,6 +82,9 @@ class BoundedContextMigrationProgressTest {
    *
    * <p>2026-08-03(Phase 4):Ops 只依赖租户解析 Port，当前租户作用域单独依赖 TenantScopeResolver；保留
    * ConsoleTenantGuard 作为唯一实现，实测降至 1374。
+   *
+   * <p>2026-08-03(Phase 5):notification 的租户感知 Service 改依赖 TenantIdResolver，实时 Controller 暂保留
+   * 具体守卫以避免 API 门禁误报，实测降至 1357。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

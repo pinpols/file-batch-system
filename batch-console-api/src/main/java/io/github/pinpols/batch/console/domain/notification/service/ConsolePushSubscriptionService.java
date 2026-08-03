@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.notification.web.request.ConsolePushSubscribeRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsolePushSubscriptionService {
 
   private final ConsolePushSubscriptionMapper repository;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsolePushProperties properties;
 
   /** 当 push 模块被关闭时,controller 应该尽早 404,这里给个判断。 */
