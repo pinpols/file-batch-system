@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.infrastructure;
+package io.github.pinpols.batch.console.application.ops;
 
 import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.*;
 
@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
@@ -38,7 +37,6 @@ import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogQuery;
 import io.github.pinpols.batch.console.domain.ops.query.OutboxRetryLogQuery;
 import io.github.pinpols.batch.console.domain.ops.query.RetryScheduleQuery;
 import io.github.pinpols.batch.console.domain.ops.query.WorkerRegistryQuery;
-import io.github.pinpols.batch.console.domain.ops.support.ConsoleOpsQueryMappers;
 import io.github.pinpols.batch.console.domain.query.AuditLogQuery;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
@@ -62,7 +60,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 运维相关查询子服务。 */
+/** 控制台运维查询应用服务，聚合各领域的只读投影。 */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

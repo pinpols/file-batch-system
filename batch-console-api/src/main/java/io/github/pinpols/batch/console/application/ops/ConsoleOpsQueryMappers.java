@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.support;
+package io.github.pinpols.batch.console.application.ops;
 
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
 import io.github.pinpols.batch.console.domain.governance.mapper.DeadLetterTaskMapper;

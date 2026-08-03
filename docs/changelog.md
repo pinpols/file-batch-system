@@ -32,6 +32,8 @@
 - **有界上下文 Phase 19**：将编排器和触发器内部 HTTP Client 适配器移入 `shared.client`，调用方不再依赖 Ops 基础设施实现；认证、熔断、错误映射和下游协议不变，`file -> ops` 依赖归零，跨域依赖从 893 降至 875，ratchet 同步下调。
 - **有界上下文 Phase 20**：新增 `ConsoleJobOperationsPort`，Job 的审批、补偿、恢复和触发服务改依赖应用端口；审批客户端、内部 HTTP、实时事件和事务实现仍由 Ops 持有，`job -> ops` 依赖归零，跨域依赖从 875 降至 708，ratchet 同步下调。
 - **有界上下文 Phase 21**：将跨 Job、File、Workflow、Audit、Notification 和 Governance 的只读查询总门面提升到 `application.observability`，聚合 REST Controller 提升到顶层 `web`；查询、租户、分页、JSON 和路由语义不变，跨域依赖从 708 降至 372，ratchet 同步下调。
+- **有界上下文 Phase 22**：将 Ops 只读查询服务和聚合 Mapper 提升到 `application.ops`，保留 Ops 自有查询与各领域只读投影语义；跨域依赖从 372 降至 199，ratchet 同步下调。
+- **有界上下文 Phase 23**：将只读 AI 诊断工具提升到 `application.audit`，保持工具、租户绑定、查询和集群诊断契约不变；跨域依赖从 199 降至 145，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

@@ -119,6 +119,10 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 20):新增 {@code ConsoleJobOperationsPort}，Job 的审批、恢复和触发服务改依赖应用端口；审批、HTTP、事件和事务实现仍由 Ops 组件持有，实测降至 708。
    *
    * <p>2026-08-03(Phase 21):将跨多个上下文的只读查询总门面提升到 {@code application.observability}，聚合 Controller 提升到顶层 {@code web}；查询实现、路由和响应契约不变，实测降至 372。
+   *
+   * <p>2026-08-03(Phase 22):将 Ops 只读查询服务和其聚合 Mapper 提升到 {@code application.ops}，保留 Ops 自有查询和各领域只读投影语义，实测降至 199。
+   *
+   * <p>2026-08-03(Phase 23):将只读 AI 诊断工具提升到 {@code application.audit}，仍由 Audit AI 应用服务按租户构造，查询和集群诊断契约不变，实测降至 145。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

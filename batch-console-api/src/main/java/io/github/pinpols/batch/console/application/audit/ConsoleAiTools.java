@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
+package io.github.pinpols.batch.console.application.audit;
 
 import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.model.PageResponse;
