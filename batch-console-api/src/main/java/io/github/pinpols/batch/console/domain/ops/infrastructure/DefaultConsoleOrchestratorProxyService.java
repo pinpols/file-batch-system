@@ -183,7 +183,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public Map<String, Integer> outboxCleanup(String tenantId, int retainDays) {
+  public OutboxCleanupProxyResponse outboxCleanup(String tenantId, int retainDays) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -197,11 +197,11 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .queryParam("retainDays", retainDays)
                 .build())
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+            .body(OutboxCleanupProxyResponse.class));
   }
 
   @Override
-  public Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids) {
+  public OutboxRepublishProxyResponse outboxRepublish(String tenantId, List<Long> ids) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -215,7 +215,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .build())
             .body(Map.of("ids", ids == null ? List.of() : ids))
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+            .body(OutboxRepublishProxyResponse.class));
   }
 
   @Override

@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.application.ops;
 
 import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import java.io.IOException;
@@ -48,14 +50,14 @@ public interface ConsoleOrchestratorPort {
    *
    * @return key=published / giveUp 的删除条数
    */
-  Map<String, Integer> outboxCleanup(String tenantId, int retainDays);
+  OutboxCleanupProxyResponse outboxCleanup(String tenantId, int retainDays);
 
   /**
    * 转发 outbox republish：把 FAILED / GIVE_UP 状态的指定 id 事件 reset 回 NEW，让 OutboxForwarder 重投递。
    *
    * @return key=requested / reset 的统计（reset 可能小于 requested，因有些 id 不在 FAILED/GIVE_UP）
    */
-  Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids);
+  OutboxRepublishProxyResponse outboxRepublish(String tenantId, List<Long> ids);
 
   /** 转发测试数据 prefix 清理：由 orchestrator 在状态主机边界内执行。 */
   Map<String, Integer> adminTestDataCleanupByPrefix(String prefix);

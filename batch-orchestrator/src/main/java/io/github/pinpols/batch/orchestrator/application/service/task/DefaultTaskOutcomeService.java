@@ -796,7 +796,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       JobInstanceEntity childJobInstance,
       String childInstanceStatus,
       TaskOutcomeCommand childCommand) {
-    Long parentVirtualTaskId = extractParentVirtualTaskId(childJobInstance.getParamsSnapshot());
+    Long parentVirtualTaskId =
+        ParentVirtualTaskIdResolver.resolve(childJobInstance.getParamsSnapshot());
     if (parentVirtualTaskId == null) {
       return;
     }
@@ -816,40 +817,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .outputs(nodeSuccess ? childCommand.outputs() : null)
         .build();
     self.applyTaskOutcome(parentCommand);
-  }
-
-  @SuppressWarnings("unchecked")
-  private Long extractParentVirtualTaskId(String paramsSnapshot) {
-    if (paramsSnapshot == null || paramsSnapshot.isBlank()) {
-      return null;
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(paramsSnapshot, Object.class);
-      if (!(parsed instanceof Map<?, ?> snapshotMap)) {
-        return null;
-      }
-      Object effectiveParams = ((Map<String, Object>) snapshotMap).get("effectiveParams");
-      if (!(effectiveParams instanceof Map<?, ?> effectiveMap)) {
-        return null;
-      }
-      Object value = ((Map<String, Object>) effectiveMap).get("_parentVirtualTaskId");
-      return TaskOutcomePayloadSupport.toPositiveLong(value);
-    } catch (IllegalArgumentException badJson) {
-      // 真·"数据格式问题"：JsonUtils 把 Jackson 的 JsonProcessingException 包成 IllegalArgumentException。
-      // 静默是 OK 的（payload 由上游写入，bad data 触发数据修复路径而非崩溃）。
-      SwallowedExceptionLogger.warn(DefaultTaskOutcomeService.class, "catch:bad_json", badJson);
-      return null;
-    } catch (RuntimeException unexpected) {
-      // R2-P2-6 子项:宽 catch + warn 把代码缺陷(NPE/ClassCastException 等 map navigation 错误)
-      // 掩盖成"数据问题",return null 后父 workflow node 永远等不到完成信号 → 长期停滞。
-      // 升级到 ERROR + 完整 stack,**并抛出**让上游事务回滚 / 调度重试,而非让父任务永久挂起。
-      log.error(
-          "extractParentVirtualTaskId failed unexpectedly (likely code defect, not bad data):"
-              + " paramsSnapshot length={}",
-          paramsSnapshot == null ? -1 : paramsSnapshot.length(),
-          unexpected);
-      throw unexpected;
-    }
   }
 
   private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {

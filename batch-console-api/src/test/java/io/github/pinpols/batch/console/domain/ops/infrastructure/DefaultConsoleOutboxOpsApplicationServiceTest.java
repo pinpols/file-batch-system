@@ -68,7 +68,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   void shouldDelegateCleanupToOrchestrator() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(orchestratorProxy.outboxCleanup("tenant-a", 30))
-        .thenReturn(Map.of("published", 5, "giveUp", 3));
+        .thenReturn(new OutboxCleanupProxyResponse(5, 3));
 
     ConsoleOutboxCleanupResponse response = service.cleanup("tenant-a", 30);
 
@@ -85,7 +85,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     List<Long> ids = List.of(1L, 2L, 3L);
     when(orchestratorProxy.outboxRepublish("tenant-a", ids))
-        .thenReturn(Map.of("requested", 3, "reset", 2));
+        .thenReturn(new OutboxRepublishProxyResponse(3, 2, 0));
 
     ConsoleOutboxRepublishResponse response = service.republish("tenant-a", ids);
 
