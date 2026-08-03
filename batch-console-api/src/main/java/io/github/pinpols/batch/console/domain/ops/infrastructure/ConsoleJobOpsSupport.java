@@ -15,10 +15,10 @@ import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
@@ -69,7 +69,7 @@ public class ConsoleJobOpsSupport {
   private final OrchestratorApprovalClient approvalClient;
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
   public static String jobTypeCompensation() {

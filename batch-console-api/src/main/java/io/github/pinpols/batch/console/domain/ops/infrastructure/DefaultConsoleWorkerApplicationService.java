@@ -7,7 +7,7 @@ import io.github.pinpols.batch.console.domain.ops.web.request.DrainWorkerRequest
 import io.github.pinpols.batch.console.domain.ops.web.request.ForceOfflineWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerClaimedTaskResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
@@ -48,7 +48,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
   @Override

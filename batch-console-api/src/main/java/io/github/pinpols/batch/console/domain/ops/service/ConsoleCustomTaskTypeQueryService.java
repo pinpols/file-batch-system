@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleCustomTaskTypeQueryService {
 
   private final CustomTaskTypeMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
 
   public List<CustomTaskTypeEntity> listActive(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);

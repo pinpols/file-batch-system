@@ -45,7 +45,7 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetr
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.query.AuditLogQuery;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.web.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.OutboxDeliveryLogQueryRequest;
@@ -67,7 +67,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleOpsQueryService {
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleOpsQueryMappers opsMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
   private final BatchTimezoneProvider timezoneProvider;

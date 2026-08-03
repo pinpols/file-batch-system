@@ -79,6 +79,9 @@ class BoundedContextMigrationProgressTest {
    *
    * <p>2026-08-03(Phase 3):将纯实时事件载荷 ConsoleRealtimeDomainEvent 提取到 shared.event，保留
    * observability 的发布器与桥接基础设施，实测降至 1449。
+   *
+   * <p>2026-08-03(Phase 4):Ops 只依赖租户解析 Port，当前租户作用域单独依赖 TenantScopeResolver；保留
+   * ConsoleTenantGuard 作为唯一实现，实测降至 1374。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

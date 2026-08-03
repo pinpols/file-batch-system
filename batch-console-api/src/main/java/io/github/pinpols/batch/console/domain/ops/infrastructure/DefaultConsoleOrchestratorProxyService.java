@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleReal
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,7 +34,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   private static final String PARAM_TENANT_ID = "tenantId";
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final DownstreamFallback downstreamFallback;
   private final ConsoleQueryCacheService cacheService;

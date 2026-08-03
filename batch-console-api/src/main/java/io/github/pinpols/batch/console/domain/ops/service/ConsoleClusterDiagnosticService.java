@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,7 +39,7 @@ public class ConsoleClusterDiagnosticService {
   private static final Set<String> ACTIVE_OUTBOX_STATUSES =
       Set.of("NEW", "PUBLISHING", "FAILED", "GIVE_UP");
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleClusterDiagnosticMapper diagnosticMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
   private final ConsoleQueryCacheService cacheService;

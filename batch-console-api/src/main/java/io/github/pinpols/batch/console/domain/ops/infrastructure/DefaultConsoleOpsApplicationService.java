@@ -10,7 +10,7 @@ import io.github.pinpols.batch.console.domain.ops.mapper.OutboxDeliveryLogMapper
 import io.github.pinpols.batch.console.domain.ops.mapper.OutboxRetryLogMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicationService {
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ApprovalCommandMapper approvalCommandMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final WorkerRegistryMapper workerRegistryMapper;

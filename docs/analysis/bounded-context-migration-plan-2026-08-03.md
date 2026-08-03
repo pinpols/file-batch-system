@@ -37,6 +37,12 @@
 - `ConsoleRealtimeDomainEventPublisher`、SSE/Redis Hub、游标生成器继续由 observability 持有，避免 shared 承载基础设施或实时业务逻辑。
 - 跨域直接依赖降至 **1449**，本批减少 **15 条**；ratchet 已下调至 1449。
 
+第四批完成后：
+
+- Ops 的只读和代理服务改依赖 `TenantIdResolver`，需要读取调用方租户作用域的 Trigger 路径依赖最小 `TenantScopeResolver`。
+- `ConsoleTenantGuard` 仍是唯一实现，保留 JWT、请求上下文、全局角色和 fail-closed 校验；本批只改变依赖方向和注入抽象。
+- 跨域直接依赖降至 **1374**，本批减少 **75 条**；ratchet 已下调至 1374。
+
 ## 第一阶段：清单与分类
 
 执行：

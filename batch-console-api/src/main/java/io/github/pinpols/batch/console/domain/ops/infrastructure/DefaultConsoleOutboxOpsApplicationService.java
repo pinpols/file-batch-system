@@ -7,7 +7,7 @@ import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleOutboxEventReadM
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleOutboxOpsApplicationService
     implements ConsoleOutboxOpsApplicationService {
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final ConsoleOrchestratorProxyService orchestratorProxy;
