@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
+import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -434,18 +434,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   }
 
   protected int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
-    Object templateConfigObject =
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get(key);
-      if (value instanceof Number number) {
-        return Math.max(1, number.intValue());
-      }
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Math.max(1, Integer.parseInt(String.valueOf(value)));
-      }
-    }
-    return fallback;
+    return ExportConfigValueSupport.resolveTemplateInt(context, key, fallback);
   }
 
   protected String csv(Object value, DelimitedFormatConfig formatConfig) {

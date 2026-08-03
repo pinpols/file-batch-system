@@ -196,15 +196,7 @@ public class BatchDayGateService {
       String severity,
       String reason,
       String traceId) {
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("tenantId", request.tenantId());
-    detail.put("jobCode", request.jobCode());
-    detail.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    detail.put("requestId", request.requestId());
-    detail.put(
-        "triggerType",
-        request.triggerType() == null ? null : request.triggerType().code());
-    detail.put("reasonCode", reason);
+    Map<String, Object> detail = BatchDayAlertDetails.base(request, reason);
     if (previous != null) {
       detail.put("calendarCode", previous.calendarCode());
       detail.put(

@@ -35,6 +35,7 @@ public class DelimitedFormatParser implements FormatParser {
     this.support = support;
   }
 
+  // CPD-OFF: Delimited and fixed-width parsers intentionally share the format-parser lifecycle.
   @Override
   public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception {
@@ -124,6 +125,7 @@ public class DelimitedFormatParser implements FormatParser {
     return recordNo;
   }
 
+  // CPD-ON
   private static CsvParserSettings buildSettings(String delimiter) {
     CsvParserSettings settings = new CsvParserSettings();
     settings.getFormat().setDelimiter(delimiter.isEmpty() ? ',' : delimiter.charAt(0));

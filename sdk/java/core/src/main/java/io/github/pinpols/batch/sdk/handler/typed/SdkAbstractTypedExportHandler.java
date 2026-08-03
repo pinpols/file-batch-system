@@ -1,15 +1,11 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
-import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -30,17 +26,16 @@ import java.util.stream.Stream;
  * @param <O> 业务结果(序列化进 output;writeOut 自带结果优先,其次 summarize,最后计数器回退)
  * @param <R> 行类型
  */
-public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstractTaskHandler {
-
-  private final SdkTypedParameters<I> params;
+public abstract class SdkAbstractTypedExportHandler<I, O, R>
+    extends SdkAbstractTypedRowStreamHandler<I, O, R> {
 
   protected SdkAbstractTypedExportHandler() {
-    this(SdkTypedParameters.defaultObjectMapper());
+    super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedExportHandler.class);
   }
 
-  protected SdkAbstractTypedExportHandler(ObjectMapper objectMapper) {
-    this.params =
-        SdkTypedParameters.forHandler(objectMapper, this, SdkAbstractTypedExportHandler.class, 0);
+  protected SdkAbstractTypedExportHandler(
+      com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+    super(objectMapper, SdkAbstractTypedExportHandler.class);
   }
 
   /** 打开输出端(创建文件 / 开 S3 multipart / 开 writer)。默认 no-op。 */
@@ -74,7 +69,7 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstract
    * {@link #buildQuery} 的范围条件同坐标系。
    */
   protected Map<String, Object> breakPosition(I input, R lastRow) {
-    return Map.of();
+    return emptyBreakPosition();
   }
 
   /** 汇总成业务结果 {@code O};默认返 null。 */
@@ -86,22 +81,17 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstract
   protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
     I input;
     try {
-      input = params.parse(ctx);
+      input = parseInput(ctx);
     } catch (IllegalArgumentException ex) {
       return SdkTaskResult.fail(
           "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
     }
-    // ADR-037 决策一:execute 开头读回断点。
-    String taskKey = String.valueOf(ctx.taskId());
-    Optional<SdkCheckpointState> resumed = ctx.checkpoint().load(taskKey);
-    if (resumed.map(SdkCheckpointState::completed).orElse(false)) {
-      return SdkTaskResult.ok("export already completed (resumed checkpoint), skipped");
-    }
     SdkRowResult counts = new SdkRowResult();
-    resumed.ifPresent(s -> {
-      counts.addSuccess(s.succeedCount());
-      ctx.commitCoordinator().restoreCounts(s.succeedCount(), s.failCount());
-    });
+    var resumed =
+        restoreCheckpoint(ctx, counts, "export already completed (resumed checkpoint), skipped");
+    if (resumed.isPresent()) {
+      return resumed.get();
+    }
     try {
       openSink(input, ctx);
       String q = buildQuery(input, ctx);
@@ -142,9 +132,6 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstract
 
   private SdkTaskResult result(I input, SdkRowResult counts, String defaultMessage) {
     O output = summarize(input, counts);
-    if (output == null) {
-      return SdkTaskResult.ok(defaultMessage, counts.toOutput());
-    }
-    return SdkTaskResult.ok(defaultMessage, params.toOutputMap(output));
+    return result(input, counts, defaultMessage, output);
   }
 }

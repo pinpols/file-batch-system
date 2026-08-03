@@ -16,7 +16,9 @@ import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutbo
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanSupport;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
+import io.github.pinpols.batch.orchestrator.application.service.WorkflowNodeRunSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
@@ -31,7 +33,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusPara
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -207,7 +208,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     waiting.setWorkflowRunId(workflowRunId);
     waiting.setNodeCode(node.nodeCode());
     waiting.setNodeType(node.nodeType());
-    waiting.setRunSeq(nextRunSeq(workflowRunId, node.nodeCode()));
+    waiting.setRunSeq(WorkflowNodeRunSupport.nextRunSeq(
+        workflowMappers.workflowNodeRunMapper, workflowRunId, node.nodeCode()));
     waiting.setNodeStatus(WorkflowNodeRunStatus.WAITING_DEPENDENCY.code());
     waiting.setRetryCount(0);
     waiting.setDurationMs(0L);
@@ -224,7 +226,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     failed.setWorkflowRunId(workflowRunId);
     failed.setNodeCode(node.nodeCode());
     failed.setNodeType(node.nodeType());
-    failed.setRunSeq(nextRunSeq(workflowRunId, node.nodeCode()));
+    failed.setRunSeq(WorkflowNodeRunSupport.nextRunSeq(
+        workflowMappers.workflowNodeRunMapper, workflowRunId, node.nodeCode()));
     failed.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
     failed.setRetryCount(0);
     failed.setDurationMs(0L);
@@ -300,7 +303,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // P1 动态 fan-out:节点配了 fanOut → 按上游 output 数组展开成 N 个并行分区(在资源调度前展开,
     // N 个分区都参与 worker 路由)。复用现有 partition 派发 + 聚合(N partition 终态聚合成节点终态),不另造状态机。
     FanOutPlan fanOut = prepareFanOut(workflowNode, workflowRun, node.nodeCode(), plan);
-    ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
+    ResourceSchedulingDecision decision =
+        resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan));
     if (isRejected(decision)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
@@ -308,7 +312,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
           decision.getReasonCode(),
           decision.getReasonMessage());
     }
-    applySchedulingDecision(plan, decision);
+    SchedulePlanSupport.applySchedulingDecision(plan, decision);
     List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
     int nextPartitionNo = existingPartitions.stream()
@@ -439,7 +443,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     runningNode.setWorkflowRunId(workflowRun.getId());
     runningNode.setNodeCode(node.nodeCode());
     runningNode.setNodeType(node.nodeType());
-    runningNode.setRunSeq(nextRunSeq(workflowRun.getId(), node.nodeCode()));
+    runningNode.setRunSeq(WorkflowNodeRunSupport.nextRunSeq(
+        workflowMappers.workflowNodeRunMapper, workflowRun.getId(), node.nodeCode()));
     runningNode.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
     runningNode.setRetryCount(0);
     runningNode.setStartedAt(now);
@@ -473,7 +478,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     terminalNode.setWorkflowRunId(workflowRunId);
     terminalNode.setNodeCode(nextNode.nodeCode());
     terminalNode.setNodeType(nextNode.nodeType());
-    terminalNode.setRunSeq(nextRunSeq(workflowRunId, nextNode.nodeCode()));
+    terminalNode.setRunSeq(WorkflowNodeRunSupport.nextRunSeq(
+        workflowMappers.workflowNodeRunMapper, workflowRunId, nextNode.nodeCode()));
     terminalNode.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
     terminalNode.setRetryCount(0);
     terminalNode.setStartedAt(finishedAt);
@@ -504,47 +510,6 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         || WorkflowNodeRunStatus.SUCCESS.code().equals(nodeStatus);
   }
 
-  private ResourceSchedulingRequest buildSchedulingRequest(SchedulePlan plan) {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId(plan.getTenantId());
-    request.setJobCode(plan.getJobCode());
-    request.setQueueCode(plan.getQueueCode());
-    request.setWorkerGroup(plan.getWorkerGroup());
-    request.setWorkerType(plan.getDefaultWorkerType());
-    request.setWindowCode(plan.getWindowCode());
-    request.setPriority(plan.getPriority());
-    request.setRequestedPartitionCount(
-        plan.getPartitionCount() == null ? 1 : plan.getPartitionCount());
-    return request;
-  }
-
-  private void applySchedulingDecision(SchedulePlan plan, ResourceSchedulingDecision decision) {
-    if (plan == null || decision == null) {
-      return;
-    }
-    if (decision.getQueueCode() != null && !decision.getQueueCode().isBlank()) {
-      plan.setQueueCode(decision.getQueueCode());
-    }
-    if (decision.getWorkerGroup() != null && !decision.getWorkerGroup().isBlank()) {
-      plan.setWorkerGroup(decision.getWorkerGroup());
-    }
-    if (decision.getPriority() != null) {
-      plan.setPriority(decision.getPriority());
-    }
-    if (decision.getRoute() != null) {
-      plan.setDefaultWorkerRoute(decision.getRoute());
-    }
-    if (plan.getPartitions() == null) {
-      return;
-    }
-    for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
-      partitionPlan.setPartitionStatus(decision.getPartitionStatus());
-      if (decision.getRoute() != null) {
-        partitionPlan.setWorkerRoute(decision.getRoute());
-      }
-    }
-  }
-
   private boolean isRejected(ResourceSchedulingDecision decision) {
     return decision != null
         && (ResourceAdmissionAction.REJECT == decision.getAdmissionAction()
@@ -564,23 +529,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   private void recordNodeRunReady(Long workflowRunId, String nodeCode, String nodeType) {
-    WorkflowNodeRunEntity readyNode = new WorkflowNodeRunEntity();
-    readyNode.setWorkflowRunId(workflowRunId);
-    readyNode.setNodeCode(nodeCode);
-    readyNode.setNodeType(nodeType);
-    readyNode.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
-    readyNode.setNodeStatus(WorkflowNodeRunStatus.READY.code());
-    readyNode.setRetryCount(0);
-    readyNode.setDurationMs(0L);
-    workflowMappers.workflowNodeRunMapper.insert(readyNode);
-  }
-
-  private int nextRunSeq(Long workflowRunId, String nodeCode) {
-    WorkflowNodeRunEntity latestNodeRun =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    return latestNodeRun == null || latestNodeRun.getRunSeq() == null
-        ? 1
-        : latestNodeRun.getRunSeq() + 1;
+    WorkflowNodeRunSupport.recordReady(
+        workflowMappers.workflowNodeRunMapper, workflowRunId, nodeCode, nodeType);
   }
 }

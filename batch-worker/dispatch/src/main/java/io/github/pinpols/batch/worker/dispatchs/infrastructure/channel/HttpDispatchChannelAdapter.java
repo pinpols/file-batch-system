@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Dns;
 import okhttp3.MediaType;
@@ -74,24 +73,13 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     if (endpoint == null || endpoint.isBlank()) {
       return new DispatchResult(false, null, null, false, false, "target endpoint missing", null);
     }
-    String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    String externalRequestId = command.payload().externalRequestId() != null
-            && !command.payload().externalRequestId().isBlank()
-        ? command.payload().externalRequestId()
-        : UUID.randomUUID().toString();
-    String receiptCode = command.payload().receiptCode() != null
-            && !command.payload().receiptCode().isBlank()
-        ? command.payload().receiptCode()
-        : "R-" + externalRequestId;
-    boolean acknowledged =
-        "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
-    boolean pending =
-        "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+    DispatchReceiptSupport.Receipt receipt =
+        DispatchReceiptSupport.resolve(command, channelConfig, "SYNC");
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("tenantId", command.tenantId());
     requestPayload.put("traceId", command.traceId());
-    requestPayload.put("externalRequestId", externalRequestId);
+    requestPayload.put("externalRequestId", receipt.externalRequestId());
     requestPayload.put("fileRecord", command.fileRecord());
     requestPayload.put("dispatchPayload", command.payload());
 
@@ -116,8 +104,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         if (!response.isSuccessful()) {
           return new DispatchResult(
               false,
-              externalRequestId,
-              receiptCode,
+              receipt.externalRequestId(),
+              receipt.receiptCode(),
               false,
               false,
               "dispatch api responded " + response.code(),
@@ -125,10 +113,10 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         }
         return new DispatchResult(
             true,
-            externalRequestId,
-            receiptCode,
-            acknowledged,
-            pending,
+            receipt.externalRequestId(),
+            receipt.receiptCode(),
+            receipt.acknowledged(),
+            receipt.pending(),
             "dispatched via http adapter",
             endpoint);
       }
@@ -136,7 +124,13 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
       SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
 
       return new DispatchResult(
-          false, externalRequestId, receiptCode, false, false, ex.getMessage(), endpoint);
+          false,
+          receipt.externalRequestId(),
+          receipt.receiptCode(),
+          false,
+          false,
+          ex.getMessage(),
+          endpoint);
     }
   }
 }
