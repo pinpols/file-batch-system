@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSseEventResponse;
@@ -50,7 +51,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  */
 @Service
 @Slf4j
-public class ConsoleRealtimeEventHub {
+public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort {
 
   private static final long DEFAULT_HEARTBEAT_MILLIS = 25_000L;
   private static final String DEFAULT_STREAM = "pipeline-definitions";
@@ -72,6 +73,7 @@ public class ConsoleRealtimeEventHub {
     this.scheduler = scheduler;
   }
 
+  @Override
   public SseEmitter subscribe(
       String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis) {
     // P1-5：超出单实例 SSE 上限时拒绝,防止僵尸连接累积击穿进程。前端拿到 503 后退避重试。

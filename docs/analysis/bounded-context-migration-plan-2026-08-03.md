@@ -99,6 +99,11 @@
 - 新增顶层应用端口 `ConsoleRealtimeEventPort`，file、notification、ops 和 workflow 业务服务只依赖实时变更发布能力；Spring 应用事件、游标、Redis/SSE bridge 仍由 observability 具体实现。
 - 跨域直接依赖降至 **1145**，本批减少 **36 条**；ratchet 已下调至 1145。
 
+第十五批完成后：
+
+- 新增 `ConsoleRealtimeSubscriptionPort`，各领域 SSE Controller 只依赖订阅端口；连接上限、心跳、游标回放、Redis Pub/Sub 和 emitter 生命周期继续由 observability 的 Hub 管理。
+- 跨域直接依赖降至 **1120**，本批减少 **25 条**；ratchet 已下调至 1120。
+
 ## 第一阶段：清单与分类
 
 执行：

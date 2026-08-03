@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.web.realtime;
 
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeEventHub;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -25,7 +25,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ConsoleJobInstanceRealtimeController {
 
-  private final ConsoleRealtimeEventHub realtimeEventHub;
+  private final ConsoleRealtimeSubscriptionPort realtimeEventHub;
   private final ConsoleTenantGuard tenantGuard;
 
   @GetMapping(path = "/job-instances/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
