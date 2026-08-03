@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,13 +20,7 @@ final class TaskOutcomeStatePolicy {
   private TaskOutcomeStatePolicy() {}
 
   static boolean isTerminalJobInstanceStatus(String status) {
-    return JobInstanceStatus.SUCCESS.code().equals(status)
-        || JobInstanceStatus.FAILED.code().equals(status)
-        || JobInstanceStatus.PARTIAL_FAILED.code().equals(status)
-        || JobInstanceStatus.CANCELLED.code().equals(status)
-        || JobInstanceStatus.TERMINATED.code().equals(status)
-        || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(status)
-        || JobInstanceStatus.FAILED_DRY_RUN.code().equals(status);
+    return LifecycleStatusCatalog.isJobInstanceTerminal(status);
   }
 
   static Set<String> parseActiveNodes(String currentNodeCode) {

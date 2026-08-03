@@ -9,6 +9,8 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
+import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -69,14 +71,16 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   static final String PARAM_AUTO_COMMIT = "autoCommit";
 
   private final SqlExecutorProperties props;
-  private final BeanFactory beanFactory;
-  private final DataSource defaultDataSource;
+  private final DataSourceResolver dataSourceResolver;
 
   public SqlTaskExecutor(
       SqlExecutorProperties props, BeanFactory beanFactory, DataSource defaultDataSource) {
+    this(props, new SpringDataSourceResolver(beanFactory, defaultDataSource));
+  }
+
+  public SqlTaskExecutor(SqlExecutorProperties props, DataSourceResolver dataSourceResolver) {
     this.props = props;
-    this.beanFactory = beanFactory;
-    this.defaultDataSource = defaultDataSource;
+    this.dataSourceResolver = dataSourceResolver;
   }
 
   @Override
@@ -184,8 +188,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
     // dataSource(param 覆盖需命中 allowedDataSourceBeans)
     String dsBeanName = resolveDataSourceBeanName(params);
-    DataSource ds =
-        dsBeanName == null ? defaultDataSource : beanFactory.getBean(dsBeanName, DataSource.class);
+    DataSource ds = dataSourceResolver.resolve(dsBeanName);
 
     boolean allSelect = statements.stream().allMatch(s -> "SELECT".equals(detectStatementType(s)));
 

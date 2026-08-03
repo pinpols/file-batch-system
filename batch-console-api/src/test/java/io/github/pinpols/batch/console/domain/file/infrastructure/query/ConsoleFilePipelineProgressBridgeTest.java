@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -96,11 +97,9 @@ class ConsoleFilePipelineProgressBridgeTest {
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", null)));
     when(stepRunMapper.selectRunningWorkerCode(TENANT, PIPELINE_ID)).thenReturn("worker-9");
-    Map<String, Object> cacheRow = new LinkedHashMap<>();
-    cacheRow.put("workerCode", "worker-9");
-    cacheRow.put("rowsProcessed", 4200L);
     when(orchestratorProxy.pipelineProgress(TENANT, List.of("worker-9")))
-        .thenReturn(List.of(cacheRow));
+        .thenReturn(
+            List.of(new ConsolePipelineProgressItemResponse("worker-9", 4200L, null, null)));
     stubFileInfo(555L, "customers.csv");
 
     // act

@@ -125,10 +125,7 @@ public class ConsoleQueryController {
   public CommonResponse<List<ConsolePipelineProgressItemResponse>> workerPipelineProgress(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("workerCodes") List<String> workerCodes) {
-    return responseFactory.success(
-        orchestratorProxy.pipelineProgress(tenantId, workerCodes).stream()
-            .map(ConsolePipelineProgressItemResponse::from)
-            .toList());
+    return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
   }
 
   /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */
