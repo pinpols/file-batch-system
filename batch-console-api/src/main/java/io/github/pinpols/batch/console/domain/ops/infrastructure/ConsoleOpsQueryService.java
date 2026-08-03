@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
@@ -65,13 +66,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class ConsoleOpsQueryService {
+public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   private final TenantIdResolver tenantGuard;
   private final ConsoleOpsQueryMappers opsMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
   private final BatchTimezoneProvider timezoneProvider;
 
+  @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
     PageRequest pageRequest = cursorMode
@@ -102,10 +104,12 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toAuditLogResponse);
   }
 
+  @Override
   public PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request) {
     return auditLogs(request);
   }
 
+  @Override
   public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
       OutboxRetryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -123,6 +127,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toOutboxRetryResponse);
   }
 
+  @Override
   public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -144,6 +149,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toOutboxDeliveryResponse);
   }
 
+  @Override
   public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     List<ConsoleAiAuditLogEntity> rows =
@@ -184,6 +190,7 @@ public class ConsoleOpsQueryService {
     });
   }
 
+  @Override
   public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
     PageRequest pageRequest = cursorMode
@@ -205,6 +212,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toDeadLetterTaskResponse);
   }
 
+  @Override
   public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
     PageRequest pageRequest = cursorMode
@@ -226,6 +234,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toRetryScheduleResponse);
   }
 
+  @Override
   public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
       PendingCatchUpQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
@@ -249,6 +258,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toPendingCatchUpResponse);
   }
 
+  @Override
   public PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     WorkerRegistryQuery query = new WorkerRegistryQuery(
@@ -261,6 +271,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toWorkerRegistryResponse);
   }
 
+  @Override
   public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
     PageRequest pageRequest = cursorMode
@@ -284,6 +295,7 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toAlertEventResponse);
   }
 
+  @Override
   public PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
@@ -299,6 +311,7 @@ public class ConsoleOpsQueryService {
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), responses);
   }
 
+  @Override
   public ConsoleBatchDayWindowResponse batchDayWindow(
       String bizDate, BatchDayWindowQueryRequest request) {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
@@ -310,6 +323,7 @@ public class ConsoleOpsQueryService {
         opsMappers.batchDayMapper.selectWindow(tenantId, request.getCalendarCode(), parsedBizDate));
   }
 
+  @Override
   public PageResponse<ConsoleApprovalCommandResponse> approvals(
       ApprovalCommandQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());

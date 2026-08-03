@@ -100,6 +100,8 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 11):租户作用域非空断言 {@code TenantScope} 移入 {@code shared.query}，保留 fail-fast 语义，实测降至 1204。
    *
    * <p>2026-08-03(Phase 12):不可变认证身份载荷 {@code ConsolePrincipal} 移入 {@code shared.security}，认证与授权策略仍归 rbac，实测降至 1196。
+   *
+   * <p>2026-08-03(Phase 13):observability 聚合服务改依赖顶层 {@code ConsoleOpsQueryPort}，Ops 查询实现仍归 Ops，实测降至 1181。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

@@ -89,6 +89,11 @@
 - 将仅承载 `username/tenantId/authorities` 的不可变认证身份载荷 `ConsolePrincipal` 移入 `shared.security`；JWT 签发/解析、认证过滤器、授权策略和租户守卫仍归 rbac。
 - 跨域直接依赖降至 **1196**，本批减少 **8 条**；ratchet 已下调至 1196。
 
+第十三批完成后：
+
+- 新增顶层应用端口 `ConsoleOpsQueryPort`，由 Ops 查询服务实现；observability 聚合门面不再直接注入 Ops 基础设施实现，查询方法、DTO、分页、SQL 和租户过滤保持不变。
+- 跨域直接依赖降至 **1181**，本批减少 **15 条**；ratchet 已下调至 1181。
+
 ## 第一阶段：清单与分类
 
 执行：

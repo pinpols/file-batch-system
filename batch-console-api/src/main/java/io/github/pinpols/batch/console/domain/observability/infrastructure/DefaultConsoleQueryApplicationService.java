@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.infrastructure;
 
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
 import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQueryService;
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
@@ -45,7 +46,6 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetrySched
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleOpsQueryService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
@@ -97,7 +97,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   private final ConsoleJobQueryService jobQueryService;
   private final ConsoleFileQueryService fileQueryService;
   private final ConsoleWorkflowQueryService workflowQueryService;
-  private final ConsoleOpsQueryService opsQueryService;
+  private final ConsoleOpsQueryPort opsQueryService;
   private final OperationAuditQueryService operationAuditQueryService;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
