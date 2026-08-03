@@ -8,12 +8,12 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
@@ -70,7 +70,7 @@ public class ConsoleJobOpsSupport {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantIdResolver tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
 
   public static String jobTypeCompensation() {
     return JOB_TYPE_COMPENSATION;

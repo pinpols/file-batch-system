@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
 import io.github.pinpols.batch.console.domain.ops.web.request.DrainWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.request.ForceOfflineWorkerRequest;
@@ -49,7 +49,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantIdResolver tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
 
   @Override
   public ConsoleWorkerRegistryResponse drain(

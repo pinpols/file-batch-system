@@ -7,7 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleOutboxEventReadMapper;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
@@ -38,7 +38,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
     service = new DefaultConsoleOutboxOpsApplicationService(
         tenantGuard,
         consoleOutboxEventReadMapper,
-        mock(ConsoleRealtimeDomainEventPublisher.class),
+        mock(ConsoleRealtimeEventPort.class),
         orchestratorProxy,
         cacheService);
   }

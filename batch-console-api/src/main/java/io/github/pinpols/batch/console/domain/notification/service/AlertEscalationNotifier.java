@@ -3,9 +3,9 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -38,7 +38,7 @@ import org.springframework.stereotype.Component;
  * <p>复用既有能力,不新增 Kafka / policy 表:
  *
  * <ul>
- *   <li>投递:{@link ConsoleRealtimeDomainEventPublisher#publishChanged} 发 {@code
+ *   <li>投递:{@link ConsoleRealtimeEventPort#publishChanged} 发 {@code
  *       alerts/ALERT_ESCALATED} 领域事件 → {@code ConsoleWebhookDomainEventListener} → 现有 webhook
  *       分发器(与告警 ack 走同一条路)。
  *   <li>调度:console-api 未启用全局 {@code @EnableScheduling},沿用自管理 {@link ScheduledExecutorService} +
@@ -72,7 +72,7 @@ public class AlertEscalationNotifier {
   private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(2);
 
   private final AlertEventMapper alertEventMapper;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
   private final LockingTaskExecutor lockingTaskExecutor;
   private final AlertEscalationNotifyProperties properties;
   private final Counter notifyCounter;
@@ -84,7 +84,7 @@ public class AlertEscalationNotifier {
 
   public AlertEscalationNotifier(
       AlertEventMapper alertEventMapper,
-      ConsoleRealtimeDomainEventPublisher domainEventPublisher,
+      ConsoleRealtimeEventPort domainEventPublisher,
       LockingTaskExecutor lockingTaskExecutor,
       AlertEscalationNotifyProperties properties,
       MeterRegistry meterRegistry) {

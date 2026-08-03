@@ -102,6 +102,8 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 12):不可变认证身份载荷 {@code ConsolePrincipal} 移入 {@code shared.security}，认证与授权策略仍归 rbac，实测降至 1196。
    *
    * <p>2026-08-03(Phase 13):observability 聚合服务改依赖顶层 {@code ConsoleOpsQueryPort}，Ops 查询实现仍归 Ops，实测降至 1181。
+   *
+   * <p>2026-08-03(Phase 14):跨域实时变更发布改依赖顶层 {@code ConsoleRealtimeEventPort}，Spring 事件和 SSE 适配器仍归 observability，实测降至 1145。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
@@ -35,7 +35,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final TenantIdResolver tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
   private final DownstreamFallback downstreamFallback;
   private final ConsoleQueryCacheService cacheService;
 

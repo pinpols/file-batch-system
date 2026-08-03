@@ -94,6 +94,11 @@
 - 新增顶层应用端口 `ConsoleOpsQueryPort`，由 Ops 查询服务实现；observability 聚合门面不再直接注入 Ops 基础设施实现，查询方法、DTO、分页、SQL 和租户过滤保持不变。
 - 跨域直接依赖降至 **1181**，本批减少 **15 条**；ratchet 已下调至 1181。
 
+第十四批完成后：
+
+- 新增顶层应用端口 `ConsoleRealtimeEventPort`，file、notification、ops 和 workflow 业务服务只依赖实时变更发布能力；Spring 应用事件、游标、Redis/SSE bridge 仍由 observability 具体实现。
+- 跨域直接依赖降至 **1145**，本批减少 **36 条**；ratchet 已下调至 1145。
+
 ## 第一阶段：清单与分类
 
 执行：

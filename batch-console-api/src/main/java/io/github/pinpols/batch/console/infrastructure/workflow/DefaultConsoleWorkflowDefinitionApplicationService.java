@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -57,7 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>每次写都调 {@link ConsoleConfigCacheInvalidationService#evictWorkflowDefinition}， 保证
  *       orchestrator launch 时读到最新拓扑（与 {@link DefaultConsoleJobDefinitionApplicationService} 一致的
  *       缓存一致性协议）。
- *   <li>通过 {@link ConsoleRealtimeDomainEventPublisher#publishChanged} 广播 {@code
+ *   <li>通过 {@link ConsoleRealtimeEventPort#publishChanged} 广播 {@code
  *       workflow-definitions} 事件 实时刷新前端视图。
  * </ul>
  *
@@ -82,7 +82,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   private final WorkflowEdgeMapper edgeMapper;
   private final WorkflowDefinitionVersionMapper versionMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
   private final WorkflowDesignLockService designLockService;

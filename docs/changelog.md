@@ -24,6 +24,7 @@
 - **有界上下文 Phase 11**：将租户作用域非空断言 `TenantScope` 移至 `shared.query`，保留 `FORBIDDEN error.tenant.context_missing` fail-fast 契约；跨域依赖从 1213 降至 1204，ratchet 同步下调。
 - **有界上下文 Phase 12**：将不可变认证身份载荷 `ConsolePrincipal` 移至 `shared.security`，认证过滤器、JWT、授权策略和租户守卫仍归 rbac；认证字段和权限语义不变，跨域依赖从 1204 降至 1196，ratchet 同步下调。
 - **有界上下文 Phase 13**：新增顶层应用端口 `ConsoleOpsQueryPort`，由 Ops 查询服务实现，observability 聚合门面不再直接依赖 Ops 基础设施类；查询、分页、SQL 和租户语义不变，跨域依赖从 1196 降至 1181，ratchet 同步下调。
+- **有界上下文 Phase 14**：新增顶层应用端口 `ConsoleRealtimeEventPort`，业务服务不再直接依赖 observability 的实时发布器；Spring 事件、游标和 SSE/Redis bridge 实现归 observability，事件语义不变，跨域依赖从 1181 降至 1145，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

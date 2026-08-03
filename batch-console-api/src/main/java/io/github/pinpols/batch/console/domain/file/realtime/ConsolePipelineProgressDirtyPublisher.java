@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsolePipelineProgressDirtyEventResponse;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.sql.ResultSet;
@@ -59,7 +59,7 @@ public class ConsolePipelineProgressDirtyPublisher {
       + " limit :limit";
 
   private final NamedParameterJdbcTemplate jdbc;
-  private final ConsoleRealtimeDomainEventPublisher eventPublisher;
+  private final ConsoleRealtimeEventPort eventPublisher;
 
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final Map<String, Instant> lastPublishedUpdateByPipeline = new ConcurrentHashMap<>();
