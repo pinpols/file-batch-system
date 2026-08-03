@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.ops.web.request.BatchApprovalActio
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -47,7 +48,7 @@ public class ConsoleApprovalController {
   private final ConsoleResponseFactory responseFactory;
   // R4-P0-2：所有 approve/reject 入口必须用 tenantGuard 校验请求体 tenantId 是否与 JWT 持有的 tenantId 一致，
   // 防止租户角色用户改 body tenantId 批准其他租户的 approvalNo。
-  private final io.github.pinpols.batch.console.shared.query.TenantIdResolver tenantGuard;
+  private final TenantIdResolver tenantGuard;
 
   /** 审批通过。 */
   @PostMapping("/{approvalNo}/approve")
