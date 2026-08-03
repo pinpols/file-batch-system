@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.rbac.service;
+package io.github.pinpols.batch.console.application.rbac;
 
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;

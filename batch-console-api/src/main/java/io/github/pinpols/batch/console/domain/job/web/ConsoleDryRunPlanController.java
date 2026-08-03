@@ -3,9 +3,9 @@ package io.github.pinpols.batch.console.domain.job.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.web.request.DryRunPlanRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleDryRunPlanResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>类级 {@code @PreAuthorize} 要求 ADMIN/CONFIG_ADMIN/AUDITOR —— 不允许 TENANT_USER 触发演练
- *   <li>body 中的 {@code tenantId} 必经 {@link ConsoleTenantGuard#resolveTenant} 校验后强制覆盖回 body，禁止信任
+ *   <li>body 中的 {@code tenantId} 必经 {@link TenantIdResolver#resolveTenant} 校验后强制覆盖回 body，禁止信任
  *       client 提交的 tenantId 跨租户触发演练
  *   <li>{@link OrchestratorInternalRestClient} 注入 {@code X-Internal-Secret}（已经是 console 调
  *       orchestrator internal API 的标准通道）
@@ -38,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsoleDryRunPlanController {
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/plan")

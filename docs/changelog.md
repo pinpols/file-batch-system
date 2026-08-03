@@ -34,6 +34,8 @@
 - **有界上下文 Phase 21**：将跨 Job、File、Workflow、Audit、Notification 和 Governance 的只读查询总门面提升到 `application.observability`，聚合 REST Controller 提升到顶层 `web`；查询、租户、分页、JSON 和路由语义不变，跨域依赖从 708 降至 372，ratchet 同步下调。
 - **有界上下文 Phase 22**：将 Ops 只读查询服务和聚合 Mapper 提升到 `application.ops`，保留 Ops 自有查询与各领域只读投影语义；跨域依赖从 372 降至 199，ratchet 同步下调。
 - **有界上下文 Phase 23**：将只读 AI 诊断工具提升到 `application.audit`，保持工具、租户绑定、查询和集群诊断契约不变；跨域依赖从 199 降至 145，ratchet 同步下调。
+- **有界上下文 Phase 24**：各领域 Controller 改依赖 `TenantIdResolver`，不再直接依赖 RBAC 具体租户守卫；租户解析、全局角色和 fail-close 语义不变，跨域依赖从 145 降至 84。
+- **有界上下文 Phase 25**：将租户 provisioning、readiness 和 meta 查询应用服务提升到 `application.rbac`，保留认证、授权、租户校验和查询语义，跨域依赖从 84 降至 59，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

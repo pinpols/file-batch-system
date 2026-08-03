@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.rbac.service;
+package io.github.pinpols.batch.console.application.rbac;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

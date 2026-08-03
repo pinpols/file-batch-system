@@ -148,6 +148,16 @@
 - 将只读 AI 诊断工具提升到 `application.audit`，由 Audit AI 应用服务继续按当前租户构造；Job/Notification 查询和 Ops 集群诊断仍通过既有应用端口/服务调用。
 - 不改变工具名称、参数、租户绑定、只读约束和返回文本；跨域直接依赖降至 **145**，本批减少 **54 条**；ratchet 已下调至 145。
 
+第二十四批完成后：
+
+- 各领域 Controller 改依赖 `TenantIdResolver`，不再直接依赖 RBAC 的具体 `ConsoleTenantGuard`；租户解析、全局角色、跨租户拒绝和 fail-close 语义不变。
+- 跨域直接依赖降至 **84**，本批减少 **61 条**。
+
+第二十五批完成后：
+
+- 将租户 provisioning、readiness 和 meta 查询应用服务提升到 `application.rbac`，因为它们编排多个领域的只读 Mapper/状态检查，不属于 RBAC 持久化模型本身。
+- 保留 RBAC 的认证、授权、租户 Guard、安全校验和所有数据库查询语义；跨域直接依赖降至 **59**，本批减少 **25 条**；ratchet 已下调至 59。
+
 ## 第一阶段：清单与分类
 
 执行：

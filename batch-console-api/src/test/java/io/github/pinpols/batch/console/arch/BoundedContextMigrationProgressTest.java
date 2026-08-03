@@ -123,6 +123,10 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 22):将 Ops 只读查询服务和其聚合 Mapper 提升到 {@code application.ops}，保留 Ops 自有查询和各领域只读投影语义，实测降至 199。
    *
    * <p>2026-08-03(Phase 23):将只读 AI 诊断工具提升到 {@code application.audit}，仍由 Audit AI 应用服务按租户构造，查询和集群诊断契约不变，实测降至 145。
+   *
+   * <p>2026-08-03(Phase 24):各领域 Controller 改依赖 {@code TenantIdResolver}，不再直接依赖 RBAC 的具体租户守卫；租户解析、全局角色和 fail-close 语义不变，实测降至 84。
+   *
+   * <p>2026-08-03(Phase 25):将租户 provisioning、readiness 和 meta 查询应用服务提升到 {@code application.rbac}，保留 RBAC 安全校验和领域 Mapper，实测降至 59。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

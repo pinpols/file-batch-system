@@ -12,6 +12,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
+import io.github.pinpols.batch.console.application.rbac.ConsoleTenantApplicationService;
+import io.github.pinpols.batch.console.application.rbac.ConsoleTenantReadinessService;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
