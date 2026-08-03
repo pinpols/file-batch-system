@@ -61,6 +61,12 @@
 - Replay、DryRun、ResultVersion、Realtime Controller 暂保留具体守卫，避免 API 文档门禁误报；Job 状态和重跑语义不变。
 - 跨域直接依赖降至 **1295**，本批减少 **34 条**；ratchet 已下调至 1295。
 
+第八批完成后：
+
+- workflow 查询服务改依赖 `TenantIdResolver`，不再直接绑定 RBAC 具体守卫。
+- Workflow 定义/运行实时 Controller 暂保留具体守卫，避免无 API 变化的注入调整触发文档门禁。
+- 跨域直接依赖降至 **1293**，本批减少 **2 条**；ratchet 已下调至 1293。
+
 ## 第一阶段：清单与分类
 
 执行：
