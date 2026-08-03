@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -111,29 +111,11 @@ public record JdbcMappedExportSpec(
       return (Map<String, Object>) m;
     }
     Object qps = templateConfig.get("query_param_schema");
-    Map<String, Object> qpsMap = toMap(qps, objectMapper);
+    Map<String, Object> qpsMap =
+        ExportConfigValueSupport.toMap(qps, objectMapper, JdbcMappedExportSpec.class);
     Object nested = qpsMap.get("jdbcMappedExport");
     if (nested instanceof Map<?, ?> m) {
       return (Map<String, Object>) m;
-    }
-    return Map.of();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> toMap(Object raw, ObjectMapper objectMapper) {
-    if (raw instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, v) -> out.put(String.valueOf(k), v));
-      return out;
-    }
-    String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-    if (Texts.hasText(text)) {
-      try {
-        return objectMapper.readValue(text, Map.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(JdbcMappedExportSpec.class, "catch:Exception", ignored);
-        return Map.of();
-      }
     }
     return Map.of();
   }

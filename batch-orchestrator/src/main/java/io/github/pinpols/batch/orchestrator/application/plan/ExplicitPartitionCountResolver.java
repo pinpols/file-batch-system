@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.util.Map;
 import org.springframework.core.annotation.Order;
@@ -18,37 +17,11 @@ public class ExplicitPartitionCountResolver implements PartitionCountResolver {
   @Override
   public int resolve(
       JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-    return firstPositiveInt(
+    return PartitionCountResolverSupport.firstPositiveInt(
+        ExplicitPartitionCountResolver.class,
         params.get("partitionCount"),
         params.get("estimatedPartitionCount"),
         params.get("suggestedPartitionCount"),
         params.get("shardCount"));
-  }
-
-  private int firstPositiveInt(Object... values) {
-    for (Object value : values) {
-      int candidate = toInt(value);
-      if (candidate > 0) {
-        return candidate;
-      }
-    }
-    return 0;
-  }
-
-  private int toInt(Object value) {
-    if (value == null) {
-      return 0;
-    }
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    try {
-      return Integer.parseInt(String.valueOf(value).trim());
-    } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          ExplicitPartitionCountResolver.class, "catch:NumberFormatException", ignored);
-
-      return 0;
-    }
   }
 }

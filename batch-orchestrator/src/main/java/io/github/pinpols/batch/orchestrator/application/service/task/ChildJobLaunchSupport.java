@@ -6,13 +6,13 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.WorkflowNodeRunSupport;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
@@ -20,7 +20,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.util.LinkedHashMap;
@@ -105,7 +104,11 @@ public class ChildJobLaunchSupport {
     guardAgainstNestingCycle(jobInstance, refJobCode, node.nodeCode());
 
     // 与 TASK/FILE_STEP 节点一致：立即将节点标为 READY
-    recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
+    WorkflowNodeRunSupport.recordReady(
+        workflowMappers.workflowNodeRunMapper,
+        workflowRun.getId(),
+        node.nodeCode(),
+        node.nodeType());
 
     String idempotencyKey =
         jobInstance.getTenantId() + ":wf:" + workflowRun.getId() + ":" + node.nodeCode();
@@ -297,32 +300,6 @@ public class ChildJobLaunchSupport {
         ctx.childRequestId(),
         ctx.traceId(),
         childParams);
-  }
-
-  // ── 与主 service 共享的 node_run 写入助手 ────────────────────────────────
-  // 这里复刻了主 service 的 recordNodeRunReady / nextRunSeq(各 ~12 LOC),原因:
-  // 跨类共享需要再抽一个 NodeRunSupport 类或在 service 上暴露 public 方法,
-  // 二选一都增加耦合;复刻 25 行是更小的代价。
-
-  private void recordNodeRunReady(Long workflowRunId, String nodeCode, String nodeType) {
-    WorkflowNodeRunEntity readyNode = new WorkflowNodeRunEntity();
-    readyNode.setWorkflowRunId(workflowRunId);
-    readyNode.setNodeCode(nodeCode);
-    readyNode.setNodeType(nodeType);
-    readyNode.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
-    readyNode.setNodeStatus(WorkflowNodeRunStatus.READY.code());
-    readyNode.setRetryCount(0);
-    readyNode.setDurationMs(0L);
-    workflowMappers.workflowNodeRunMapper.insert(readyNode);
-  }
-
-  private int nextRunSeq(Long workflowRunId, String nodeCode) {
-    WorkflowNodeRunEntity latestNodeRun =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    return latestNodeRun == null || latestNodeRun.getRunSeq() == null
-        ? 1
-        : latestNodeRun.getRunSeq() + 1;
   }
 
   @Builder

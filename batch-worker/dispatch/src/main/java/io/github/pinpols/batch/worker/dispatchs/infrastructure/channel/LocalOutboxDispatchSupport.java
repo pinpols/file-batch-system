@@ -15,7 +15,6 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * 将分发命令写入文件系统 outbox 目录（LOCAL 渠道及存根远程渠道）。 存根渠道符合设计意图：持久化载荷供运维核查，但不执行真实的 NAS/OSS/SFTP/EMAIL 传输协议。
@@ -40,19 +39,10 @@ final class LocalOutboxDispatchSupport {
       DispatchRuntimeProperties properties) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
-      String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "NONE"));
-      String externalRequestId = command.payload().externalRequestId() != null
-              && !command.payload().externalRequestId().isBlank()
-          ? command.payload().externalRequestId()
-          : UUID.randomUUID().toString();
-      String receiptCode = command.payload().receiptCode() != null
-              && !command.payload().receiptCode().isBlank()
-          ? command.payload().receiptCode()
-          : "R-" + externalRequestId;
-      boolean acknowledged =
-          "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
-      boolean pending =
-          "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+      DispatchReceiptSupport.Receipt receipt =
+          DispatchReceiptSupport.resolve(command, channelConfig, "NONE");
+      String externalRequestId = receipt.externalRequestId();
+      String receiptCode = receipt.receiptCode();
 
       String endpoint = channelConfig.get("target_endpoint") == null
           ? null
@@ -77,8 +67,8 @@ final class LocalOutboxDispatchSupport {
       envelope.put("dispatchTarget", command.payload().dispatchTarget());
       envelope.put("externalRequestId", externalRequestId);
       envelope.put("receiptCode", receiptCode);
-      envelope.put("acknowledged", acknowledged);
-      envelope.put("receiptPending", pending);
+      envelope.put("acknowledged", receipt.acknowledged());
+      envelope.put("receiptPending", receipt.pending());
       envelope.put("fileRecord", command.fileRecord());
       envelope.put("payload", command.payload());
       if (transportStub) {
@@ -109,8 +99,8 @@ final class LocalOutboxDispatchSupport {
           true,
           externalRequestId,
           receiptCode,
-          acknowledged,
-          pending,
+          receipt.acknowledged(),
+          receipt.pending(),
           message,
           envelopePath.toString(),
           manifest == null ? null : manifest.toRef());

@@ -3,10 +3,8 @@ package io.github.pinpols.batch.worker.exports.sql;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
-import java.util.LinkedHashMap;
+import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -40,14 +38,16 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
       throw new WorkerConfigException("default_query_sql is required for sql_template_export");
     }
 
-    Map<String, Object> schemaMap = toMap(templateConfig.get("query_param_schema"), objectMapper);
-    Map<String, Object> spec = toMap(
+    Map<String, Object> schemaMap = ExportConfigValueSupport.toMap(
+        templateConfig.get("query_param_schema"), objectMapper, SqlTemplateExportSpec.class);
+    Map<String, Object> spec = ExportConfigValueSupport.toMap(
         firstNonNull(
             schemaMap.get("sqlTemplateExport"),
             schemaMap.get("sql_template_export"),
             templateConfig.get("sql_template_export"),
             templateConfig.get("sqlTemplateExport")),
-        objectMapper);
+        objectMapper,
+        SqlTemplateExportSpec.class);
 
     String cursorColumn =
         textValue(firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column")));
@@ -98,25 +98,5 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     }
     String text = String.valueOf(value);
     return Texts.hasText(text) ? text.trim() : null;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> toMap(Object raw, ObjectMapper objectMapper) {
-    if (raw instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, v) -> out.put(String.valueOf(k), v));
-      return out;
-    }
-    String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-    if (Texts.hasText(text)) {
-      try {
-        return objectMapper.readValue(text, Map.class);
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(SqlTemplateExportSpec.class, "catch:Exception", ignored);
-
-        return Map.of();
-      }
-    }
-    return Map.of();
   }
 }

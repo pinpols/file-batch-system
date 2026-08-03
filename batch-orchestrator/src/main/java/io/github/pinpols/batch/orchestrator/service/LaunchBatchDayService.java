@@ -552,14 +552,7 @@ public class LaunchBatchDayService {
       BatchDayInstanceEntity batchDay,
       String alertType,
       String severity) {
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("tenantId", request.tenantId());
-    detail.put("jobCode", request.jobCode());
-    detail.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
-    detail.put("requestId", request.requestId());
-    detail.put(
-        "triggerType",
-        request.triggerType() == null ? null : request.triggerType().code());
+    Map<String, Object> detail = BatchDayAlertDetails.base(request, null);
     detail.put("calendarCode", calendarCode);
     detail.put("batchDayStatus", batchDay == null ? null : batchDay.dayStatus());
     detail.put(

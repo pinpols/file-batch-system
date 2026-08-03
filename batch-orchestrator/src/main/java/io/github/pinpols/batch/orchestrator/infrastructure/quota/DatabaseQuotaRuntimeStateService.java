@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -67,26 +68,18 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   @Override
   @Transactional
   public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
-    if (request == null
-        || request.owner() == null
-        || !Texts.hasText(request.owner().tenantId())
-        || !Texts.hasText(request.owner().quotaScope())
-        || !Texts.hasText(request.owner().ownerCode())) {
+    QuotaReservationSupport.Precheck precheck = QuotaReservationSupport.precheck(request);
+    if (!precheck.applicable()) {
       return ResourceCheck.allow();
     }
-    if (request.policy() == null || request.policy().baseCap() <= 0) {
-      return ResourceCheck.allow();
+    Optional<ResourceCheck> staticCheck =
+        QuotaReservationSupport.resolveStaticReservation(request, precheck, this::waitForCapacity);
+    if (staticCheck.isPresent()) {
+      return staticCheck.get();
     }
-    int normalizedBurst = Math.max(0, request.policy().burstLimit());
-    int normalizedRequested = Math.max(1, request.requestedCount());
-    QuotaResetPolicy policy = QuotaResetPolicy.from(request.policy().quotaResetPolicy());
-    if (!policy.isRuntimeManaged() || normalizedBurst == 0) {
-      long cap = (long) request.policy().baseCap() + normalizedBurst;
-      if (request.currentActiveCount() + normalizedRequested > cap) {
-        return waitForCapacity(request);
-      }
-      return ResourceCheck.allow();
-    }
+    int normalizedBurst = precheck.normalizedBurst();
+    int normalizedRequested = precheck.normalizedRequested();
+    QuotaResetPolicy policy = precheck.policy();
 
     Instant now = BatchDateTimeSupport.utcNow();
     QuotaRuntimeStateEntity state = loadOrCreate(new StateContext(

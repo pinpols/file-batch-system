@@ -36,6 +36,7 @@ public interface WorkerReportOutboxSqliteMapper {
       @Param("updatedAt") long updatedAt,
       @Param("publishStatus") String publishStatus);
 
+  // CPD-OFF: PostgreSQL and SQLite report-outbox mappers intentionally mirror the same contract.
   int resetStalePublishing(
       @Param("statusNew") String statusNew,
       @Param("now") long now,
@@ -54,4 +55,5 @@ public interface WorkerReportOutboxSqliteMapper {
       @Param("publishStatus") String publishStatus,
       @Param("now") long now,
       @Param("maxAttempts") int maxAttempts);
+  // CPD-ON
 }

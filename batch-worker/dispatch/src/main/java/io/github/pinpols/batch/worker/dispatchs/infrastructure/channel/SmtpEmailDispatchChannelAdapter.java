@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
@@ -79,22 +78,11 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
           false, null, null, false, false, "mail_from/mail_to or target_endpoint missing", null);
     }
 
-    String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    String externalRequestId = command.payload().externalRequestId() != null
-            && !command.payload().externalRequestId().isBlank()
-        ? command.payload().externalRequestId()
-        : UUID.randomUUID().toString();
-    String receiptCode = command.payload().receiptCode() != null
-            && !command.payload().receiptCode().isBlank()
-        ? command.payload().receiptCode()
-        : "R-" + externalRequestId;
-    boolean acknowledged =
-        "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
-    boolean pending =
-        "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+    DispatchReceiptSupport.Receipt receipt =
+        DispatchReceiptSupport.resolve(command, channelConfig, "SYNC");
 
     try {
-      MimeMessage message = buildMimeMessage(mailConfig, command, externalRequestId);
+      MimeMessage message = buildMimeMessage(mailConfig, command, receipt.externalRequestId());
       // ⚠4 (2026-05-03): 改 ByteArrayDataSource 直接桥接 InputStream → SMTP socket. 之前 Files.copy 落 temp
       // file
       // 后 FileDataSource 又被 jakarta.mail 整块读到 socket = 2× 磁盘 IO. 25MB 上限已防 OOM.
@@ -103,17 +91,23 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       sendMail(mailConfig, message);
       return new DispatchResult(
           true,
-          externalRequestId,
-          receiptCode,
-          acknowledged,
-          pending,
+          receipt.externalRequestId(),
+          receipt.receiptCode(),
+          receipt.acknowledged(),
+          receipt.pending(),
           "sent via SMTP",
           "mailto:" + mailConfig.to());
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(SmtpEmailDispatchChannelAdapter.class, "catch:Exception", ex);
 
       return new DispatchResult(
-          false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
+          false,
+          receipt.externalRequestId(),
+          receipt.receiptCode(),
+          false,
+          false,
+          ex.getMessage(),
+          null);
     }
   }
 
@@ -270,19 +264,11 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private static String stringProp(Map<String, Object> map, String key) {
-    Object v = map == null ? null : map.get(key);
-    return v == null ? null : String.valueOf(v);
+    return DispatchChannelConfigSupport.stringProp(map, key);
   }
 
   private static int intProp(Map<String, Object> map, String key, int def) {
-    Object v = map == null ? null : map.get(key);
-    if (v instanceof Number n) {
-      return n.intValue();
-    }
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return Integer.parseInt(String.valueOf(v).trim());
-    }
-    return def;
+    return DispatchChannelConfigSupport.intProp(map, key, def);
   }
 
   private static int positiveIntProp(Map<String, Object> map, String key, int def) {

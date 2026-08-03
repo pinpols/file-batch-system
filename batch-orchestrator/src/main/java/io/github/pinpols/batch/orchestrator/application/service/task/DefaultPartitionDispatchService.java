@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutbo
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanSupport;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
@@ -24,7 +25,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
-import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -140,7 +140,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     SchedulePlan plan = schedulePlanBuilder.build(new SchedulePlanCommand(
         request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams));
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
-    ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
+    ResourceSchedulingDecision decision =
+        resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan));
     if (isRejected(decision)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
@@ -148,7 +149,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
           decision.getReasonCode(),
           decision.getReasonMessage());
     }
-    applySchedulingDecision(plan, decision);
+    SchedulePlanSupport.applySchedulingDecision(plan, decision);
     List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
         plan, jobInstance.getId(), decision.getPartitionStatus());
     createTasksAndMaybeOutboxEvents(new TaskCreationContext(
@@ -287,47 +288,6 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     task.setDryRun(
         Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
     return task;
-  }
-
-  private ResourceSchedulingRequest buildSchedulingRequest(SchedulePlan plan) {
-    ResourceSchedulingRequest request = new ResourceSchedulingRequest();
-    request.setTenantId(plan.getTenantId());
-    request.setJobCode(plan.getJobCode());
-    request.setQueueCode(plan.getQueueCode());
-    request.setWorkerGroup(plan.getWorkerGroup());
-    request.setWorkerType(plan.getDefaultWorkerType());
-    request.setWindowCode(plan.getWindowCode());
-    request.setPriority(plan.getPriority());
-    request.setRequestedPartitionCount(
-        plan.getPartitionCount() == null ? 1 : plan.getPartitionCount());
-    return request;
-  }
-
-  private void applySchedulingDecision(SchedulePlan plan, ResourceSchedulingDecision decision) {
-    if (plan == null || decision == null) {
-      return;
-    }
-    if (decision.getQueueCode() != null && !decision.getQueueCode().isBlank()) {
-      plan.setQueueCode(decision.getQueueCode());
-    }
-    if (decision.getWorkerGroup() != null && !decision.getWorkerGroup().isBlank()) {
-      plan.setWorkerGroup(decision.getWorkerGroup());
-    }
-    if (decision.getPriority() != null) {
-      plan.setPriority(decision.getPriority());
-    }
-    if (decision.getRoute() != null) {
-      plan.setDefaultWorkerRoute(decision.getRoute());
-    }
-    if (plan.getPartitions() == null) {
-      return;
-    }
-    for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
-      partitionPlan.setPartitionStatus(decision.getPartitionStatus());
-      if (decision.getRoute() != null) {
-        partitionPlan.setWorkerRoute(decision.getRoute());
-      }
-    }
   }
 
   private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {

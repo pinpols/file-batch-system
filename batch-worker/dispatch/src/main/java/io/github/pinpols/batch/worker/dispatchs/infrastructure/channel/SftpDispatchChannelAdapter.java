@@ -131,19 +131,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
 
-    String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    String externalRequestId = command.payload().externalRequestId() != null
-            && !command.payload().externalRequestId().isBlank()
-        ? command.payload().externalRequestId()
-        : UUID.randomUUID().toString();
-    String receiptCode = command.payload().receiptCode() != null
-            && !command.payload().receiptCode().isBlank()
-        ? command.payload().receiptCode()
-        : "R-" + externalRequestId;
-    boolean acknowledged =
-        "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
-    boolean pending =
-        "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+    DispatchReceiptSupport.Receipt receipt =
+        DispatchReceiptSupport.resolve(command, channelConfig, "SYNC");
 
     SftpUploadContext uploadCtx = SftpUploadContext.builder()
         .command(command)
@@ -151,10 +140,10 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         .connConfig(connConfig)
         .remoteTarget(remoteTarget)
         .fileRecord(command.fileRecord())
-        .externalRequestId(externalRequestId)
-        .receiptCode(receiptCode)
-        .acknowledged(acknowledged)
-        .pending(pending)
+        .externalRequestId(receipt.externalRequestId())
+        .receiptCode(receipt.receiptCode())
+        .acknowledged(receipt.acknowledged())
+        .pending(receipt.pending())
         .build();
     return uploadViaSftp(uploadCtx);
   }
@@ -379,19 +368,11 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private static String stringProp(Map<String, Object> map, String key) {
-    Object v = map == null ? null : map.get(key);
-    return v == null ? null : String.valueOf(v);
+    return DispatchChannelConfigSupport.stringProp(map, key);
   }
 
   private static int intProp(Map<String, Object> map, String key, int def) {
-    Object v = map == null ? null : map.get(key);
-    if (v instanceof Number n) {
-      return n.intValue();
-    }
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return Integer.parseInt(String.valueOf(v).trim());
-    }
-    return def;
+    return DispatchChannelConfigSupport.intProp(map, key, def);
   }
 
   private static String firstNonBlank(String a, String b) {

@@ -16,6 +16,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointP
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
+import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
@@ -310,18 +311,7 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
-    Object templateConfigObject =
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get(key);
-      if (value instanceof Number number) {
-        return Math.max(1, number.intValue());
-      }
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Math.max(1, Integer.parseInt(String.valueOf(value)));
-      }
-    }
-    return fallback;
+    return ExportConfigValueSupport.resolveTemplateInt(context, key, fallback);
   }
 
   private Path createGeneratedFile(
