@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleApiKeyCreateResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;

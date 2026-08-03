@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantApplicationService.BatchCreateTenantCommand;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleTenantApplicationService.ConfigInitOption;
@@ -19,6 +18,7 @@ import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleTenantRes
 import io.github.pinpols.batch.console.domain.rbac.web.response.ProvisionTenantResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

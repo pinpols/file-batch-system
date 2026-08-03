@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.observability.service.SseTicketService;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
@@ -19,6 +18,7 @@ import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthToken
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleLoginPublicKeyResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleStreamTicketResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

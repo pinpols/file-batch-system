@@ -2,12 +2,12 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.web.request.ApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.web.request.BatchApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;

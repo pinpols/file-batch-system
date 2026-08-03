@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
 import io.github.pinpols.batch.console.service.ConsoleBusinessTenantPlacementService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;

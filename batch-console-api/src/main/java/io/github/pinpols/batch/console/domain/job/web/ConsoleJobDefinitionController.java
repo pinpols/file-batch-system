@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchEnabledPatchRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.EnabledPatchRequest;
@@ -10,6 +9,7 @@ import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCreat
 import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobDefinitionResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

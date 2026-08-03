@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
@@ -11,6 +10,7 @@ import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxClea
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;

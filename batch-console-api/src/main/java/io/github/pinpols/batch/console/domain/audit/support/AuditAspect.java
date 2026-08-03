@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
@@ -82,7 +83,7 @@ public class AuditAspect {
     this.requiresNewTemplate = tmpl;
   }
 
-  @Around("@annotation(io.github.pinpols.batch.console.domain.audit.support.AuditAction)")
+  @Around("@annotation(io.github.pinpols.batch.console.shared.audit.AuditAction)")
   public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
     MethodSignature sig = (MethodSignature) pjp.getSignature();
     Method method = sig.getMethod();

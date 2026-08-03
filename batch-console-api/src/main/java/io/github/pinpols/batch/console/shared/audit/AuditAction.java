@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.audit.support;
+package io.github.pinpols.batch.console.shared.audit;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -6,7 +6,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 标注 Controller 写操作方法,由 {@link AuditAspect} 同事务写一行 {@code batch.console_operation_audit}。
+ * 标注 Controller 写操作方法,由 {@code AuditAspect} 同事务写一行 {@code batch.console_operation_audit}。
+ *
+ * <p>这是跨 bounded context 复用的无状态审计声明,不承载审计查询或业务逻辑。
  *
  * <p>用法示例:
  *
@@ -53,10 +55,7 @@ public @interface AuditAction {
   /**
    * 目标租户的 SpEL 表达式或参数名,运行时对入参求值得到目标租户 ID。例如 {@code "#tenantId"} 或 {@code "#request.tenantId"}。
    *
-   * <p><b>用途:</b>ROLE_ADMIN 跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)})的 {@link
-   * io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal#tenantId()} 为 null, 默认会回退到
-   * {@code "system"},导致审计行 tenant_id="system",取证按目标租户查询时漏掉这些行。 显式指定 {@code targetTenantParam}
-   * 后,审计行的 tenant_id 取该入参值,而非 principal 的租户。
+   * <p><b>用途:</b>ROLE_ADMIN 跨租操作的 principal.tenantId() 为 null,默认会回退到 {@code "system"},导致审计行 tenant_id="system",取证按目标租户查询时漏掉这些行。显式指定 {@code targetTenantParam} 后,审计行的 tenant_id 取该入参值,而非 principal 的租户。
    *
    * <p><b>解析优先级:</b>targetTenantParam(非空且成功求值) → principal.tenantId() → MDC tenant → "system"。
    *

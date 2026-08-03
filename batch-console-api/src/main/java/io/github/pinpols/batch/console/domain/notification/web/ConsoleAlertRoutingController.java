@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.AlertRoutingSaveRequest;
 import jakarta.validation.Valid;
