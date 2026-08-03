@@ -7,6 +7,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +60,10 @@ public class ValidationRuleSetMerger {
         if (Texts.hasText(name)
             && booleanValue(
                 firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false)) {
-          derived.put(name, Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
+          derived.put(
+              name,
+              Map.of(
+                  KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()));
         }
       }
     }

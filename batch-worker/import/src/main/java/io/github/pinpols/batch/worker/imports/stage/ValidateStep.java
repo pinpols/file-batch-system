@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportDataQualityService;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ControlTotalEvaluator;
@@ -51,8 +52,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ValidateStep implements ImportStageStep {
 
-  private static final String ERROR_CODE_NO_STREAM = "IMPORT_VALIDATE_NO_STREAM";
-
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String ERR_SKIP_THRESHOLD_EXCEEDED = "IMPORT_SKIP_THRESHOLD_EXCEEDED";
   private static final String MSG_SKIP_THRESHOLD_EXCEEDED = "skip threshold exceeded";
@@ -79,7 +78,7 @@ public class ValidateStep implements ImportStageStep {
     if (!Texts.hasText(parsedRecordsPath)) {
       return ImportStageResult.failure(
           stage(),
-          ERROR_CODE_NO_STREAM,
+          ImportValidationErrorCode.NO_STREAM.code(),
           "error.import.validate.no_stream",
           new Object[] {"parsed records path missing"},
           "parsed records path missing",
@@ -92,7 +91,7 @@ public class ValidateStep implements ImportStageStep {
     if (!Files.exists(parsedRecordsPath)) {
       return ImportStageResult.failure(
           stage(),
-          ERROR_CODE_NO_STREAM,
+          ImportValidationErrorCode.NO_STREAM.code(),
           "error.import.validate.no_stream",
           new Object[] {"parsed records file missing"},
           "parsed records file missing",
@@ -156,7 +155,7 @@ public class ValidateStep implements ImportStageStep {
           exception);
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_VALIDATE_FAILED",
+          ImportValidationErrorCode.FAILED.code(),
           "error.import.validate.failed",
           new Object[] {exception.getMessage()},
           exception.getMessage(),
@@ -301,7 +300,11 @@ public class ValidateStep implements ImportStageStep {
           SwallowedExceptionLogger.warn(ValidateStep.class, "catch:Exception", exception);
 
           ValidationErrorOutcome outcome = recordValidationError(
-              context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
+              context,
+              recordNo,
+              ImportValidationErrorCode.TYPE_INVALID.code(),
+              exception.getMessage(),
+              line);
           if (outcome.stop()) {
             return new StreamingValidationResult(
                 validatedCount,

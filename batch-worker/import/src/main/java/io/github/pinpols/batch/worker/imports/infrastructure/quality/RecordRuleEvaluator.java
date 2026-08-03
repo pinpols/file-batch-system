@@ -18,6 +18,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -189,8 +190,9 @@ public class RecordRuleEvaluator {
       Set<String> seen = seenValues.computeIfAbsent(field, ignored -> new LinkedHashSet<>());
       String normalized = value.toUpperCase(Locale.ROOT);
       if (!seen.add(normalized)) {
-        String errorCode =
-            "customerNo".equals(field) ? "IMPORT_VALIDATE_DUPLICATE" : "IMPORT_VALIDATE_UNIQUE";
+        String errorCode = "customerNo".equals(field)
+            ? ImportValidationErrorCode.DUPLICATE.code()
+            : ImportValidationErrorCode.UNIQUE.code();
         return new ValidationIssue(recordNo, errorCode, "duplicate " + field + ": " + value, row);
       }
     }
