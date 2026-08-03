@@ -16,12 +16,11 @@ import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupA
 import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
@@ -47,7 +46,7 @@ import org.springframework.web.multipart.MultipartFile;
  *       approvalId} 时先 {@link #requireApprovedApproval} 校验审批已通过或已执行，再拿 presign URL。 与 {@link
  *       DefaultConsoleFileGovernanceService} 里加密文件走 console 代理 URL 的逻辑配合， 保证敏感文件下载全程有审批留痕。
  *   <li><b>请求三件套</b>：所有下游调用都带 {@code Idempotency-Key / X-Request-Id / X-Trace-Id} （与 {@link
- *       ConsoleJobOpsSupport} 协议一致）。
+ *       Job 操作端口协议一致）。
  *   <li><b>文本入参清洗</b>：channelCode / reason / operatorId 经 {@link ConsoleTextSanitizer#safeInput}
  *       截断并过滤控制字符再落到下游。
  * </ul>
@@ -61,7 +60,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
   // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final FileRecordMapper fileRecordMapper;
   private final BatchObjectStore objectStore;
   private final S3StorageProperties s3StorageProperties;

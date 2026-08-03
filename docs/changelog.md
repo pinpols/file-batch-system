@@ -10,6 +10,35 @@
 - **ADR-033 调度器边界校正**：明确 Hashed Wheel 方案已撤回，当前生产调度基线为 Quartz；只有达到明确的容量或时序门槛才重新评估时间轮。若重新评估，时间轮核心必须采用成熟开源实现（例如 Netty `HashedWheelTimer`），不得在 BFS 内自行实现核心调度算法；BFS 只负责业务语义适配、持久化、幂等、租户隔离、故障转移和可观测性。
 - **Controller 响应边界澄清**：`CommonResponse<T>` 仅约束 `batch-console-api` 对外 Console REST API；服务间 `/internal/**` 保留登记的 DTO / Map 协议，避免文档规则误导内部接口改包络。
 - **有界上下文门禁启用**：`BoundedContextDependencyArchTest` 从完全跳过改为 1841 条历史依赖基线的 ratchet 门禁；跨域依赖不得继续增加，降到 0 后再切换严格隔离规则。
+- **有界上下文治理计划落地**：新增 [`bounded-context-migration-plan-2026-08-03.md`](analysis/bounded-context-migration-plan-2026-08-03.md)，先生成逐类依赖清单并按只读聚合、写路径、包结构分阶段治理。
+- **有界上下文 Phase 1**：将无业务状态的 `ConsoleQuerySupport` 与租户解析 Port 移入 `shared.query`，跨域依赖从 1841 降至 1480，ratchet 同步下调。
+- **有界上下文 Phase 2**：将通用 `SimpleOptionView` 提取到 `shared.view`，将集群诊断投影 `ShedLockView` / `DeliveryStatusCountView` 收回 `ops.view.cluster`，同步 MyBatis 映射和测试引用；跨域依赖从 1480 降至 1464，ratchet 同步下调。
+- **有界上下文 Phase 3**：将纯实时事件载荷 `ConsoleRealtimeDomainEvent` 提取到 `shared.event`，保留 observability 的发布器与 SSE/Redis 桥接基础设施；跨域依赖从 1464 降至 1449，ratchet 同步下调。
+- **有界上下文 Phase 4**：Ops 侧只依赖 `TenantIdResolver` / `TenantScopeResolver` Port，`ConsoleTenantGuard` 仍为唯一实现，保持租户安全语义不变；跨域依赖从 1449 降至 1374，ratchet 同步下调。
+- **有界上下文 Phase 5**：notification 的租户感知 Service 改依赖 `TenantIdResolver`，实时 Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1374 降至 1357，ratchet 同步下调。
+- **有界上下文 Phase 6**：file 的文件服务和查询服务改依赖 `TenantIdResolver`，实时 Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1357 降至 1329，ratchet 同步下调。
+- **有界上下文 Phase 7**：job 的定义、日历、窗口、Bundle 和自服务改依赖 `TenantIdResolver`，Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1329 降至 1295，ratchet 同步下调。
+- **有界上下文 Phase 8**：workflow 查询服务改依赖 `TenantIdResolver`，实时 Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1295 降至 1293，ratchet 同步下调。
+- **有界上下文 Phase 9**：audit 查询和 observability 查询/实时流改依赖 `TenantIdResolver`，保持租户、聚合和 SSE 语义不变；跨域依赖从 1293 降至 1266，ratchet 同步下调。
+- **有界上下文 Phase 10**：将无状态横切审计声明 `AuditAction` 移至 `shared.audit`，由各领域 Controller 复用，`AuditAspect` 仍归 audit context；HTTP、鉴权、审计事务和租户解析语义不变，跨域依赖从 1266 降至 1213，ratchet 同步下调。
+- **有界上下文 Phase 11**：将租户作用域非空断言 `TenantScope` 移至 `shared.query`，保留 `FORBIDDEN error.tenant.context_missing` fail-fast 契约；跨域依赖从 1213 降至 1204，ratchet 同步下调。
+- **有界上下文 Phase 12**：将不可变认证身份载荷 `ConsolePrincipal` 移至 `shared.security`，认证过滤器、JWT、授权策略和租户守卫仍归 rbac；认证字段和权限语义不变，跨域依赖从 1204 降至 1196，ratchet 同步下调。
+- **有界上下文 Phase 13**：新增顶层应用端口 `ConsoleOpsQueryPort`，由 Ops 查询服务实现，observability 聚合门面不再直接依赖 Ops 基础设施类；查询、分页、SQL 和租户语义不变，跨域依赖从 1196 降至 1181，ratchet 同步下调。
+- **有界上下文 Phase 14**：新增顶层应用端口 `ConsoleRealtimeEventPort`，业务服务不再直接依赖 observability 的实时发布器；Spring 事件、游标和 SSE/Redis bridge 实现归 observability，事件语义不变，跨域依赖从 1181 降至 1145，ratchet 同步下调。
+- **有界上下文 Phase 15**：新增顶层应用端口 `ConsoleRealtimeSubscriptionPort`，各领域 SSE Controller 不再直接依赖 observability 的 Hub；连接生命周期、心跳、回放和 Redis 语义不变，跨域依赖从 1145 降至 1120，ratchet 同步下调。
+- **有界上下文 Phase 16**：将跨多个上下文复用的只读响应 DTO 移入 `shared.view`，将跨 Job/Ops 使用的补跑审批命令移入 `shared.command`；JSON、REST、SQL、分页和租户语义不变，跨域依赖从 1120 降至 974，ratchet 同步下调。
+- **有界上下文 Phase 17**：将编排器代理和触发器代理提升为顶层应用端口，报表导出复用编排器查询端口；HTTP 适配器、下游熔断、缓存和实时刷新语义不变，跨域依赖从 974 降至 927，ratchet 同步下调。
+- **有界上下文 Phase 18**：将跨 Job、治理和 Ops 使用的命令请求 DTO 移入 `shared.command`，保持请求字段、校验和 REST 协议不变；跨域依赖从 927 降至 893，ratchet 同步下调。
+- **有界上下文 Phase 19**：将编排器和触发器内部 HTTP Client 适配器移入 `shared.client`，调用方不再依赖 Ops 基础设施实现；认证、熔断、错误映射和下游协议不变，`file -> ops` 依赖归零，跨域依赖从 893 降至 875，ratchet 同步下调。
+- **有界上下文 Phase 20**：新增 `ConsoleJobOperationsPort`，Job 的审批、补偿、恢复和触发服务改依赖应用端口；审批客户端、内部 HTTP、实时事件和事务实现仍由 Ops 持有，`job -> ops` 依赖归零，跨域依赖从 875 降至 708，ratchet 同步下调。
+- **有界上下文 Phase 21**：将跨 Job、File、Workflow、Audit、Notification 和 Governance 的只读查询总门面提升到 `application.observability`，聚合 REST Controller 提升到顶层 `web`；查询、租户、分页、JSON 和路由语义不变，跨域依赖从 708 降至 372，ratchet 同步下调。
+- **有界上下文 Phase 22**：将 Ops 只读查询服务和聚合 Mapper 提升到 `application.ops`，保留 Ops 自有查询与各领域只读投影语义；跨域依赖从 372 降至 199，ratchet 同步下调。
+- **有界上下文 Phase 23**：将只读 AI 诊断工具提升到 `application.audit`，保持工具、租户绑定、查询和集群诊断契约不变；跨域依赖从 199 降至 145，ratchet 同步下调。
+- **有界上下文 Phase 24**：各领域 Controller 改依赖 `TenantIdResolver`，不再直接依赖 RBAC 具体租户守卫；租户解析、全局角色和 fail-close 语义不变，跨域依赖从 145 降至 84。
+- **有界上下文 Phase 25**：将租户 provisioning、readiness 和 meta 查询应用服务提升到 `application.rbac`，保留认证、授权、租户校验和查询语义，跨域依赖从 84 降至 59，ratchet 同步下调。
+- **有界上下文 Phase 26**：将 File、Job 和 Workflow 共用的 `EnabledPatchRequest` 移至 `shared.command`，保持字段、校验和 REST 契约不变，跨域依赖从 59 降至 50，ratchet 同步下调。
+- **有界上下文 Phase 27**：将 SSE ticket 和系统参数应用服务提升到 `application.observability`，保留 Redis 一次性消费、角色绑定、缓存、租户校验和 REST 语义，跨域依赖从 50 降至 29，ratchet 同步下调。
+- **有界上下文 Phase 28**：运维摘要实时流改依赖应用层订阅端口，Workflow DAG 校验通过最小 Job 引用端口访问 Job 类型；保留 SSE、拓扑、缓存和租户语义，跨域依赖从 29 降至 0，门禁切换为严格 0 断言。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

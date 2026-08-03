@@ -5,9 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -57,7 +57,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
             io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper
                 .class),
         jobDefinitionMapper,
-        mock(ConsoleRealtimeDomainEventPublisher.class),
+        mock(ConsoleRealtimeEventPort.class),
         tenantGuard,
         mock(ConsoleConfigCacheInvalidationService.class),
         mock(

@@ -6,8 +6,8 @@ import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChanne
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelUpdateRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.EnabledPatchRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;

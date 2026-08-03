@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
+import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleInstanceDiagnosisResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxHealthResponse;

@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeEventHub;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -23,7 +23,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ConsoleJobInstanceRealtimeControllerTest {
 
-  private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
+  private final ConsoleRealtimeSubscriptionPort realtimeEventHub =
+      mock(ConsoleRealtimeSubscriptionPort.class);
   private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);

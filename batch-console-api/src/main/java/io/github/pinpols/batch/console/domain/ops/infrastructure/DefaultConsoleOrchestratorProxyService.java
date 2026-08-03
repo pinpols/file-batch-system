@@ -2,11 +2,12 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,7 +21,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 
 /**
- * {@link ConsoleOrchestratorProxyService} 的默认实现：通过 RestClient 转发请求到编排器内部接口。
+ * {@link ConsoleOrchestratorPort} 的默认实现：通过 RestClient 转发请求到编排器内部接口。
  *
  * <p>P1-B(2026-05-30):全部调用走 {@link DownstreamFallback} 统一打 metrics。读路径 {@code
  * scheduler-snapshot-history} 用 {@code callOrFallback} 降级为空 list;{@code scheduler-snapshot} 因为强类型响应
@@ -28,14 +29,14 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestratorProxyService {
+public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestratorPort {
 
   private static final String SVC = "orchestrator";
   private static final String PARAM_TENANT_ID = "tenantId";
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final TenantIdResolver tenantGuard;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
   private final DownstreamFallback downstreamFallback;
   private final ConsoleQueryCacheService cacheService;
 

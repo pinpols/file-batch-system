@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerFingerprintMapper;
 import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintSummaryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 public class ConsoleWorkerFingerprintQueryService {
 
   private final WorkerFingerprintMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleQueryCacheService cacheService;
   private final WorkerCompatibilityEvaluator compatibilityEvaluator;
 

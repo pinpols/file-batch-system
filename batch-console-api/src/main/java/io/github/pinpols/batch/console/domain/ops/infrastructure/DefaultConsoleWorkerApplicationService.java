@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
 import io.github.pinpols.batch.console.domain.ops.web.request.DrainWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.request.ForceOfflineWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerClaimedTaskResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
@@ -35,8 +36,7 @@ import org.springframework.web.client.RestClient;
  * <p>写操作统一广播 {@code publishChanged(workers)} + {@code publishSummaryRefresh}， 让前端 worker
  * 列表与仪表盘实时刷新。
  *
- * <p>所有下游请求都带 {@code Idempotency-Key / Request-Id / Trace-Id} 三件套 （与 {@link ConsoleJobOpsSupport}
- * 保持一致的 BFF 调用协议）。
+ * <p>所有下游请求都带 {@code Idempotency-Key / Request-Id / Trace-Id} 三件套，保持统一的 BFF 调用协议。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,8 +48,8 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final TenantIdResolver tenantGuard;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
 
   @Override
   public ConsoleWorkerRegistryResponse drain(

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.application;
 import io.github.pinpols.batch.console.domain.ops.web.request.DrainWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.request.ForceOfflineWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerClaimedTaskResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import java.util.List;
 
 /** 控制台 Worker 运维应用服务：优雅排空、强制下线及已认领任务查询。 */

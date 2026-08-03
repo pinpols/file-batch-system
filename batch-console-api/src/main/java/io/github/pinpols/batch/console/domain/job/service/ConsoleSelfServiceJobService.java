@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.service;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
@@ -19,7 +19,7 @@ public class ConsoleSelfServiceJobService {
   // 现统一走共享 OrchestratorApprovalClient（内部走带 secret 的 OrchestratorInternalRestClient），
   // 顺带补齐此前缺失的 requestId/traceId header 透传与 requesterId 文本清洗。
   private final OrchestratorApprovalClient approvalClient;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
 
   public String requestRerun(RerunParam param, String operator, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(param.tenantId());

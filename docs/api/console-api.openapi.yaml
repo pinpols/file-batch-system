@@ -2,8 +2,12 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-07-09"
+  x-last-updated: "2026-08-03"
   x-changelog:
+    - date: "2026-08-03"
+      summary: "有界上下文治理仅调整内部 Java 依赖方向与共享 DTO 包位置；Console REST 路径、请求/响应字段和鉴权语义不变"
+    - date: "2026-08-03"
+      summary: "内部审计声明注解移至 shared 横切包；HTTP 路径、请求/响应字段、鉴权和审计事务语义均不变"
     - date: "2026-07-09"
       summary: "event-catalog/event-types 新增可订阅事件 ALERT_ESCALATED（告警升级）；升级事件类型由连字符 alert-escalated 更正为下划线 ALERT_ESCALATED，对齐事件目录命名风格，使前端 subscription_rule 能订阅到升级告警"
     - date: "2026-07-09"

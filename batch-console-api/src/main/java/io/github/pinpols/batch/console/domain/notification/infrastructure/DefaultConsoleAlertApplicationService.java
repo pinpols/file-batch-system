@@ -5,12 +5,12 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.web.request.ops.AlertActionRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,9 +28,9 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   private static final String STATUS_SUPPRESSED = "SUPPRESSED";
   private static final String STATUS_CLOSED = "CLOSED";
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final AlertEventMapper alertEventMapper;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
   private final AlertmanagerSilenceBridge alertmanagerSilenceBridge;
 
   @Override

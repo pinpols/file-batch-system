@@ -10,16 +10,16 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayCatchUpRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpItemResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.ApprovalSubmitContext;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.TriggerInternalRestClient;
-import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
+import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
@@ -37,7 +37,7 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
 
-  private final ConsoleJobOpsSupport ops;
+  private final ConsoleJobOperationsPort ops;
 
   /** P0-1(2026-05-16):同 ConsoleJobOpsSupport 一起切到带 secret 的 trigger client。 */
   private final TriggerInternalRestClient triggerInternalRestClient;

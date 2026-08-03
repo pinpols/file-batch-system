@@ -13,10 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -29,7 +29,7 @@ import org.springframework.context.support.StaticApplicationContext;
 class AlertEscalationNotifierTest {
 
   private AlertEventMapper alertEventMapper;
-  private ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private ConsoleRealtimeEventPort domainEventPublisher;
   private LockingTaskExecutor lockExecutor;
   private SimpleMeterRegistry meterRegistry;
   private AlertEscalationNotifier notifier;
@@ -37,7 +37,7 @@ class AlertEscalationNotifierTest {
   @BeforeEach
   void setUp() throws Throwable {
     alertEventMapper = mock(AlertEventMapper.class);
-    domainEventPublisher = mock(ConsoleRealtimeDomainEventPublisher.class);
+    domainEventPublisher = mock(ConsoleRealtimeEventPort.class);
     lockExecutor = mock(LockingTaskExecutor.class);
     meterRegistry = new SimpleMeterRegistry();
     doAnswer(inv -> {

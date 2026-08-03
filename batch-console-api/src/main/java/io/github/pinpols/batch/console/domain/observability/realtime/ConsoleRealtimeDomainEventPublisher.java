@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -12,19 +14,22 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class ConsoleRealtimeDomainEventPublisher {
+public class ConsoleRealtimeDomainEventPublisher implements ConsoleRealtimeEventPort {
 
   private final ApplicationEventPublisher applicationEventPublisher;
   private final ConsoleRealtimeCursorFactory cursorFactory;
 
+  @Override
   public void publishChanged(String tenantId, String stream, String eventType) {
     publish(tenantId, stream, eventType, null, false);
   }
 
+  @Override
   public void publishChanged(String tenantId, String stream, String eventType, Object data) {
     publish(tenantId, stream, eventType, data, false);
   }
 
+  @Override
   public void publishSummaryRefresh(String tenantId) {
     publish(tenantId, "ops-summary", "ops-summary-refresh-requested", null, true);
   }

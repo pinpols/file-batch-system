@@ -7,8 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleOutboxEventReadMapper;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
@@ -25,7 +25,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
   private ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
-  private ConsoleOrchestratorProxyService orchestratorProxy;
+  private ConsoleOrchestratorPort orchestratorProxy;
   private ConsoleQueryCacheService cacheService;
   private DefaultConsoleOutboxOpsApplicationService service;
 
@@ -33,12 +33,12 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   void setUp() {
     tenantGuard = mock(ConsoleTenantGuard.class);
     consoleOutboxEventReadMapper = mock(ConsoleOutboxEventReadMapper.class);
-    orchestratorProxy = mock(ConsoleOrchestratorProxyService.class);
+    orchestratorProxy = mock(ConsoleOrchestratorPort.class);
     cacheService = passThroughCache();
     service = new DefaultConsoleOutboxOpsApplicationService(
         tenantGuard,
         consoleOutboxEventReadMapper,
-        mock(ConsoleRealtimeDomainEventPublisher.class),
+        mock(ConsoleRealtimeEventPort.class),
         orchestratorProxy,
         cacheService);
   }

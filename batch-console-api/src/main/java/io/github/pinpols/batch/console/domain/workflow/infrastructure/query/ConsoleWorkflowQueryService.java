@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.console.domain.workflow.infrastructure.query;
 
-import static io.github.pinpols.batch.console.domain.observability.infrastructure.ConsoleQuerySupport.*;
+import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.*;
 
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.rbac.support.TenantScope;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -30,6 +28,8 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkf
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.query.TenantScope;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleWorkflowQueryService {
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleWorkflowQueryMappers workflowMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
 

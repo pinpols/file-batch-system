@@ -13,8 +13,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.observability.service.SseTicketService;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
 import java.util.List;
 import java.util.Set;
@@ -209,9 +210,9 @@ class ConsoleAuthenticationFilterTest {
   @Test
   void filter_validatesSseTicketAndCachesResultForAsyncDispatch() throws Exception {
     // R4-P1-1：validate 返回 TicketPayload，含签发时角色集
-    io.github.pinpols.batch.console.domain.observability.service.SseTicketService.TicketPayload
+    io.github.pinpols.batch.console.application.observability.SseTicketService.TicketPayload
         payload =
-            new io.github.pinpols.batch.console.domain.observability.service.SseTicketService
+            new io.github.pinpols.batch.console.application.observability.SseTicketService
                 .TicketPayload("alice", "t1", Set.of("ROLE_USER"));
     when(sseTicketService.validate("ticket-1")).thenReturn(payload);
 

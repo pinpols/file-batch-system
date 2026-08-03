@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
-import io.github.pinpols.batch.console.domain.observability.view.cluster.DeliveryStatusCountView;
-import io.github.pinpols.batch.console.domain.observability.view.cluster.ShedLockView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.DeliveryStatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;

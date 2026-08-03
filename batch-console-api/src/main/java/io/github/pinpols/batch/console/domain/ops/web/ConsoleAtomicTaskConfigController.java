@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskConfigService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsoleAtomicTaskConfigController {
 
   private final ConsoleAtomicTaskConfigService configService;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
@@ -67,7 +67,7 @@ public class ConsoleAtomicTaskConfigController {
   }
 
   /**
-   * 创建请求体。tenantId 为空 → 由 {@link ConsoleTenantGuard} 回退(租户角色用 JWT,全局角色必传)。
+   * 创建请求体。tenantId 为空 → 由租户作用域解析器回退(租户角色用 JWT,全局角色必传)。
    *
    * @param tenantId 可空,见上
    * @param taskType 内置原子 taskType(sql / stored_proc / shell / http)

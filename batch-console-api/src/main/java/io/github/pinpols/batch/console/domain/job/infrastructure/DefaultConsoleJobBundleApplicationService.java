@@ -10,7 +10,7 @@ import io.github.pinpols.batch.console.domain.job.web.request.JobBundleImportReq
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleExportResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleResultResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleSummaryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleJobBundleApplicationService
     implements ConsoleJobBundleApplicationService {
 
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleTenantConfigCopyService tenantConfigCopyService;
   private final ConsoleTenantConfigInitApplicationService initApplicationService;
   private final ConsoleRequestMetadataResolver metadataResolver;

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

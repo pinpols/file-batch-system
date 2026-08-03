@@ -4,7 +4,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
@@ -30,7 +30,7 @@ class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationT
   private int port;
 
   @MockitoBean
-  private ConsoleOrchestratorProxyService orchestratorProxyService;
+  private ConsoleOrchestratorPort orchestratorProxyService;
 
   private WebTestClient webTestClient;
 

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.arch;
 
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.BOUNDED_CONTEXTS;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.DOMAIN_ROOT;
-import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.SHARED_ROOT;
 import static io.github.pinpols.batch.console.arch.BoundedContextDependencyArchTest.hasBoundedContextSuppression;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,8 +11,15 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -22,7 +28,8 @@ import org.junit.jupiter.api.Test;
 /**
  * P1-A Stage 1 迁移进度 metric。
  *
- * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,不做 assert。
+ * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,并校验严格为 0。
+ * 通过 {@code -DboundedContext.report=<path>} 可额外生成逐类 TSV 清单,供迁移批次评审使用。
  *
  * <p>每次跑测试都能看到迁移进度,例如:
  *
@@ -33,13 +40,12 @@ import org.junit.jupiter.api.Test;
  *   ...
  * </pre>
  *
- * <p>启用守护测试 {@link BoundedContextDependencyArchTest} 的前提:本测试输出 0。
+ * <p>{@link BoundedContextDependencyArchTest} 当前已切换为严格隔离规则;本测试保留逐类清单输出能力。
  */
 class BoundedContextMigrationProgressTest {
 
   /**
-   * 2026-06-21 基线:当前 console bounded context 直接依赖违规数。这个测试先作为 ratchet 护栏防新增债务;每次迁移减少后必须同步下调预算。降到 0
-   * 后删除本预算并启用 {@link BoundedContextDependencyArchTest}。
+   * 2026-06-21 起的历史迁移记录：本测试曾作为 ratchet 护栏防止新增债务；Phase 28 完成后切换为严格 0 断言。
    *
    * <p>基线对齐 main 实测 1711(原 capture 写 1697 是 de-stale 前的旧快照,合 main 后域代码增加到 1711)。
    *
@@ -63,8 +69,85 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-02(#868):observability timeline 与 rate-limit degradation 观测接入 console 查询/ops
    * 边界，CI JDK 21 实测为 1807；本地 JDK 25 的同一字节码扫描为 1841。1841 是跨 JDK 的当前
    * 兼容上限；这些是已交付运维闭环的只读聚合依赖，更新 ratchet 基线，不为降低数字破坏功能边界。
+   *
+   * <p>2026-08-03(Phase 1):将无业务状态的 ConsoleQuerySupport 与租户解析 Port 移入 shared.query，移除
+   * file / ops / workflow / job 查询服务对 observability 工具类的直接依赖，实测降至 1480。
+   *
+   * <p>2026-08-03(Phase 2):将 SimpleOptionView 提取到 shared.view，将集群诊断投影收回 ops.view.cluster，实测降至 1464。
+   *
+   * <p>2026-08-03(Phase 3):将纯实时事件载荷 ConsoleRealtimeDomainEvent 提取到 shared.event，保留
+   * observability 的发布器与桥接基础设施，实测降至 1449。
+   *
+   * <p>2026-08-03(Phase 4):Ops 只依赖租户解析 Port，当前租户作用域单独依赖 TenantScopeResolver；保留
+   * ConsoleTenantGuard 作为唯一实现，实测降至 1374。
+   *
+   * <p>2026-08-03(Phase 5):notification 的租户感知 Service 改依赖 TenantIdResolver，实时 Controller 暂保留
+   * 具体守卫以避免 API 门禁误报，实测降至 1357。
+   *
+   * <p>2026-08-03(Phase 6):file 的文件服务和查询服务改依赖 TenantIdResolver，实时 Controller 暂保留具体守卫，实测降至 1329。
+   *
+   * <p>2026-08-03(Phase 7):job 的定义、日历、窗口、Bundle 和自服务改依赖 TenantIdResolver，Controller 暂保留具体守卫，实测降至 1295。
+   *
+   * <p>2026-08-03(Phase 8):workflow 查询服务改依赖 TenantIdResolver，3 个实时 Controller 暂保留具体守卫，实测降至 1293。
+   *
+   * <p>2026-08-03(Phase 9):audit 查询和 observability 查询/实时流改依赖 TenantIdResolver，实测降至 1266。
+   *
+   * <p>2026-08-03(Phase 10):无状态横切审计声明 {@code AuditAction} 移入 {@code shared.audit}，供各领域 Controller 复用；切面仍由
+   * audit context 持有，HTTP 和审计事务语义不变，实测降至 1213。
+   *
+   * <p>2026-08-03(Phase 11):租户作用域非空断言 {@code TenantScope} 移入 {@code shared.query}，保留 fail-fast 语义，实测降至 1204。
+   *
+   * <p>2026-08-03(Phase 12):不可变认证身份载荷 {@code ConsolePrincipal} 移入 {@code shared.security}，认证与授权策略仍归 rbac，实测降至 1196。
+   *
+   * <p>2026-08-03(Phase 13):observability 聚合服务改依赖顶层 {@code ConsoleOpsQueryPort}，Ops 查询实现仍归 Ops，实测降至 1181。
+   *
+   * <p>2026-08-03(Phase 14):跨域实时变更发布改依赖顶层 {@code ConsoleRealtimeEventPort}，Spring 事件和 SSE 适配器仍归 observability，实测降至 1145。
+   *
+   * <p>2026-08-03(Phase 15):跨域 SSE Controller 改依赖 {@code ConsoleRealtimeSubscriptionPort}，Hub 的连接生命周期仍归 observability，实测降至 1120。
+   *
+   * <p>2026-08-03(Phase 16):将跨多个上下文复用的只读响应 DTO 移入 {@code shared.view}，将跨域补跑审批命令移入
+   * {@code shared.command}；JSON 字段、REST 路由、SQL 和租户语义不变，实测降至 974。
+   *
+   * <p>2026-08-03(Phase 17):将编排器代理和触发器代理提升为顶层应用端口，报表导出复用编排器查询端口；HTTP 适配器仍归 Ops，实测降至 927。
+   *
+   * <p>2026-08-03(Phase 18):将跨 Job、治理和 Ops 使用的命令请求 DTO 移入 {@code shared.command}，保持请求字段、校验和 REST 协议不变，实测降至 893。
+   *
+   * <p>2026-08-03(Phase 19):将编排器和触发器内部 HTTP Client 适配器移入 {@code shared.client}，调用方不再依赖 Ops 基础设施实现，保持认证、熔断、错误映射和下游协议不变，实测降至 875。
+   *
+   * <p>2026-08-03(Phase 20):新增 {@code ConsoleJobOperationsPort}，Job 的审批、恢复和触发服务改依赖应用端口；审批、HTTP、事件和事务实现仍由 Ops 组件持有，实测降至 708。
+   *
+   * <p>2026-08-03(Phase 21):将跨多个上下文的只读查询总门面提升到 {@code application.observability}，聚合 Controller 提升到顶层 {@code web}；查询实现、路由和响应契约不变，实测降至 372。
+   *
+   * <p>2026-08-03(Phase 22):将 Ops 只读查询服务和其聚合 Mapper 提升到 {@code application.ops}，保留 Ops 自有查询和各领域只读投影语义，实测降至 199。
+   *
+   * <p>2026-08-03(Phase 23):将只读 AI 诊断工具提升到 {@code application.audit}，仍由 Audit AI 应用服务按租户构造，查询和集群诊断契约不变，实测降至 145。
+   *
+   * <p>2026-08-03(Phase 24):各领域 Controller 改依赖 {@code TenantIdResolver}，不再直接依赖 RBAC 的具体租户守卫；租户解析、全局角色和 fail-close 语义不变，实测降至 84。
+   *
+   * <p>2026-08-03(Phase 25):将租户 provisioning、readiness 和 meta 查询应用服务提升到 {@code application.rbac}，保留 RBAC 安全校验和领域 Mapper，实测降至 59。
+   *
+   * <p>2026-08-03(Phase 26):将 File、Job 和 Workflow 共用的 {@code EnabledPatchRequest} 移入 {@code shared.command}，保持字段、校验和 REST 契约不变，实测降至 50。
+   *
+   * <p>2026-08-03(Phase 27):将 SSE ticket 和系统参数应用服务提升到 {@code application.observability}，保留 Redis 一次性消费、角色绑定、缓存和租户校验语义，实测降至 29。
+   *
+   * <p>2026-08-03(Phase 28):将 Ops 运维摘要实时流改依赖应用层订阅端口，为 Workflow DAG 校验提取最小 Job 引用端口，保留 SSE、缓存、拓扑校验和租户查询语义，实测降至 0，并切换严格隔离门禁。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
+
+  private static final Map<String, String> LAYER_CATEGORIES = Map.ofEntries(
+      Map.entry("entity", "PERSISTENCE"),
+      Map.entry("mapper", "PERSISTENCE"),
+      Map.entry("application", "APPLICATION"),
+      Map.entry("service", "APPLICATION"),
+      Map.entry("command", "CONTRACT"),
+      Map.entry("dto", "CONTRACT"),
+      Map.entry("param", "CONTRACT"),
+      Map.entry("query", "CONTRACT"),
+      Map.entry("view", "CONTRACT"),
+      Map.entry("web", "WEB_OR_REALTIME"),
+      Map.entry("realtime", "WEB_OR_REALTIME"),
+      Map.entry("infrastructure", "ADAPTER_OR_SUPPORT"),
+      Map.entry("support", "ADAPTER_OR_SUPPORT"));
 
   @Test
   void reportCurrentViolationCount() {
@@ -73,6 +156,7 @@ class BoundedContextMigrationProgressTest {
         .importPackages("io.github.pinpols.batch.console..");
 
     Map<String, Integer> matrix = new TreeMap<>();
+    List<String> inventoryRows = new ArrayList<>();
     int total = 0;
     int suppressed = 0;
 
@@ -91,6 +175,19 @@ class BoundedContextMigrationProgressTest {
         if (depCtx == null || depCtx.equals(srcCtx)) {
           continue;
         }
+        String sourceLayer = layerOf(src.getPackageName());
+        String targetLayer = layerOf(depPkg);
+        String status = srcSuppressed ? "SUPPRESSED" : "ACTIVE";
+        inventoryRows.add(String.join(
+            "\t",
+            status,
+            srcCtx,
+            src.getName(),
+            sourceLayer,
+            depCtx,
+            dep.getTargetClass().getName(),
+            targetLayer,
+            LAYER_CATEGORIES.getOrDefault(targetLayer, "OTHER")));
         if (srcSuppressed) {
           suppressed++;
           continue;
@@ -109,14 +206,31 @@ class BoundedContextMigrationProgressTest {
     System.out.println("[BoundedContext] total cross-context violations: " + total);
     System.out.println("[BoundedContext] suppressed (whitelisted) edges: " + suppressed);
     sorted.forEach((k, v) -> System.out.println("[BoundedContext]   " + k + " : " + v));
-    if (total == 0) {
-      System.out.println("[BoundedContext] No violations detected — safe to remove @Disabled from "
-          + "BoundedContextDependencyArchTest.");
-    }
+    writeInventoryIfRequested(inventoryRows);
     assertThat(total)
-        .as("bounded-context cross dependencies must not increase; lower this budget as migration"
-            + " progresses")
-        .isLessThanOrEqualTo(MAX_ALLOWED_CROSS_CONTEXT_VIOLATIONS);
+        .as("bounded-context cross dependencies must be eliminated")
+        .isZero();
+  }
+
+  private static void writeInventoryIfRequested(List<String> rows) {
+    String reportPath = System.getProperty("boundedContext.report");
+    if (reportPath == null || reportPath.isBlank()) {
+      return;
+    }
+    try {
+      Path path = Path.of(reportPath);
+      if (path.getParent() != null) {
+        Files.createDirectories(path.getParent());
+      }
+      List<String> output = new ArrayList<>(rows.size() + 1);
+      output.add(
+          "status\tsource_context\tsource_class\tsource_layer\ttarget_context\ttarget_class\ttarget_layer\tcategory");
+      rows.stream().sorted().forEach(output::add);
+      Files.write(path, output, StandardCharsets.UTF_8);
+      System.out.println("[BoundedContext] inventory written: " + path);
+    } catch (IOException exception) {
+      throw new UncheckedIOException("failed to write bounded-context inventory", exception);
+    }
   }
 
   private static String boundedContextOf(String pkg) {
@@ -127,5 +241,16 @@ class BoundedContextMigrationProgressTest {
     int dot = tail.indexOf('.');
     String head = dot < 0 ? tail : tail.substring(0, dot);
     return CTX_SET.contains(head) ? head : null;
+  }
+
+  private static String layerOf(String pkg) {
+    String tail = pkg.substring(DOMAIN_ROOT.length() + 1);
+    int firstDot = tail.indexOf('.');
+    if (firstDot < 0) {
+      return "(root)";
+    }
+    String layers = tail.substring(firstDot + 1);
+    int secondDot = layers.indexOf('.');
+    return secondDot < 0 ? layers : layers.substring(0, secondDot);
   }
 }

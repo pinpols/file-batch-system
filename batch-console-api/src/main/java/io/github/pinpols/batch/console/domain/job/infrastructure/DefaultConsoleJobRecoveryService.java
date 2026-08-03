@@ -4,16 +4,16 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.ApprovalSubmitContext;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.CompensationPayload;
+import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
+import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
+import io.github.pinpols.batch.console.shared.command.CompensationPayload;
+import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
+import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
+import io.github.pinpols.batch.console.shared.command.RerunRequest;
+import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -37,9 +37,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
 
-  private static final String JOB_TYPE_COMPENSATION = ConsoleJobOpsSupport.jobTypeCompensation();
+  private static final String JOB_TYPE_COMPENSATION =
+      ConsoleJobOperationsPort.JOB_TYPE_COMPENSATION;
 
-  private final ConsoleJobOpsSupport ops;
+  private final ConsoleJobOperationsPort ops;
 
   @Override
   public String compensation(CompensationCommandRequest request, String idempotencyKey) {

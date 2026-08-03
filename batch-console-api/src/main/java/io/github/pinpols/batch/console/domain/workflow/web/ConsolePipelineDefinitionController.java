@@ -2,12 +2,12 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.domain.audit.support.AuditAction;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.web.request.PipelineDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsolePipelineDefinitionListItemResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;

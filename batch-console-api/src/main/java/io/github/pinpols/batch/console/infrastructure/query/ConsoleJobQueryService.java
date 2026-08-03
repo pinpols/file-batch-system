@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.query;
 
-import static io.github.pinpols.batch.console.domain.observability.infrastructure.ConsoleQuerySupport.*;
+import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.*;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.ResultCode;

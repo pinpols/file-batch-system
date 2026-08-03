@@ -11,16 +11,16 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
-import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSecretVersionResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxDeliveryLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.ConfigChangeLogQueryRequest;
@@ -47,13 +47,11 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
@@ -67,8 +65,7 @@ public class DefaultConsoleReportExcelApplicationService
 
   private final ConsoleConfigApplicationService configApplicationService;
   private final ConsoleQueryApplicationService queryApplicationService;
-  // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(死注入,本类只走 OrchestratorInternalRestClient)。
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
+  private final ConsoleOrchestratorPort orchestratorPort;
   private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
@@ -172,30 +169,12 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   private ConsoleSchedulerSnapshotResponse fetchSnapshot(String tenantId) {
-    RestClient client = orchestratorInternalRestClient.build();
-    return client
-        .get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/internal/scheduler/snapshot")
-            .queryParam("tenantId", tenantId)
-            .build())
-        .retrieve()
-        .body(ConsoleSchedulerSnapshotResponse.class);
+    return orchestratorPort.schedulerSnapshot(tenantId);
   }
 
   private List<ConsoleSchedulerSnapshotHistoryResponse> fetchSnapshotHistory(
       String tenantId, int limit) {
-    RestClient client = orchestratorInternalRestClient.build();
-    List<ConsoleSchedulerSnapshotHistoryResponse> body = client
-        .get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/internal/scheduler/snapshot/history")
-            .queryParam("tenantId", tenantId)
-            .queryParam("limit", limit)
-            .build())
-        .retrieve()
-        .body(new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
-    return body == null ? List.of() : body;
+    return orchestratorPort.schedulerSnapshotHistory(tenantId, limit);
   }
 
   private <T> ResponseEntity<StreamingResponseBody> exportRows(

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEvent;
+import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

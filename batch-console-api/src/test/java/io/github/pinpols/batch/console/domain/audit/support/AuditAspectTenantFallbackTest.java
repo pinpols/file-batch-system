@@ -6,7 +6,8 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;

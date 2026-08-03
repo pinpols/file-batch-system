@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -37,7 +37,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 /** P0: ConsoleForensicController (admin-only 取证导出)。 */
 class ConsoleForensicControllerTest {
 
-  private final ConsoleOrchestratorProxyService proxy = mock(ConsoleOrchestratorProxyService.class);
+  private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;

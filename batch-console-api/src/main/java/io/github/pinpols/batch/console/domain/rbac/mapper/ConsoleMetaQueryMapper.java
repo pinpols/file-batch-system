@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.domain.observability.view.meta.SimpleOptionView;
+import io.github.pinpols.batch.console.shared.view.SimpleOptionView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

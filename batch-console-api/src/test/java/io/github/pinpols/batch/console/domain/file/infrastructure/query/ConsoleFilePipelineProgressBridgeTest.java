@@ -11,10 +11,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,7 +48,7 @@ class ConsoleFilePipelineProgressBridgeTest {
   private LocalizedErrorRenderer localizedErrorRenderer;
 
   @Mock
-  private ConsoleOrchestratorProxyService orchestratorProxy;
+  private ConsoleOrchestratorPort orchestratorProxy;
 
   private ConsoleFileQueryService service;
 

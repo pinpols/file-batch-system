@@ -3,10 +3,11 @@ package io.github.pinpols.batch.console.domain.observability.realtime;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,18 +27,18 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * <p>负责订阅首屏摘要，并在关键写操作后推送最新快照。
  */
 @Service
-public class ConsoleOpsSummaryRealtimeStream {
+public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtimePort {
 
   private static final String STREAM = "ops-summary";
   private static final String EVENT_TYPE = "ops-summary-updated";
   private static final long REFRESH_DEBOUNCE_MILLIS = 300L;
   private static final long SUMMARY_CACHE_TTL_MILLIS = 1_000L;
 
-  private final ConsoleOpsApplicationService opsApplicationService;
+  private final ConsoleOpsSummaryPort opsApplicationService;
   private final ConsoleRealtimeEventHub realtimeEventHub;
   private final ConsoleRealtimeRedisPublisher redisPublisher;
   private final ConsoleRealtimeCursorFactory cursorFactory;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final BatchDateTimeSupport dateTimeSupport;
   // P0:scheduledRefreshes 在 finally 里有 remove,但异常 / cancel 路径下仍可能漏删,
   // 加 maximumSize 回退防止租户基数增长后无界堆积。
@@ -52,11 +53,11 @@ public class ConsoleOpsSummaryRealtimeStream {
   private final TaskScheduler scheduler;
 
   public ConsoleOpsSummaryRealtimeStream(
-      ConsoleOpsApplicationService opsApplicationService,
+      ConsoleOpsSummaryPort opsApplicationService,
       ConsoleRealtimeEventHub realtimeEventHub,
       ConsoleRealtimeRedisPublisher redisPublisher,
       ConsoleRealtimeCursorFactory cursorFactory,
-      ConsoleTenantGuard tenantGuard,
+      TenantIdResolver tenantGuard,
       BatchDateTimeSupport dateTimeSupport,
       @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
     this.opsApplicationService = opsApplicationService;

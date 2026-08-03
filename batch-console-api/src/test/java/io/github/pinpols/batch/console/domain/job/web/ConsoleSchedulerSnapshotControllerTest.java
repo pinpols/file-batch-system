@@ -10,9 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
@@ -24,8 +24,8 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 class ConsoleSchedulerSnapshotControllerTest {
 
-  private final ConsoleOrchestratorProxyService orchestratorProxyService =
-      mock(ConsoleOrchestratorProxyService.class);
+  private final ConsoleOrchestratorPort orchestratorProxyService =
+      mock(ConsoleOrchestratorPort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;

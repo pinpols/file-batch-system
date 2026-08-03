@@ -10,8 +10,8 @@ import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchWindowUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchWindowResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +25,7 @@ public class DefaultConsoleBatchWindowApplicationService
     implements ConsoleBatchWindowApplicationService {
 
   private final BatchWindowMapper batchWindowMapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
   @Override

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleSystemParameterMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;

@@ -7,7 +7,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliver
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import java.util.Arrays;
 import java.util.List;
@@ -22,7 +22,7 @@ public class ConsoleWebhookService {
 
   private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
   private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final CallbackUrlValidator callbackUrlValidator;
 
   public List<WebhookSubscriptionEntity> listSubscriptions(String tenantId) {

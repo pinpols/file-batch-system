@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
 import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEvent;
+import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;

@@ -8,24 +8,27 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
-import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
+import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
+import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
+import io.github.pinpols.batch.console.shared.command.CompensationPayload;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
+import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
+import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
+import io.github.pinpols.batch.console.shared.command.TriggerRequest;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
-import lombok.Builder;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -54,9 +57,7 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 @RequiredArgsConstructor
-public class ConsoleJobOpsSupport {
-
-  private static final String JOB_TYPE_COMPENSATION = "COMPENSATION";
+public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
   // P2-1(2026-05-16):删除 RestClient.Builder 字段直接注入 — 所有 client 构造都走专用
   // OrchestratorInternalRestClient / TriggerInternalRestClient,后者已是 ObjectProvider 模式。
@@ -69,17 +70,15 @@ public class ConsoleJobOpsSupport {
   private final OrchestratorApprovalClient approvalClient;
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+  private final TenantIdResolver tenantGuard;
+  private final ConsoleRealtimeEventPort domainEventPublisher;
 
-  public static String jobTypeCompensation() {
-    return JOB_TYPE_COMPENSATION;
-  }
-
+  @Override
   public String resolveTenant(String requestTenantId) {
     return tenantGuard.resolveTenant(requestTenantId);
   }
 
+  @Override
   public void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
     domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
@@ -88,6 +87,7 @@ public class ConsoleJobOpsSupport {
     domainEventPublisher.publishSummaryRefresh(tenantId);
   }
 
+  @Override
   public String delegateLaunch(
       String tenantId,
       String jobCode,
@@ -120,6 +120,7 @@ public class ConsoleJobOpsSupport {
     return response.data().instanceNo();
   }
 
+  @Override
   public String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
@@ -129,7 +130,7 @@ public class ConsoleJobOpsSupport {
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(payload.withTraceId(requestMetadata.traceId()))
+        .body(payload.toBuilder().traceId(requestMetadata.traceId()).build())
         .retrieve()
         .body(CompensationResponse.class);
     if (response == null || response.commandNo() == null) {
@@ -140,6 +141,7 @@ public class ConsoleJobOpsSupport {
 
   private record RecoveryOperationResponse(String operationNo) {}
 
+  @Override
   public String triggerRecovery(
       String tenantId, String uriTemplate, Long targetId, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -159,6 +161,7 @@ public class ConsoleJobOpsSupport {
     return response.data().operationNo();
   }
 
+  @Override
   public String submitApproval(ApprovalSubmitContext ctx) {
     return approvalClient.submitApproval(ApprovalSubmitCommand.builder()
         .tenantId(resolveTenant(extractTenantId(ctx.payload())))
@@ -176,14 +179,17 @@ public class ConsoleJobOpsSupport {
    * 校验审批已通过态（APPROVED/EXECUTED）。作业运维路径保留原有的<b>不绑定目标</b>行为（{@link ApprovalTargetBinding#none()}）——
    * 本次重构只做去重不改此路径对外行为；作业侧的目标绑定加固是独立的后续项。
    */
+  @Override
   public void requireApprovedApproval(String tenantId, String approvalNo) {
     approvalClient.requireApprovedApproval(tenantId, approvalNo, ApprovalTargetBinding.none());
   }
 
+  @Override
   public boolean hasText(String text) {
     return text != null && !text.isBlank();
   }
 
+  @Override
   public TriggerType resolveTriggerType(String triggerTypeValue, TriggerType defaultTriggerType) {
     if (triggerTypeValue == null || triggerTypeValue.isBlank()) {
       return defaultTriggerType;
@@ -198,6 +204,7 @@ public class ConsoleJobOpsSupport {
     }
   }
 
+  @Override
   public LocalDate parseBizDate(String bizDate) {
     try {
       return LocalDate.parse(bizDate);
@@ -206,6 +213,7 @@ public class ConsoleJobOpsSupport {
     }
   }
 
+  @Override
   public LocalDate parseOptionalBizDate(String bizDate) {
     if (bizDate == null || bizDate.isBlank()) {
       return null;
@@ -214,6 +222,7 @@ public class ConsoleJobOpsSupport {
   }
 
   @SuppressWarnings("unchecked")
+  @Override
   public Map<String, Object> parsePayload(String payloadJson) {
     if (payloadJson == null || payloadJson.isBlank()) {
       return Map.of();
@@ -247,54 +256,12 @@ public class ConsoleJobOpsSupport {
     return null;
   }
 
-  @Builder
-  public record ApprovalSubmitContext(
-      String approvalType,
-      String actionType,
-      String targetType,
-      String targetId,
-      Object payload,
-      String approvalReason,
-      String idempotencyKey) {}
-
   private record TriggerLaunchPayload(
       String tenantId,
       String jobCode,
       LocalDate bizDate,
       TriggerType triggerType,
       Map<String, Object> params) {}
-
-  @Getter
-  @Builder(toBuilder = true)
-  public static class CompensationPayload {
-    private final String tenantId;
-    private final String compensationType;
-    private final Long targetId;
-    private final String targetInstanceNo;
-    private final String jobCode;
-    private final LocalDate bizDate;
-    private final String batchNo;
-    private final Long relatedFileId;
-    private final String channelCode;
-    private final String reason;
-    private final String operatorId;
-    private final String approvalId;
-    private final String strategy;
-    private final String traceId;
-
-    /** §5.5 — 补跑结果版本策略（CREATE_NEW_VERSION / KEEP_BOTH / MANUAL_CONFIRM_EFFECTIVE）。 */
-    private final String resultPolicy;
-
-    /** §5.5 — 补跑配置版本策略（USE_ORIGINAL_CONFIG / USE_LATEST_CONFIG / USE_SPECIFIED_VERSION）。 */
-    private final String configVersionPolicy;
-
-    /** USE_SPECIFIED_VERSION 时使用的具体 job_definition_version。 */
-    private final Integer configVersion;
-
-    CompensationPayload withTraceId(String currentTraceId) {
-      return toBuilder().traceId(currentTraceId).build();
-    }
-  }
 
   record CompensationResponse(String commandNo) {}
 }

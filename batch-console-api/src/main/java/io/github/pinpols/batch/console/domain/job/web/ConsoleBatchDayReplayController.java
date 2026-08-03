@@ -6,9 +6,9 @@ import io.github.pinpols.batch.console.domain.job.web.request.BatchDayReplaySubm
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayEntryResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayPreviewResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplaySessionResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -39,7 +39,7 @@ import org.springframework.web.client.RestClient;
 public class ConsoleBatchDayReplayController {
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleResponseFactory responseFactory;
 
   // P1-5/P1-6 (ADR audit): submit body 的 tenantId 经 guard 解析后强制覆盖回 body，

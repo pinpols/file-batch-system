@@ -13,8 +13,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
-import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.application.workflow.WorkflowJobReferencePort;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -48,7 +47,7 @@ class WorkflowDagValidatorTest {
   private PipelineDefinitionMapper pipelineDefinitionMapper;
 
   @Mock
-  private JobDefinitionMapper jobDefinitionMapper;
+  private WorkflowJobReferencePort workflowJobReferencePort;
 
   @Mock
   private WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -301,7 +300,7 @@ class WorkflowDagValidatorTest {
     // arrange
     WorkflowDefinitionSaveRequest req = baseRequest();
     req.setNodes(Arrays.asList(node("start", "START"), jobNode("j1", "WF_A"), node("end", "END")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "WF_A")).thenReturn(workflowJob("WF_A"));
+    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_A")).thenReturn(true);
 
     // act / assert
     assertThatThrownBy(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
@@ -317,8 +316,8 @@ class WorkflowDagValidatorTest {
     // arrange：root WF_A 引用 WF_B;WF_B 的 DB 定义里又有 JOB 节点引用 WF_A
     WorkflowDefinitionSaveRequest req = baseRequest();
     req.setNodes(Arrays.asList(node("start", "START"), jobNode("j1", "WF_B"), node("end", "END")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "WF_B")).thenReturn(workflowJob("WF_B"));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "WF_A")).thenReturn(workflowJob("WF_A"));
+    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_B")).thenReturn(true);
+    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_A")).thenReturn(true);
     when(workflowDefinitionMapper.selectByQuery(any()))
         .thenReturn(List.of(workflowDef(2L, "WF_B")));
     when(workflowNodeMapper.selectByQuery(any()))
@@ -337,14 +336,13 @@ class WorkflowDagValidatorTest {
   void shouldPass_whenNoCrossWorkflowCycle() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     req.setNodes(Arrays.asList(node("start", "START"), jobNode("j1", "WF_B"), node("end", "END")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "WF_B")).thenReturn(workflowJob("WF_B"));
+    when(workflowJobReferencePort.isWorkflowType(TENANT, "WF_B")).thenReturn(true);
     when(workflowDefinitionMapper.selectByQuery(any()))
         .thenReturn(List.of(workflowDef(2L, "WF_B")));
     // WF_B 的节点只有一个 IMPORT 子作业引用(非 WORKFLOW 类型) → 不构成跨 wf 边
     when(workflowNodeMapper.selectByQuery(any()))
         .thenReturn(List.of(workflowNodeEntity("JOB", "IMPORT_X")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "IMPORT_X"))
-        .thenReturn(plainJob("IMPORT_X"));
+    when(workflowJobReferencePort.isWorkflowType(TENANT, "IMPORT_X")).thenReturn(false);
 
     assertThatCode(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
         .doesNotThrowAnyException();
@@ -356,27 +354,12 @@ class WorkflowDagValidatorTest {
     WorkflowDefinitionSaveRequest req = baseRequest();
     req.setNodes(
         Arrays.asList(node("start", "START"), jobNode("j1", "IMPORT_X"), node("end", "END")));
-    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "IMPORT_X"))
-        .thenReturn(plainJob("IMPORT_X"));
+    when(workflowJobReferencePort.isWorkflowType(TENANT, "IMPORT_X")).thenReturn(false);
 
     assertThatCode(() -> validator.validateNoCrossWorkflowCycle(TENANT, "WF_A", req))
         .doesNotThrowAnyException();
     // 非 WORKFLOW 引用不应触发 DB 图展开
     verify(workflowDefinitionMapper, never()).selectByQuery(any());
-  }
-
-  private static JobDefinitionEntity workflowJob(String jobCode) {
-    JobDefinitionEntity j = new JobDefinitionEntity();
-    j.setJobCode(jobCode);
-    j.setJobType("WORKFLOW");
-    return j;
-  }
-
-  private static JobDefinitionEntity plainJob(String jobCode) {
-    JobDefinitionEntity j = new JobDefinitionEntity();
-    j.setJobCode(jobCode);
-    j.setJobType("IMPORT");
-    return j;
   }
 
   private static WorkflowDefinitionEntity workflowDef(Long id, String code) {

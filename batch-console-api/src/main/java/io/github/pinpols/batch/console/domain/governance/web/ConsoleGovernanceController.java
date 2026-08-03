@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.governance.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.observability.service.ConsoleSystemParameterService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -52,7 +52,7 @@ public class ConsoleGovernanceController {
   private final ConsoleSystemParameterService parameterService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
 
   /** 查看当前所有治理参数（含默认值）。 */
   @GetMapping

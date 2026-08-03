@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
+import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import lombok.Builder;

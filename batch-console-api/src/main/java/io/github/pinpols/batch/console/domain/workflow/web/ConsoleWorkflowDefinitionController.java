@@ -3,8 +3,6 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.job.web.request.EnabledPatchRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsolePrincipal;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -17,6 +15,8 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefi
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDesignLockResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowMermaidResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;

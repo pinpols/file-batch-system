@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
-import io.github.pinpols.batch.console.domain.rbac.service.ConsoleMetaQueryService;
+import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -49,7 +49,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleRealtimeDomainEventPublisher realtimeEventPublisher;
+  private final ConsoleRealtimeEventPort realtimeEventPublisher;
   private final ConsoleMetaQueryService metaQueryService;
 
   /** 校验每个 step 的 stageCode 属于该 pipelineType 允许集、implCode 已在 step 注册表登记(FE 下拉之外的越界拦截)。 */

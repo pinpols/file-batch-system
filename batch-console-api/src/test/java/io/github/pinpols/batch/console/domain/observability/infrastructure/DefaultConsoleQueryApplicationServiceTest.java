@@ -6,19 +6,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.observability.DefaultConsoleQueryApplicationService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
 import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQueryService;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.web.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleOpsQueryService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
+import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +42,7 @@ class DefaultConsoleQueryApplicationServiceTest {
   private ConsoleWorkflowQueryService workflowQueryService;
 
   @Mock
-  private ConsoleOpsQueryService opsQueryService;
+  private ConsoleOpsQueryPort opsQueryService;
 
   @Mock
   private OperationAuditQueryService operationAuditQueryService;

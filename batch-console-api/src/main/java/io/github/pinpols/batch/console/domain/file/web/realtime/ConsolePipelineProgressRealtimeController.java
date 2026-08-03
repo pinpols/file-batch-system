@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.web.realtime;
 
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeEventHub;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,8 +25,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ConsolePipelineProgressRealtimeController {
 
-  private final ConsoleRealtimeEventHub realtimeEventHub;
-  private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleRealtimeSubscriptionPort realtimeEventHub;
+  private final TenantIdResolver tenantGuard;
 
   @GetMapping(path = "/pipeline-progress/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter pipelineProgress(

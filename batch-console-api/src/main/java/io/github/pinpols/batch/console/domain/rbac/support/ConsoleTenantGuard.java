@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.regex.Pattern;
@@ -30,7 +32,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-public class ConsoleTenantGuard {
+public class ConsoleTenantGuard implements TenantScopeResolver {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 

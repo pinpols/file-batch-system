@@ -5,12 +5,12 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleDryRunResultResponse;
-import io.github.pinpols.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
+import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 作业触发入口：通过 {@link ConsoleJobOpsSupport#delegateLaunch} 把 launch 请求转给 batch-trigger 服务。
+ * 作业触发入口：通过 {@link ConsoleJobOperationsPort#delegateLaunch} 把 launch 请求转给 batch-trigger 服务。
  *
  * <p>三种入口：
  *
@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService {
 
-  private final ConsoleJobOpsSupport ops;
+  private final ConsoleJobOperationsPort ops;
   private final JobDefinitionMapper jobDefinitionMapper;
 
   @Override

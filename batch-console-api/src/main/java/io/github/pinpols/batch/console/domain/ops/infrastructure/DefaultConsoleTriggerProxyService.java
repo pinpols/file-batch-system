@@ -2,8 +2,9 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleTriggerProxyService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
+import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
+import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   private static final String SVC = "trigger";
 
   private final TriggerInternalRestClient triggerInternalRestClient;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantScopeResolver tenantGuard;
   private final DownstreamFallback downstreamFallback;
 
   private RestClient newClient() {

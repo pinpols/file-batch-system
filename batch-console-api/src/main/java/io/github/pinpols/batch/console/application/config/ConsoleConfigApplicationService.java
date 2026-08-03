@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.console.domain.ops.web.request.SecretVersionRotateRequest;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSecretVersionResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
 import io.github.pinpols.batch.console.web.query.ConfigChangeLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;

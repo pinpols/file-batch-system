@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.job.application;
 
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayCatchUpRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
-import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 
 /** 控制台作业审批服务：Catch-Up 审批、批量日 Catch-Up。 */
 public interface ConsoleJobApprovalService {

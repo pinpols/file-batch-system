@@ -9,14 +9,15 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.console.application.ops.DefaultConsoleOpsApplicationService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.OutboxDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.OutboxRetryLogMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import java.util.function.Supplier;

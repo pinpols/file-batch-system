@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
-import io.github.pinpols.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
+import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
+import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
+import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
+import io.github.pinpols.batch.console.shared.command.RerunRequest;
+import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
 
 /** 控制台作业恢复服务：补偿、重跑、死信重放、分区重放、任务重放。 */
 public interface ConsoleJobRecoveryService {

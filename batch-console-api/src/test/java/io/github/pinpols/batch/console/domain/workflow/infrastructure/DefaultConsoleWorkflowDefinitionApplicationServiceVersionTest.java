@@ -10,8 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
@@ -79,7 +79,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
         edgeMapper,
         versionMapper,
         mock(JobDefinitionMapper.class),
-        mock(ConsoleRealtimeDomainEventPublisher.class),
+        mock(ConsoleRealtimeEventPort.class),
         tenantGuard,
         mock(ConsoleConfigCacheInvalidationService.class),
         lockService,

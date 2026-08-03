@@ -8,8 +8,8 @@ import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateCreat
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateMappingDraftRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateUpdateRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.FileTemplateMappingDraftResponse;
-import io.github.pinpols.batch.console.domain.job.web.request.EnabledPatchRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
