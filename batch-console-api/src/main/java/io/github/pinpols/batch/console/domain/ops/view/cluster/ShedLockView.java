@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.view.cluster;
+package io.github.pinpols.batch.console.domain.ops.view.cluster;
 
 import java.time.Instant;
 

@@ -74,6 +74,11 @@ class BoundedContextMigrationProgressTest {
    *
    * <p>2026-08-03(Phase 1):将无业务状态的 ConsoleQuerySupport 与租户解析 Port 移入 shared.query，移除
    * file / ops / workflow / job 查询服务对 observability 工具类的直接依赖，实测降至 1480。
+   *
+   * <p>2026-08-03(Phase 2):将 SimpleOptionView 提取到 shared.view，将集群诊断投影收回 ops.view.cluster，实测降至 1464。
+   *
+   * <p>2026-08-03(Phase 3):将纯实时事件载荷 ConsoleRealtimeDomainEvent 提取到 shared.event，保留
+   * observability 的发布器与桥接基础设施，实测降至 1449。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

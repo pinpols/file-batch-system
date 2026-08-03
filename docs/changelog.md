@@ -12,6 +12,8 @@
 - **有界上下文门禁启用**：`BoundedContextDependencyArchTest` 从完全跳过改为 1841 条历史依赖基线的 ratchet 门禁；跨域依赖不得继续增加，降到 0 后再切换严格隔离规则。
 - **有界上下文治理计划落地**：新增 [`bounded-context-migration-plan-2026-08-03.md`](analysis/bounded-context-migration-plan-2026-08-03.md)，先生成逐类依赖清单并按只读聚合、写路径、包结构分阶段治理。
 - **有界上下文 Phase 1**：将无业务状态的 `ConsoleQuerySupport` 与租户解析 Port 移入 `shared.query`，跨域依赖从 1841 降至 1480，ratchet 同步下调。
+- **有界上下文 Phase 2**：将通用 `SimpleOptionView` 提取到 `shared.view`，将集群诊断投影 `ShedLockView` / `DeliveryStatusCountView` 收回 `ops.view.cluster`，同步 MyBatis 映射和测试引用；跨域依赖从 1480 降至 1464，ratchet 同步下调。
+- **有界上下文 Phase 3**：将纯实时事件载荷 `ConsoleRealtimeDomainEvent` 提取到 `shared.event`，保留 observability 的发布器与 SSE/Redis 桥接基础设施；跨域依赖从 1464 降至 1449，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

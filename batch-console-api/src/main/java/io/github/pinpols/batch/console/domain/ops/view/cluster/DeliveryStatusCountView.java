@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.view.cluster;
+package io.github.pinpols.batch.console.domain.ops.view.cluster;
 
 /**
  * batch.event_delivery_log 按 delivery_status 分组的计数投影。

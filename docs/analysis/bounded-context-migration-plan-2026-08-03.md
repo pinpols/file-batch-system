@@ -24,6 +24,19 @@
 - 跨域直接依赖降至 **1480**，减少 **361 条**。
 - 当前 ratchet 已下调至 1480。
 
+第二批完成后：
+
+- `SimpleOptionView` 移入 `shared.view`，作为 RBAC 元数据查询与其他只读查询可复用的无业务逻辑投影。
+- `ShedLockView`、`DeliveryStatusCountView` 移入 `ops.view.cluster`，明确集群诊断投影由 Ops context 拥有。
+- MyBatis result map 与测试引用同步，SQL、事务、租户过滤和外部响应保持不变。
+- 跨域直接依赖降至 **1464**，本批减少 **16 条**；ratchet 已下调至 1464。
+
+第三批完成后：
+
+- 纯事件载荷 `ConsoleRealtimeDomainEvent` 移入 `shared.event`，供通知监听器和 observability Bridge 共享。
+- `ConsoleRealtimeDomainEventPublisher`、SSE/Redis Hub、游标生成器继续由 observability 持有，避免 shared 承载基础设施或实时业务逻辑。
+- 跨域直接依赖降至 **1449**，本批减少 **15 条**；ratchet 已下调至 1449。
+
 ## 第一阶段：清单与分类
 
 执行：

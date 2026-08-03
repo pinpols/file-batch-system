@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;

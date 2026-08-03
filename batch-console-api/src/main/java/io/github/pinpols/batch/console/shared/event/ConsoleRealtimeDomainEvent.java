@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.realtime;
+package io.github.pinpols.batch.console.shared.event;
 
 import java.time.Instant;
 import lombok.Builder;
