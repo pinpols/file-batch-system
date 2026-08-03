@@ -26,6 +26,8 @@
 - **有界上下文 Phase 13**：新增顶层应用端口 `ConsoleOpsQueryPort`，由 Ops 查询服务实现，observability 聚合门面不再直接依赖 Ops 基础设施类；查询、分页、SQL 和租户语义不变，跨域依赖从 1196 降至 1181，ratchet 同步下调。
 - **有界上下文 Phase 14**：新增顶层应用端口 `ConsoleRealtimeEventPort`，业务服务不再直接依赖 observability 的实时发布器；Spring 事件、游标和 SSE/Redis bridge 实现归 observability，事件语义不变，跨域依赖从 1181 降至 1145，ratchet 同步下调。
 - **有界上下文 Phase 15**：新增顶层应用端口 `ConsoleRealtimeSubscriptionPort`，各领域 SSE Controller 不再直接依赖 observability 的 Hub；连接生命周期、心跳、回放和 Redis 语义不变，跨域依赖从 1145 降至 1120，ratchet 同步下调。
+- **有界上下文 Phase 16**：将跨多个上下文复用的只读响应 DTO 移入 `shared.view`，将跨 Job/Ops 使用的补跑审批命令移入 `shared.command`；JSON、REST、SQL、分页和租户语义不变，跨域依赖从 1120 降至 974，ratchet 同步下调。
+- **有界上下文 Phase 17**：将编排器代理和触发器代理提升为顶层应用端口，报表导出复用编排器查询端口；HTTP 适配器、下游熔断、缓存和实时刷新语义不变，跨域依赖从 974 降至 927，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

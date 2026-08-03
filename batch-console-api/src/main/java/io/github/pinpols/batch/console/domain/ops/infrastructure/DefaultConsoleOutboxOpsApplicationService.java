@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleOutboxEventReadMapper;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
@@ -28,7 +28,7 @@ public class DefaultConsoleOutboxOpsApplicationService
   private final TenantIdResolver tenantGuard;
   private final ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
   private final ConsoleRealtimeEventPort domainEventPublisher;
-  private final ConsoleOrchestratorProxyService orchestratorProxy;
+  private final ConsoleOrchestratorPort orchestratorProxy;
   private final ConsoleQueryCacheService cacheService;
 
   @Override

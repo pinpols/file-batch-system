@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.web.response;
+package io.github.pinpols.batch.console.shared.view;
 
 import io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;

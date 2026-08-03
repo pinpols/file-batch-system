@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
@@ -25,13 +26,10 @@ class DefaultConsoleReportExcelApplicationServiceTest {
   void shouldExportConfigReleasesWorkbook() throws Exception {
     ConsoleConfigApplicationService configService = mock(ConsoleConfigApplicationService.class);
     ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
-    io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient
-        orchestratorInternalRestClient = mock(
-            io.github.pinpols.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient
-                .class);
+    ConsoleOrchestratorPort orchestratorPort = mock(ConsoleOrchestratorPort.class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
-            configService, queryService, orchestratorInternalRestClient, dateTimeSupport());
+            configService, queryService, orchestratorPort, dateTimeSupport());
     when(configService.configReleases(any()))
         .thenReturn(List.of(new ConsoleConfigReleaseResponse(
             1L,

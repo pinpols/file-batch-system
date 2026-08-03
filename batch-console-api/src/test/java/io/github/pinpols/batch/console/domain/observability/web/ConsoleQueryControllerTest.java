@@ -17,12 +17,12 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanc
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobStepInstanceResponse;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Instant;

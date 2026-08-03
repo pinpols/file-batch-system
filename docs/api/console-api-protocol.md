@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-08-03 | 有界上下文治理 Phase 16/17 仅调整内部 Java 依赖方向、共享 DTO/命令包位置和应用端口；Console REST 路径、请求/响应字段、鉴权、分页、租户和事务语义均不变。 |
 | 2026-08-03 | 内部审计声明注解 `AuditAction` 移至 shared 横切包，供各领域 Controller 复用；HTTP 路径、请求/响应字段、鉴权和审计事务语义均不变。 |
 | 2026-08-02 | `GET /api/console/queries/trace-snapshot` 响应新增 `timeline`：按 `occurredAt` 排序聚合 job instance、workflow、file pipeline、审计、execution log、outbox、alert 和 dead-letter 的只读诊断项。每项仅含 `source/eventType/referenceId/status/message/occurredAt/traceId`，不携带文件正文、SQL、请求头、密钥或下游响应；原有领域列表和查询语义不变。同步更新 OpenAPI 与前端生成类型。 |
 | 2026-07-16 | **取证导出安全与资源边界收口**：`POST /api/console/forensic/export` 不再信任请求体 `requestedBy`，审计操作者统一取当前认证请求的 operator metadata；导出日期范围限制为最多 31 天、审计明细最多 100000 行。`GET /api/console/forensic/export/{exportId}/download` 改为流式转发 ZIP，避免 Console 将完整文件读入 `byte[]`；响应路径与二进制 wire 格式不变。 |

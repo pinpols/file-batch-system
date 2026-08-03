@@ -14,8 +14,8 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApplicat
 import io.github.pinpols.batch.console.domain.job.web.request.CompensationCommandRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.RerunRequest;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
-import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;

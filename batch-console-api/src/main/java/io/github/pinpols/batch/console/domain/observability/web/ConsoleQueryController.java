@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQueryService;
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
@@ -46,13 +47,6 @@ import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQ
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
@@ -67,6 +61,13 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkf
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxDeliveryLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.web.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;
@@ -99,9 +100,7 @@ public class ConsoleQueryController {
   private final ConsoleQueryApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
   private final OperationAuditQueryService operationAuditQueryService;
-  private final io.github.pinpols.batch.console.domain.ops.application
-          .ConsoleOrchestratorProxyService
-      orchestratorProxy;
+  private final ConsoleOrchestratorPort orchestratorProxy;
 
   /**
    * GET /pipeline-progress?pipelineInstanceId=... — 拉取单个 pipeline instance 的 step 行级进度。

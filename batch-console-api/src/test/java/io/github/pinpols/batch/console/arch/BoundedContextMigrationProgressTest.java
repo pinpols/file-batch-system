@@ -106,6 +106,11 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 14):跨域实时变更发布改依赖顶层 {@code ConsoleRealtimeEventPort}，Spring 事件和 SSE 适配器仍归 observability，实测降至 1145。
    *
    * <p>2026-08-03(Phase 15):跨域 SSE Controller 改依赖 {@code ConsoleRealtimeSubscriptionPort}，Hub 的连接生命周期仍归 observability，实测降至 1120。
+   *
+   * <p>2026-08-03(Phase 16):将跨多个上下文复用的只读响应 DTO 移入 {@code shared.view}，将跨域补跑审批命令移入
+   * {@code shared.command}；JSON 字段、REST 路由、SQL 和租户语义不变，实测降至 974。
+   *
+   * <p>2026-08-03(Phase 17):将编排器代理和触发器代理提升为顶层应用端口，报表导出复用编排器查询端口；HTTP 适配器仍归 Ops，实测降至 927。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

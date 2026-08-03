@@ -14,10 +14,10 @@ import io.github.pinpols.batch.console.domain.job.web.request.CompensationComman
 import io.github.pinpols.batch.console.domain.job.web.request.PartitionReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
-import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

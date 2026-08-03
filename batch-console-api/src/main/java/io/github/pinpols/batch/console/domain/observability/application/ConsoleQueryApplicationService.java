@@ -40,13 +40,6 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobStepIns
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryScheduleResponse;
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
@@ -59,6 +52,13 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkf
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxDeliveryLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.web.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;

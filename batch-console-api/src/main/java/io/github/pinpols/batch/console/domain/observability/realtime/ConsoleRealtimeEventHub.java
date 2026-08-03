@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSseEventResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;

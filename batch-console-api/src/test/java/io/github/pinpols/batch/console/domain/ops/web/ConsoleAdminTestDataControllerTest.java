@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleAdminTestDataCleanupService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -42,8 +42,8 @@ class ConsoleAdminTestDataControllerTest {
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private final Environment environment = mock(Environment.class);
-  private final ConsoleOrchestratorProxyService orchestratorProxyService =
-      mock(ConsoleOrchestratorProxyService.class);
+  private final ConsoleOrchestratorPort orchestratorProxyService =
+      mock(ConsoleOrchestratorPort.class);
   private MockMvc mockMvc;
 
   @BeforeEach

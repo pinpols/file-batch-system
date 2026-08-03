@@ -11,9 +11,9 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class ConsoleOpsSummaryRealtimeStreamTest {
 
   @Mock
-  private ConsoleOpsApplicationService opsApplicationService;
+  private ConsoleOpsSummaryPort opsApplicationService;
 
   @Mock
   private ConsoleRealtimeEventHub realtimeEventHub;

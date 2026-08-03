@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.ops.web.request.ForensicExportRequest;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -40,7 +40,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @Idempotent
 public class ConsoleForensicController {
 
-  private final ConsoleOrchestratorProxyService orchestratorProxyService;
+  private final ConsoleOrchestratorPort orchestratorProxyService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 

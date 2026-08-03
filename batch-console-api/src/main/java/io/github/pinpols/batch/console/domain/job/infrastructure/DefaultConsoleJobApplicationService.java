@@ -14,7 +14,7 @@ import io.github.pinpols.batch.console.domain.job.web.request.TaskReplayRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.TriggerRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
-import io.github.pinpols.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

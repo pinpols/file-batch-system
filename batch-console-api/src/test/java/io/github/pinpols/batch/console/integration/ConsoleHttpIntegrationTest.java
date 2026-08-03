@@ -22,7 +22,7 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerS
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;

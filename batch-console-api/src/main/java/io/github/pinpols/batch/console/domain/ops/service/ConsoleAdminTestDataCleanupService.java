@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleAdminTestDataCleanupService {
 
-  private final ConsoleOrchestratorProxyService orchestratorProxyService;
+  private final ConsoleOrchestratorPort orchestratorProxyService;
 
   public Map<String, Integer> cleanupByPrefix(String prefix) {
     return orchestratorProxyService.adminTestDataCleanupByPrefix(prefix);

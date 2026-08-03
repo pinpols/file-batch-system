@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.web.request;
+package io.github.pinpols.batch.console.shared.command;
 
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;

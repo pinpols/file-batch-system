@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.web.response;
+package io.github.pinpols.batch.console.shared.view;
 
 public record ConsoleOpsSummaryResponse(
     String tenantId,

@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.ops.application;
+package io.github.pinpols.batch.console.application.ops;
 
 import java.util.List;
 import java.util.Map;

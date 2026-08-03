@@ -13,12 +13,12 @@ import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleF
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.web.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
+import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

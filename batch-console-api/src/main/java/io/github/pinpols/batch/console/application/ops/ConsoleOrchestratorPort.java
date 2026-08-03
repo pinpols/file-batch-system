@@ -1,7 +1,7 @@
-package io.github.pinpols.batch.console.domain.ops.application;
+package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.LocalDate;
@@ -25,7 +25,7 @@ import java.util.Map;
  *
  * <p>快照查询（schedulerSnapshot / schedulerSnapshotHistory）为只读，不改变编排器状态。
  */
-public interface ConsoleOrchestratorProxyService {
+public interface ConsoleOrchestratorPort {
 
   Map<String, Object> instanceAction(Long id, String tenantId, String action);
 

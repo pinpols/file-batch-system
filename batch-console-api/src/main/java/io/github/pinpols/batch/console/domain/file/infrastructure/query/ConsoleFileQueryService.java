@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.entity.FileArrivalGroupEntity;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
 import io.github.pinpols.batch.console.domain.file.entity.FileRecordEntity;
@@ -38,7 +39,6 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
 import io.github.pinpols.batch.console.web.query.FileChainQueryRequest;
@@ -69,7 +69,7 @@ public class ConsoleFileQueryService {
   private final ConsoleFileQueryMappers fileMappers;
   private final BatchSecurityProperties batchSecurityProperties;
   private final LocalizedErrorRenderer localizedErrorRenderer;
-  private final ConsoleOrchestratorProxyService orchestratorProxy;
+  private final ConsoleOrchestratorPort orchestratorProxy;
 
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
