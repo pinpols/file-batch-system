@@ -15,6 +15,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
+import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -30,9 +31,6 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class DatasetRuleEvaluator {
-
-  private static final String ERROR_CODE_ROW_COUNT = "IMPORT_VALIDATE_ROW_COUNT";
-  private static final String ERROR_CODE_SCHEMA = "IMPORT_VALIDATE_SCHEMA";
 
   private final ValidationConfigSupport configSupport;
 
@@ -103,7 +101,7 @@ public class DatasetRuleEvaluator {
       }
       datasetIssues.add(new ValidationIssue(
           null,
-          ERROR_CODE_ROW_COUNT,
+          ImportValidationErrorCode.ROW_COUNT.code(),
           "row count mismatch, expected="
               + exactCount
               + (fromManifest ? " (manifest)" : "")
@@ -115,7 +113,7 @@ public class DatasetRuleEvaluator {
     if (minCount != null && actualCount < minCount) {
       datasetIssues.add(new ValidationIssue(
           null,
-          ERROR_CODE_ROW_COUNT,
+          ImportValidationErrorCode.ROW_COUNT.code(),
           "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
           Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
       return;
@@ -123,7 +121,7 @@ public class DatasetRuleEvaluator {
     if (maxCount != null && actualCount > maxCount) {
       datasetIssues.add(new ValidationIssue(
           null,
-          ERROR_CODE_ROW_COUNT,
+          ImportValidationErrorCode.ROW_COUNT.code(),
           "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
           Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
     }
@@ -159,7 +157,7 @@ public class DatasetRuleEvaluator {
           .datasetIssues()
           .add(new ValidationIssue(
               null,
-              "IMPORT_VALIDATE_CONTROL_RECORD",
+              ImportValidationErrorCode.CONTROL_RECORD.code(),
               "control-record count mismatch, declared="
                   + declaredCount
                   + MSG_ACTUAL_SUFFIX
@@ -206,7 +204,7 @@ public class DatasetRuleEvaluator {
     if (!expectedChecksum.equalsIgnoreCase(actualChecksum)) {
       datasetIssues.add(new ValidationIssue(
           null,
-          "IMPORT_VALIDATE_CHECKSUM",
+          ImportValidationErrorCode.CHECKSUM.code(),
           "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum,
           Map.of(
               "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum)));
@@ -245,7 +243,7 @@ public class DatasetRuleEvaluator {
     if (!missingFields.isEmpty()) {
       datasetIssues.add(new ValidationIssue(
           null,
-          ERROR_CODE_SCHEMA,
+          ImportValidationErrorCode.SCHEMA.code(),
           "schema missing required fields: " + String.join(",", missingFields),
           Map.of("requiredFields", requiredFields, "actualFields", schemaFields)));
       return;
@@ -261,7 +259,7 @@ public class DatasetRuleEvaluator {
       if (!unexpectedFields.isEmpty()) {
         datasetIssues.add(new ValidationIssue(
             null,
-            ERROR_CODE_SCHEMA,
+            ImportValidationErrorCode.SCHEMA.code(),
             "schema contains unexpected fields: " + String.join(",", unexpectedFields),
             Map.of("allowedFields", allowedFields, "actualFields", schemaFields)));
       }
