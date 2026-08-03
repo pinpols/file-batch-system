@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
@@ -18,7 +19,6 @@ import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiPromptGuard
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.console.domain.audit.web.response.AiChatResponse;
-import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;

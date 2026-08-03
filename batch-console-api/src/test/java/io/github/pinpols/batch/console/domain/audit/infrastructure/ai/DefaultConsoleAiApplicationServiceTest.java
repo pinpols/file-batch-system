@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
@@ -22,7 +23,6 @@ import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiPromptGuard
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.console.domain.audit.web.response.AiChatResponse;
-import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;

@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.infrastructure;
+package io.github.pinpols.batch.console.application.observability;
 
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
@@ -45,7 +45,6 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobStepIns
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryScheduleResponse;
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
-import io.github.pinpols.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;

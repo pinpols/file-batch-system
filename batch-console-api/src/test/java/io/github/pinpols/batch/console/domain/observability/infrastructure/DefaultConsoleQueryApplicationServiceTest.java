@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.observability.DefaultConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsQueryPort;
 import io.github.pinpols.batch.console.domain.audit.application.OperationAuditQueryService;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;

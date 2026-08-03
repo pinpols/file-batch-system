@@ -132,6 +132,12 @@
 - 将审批提交上下文和补偿命令载荷移入 `shared.command`，仅改变依赖方向，不改变审批门控、幂等键、下游路径、状态机或事务语义。
 - `job -> ops` 依赖降至 0，跨域直接依赖降至 **708**，本批减少 **167 条**；ratchet 已下调至 708。
 
+第二十一批完成后：
+
+- 将跨 Job、File、Workflow、Audit、Notification 和 Governance 的只读查询总门面提升到 `application.observability`，将对应聚合 REST Controller 提升到顶层 `web`。
+- 该门面属于控制台应用编排层，不承载领域状态机；查询子服务、SQL、租户过滤、分页、响应 JSON 和 REST 路由均保持不变。
+- 跨域直接依赖降至 **372**，本批减少 **336 条**；ratchet 已下调至 372。
+
 ## 第一阶段：清单与分类
 
 执行：

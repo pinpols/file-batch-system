@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.application;
+package io.github.pinpols.batch.console.application.observability;
 
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
