@@ -13,8 +13,8 @@ import io.github.pinpols.batch.console.domain.job.web.request.HolidayImportReque
 import io.github.pinpols.batch.console.domain.job.web.request.HolidaySaveRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleCalendarResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleHolidayResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +33,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
 
   private final BusinessCalendarMapper calendarMapper;
   private final CalendarHolidayMapper holidayMapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
   @Override

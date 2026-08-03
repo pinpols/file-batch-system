@@ -55,6 +55,12 @@
 - Pipeline 实时 Controller 暂保留具体守卫，避免只改注入类型却触发 API 文档门禁；文件租户校验语义不变。
 - 跨域直接依赖降至 **1329**，本批减少 **28 条**；ratchet 已下调至 1329。
 
+第七批完成后：
+
+- job 的定义、日历、批量窗口、Bundle 和自服务改依赖 `TenantIdResolver`。
+- Replay、DryRun、ResultVersion、Realtime Controller 暂保留具体守卫，避免 API 文档门禁误报；Job 状态和重跑语义不变。
+- 跨域直接依赖降至 **1295**，本批减少 **34 条**；ratchet 已下调至 1295。
+
 ## 第一阶段：清单与分类
 
 执行：

@@ -14,8 +14,8 @@ import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCopyR
 import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobDefinitionResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +46,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     implements ConsoleJobDefinitionApplicationService {
 
   private final JobDefinitionMapper jobDefinitionMapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
   private final BuiltinTaskTypeGuard builtinTaskTypeGuard;

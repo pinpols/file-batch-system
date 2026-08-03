@@ -17,6 +17,7 @@
 - **有界上下文 Phase 4**：Ops 侧只依赖 `TenantIdResolver` / `TenantScopeResolver` Port，`ConsoleTenantGuard` 仍为唯一实现，保持租户安全语义不变；跨域依赖从 1449 降至 1374，ratchet 同步下调。
 - **有界上下文 Phase 5**：notification 的租户感知 Service 改依赖 `TenantIdResolver`，实时 Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1374 降至 1357，ratchet 同步下调。
 - **有界上下文 Phase 6**：file 的文件服务和查询服务改依赖 `TenantIdResolver`，实时 Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1357 降至 1329，ratchet 同步下调。
+- **有界上下文 Phase 7**：job 的定义、日历、窗口、Bundle 和自服务改依赖 `TenantIdResolver`，Controller 保持原注入以避免 API 门禁误报；跨域依赖从 1329 降至 1295，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。
