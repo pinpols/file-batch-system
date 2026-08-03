@@ -15,6 +15,7 @@ import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -174,7 +175,7 @@ public class QuartzLaunchJob implements Job {
         .withIdentity("readiness-retry-" + UUID.randomUUID(), TriggerSchedulerFacade.JOB_GROUP)
         .forJob(context.getJobDetail().getKey())
         .usingJobData(retryData)
-        .startAt(java.util.Date.from(retryAt))
+        .startAt(Date.from(retryAt))
         .withSchedule(
             SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
         .build();

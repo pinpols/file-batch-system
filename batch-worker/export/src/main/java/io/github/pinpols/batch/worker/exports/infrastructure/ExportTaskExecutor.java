@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperti
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import java.time.Duration;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +47,7 @@ public class ExportTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET),
+        Set.of(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET),
         false,
         true,
         Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()));

@@ -8,6 +8,8 @@
 
 ### 2026-08-03
 - **ADR-033 调度器边界校正**：明确 Hashed Wheel 方案已撤回，当前生产调度基线为 Quartz；只有达到明确的容量或时序门槛才重新评估时间轮。若重新评估，时间轮核心必须采用成熟开源实现（例如 Netty `HashedWheelTimer`），不得在 BFS 内自行实现核心调度算法；BFS 只负责业务语义适配、持久化、幂等、租户隔离、故障转移和可观测性。
+- **Controller 响应边界澄清**：`CommonResponse<T>` 仅约束 `batch-console-api` 对外 Console REST API；服务间 `/internal/**` 保留登记的 DTO / Map 协议，避免文档规则误导内部接口改包络。
+- **有界上下文门禁启用**：`BoundedContextDependencyArchTest` 从完全跳过改为 1841 条历史依赖基线的 ratchet 门禁；跨域依赖不得继续增加，降到 0 后再切换严格隔离规则。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。
