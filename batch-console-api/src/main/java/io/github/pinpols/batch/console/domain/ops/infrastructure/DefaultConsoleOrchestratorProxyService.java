@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
@@ -351,7 +352,8 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public List<Map<String, Object>> pipelineProgress(String tenantId, List<String> workerCodes) {
+  public List<ConsolePipelineProgressItemResponse> pipelineProgress(
+      String tenantId, List<String> workerCodes) {
     if (workerCodes == null || workerCodes.isEmpty()) {
       return List.of();
     }
@@ -369,7 +371,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .queryParam("workerCodes", workerCodesParam)
                 .build())
             .retrieve()
-            .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {}),
+            .body(new ParameterizedTypeReference<List<ConsolePipelineProgressItemResponse>>() {}),
         ex -> List.of());
   }
 

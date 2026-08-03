@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.console.domain.observability.web.response.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
 import java.io.IOException;
@@ -110,5 +111,6 @@ public interface ConsoleOrchestratorPort {
    *
    * @return key=workerCode / rowsProcessed / totalRowsHint(可空)/ heartbeatAt
    */
-  List<Map<String, Object>> pipelineProgress(String tenantId, List<String> workerCodes);
+  List<ConsolePipelineProgressItemResponse> pipelineProgress(
+      String tenantId, List<String> workerCodes);
 }
