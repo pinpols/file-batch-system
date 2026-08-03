@@ -3638,6 +3638,7 @@ paths:
     get:
       tags: [Queries]
       summary: 按 pipelineInstanceId 拉取当前 pipeline step 行级进度
+      description: 返回类型化的 pipeline progress item；稳定字段由 ConsolePipelineProgressItemResponse 保证，totalRowsHint 可为空。
       operationId: queryPipelineProgress
       parameters:
         - name: pipelineInstanceId
@@ -3664,6 +3665,7 @@ paths:
                         type: array
                         items:
                           type: object
+                          description: 当前 worker 的实时 stage 进度项。
                           properties:
                             stepId: { type: integer, format: int64 }
                             pipelineInstanceId: { type: integer, format: int64 }
