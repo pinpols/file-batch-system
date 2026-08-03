@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
-import io.github.pinpols.batch.console.domain.observability.service.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSystemParameterValueResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

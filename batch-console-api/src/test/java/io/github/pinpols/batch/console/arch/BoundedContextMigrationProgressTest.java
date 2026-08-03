@@ -127,6 +127,10 @@ class BoundedContextMigrationProgressTest {
    * <p>2026-08-03(Phase 24):各领域 Controller 改依赖 {@code TenantIdResolver}，不再直接依赖 RBAC 的具体租户守卫；租户解析、全局角色和 fail-close 语义不变，实测降至 84。
    *
    * <p>2026-08-03(Phase 25):将租户 provisioning、readiness 和 meta 查询应用服务提升到 {@code application.rbac}，保留 RBAC 安全校验和领域 Mapper，实测降至 59。
+   *
+   * <p>2026-08-03(Phase 26):将 File、Job 和 Workflow 共用的 {@code EnabledPatchRequest} 移入 {@code shared.command}，保持字段、校验和 REST 契约不变，实测降至 50。
+   *
+   * <p>2026-08-03(Phase 27):将 SSE ticket 和系统参数应用服务提升到 {@code application.observability}，保留 Redis 一次性消费、角色绑定、缓存和租户校验语义，实测降至 29。
    */
   private static final Set<String> CTX_SET = Set.copyOf(Arrays.asList(BOUNDED_CONTEXTS));
 

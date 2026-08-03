@@ -36,6 +36,8 @@
 - **有界上下文 Phase 23**：将只读 AI 诊断工具提升到 `application.audit`，保持工具、租户绑定、查询和集群诊断契约不变；跨域依赖从 199 降至 145，ratchet 同步下调。
 - **有界上下文 Phase 24**：各领域 Controller 改依赖 `TenantIdResolver`，不再直接依赖 RBAC 具体租户守卫；租户解析、全局角色和 fail-close 语义不变，跨域依赖从 145 降至 84。
 - **有界上下文 Phase 25**：将租户 provisioning、readiness 和 meta 查询应用服务提升到 `application.rbac`，保留认证、授权、租户校验和查询语义，跨域依赖从 84 降至 59，ratchet 同步下调。
+- **有界上下文 Phase 26**：将 File、Job 和 Workflow 共用的 `EnabledPatchRequest` 移至 `shared.command`，保持字段、校验和 REST 契约不变，跨域依赖从 59 降至 50，ratchet 同步下调。
+- **有界上下文 Phase 27**：将 SSE ticket 和系统参数应用服务提升到 `application.observability`，保留 Redis 一次性消费、角色绑定、缓存、租户校验和 REST 语义，跨域依赖从 50 降至 29，ratchet 同步下调。
 
 ### 2026-07-23
 - **CLAUDE.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。

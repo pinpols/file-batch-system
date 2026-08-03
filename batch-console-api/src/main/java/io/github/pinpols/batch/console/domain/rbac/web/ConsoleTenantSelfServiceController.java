@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
-import io.github.pinpols.batch.console.domain.observability.service.ConsoleSystemParameterService;
+import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleTenantUsageSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;

@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.observability.service.SseTicketService;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;

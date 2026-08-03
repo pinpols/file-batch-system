@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.service;
+package io.github.pinpols.batch.console.application.observability;
 
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.Duration;

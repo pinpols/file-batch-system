@@ -158,6 +158,16 @@
 - 将租户 provisioning、readiness 和 meta 查询应用服务提升到 `application.rbac`，因为它们编排多个领域的只读 Mapper/状态检查，不属于 RBAC 持久化模型本身。
 - 保留 RBAC 的认证、授权、租户 Guard、安全校验和所有数据库查询语义；跨域直接依赖降至 **59**，本批减少 **25 条**；ratchet 已下调至 59。
 
+第二十六批完成后：
+
+- 将 File、Job 和 Workflow 共用的 `EnabledPatchRequest` 移入 `shared.command`，保持字段、校验和 REST 契约不变。
+- 跨域直接依赖降至 **50**，本批减少 **9 条**；ratchet 已下调至 50。
+
+第二十七批完成后：
+
+- 将 SSE ticket 和系统参数应用服务提升到 `application.observability`，使 RBAC、Governance 和 Observability Web 依赖应用层能力，不直接依赖观测域服务实现。
+- 保留 Redis ticket 一次性消费、角色绑定、系统参数缓存、租户解析和 REST 路由语义；跨域直接依赖降至 **29**，本批减少 **21 条**；ratchet 已下调至 29。
+
 ## 第一阶段：清单与分类
 
 执行：

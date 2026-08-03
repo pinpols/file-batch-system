@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.console.domain.observability.service.SseTicketService;
+import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
