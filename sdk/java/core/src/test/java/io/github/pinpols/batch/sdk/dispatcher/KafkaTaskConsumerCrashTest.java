@@ -13,6 +13,7 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -71,6 +72,28 @@ class KafkaTaskConsumerCrashTest {
     runner.join(3_000);
     assertThat(kafka.hasCrashed()).isTrue();
     assertThat(kafka.isRunning()).isFalse();
+  }
+
+  @Test
+  void fatalErrorIsRethrownAfterCrashStateIsRecorded() throws Exception {
+    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+    Consumer<String, byte[]> consumer = mockConsumer();
+    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+    when(consumer.assignment()).thenReturn(Set.of());
+    var fatal = new AssertionError("fatal kafka failure");
+    when(consumer.poll(any())).thenThrow(fatal);
+
+    KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
+    AtomicReference<Throwable> uncaught = new AtomicReference<>();
+    runner = new Thread(kafka, "test-kafka-fatal");
+    runner.setUncaughtExceptionHandler((thread, throwable) -> uncaught.set(throwable));
+    runner.start();
+    runner.join(3_000);
+
+    assertThat(kafka.hasCrashed()).isTrue();
+    assertThat(kafka.isRunning()).isFalse();
+    assertThat(uncaught.get()).isSameAs(fatal);
   }
 
   @Test

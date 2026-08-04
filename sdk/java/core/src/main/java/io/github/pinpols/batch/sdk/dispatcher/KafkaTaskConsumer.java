@@ -191,6 +191,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       // 不静默死。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
       crashed.set(true);
       running.set(false);
+      rethrowFatal(t);
       log.error("KafkaTaskConsumer poll loop died (marked crashed)", t);
     } finally {
       try {
@@ -199,6 +200,13 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         log.warn("kafka consumer close error: {}", e.getMessage());
       }
       log.info("KafkaTaskConsumer stopped");
+    }
+  }
+
+  /** poll 线程可以隔离普通运行时故障，但不能吞掉 JVM 级故障。 */
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 
