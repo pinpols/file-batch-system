@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.domain.workflow.infrastructure.excel;
 
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelValueSupport;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -127,29 +127,19 @@ public final class WorkflowNodeStartEndCodeRule {
   }
 
   private static String asString(Object o) {
-    return o == null ? null : String.valueOf(o);
+    return ConsoleExcelValueSupport.asString(o);
   }
 
   private static String upper(String s) {
-    return s == null ? null : s.trim().toUpperCase(Locale.ROOT);
+    return ConsoleExcelValueSupport.upper(s);
   }
 
   private static boolean isBlank(String s) {
-    return s == null || s.trim().isEmpty();
+    return ConsoleExcelValueSupport.isBlank(s);
   }
 
   private static int parseRowNo(Object o) {
-    if (o == null) {
-      return 0;
-    }
-    if (o instanceof Number n) {
-      return n.intValue();
-    }
-    try {
-      return Integer.parseInt(o.toString());
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return ConsoleExcelValueSupport.parseRowNo(o);
   }
 
   private static final class GroupStat {

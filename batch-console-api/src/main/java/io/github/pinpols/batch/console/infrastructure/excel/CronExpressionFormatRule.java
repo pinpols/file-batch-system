@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelValueSupport;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -64,15 +64,15 @@ public final class CronExpressionFormatRule {
   }
 
   private static String asString(Object o) {
-    return o == null ? null : String.valueOf(o);
+    return ConsoleExcelValueSupport.asString(o);
   }
 
   private static String upper(String s) {
-    return s == null ? null : s.trim().toUpperCase(Locale.ROOT);
+    return ConsoleExcelValueSupport.upper(s);
   }
 
   private static boolean isBlank(String s) {
-    return s == null || s.trim().isEmpty();
+    return ConsoleExcelValueSupport.isBlank(s);
   }
 
   private static int parseRowNo(Object o) {

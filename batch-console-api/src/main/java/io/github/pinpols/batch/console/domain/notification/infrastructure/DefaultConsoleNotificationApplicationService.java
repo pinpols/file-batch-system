@@ -1,22 +1,19 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
-import io.github.pinpols.batch.console.domain.notification.service.NotificationMessage;
 import io.github.pinpols.batch.console.domain.notification.service.NotificationSender;
 import io.github.pinpols.batch.console.domain.notification.service.NotificationSenderRegistry;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDeliveryResult;
+import io.github.pinpols.batch.console.domain.notification.service.WebhookDeliverySupport;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookEventPayload;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
@@ -177,7 +174,8 @@ public class DefaultConsoleNotificationApplicationService
     if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
       return;
     }
-    String url = str(parseConfig(configJson), "url");
+    String url = WebhookDeliverySupport.configText(
+        configJson, "url", DefaultConsoleNotificationApplicationService.class);
     if (url != null && !url.isBlank()) {
       callbackUrlValidator.validate(url);
     }
@@ -190,6 +188,11 @@ public class DefaultConsoleNotificationApplicationService
           "error.common.invalid_argument_detail",
           "channelType must be one of " + CHANNEL_TYPES);
     }
+  }
+
+  private static String str(Map<String, Object> map, String key) {
+    Object value = map == null ? null : map.get(key);
+    return value == null ? null : value.toString();
   }
 
   private static Boolean enabledOrDefault(Boolean enabled) {
@@ -369,61 +372,16 @@ public class DefaultConsoleNotificationApplicationService
       String configJson,
       WebhookEventPayload payload,
       String payloadJson) {
-    if (channelType == null || channelType.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "channel has no channel_type");
-    }
-    if (CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
-      WebhookSubscriptionEntity synthetic =
-          toSyntheticWebhookSubscription(tenantId, channelCode, configJson);
-      if (synthetic == null) {
-        return WebhookDeliveryResult.failure(null, "webhook channel missing config url");
-      }
-      // attemptDelivery 复用生产投递路径:自带 DnsResolveGuard(SSRF)+ 请求超时,不会挂死请求线程。
-      return webhookDispatcher.attemptDelivery(synthetic, payload, payloadJson);
-    }
-    NotificationSender sender = senderRegistry.resolve(channelType);
-    if (sender == null) {
-      return WebhookDeliveryResult.failure(
-          null, "no sender registered for channel type: " + channelType);
-    }
-    return sender.send(new NotificationMessage(
-        tenantId, channelCode, channelType, configJson, payload, payloadJson));
-  }
-
-  private WebhookSubscriptionEntity toSyntheticWebhookSubscription(
-      String tenantId, String channelCode, String configJson) {
-    Map<String, Object> config = parseConfig(configJson);
-    String url = str(config, "url");
-    if (url == null || url.isBlank()) {
-      return null;
-    }
-    WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
-    entity.setTenantId(tenantId);
-    entity.setName(channelCode);
-    entity.setCallbackUrl(url);
-    entity.setSecret(str(config, "secret"));
-    entity.setEnabled(Boolean.TRUE);
-    return entity;
-  }
-
-  private Map<String, Object> parseConfig(String configJson) {
-    if (configJson == null || configJson.isBlank()) {
-      return Map.of();
-    }
-    try {
-      Map<String, Object> parsed =
-          JsonUtils.fromJson(configJson, new TypeReference<Map<String, Object>>() {});
-      return parsed == null ? Map.of() : parsed;
-    } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.info(
-          DefaultConsoleNotificationApplicationService.class, "catch:config_json parse", ex);
-      return Map.of();
-    }
-  }
-
-  private static String str(Map<String, Object> map, String key) {
-    Object value = map == null ? null : map.get(key);
-    return value == null ? null : value.toString();
+    return WebhookDeliverySupport.deliver(new WebhookDeliverySupport.DeliveryContext(
+        tenantId,
+        channelCode,
+        channelType,
+        configJson,
+        payload,
+        payloadJson,
+        senderRegistry,
+        webhookDispatcher,
+        DefaultConsoleNotificationApplicationService.class));
   }
 
   private static Map<String, Object> mapOf(Object... pairs) {

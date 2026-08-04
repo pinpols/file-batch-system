@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.console.config.SmsProperties;
+import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -288,16 +289,11 @@ public class AliyunSmsProvider implements SmsProvider {
   }
 
   private static String toHex(byte[] bytes) {
-    StringBuilder sb = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
-    }
-    return sb.toString();
+    return ConsoleNotificationCryptoSupport.toHex(bytes);
   }
 
   private static String textOrNull(JsonNode config, String field) {
-    JsonNode node = config.get(field);
-    return (node == null || node.isNull()) ? null : node.asText();
+    return ConsoleNotificationCryptoSupport.textOrNull(config, field);
   }
 
   /** 手机号脱敏：只暴露收件人数量,绝不打明文。 */

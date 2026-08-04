@@ -8,6 +8,7 @@ import lombok.Data;
 
 @Data
 public class FileTemplateCreateRequest {
+  // CPD-OFF: Create and update requests intentionally mirror the public file-template contract.
   @ValidTenantId
   private String tenantId;
 
@@ -98,4 +99,5 @@ public class FileTemplateCreateRequest {
 
   @Size(max = 128)
   private String exportDataRef;
+  // CPD-ON
 }

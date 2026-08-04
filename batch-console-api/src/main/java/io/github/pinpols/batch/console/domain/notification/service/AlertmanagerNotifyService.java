@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerWebhookPayload;
@@ -131,6 +130,11 @@ public class AlertmanagerNotifyService {
     return value != null && !value.isBlank();
   }
 
+  private static String str(Map<String, Object> map, String key) {
+    Object value = map == null ? null : map.get(key);
+    return value == null ? null : value.toString();
+  }
+
   private WebhookDeliveryResult deliver(
       String tenantId,
       String channelCode,
@@ -138,24 +142,16 @@ public class AlertmanagerNotifyService {
       String configJson,
       WebhookEventPayload payload,
       String payloadJson) {
-    if (channelType == null || channelType.isBlank()) {
-      return WebhookDeliveryResult.failure(null, "channel has no channel_type");
-    }
-    if (CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
-      WebhookSubscriptionEntity synthetic =
-          toSyntheticWebhookSubscription(tenantId, channelCode, configJson);
-      if (synthetic == null) {
-        return WebhookDeliveryResult.failure(null, "webhook channel missing config url");
-      }
-      return webhookDispatcher.attemptDelivery(synthetic, payload, payloadJson);
-    }
-    NotificationSender sender = senderRegistry.resolve(channelType);
-    if (sender == null) {
-      return WebhookDeliveryResult.failure(
-          null, "no sender registered for channel type: " + channelType);
-    }
-    return sender.send(new NotificationMessage(
-        tenantId, channelCode, channelType, configJson, payload, payloadJson));
+    return WebhookDeliverySupport.deliver(new WebhookDeliverySupport.DeliveryContext(
+        tenantId,
+        channelCode,
+        channelType,
+        configJson,
+        payload,
+        payloadJson,
+        senderRegistry,
+        webhookDispatcher,
+        AlertmanagerNotifyService.class));
   }
 
   private void writeDeliveryLog(
@@ -176,40 +172,5 @@ public class AlertmanagerNotifyService {
       // 日志写入是 off 关键路径的审计动作,失败只 warn,不影响回执 AM。
       log.warn("AM notify delivery log persist failed: channel={}", channelCode, ex);
     }
-  }
-
-  private WebhookSubscriptionEntity toSyntheticWebhookSubscription(
-      String tenantId, String channelCode, String configJson) {
-    Map<String, Object> config = parseConfig(configJson);
-    String url = str(config, "url");
-    if (url == null || url.isBlank()) {
-      return null;
-    }
-    WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
-    entity.setTenantId(tenantId);
-    entity.setName(channelCode);
-    entity.setCallbackUrl(url);
-    entity.setSecret(str(config, "secret"));
-    entity.setEnabled(Boolean.TRUE);
-    return entity;
-  }
-
-  private Map<String, Object> parseConfig(String configJson) {
-    if (configJson == null || configJson.isBlank()) {
-      return Map.of();
-    }
-    try {
-      Map<String, Object> parsed = JsonUtils.fromJson(
-          configJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-      return parsed == null ? Map.of() : parsed;
-    } catch (RuntimeException ex) {
-      log.info("AM notify config_json parse failed", ex);
-      return Map.of();
-    }
-  }
-
-  private static String str(Map<String, Object> map, String key) {
-    Object value = map == null ? null : map.get(key);
-    return value == null ? null : value.toString();
   }
 }

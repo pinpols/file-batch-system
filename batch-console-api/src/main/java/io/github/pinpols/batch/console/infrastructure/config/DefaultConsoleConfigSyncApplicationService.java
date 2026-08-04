@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCop
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
+import io.github.pinpols.batch.console.support.web.ConsoleMapSupport;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncExportRequest;
@@ -20,7 +21,6 @@ import io.github.pinpols.batch.console.web.response.config.ConfigSyncLogResponse
 import io.github.pinpols.batch.console.web.response.config.ConfigSyncPreviewResponse;
 import io.github.pinpols.batch.console.web.response.config.ConfigSyncSummaryResponse;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -230,17 +230,10 @@ public class DefaultConsoleConfigSyncApplicationService
   }
 
   private Long longValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    return value == null ? null : Long.valueOf(String.valueOf(value));
+    return ConsoleMapSupport.longValue(value);
   }
 
   private Map<String, Object> mapOf(Object... pairs) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (int i = 0; i < pairs.length; i += 2) {
-      result.put(String.valueOf(pairs[i]), pairs[i + 1]);
-    }
-    return result;
+    return ConsoleMapSupport.mapOf(pairs);
   }
 }

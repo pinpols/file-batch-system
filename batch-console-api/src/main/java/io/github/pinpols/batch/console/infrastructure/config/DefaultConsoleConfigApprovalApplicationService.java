@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
 import io.github.pinpols.batch.console.support.ConfigChangeLogBuilder;
+import io.github.pinpols.batch.console.support.web.ConsoleMapSupport;
 import io.github.pinpols.batch.console.web.request.config.ConfigApprovalActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseApprovalSubmitRequest;
 import java.time.Instant;
@@ -260,17 +261,10 @@ public class DefaultConsoleConfigApprovalApplicationService
   }
 
   private Long longValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    return value == null ? null : Long.valueOf(String.valueOf(value));
+    return ConsoleMapSupport.longValue(value);
   }
 
   private Map<String, Object> mapOf(Object... pairs) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (int i = 0; i < pairs.length; i += 2) {
-      result.put(String.valueOf(pairs[i]), pairs[i + 1]);
-    }
-    return result;
+    return ConsoleMapSupport.mapOf(pairs);
   }
 }

@@ -10,6 +10,7 @@ import lombok.Data;
 /** mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。dryRun=true 时只校验不写入数据库。 */
 @Data
 public class TenantConfigBatchInitRequest {
+  // CPD-OFF: Batch initialization exposes the same nested specs as file-template APIs by contract.
 
   @NotEmpty(message = "targetTenantIds must not be empty")
   @Size(max = 50, message = "targetTenantIds must not exceed 50")
@@ -39,6 +40,7 @@ public class TenantConfigBatchInitRequest {
 
   @Valid
   private List<FileTemplateSpec> fileTemplates;
+  // CPD-ON
 
   @Valid
   private List<ResourceQueueSpec> resourceQueues;
