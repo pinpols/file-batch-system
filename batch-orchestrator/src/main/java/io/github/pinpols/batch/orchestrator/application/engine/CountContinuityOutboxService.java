@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -50,21 +51,23 @@ public class CountContinuityOutboxService {
   /** 调用方持有当前事务;本方法 MANDATORY,无事务直接抛。 */
   @Transactional(propagation = Propagation.MANDATORY)
   public void checkContinuity(Long workflowRunId, String nodeCode, String currentOutputJson) {
-    if (workflowRunId == null || !Texts.hasText(nodeCode) || !Texts.hasText(currentOutputJson)) {
+    if (EmptyChecks.isNull(workflowRunId)
+        || !Texts.hasText(nodeCode)
+        || !Texts.hasText(currentOutputJson)) {
       return;
     }
     Long inputCount = readLong(parse(currentOutputJson), "inputCount");
-    if (inputCount == null) {
+    if (EmptyChecks.isNull(inputCount)) {
       // 本节点未上报 inputCount(非文件链路节点 / 未启用信封)→ 不参与
       return;
     }
     WorkflowRunEntity run = workflowRunMapper.selectByIdAnyTenant(workflowRunId);
-    if (run == null || run.getWorkflowDefinitionId() == null) {
+    if (EmptyChecks.isNull(run) || EmptyChecks.isNull(run.getWorkflowDefinitionId())) {
       return;
     }
     List<WorkflowEdgeEntity> incoming =
         workflowEdgeMapper.selectIncomingEdges(run.getWorkflowDefinitionId(), nodeCode);
-    if (incoming.isEmpty()) {
+    if (EmptyChecks.isEmpty(incoming)) {
       return;
     }
     List<String> upstreamCodes = incoming.stream()
@@ -72,7 +75,7 @@ public class CountContinuityOutboxService {
         .filter(Texts::hasText)
         .distinct()
         .toList();
-    if (upstreamCodes.isEmpty()) {
+    if (EmptyChecks.isEmpty(upstreamCodes)) {
       return;
     }
     List<WorkflowNodeRunEntity> upstreamRuns =
@@ -80,7 +83,7 @@ public class CountContinuityOutboxService {
             workflowRunId, upstreamCodes);
     for (WorkflowNodeRunEntity upstream : upstreamRuns) {
       Long upstreamOutput = readLong(parse(upstream.getOutput()), "outputCount");
-      if (upstreamOutput == null || upstreamOutput.equals(inputCount)) {
+      if (EmptyChecks.isNull(upstreamOutput) || upstreamOutput.equals(inputCount)) {
         continue;
       }
       writeMismatch(run, nodeCode, upstream.getNodeCode(), upstreamOutput, inputCount);
@@ -136,7 +139,7 @@ public class CountContinuityOutboxService {
     if (value instanceof Number number) {
       return number.longValue();
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     try {
