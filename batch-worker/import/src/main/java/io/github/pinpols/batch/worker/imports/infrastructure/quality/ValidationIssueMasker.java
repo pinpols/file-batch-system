@@ -56,7 +56,7 @@ public class ValidationIssueMasker {
   private Map<Long, ValidationIssue> maskRecordIssues(
       Map<Long, ValidationIssue> issues, boolean mask, String ruleSet) {
     if (!mask || issues == null || issues.isEmpty()) {
-      return new LinkedHashMap<>(issues);
+      return new LinkedHashMap<>(issues == null ? Map.of() : issues);
     }
     Map<Long, ValidationIssue> masked = new LinkedHashMap<>();
     for (Map.Entry<Long, ValidationIssue> entry : issues.entrySet()) {
