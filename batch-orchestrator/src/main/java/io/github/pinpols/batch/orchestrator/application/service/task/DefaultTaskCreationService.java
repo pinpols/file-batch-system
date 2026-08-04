@@ -3,8 +3,8 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -51,8 +51,8 @@ public class DefaultTaskCreationService implements TaskCreationService {
   @Override
   @Transactional
   public List<JobTaskEntity> createTasks(List<JobTaskEntity> tasks) {
-    if (tasks == null || tasks.isEmpty()) {
-      return tasks == null ? List.of() : tasks;
+    if (EmptyChecks.isEmpty(tasks)) {
+      return EmptyChecks.isNull(tasks) ? List.of() : tasks;
     }
     // 先整批校验再写：任何一项非法（task_type 缺失）整批不落库，避免半批状态。
     for (JobTaskEntity task : tasks) {
@@ -64,12 +64,12 @@ public class DefaultTaskCreationService implements TaskCreationService {
         tasks, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobTaskMapper::insertBatch);
     List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
     for (JobTaskEntity task : tasks) {
-      if (task.getId() == null) {
+      if (EmptyChecks.isNull(task.getId())) {
         continue;
       }
       stepInstances.add(buildStepInstance(task));
     }
-    if (!stepInstances.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(stepInstances)) {
       BatchInsertChunks.insertInChunks(
           stepInstances, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobStepInstanceMapper::insertBatch);
     }
@@ -77,14 +77,14 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private void validateForCreate(JobTaskEntity task) {
-    if (task != null && task.getVersion() == null) {
+    if (EmptyChecks.isNotNull(task) && EmptyChecks.isNull(task.getVersion())) {
       task.setVersion(0L);
     }
     // R7 log-audit defensive：job_task.task_type 列 NOT NULL，但历史发现 workflow
     // dispatch 路径在 targetJobCode 解析不到 jobDefinition 时会传 null，撞 PSQLException
     // 导致 TriggerLaunchConsumer 无限循环。上游 DefaultWorkflowNodeDispatchService 已经
     // fail-fast，这里再加一层回退，把 DB 抛错前置成业务异常，错误信息更可读。
-    if (task != null && (task.getTaskType() == null || task.getTaskType().isBlank())) {
+    if (EmptyChecks.isNotNull(task) && EmptyChecks.isBlank(task.getTaskType())) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.job_task.task_type_required",
@@ -93,12 +93,12 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private void createStepInstance(JobTaskEntity task) {
-    if (task == null || task.getId() == null) {
+    if (EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getId())) {
       return;
     }
     JobStepInstanceEntity existing =
         jobStepInstanceMapper.selectByJobTaskId(task.getTenantId(), task.getId());
-    if (existing != null) {
+    if (EmptyChecks.isNotNull(existing)) {
       return;
     }
     jobStepInstanceMapper.insert(buildStepInstance(task));
@@ -120,44 +120,44 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private String resolveStepCode(JobTaskEntity task) {
-    String workflowNodeCode =
-        payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
-    if (workflowNodeCode != null && !workflowNodeCode.isBlank()) {
+    String workflowNodeCode = payloadStringValue(
+        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
+    if (EmptyChecks.isNotBlank(workflowNodeCode)) {
       return workflowNodeCode;
     }
-    String taskType = task == null ? null : task.getTaskType();
-    Integer taskSeq = task == null ? null : task.getTaskSeq();
-    return Texts.hasText(taskType)
-        ? taskType + ":" + (taskSeq == null ? 1 : taskSeq)
-        : "EXECUTION:" + (taskSeq == null ? 1 : taskSeq);
+    String taskType = EmptyChecks.isNull(task) ? null : task.getTaskType();
+    Integer taskSeq = EmptyChecks.isNull(task) ? null : task.getTaskSeq();
+    return EmptyChecks.isNotBlank(taskType)
+        ? taskType + ":" + (EmptyChecks.isNull(taskSeq) ? 1 : taskSeq)
+        : "EXECUTION:" + (EmptyChecks.isNull(taskSeq) ? 1 : taskSeq);
   }
 
   private String resolveStepType(JobTaskEntity task) {
-    String workflowNodeType =
-        payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeType");
-    if (workflowNodeType != null && !workflowNodeType.isBlank()) {
+    String workflowNodeType = payloadStringValue(
+        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeType");
+    if (EmptyChecks.isNotBlank(workflowNodeType)) {
       return workflowNodeType;
     }
-    return task == null ? "EXECUTION" : task.getTaskType();
+    return EmptyChecks.isNull(task) ? "EXECUTION" : task.getTaskType();
   }
 
   private Long resolveRelatedFileId(JobTaskEntity task) {
     return firstPositiveLong(
-        payloadLongValue(task == null ? null : task.getTaskPayload(), "relatedFileId"),
-        payloadLongValue(task == null ? null : task.getTaskPayload(), "fileId"),
-        payloadLongValue(task == null ? null : task.getTaskPayload(), "sourceFileId"));
+        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId"),
+        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId"),
+        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId"));
   }
 
   @SuppressWarnings("unchecked")
   private String payloadStringValue(String payloadJson, String fieldName) {
-    if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
+    if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
       return null;
     }
     try {
       Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
       if (payloadObject instanceof Map<?, ?> payloadMap) {
         Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return value == null ? null : String.valueOf(value);
+        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
       }
     } catch (IllegalArgumentException exception) {
       SwallowedExceptionLogger.info(
@@ -170,7 +170,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
   @SuppressWarnings("unchecked")
   private Long payloadLongValue(String payloadJson, String fieldName) {
-    if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
+    if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
       return null;
     }
     try {
@@ -193,11 +193,11 @@ public class DefaultTaskCreationService implements TaskCreationService {
       long value = number.longValue();
       return value > 0 ? value : null;
     }
-    if (candidate == null) {
+    if (EmptyChecks.isNull(candidate)) {
       return null;
     }
     String text = String.valueOf(candidate).trim();
-    if (text.isEmpty()) {
+    if (EmptyChecks.isEmpty(text)) {
       return null;
     }
     try {
@@ -213,7 +213,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
   private Long firstPositiveLong(Long... candidates) {
     for (Long candidate : candidates) {
-      if (candidate != null && candidate > 0) {
+      if (EmptyChecks.isNotNull(candidate) && candidate > 0) {
         return candidate;
       }
     }

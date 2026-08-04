@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
@@ -337,10 +336,10 @@ public class TaskControllerApplicationService {
     if (success) {
       return null;
     }
-    if (Texts.hasText(primary)) {
+    if (EmptyChecks.isNotBlank(primary)) {
       return primary;
     }
-    if (Texts.hasText(fallback)) {
+    if (EmptyChecks.isNotBlank(fallback)) {
       return fallback;
     }
     return "UNKNOWN";
