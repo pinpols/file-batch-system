@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.config;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

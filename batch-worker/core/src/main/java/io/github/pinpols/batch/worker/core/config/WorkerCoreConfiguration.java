@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.config;
 
+import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxConfiguration;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -9,7 +10,7 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @Import({WorkerReportOutboxConfiguration.class, WorkerCoreAsyncConfiguration.class})
 @EnableConfigurationProperties({
-  OrchestratorWorkerClientProperties.class,
+  OrchestratorClientProperties.class,
   OrchestratorTaskClientProperties.class,
   WorkerExecutionTimeoutProperties.class,
   WorkerReportOutboxProperties.class,
