@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-08-04 | **测试数据清理事务边界收敛**：`DELETE /api/console/admin/test-data` 及 `/by-ids` 的 HTTP 路径、请求/响应字段、鉴权、审计和清理语义不变；Console 仅负责参数校验与委派，事务边界统一由 orchestrator 内部接口对应的服务承载。同步更新 OpenAPI 描述。 |
 | 2026-08-03 | **Pipeline progress 响应类型化**：`GET /api/console/queries/pipeline-progress` 的 worker progress 代理由内部 `Map<String,Object>` 改为 `ConsolePipelineProgressItemResponse`，wire 字段 `workerCode/rowsProcessed/totalRowsHint/heartbeatAt` 保持不变；`totalRowsHint` 仍允许为 `null`。同步更新 OpenAPI 与桥接单测。 |
 | 2026-08-03 | 有界上下文治理 Phase 16/17 仅调整内部 Java 依赖方向、共享 DTO/命令包位置和应用端口；Console REST 路径、请求/响应字段、鉴权、分页、租户和事务语义均不变。 |
 | 2026-08-03 | 内部审计声明注解 `AuditAction` 移至 shared 横切包，供各领域 Controller 复用；HTTP 路径、请求/响应字段、鉴权和审计事务语义均不变。 |
