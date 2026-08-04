@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -58,7 +59,7 @@ public class PreprocessStep implements ImportStageStep {
    * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB， 通过 {@code
    * batch.worker.import.preprocess-spool-bytes} 调整（设 0 关闭 spool）。
    */
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   /** 对象存储拉取的单文件字节上限(防 OOM)。默认 512 MiB,由 {@code batch.worker.import.max-object-bytes} 调整。 */
   private final PlatformFileRuntimeRepository runtimeRepository;

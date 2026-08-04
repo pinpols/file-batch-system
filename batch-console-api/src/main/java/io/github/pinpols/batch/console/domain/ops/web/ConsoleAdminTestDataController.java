@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleAdminTestDataCleanupService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import jakarta.annotation.PostConstruct;
@@ -38,8 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>清理路径覆盖 11 张业务表(含关联子表),按 FK 反向 DELETE,跑在 service 的 @Transactional 里要么全成要么全回滚
  * </ul>
  *
- * <p>事务边界在 {@link ConsoleAdminTestDataCleanupService}(CLAUDE.md §Java 编码细则 #4 禁 @Transactional 放
- * Controller),本 Controller 仅负责入口校验 + 委派。
+ * <p>事务边界在 orchestrator 内部接口对应的服务中，本 Controller 仅负责入口校验 + 委派。
  *
  * <p>典型使用:`DELETE /api/console/admin/test-data?prefix=e2e` 或 `?prefix=test-suite-A`。
  */
@@ -55,7 +54,7 @@ public class ConsoleAdminTestDataController {
   // 改用 hyphen 作为分隔(本就是文档示例: `e2e-suite-A`)。
   private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
 
-  private final ConsoleAdminTestDataCleanupService cleanupService;
+  private final ConsoleOrchestratorPort orchestratorProxyService;
   private final ConsoleResponseFactory responseFactory;
   private final Environment environment;
 
@@ -92,7 +91,7 @@ public class ConsoleAdminTestDataController {
       // Spring validation 已拦,这里再硬挡一次,防止反射调用绕过 @Pattern
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
-    Map<String, Integer> result = cleanupService.cleanupByPrefix(prefix);
+    Map<String, Integer> result = orchestratorProxyService.adminTestDataCleanupByPrefix(prefix);
     return responseFactory.success(result);
   }
 
@@ -122,7 +121,8 @@ public class ConsoleAdminTestDataController {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .toList();
-    Map<String, Integer> result = cleanupService.cleanupByExactTenantIds(tenantIds);
+    Map<String, Integer> result =
+        orchestratorProxyService.adminTestDataCleanupByExactTenantIds(tenantIds);
     return responseFactory.success(result);
   }
 }

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class PrepareStep implements ProcessStageStep {
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   @Override
   public ProcessStage stage() {

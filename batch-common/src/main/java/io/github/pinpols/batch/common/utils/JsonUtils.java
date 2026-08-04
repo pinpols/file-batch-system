@@ -37,6 +37,11 @@ public final class JsonUtils {
 
   private JsonUtils() {}
 
+  /** 创建平台侧默认 mapper，统一注册时间模块，避免业务类各自拼装 Jackson 配置。 */
+  public static ObjectMapper newDefaultMapper() {
+    return new ObjectMapper().findAndRegisterModules();
+  }
+
   public static String toJson(Object value) {
     try {
       return MAPPER.writeValueAsString(value);

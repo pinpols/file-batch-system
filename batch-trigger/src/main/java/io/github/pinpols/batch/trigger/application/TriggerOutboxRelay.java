@@ -198,6 +198,7 @@ public class TriggerOutboxRelay {
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
+      rethrowFatal(t);
       if (stopping.get() && isRedisStopping(t)) {
         log.info("TriggerOutboxRelay poll skipped during shutdown: {}", t.getMessage());
         return;
@@ -218,6 +219,12 @@ public class TriggerOutboxRelay {
       current = current.getCause();
     }
     return false;
+  }
+
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
+    }
   }
 
   private void pollLocked() {
@@ -249,6 +256,7 @@ public class TriggerOutboxRelay {
       try {
         publishOne(event);
       } catch (Throwable t) {
+        rethrowFatal(t);
         // 单条异常不能拖累整批;失败已写库,异常本身只为 ERROR 日志
         log.error(
             "TriggerOutboxRelay failed to publish event: id={} tenantId={} requestId={}",

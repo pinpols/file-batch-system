@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.dispatcher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
 import java.util.Collection;
@@ -106,12 +107,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private volatile long consumerLagMax = -1L;
 
   public KafkaTaskConsumer(BatchPlatformClientConfig config, TaskDispatcher dispatcher) {
-    this(
-        config,
-        dispatcher,
-        defaultConsumer(config),
-        new ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    this(config, dispatcher, defaultConsumer(config), SdkJsonMapperFactory.create());
   }
 
   /** test-friendly ctor:可注入 mock Consumer(含 {@code MockConsumer})。 */

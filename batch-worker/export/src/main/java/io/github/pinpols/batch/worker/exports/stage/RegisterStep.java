@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
@@ -34,7 +35,7 @@ public class RegisterStep implements ExportStageStep {
   private static final Set<String> RESERVED_METADATA_KEYS =
       Set.of("recordCount", "totalAmount", "templateCode", KEY_OBJECT_NAME, "exportSnapshot");
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ExportDataPluginRegistry exportDataPluginRegistry;

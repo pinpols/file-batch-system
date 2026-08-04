@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -13,7 +14,7 @@ public class ComputeStep implements ProcessStageStep {
   /** Payload 中可选字段,允许业务通过 task params 临时指定 plugin 实现码(用于自定义插件按需 opt-in)。 */
   public static final String ATTR_PROCESS_IMPL_CODE = "processImplCode";
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   @Override
   public ProcessStage stage() {

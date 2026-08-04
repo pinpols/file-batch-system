@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -23,7 +24,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class StoreStep implements ExportStageStep {
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
   private static final String ERROR_CODE_STORE_INVALID = "EXPORT_STORE_INVALID";
 
   private final S3ExportStorage s3ExportStorage;

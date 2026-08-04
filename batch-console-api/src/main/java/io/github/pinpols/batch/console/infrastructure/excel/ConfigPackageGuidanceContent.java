@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ public final class ConfigPackageGuidanceContent {
 
   /** 从 classpath 读取并解析 guidance 资源，解析所有 {@code ${key}} 占位符。fail-fast。 */
   public static ConfigPackageGuidanceContent load() {
-    ObjectMapper mapper = new ObjectMapper();
+    ObjectMapper mapper = JsonUtils.newDefaultMapper();
     JsonNode root;
     try (InputStream in = ConfigPackageGuidanceContent.class.getResourceAsStream(RESOURCE)) {
       if (in == null) {

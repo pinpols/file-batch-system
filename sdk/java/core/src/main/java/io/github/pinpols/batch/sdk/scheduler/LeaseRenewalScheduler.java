@@ -69,6 +69,7 @@ public class LeaseRenewalScheduler implements AutoCloseable {
         renewOne(taskId);
       }
     } catch (Throwable outer) {
+      rethrowFatal(outer);
       log.warn("lease renewal tick failed: {}", outer.getMessage());
     }
   }
@@ -110,7 +111,14 @@ public class LeaseRenewalScheduler implements AutoCloseable {
         log.warn("renew failed for taskId={} (HTTP {})", taskId, httpEx.statusCode());
       }
     } catch (Throwable t) {
+      rethrowFatal(t);
       log.warn("renew failed for taskId={}: {}", taskId, t.getMessage());
+    }
+  }
+
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

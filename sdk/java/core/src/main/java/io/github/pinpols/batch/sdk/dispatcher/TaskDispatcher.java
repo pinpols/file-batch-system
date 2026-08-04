@@ -8,6 +8,7 @@ import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotentHandler;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import io.github.pinpols.batch.sdk.retry.RetryOn;
 import io.github.pinpols.batch.sdk.retry.SdkRetryableHandler;
@@ -57,13 +58,13 @@ public class TaskDispatcher {
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
 
+  private static final ObjectMapper RESULT_SUMMARY_MAPPER = SdkJsonMapperFactory.create();
+
   /**
    * 平台 {@code result_summary} 是 JSONB 列(mapper {@code #{resultSummary}::jsonb}):必须是合法 JSON,
    * 发裸人读串("boom")会触发 {@code invalid input syntax for type json} → report 500。统一序列化成 {@code
    * {code,message}} 对象(对齐内建 worker DefaultTaskExecutionWrapper 契约)。
    */
-  private static final ObjectMapper RESULT_SUMMARY_MAPPER = new ObjectMapper();
-
   /**
    * P0 backpressure 关键约束:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
    * 的工作队列无界,单看 {@link #inFlight}(CLAIM 成功后才加)在平台 5xx / claim 慢 / HTTP 卡住时挡不住——worker 线程全卡在
@@ -388,7 +389,8 @@ public class TaskDispatcher {
         result = SdkTaskResult.fail("handler returned null");
       }
     } catch (Throwable t) {
-      // 任意异常回退(含 OOM / 业务 RuntimeException)— 防 dispatcher 线程因业务问题死
+      // 业务异常转失败回写；Error 不应被伪装成业务失败，否则会掩盖 JVM/线程级故障。
+      rethrowFatal(t);
       log.error(
           "handler {} threw exception on taskId={}", handler.getClass().getName(), msg.taskId(), t);
       result = SdkTaskResult.fail(t);
@@ -813,6 +815,12 @@ public class TaskDispatcher {
       return RESULT_SUMMARY_MAPPER.writeValueAsString(summary);
     } catch (Exception e) {
       return "{\"code\":\"UNKNOWN\",\"message\":\"\"}";
+    }
+  }
+
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

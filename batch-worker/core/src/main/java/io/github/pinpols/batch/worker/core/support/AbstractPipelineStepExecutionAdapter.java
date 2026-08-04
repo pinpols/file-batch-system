@@ -49,7 +49,7 @@ import org.springframework.beans.factory.ObjectProvider;
 public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionContext, R>
     implements StepExecutionAdapter {
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   private final PlatformFileRuntimeRepository runtimeRepository;
 

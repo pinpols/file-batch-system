@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -66,7 +67,7 @@ public class ParseStep implements ImportStageStep {
   private static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
   private static final String FORMAT_EXCEL = "EXCEL";
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ParseSupport support;

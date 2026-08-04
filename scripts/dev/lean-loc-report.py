@@ -254,6 +254,9 @@ def collect() -> list[FileMetric]:
     metrics: list[FileMetric] = []
     for rel in tracked_files():
         full = ROOT / rel
+        # 工作区可能存在暂存或未暂存删除；只读统计不应因路径已不存在而失败。
+        if not full.is_file():
+            continue
         try:
             text = full.read_text(encoding="utf-8")
         except UnicodeDecodeError:
