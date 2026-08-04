@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
 
   /**
    * 多 bean 类型构造器：同一 module 下登记多种 bean 类型（例如 process 模块同时登记 ProcessStageStep 与
-   * ProcessComputePlugin）。 各 binding 按列表顺序遍历，所有类型共享同一去重集合（同 impl_code 仅登记一次，先入为主）。
+   * ProcessComputePlugin）。各 binding 按列表顺序遍历，所有类型共享同一去重集合；同 impl_code 多实现直接失败，避免运行时选择不确定。
    */
   protected AbstractStepBeanRegistrar(
       ApplicationContext applicationContext,
@@ -78,12 +79,13 @@ public abstract class AbstractStepBeanRegistrar<T> {
   public void registerStepBeansOnStartup() {
     try {
       LinkedHashSet<String> registeredCodes = new LinkedHashSet<>();
+      Map<String, String> registeredOwners = new LinkedHashMap<>();
       List<Object> collected = new ArrayList<>();
       TransactionTemplate tx = new TransactionTemplate(transactionManager);
       tx.executeWithoutResult(status -> {
         stepRegistryMapper.deleteByModule(module);
         for (BeanTypeBinding<?> binding : bindings) {
-          registerOne(binding, registeredCodes, collected);
+          registerOne(binding, registeredCodes, registeredOwners, collected);
         }
       });
       if (collected.isEmpty()) {
@@ -106,20 +108,32 @@ public abstract class AbstractStepBeanRegistrar<T> {
   }
 
   private <B> void registerOne(
-      BeanTypeBinding<B> binding, LinkedHashSet<String> registeredCodes, List<Object> collected) {
+      BeanTypeBinding<B> binding,
+      LinkedHashSet<String> registeredCodes,
+      Map<String, String> registeredOwners,
+      List<Object> collected) {
     Map<String, B> beans = applicationContext.getBeansOfType(binding.beanType());
-    beans.values().forEach(bean -> {
+    for (B bean : beans.values()) {
       String code = binding.implCodeExtractor().apply(bean);
       if (code == null || code.isBlank()) {
-        return;
+        continue;
       }
-      // 同 impl_code 可能有多个 bean 实现（预留扩展），按第一个登记；同一 bean
-      // 重复登记由 UK(module, impl_code) 拦截，这里手动去重避免 SQL 异常
-      if (registeredCodes.add(code)) {
-        stepRegistryMapper.insertEntry(module, code, bean.getClass().getName());
-        collected.add(bean);
+      String owner = bean.getClass().getName();
+      String existingOwner = registeredOwners.putIfAbsent(code, owner);
+      if (existingOwner != null) {
+        throw new IllegalStateException("duplicate step implCode '"
+            + code
+            + "' in module "
+            + module
+            + ": "
+            + existingOwner
+            + " and "
+            + owner);
       }
-    });
+      registeredCodes.add(code);
+      stepRegistryMapper.insertEntry(module, code, owner);
+      collected.add(bean);
+    }
   }
 
   /** 单个 bean 类型 + 其 impl_code 提取器的绑定。 */

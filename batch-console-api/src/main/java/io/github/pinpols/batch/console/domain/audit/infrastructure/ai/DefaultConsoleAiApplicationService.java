@@ -231,6 +231,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     Future<ChatResponse> future = modelCallExecutor.submit(() -> spec.call().chatResponse());
     try {
       return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException interrupted) {
+      future.cancel(true);
+      Thread.currentThread().interrupt();
+      throw interrupted;
     } catch (Exception exception) {
       future.cancel(true);
       throw exception;
