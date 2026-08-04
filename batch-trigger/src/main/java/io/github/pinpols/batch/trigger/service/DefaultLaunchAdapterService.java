@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
@@ -71,7 +72,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     LocalDate bizDate = calendarBizDateResolver.resolve(command.fireTime(), zoneId, calendar);
     // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP
     TriggerType triggerType =
-        command.triggerType() == null ? TriggerType.SCHEDULED : command.triggerType();
+        EmptyChecks.isNull(command.triggerType()) ? TriggerType.SCHEDULED : command.triggerType();
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("scheduleType", descriptor.getScheduleType());
     params.put("scheduleExpression", descriptor.getScheduleExpression());
@@ -111,7 +112,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
    */
   private Instant resolveNextFireAt(
       String scheduleType, String scheduleExpression, ZoneId zoneId, Instant fireAt) {
-    if (scheduleType == null || scheduleExpression == null || scheduleExpression.isBlank()) {
+    if (EmptyChecks.isNull(scheduleType) || EmptyChecks.isBlank(scheduleExpression)) {
       return null;
     }
     String type = scheduleType.trim().toUpperCase(Locale.ROOT);
@@ -122,7 +123,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
       if (ScheduleType.FIXED_RATE.code().equals(type)) {
         // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
         Duration interval = parseFixedRateInterval(scheduleExpression);
-        return interval == null ? null : fireAt.plus(interval);
+        return EmptyChecks.isNull(interval) ? null : fireAt.plus(interval);
       }
       // MANUAL / 其他类型不算 interval, 走 worker bizDate 回退
       return null;
@@ -138,7 +139,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
   private static Duration parseFixedRateInterval(String expr) {
     String trimmed = expr.trim();
-    if (trimmed.isEmpty()) {
+    if (EmptyChecks.isEmpty(trimmed)) {
       return null;
     }
     // 纯数字 → 秒
@@ -160,7 +161,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   @Override
   public TriggerType resolveTriggerType(TriggerLaunchCommand command) {
     // API 触发不要求调用方传 triggerType，null 时默认 API 以简化客户端接入
-    return command.request().getTriggerType() == null
+    return EmptyChecks.isNull(command.request().getTriggerType())
         ? TriggerType.API
         : command.request().getTriggerType();
   }

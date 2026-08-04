@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEn
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -90,7 +91,7 @@ public class DefaultTriggerService implements TriggerService {
     assertTenantActive(command.descriptor().getTenantId());
     LaunchRequest launchRequest =
         launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
-    if (launchRequest.bizDate() == null) {
+    if (EmptyChecks.isNull(launchRequest.bizDate())) {
       return skipScheduled(command);
     }
     if (!upstreamReady(command, launchRequest)) {
@@ -125,7 +126,7 @@ public class DefaultTriggerService implements TriggerService {
     assertTenantActive(command.descriptor().getTenantId());
     LaunchRequest launchRequest =
         launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
-    if (launchRequest.bizDate() == null) {
+    if (EmptyChecks.isNull(launchRequest.bizDate())) {
       return skipScheduled(command);
     }
     String dedupKey = buildScheduledDedupKey(command);
@@ -139,15 +140,15 @@ public class DefaultTriggerService implements TriggerService {
 
     PendingApprovalTarget pendingTarget = resolveRequestFromPending(command);
     TriggerRequestEntity requestFromPending =
-        pendingTarget == null ? null : pendingTarget.request();
+        EmptyChecks.isNull(pendingTarget) ? null : pendingTarget.request();
 
     // 5.6:幂等 —— 若已有相同 key 的请求被 launch 过,则提前返回
-    if (requestFromPending == null
-        && command.getIdempotencyKey() != null
-        && !command.getIdempotencyKey().isBlank()) {
+    if (EmptyChecks.isNull(requestFromPending)
+        && EmptyChecks.isNotBlank(command.getIdempotencyKey())) {
       TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(
           command.getTenantId(), command.getIdempotencyKey());
-      if (existing != null && "LAUNCHED".equalsIgnoreCase(existing.getRequestStatus())) {
+      if (EmptyChecks.isNotNull(existing)
+          && "LAUNCHED".equalsIgnoreCase(existing.getRequestStatus())) {
         return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
       }
     }
@@ -159,7 +160,7 @@ public class DefaultTriggerService implements TriggerService {
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     LaunchResponse result = tx.execute(ignored -> {
-      TriggerRequestEntity pendingRequest = requestFromPending != null
+      TriggerRequestEntity pendingRequest = EmptyChecks.isNotNull(requestFromPending)
           ? triggerRequestMapper.selectById(requestFromPending.getId())
           : triggerRequestMapper.selectByTenantAndRequestId(
               command.getTenantId(), command.getRequestId());
@@ -180,7 +181,7 @@ public class DefaultTriggerService implements TriggerService {
         // 另一实例正在处理；返回当前状态，重试方需重新查询
         return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
       }
-      if (pendingTarget != null && pendingTarget.approvePending()) {
+      if (EmptyChecks.isNotNull(pendingTarget) && pendingTarget.approvePending()) {
         triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
       }
       LaunchRequest launchRequest = new LaunchRequest(
@@ -198,7 +199,7 @@ public class DefaultTriggerService implements TriggerService {
               "catchUpApproved",
               true,
               "reason",
-              command.getReason() == null ? "" : command.getReason()));
+              EmptyChecks.isNull(command.getReason()) ? "" : command.getReason()));
       String dedupKey = Texts.hasText(pendingRequest.getDedupKey())
           ? pendingRequest.getDedupKey()
           : pendingRequest.getRequestId();
@@ -222,7 +223,7 @@ public class DefaultTriggerService implements TriggerService {
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
     TriggerRequestEntity existing = insertPendingAndOutboxOrReturnExisting(launchRequest, dedupKey);
-    if (existing != null) {
+    if (EmptyChecks.isNotNull(existing)) {
       return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
     }
     // CAS 守卫:前态必须仍是刚插入的 PENDING,防止覆盖被并发路径推进过的行(0 行时 reconciler 兜底,不抛异常)。
@@ -253,7 +254,7 @@ public class DefaultTriggerService implements TriggerService {
     tx.execute(ignored -> {
       TriggerRequestEntity existing =
           triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-      if (existing != null) {
+      if (EmptyChecks.isNotNull(existing)) {
         existingHolder.set(existing);
         return null;
       }
@@ -295,7 +296,7 @@ public class DefaultTriggerService implements TriggerService {
       LaunchRequest launchRequest, String dedupKey, ScheduledTriggerCommand command) {
     TriggerRequestEntity existing =
         triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-    if (existing != null) {
+    if (EmptyChecks.isNotNull(existing)) {
       linkMisfirePending(command, existing);
       return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
     }
@@ -315,7 +316,7 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private void linkMisfirePending(ScheduledTriggerCommand command, TriggerRequestEntity request) {
-    if (command == null || request == null) {
+    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(request)) {
       return;
     }
     TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
@@ -330,13 +331,15 @@ public class DefaultTriggerService implements TriggerService {
           command.descriptor().getJobCode(),
           command.fireTime());
     }
-    if (pending != null && pending.getId() != null && request.getId() != null) {
+    if (EmptyChecks.isNotNull(pending)
+        && EmptyChecks.isNotNull(pending.getId())
+        && EmptyChecks.isNotNull(request.getId())) {
       triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
     }
   }
 
   private PendingApprovalTarget resolveRequestFromPending(PendingCatchUpApprovalCommand command) {
-    if (command.getPendingId() == null) {
+    if (EmptyChecks.isNull(command.getPendingId())) {
       return null;
     }
     TriggerMisfirePendingEntity pending = Guard.requireFound(
@@ -350,7 +353,7 @@ public class DefaultTriggerService implements TriggerService {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
     }
     Long requestId = pending.getCatchUpRequestId();
-    if (requestId == null) {
+    if (EmptyChecks.isNull(requestId)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
           "error.common.business_error_detail",
@@ -387,7 +390,7 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private CalendarBizDateDefinition loadCalendarDefinition(ScheduledTriggerCommand command) {
-    if (command == null || command.descriptor() == null) {
+    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(command.descriptor())) {
       return null;
     }
     // 归一化到「配置码」形式（小写 + `-`→`_`，与 V64 migration 对 DB 存量归一一致），
@@ -398,7 +401,7 @@ public class DefaultTriggerService implements TriggerService {
     }
     TriggerCalendarConfig calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
         command.descriptor().getTenantId(), calendarCode);
-    if (calendar == null || calendar.getId() == null) {
+    if (EmptyChecks.isNull(calendar) || EmptyChecks.isNull(calendar.getId())) {
       // M-14: 配置了日历码但数据库中未找到——告警使错误配置在日志中可见
       log.warn(
           "calendar definition not found: tenantId={}, calendarCode={} — scheduled"
@@ -409,7 +412,7 @@ public class DefaultTriggerService implements TriggerService {
     }
     List<CalendarHolidayRule> rules =
         businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());
-    if (rules == null) {
+    if (EmptyChecks.isNull(rules)) {
       rules = List.of();
     }
     // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
@@ -432,13 +435,13 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private boolean isDayType(CalendarHolidayRule rule, String expectedType) {
-    return rule != null
-        && rule.getBizDate() != null
+    return EmptyChecks.isNotNull(rule)
+        && EmptyChecks.isNotNull(rule.getBizDate())
         && expectedType.equalsIgnoreCase(normalize(rule.getDayType()));
   }
 
   private String normalize(String value) {
-    return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    return EmptyChecks.isNull(value) ? "" : value.trim().toUpperCase(Locale.ROOT);
   }
 
   private void assertTenantActive(String tenantId) {
@@ -455,38 +458,36 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private void validateRequest(TriggerLaunchCommand command) {
-    Guard.require(command != null, "launch command is required");
-    if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()) {
+    Guard.require(EmptyChecks.isNotNull(command), "launch command is required");
+    if (EmptyChecks.isBlank(command.idempotencyKey())) {
       throw BizException.of(
           ResultCode.MISSING_IDEMPOTENCY_KEY,
           "error.common.missing_idempotency_key_detail",
           ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
     }
-    if (command.request() == null) {
+    if (EmptyChecks.isNull(command.request())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
     }
-    if (command.request().getTenantId() == null
-        || command.request().getTenantId().isBlank()) {
+    if (EmptyChecks.isBlank(command.request().getTenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
-    if (command.request().getJobCode() == null || command.request().getJobCode().isBlank()) {
+    if (EmptyChecks.isBlank(command.request().getJobCode())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.code_required");
     }
-    if (command.request().getBizDate() == null) {
+    if (EmptyChecks.isNull(command.request().getBizDate())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_required");
     }
-    if (command.request().getTriggerType() == null) {
+    if (EmptyChecks.isNull(command.request().getTriggerType())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.type_required");
     }
   }
 
   private void validatePendingApproval(PendingCatchUpApprovalCommand command) {
-    Guard.require(command != null, "approval command is required");
-    if (command.getTenantId() == null || command.getTenantId().isBlank()) {
+    Guard.require(EmptyChecks.isNotNull(command), "approval command is required");
+    if (EmptyChecks.isBlank(command.getTenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
-    if (command.getPendingId() == null
-        && (command.getRequestId() == null || command.getRequestId().isBlank())) {
+    if (EmptyChecks.isNull(command.getPendingId()) && EmptyChecks.isBlank(command.getRequestId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_id_required");
     }
   }

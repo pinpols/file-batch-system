@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.support;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -44,12 +45,12 @@ public class CronExpressionAdapter {
     CronExpression expression = parseOrCache(cronExpr, zone);
     // setTimeZone 不再调（已在构建时固化），避免跨线程写
     Date nextFire = expression.getNextValidTimeAfter(Date.from(after));
-    return nextFire == null ? null : nextFire.toInstant();
+    return EmptyChecks.isNull(nextFire) ? null : nextFire.toInstant();
   }
 
   /** 校验 cron 表达式合法。Reconciler 同步前预检用。 */
   public boolean isValid(String cronExpr) {
-    if (cronExpr == null || cronExpr.isBlank()) {
+    if (EmptyChecks.isBlank(cronExpr)) {
       return false;
     }
     return CronExpression.isValidExpression(cronExpr);

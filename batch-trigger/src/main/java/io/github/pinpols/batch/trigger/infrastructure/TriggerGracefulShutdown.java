@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -116,7 +117,7 @@ public class TriggerGracefulShutdown
   }
 
   private void publishReadiness(ReadinessState state) {
-    if (eventPublisher == null) {
+    if (EmptyChecks.isNull(eventPublisher)) {
       return;
     }
     try {

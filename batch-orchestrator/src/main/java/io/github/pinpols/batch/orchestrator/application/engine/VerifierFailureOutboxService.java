@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.engine;
 
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.util.LinkedHashMap;
@@ -54,17 +55,17 @@ public class VerifierFailureOutboxService {
   /** 调用方持有当前事务；本方法 MANDATORY，无事务直接抛。 */
   @Transactional(propagation = Propagation.MANDATORY)
   public int writeVerifierFailures(TaskOutcomeCommand command, JobTaskEntity task) {
-    if (command == null || task == null) {
+    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
       return 0;
     }
     List<Map<String, Object>> failures = command.verifierFailures();
-    if (failures == null || failures.isEmpty()) {
+    if (EmptyChecks.isEmpty(failures)) {
       return 0;
     }
     int written = 0;
     int index = 0;
     for (Map<String, Object> failure : failures) {
-      if (failure == null) {
+      if (EmptyChecks.isNull(failure)) {
         index++;
         continue;
       }
@@ -107,7 +108,7 @@ public class VerifierFailureOutboxService {
         + ":verifier:"
         + command.taskId()
         + ":"
-        + (reason == null ? "UNKNOWN" : reason)
+        + (EmptyChecks.isNull(reason) ? "UNKNOWN" : reason)
         + ":"
         + index;
     return DomainEvent.builder(command.tenantId())
@@ -119,6 +120,6 @@ public class VerifierFailureOutboxService {
   }
 
   private static String stringValue(Object value) {
-    return value == null ? null : value.toString();
+    return EmptyChecks.isNull(value) ? null : value.toString();
   }
 }

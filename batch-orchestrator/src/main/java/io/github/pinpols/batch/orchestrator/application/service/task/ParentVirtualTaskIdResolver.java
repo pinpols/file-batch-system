@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ final class ParentVirtualTaskIdResolver {
   private ParentVirtualTaskIdResolver() {}
 
   static Long resolve(String paramsSnapshot) {
-    if (paramsSnapshot == null || paramsSnapshot.isBlank()) {
+    if (EmptyChecks.isBlank(paramsSnapshot)) {
       return null;
     }
     try {

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
@@ -60,7 +61,7 @@ public class TriggerLaunchConsumer {
   private static final Set<String> OBSERVED_TENANTS = ConcurrentHashMap.newKeySet();
 
   private String normalizeTenantTag(String tenantId) {
-    if (tenantId == null || tenantId.isBlank()) {
+    if (EmptyChecks.isBlank(tenantId)) {
       return "unknown";
     }
     if (OBSERVED_TENANTS.size() < MAX_TENANT_TAG_CARDINALITY) {
@@ -108,7 +109,7 @@ public class TriggerLaunchConsumer {
       ack.acknowledge();
       return;
     }
-    if (envelope == null || envelope.launchRequest() == null) {
+    if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
       log.warn(
           "TriggerLaunchConsumer envelope/launchRequest is null; skipping: offset={}",
           record.offset());
@@ -117,7 +118,7 @@ public class TriggerLaunchConsumer {
       return;
     }
     LaunchRequest request = envelope.launchRequest();
-    String tenantId = request.tenantId() == null ? "unknown" : request.tenantId();
+    String tenantId = EmptyChecks.isNull(request.tenantId()) ? "unknown" : request.tenantId();
     String tenantTag = normalizeTenantTag(tenantId);
     // R3-P1-2：Kafka listener 入口注入 MDC，让 launch 失败的 ERROR 日志可按 tenant/trace 过滤。
     BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
@@ -130,7 +131,7 @@ public class TriggerLaunchConsumer {
       final String boundTenantId = tenantId;
       final LaunchRequest boundRequest = request;
       LaunchResponse response;
-      if (boundTenantId != null && !boundTenantId.isBlank() && !"unknown".equals(boundTenantId)) {
+      if (EmptyChecks.isNotBlank(boundTenantId) && !"unknown".equals(boundTenantId)) {
         response = RlsTenantContextHolder.runWithTenant(boundTenantId, () -> {
           LaunchResponse r = launchApplicationService.launch(boundRequest);
           // 闭环回写也在 holder 作用域内,确保 trigger_request UPDATE 走 RLS。
@@ -145,7 +146,7 @@ public class TriggerLaunchConsumer {
           "TriggerLaunchConsumer launch succeeded: tenantId={} requestId={} instanceNo={}",
           tenantId,
           request.requestId(),
-          response == null ? null : response.instanceNo());
+          EmptyChecks.isNull(response) ? null : response.instanceNo());
       counter(METRIC_CONSUMED, "tenant", tenantTag, "outcome", "ok").increment();
       ack.acknowledge();
     } catch (ResponseStatusException ex) {
@@ -211,17 +212,17 @@ public class TriggerLaunchConsumer {
    */
   private void writeBackTriggerRequestLaunched(
       String tenantId, String requestId, LaunchResponse response) {
-    if (tenantId == null || tenantId.isBlank() || requestId == null || requestId.isBlank()) {
+    if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(requestId)) {
       return;
     }
     Long jobInstanceId = null;
     try {
-      if (response != null
-          && response.instanceNo() != null
-          && !response.instanceNo().isBlank()) {
+      if (EmptyChecks.isNotNull(response)
+          && EmptyChecks.isNotNull(response.instanceNo())
+          && EmptyChecks.isNotBlank(response.instanceNo())) {
         JobInstanceEntity jobInstance =
             jobInstanceMapper.selectByInstanceNo(tenantId, response.instanceNo());
-        if (jobInstance != null) {
+        if (EmptyChecks.isNotNull(jobInstance)) {
           jobInstanceId = jobInstance.getId();
         }
       }

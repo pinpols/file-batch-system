@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -17,10 +18,10 @@ public class ValidateStep implements ProcessStageStep {
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
     ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (plugin == null) {
+    if (EmptyChecks.isNull(plugin)) {
       return ProcessStageResult.success(stage());
     }
     ProcessStageResult result = plugin.validate(context);
-    return result == null ? ProcessStageResult.success(stage()) : result;
+    return EmptyChecks.isNull(result) ? ProcessStageResult.success(stage()) : result;
   }
 }

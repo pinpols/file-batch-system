@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.infrastructure.verifier;
 
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
@@ -34,7 +35,7 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
   @Override
   public VerifyResult verify(VerifyContext context) {
     Object raw = context.property("publishedCount");
-    if (raw == null) {
+    if (EmptyChecks.isNull(raw)) {
       // worker 未上报；不属于本 verifier 的判定范围
       return VerifyResult.pass();
     }
@@ -70,7 +71,7 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
     if (value instanceof Number n) {
       return n.longValue() == 0;
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return false;
     }
     try {

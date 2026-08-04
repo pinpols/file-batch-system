@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
@@ -147,7 +148,7 @@ public class TriggerOutboxRelay {
       return;
     }
     ScheduledFuture<?> task = scheduledTask;
-    if (task != null) {
+    if (EmptyChecks.isNotNull(task)) {
       task.cancel(true);
     }
     log.info("TriggerOutboxRelay stopping: cancelled scheduled polling");
@@ -194,7 +195,7 @@ public class TriggerOutboxRelay {
     } catch (DataAccessException dae) {
       log.warn(
           "TriggerOutboxRelay transient DB failure; retrying on the next cycle: {}",
-          dae.getMostSpecificCause() == null
+          EmptyChecks.isNull(dae.getMostSpecificCause())
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
@@ -211,9 +212,10 @@ public class TriggerOutboxRelay {
 
   private static boolean isRedisStopping(Throwable throwable) {
     Throwable current = throwable;
-    while (current != null) {
+    while (EmptyChecks.isNotNull(current)) {
       String message = current.getMessage();
-      if (message != null && message.contains("LettuceConnectionFactory is STOPPING")) {
+      if (EmptyChecks.isNotNull(message)
+          && message.contains("LettuceConnectionFactory is STOPPING")) {
         return true;
       }
       current = current.getCause();
@@ -245,7 +247,7 @@ public class TriggerOutboxRelay {
         properties.getBatchSize(),
         OutboxPublishStatus.NEW.code(),
         OutboxPublishStatus.FAILED.code());
-    if (batch.isEmpty()) {
+    if (EmptyChecks.isEmpty(batch)) {
       return;
     }
     log.debug("TriggerOutboxRelay loaded {} pending events", batch.size());
@@ -274,7 +276,7 @@ public class TriggerOutboxRelay {
     try {
       ok = publishOneInternal(event);
     } finally {
-      if (publishLatencyOk != null) {
+      if (EmptyChecks.isNotNull(publishLatencyOk)) {
         io.micrometer.core.instrument.Timer timer = ok ? publishLatencyOk : publishLatencyFail;
         timer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
       }
@@ -316,7 +318,7 @@ public class TriggerOutboxRelay {
             "TriggerOutboxRelay markFailed(GIVE_UP) affected 0 rows; another instance took over the event: id={}",
             event.getId());
       }
-      if (giveUpCounter != null) {
+      if (EmptyChecks.isNotNull(giveUpCounter)) {
         giveUpCounter.increment();
       }
       return false;
@@ -362,7 +364,7 @@ public class TriggerOutboxRelay {
               "TriggerOutboxRelay markFailed(GIVE_UP) affected 0 rows; another instance took over the event: id={}",
               event.getId());
         }
-        if (giveUpCounter != null) {
+        if (EmptyChecks.isNotNull(giveUpCounter)) {
           giveUpCounter.increment();
         }
         return false;
@@ -398,7 +400,7 @@ public class TriggerOutboxRelay {
   }
 
   private static String truncate(String s) {
-    if (s == null) {
+    if (EmptyChecks.isNull(s)) {
       return null;
     }
     return s.length() <= 2000 ? s : s.substring(0, 2000);

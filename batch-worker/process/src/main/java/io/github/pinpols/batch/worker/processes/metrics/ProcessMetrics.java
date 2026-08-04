@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.metrics;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -67,12 +68,12 @@ public class ProcessMetrics {
   }
 
   public void recordComputeStagedRows(String tenantId, long stagedRows) {
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
-    if (stagedSummary == null) {
+    if (EmptyChecks.isNull(stagedSummary)) {
       synchronized (this) {
-        if (stagedSummary == null) {
+        if (EmptyChecks.isNull(stagedSummary)) {
           stagedSummary = DistributionSummary.builder(STAGED_ROWS)
               .description("PROCESS COMPUTE 写 staging 的行数")
               .register(registry);
@@ -83,12 +84,12 @@ public class ProcessMetrics {
   }
 
   public void recordCommitPublishedRows(String tenantId, long publishedRows) {
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
-    if (publishedSummary == null) {
+    if (EmptyChecks.isNull(publishedSummary)) {
       synchronized (this) {
-        if (publishedSummary == null) {
+        if (EmptyChecks.isNull(publishedSummary)) {
           publishedSummary = DistributionSummary.builder(PUBLISHED_ROWS)
               .description("PROCESS COMMIT 落 target 表的行数")
               .register(registry);
@@ -99,7 +100,7 @@ public class ProcessMetrics {
   }
 
   public void incrementValidationFailed(String tenantId, String ruleName) {
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
     String ruleTag = normalize(ruleName);
@@ -117,12 +118,12 @@ public class ProcessMetrics {
    * / 审计漏写不可见。本指标暴露 swallow 频率,告警 / 排障的入口。
    */
   public void incrementFeedbackSwallowed(String tenantId) {
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
-    if (feedbackSwallowedCounter == null) {
+    if (EmptyChecks.isNull(feedbackSwallowedCounter)) {
       synchronized (this) {
-        if (feedbackSwallowedCounter == null) {
+        if (EmptyChecks.isNull(feedbackSwallowedCounter)) {
           feedbackSwallowedCounter = Counter.builder(FEEDBACK_SWALLOWED)
               .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
               .register(registry);
@@ -134,7 +135,7 @@ public class ProcessMetrics {
 
   public void recordStageDuration(
       String stage, String tenantId, boolean success, long durationNanos) {
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
     String stageTag = normalize(stage);
@@ -150,6 +151,6 @@ public class ProcessMetrics {
   }
 
   private static String normalize(String value) {
-    return value == null || value.isBlank() ? UNKNOWN_TAG : value;
+    return EmptyChecks.isBlank(value) ? UNKNOWN_TAG : value;
   }
 }

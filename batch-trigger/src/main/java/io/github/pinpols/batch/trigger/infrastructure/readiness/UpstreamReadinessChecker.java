@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +50,7 @@ public class UpstreamReadinessChecker {
               .build())
           .retrieve()
           .body(ReadinessResponse.class);
-      return response != null && response.ready();
+      return EmptyChecks.isNotNull(response) && response.ready();
     } catch (RuntimeException e) {
       log.error(
           "upstream readiness check failed, fail-closed (skip fire): tenantId={} upstream={} "

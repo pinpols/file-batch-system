@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -85,7 +86,7 @@ public record SqlTransformComputeSpec(
   public static SqlTransformComputeSpec parse(
       Map<String, Object> stepParams, ObjectMapper objectMapper) {
     Map<String, Object> root = extractSpecRoot(stepParams, objectMapper);
-    if (root.isEmpty()) {
+    if (EmptyChecks.isEmpty(root)) {
       throw new IllegalArgumentException(
           "sqlTransformCompute spec missing in pipeline_step_definition.step_params");
     }
@@ -101,7 +102,7 @@ public record SqlTransformComputeSpec(
     StagingMode stagingMode =
         parseStagingMode(firstNonNull(root.get("stagingMode"), root.get("staging_mode")));
     List<ColumnMapping> columns = parseColumns(root.get("columns"));
-    if (columns.isEmpty()) {
+    if (EmptyChecks.isEmpty(columns)) {
       throw new IllegalArgumentException("sqlTransformCompute.columns is required");
     }
     List<String> conflictColumns =
@@ -134,7 +135,7 @@ public record SqlTransformComputeSpec(
   }
 
   private static int parseMaxStagedRows(Object raw) {
-    if (raw == null) {
+    if (EmptyChecks.isNull(raw)) {
       return DEFAULT_MAX_STAGED_ROWS;
     }
     int value;
@@ -142,7 +143,7 @@ public record SqlTransformComputeSpec(
       value = n.intValue();
     } else {
       String text = String.valueOf(raw).trim();
-      if (text.isEmpty()) {
+      if (EmptyChecks.isEmpty(text)) {
         return DEFAULT_MAX_STAGED_ROWS;
       }
       try {
@@ -194,7 +195,7 @@ public record SqlTransformComputeSpec(
     // 都必须可幂等重放;空 conflictColumns 配 raw INSERT 会在 publish 重放时双写 target 行。
     // 因此对所有 writeMode 强制要求 conflictColumns。INSERT 路径在 buildPublishSql 中按 DO NOTHING
     // 语义生成 ON CONFLICT 子句,语义 = at-least-once 安全的 append-only。
-    if (conflictColumns.isEmpty()) {
+    if (EmptyChecks.isEmpty(conflictColumns)) {
       throw new IllegalArgumentException("sqlTransformCompute.conflictColumns is required for "
           + writeMode
           + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
@@ -203,7 +204,7 @@ public record SqlTransformComputeSpec(
       JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
     }
     if (stagingMode == StagingMode.DIRECT) {
-      if (!validations.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(validations)) {
         throw new IllegalArgumentException(
             "sqlTransformCompute.validations are not supported when stagingMode=DIRECT"
                 + " (DIRECT does not write batch.process_staging)");
@@ -220,7 +221,7 @@ public record SqlTransformComputeSpec(
         throw new IllegalArgumentException(
             "sqlTransformCompute.params contains reserved parameter: " + paramName);
       }
-      if (paramName != null && paramName.startsWith(METADATA_PARAM_PREFIX)) {
+      if (EmptyChecks.isNotNull(paramName) && paramName.startsWith(METADATA_PARAM_PREFIX)) {
         throw new IllegalArgumentException(
             "sqlTransformCompute.params must not start with reserved prefix '"
                 + METADATA_PARAM_PREFIX
@@ -233,7 +234,7 @@ public record SqlTransformComputeSpec(
   @SuppressWarnings("unchecked")
   private static Map<String, Object> extractSpecRoot(
       Map<String, Object> stepParams, ObjectMapper objectMapper) {
-    if (stepParams == null || stepParams.isEmpty()) {
+    if (EmptyChecks.isEmpty(stepParams)) {
       return Map.of();
     }
     Object nested = firstNonNull(
@@ -361,7 +362,7 @@ public record SqlTransformComputeSpec(
 
   private static Object firstNonNull(Object... values) {
     for (Object value : values) {
-      if (value != null) {
+      if (EmptyChecks.isNotNull(value)) {
         return value;
       }
     }
@@ -369,7 +370,7 @@ public record SqlTransformComputeSpec(
   }
 
   private static String text(Object value) {
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     String text = String.valueOf(value).trim();

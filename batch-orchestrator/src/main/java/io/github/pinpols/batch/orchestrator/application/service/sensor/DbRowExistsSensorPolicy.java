@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import java.util.LinkedHashMap;
@@ -92,7 +93,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     try {
       RlsTenantSessionSupport.applyIfPresent(dataSource);
       List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
-      if (rows.isEmpty()) {
+      if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
         return SensorProbeResult.notYet();
       }
       Map<String, Object> output = new LinkedHashMap<>();
@@ -117,7 +118,8 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
       return Map.of();
     }
     Map<String, Object> result = new LinkedHashMap<>();
-    Map<String, Object> vars = ctx.workflowRunVars() == null ? Map.of() : ctx.workflowRunVars();
+    Map<String, Object> vars =
+        EmptyChecks.isNull(ctx.workflowRunVars()) ? Map.of() : ctx.workflowRunVars();
     for (Map.Entry<String, Object> entry : ((Map<String, Object>) raw).entrySet()) {
       Object v = entry.getValue();
       if (v instanceof String s && s.startsWith("$.workflowRun.")) {

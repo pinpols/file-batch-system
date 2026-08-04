@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -81,7 +82,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     this.businessDataSource = processBusinessDataSource;
     JdbcTemplate template = new JdbcTemplate(processBusinessDataSource);
     template.setQueryTimeout(
-        Math.max(1, security == null ? 60 : security.getQueryTimeoutSeconds()));
+        Math.max(1, EmptyChecks.isNull(security) ? 60 : security.getQueryTimeoutSeconds()));
     this.jdbc = new NamedParameterJdbcTemplate(template);
     this.objectMapper = objectMapper;
     this.security = security;
@@ -101,7 +102,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> stepParams = readComputeStepParams(context);
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
     JdbcMappedSqlValidator.requireInAllowlist(
-        spec.targetSchema(), security == null ? null : security.getAllowedSchemas());
+        spec.targetSchema(), EmptyChecks.isNull(security) ? null : security.getAllowedSchemas());
     String validatedSourceSql = sqlValidator.validateSelect(spec.sourceSql());
     Map<String, Object> sqlParams = buildSqlParams(context, spec);
     validateNamedParameters(validatedSourceSql, sqlParams);
@@ -213,7 +214,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     if (Texts.hasText(spec.watermarkColumn())) {
       Object highWaterMarkOut = queryMaxWatermark(spec, batchKey, context.getTenantId());
-      if (highWaterMarkOut != null) {
+      if (EmptyChecks.isNotNull(highWaterMarkOut)) {
         attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));
       }
     }
@@ -282,11 +283,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             ProcessStage.VALIDATE,
             "PROCESS_VALIDATION_FAILED",
             "error.process.validation.failed",
-            new Object[] {rule.name(), message == null ? "(no message)" : message},
+            new Object[] {rule.name(), EmptyChecks.isNull(message) ? "(no message)" : message},
             "validation '"
                 + rule.name()
                 + "' failed: "
-                + (message == null ? "(no message)" : message),
+                + (EmptyChecks.isNull(message) ? "(no message)" : message),
             objectMapper);
       }
     }
@@ -367,10 +368,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     // A2-C fix(2026-05-29):空 map 应 fallback 到当前 step 的 step_params,不然 COMPUTE step
     // 配 {} 会"压住"PREPARE/VALIDATE 等同步 step 上配置的 validations / emptyResultPolicy,
     // 静默通过。原代码只 null check,空 map 命中后导致 spec.validations() 为空。
-    if (value == null || (value instanceof Map<?, ?> m && m.isEmpty())) {
+    if (EmptyChecks.isNull(value) || (value instanceof Map<?, ?> m && EmptyChecks.isEmpty(m))) {
       Object current =
           context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
-      if (current != null) {
+      if (EmptyChecks.isNotNull(current)) {
         value = current;
       }
     }
@@ -417,7 +418,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             + " AND table_name = :table)",
         params,
         Boolean.class);
-    if (exists == null || !exists) {
+    if (EmptyChecks.isNull(exists) || !exists) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.process.target_table_not_found",
@@ -462,14 +463,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       if (Texts.hasText(typedPayload.bizDate())) {
         params.put("bizDate", typedPayload.bizDate());
       }
-      if (typedPayload.metadata() != null) {
+      if (EmptyChecks.isNotNull(typedPayload.metadata())) {
         typedPayload.metadata().forEach((key, value) -> putMetadataParam(params, key, value));
       }
     } else {
       // 回退:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
       // 直接从顶层 attributes 读 bizDate 字符串保持兼容(只读 bizDate 一项,不再全量散开)。
       Object bizDate = context.getAttributes().get("bizDate");
-      if (bizDate != null) {
+      if (EmptyChecks.isNotNull(bizDate)) {
         params.put("bizDate", bizDate);
       }
     }
@@ -479,10 +480,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   }
 
   private void putMetadataParam(Map<String, Object> params, String key, Object value) {
-    if (key == null || key.isBlank()) {
+    if (EmptyChecks.isBlank(key)) {
       return;
     }
-    if (value != null
+    if (EmptyChecks.isNotNull(value)
         && !(value instanceof String)
         && !(value instanceof Number)
         && !(value instanceof Boolean)
@@ -586,7 +587,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       Map<String, Object> result = jdbc.queryForMap(buildDirectPublishMetricsSql(spec), params);
       publishedRows = toIntegerOrZero(result.get("published_rows"));
       Object highWaterMarkOut = result.get("high_water_mark");
-      if (highWaterMarkOut != null) {
+      if (EmptyChecks.isNotNull(highWaterMarkOut)) {
         context
             .getAttributes()
             .put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));

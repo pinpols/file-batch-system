@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import io.github.pinpols.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import java.math.BigDecimal;
@@ -71,7 +72,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
     });
-    if (rows == null || rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
       return Map.of();
     }
     return new LinkedHashMap<>(rows.get(0));
@@ -80,7 +81,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   @Override
   public DetailPage loadDetailPage(
       ExportDataContext context, Long batchId, int pageSize, Object cursor) {
-    if (batchId == null) {
+    if (EmptyChecks.isNull(batchId)) {
       return DetailPage.empty();
     }
     JdbcMappedExportSpec spec = JdbcMappedExportSpec.parse(context.templateConfig(), objectMapper);
@@ -113,7 +114,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       return jdbcTemplate.queryForList(finalSql, sqlArgs);
     });
-    if (rows == null || rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows)) {
       return DetailPage.empty();
     }
     Object nextCursor = null;
@@ -156,7 +157,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
         .append(" = ?");
     List<Object> args = new ArrayList<>();
     args.add(batchId);
-    if (range != null && range.active()) {
+    if (EmptyChecks.isNotNull(range) && range.active()) {
       sql.append(" AND ")
           .append(ob)
           .append(" >= ?")
@@ -165,14 +166,14 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
           .append(range.includeUpper() ? " <= ?" : " < ?");
       args.add(range.loN());
       args.add(range.hiN());
-    } else if (range != null && range.partitionCount() > 1) {
+    } else if (EmptyChecks.isNotNull(range) && range.partitionCount() > 1) {
       sql.append(" AND ((hashtext(").append(ob).append("::text) % ?) + ?) % ? = ?");
       args.add(range.partitionCount());
       args.add(range.partitionCount());
       args.add(range.partitionCount());
       args.add(range.partitionNo() - 1);
     }
-    if (cursor != null) {
+    if (EmptyChecks.isNotNull(cursor)) {
       sql.append(" AND ").append(ob).append(" > ?");
       args.add(cursor);
     }

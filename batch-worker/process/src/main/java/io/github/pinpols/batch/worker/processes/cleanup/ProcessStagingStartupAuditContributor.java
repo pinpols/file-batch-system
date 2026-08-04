@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import java.time.Instant;
@@ -30,7 +31,7 @@ public class ProcessStagingStartupAuditContributor implements WorkerStartupAudit
     details.put("retentionHours", retentionHours);
     details.put("batchSize", Math.max(100, properties.getBatchSize()));
     Instant oldest = processStagingMapper.selectMinStagedAt();
-    long oldestAgeSeconds = oldest == null
+    long oldestAgeSeconds = EmptyChecks.isNull(oldest)
         ? 0
         : Math.max(0, (BatchDateTimeSupport.utcEpochMillis() - oldest.toEpochMilli()) / 1000);
     long orphanRows = processStagingMapper.countOrphansOlderThan(retentionHours);

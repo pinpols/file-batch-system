@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
@@ -24,13 +25,13 @@ public class ComputeStep implements ProcessStageStep {
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
     ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (plugin == null) {
+    if (EmptyChecks.isNull(plugin)) {
       // 没有 plugin 配置时仍允许走通(便于开箱跑通骨架),但写一个 0 行的 processedCount 占位。
       context.getAttributes().putIfAbsent("processedCount", 0);
       return ProcessStageResult.success(stage());
     }
     ProcessStageResult result = plugin.compute(context);
-    return result == null
+    return EmptyChecks.isNull(result)
         ? ProcessStageResult.failure(
             stage(),
             "PROCESS_COMPUTE_EMPTY_RESULT",

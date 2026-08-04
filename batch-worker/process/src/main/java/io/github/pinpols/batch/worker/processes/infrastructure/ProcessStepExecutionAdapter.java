@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -64,8 +65,7 @@ public class ProcessStepExecutionAdapter
     // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
     // commit/feedback 的 WHERE 过滤兜住。
     if (attributes.get("processPayload") instanceof ProcessPayload typed
-        && typed.batchKey() != null
-        && !typed.batchKey().isBlank()) {
+        && EmptyChecks.isNotBlank(typed.batchKey())) {
       context.setBatchKey(typed.batchKey());
     }
     return context;
@@ -74,7 +74,7 @@ public class ProcessStepExecutionAdapter
   @SuppressWarnings("unchecked")
   private void enrichProcessAttributes(String rawPayload, Map<String, Object> attributes)
       throws Exception {
-    if (rawPayload == null || rawPayload.isBlank()) {
+    if (EmptyChecks.isBlank(rawPayload)) {
       return;
     }
     Object parsed = objectMapper.readValue(rawPayload, Object.class);
@@ -82,7 +82,7 @@ public class ProcessStepExecutionAdapter
       Map<String, Object> payloadAttributes = (Map<String, Object>) payloadMap;
       payloadAttributes.forEach((key, value) -> attributes.putIfAbsent(key, value));
       Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
-      if (processImplCode != null) {
+      if (EmptyChecks.isNotNull(processImplCode)) {
         attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
       }
     }
@@ -99,7 +99,7 @@ public class ProcessStepExecutionAdapter
 
   @Override
   protected boolean isSuccess(ProcessStageResult result) {
-    return result != null && result.success();
+    return EmptyChecks.isNotNull(result) && result.success();
   }
 
   @Override
@@ -128,7 +128,7 @@ public class ProcessStepExecutionAdapter
     // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
     // stagedCount)。
     Object processOutputCount = attributes.get("publishedCount");
-    if (processOutputCount == null) {
+    if (EmptyChecks.isNull(processOutputCount)) {
       processOutputCount = attributes.get("stagedCount");
     }
     putIfPresent(outputs, "inputCount", attributes.get("processedCount"));
@@ -136,7 +136,7 @@ public class ProcessStepExecutionAdapter
     putIfPresent(outputs, "batchKey", context.getBatchKey());
     putIfPresent(
         outputs, "highWaterMarkOut", attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
-    if (!outputs.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(outputs)) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
     return new StepExecutionResponse(true, "SUCCESS", "加工阶段执行完成");

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
@@ -98,7 +99,9 @@ public class TaskControllerApplicationService {
    */
   public TaskClaimBatchResult claimBatch(TaskClaimBatchCommand request) {
     List<TaskClaimItemCommand> items =
-        request == null || request.items() == null ? List.of() : request.items();
+        EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
+            ? List.of()
+            : request.items();
     int cap = batchClaimProperties.effectiveBatchSize();
     if (items.size() > cap) {
       throw BizException.of(
@@ -112,9 +115,13 @@ public class TaskControllerApplicationService {
     TaskAssignmentService.WorkerLookupMemo workerMemo =
         new TaskAssignmentService.WorkerLookupMemo();
     for (TaskClaimItemCommand item : items) {
+      if (EmptyChecks.isNull(item)) {
+        results.add(new TaskClaimItemResult(null, false, null));
+        continue;
+      }
       JobTaskEntity task = taskExecutionService.assignWorker(
           item.tenantId(), item.taskId(), item.workerId(), workerMemo);
-      if (task != null && isClaimedBy(task, item.workerId())) {
+      if (EmptyChecks.isNotNull(task) && isClaimedBy(task, item.workerId())) {
         // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
         EffectiveTaskConfig config =
             taskExecutionService.loadEffectiveConfig(item.tenantId(), task);
@@ -125,7 +132,7 @@ public class TaskControllerApplicationService {
       }
     }
     // 2.4 观测:批大小分布(看 K 实际多大=churn 省多少)+ 逐项 outcome 计数
-    if (!items.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(items)) {
       meterRegistry.summary(BatchMetricsNames.BATCH_CLAIM_SIZE).record(items.size());
       meterRegistry
           .counter(
@@ -184,7 +191,9 @@ public class TaskControllerApplicationService {
    */
   public TaskReportBatchResult reportBatch(TaskReportBatchCommand request) {
     List<TaskExecutionReportCommand> items =
-        request == null || request.items() == null ? List.of() : request.items();
+        EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
+            ? List.of()
+            : request.items();
     int cap = batchClaimProperties.effectiveBatchSize();
     if (items.size() > cap) {
       throw BizException.of(
@@ -195,6 +204,10 @@ public class TaskControllerApplicationService {
     List<TaskReportItemResult> results = new ArrayList<>(items.size());
     int ok = 0;
     for (TaskExecutionReportCommand item : items) {
+      if (EmptyChecks.isNull(item)) {
+        results.add(new TaskReportItemResult(null, false, "batch item is null"));
+        continue;
+      }
       Long taskId = item.taskId();
       try {
         self.report(taskId, item);
@@ -207,7 +220,7 @@ public class TaskControllerApplicationService {
       }
     }
     // 2.4 观测:批大小分布 + 逐项 outcome(批内部分失败可观测)
-    if (!items.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(items)) {
       meterRegistry.summary(BatchMetricsNames.BATCH_REPORT_SIZE).record(items.size());
       meterRegistry
           .counter(BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "ok")
@@ -251,7 +264,7 @@ public class TaskControllerApplicationService {
 
   /** details 非空时序列化为 JSON 文本(存 job_task.heartbeat_details);序列化失败降级为跳过 details,不阻塞续租。 */
   private String serializeDetails(Long taskId, Object details) {
-    if (details == null) {
+    if (EmptyChecks.isNull(details)) {
       return null;
     }
     try {
@@ -270,32 +283,53 @@ public class TaskControllerApplicationService {
    */
   public TaskLeaseRenewBatchResult renewBatch(TaskLeaseRenewBatchCommand request) {
     List<TaskLeaseRenewItemCommand> items =
-        request == null || request.items() == null ? List.of() : request.items();
-    if (items.isEmpty()) {
+        EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
+            ? List.of()
+            : request.items();
+    if (EmptyChecks.isEmpty(items)) {
       return new TaskLeaseRenewBatchResult(List.of());
     }
     // PERF(5.3): set-based —— N 项一条 UPDATE ... RETURNING 完成续租 + cancelRequested 回读;
     // 丢租约的项按原逐项语义返回 renewed=false(结果与入参逐位对齐)。
     List<TaskAssignmentService.LeaseRenewCommand> commands = new ArrayList<>(items.size());
+    List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
     for (TaskLeaseRenewItemCommand item : items) {
+      if (EmptyChecks.isNull(item)) {
+        results.add(new TaskLeaseRenewItemResult(null, false, false));
+        continue;
+      }
       commands.add(new TaskAssignmentService.LeaseRenewCommand(
           item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()));
+      results.add(null);
     }
     List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
-        taskExecutionService.renewLeaseBatch(commands);
-    List<TaskLeaseRenewItemResult> results = new ArrayList<>(items.size());
+        EmptyChecks.isEmpty(commands) ? List.of() : taskExecutionService.renewLeaseBatch(commands);
+    if (EmptyChecks.isNull(outcomes)) {
+      outcomes = List.of();
+    }
+    int outcomeIndex = 0;
     for (int i = 0; i < items.size(); i++) {
-      TaskAssignmentService.TaskHeartbeatResult result = outcomes.get(i);
-      results.add(new TaskLeaseRenewItemResult(
-          items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
+      if (EmptyChecks.isNull(items.get(i))) {
+        continue;
+      }
+      TaskAssignmentService.TaskHeartbeatResult result = outcomeIndex < outcomes.size()
+          ? outcomes.get(outcomeIndex++)
+          : new TaskAssignmentService.TaskHeartbeatResult(false, false);
+      if (EmptyChecks.isNull(result)) {
+        result = new TaskAssignmentService.TaskHeartbeatResult(false, false);
+      }
+      results.set(
+          i,
+          new TaskLeaseRenewItemResult(
+              items.get(i).taskId(), result.leaseRenewed(), result.cancelRequested()));
     }
     return new TaskLeaseRenewBatchResult(results);
   }
 
   private boolean isClaimedBy(JobTaskEntity task, String workerId) {
-    return task != null
+    return EmptyChecks.isNotNull(task)
         && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
-        && workerId != null
+        && EmptyChecks.isNotNull(workerId)
         && workerId.equals(task.getAssignedWorkerCode());
   }
 

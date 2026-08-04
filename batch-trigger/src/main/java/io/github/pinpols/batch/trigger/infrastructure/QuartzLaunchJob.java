@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
@@ -198,7 +199,7 @@ public class QuartzLaunchJob implements Job {
 
   private TriggerType resolveTriggerType(
       TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
-    if (scheduledFireTime == null || actualFireTime == null) {
+    if (EmptyChecks.isNull(scheduledFireTime) || EmptyChecks.isNull(actualFireTime)) {
       return TriggerType.SCHEDULED;
     }
     long driftSeconds =
@@ -218,7 +219,8 @@ public class QuartzLaunchJob implements Job {
         || catchUpPolicy == CatchUpPolicyType.MANUAL_APPROVAL) {
       return TriggerType.SCHEDULED;
     }
-    long maxDays = descriptor.getCatchUpMaxDays() == null ? 0L : descriptor.getCatchUpMaxDays();
+    long maxDays =
+        EmptyChecks.isNull(descriptor.getCatchUpMaxDays()) ? 0L : descriptor.getCatchUpMaxDays();
     if (maxDays <= 0L) {
       return TriggerType.CATCH_UP;
     }
@@ -229,7 +231,7 @@ public class QuartzLaunchJob implements Job {
 
   private boolean requiresManualApproval(
       TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
-    if (scheduledFireTime == null || actualFireTime == null) {
+    if (EmptyChecks.isNull(scheduledFireTime) || EmptyChecks.isNull(actualFireTime)) {
       return false;
     }
     CatchUpPolicyType catchUpPolicy = CatchUpPolicyType.fromCode(descriptor.getCatchUpPolicy());
@@ -241,7 +243,8 @@ public class QuartzLaunchJob implements Job {
     if (driftSeconds < triggerRuntimeProperties.getMisfireCatchUpThresholdSeconds()) {
       return false;
     }
-    long maxDays = descriptor.getCatchUpMaxDays() == null ? 0L : descriptor.getCatchUpMaxDays();
+    long maxDays =
+        EmptyChecks.isNull(descriptor.getCatchUpMaxDays()) ? 0L : descriptor.getCatchUpMaxDays();
     if (maxDays <= 0L) {
       return true;
     }
@@ -258,7 +261,7 @@ public class QuartzLaunchJob implements Job {
     if (rawValue instanceof Number number) {
       return number.intValue();
     }
-    if (rawValue instanceof String string && !string.isBlank()) {
+    if (rawValue instanceof String string && EmptyChecks.isNotBlank(string)) {
       return Integer.parseInt(string);
     }
     return null;

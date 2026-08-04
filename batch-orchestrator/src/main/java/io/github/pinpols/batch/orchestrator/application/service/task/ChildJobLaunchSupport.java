@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -94,7 +95,7 @@ public class ChildJobLaunchSupport {
       String sourcePayload,
       String traceId) {
     String refJobCode = workflowNode.getRelatedJobCode();
-    if (refJobCode == null || refJobCode.isBlank()) {
+    if (EmptyChecks.isBlank(refJobCode)) {
       return 0;
     }
 
@@ -153,12 +154,12 @@ public class ChildJobLaunchSupport {
     Set<String> ancestorJobCodes = new LinkedHashSet<>();
     JobInstanceEntity cursor = parent;
     int hops = 0;
-    while (cursor != null && hops < MAX_ANCESTOR_WALK) {
-      if (cursor.getJobCode() != null) {
+    while (EmptyChecks.isNotNull(cursor) && hops < MAX_ANCESTOR_WALK) {
+      if (EmptyChecks.isNotNull(cursor.getJobCode())) {
         ancestorJobCodes.add(cursor.getJobCode());
       }
       Long parentInstanceId = cursor.getParentInstanceId();
-      if (parentInstanceId == null) {
+      if (EmptyChecks.isNull(parentInstanceId)) {
         break;
       }
       cursor = jobMappers.jobInstanceMapper.selectById(cursor.getTenantId(), parentInstanceId);
@@ -243,7 +244,7 @@ public class ChildJobLaunchSupport {
   }
 
   private void incrementExpectedPartitionCount(JobInstanceEntity jobInstance, String nodeCode) {
-    int currentExpected = jobInstance.getExpectedPartitionCount() == null
+    int currentExpected = EmptyChecks.isNull(jobInstance.getExpectedPartitionCount())
         ? 0
         : jobInstance.getExpectedPartitionCount();
     int updated = jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
@@ -256,7 +257,8 @@ public class ChildJobLaunchSupport {
         ResultCode.STATE_CONFLICT,
         "job instance expected partition count update conflict for JOB node " + nodeCode);
     jobInstance.setExpectedPartitionCount(currentExpected + 1);
-    jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+    jobInstance.setVersion(
+        (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
   }
 
   private String writeTriggerRequestForChildJob(

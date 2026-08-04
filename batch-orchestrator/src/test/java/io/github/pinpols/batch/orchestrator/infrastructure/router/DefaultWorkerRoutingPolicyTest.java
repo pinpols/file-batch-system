@@ -27,6 +27,14 @@ class DefaultWorkerRoutingPolicyTest {
   }
 
   @Test
+  void shouldIgnoreNullCandidates() {
+    WorkerRouteModel available = route("w1", 3, true);
+
+    assertThat(policy.select(java.util.Arrays.asList(null, available))).isSameAs(available);
+    assertThat(policy.select(java.util.Arrays.asList(null, null))).isNull();
+  }
+
+  @Test
   void shouldSelectAvailableWorkerWithHighestPriority() {
     WorkerRouteModel low = route("w1", 1, true);
     WorkerRouteModel high = route("w2", 10, true);

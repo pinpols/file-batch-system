@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -173,7 +174,7 @@ public class FileGovernanceScheduler {
     if (value instanceof Number number) {
       return number.longValue();
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return 0L;
     }
     return Long.parseLong(String.valueOf(value));
@@ -187,9 +188,15 @@ public class FileGovernanceScheduler {
         fileGovernanceRepository.selectArrivalGovernanceCandidates(
             properties.getArrival().getBatchSize());
     Map<ArrivalGroupKey, List<Map<String, Object>>> grouped = new HashMap<>();
+    if (EmptyChecks.isEmpty(candidates)) {
+      arrivalGroupWaitingCount.set(0L);
+      arrivalGroupTriggeredCount.set(0L);
+      arrivalGroupTimeoutCount.set(0L);
+      return;
+    }
     for (Map<String, Object> candidate : candidates) {
       ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
-      if (key == null) {
+      if (EmptyChecks.isNull(key)) {
         continue;
       }
       grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
@@ -200,7 +207,7 @@ public class FileGovernanceScheduler {
     Instant now = BatchDateTimeSupport.utcNow();
     for (Map.Entry<ArrivalGroupKey, List<Map<String, Object>>> entry : grouped.entrySet()) {
       ArrivalGroupDecision decision = evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
-      if (decision == null || decision.state() == null) {
+      if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
         continue;
       }
       switch (decision.state()) {
@@ -235,29 +242,35 @@ public class FileGovernanceScheduler {
 
   private ArrivalGroupDecision evaluateArrivalGroup(
       ArrivalGroupKey key, List<Map<String, Object>> groupFiles, Instant now) {
-    if (groupFiles == null || groupFiles.isEmpty()) {
+    if (EmptyChecks.isEmpty(groupFiles)) {
       return new ArrivalGroupDecision(null);
     }
-    Set<String> requiredFiles =
-        parseRequiredFileSet(text(groupFiles.get(0).get("required_file_set")));
+    Map<String, Object> firstFile =
+        groupFiles.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
+    if (EmptyChecks.isNull(firstFile)) {
+      return new ArrivalGroupDecision(null);
+    }
+    Set<String> requiredFiles = parseRequiredFileSet(text(firstFile.get("required_file_set")));
     Set<String> arrivedFiles = new HashSet<>();
     for (Map<String, Object> file : groupFiles) {
+      if (EmptyChecks.isNull(file)) {
+        continue;
+      }
       String fileName = text(file.get("file_name"));
-      if (fileName != null) {
+      if (EmptyChecks.isNotNull(fileName)) {
         arrivedFiles.add(fileName);
       }
     }
     Set<String> missingFiles = new HashSet<>(requiredFiles);
     missingFiles.removeAll(arrivedFiles);
-    Instant latestTolerableTime =
-        parseInstant(text(groupFiles.get(0).get("latest_tolerable_time")));
+    Instant latestTolerableTime = parseInstant(text(firstFile.get("latest_tolerable_time")));
     boolean triggerOnComplete = parseBoolean(
-        text(groupFiles.get(0).get("trigger_on_complete")),
-        properties.getArrival().isTriggerOnComplete());
+        text(firstFile.get("trigger_on_complete")), properties.getArrival().isTriggerOnComplete());
     String timeoutAction = defaultText(
-        text(groupFiles.get(0).get("arrival_timeout_action")),
+        text(firstFile.get("arrival_timeout_action")),
         properties.getArrival().getDefaultTimeoutAction());
-    boolean timedOut = latestTolerableTime != null && now.isAfter(latestTolerableTime);
+    boolean timedOut =
+        EmptyChecks.isNotNull(latestTolerableTime) && now.isAfter(latestTolerableTime);
     if (timedOut) {
       if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
         updateGroupState(new ArrivalGroupUpdateContext(
@@ -278,7 +291,7 @@ public class FileGovernanceScheduler {
       return triggerArrivalGroup(
           key, groupFiles, requiredFiles, missingFiles, "TIMEOUT_OVERRIDE_" + timeoutAction, now);
     }
-    if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles)) {
       if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
         // 文件名虽齐,但有成员缺完整性背书(checksum_type=NONE)→ 保持等待,不放行;超时已在上方走 timeoutAction
         updateGroupState(new ArrivalGroupUpdateContext(
@@ -302,7 +315,7 @@ public class FileGovernanceScheduler {
     // 此时若仍写 WAITING_ARRIVAL,scheduler 会在每个 30s tick 重复评估同一行,造成日志 +
     // updated_at 抖动(2026-05-01 5207.fw 类噪声根因)。改为静默跳过,等业务方补全 metadata 或
     // 数据治理手工置终态。
-    if (requiredFiles.isEmpty()) {
+    if (EmptyChecks.isEmpty(requiredFiles)) {
       log.warn(
           "skip arrival group with empty requiredFileSet: tenantId={}, fileGroupCode={},"
               + " arrivedCount={} - metadata is incomplete, so the trigger condition cannot be determined; add requiredFileSet or set a terminal state",
@@ -385,7 +398,7 @@ public class FileGovernanceScheduler {
     for (Map<String, Object> file : context.files().groupFiles()) {
       Long fileId = toLong(file.get("id"));
       String tenantId = text(file.get("tenant_id"));
-      if (fileId == null || tenantId == null) {
+      if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
         continue;
       }
       fileGovernanceRepository.updateFileMetadata(tenantId, fileId, metadata);
@@ -414,19 +427,19 @@ public class FileGovernanceScheduler {
     if (value instanceof Number number) {
       return number.longValue();
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     String text = String.valueOf(value);
-    return text.isBlank() ? null : Long.valueOf(text);
+    return EmptyChecks.isBlank(text) ? null : Long.valueOf(text);
   }
 
   private String text(Object value) {
-    return value == null ? null : String.valueOf(value);
+    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private Instant parseInstant(String value) {
-    if (value == null || value.isBlank()) {
+    if (EmptyChecks.isBlank(value)) {
       return null;
     }
     try {
@@ -442,7 +455,7 @@ public class FileGovernanceScheduler {
   private boolean allMembersVerified(List<Map<String, Object>> groupFiles) {
     for (Map<String, Object> file : groupFiles) {
       String checksumType = text(file.get("checksum_type"));
-      if (checksumType == null || checksumType.isBlank() || "NONE".equalsIgnoreCase(checksumType)) {
+      if (EmptyChecks.isBlank(checksumType) || "NONE".equalsIgnoreCase(checksumType)) {
         return false;
       }
     }
@@ -451,12 +464,12 @@ public class FileGovernanceScheduler {
 
   private Set<String> parseRequiredFileSet(String value) {
     Set<String> files = new HashSet<>();
-    if (value == null || value.isBlank()) {
+    if (EmptyChecks.isBlank(value)) {
       return files;
     }
     for (String item : value.split(",")) {
       String trimmed = item.trim();
-      if (!trimmed.isBlank()) {
+      if (EmptyChecks.isNotBlank(trimmed)) {
         files.add(trimmed);
       }
     }
@@ -464,14 +477,14 @@ public class FileGovernanceScheduler {
   }
 
   private boolean parseBoolean(String value, boolean fallback) {
-    if (value == null || value.isBlank()) {
+    if (EmptyChecks.isBlank(value)) {
       return fallback;
     }
     return Boolean.parseBoolean(value);
   }
 
   private String defaultText(String value, String fallback) {
-    return value == null || value.isBlank() ? fallback : value;
+    return EmptyChecks.isBlank(value) ? fallback : value;
   }
 
   private record ArrivalGroupKey(
@@ -485,15 +498,12 @@ public class FileGovernanceScheduler {
     private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
 
     static ArrivalGroupKey from(Map<String, Object> candidate) {
-      if (candidate == null) {
+      if (EmptyChecks.isNull(candidate)) {
         return null;
       }
       String tenantId = textValue(candidate.get("tenant_id"));
       String fileGroupCode = textValue(candidate.get("file_group_code"));
-      if (tenantId == null
-          || tenantId.isBlank()
-          || fileGroupCode == null
-          || fileGroupCode.isBlank()) {
+      if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(fileGroupCode)) {
         return null;
       }
       return new ArrivalGroupKey(
@@ -506,11 +516,11 @@ public class FileGovernanceScheduler {
     }
 
     private static String textValue(Object value) {
-      return value == null ? null : String.valueOf(value);
+      return EmptyChecks.isNull(value) ? null : String.valueOf(value);
     }
 
     private static String defaultString(String value, String fallback) {
-      return value == null || value.isBlank() ? fallback : value;
+      return EmptyChecks.isBlank(value) ? fallback : value;
     }
 
     // 显式覆写与 record 默认生成逻辑一致，仅为绕过 Alibaba 插件对 record 的识别盲区。
