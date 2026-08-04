@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import io.github.pinpols.batch.common.utils.Texts;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -12,7 +13,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.core.env.Environment;
-import org.springframework.util.StringUtils;
 
 /**
  * 只读运行态诊断端点。
@@ -58,22 +58,20 @@ public class BatchRuntimeStatusEndpoint {
     Map<String, Object> storage = new LinkedHashMap<>();
     storage.put("backend", backend);
     StorageBackendGuardProperties guard = guardProvider.getIfAvailable();
-    storage.put(
-        "backendCutoverConfigured", guard != null && StringUtils.hasText(guard.getCutoverId()));
+    storage.put("backendCutoverConfigured", guard != null && Texts.hasText(guard.getCutoverId()));
     S3StorageProperties s3 = s3Provider.getIfAvailable();
     if ("s3".equalsIgnoreCase(backend) && s3 != null) {
       storage.put("endpointHost", hostOf(s3.getEndpoint()));
-      storage.put("bucketConfigured", StringUtils.hasText(s3.getBucket()));
+      storage.put("bucketConfigured", Texts.hasText(s3.getBucket()));
       storage.put(
           "credentialsConfigured",
-          StringUtils.hasText(s3.getAccessKey()) && StringUtils.hasText(s3.getSecretKey()));
+          Texts.hasText(s3.getAccessKey()) && Texts.hasText(s3.getSecretKey()));
     }
     FilesystemStorageProperties filesystem = filesystemProvider.getIfAvailable();
     if ("filesystem".equalsIgnoreCase(backend) && filesystem != null) {
-      storage.put("rootConfigured", StringUtils.hasText(filesystem.getRoot()));
-      storage.put(
-          "downloadBaseUrlConfigured", StringUtils.hasText(filesystem.getDownloadBaseUrl()));
-      storage.put("presignSecretConfigured", StringUtils.hasText(filesystem.getPresignSecret()));
+      storage.put("rootConfigured", Texts.hasText(filesystem.getRoot()));
+      storage.put("downloadBaseUrlConfigured", Texts.hasText(filesystem.getDownloadBaseUrl()));
+      storage.put("presignSecretConfigured", Texts.hasText(filesystem.getPresignSecret()));
     }
     return storage;
   }
@@ -84,7 +82,7 @@ public class BatchRuntimeStatusEndpoint {
     security.put("bypassMode", properties != null && properties.isBypassMode());
     security.put(
         "internalSecretConfigured",
-        properties != null && StringUtils.hasText(properties.getInternalSecret()));
+        properties != null && Texts.hasText(properties.getInternalSecret()));
     return security;
   }
 
@@ -98,7 +96,7 @@ public class BatchRuntimeStatusEndpoint {
   }
 
   private static String hostOf(String endpoint) {
-    if (!StringUtils.hasText(endpoint)) {
+    if (!Texts.hasText(endpoint)) {
       return "";
     }
     try {
