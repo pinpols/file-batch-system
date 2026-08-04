@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleAdminTestDataCleanupService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -63,9 +62,8 @@ class ConsoleAdminTestDataControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    ConsoleAdminTestDataCleanupService cleanupService = cleanupService();
     ConsoleAdminTestDataController controller =
-        new ConsoleAdminTestDataController(cleanupService, responseFactory, environment);
+        new ConsoleAdminTestDataController(orchestratorProxyService, responseFactory, environment);
     // PostConstruct 在 standalone setup 下不会自动跑;此处显式调一次走非 prod 路径(test profile)
     ReflectionTestUtils.invokeMethod(controller, "validateProfile");
     mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -79,7 +77,7 @@ class ConsoleAdminTestDataControllerTest {
     when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
     ConsoleResponseFactory rf = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleAdminTestDataController prodCtl =
-        new ConsoleAdminTestDataController(cleanupService(), rf, environment);
+        new ConsoleAdminTestDataController(orchestratorProxyService, rf, environment);
     assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(prodCtl, "validateProfile"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("must not be enabled in production profiles");
@@ -115,9 +113,5 @@ class ConsoleAdminTestDataControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.tenant").value(2));
     verify(orchestratorProxyService).adminTestDataCleanupByExactTenantIds(List.of("td", "te"));
-  }
-
-  private ConsoleAdminTestDataCleanupService cleanupService() {
-    return new ConsoleAdminTestDataCleanupService(orchestratorProxyService);
   }
 }

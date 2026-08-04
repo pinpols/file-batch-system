@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.infrastructure.lineage.OpenLineageEmitter;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -45,7 +46,7 @@ public class WorkflowTerminalOutboxService {
   @Transactional(propagation = Propagation.MANDATORY)
   public void writeTerminalEvent(
       WorkflowRunEntity workflowRun, String terminalStatus, Instant finishedAt) {
-    if (workflowRun == null || !isTerminal(terminalStatus)) {
+    if (EmptyChecks.isNull(workflowRun) || !isTerminal(terminalStatus)) {
       return;
     }
     Map<String, Object> payload = new LinkedHashMap<>();
@@ -55,7 +56,7 @@ public class WorkflowTerminalOutboxService {
     payload.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
     payload.put("relatedJobInstanceId", workflowRun.getRelatedJobInstanceId());
     payload.put("runStatus", terminalStatus);
-    payload.put("finishedAt", finishedAt == null ? null : finishedAt.toString());
+    payload.put("finishedAt", EmptyChecks.isNull(finishedAt) ? null : finishedAt.toString());
     payload.put("traceId", workflowRun.getTraceId());
 
     domainEventPublisher.publish(DomainEvent.builder(workflowRun.getTenantId())

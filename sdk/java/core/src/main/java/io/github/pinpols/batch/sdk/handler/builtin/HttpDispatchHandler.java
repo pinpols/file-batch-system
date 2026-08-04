@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.handler.builtin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.net.InetAddress;
@@ -44,7 +45,7 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
   private final HttpClient httpClient;
 
   public HttpDispatchHandler(HttpDispatchConfig config, DataSource dataSource) {
-    this(config, dataSource, new ObjectMapper());
+    this(config, dataSource, SdkJsonMapperFactory.create());
   }
 
   public HttpDispatchHandler(

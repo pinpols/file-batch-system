@@ -47,6 +47,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
       after(ctx, result);
       return result == null ? TaskResult.fail("executor returned null TaskResult", null) : result;
     } catch (Throwable t) {
+      rethrowFatal(t);
       log.error(
           "SPI executor {} failed (taskType={}, taskId={}): {}",
           this.getClass().getSimpleName(),
@@ -61,6 +62,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
         try {
           cleanup(ctx);
         } catch (Throwable cleanupEx) {
+          rethrowFatal(cleanupEx);
           // cleanup 异常不掩盖原结果,只 log
           log.warn(
               "SPI executor {} cleanup() failed: {}",
@@ -69,6 +71,12 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
               cleanupEx);
         }
       }
+    }
+  }
+
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

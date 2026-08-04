@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -31,7 +32,7 @@ public abstract class AbstractStageExecutor<
    * <p>public 暴露给 dispatch stage step（实现 DispatchStageStep 而非继承本类的兄弟）直接引用， 避免每个 step 重复声明 {@code
    * private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
    */
-  public static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  public static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   private static final Logger log = LoggerFactory.getLogger(AbstractStageExecutor.class);
 

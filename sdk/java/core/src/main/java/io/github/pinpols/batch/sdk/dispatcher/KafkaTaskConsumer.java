@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.dispatcher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
 import java.util.Collection;
@@ -106,12 +107,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private volatile long consumerLagMax = -1L;
 
   public KafkaTaskConsumer(BatchPlatformClientConfig config, TaskDispatcher dispatcher) {
-    this(
-        config,
-        dispatcher,
-        defaultConsumer(config),
-        new ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    this(config, dispatcher, defaultConsumer(config), SdkJsonMapperFactory.create());
   }
 
   /** test-friendly ctor:可注入 mock Consumer(含 {@code MockConsumer})。 */
@@ -195,6 +191,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       // 不静默死。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
       crashed.set(true);
       running.set(false);
+      rethrowFatal(t);
       log.error("KafkaTaskConsumer poll loop died (marked crashed)", t);
     } finally {
       try {
@@ -203,6 +200,13 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         log.warn("kafka consumer close error: {}", e.getMessage());
       }
       log.info("KafkaTaskConsumer stopped");
+    }
+  }
+
+  /** poll 线程可以隔离普通运行时故障，但不能吞掉 JVM 级故障。 */
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

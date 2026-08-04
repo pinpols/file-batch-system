@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.List;
 import java.util.Locale;
@@ -59,7 +60,7 @@ public class SqlTransformComputeSqlValidator {
   }
 
   private String validate(String raw, boolean enforceSchemaAllowlist) {
-    String sql = raw == null ? "" : raw.trim();
+    String sql = EmptyChecks.isNull(raw) ? "" : raw.trim();
     if (!Texts.hasText(sql)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, ERR_KEY, "sqlTransformCompute SQL is blank");
@@ -73,22 +74,20 @@ public class SqlTransformComputeSqlValidator {
           "sqlTransformCompute only allows SELECT/WITH queries, got: "
               + statement.getClass().getSimpleName());
     }
-    if (security == null || security.isForbidSelectStar()) {
+    if (EmptyChecks.isNull(security) || security.isForbidSelectStar()) {
       checkNoSelectStar(select);
     }
     if (enforceSchemaAllowlist
-        && security != null
-        && security.getAllowedSchemas() != null
-        && !security.getAllowedSchemas().isEmpty()) {
+        && EmptyChecks.isNotNull(security)
+        && EmptyChecks.isNotEmpty(security.getAllowedSchemas())) {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
-    if (security != null
-        && security.getForbiddenFunctions() != null
-        && !security.getForbiddenFunctions().isEmpty()) {
+    if (EmptyChecks.isNotNull(security)
+        && EmptyChecks.isNotEmpty(security.getForbiddenFunctions())) {
       checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
     }
     // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
-    if (enforceSchemaAllowlist && security != null && security.isRequireLimit()) {
+    if (enforceSchemaAllowlist && EmptyChecks.isNotNull(security) && security.isRequireLimit()) {
       checkTopLevelLimit(select, security.getMaxLimitRows());
     }
     return sql;
@@ -102,7 +101,7 @@ public class SqlTransformComputeSqlValidator {
    */
   private static void checkNoForbiddenFunctions(Statement statement, List<String> forbidden) {
     String hit = SelectSqlAstValidator.findForbiddenFunctionCall(statement, forbidden);
-    if (hit != null) {
+    if (EmptyChecks.isNotNull(hit)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ERR_KEY,
@@ -113,7 +112,7 @@ public class SqlTransformComputeSqlValidator {
   /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
   private static void checkTopLevelLimit(Select select, long maxLimitRows) {
     Long limit = topLimitOf(select);
-    if (limit == null) {
+    if (EmptyChecks.isNull(limit)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ERR_KEY,
@@ -130,10 +129,10 @@ public class SqlTransformComputeSqlValidator {
   }
 
   private static Long topLimitOf(Select body) {
-    if (body instanceof PlainSelect ps && ps.getLimit() != null) {
+    if (body instanceof PlainSelect ps && EmptyChecks.isNotNull(ps.getLimit())) {
       return numericLimit(ps.getLimit().getRowCount());
     }
-    if (body instanceof SetOperationList sol && sol.getLimit() != null) {
+    if (body instanceof SetOperationList sol && EmptyChecks.isNotNull(sol.getLimit())) {
       return numericLimit(sol.getLimit().getRowCount());
     }
     return null;
@@ -147,7 +146,7 @@ public class SqlTransformComputeSqlValidator {
    * requireLimit 的目的就是给结果集封顶,非数值 LIMIT 无法在解析期证明 ≤ 上限,一律拒。
    */
   private static Long numericLimit(Object rowCount) {
-    if (rowCount == null) {
+    if (EmptyChecks.isNull(rowCount)) {
       return null;
     }
     try {
@@ -186,7 +185,7 @@ public class SqlTransformComputeSqlValidator {
   private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
     SchemaViolation violation =
         SelectSqlAstValidator.findSchemaViolation(statement, allowedSchemas);
-    if (violation == null) {
+    if (EmptyChecks.isNull(violation)) {
       return;
     }
     if (violation.unqualified()) {

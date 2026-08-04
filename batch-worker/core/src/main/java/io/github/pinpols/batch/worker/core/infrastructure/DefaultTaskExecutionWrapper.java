@@ -233,6 +233,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       // 业务异常已在 stepExecutionAdapter 里被包成 StepExecutionResponse.failure 返回, 这里到达说明 adapter 自己抛了
       // RuntimeException (典型: 解析 payload 失败 / 框架 bug). 也按失败上报.
       Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+      rethrowFatal(cause);
       log.error(
           "task execution adapter threw: tenantId={}, taskId={}",
           task.getTenantId(),
@@ -248,6 +249,13 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       future.cancel(true);
       Thread.currentThread().interrupt();
       throw new IllegalStateException("listener thread interrupted while waiting task", ex);
+    }
+  }
+
+  /** 后台执行线程的 JVM 级故障不能被包装成单个任务失败。 */
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

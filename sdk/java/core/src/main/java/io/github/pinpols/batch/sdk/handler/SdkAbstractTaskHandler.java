@@ -44,6 +44,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
           stopped.breakPosition());
       return SdkTaskResult.cancelled(stopped.breakPosition());
     } catch (Throwable t) {
+      rethrowFatal(t);
       log.error(
           "SDK handler {} failed (taskType={}, taskId={}): {}",
           getClass().getSimpleName(),
@@ -58,6 +59,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
         try {
           cleanup(ctx);
         } catch (Throwable cleanupEx) {
+          rethrowFatal(cleanupEx);
           log.warn(
               "SDK handler {} cleanup() failed: {}",
               getClass().getSimpleName(),
@@ -78,11 +80,18 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
   }
 
   /**
-   * 真业务执行。子类(或 shape 基类)实现。抛任何 {@link Throwable} 都被模板 catch 转 {@link SdkTaskResult#fail}。
+   * 真业务执行。子类(或 shape 基类)实现。业务异常会被模板转为 {@link SdkTaskResult#fail}，JVM 级 {@link Error} 会继续向上抛出。
    *
    * @return 不应返 null;返 null 会被转 fail("returned null")
    */
   protected abstract SdkTaskResult doExecute(SdkTaskContext ctx);
+
+  /** 不能把 JVM 级故障伪装成单个任务失败。 */
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
+    }
+  }
 
   /** doExecute 成功完成后调(异常路径不调)。默认 no-op。 */
   protected void after(SdkTaskContext ctx, SdkTaskResult result) {

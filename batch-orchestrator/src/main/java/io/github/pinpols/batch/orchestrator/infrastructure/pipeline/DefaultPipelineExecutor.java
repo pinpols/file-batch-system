@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.domain.pipeline.StepResult;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,11 +43,15 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
     if (definition == null || definition.getSteps() == null) {
       return emptyResult();
     }
-    definition.getSteps().stream()
+    List<StepDefinition> enabledSteps = definition.getSteps().stream()
+        .filter(Objects::nonNull)
         .filter(step -> Boolean.TRUE.equals(step.getEnabled()))
         .sorted(Comparator.comparing(
             step -> step.getStepOrder() == null ? Integer.MAX_VALUE : step.getStepOrder()))
-        .forEach(stepDefinition -> results.add(executeStep(context, definition, stepDefinition)));
+        .toList();
+    for (StepDefinition stepDefinition : enabledSteps) {
+      results.add(executeStep(context, definition, stepDefinition));
+    }
     context.setStepResults(results);
     PipelineExecutionResult result = new PipelineExecutionResult();
     result.setStepResults(results);

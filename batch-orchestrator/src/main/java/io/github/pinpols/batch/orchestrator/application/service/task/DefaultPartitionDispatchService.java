@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
@@ -102,7 +103,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     Instant startedAt = context.startedAt();
     String sourcePayload = buildPayloadJson(request, jobInstance, effectiveParams);
     // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
-    DispatchOutcome outcome = (initialNodes != null && !initialNodes.isEmpty())
+    DispatchOutcome outcome = (EmptyChecks.isNotNull(initialNodes)
+            && EmptyChecks.isNotEmpty(initialNodes))
         ? dispatchInitialDagNodes(initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
         : dispatchByPlan(request, effectiveParams, traceId, jobInstance);
     refreshJobInstanceVersion(jobInstance);
@@ -123,7 +125,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       String traceId) {
     int partitionCount = 0;
     for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
-      if (initialNode == null || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
+      if (EmptyChecks.isNull(initialNode)
+          || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
         continue;
       }
       partitionCount += workflowNodeDispatchService.dispatchNode(
@@ -159,7 +162,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   }
 
   private boolean isRejected(ResourceSchedulingDecision decision) {
-    return decision != null
+    return EmptyChecks.isNotNull(decision)
         && (ResourceAdmissionAction.REJECT == decision.getAdmissionAction()
             || decision.isFailFast());
   }
@@ -168,7 +171,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   private void refreshJobInstanceVersion(JobInstanceEntity jobInstance) {
     JobInstanceEntity fresh =
         jobInstanceMapper.selectById(jobInstance.getTenantId(), jobInstance.getId());
-    if (fresh != null) {
+    if (EmptyChecks.isNotNull(fresh)) {
       jobInstance.setVersion(fresh.getVersion());
     }
   }
@@ -190,8 +193,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
     }
-    jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-    if (workflowRun != null) {
+    jobInstance.setVersion(
+        (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
+    if (EmptyChecks.isNotNull(workflowRun)) {
       workflowRunMapper.markRunning(
           jobInstance.getTenantId(),
           workflowRun.getId(),
@@ -215,8 +219,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
     }
-    jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-    if (workflowRun != null) {
+    jobInstance.setVersion(
+        (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
+    if (EmptyChecks.isNotNull(workflowRun)) {
       workflowRunMapper.markRunning(
           jobInstance.getTenantId(),
           workflowRun.getId(),
@@ -233,7 +238,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   // DomainEventPublisher 契约与该治理护栏，按任务降级方案保持逐条（见 task-5-report）。
   private void createTasksAndMaybeOutboxEvents(TaskCreationContext context) {
     List<JobPartitionEntity> partitions = context.scheduling().partitions();
-    if (partitions.isEmpty()) {
+    if (EmptyChecks.isEmpty(partitions)) {
       return;
     }
     List<JobTaskEntity> tasks = new ArrayList<>(partitions.size());
@@ -271,7 +276,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         resolveSelectedWorkerId(context.creation().scheduling().plan(), context.partition()));
     ResourceSchedulingDecision decision = context.creation().scheduling().decision();
     task.setTaskStatus(
-        decision == null || decision.getTaskStatus() == null
+        EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())
             ? TaskStatus.READY.code()
             : decision.getTaskStatus());
     task.setVersion(0L);
@@ -284,30 +289,29 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         effectiveParams,
         context.partition()));
     // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
-    task.setEffectiveParameters(effectiveParams == null ? null : JsonUtils.toJson(effectiveParams));
+    task.setEffectiveParameters(
+        EmptyChecks.isNull(effectiveParams) ? null : JsonUtils.toJson(effectiveParams));
     task.setDryRun(
         Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
     return task;
   }
 
   private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {
-    if (partition != null
-        && partition.getWorkerGroup() != null
+    if (EmptyChecks.isNotNull(partition)
+        && EmptyChecks.isNotNull(partition.getWorkerGroup())
         && hasDefaultRoute(plan)
-        && plan.getDefaultWorkerRoute().getWorkerType() != null) {
+        && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute().getWorkerType())) {
       return plan.getDefaultWorkerRoute().getWorkerType();
     }
-    return plan == null ? null : plan.getDefaultWorkerType();
+    return EmptyChecks.isNull(plan) ? null : plan.getDefaultWorkerType();
   }
 
   private boolean hasDefaultRoute(SchedulePlan plan) {
-    return plan != null && plan.getDefaultWorkerRoute() != null;
+    return EmptyChecks.isNotNull(plan) && EmptyChecks.isNotNull(plan.getDefaultWorkerRoute());
   }
 
   private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
-    if (partition != null
-        && partition.getWorkerCode() != null
-        && !partition.getWorkerCode().isBlank()) {
+    if (EmptyChecks.isNotNull(partition) && EmptyChecks.isNotBlank(partition.getWorkerCode())) {
       return partition.getWorkerCode();
     }
     if (hasDefaultRoute(plan)) {
@@ -319,31 +323,31 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   static Map<String, Object> enrichPayload(
       LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
     Map<String, Object> payload = new LinkedHashMap<>();
-    if (params != null) {
+    if (EmptyChecks.isNotNull(params)) {
       payload.putAll(params);
     }
     if (!payload.containsKey("batchNo") && !payload.containsKey("batch_no")) {
-      String batchNo = jobInstance == null ? null : jobInstance.getBatchNo();
-      if (batchNo != null && !batchNo.isBlank()) {
+      String batchNo = EmptyChecks.isNull(jobInstance) ? null : jobInstance.getBatchNo();
+      if (EmptyChecks.isNotBlank(batchNo)) {
         payload.put("batchNo", batchNo);
       }
     }
     if (!payload.containsKey("bizDate")) {
-      String bizDate = request == null || request.bizDate() == null
+      String bizDate = EmptyChecks.isNull(request) || EmptyChecks.isNull(request.bizDate())
           ? null
           : request.bizDate().toString();
-      if (bizDate != null && !bizDate.isBlank()) {
+      if (EmptyChecks.isNotBlank(bizDate)) {
         payload.put("bizDate", bizDate);
       }
     }
     if (!payload.containsKey("jobCode")) {
-      String jobCode = request == null ? null : request.jobCode();
-      if (jobCode != null && !jobCode.isBlank()) {
+      String jobCode = EmptyChecks.isNull(request) ? null : request.jobCode();
+      if (EmptyChecks.isNotBlank(jobCode)) {
         payload.put("jobCode", jobCode);
       }
     }
     // ADR-026: 把 dry_run 注入 task payload，worker 端通过 PipelineRuntimeKeys.DRY_RUN 读取
-    if (jobInstance != null && Boolean.TRUE.equals(jobInstance.getDryRun())) {
+    if (EmptyChecks.isNotNull(jobInstance) && Boolean.TRUE.equals(jobInstance.getDryRun())) {
       payload.put("dryRun", true);
     }
     return payload;
@@ -375,18 +379,19 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
    * {@code @JsonAlias} 歧义。{@code templateCode} 是 Import/ExportPayload 的真字段,保持原名(束有意复用)。
    */
   static void enrichBundleBinding(Map<String, Object> payload, JobPartitionEntity partition) {
-    if (partition == null) {
+    if (EmptyChecks.isNull(partition)) {
       return;
     }
-    if (partition.getSourceFileId() != null && !payload.containsKey("bundleSourceFileId")) {
+    if (EmptyChecks.isNotNull(partition.getSourceFileId())
+        && !payload.containsKey("bundleSourceFileId")) {
       payload.put("bundleSourceFileId", partition.getSourceFileId());
     }
     String templateCode = partition.getTemplateCode();
-    if (templateCode != null && !templateCode.isBlank() && !payload.containsKey("templateCode")) {
+    if (EmptyChecks.isNotBlank(templateCode) && !payload.containsKey("templateCode")) {
       payload.put("templateCode", templateCode);
     }
     String targetRef = partition.getTargetRef();
-    if (targetRef != null && !targetRef.isBlank() && !payload.containsKey("bundleTargetRef")) {
+    if (EmptyChecks.isNotBlank(targetRef) && !payload.containsKey("bundleTargetRef")) {
       payload.put("bundleTargetRef", targetRef);
     }
   }

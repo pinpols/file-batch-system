@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
@@ -48,11 +49,15 @@ class OutboxPollSchedulerTest {
 
   private OutboxPollScheduler scheduler;
   private SimpleMeterRegistry meterRegistry;
+  private Throwable lockingFailure;
 
   @BeforeEach
   void setUp() throws Throwable {
     when(governance.outbox()).thenReturn(new OutboxProperties());
     doAnswer(inv -> {
+          if (lockingFailure != null) {
+            throw lockingFailure;
+          }
           inv.getArgument(0, LockingTaskExecutor.Task.class).call();
           return null;
         })
@@ -104,6 +109,14 @@ class OutboxPollSchedulerTest {
             .counter()
             .count())
         .isEqualTo(1.0d);
+  }
+
+  @Test
+  void shouldPropagateOutOfMemoryError_insteadOfTreatingItAsPollFailure() throws Throwable {
+    OutOfMemoryError oom = new OutOfMemoryError("test oom");
+    lockingFailure = oom;
+
+    assertThatThrownBy(() -> scheduler.poll()).isSameAs(oom);
   }
 
   // 自适应间隔行为通过 OutboxForwarderE2eIT 验证

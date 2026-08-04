@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
@@ -44,7 +45,7 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
     return ResponseEntity.badRequest()
         .body(CommonResponse.failure(
             ResultCode.VALIDATION_ERROR,
-            message.isBlank() ? ResultCode.VALIDATION_ERROR.defaultMessage() : message));
+            EmptyChecks.isBlank(message) ? ResultCode.VALIDATION_ERROR.defaultMessage() : message));
   }
 
   @ExceptionHandler(ConstraintViolationException.class)

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.net.URI;
 import java.time.Duration;
@@ -14,7 +15,6 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 /**
  * 企业微信群机器人通知发送器（{@code channelType=WECOM}，平台枚举 WECOM 即企业微信）。
@@ -69,7 +69,7 @@ public class WeComNotificationSender implements NotificationSender {
   @Override
   public WebhookDeliveryResult send(NotificationMessage message) {
     String url = resolveUrl(message.configJson());
-    if (!StringUtils.hasText(url)) {
+    if (!Texts.hasText(url)) {
       return WebhookDeliveryResult.failure(null, "missing wecom url");
     }
     String body = buildTextMessage(message);
@@ -92,7 +92,7 @@ public class WeComNotificationSender implements NotificationSender {
   }
 
   private String resolveUrl(String configJson) {
-    if (!StringUtils.hasText(configJson)) {
+    if (!Texts.hasText(configJson)) {
       return null;
     }
     try {
@@ -117,10 +117,10 @@ public class WeComNotificationSender implements NotificationSender {
   private String summarize(NotificationMessage message) {
     StringBuilder sb = new StringBuilder();
     WebhookEventPayload payload = message.payload();
-    if (payload != null && StringUtils.hasText(payload.eventType())) {
+    if (payload != null && Texts.hasText(payload.eventType())) {
       sb.append('[').append(payload.eventType()).append("] ");
     }
-    if (StringUtils.hasText(message.payloadJson())) {
+    if (Texts.hasText(message.payloadJson())) {
       sb.append(message.payloadJson());
     }
     String content = sb.toString().strip();
@@ -146,7 +146,7 @@ public class WeComNotificationSender implements NotificationSender {
   }
 
   private int parseErrcode(String body) {
-    if (!StringUtils.hasText(body)) {
+    if (!Texts.hasText(body)) {
       // 无 body 视为非 0，触发 failure 而非误判成功
       return -1;
     }

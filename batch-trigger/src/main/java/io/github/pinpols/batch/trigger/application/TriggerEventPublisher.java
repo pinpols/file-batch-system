@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.application;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 
 /**
  * ADR-010: trigger 端事件发布抽象。
@@ -41,7 +42,7 @@ public interface TriggerEventPublisher {
     }
 
     private static String truncate(String message) {
-      if (message == null) {
+      if (EmptyChecks.isNull(message)) {
         return null;
       }
       return message.length() <= 2000 ? message : message.substring(0, 2000);

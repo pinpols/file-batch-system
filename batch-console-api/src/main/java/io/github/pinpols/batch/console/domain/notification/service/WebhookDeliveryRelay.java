@@ -195,6 +195,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
+      rethrowFatal(t);
       if (isShutdownNoise(t)) {
         log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", t.getMessage());
         return;
@@ -221,6 +222,12 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     return false;
   }
 
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
+    }
+  }
+
   private void pollLocked() {
     if (stopping.get()) {
       return;
@@ -239,6 +246,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       try {
         retryOne(row);
       } catch (Throwable t) {
+        rethrowFatal(t);
         // 单条异常不能拖累整批;失败已写库,异常本身只为 ERROR 日志
         log.error(
             "WebhookDeliveryRelay failed to retry one delivery: id={} tenantId={} subscriptionId={}",

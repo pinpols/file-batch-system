@@ -2,7 +2,7 @@ package io.github.pinpols.batch.sdk.handler.typed;
 
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.util.Map;
 
@@ -30,7 +30,7 @@ public final class SdkTypedParameters<I> {
 
   /** 默认 mapper —— 对齐 SDK 其它组件(JavaTimeModule 支持 LocalDate 等时间类型)。 */
   public static ObjectMapper defaultObjectMapper() {
-    return new ObjectMapper().registerModule(new JavaTimeModule());
+    return SdkJsonMapperFactory.create();
   }
 
   /**

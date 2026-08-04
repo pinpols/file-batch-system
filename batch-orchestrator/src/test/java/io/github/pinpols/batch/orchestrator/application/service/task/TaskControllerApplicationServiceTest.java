@@ -32,6 +32,7 @@ import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -171,6 +172,22 @@ class TaskControllerApplicationServiceTest {
     assertThat(service.claimBatch(null).results()).isEmpty();
   }
 
+  @Test
+  @DisplayName("claimBatch: null 项按未认领返回,不触发底层调用")
+  void claimBatchNullItemIsSkipped() {
+    List<TaskClaimItemCommand> items = new ArrayList<>();
+    items.add(null);
+
+    TaskClaimBatchResult result = service.claimBatch(new TaskClaimBatchCommand(items));
+
+    assertThat(result.results()).singleElement().satisfies(item -> {
+      assertThat(item.taskId()).isNull();
+      assertThat(item.claimed()).isFalse();
+      assertThat(item.config()).isNull();
+    });
+    verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
+  }
+
   // ===== reportBatch (ADR-046 P2 切片 2.2) =====
 
   @Test
@@ -213,6 +230,22 @@ class TaskControllerApplicationServiceTest {
   void reportBatchEmptyInputReturnsEmpty() {
     assertThat(service.reportBatch(new TaskReportBatchCommand(null)).results()).isEmpty();
     assertThat(service.reportBatch(null).results()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("reportBatch: null 项只返回失败结果,不阻断后续项")
+  void reportBatchNullItemIsolated() {
+    List<TaskExecutionReportCommand> items = new ArrayList<>();
+    items.add(null);
+    items.add(reportDto(2L));
+
+    TaskReportBatchResult result = service.reportBatch(new TaskReportBatchCommand(items));
+
+    assertThat(result.results()).hasSize(2);
+    assertThat(result.results().get(0).ok()).isFalse();
+    assertThat(result.results().get(0).error()).isEqualTo("batch item is null");
+    assertThat(result.results().get(1).ok()).isTrue();
+    verify(taskExecutionService).applyTaskOutcome(any());
   }
 
   // ===== 2.4 观测指标 =====
@@ -442,6 +475,28 @@ class TaskControllerApplicationServiceTest {
     assertThat(cap.getValue().get(1).partitionInvocationId()).isEqualTo("inv-2");
     verify(taskExecutionService, never())
         .recordHeartbeat(anyString(), anyLong(), anyString(), any(), any());
+  }
+
+  @Test
+  @DisplayName("renewBatch: null 项保持结果位置,只把有效项下发到底层")
+  void renewBatchNullItemPreservesOrder() {
+    when(taskExecutionService.renewLeaseBatch(any()))
+        .thenReturn(List.of(new TaskAssignmentService.TaskHeartbeatResult(true, false)));
+    List<TaskLeaseRenewItemCommand> items = new ArrayList<>();
+    items.add(new TaskLeaseRenewItemCommand("ta", 1L, "w1", "inv-1"));
+    items.add(null);
+
+    TaskLeaseRenewBatchResult result = service.renewBatch(new TaskLeaseRenewBatchCommand(items));
+
+    assertThat(result.results()).hasSize(2);
+    assertThat(result.results().get(0).taskId()).isEqualTo(1L);
+    assertThat(result.results().get(0).renewed()).isTrue();
+    assertThat(result.results().get(1).taskId()).isNull();
+    assertThat(result.results().get(1).renewed()).isFalse();
+    ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap =
+        ArgumentCaptor.forClass(List.class);
+    verify(taskExecutionService).renewLeaseBatch(cap.capture());
+    assertThat(cap.getValue()).hasSize(1);
   }
 
   // ===== fixtures =====

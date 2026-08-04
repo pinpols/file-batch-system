@@ -130,7 +130,7 @@ public class DefaultConsoleConfigSyncApplicationService
   private void markLogFailed(String tenantId, Long logId, int failedItems, String errorMessage) {
     TransactionTemplate tt = new TransactionTemplate(transactionManager);
     tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    tt.executeWithoutResult(status -> configSyncLogMapper.updateResult(mapOf(
+    tt.executeWithoutResult(status -> configSyncLogMapper.updateResult(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "id",
@@ -144,7 +144,7 @@ public class DefaultConsoleConfigSyncApplicationService
         "skippedItems",
         0,
         "detailJson",
-        JsonUtils.toJson(mapOf("error", errorMessage)))));
+        JsonUtils.toJson(ConsoleMapSupport.mapOf("error", errorMessage)))));
   }
 
   private Long createLog(
@@ -152,7 +152,7 @@ public class DefaultConsoleConfigSyncApplicationService
     ConfigSyncSummaryResponse summary = ConfigSyncSummaryResponse.from(bundle);
     int totalItems = summary.total();
     String operator = metadataResolver.current().operatorId();
-    Map<String, Object> params = mapOf(
+    Map<String, Object> params = ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "syncDirection",
@@ -174,7 +174,8 @@ public class DefaultConsoleConfigSyncApplicationService
         "syncStatus",
         "RUNNING",
         "detailJson",
-        JsonUtils.toJson(mapOf(KEY_SUMMARY, summary, "dryRun", request.isDryRun())),
+        JsonUtils.toJson(
+            ConsoleMapSupport.mapOf(KEY_SUMMARY, summary, "dryRun", request.isDryRun())),
         "operatorId",
         operator);
     configSyncLogMapper.insert(params);
@@ -185,7 +186,7 @@ public class DefaultConsoleConfigSyncApplicationService
     int total = response.totalTenants();
     int success = response.successTenants();
     int failed = response.failureTenants();
-    configSyncLogMapper.updateResult(mapOf(
+    configSyncLogMapper.updateResult(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "id",
@@ -231,9 +232,5 @@ public class DefaultConsoleConfigSyncApplicationService
 
   private Long longValue(Object value) {
     return ConsoleMapSupport.longValue(value);
-  }
-
-  private Map<String, Object> mapOf(Object... pairs) {
-    return ConsoleMapSupport.mapOf(pairs);
   }
 }

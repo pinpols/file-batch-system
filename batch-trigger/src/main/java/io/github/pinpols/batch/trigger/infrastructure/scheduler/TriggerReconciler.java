@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
@@ -136,13 +137,13 @@ public class TriggerReconciler {
    */
   private boolean hasScheduleDrift(JobKey key, TriggerDescriptor descriptor) {
     String type = descriptor.getScheduleType();
-    if (type == null || type.isBlank()) {
+    if (EmptyChecks.isBlank(type)) {
       // descriptor 没声明 schedule_type（异常数据 / 旧测试 fixture）→ 保守不判 drift
       return false;
     }
     try {
       List<? extends Trigger> triggers = scheduler.getTriggersOfJob(key);
-      if (triggers == null || triggers.isEmpty()) {
+      if (EmptyChecks.isEmpty(triggers)) {
         // Quartz 里有 jobKey 但没 trigger（罕见）→ 保守不判 drift，下一轮再说
         return false;
       }
@@ -154,7 +155,8 @@ public class TriggerReconciler {
         if (!Objects.equals(ct.getCronExpression(), descriptor.getScheduleExpression())) {
           return true;
         }
-        String quartzTz = ct.getTimeZone() == null ? null : ct.getTimeZone().getID();
+        String quartzTz =
+            EmptyChecks.isNull(ct.getTimeZone()) ? null : ct.getTimeZone().getID();
         return !Objects.equals(quartzTz, descriptor.getTimezone());
       }
       if ("FIXED_RATE".equalsIgnoreCase(type)) {
@@ -175,7 +177,7 @@ public class TriggerReconciler {
   }
 
   private long parseSecondsOrMinusOne(String expression) {
-    if (expression == null || expression.isBlank()) {
+    if (EmptyChecks.isBlank(expression)) {
       return -1L;
     }
     try {

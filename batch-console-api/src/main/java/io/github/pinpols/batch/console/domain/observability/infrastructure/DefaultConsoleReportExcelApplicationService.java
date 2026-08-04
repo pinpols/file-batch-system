@@ -10,6 +10,7 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.w
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
@@ -115,7 +116,7 @@ public class DefaultConsoleReportExcelApplicationService
   public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshot(String tenantId) {
     ConsoleSchedulerSnapshotResponse snapshot = fetchSnapshot(tenantId);
     List<ConsoleSchedulerSnapshotResponse.PolicySnapshot> rows =
-        snapshot == null ? List.of() : snapshot.policies();
+        EmptyChecks.isNull(snapshot) ? List.of() : snapshot.policies();
     return exportRows(
         "scheduler_snapshot",
         "scheduler-snapshot",
@@ -232,7 +233,7 @@ public class DefaultConsoleReportExcelApplicationService
       }
       return headers;
     }
-    if (!rows.isEmpty() && rows.get(0) instanceof Map<?, ?> map) {
+    if (EmptyChecks.isNotEmpty(rows) && rows.get(0) instanceof Map<?, ?> map) {
       return map.keySet().stream().map(String::valueOf).toList();
     }
     try {
@@ -267,7 +268,8 @@ public class DefaultConsoleReportExcelApplicationService
               .filter(item -> item.getName().equals(header))
               .findFirst()
               .orElse(null);
-          values.add(component == null ? null : component.getAccessor().invoke(row));
+          values.add(
+              EmptyChecks.isNull(component) ? null : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {
         throw BizException.of(
@@ -288,7 +290,7 @@ public class DefaultConsoleReportExcelApplicationService
       for (String header : headers) {
         PropertyDescriptor descriptor = descriptors.get(header);
         values.add(
-            descriptor == null || descriptor.getReadMethod() == null
+            EmptyChecks.isNull(descriptor) || EmptyChecks.isNull(descriptor.getReadMethod())
                 ? null
                 : descriptor.getReadMethod().invoke(row));
       }

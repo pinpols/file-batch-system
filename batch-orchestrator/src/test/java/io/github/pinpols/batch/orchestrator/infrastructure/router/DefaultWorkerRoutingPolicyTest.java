@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.router;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,14 @@ class DefaultWorkerRoutingPolicyTest {
   @Test
   void shouldReturnNullForEmptyCandidates() {
     assertThat(policy.select(List.of())).isNull();
+  }
+
+  @Test
+  void shouldIgnoreNullCandidates() {
+    WorkerRouteModel available = route("w1", 3, true);
+
+    assertThat(policy.select(Arrays.asList(null, available))).isSameAs(available);
+    assertThat(policy.select(Arrays.asList(null, null))).isNull();
   }
 
   @Test

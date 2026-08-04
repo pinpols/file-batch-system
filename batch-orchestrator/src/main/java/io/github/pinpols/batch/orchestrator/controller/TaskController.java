@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
@@ -68,7 +69,8 @@ public class TaskController {
       @RequestBody TaskClaimRequest request,
       HttpServletRequest httpRequest) {
     TaskClaimRequest normalized = normalize(request, httpRequest);
-    rateLimit(normalized == null ? null : normalized.tenantId(), RateLimitAction.TASK_CLAIM);
+    rateLimit(
+        EmptyChecks.isNull(normalized) ? null : normalized.tenantId(), RateLimitAction.TASK_CLAIM);
     return taskControllerApplicationService.claim(
         taskId,
         new TaskClaimCommand(
@@ -106,9 +108,10 @@ public class TaskController {
       @RequestBody TaskCancelRequest request,
       HttpServletRequest httpRequest) {
     String tenantId = InternalRequestTenantGuard.resolveTenant(
-        httpRequest, request == null ? null : request.tenantId());
+        httpRequest, EmptyChecks.isNull(request) ? null : request.tenantId());
     taskControllerApplicationService.cancel(
-        taskId, new TaskCancelCommand(tenantId, request == null ? null : request.reason()));
+        taskId,
+        new TaskCancelCommand(tenantId, EmptyChecks.isNull(request) ? null : request.reason()));
   }
 
   @PostMapping("/leases/renew-batch")
@@ -156,38 +159,38 @@ public class TaskController {
   private static TaskClaimRequest normalize(
       TaskClaimRequest request, HttpServletRequest httpRequest) {
     String tenantId = InternalRequestTenantGuard.resolveTenant(
-        httpRequest, request == null ? null : request.tenantId());
+        httpRequest, EmptyChecks.isNull(request) ? null : request.tenantId());
     return new TaskClaimRequest(
         tenantId,
-        request == null ? null : request.workerId(),
-        request == null ? null : request.partitionInvocationId());
+        EmptyChecks.isNull(request) ? null : request.workerId(),
+        EmptyChecks.isNull(request) ? null : request.partitionInvocationId());
   }
 
   private static TaskClaimBatchRequest normalize(
       TaskClaimBatchRequest request, HttpServletRequest httpRequest) {
-    if (request == null || request.items() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())) {
       return request;
     }
     List<TaskClaimItemPayload> items = new ArrayList<>(request.items().size());
     for (TaskClaimItemPayload item : request.items()) {
       String tenantId = InternalRequestTenantGuard.resolveTenant(
-          httpRequest, item == null ? null : item.tenantId());
+          httpRequest, EmptyChecks.isNull(item) ? null : item.tenantId());
       items.add(new TaskClaimItemPayload(
           tenantId,
-          item == null ? null : item.taskId(),
-          item == null ? null : item.workerId(),
-          item == null ? null : item.partitionInvocationId()));
+          EmptyChecks.isNull(item) ? null : item.taskId(),
+          EmptyChecks.isNull(item) ? null : item.workerId(),
+          EmptyChecks.isNull(item) ? null : item.partitionInvocationId()));
     }
     return new TaskClaimBatchRequest(items);
   }
 
   private static TaskReportBatchRequest normalize(
       TaskReportBatchRequest request, HttpServletRequest httpRequest) {
-    if (request == null || request.items() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())) {
       return request;
     }
     for (TaskExecutionReportDto item : request.items()) {
-      if (item != null) {
+      if (EmptyChecks.isNotNull(item)) {
         item.setTenantId(InternalRequestTenantGuard.resolveTenant(httpRequest, item.getTenantId()));
       }
     }
@@ -197,34 +200,34 @@ public class TaskController {
   private static TaskHeartbeatRequest normalize(
       TaskHeartbeatRequest request, HttpServletRequest httpRequest) {
     String tenantId = InternalRequestTenantGuard.resolveTenant(
-        httpRequest, request == null ? null : request.tenantId());
+        httpRequest, EmptyChecks.isNull(request) ? null : request.tenantId());
     return new TaskHeartbeatRequest(
         tenantId,
-        request == null ? null : request.workerId(),
-        request == null ? null : request.partitionInvocationId(),
-        request == null ? null : request.details());
+        EmptyChecks.isNull(request) ? null : request.workerId(),
+        EmptyChecks.isNull(request) ? null : request.partitionInvocationId(),
+        EmptyChecks.isNull(request) ? null : request.details());
   }
 
   private static TaskLeaseRenewBatchRequest normalize(
       TaskLeaseRenewBatchRequest request, HttpServletRequest httpRequest) {
-    if (request == null || request.items() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())) {
       return request;
     }
     List<TaskLeaseRenewItemPayload> items = new ArrayList<>(request.items().size());
     for (TaskLeaseRenewItemPayload item : request.items()) {
       String tenantId = InternalRequestTenantGuard.resolveTenant(
-          httpRequest, item == null ? null : item.tenantId());
+          httpRequest, EmptyChecks.isNull(item) ? null : item.tenantId());
       items.add(new TaskLeaseRenewItemPayload(
           tenantId,
-          item == null ? null : item.taskId(),
-          item == null ? null : item.workerId(),
-          item == null ? null : item.partitionInvocationId()));
+          EmptyChecks.isNull(item) ? null : item.taskId(),
+          EmptyChecks.isNull(item) ? null : item.workerId(),
+          EmptyChecks.isNull(item) ? null : item.partitionInvocationId()));
     }
     return new TaskLeaseRenewBatchRequest(items);
   }
 
   private static TaskClaimBatchCommand toCommand(TaskClaimBatchRequest request) {
-    if (request == null || request.items() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())) {
       return new TaskClaimBatchCommand(null);
     }
     return new TaskClaimBatchCommand(request.items().stream()
@@ -240,6 +243,9 @@ public class TaskController {
   }
 
   private static TaskExecutionReportCommand toCommand(TaskExecutionReportDto request) {
+    if (EmptyChecks.isNull(request)) {
+      return null;
+    }
     return new TaskExecutionReportCommand(
         request.getTaskId(),
         request.getTenantId(),
@@ -260,7 +266,7 @@ public class TaskController {
   }
 
   private static TaskReportBatchCommand toCommand(TaskReportBatchRequest request) {
-    if (request == null || request.items() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())) {
       return new TaskReportBatchCommand(null);
     }
     return new TaskReportBatchCommand(
@@ -279,7 +285,7 @@ public class TaskController {
   }
 
   private static TaskLeaseRenewBatchCommand toCommand(TaskLeaseRenewBatchRequest request) {
-    if (request == null || request.items() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())) {
       return new TaskLeaseRenewBatchCommand(null);
     }
     return new TaskLeaseRenewBatchCommand(request.items().stream()

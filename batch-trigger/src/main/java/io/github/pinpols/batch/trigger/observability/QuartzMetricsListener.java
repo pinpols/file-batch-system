@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.observability;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +54,7 @@ public class QuartzMetricsListener implements JobListener, TriggerListener {
     Long start = startTimes.remove(key);
     String group = key.getGroup();
     metrics.fireCounter(group).increment();
-    if (start != null) {
+    if (EmptyChecks.isNotNull(start)) {
       metrics.recordExecution(group, start);
     }
   }

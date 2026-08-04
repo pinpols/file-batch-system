@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.plugin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.math.BigDecimal;
@@ -16,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ExportKeysetRangePlanner {
 
   static final String SNAP_KEY = "__export_keyset_range";
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   /**
    * @param minMaxSupplier 算游标列 [min,max] 的回调（BigDecimal[2]；非数值/空 → 元素 null 或抛异常）。

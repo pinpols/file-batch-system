@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.config.OrchestratorWorkerClientProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import java.time.Duration;
@@ -26,7 +26,7 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
-  private final OrchestratorWorkerClientProperties properties;
+  private final OrchestratorClientProperties properties;
   private final BatchSecurityProperties securityProperties;
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final Environment environment;

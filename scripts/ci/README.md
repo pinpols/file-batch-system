@@ -2,6 +2,20 @@
 
 本目录存放 GitHub Actions 与本地均可复用的 CI 门禁脚本。
 
+## `check-empty-checks.py`
+
+检查生产 Java 本次 diff 新增的 `null`、字符串空、集合空判断。统一入口为
+`batch-common` 的 `EmptyChecks`：`isNull/isNotNull`、`isEmpty/isNotEmpty`、
+`isBlank/isNotBlank` 分别表达对象、字符串和集合的语义。脚本只检查新增行，历史
+代码由专项迁移逐步收口，不会因为一次接入产生大范围机械改动。
+
+```bash
+python3 scripts/ci/check-empty-checks.py
+python3 scripts/ci/check-empty-checks.py --base origin/main
+```
+
+已接入 `pr-gate.yml` 和 `full-ci-gate.yml` 的静态检查。
+
 ## `run-full-regression.sh`
 
 统一 Maven 回归入口：默认测试、`*IT` / E2E、可选压测 smoke、部署 smoke、升级 / 回滚验证与巡检。参数与行为以脚本内 `usage()` 为准。

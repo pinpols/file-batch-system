@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -72,7 +73,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
     int limit = Math.max(batchSize, 1);
     List<JobInstanceEntity> candidates =
         jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
-    if (candidates.isEmpty()) {
+    if (EmptyChecks.isEmpty(candidates)) {
       return;
     }
     int recovered = 0;
@@ -105,7 +106,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
   private boolean recoverOne(JobInstanceEntity jobInstance) {
     TriggerRequestEntity triggerRequest = triggerRequestMapper.selectById(
         jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
-    if (triggerRequest == null
+    if (EmptyChecks.isNull(triggerRequest)
         || !TriggerRequestStatus.ACCEPTED.code().equals(triggerRequest.getRequestStatus())) {
       return false;
     }

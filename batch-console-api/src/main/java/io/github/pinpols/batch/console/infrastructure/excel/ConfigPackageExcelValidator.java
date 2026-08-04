@@ -24,6 +24,7 @@ import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
@@ -169,7 +170,7 @@ public class ConfigPackageExcelValidator {
   private final ResourceQueueMapper resourceQueueMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final BatchWindowMapper batchWindowMapper;
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = JsonUtils.newDefaultMapper();
 
   public ConfigPackageExcelValidator(
       JobDefinitionMapper jobDefinitionMapper,

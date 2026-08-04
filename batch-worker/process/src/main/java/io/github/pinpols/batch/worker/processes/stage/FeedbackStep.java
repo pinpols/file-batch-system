@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -30,17 +31,17 @@ public class FeedbackStep implements ProcessStageStep {
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
     // ADR-026: 演练模式 plugin.feedback() 通常推水位 / 清 staging / 写审计 — 全部跳过。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
+    if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
         .isDryRun()) {
       return ProcessStageResult.success(stage());
     }
     ProcessComputePlugin plugin = context.getResolvedPlugin();
-    if (plugin == null) {
+    if (EmptyChecks.isNull(plugin)) {
       return ProcessStageResult.success(stage());
     }
     try {
       ProcessStageResult result = plugin.feedback(context);
-      return result == null ? ProcessStageResult.success(stage()) : result;
+      return EmptyChecks.isNull(result) ? ProcessStageResult.success(stage()) : result;
     } catch (RuntimeException ex) {
       metrics.incrementFeedbackSwallowed(context.getTenantId());
       log.warn(

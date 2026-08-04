@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
@@ -72,7 +73,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void registerByJobCode(String tenantId, String jobCode) {
     TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
-    if (descriptor != null && descriptor.isEnabled()) {
+    if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
       scheduleDescriptor(descriptor);
     }
   }
@@ -147,7 +148,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       List<TriggerStatusInfo> result = new ArrayList<>();
       for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
         JobDetail detail = scheduler.getJobDetail(jobKey);
-        if (detail == null) {
+        if (EmptyChecks.isNull(detail)) {
           continue;
         }
         JobDataMap data = detail.getJobDataMap();
@@ -160,14 +161,14 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         String status = "UNKNOWN";
         Instant prevFire = null;
         Instant nextFire = null;
-        if (!triggers.isEmpty()) {
+        if (EmptyChecks.isNotEmpty(triggers)) {
           Trigger t = triggers.get(0);
           Trigger.TriggerState state = scheduler.getTriggerState(t.getKey());
           status = state.name();
-          if (t.getPreviousFireTime() != null) {
+          if (EmptyChecks.isNotNull(t.getPreviousFireTime())) {
             prevFire = t.getPreviousFireTime().toInstant();
           }
-          if (t.getNextFireTime() != null) {
+          if (EmptyChecks.isNotNull(t.getNextFireTime())) {
             nextFire = t.getNextFireTime().toInstant();
           }
         }
@@ -241,9 +242,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   private void scheduleDescriptor(TriggerDescriptor descriptor) {
     try {
       String scheduleType = descriptor.getScheduleType();
-      if (scheduleType != null) {
+      if (EmptyChecks.isNotNull(scheduleType)) {
         var handler = scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
-        if (handler != null) {
+        if (EmptyChecks.isNotNull(handler)) {
           handler.accept(descriptor);
         }
       }
@@ -258,9 +259,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   private void scheduleCronDescriptor(TriggerDescriptor descriptor) {
     String expression = descriptor.getScheduleExpression();
-    if (expression == null
-        || expression.isBlank()
-        || !CronExpression.isValidExpression(expression)) {
+    if (EmptyChecks.isBlank(expression) || !CronExpression.isValidExpression(expression)) {
       throw new IllegalArgumentException(
           "invalid cron expression for job " + descriptor.getJobCode() + ": '" + expression + "'");
     }
@@ -282,7 +281,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
                   : ""));
     }
     String timezone = descriptor.getTimezone();
-    if (timezone != null && !timezone.isBlank()) {
+    if (EmptyChecks.isNotBlank(timezone)) {
       try {
         ZoneId.of(timezone);
       } catch (DateTimeException e) {
@@ -351,7 +350,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   private int parseFixedRateIntervalSeconds(TriggerDescriptor descriptor) {
     String expression = descriptor.getScheduleExpression();
-    if (expression == null || expression.isBlank()) {
+    if (EmptyChecks.isBlank(expression)) {
       throw new IllegalArgumentException(
           "FIXED_RATE schedule_expr must be a positive integer (seconds) for job: "
               + descriptor.getJobCode());

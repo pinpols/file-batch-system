@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
@@ -132,7 +133,7 @@ public class InstanceManagementApplicationService {
         jobInstanceMapper.selectById(tenantId, instanceId), "job instance not found");
     List<JobPartitionEntity> failedPartitions = jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(tenantId, instanceId, "FAILED", null));
-    if (failedPartitions == null || failedPartitions.isEmpty()) {
+    if (EmptyChecks.isEmpty(failedPartitions)) {
       return Map.of(
           "id",
           instanceId,
@@ -180,7 +181,7 @@ public class InstanceManagementApplicationService {
   }
 
   private String manualRetryEventKey(String tenantId, JobPartitionEntity partition) {
-    Long version = partition.getVersion() == null ? 0L : partition.getVersion();
+    Long version = EmptyChecks.isNull(partition.getVersion()) ? 0L : partition.getVersion();
     return tenantId + ":manual-partition-retry:" + partition.getId() + ":" + version;
   }
 

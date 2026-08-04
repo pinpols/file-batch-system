@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.health.S3HealthIndicator;
+import io.github.pinpols.batch.common.utils.Texts;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -11,7 +12,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
-import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
@@ -52,7 +52,7 @@ public class S3AutoConfiguration {
         .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
         .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
         .httpClientBuilder(http)
-        .region(StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
+        .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
     RetryStrategy retryStrategy = buildRetryStrategy(p);
     if (retryStrategy != null) {
       b.overrideConfiguration(
@@ -87,7 +87,7 @@ public class S3AutoConfiguration {
             AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
         .serviceConfiguration(
             S3Configuration.builder().pathStyleAccessEnabled(true).build())
-        .region(StringUtils.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
+        .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
         .build();
   }
 

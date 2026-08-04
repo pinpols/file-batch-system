@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +25,7 @@ public class JobInstanceTerminalChildStateReconciler {
    */
   public void reconcile(String tenantId, Long jobInstanceId, String terminalInstanceStatus) {
     Targets targets = resolveTargets(terminalInstanceStatus);
-    if (targets == null) {
+    if (EmptyChecks.isNull(targets)) {
       return;
     }
     int partitions = jobPartitionMapper.closeNonTerminalPartitionsForTerminalInstance(
@@ -45,7 +46,7 @@ public class JobInstanceTerminalChildStateReconciler {
 
   private Targets resolveTargets(String instanceStatusCode) {
     JobInstanceStatus st = DictEnum.fromCode(JobInstanceStatus.class, instanceStatusCode);
-    if (st == null) {
+    if (EmptyChecks.isNull(st)) {
       return null;
     }
     return switch (st) {

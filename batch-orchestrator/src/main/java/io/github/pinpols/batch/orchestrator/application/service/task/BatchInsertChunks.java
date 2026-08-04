@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -31,7 +32,7 @@ final class BatchInsertChunks {
    * <p>空/单批直接一次调用;{@code insert} 接收的是原 list 的视图(见类 javadoc 的回填顺序保证)。
    */
   static <T> void insertInChunks(List<T> items, int chunkSize, Consumer<List<T>> insert) {
-    if (items == null || items.isEmpty()) {
+    if (EmptyChecks.isEmpty(items)) {
       return;
     }
     if (chunkSize <= 0) {

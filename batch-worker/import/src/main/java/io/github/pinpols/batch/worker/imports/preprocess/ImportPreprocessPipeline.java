@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -72,7 +73,7 @@ public final class ImportPreprocessPipeline {
    * ImportPreprocessObjectMapperInitializer} 替换为容器管理的全局 bean,确保自定义 Module(JavaTime / Kotlin / 项目内
    * mixin)与其他模块行为一致。
    */
-  private static volatile ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
+  private static volatile ObjectMapper OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   /**
    * 仅由 Spring 启动期(单线程)调用,把 fallback 实例替换为容器管理的 ObjectMapper。volatile 写一次,后续解析步骤读到的就是项目全局

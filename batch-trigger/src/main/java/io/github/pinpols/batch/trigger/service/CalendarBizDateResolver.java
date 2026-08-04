@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,7 +44,7 @@ public class CalendarBizDateResolver {
       Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
     Objects.requireNonNull(fireTime, "fireTime");
     ZoneId zoneId = resolveZoneId(fallbackZoneId, calendar);
-    if (calendar == null) {
+    if (EmptyChecks.isNull(calendar)) {
       return fireTime.atZone(zoneId).toLocalDate();
     }
     LocalDate localDate = fireTime.atZone(zoneId).toLocalDate();
@@ -54,14 +55,14 @@ public class CalendarBizDateResolver {
   }
 
   private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
-    if (calendar != null && calendar.timezone() != null && !calendar.timezone().isBlank()) {
+    if (EmptyChecks.isNotNull(calendar) && EmptyChecks.isNotBlank(calendar.timezone())) {
       return ZoneId.of(calendar.timezone());
     }
-    return fallbackZoneId == null ? timezoneProvider.defaultZone() : fallbackZoneId;
+    return EmptyChecks.isNull(fallbackZoneId) ? timezoneProvider.defaultZone() : fallbackZoneId;
   }
 
   private LocalTime resolveCutoffTime(CalendarBizDateDefinition calendar) {
-    return calendar.cutoffTime() == null ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
+    return EmptyChecks.isNull(calendar.cutoffTime()) ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
   }
 
   private LocalDate adjustForHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
@@ -106,14 +107,14 @@ public class CalendarBizDateResolver {
 
   private boolean isHoliday(LocalDate date, CalendarBizDateDefinition calendar) {
     Set<LocalDate> workdayOverrides = calendar.workdayOverrides();
-    if (workdayOverrides != null && workdayOverrides.contains(date)) {
+    if (EmptyChecks.isNotNull(workdayOverrides) && workdayOverrides.contains(date)) {
       return false;
     }
     Set<LocalDate> holidays = calendar.holidays();
-    return holidays != null && holidays.contains(date);
+    return EmptyChecks.isNotNull(holidays) && holidays.contains(date);
   }
 
   private String normalize(String value) {
-    return value == null ? "SKIP" : value.trim().toUpperCase(Locale.ROOT);
+    return EmptyChecks.isNull(value) ? "SKIP" : value.trim().toUpperCase(Locale.ROOT);
   }
 }

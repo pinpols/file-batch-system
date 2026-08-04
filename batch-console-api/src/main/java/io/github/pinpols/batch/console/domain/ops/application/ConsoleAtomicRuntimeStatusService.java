@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.application;
 
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicRuntimeStatusPayload;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicWorkerInternalRestClient;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAtomicRuntimeStatusResponse;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -38,30 +38,29 @@ public class ConsoleAtomicRuntimeStatusService {
         SVC,
         OP,
         () -> {
-          Map<String, Object> raw = atomicClient
+          AtomicRuntimeStatusPayload payload = atomicClient
               .build()
               .get()
               .uri(ENDPOINT_URI)
               .retrieve()
-              .body(new ParameterizedTypeReference<Map<String, Object>>() {});
-          return toResponse(raw);
+              .body(new ParameterizedTypeReference<AtomicRuntimeStatusPayload>() {});
+          return toResponse(payload);
         },
         ex -> ConsoleAtomicRuntimeStatusResponse.unavailable("atomic worker unreachable"));
   }
 
-  @SuppressWarnings("unchecked")
-  static ConsoleAtomicRuntimeStatusResponse toResponse(Map<String, Object> raw) {
-    if (raw == null || raw.isEmpty()) {
+  static ConsoleAtomicRuntimeStatusResponse toResponse(AtomicRuntimeStatusPayload payload) {
+    if (payload == null) {
       return ConsoleAtomicRuntimeStatusResponse.unavailable("empty response from atomic worker");
     }
     return new ConsoleAtomicRuntimeStatusResponse(
         true,
         null,
-        (String) raw.get("workerCode"),
-        (String) raw.get("workerType"),
-        (Map<String, Object>) raw.getOrDefault("shell", Map.of()),
-        (Map<String, Object>) raw.getOrDefault("sql", Map.of()),
-        (Map<String, Object>) raw.getOrDefault("http", Map.of()),
-        (Map<String, Object>) raw.getOrDefault("storedProc", Map.of()));
+        payload.workerCode(),
+        payload.workerType(),
+        payload.shell(),
+        payload.sql(),
+        payload.http(),
+        payload.storedProc());
   }
 }

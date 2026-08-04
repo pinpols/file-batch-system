@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +45,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
   @Override
   public void triggerMisfired(Trigger trigger) {
     if (!TriggerSchedulerFacade.JOB_GROUP.equals(trigger.getKey().getGroup())
-        || trigger.getNextFireTime() == null) {
+        || EmptyChecks.isNull(trigger.getNextFireTime())) {
       return;
     }
     Trigger recovery = TriggerBuilder.newTrigger()

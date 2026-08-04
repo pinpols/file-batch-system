@@ -3485,6 +3485,8 @@ paths:
         清理覆盖 11 张表(按 FK 反向):job_partition → job_instance → workflow_node →
         workflow_edge → workflow_definition → job_definition → file_channel_config →
         file_template_config → console_user_account → archive_policy → tenant。
+
+        事务由 orchestrator 内部接口对应的服务统一承载, Console 仅负责入口校验、鉴权和审计委派。
       operationId: cleanupTestData
       parameters:
         - name: prefix
@@ -3524,6 +3526,8 @@ paths:
 
         清理顺序参考 scripts/db/wipe-non-system-tenants.sql:pipeline 运行 → workflow 运行 →
         job 实例链 → file 相关 → workflow/pipeline/job 定义 → 配置 → 用户 → 租户本体。
+
+        事务由 orchestrator 内部接口对应的服务统一承载, Console 仅负责入口校验、鉴权和审计委派。
       operationId: cleanupTestDataByIds
       parameters:
         - name: ids

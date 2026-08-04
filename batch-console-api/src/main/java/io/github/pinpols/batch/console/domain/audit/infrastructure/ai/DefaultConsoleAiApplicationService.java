@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.audit.ConsoleAiTools;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
@@ -25,7 +26,6 @@ import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimite
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.auth.AiChatRequest;
-import io.micrometer.common.util.StringUtils;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -231,6 +231,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     Future<ChatResponse> future = modelCallExecutor.submit(() -> spec.call().chatResponse());
     try {
       return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException interrupted) {
+      future.cancel(true);
+      Thread.currentThread().interrupt();
+      throw interrupted;
     } catch (Exception exception) {
       future.cancel(true);
       throw exception;
@@ -285,7 +289,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     if (limit <= 0) {
       return;
     }
-    String user = StringUtils.isNotBlank(operatorId) ? operatorId : "anonymous";
+    String user = Texts.hasText(operatorId) ? operatorId : "anonymous";
     String key = "ai:chat:tenant:" + tenantId + ":user:" + user;
     boolean allowed;
     try {
@@ -437,18 +441,18 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   private String resolveTenantId(String requestTenantId, String headerTenantId) {
-    if (StringUtils.isNotBlank(requestTenantId)
-        && StringUtils.isNotBlank(headerTenantId)
+    if (Texts.hasText(requestTenantId)
+        && Texts.hasText(headerTenantId)
         && !requestTenantId.equals(headerTenantId)) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.common.tenant_id_mismatch");
     }
-    String tenantId = StringUtils.isNotBlank(requestTenantId) ? requestTenantId : headerTenantId;
+    String tenantId = Texts.hasText(requestTenantId) ? requestTenantId : headerTenantId;
     Guard.requireText(tenantId, "tenantId is required");
     return tenantId;
   }
 
   private String resolveSessionId(String sessionId, String fallbackRequestId) {
-    if (StringUtils.isNotBlank(sessionId)) {
+    if (Texts.hasText(sessionId)) {
       return sessionId;
     }
     return fallbackRequestId;
@@ -487,7 +491,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   private String firstNonBlank(String value, String fallback) {
-    return StringUtils.isNotBlank(value) ? value : fallback;
+    return Texts.hasText(value) ? value : fallback;
   }
 
   @Builder

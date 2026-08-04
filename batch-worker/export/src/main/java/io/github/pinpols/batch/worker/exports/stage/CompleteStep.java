@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -20,7 +21,7 @@ public class CompleteStep implements ExportStageStep {
   private static final String KEY_RECORD_COUNT = "recordCount";
   private static final String KEY_OBJECT_NAME = "objectName";
 
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   private final PlatformFileRuntimeRepository runtimeRepository;
 

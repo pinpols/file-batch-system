@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.trigger.support.BatchDayCutoffCandidate;
@@ -52,16 +53,17 @@ public class BatchDayCutoffScheduler {
       return;
     }
     List<BatchDayCutoffCandidate> candidates = batchDayInstanceMapper.selectOpenCutoffCandidates();
-    if (candidates == null || candidates.isEmpty()) {
+    if (EmptyChecks.isEmpty(candidates)) {
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
     for (BatchDayCutoffCandidate candidate : candidates) {
-      if (candidate == null || candidate.getId() == null) {
+      if (EmptyChecks.isNull(candidate) || EmptyChecks.isNull(candidate.getId())) {
         continue;
       }
-      LocalTime cutoffTime =
-          candidate.getCutoffTime() == null ? DEFAULT_CUTOFF_TIME : candidate.getCutoffTime();
+      LocalTime cutoffTime = EmptyChecks.isNull(candidate.getCutoffTime())
+          ? DEFAULT_CUTOFF_TIME
+          : candidate.getCutoffTime();
       ZoneId zoneId = timezoneProvider.resolveOrDefault(candidate.getTimezone());
       LocalTime localTime = now.atZone(zoneId).toLocalTime();
       if (localTime.isBefore(cutoffTime)) {

@@ -76,7 +76,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
     }
-    configApprovalMapper.insert(mapOf(
+    configApprovalMapper.insert(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         KEY_RELEASE_ID,
@@ -89,7 +89,7 @@ public class DefaultConsoleConfigApprovalApplicationService
         ConsoleTextSanitizer.safeInput(request.getReason(), 1024),
         "expiredAt",
         parseInstant(request.getExpiredAt())));
-    configReleaseMapper.updateConfigReleaseStatus(mapOf(
+    configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         KEY_RELEASE_ID,
@@ -139,7 +139,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
-    int rows = configApprovalMapper.approve(mapOf(
+    int rows = configApprovalMapper.approve(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "id",
@@ -151,7 +151,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
-    configReleaseMapper.updateConfigReleaseStatus(mapOf(
+    configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         KEY_RELEASE_ID,
@@ -184,7 +184,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
-    int rows = configApprovalMapper.reject(mapOf(
+    int rows = configApprovalMapper.reject(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "id",
@@ -196,7 +196,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
-    configReleaseMapper.updateConfigReleaseStatus(mapOf(
+    configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         KEY_RELEASE_ID,
@@ -226,7 +226,8 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
     return Guard.requireFound(
-        configReleaseMapper.selectById(mapOf(KEY_TENANT_ID, tenantId, KEY_RELEASE_ID, releaseId)),
+        configReleaseMapper.selectById(
+            ConsoleMapSupport.mapOf(KEY_TENANT_ID, tenantId, KEY_RELEASE_ID, releaseId)),
         "config release not found");
   }
 
@@ -244,8 +245,8 @@ public class DefaultConsoleConfigApprovalApplicationService
             .versionNo(release.getVersionNo())
             .action(action)
             .operatorType("API")
-            .summary(JsonUtils.toJson(
-                mapOf("reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
+            .summary(JsonUtils.toJson(ConsoleMapSupport.mapOf(
+                "reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
             .build());
   }
 
@@ -262,9 +263,5 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   private Long longValue(Object value) {
     return ConsoleMapSupport.longValue(value);
-  }
-
-  private Map<String, Object> mapOf(Object... pairs) {
-    return ConsoleMapSupport.mapOf(pairs);
   }
 }

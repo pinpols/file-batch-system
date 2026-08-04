@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.infrastructure.mq;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
@@ -41,7 +42,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   @Override
   public PublishResult publish(
       String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-    if (envelope == null || envelope.launchRequest() == null) {
+    if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
       return PublishResult.fail("envelope or launchRequest is null");
     }
     String payload;
@@ -56,12 +57,12 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       return PublishResult.fail("serialize envelope: " + ex.getMessage());
     }
     ProducerRecord<String, String> record = new ProducerRecord<>(topic, messageKey, payload);
-    if (traceId != null && !traceId.isBlank()) {
+    if (EmptyChecks.isNotBlank(traceId)) {
       record
           .headers()
           .add(new RecordHeader(HEADER_TRACE_ID, traceId.getBytes(StandardCharsets.UTF_8)));
     }
-    if (envelope.launchRequest().tenantId() != null) {
+    if (EmptyChecks.isNotNull(envelope.launchRequest().tenantId())) {
       record
           .headers()
           .add(new RecordHeader(
@@ -90,7 +91,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       return PublishResult.fail(
           "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
     } catch (ExecutionException ex) {
-      Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+      Throwable cause = EmptyChecks.isNull(ex.getCause()) ? ex : ex.getCause();
       // R2-P2-6：之前完全无日志 → 不可恢复错误（AuthorizationException / RecordTooLarge /
       // InvalidTopic）会耗光全部 retry 直至 GIVE_UP，运维无实时信号。改为 ERROR + stack。
       log.error(

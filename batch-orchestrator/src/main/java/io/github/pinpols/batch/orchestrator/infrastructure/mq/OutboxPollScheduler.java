@@ -170,6 +170,7 @@ public class OutboxPollScheduler {
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) () -> doPoll(assignment), lockConfig(assignment));
     } catch (Throwable t) {
+      rethrowFatal(t);
       log.error("Outbox poll failed", t);
     } finally {
       running.set(false);
@@ -215,10 +216,18 @@ public class OutboxPollScheduler {
       throw oom;
     } catch (Throwable t) {
       // 其他异常（Kafka 故障、序列化错误等）—— 真异常用 ERROR
+      rethrowFatal(t);
       log.error("Outbox poll failed (non-database exception)", t);
     } finally {
       running.set(false);
       scheduleNext(holder[0]);
+    }
+  }
+
+  /** 调度循环可以隔离业务异常，但不能吞掉会破坏 JVM 的致命错误。 */
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

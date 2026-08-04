@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
@@ -90,6 +91,25 @@ class SdkAbstractAtomicHandlerTest {
     assertThat(result.success()).isFalse();
     assertThat(result.error()).isSameAs(boom);
     assertThat(result.message()).isEqualTo("boom");
+  }
+
+  @Test
+  @DisplayName("JVM 级 Error 不应被模板伪装成任务失败")
+  void shouldRethrowFatalError_whenInvokeThrows() {
+    var fatal = new AssertionError("fatal");
+    var handler = new SdkAbstractAtomicHandler<String>() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      protected String doInvoke(SdkTaskContext c) {
+        throw fatal;
+      }
+    };
+
+    assertThatThrownBy(() -> handler.execute(ctx())).isSameAs(fatal);
   }
 
   @Test

@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+
 /**
  * Outbox `event_key` 中心化生成器。
  *
@@ -98,10 +100,10 @@ public final class OutboxEventKeyGenerator {
   // ── helpers ──────────────────────────────────────────────────────────
 
   private static String build(String tenantId, String scope, String... parts) {
-    StringBuilder sb = new StringBuilder(tenantId == null ? "" : tenantId);
+    StringBuilder sb = new StringBuilder(EmptyChecks.isNull(tenantId) ? "" : tenantId);
     sb.append(':').append(scope);
     for (String p : parts) {
-      sb.append(':').append(p == null ? "" : p);
+      sb.append(':').append(EmptyChecks.isNull(p) ? "" : p);
     }
     return truncate(sb.toString());
   }

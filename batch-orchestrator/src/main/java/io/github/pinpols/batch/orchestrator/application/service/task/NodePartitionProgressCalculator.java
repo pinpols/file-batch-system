@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import java.util.LinkedHashMap;
@@ -20,20 +21,20 @@ final class NodePartitionProgressCalculator {
       List<NodePartitionAssignment> assignments,
       String nodeCode,
       WorkflowRunEntity workflowRun) {
-    if (nodeCode == null || nodeCode.isBlank()) {
+    if (EmptyChecks.isBlank(nodeCode)) {
       return new Result(0, 0, 0, Set.of());
     }
 
     Map<Long, String> statusById = new LinkedHashMap<>();
     for (PartitionStatusRef ref : statusRefs) {
-      if (ref != null && ref.id() != null) {
+      if (EmptyChecks.isNotNull(ref) && EmptyChecks.isNotNull(ref.id())) {
         statusById.put(ref.id(), ref.partitionStatus());
       }
     }
 
     Set<Long> nodePartitionIds = new LinkedHashSet<>();
     for (NodePartitionAssignment assignment : assignments) {
-      if (assignment == null || assignment.jobPartitionId() == null) {
+      if (EmptyChecks.isNull(assignment) || EmptyChecks.isNull(assignment.jobPartitionId())) {
         continue;
       }
       String taskNodeCode = resolveTaskNodeCode(assignment.nodeCode(), workflowRun, nodeCode);
@@ -57,12 +58,12 @@ final class NodePartitionProgressCalculator {
 
   private static String resolveTaskNodeCode(
       String payloadNodeCode, WorkflowRunEntity workflowRun, String fallbackNodeCode) {
-    if (payloadNodeCode != null && !payloadNodeCode.isBlank()) {
+    if (EmptyChecks.isNotBlank(payloadNodeCode)) {
       return payloadNodeCode;
     }
-    if (workflowRun != null
-        && workflowRun.getCurrentNodeCode() != null
-        && !workflowRun.getCurrentNodeCode().isBlank()) {
+    if (EmptyChecks.isNotNull(workflowRun)
+        && EmptyChecks.isNotNull(workflowRun.getCurrentNodeCode())
+        && EmptyChecks.isNotBlank(workflowRun.getCurrentNodeCode())) {
       Set<String> activeNodes =
           TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
       if (activeNodes.size() == 1) {

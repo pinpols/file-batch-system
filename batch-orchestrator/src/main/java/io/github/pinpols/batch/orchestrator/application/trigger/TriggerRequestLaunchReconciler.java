@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -77,7 +78,7 @@ public class TriggerRequestLaunchReconciler {
           ex.getMessage());
       return;
     }
-    if (rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows)) {
       return;
     }
     int reconciled = 0;

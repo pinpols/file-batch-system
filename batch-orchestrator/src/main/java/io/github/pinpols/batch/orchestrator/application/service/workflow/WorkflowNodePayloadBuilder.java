@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.workflow.WorkflowParamResolver;
@@ -68,7 +69,7 @@ public class WorkflowNodePayloadBuilder {
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun) {
     Map<String, Object> payload = new LinkedHashMap<>();
-    if (sourcePayload != null && !sourcePayload.isBlank()) {
+    if (EmptyChecks.isNotBlank(sourcePayload)) {
       try {
         Object payloadObject = JsonUtils.fromJson(sourcePayload, Object.class);
         if (payloadObject instanceof Map<?, ?> payloadMap) {
@@ -101,12 +102,12 @@ public class WorkflowNodePayloadBuilder {
 
   private void mergeUpstreamPartitionOutputs(
       Map<String, Object> payload, JobInstanceEntity jobInstance) {
-    if (jobInstance == null || jobInstance.getId() == null) {
+    if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getId())) {
       return;
     }
     List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
-    if (siblings == null || siblings.isEmpty()) {
+    if (EmptyChecks.isEmpty(siblings)) {
       return;
     }
     JobPartitionEntity latestSuccess = findLatestSuccessPartition(siblings);
@@ -117,10 +118,13 @@ public class WorkflowNodePayloadBuilder {
   private static JobPartitionEntity findLatestSuccessPartition(List<JobPartitionEntity> siblings) {
     JobPartitionEntity latest = null;
     for (JobPartitionEntity p : siblings) {
+      if (EmptyChecks.isNull(p)) {
+        continue;
+      }
       if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
         continue;
       }
-      if (latest == null || isFinishedLater(p, latest)) {
+      if (EmptyChecks.isNull(latest) || isFinishedLater(p, latest)) {
         latest = p;
       }
     }
@@ -128,15 +132,15 @@ public class WorkflowNodePayloadBuilder {
   }
 
   private static boolean isFinishedLater(JobPartitionEntity p, JobPartitionEntity reference) {
-    return p.getFinishedAt() != null
-        && reference.getFinishedAt() != null
+    return EmptyChecks.isNotNull(p.getFinishedAt())
+        && EmptyChecks.isNotNull(reference.getFinishedAt())
         && p.getFinishedAt().isAfter(reference.getFinishedAt());
   }
 
   @SuppressWarnings("unchecked")
   private static void mergeWhitelistedOutputFields(
       Map<String, Object> payload, JobPartitionEntity latestSuccess) {
-    if (latestSuccess == null || latestSuccess.getOutputSummary() == null) {
+    if (EmptyChecks.isNull(latestSuccess) || EmptyChecks.isNull(latestSuccess.getOutputSummary())) {
       return;
     }
     try {
@@ -148,7 +152,7 @@ public class WorkflowNodePayloadBuilder {
       // 保守白名单：只把已知的跨节点常用字段挑出来
       for (String key : UPSTREAM_OUTPUT_WHITELIST) {
         Object v = out.get(key);
-        if (v != null && !payload.containsKey(key)) {
+        if (EmptyChecks.isNotNull(v) && !payload.containsKey(key)) {
           payload.put(key, v);
         }
       }
@@ -166,20 +170,20 @@ public class WorkflowNodePayloadBuilder {
   //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
   //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
   private void fallbackFileIdLookup(Map<String, Object> payload, JobInstanceEntity jobInstance) {
-    if (payload.containsKey("fileId") || jobInstance.getTenantId() == null) {
+    if (payload.containsKey("fileId") || EmptyChecks.isNull(jobInstance.getTenantId())) {
       return;
     }
     Long fileId = null;
-    if (jobInstance.getTraceId() != null && !jobInstance.getTraceId().isBlank()) {
+    if (EmptyChecks.isNotBlank(jobInstance.getTraceId())) {
       fileId = safeFileIdLookup(
           fileRecordLookupMapper::selectIdByTenantAndTraceId,
           jobInstance.getTenantId(),
           jobInstance.getTraceId(),
           "traceId");
     }
-    if (fileId == null) {
+    if (EmptyChecks.isNull(fileId)) {
       Object batchNo = payload.get("batchNo");
-      if (batchNo != null && !String.valueOf(batchNo).isBlank()) {
+      if (EmptyChecks.isNotBlank(String.valueOf(batchNo))) {
         fileId = safeFileIdLookup(
             fileRecordLookupMapper::selectIdByTenantAndSourceRef,
             jobInstance.getTenantId(),
@@ -187,7 +191,7 @@ public class WorkflowNodePayloadBuilder {
             "sourceRef");
       }
     }
-    if (fileId != null) {
+    if (EmptyChecks.isNotNull(fileId)) {
       payload.put("fileId", String.valueOf(fileId));
     }
   }
@@ -222,11 +226,11 @@ public class WorkflowNodePayloadBuilder {
   @SuppressWarnings("unchecked")
   public void mergeNodeParams(
       Map<String, Object> payload, WorkflowNodeEntity workflowNode, WorkflowRunEntity workflowRun) {
-    if (workflowNode == null || workflowNode.getNodeParams() == null) {
+    if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
       return;
     }
     String raw = workflowNode.getNodeParams();
-    if (raw.isBlank()) {
+    if (EmptyChecks.isBlank(raw)) {
       return;
     }
     try {
@@ -253,7 +257,7 @@ public class WorkflowNodePayloadBuilder {
    * 但实际只有 workflow 派发路径会调到 mergeNodeParams,所以这里 null-safe 仅作防御)。
    */
   private WorkflowRunContext loadWorkflowRunContext(WorkflowRunEntity workflowRun) {
-    if (workflowRun == null) {
+    if (EmptyChecks.isNull(workflowRun)) {
       return new WorkflowRunContext() {
         @Override
         public boolean hasNode(String nodeCode) {
@@ -282,10 +286,10 @@ public class WorkflowNodePayloadBuilder {
       nodeOutputs.put(code, parsedOutput);
     }
     Map<String, Object> workflowRunFields = new LinkedHashMap<>();
-    if (workflowRun.getBizDate() != null) {
+    if (EmptyChecks.isNotNull(workflowRun.getBizDate())) {
       workflowRunFields.put("bizDate", workflowRun.getBizDate().toString());
     }
-    if (workflowRun.getTraceId() != null) {
+    if (EmptyChecks.isNotNull(workflowRun.getTraceId())) {
       workflowRunFields.put("traceId", workflowRun.getTraceId());
     }
     return new WorkflowRunContext() {
@@ -324,7 +328,7 @@ public class WorkflowNodePayloadBuilder {
 
   @SuppressWarnings("unchecked")
   public static Map<String, Object> parsePayloadMap(String payloadJson) {
-    if (payloadJson == null || payloadJson.isBlank()) {
+    if (EmptyChecks.isBlank(payloadJson)) {
       return Map.of();
     }
     try {
@@ -343,7 +347,7 @@ public class WorkflowNodePayloadBuilder {
 
   @SuppressWarnings("unchecked")
   private static Map<String, Object> parseOutputJson(String outputJson) {
-    if (outputJson == null || outputJson.isBlank()) {
+    if (EmptyChecks.isBlank(outputJson)) {
       return null;
     }
     try {

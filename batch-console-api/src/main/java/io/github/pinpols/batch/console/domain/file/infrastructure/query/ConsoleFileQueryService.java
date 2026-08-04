@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.entity.FileArrivalGroupEntity;
@@ -76,9 +77,7 @@ public class ConsoleFileQueryService {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     FileRecordQuery query = new FileRecordQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
-        request.getBizType() == null || request.getBizType().isBlank()
-            ? request.getPipelineType()
-            : request.getBizType(),
+        !Texts.hasText(request.getBizType()) ? request.getPipelineType() : request.getBizType(),
         request.getFileStatus(),
         parseLong(request.getFileId(), "fileId"),
         request.getFileName(),
@@ -103,7 +102,7 @@ public class ConsoleFileQueryService {
   }
 
   private static long longValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
+    Object value = EmptyChecks.isNull(row) ? null : row.get(key);
     return value instanceof Number number ? number.longValue() : 0L;
   }
 
@@ -147,19 +146,22 @@ public class ConsoleFileQueryService {
   }
 
   public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
-    if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
+    if (EmptyChecks.isNull(pipelineInstanceId) || pipelineInstanceId <= 0) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.field.must_be_number", "pipelineInstanceId");
     }
     String tenantId = fileMappers.filePipelineStepRunMapper.selectTenantIdByPipelineInstanceId(
         pipelineInstanceId);
-    if (tenantId == null) {
+    if (EmptyChecks.isNull(tenantId)) {
       return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, null, null, List.of());
     }
     tenantGuard.assertTenantAllowed(tenantId);
     List<Map<String, Object>> rawSteps =
         fileMappers.filePipelineStepRunMapper.selectProgressByPipelineInstance(
             tenantId, pipelineInstanceId);
+    if (EmptyChecks.isNull(rawSteps)) {
+      rawSteps = List.of();
+    }
     // 缺口1:某运行中 step 的持久 rows_processed 为 null 时(未开 checkpoint),
     // 服务端解析该 pipeline 当前 worker 再查 orchestrator 内存 cache 补上实时行数。
     // 前端契约不变(仍按 pipelineInstanceId 查),桥接完全在服务端完成。
@@ -171,8 +173,8 @@ public class ConsoleFileQueryService {
     Map<String, Object> fileInfo =
         fileMappers.filePipelineStepRunMapper.selectFileInfoByPipelineInstance(
             tenantId, pipelineInstanceId);
-    Long fileId = fileInfo == null ? null : longOrNull(fileInfo, "file_id");
-    String fileName = fileInfo == null ? null : stringValue(fileInfo, "file_name");
+    Long fileId = EmptyChecks.isNull(fileInfo) ? null : longOrNull(fileInfo, "file_id");
+    String fileName = EmptyChecks.isNull(fileInfo) ? null : stringValue(fileInfo, "file_name");
     return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, fileId, fileName, steps);
   }
 
@@ -182,27 +184,31 @@ public class ConsoleFileQueryService {
    */
   private Long resolveLiveRowsProcessed(
       String tenantId, Long pipelineInstanceId, List<Map<String, Object>> rawSteps) {
+    if (EmptyChecks.isEmpty(rawSteps)) {
+      return null;
+    }
     boolean needsBridge = rawSteps.stream()
-        .anyMatch(row -> STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))
-            && row.get("rows_processed") == null);
+        .anyMatch(row -> EmptyChecks.isNotNull(row)
+            && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))
+            && EmptyChecks.isNull(row.get("rows_processed")));
     if (!needsBridge) {
       return null;
     }
     String workerCode =
         fileMappers.filePipelineStepRunMapper.selectRunningWorkerCode(tenantId, pipelineInstanceId);
-    if (workerCode == null) {
+    if (EmptyChecks.isNull(workerCode)) {
       return null;
     }
     List<ConsolePipelineProgressItemResponse> cache =
         orchestratorProxy.pipelineProgress(tenantId, List.of(workerCode));
-    if (cache.isEmpty()) {
+    if (EmptyChecks.isEmpty(cache) || EmptyChecks.isNull(cache.get(0))) {
       return null;
     }
     return cache.get(0).rowsProcessed();
   }
 
   private static Long longOrNull(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
+    Object value = EmptyChecks.isNull(row) ? null : row.get(key);
     return value instanceof Number number ? number.longValue() : null;
   }
 
@@ -312,7 +318,7 @@ public class ConsoleFileQueryService {
   public Map<String, Object> fileTemplateDetail(
       String tenantId, String templateCode, Integer version) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    Integer ver = version != null ? version : 1;
+    Integer ver = EmptyChecks.isNotNull(version) ? version : 1;
     return requireRow(
         fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver),
         "file template not found: " + templateCode);
@@ -330,7 +336,7 @@ public class ConsoleFileQueryService {
     PageRequest pageSingle = new PageRequest(1, 1);
     FilePipelineQuery detailQuery = FilePipelineQuery.ofPipeline(resolved, id, pageSingle);
     List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(detailQuery);
-    if (rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows) || EmptyChecks.isNull(rows.get(0))) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.instance_not_found", id);
     }
     return toFilePipelineResponse(rows.get(0));
@@ -340,7 +346,7 @@ public class ConsoleFileQueryService {
     if (value instanceof Boolean bool) {
       return bool;
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return false;
     }
     return "true".equalsIgnoreCase(String.valueOf(value));
@@ -349,9 +355,8 @@ public class ConsoleFileQueryService {
   private void applyErrorLineMasking(
       String tenantId, Long fileId, List<FileErrorRecordEntity> rows) {
     if (batchSecurityProperties.isBypassMode()
-        || rows == null
-        || rows.isEmpty()
-        || fileId == null
+        || EmptyChecks.isEmpty(rows)
+        || EmptyChecks.isNull(fileId)
         || !Texts.hasText(tenantId)) {
       return;
     }
@@ -362,16 +367,17 @@ public class ConsoleFileQueryService {
     Map<String, Object> sec =
         fileMappers.fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(
             tenantId, templateCode);
-    if (sec == null || !truthy(sec.get("error_line_masking_enabled"))) {
+    if (EmptyChecks.isNull(sec) || !truthy(sec.get("error_line_masking_enabled"))) {
       return;
     }
-    String ruleSet =
-        sec.get("masking_rule_set") == null ? null : String.valueOf(sec.get("masking_rule_set"));
+    String ruleSet = EmptyChecks.isNull(sec.get("masking_rule_set"))
+        ? null
+        : String.valueOf(sec.get("masking_rule_set"));
     for (FileErrorRecordEntity row : rows) {
-      if (row.getErrorMessage() != null) {
+      if (EmptyChecks.isNotNull(row.getErrorMessage())) {
         row.setErrorMessage(ContentMaskingUtils.maskPlainText(row.getErrorMessage(), ruleSet));
       }
-      if (row.getRawRecord() != null) {
+      if (EmptyChecks.isNotNull(row.getRawRecord())) {
         row.setRawRecord(ContentMaskingUtils.maskPlainText(row.getRawRecord(), ruleSet));
       }
     }
@@ -432,8 +438,8 @@ public class ConsoleFileQueryService {
     Instant lastHeartbeatAt = instantValue(row, "last_heartbeat_at");
     // 仅当持久值为 null 且该 step 运行中时,才用 cache 桥接的实时行数;total 保持 null(不做百分比)。
     Long rowsProcessed = longOrNull(row, "rows_processed");
-    if (rowsProcessed == null
-        && liveRowsProcessed != null
+    if (EmptyChecks.isNull(rowsProcessed)
+        && EmptyChecks.isNotNull(liveRowsProcessed)
         && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))) {
       rowsProcessed = liveRowsProcessed;
     }
@@ -444,7 +450,7 @@ public class ConsoleFileQueryService {
         stringValue(row, "stage_code"),
         rowsProcessed,
         longOrNull(row, "total_rows_hint"),
-        lastHeartbeatAt == null ? null : lastHeartbeatAt.toEpochMilli());
+        EmptyChecks.isNull(lastHeartbeatAt) ? null : lastHeartbeatAt.toEpochMilli());
   }
 
   private ConsoleFileDispatchRecordResponse toFileDispatchRecordResponse(Map<String, Object> row) {

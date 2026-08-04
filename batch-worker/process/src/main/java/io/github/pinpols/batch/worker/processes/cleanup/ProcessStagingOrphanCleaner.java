@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -62,14 +63,14 @@ public class ProcessStagingOrphanCleaner {
     this.processStagingMapper = processStagingMapper;
     this.properties = properties;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    this.cleanedCounter = registry == null
+    this.cleanedCounter = EmptyChecks.isNull(registry)
         ? null
         // R7-A6-P2：dot-namespace 与全栈 (batch.worker.* / batch.outbox.*) 对齐；
         // 原 snake_case 名 Prometheus 还能识别但与项目惯例脱节。
         : Counter.builder("batch.worker.process.staging.orphan.cleaned.total")
             .description("累计被 ProcessStagingOrphanCleaner 删除的孤儿 staging 行数")
             .register(registry);
-    if (registry != null) {
+    if (EmptyChecks.isNotNull(registry)) {
       registry.gauge(
           "batch.worker.process.staging.oldest.age.seconds",
           Collections.emptyList(),
@@ -134,7 +135,7 @@ public class ProcessStagingOrphanCleaner {
       String cutoffYmd = today.minusDays(retentionDays).format(PARTITION_YMD);
       List<String> expired = processStagingMapper.listExpiredDailyPartitions(cutoffYmd);
       for (String partition : expired) {
-        if (partition == null || !PARTITION_NAME.matcher(partition).matches()) {
+        if (EmptyChecks.isNull(partition) || !PARTITION_NAME.matcher(partition).matches()) {
           log.warn("skip drop: unexpected partition name (whitelist mismatch): name={}", partition);
           continue;
         }
@@ -174,7 +175,7 @@ public class ProcessStagingOrphanCleaner {
           deleted,
           retentionHours,
           batchSize);
-      if (cleanedCounter != null) {
+      if (EmptyChecks.isNotNull(cleanedCounter)) {
         cleanedCounter.increment(deleted);
       }
     }

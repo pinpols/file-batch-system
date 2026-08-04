@@ -45,6 +45,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # EmptyChecks guard 按 push event.before 做 diff；静态 job 需要可访问完整基线。
+          fetch-depth: 0
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -64,6 +67,16 @@ jobs:
       - name: Verify Helm env switch sync
         shell: bash
         run: python3 scripts/ci/check-helm-env-sync.py
+
+      - name: Enforce centralized empty checks
+        shell: bash
+        # main push 工作树干净，按本次 push 的前一提交检查新增生产 Java 行。
+        run: |
+          BASE="${{ github.event.before }}"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="$(git rev-parse HEAD^)"
+          fi
+          python3 scripts/ci/check-empty-checks.py --base "$BASE"
 
       - name: PMD + Spotless + dependency boundary
         shell: bash

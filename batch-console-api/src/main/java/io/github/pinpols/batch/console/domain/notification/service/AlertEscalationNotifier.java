@@ -176,6 +176,7 @@ public class AlertEscalationNotifier {
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
+      rethrowFatal(t);
       if (stopping.get() && isShutdownNoise(t)) {
         log.info("AlertEscalationNotifier poll skipped during shutdown: {}", t.getMessage());
         return;
@@ -218,6 +219,7 @@ public class AlertEscalationNotifier {
       try {
         notifyOne(alert);
       } catch (Throwable t) {
+        rethrowFatal(t);
         // 单条异常不能拖累整批;水位线未推进,下轮会重试
         log.error(
             "AlertEscalationNotifier failed to deliver one notification: alertId={} tenantId={}",
@@ -225,6 +227,13 @@ public class AlertEscalationNotifier {
             alert.getTenantId(),
             t);
       }
+    }
+  }
+
+  /** 通知失败可以按单条隔离重试，但 JVM 级故障不能伪装成业务投递失败。 */
+  private static void rethrowFatal(Throwable throwable) {
+    if (throwable instanceof Error error) {
+      throw error;
     }
   }
 

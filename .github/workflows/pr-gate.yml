@@ -179,6 +179,12 @@ jobs:
         # 对 #752 修复前代码必报、对 requireNonNullElse 兜底后不误报。
         run: python3 scripts/ci/check-mapof-null-values.py
 
+      - name: Enforce centralized empty checks
+        shell: bash
+        # 只检查本 PR 新增的生产 Java 行，历史遗留由专项迁移逐步收口；从此禁止新增
+        # == null / != null / isEmpty / isBlank 等零散判断，统一使用 EmptyChecks。
+        run: python3 scripts/ci/check-empty-checks.py --base "$GUARD_BASE"
+
       - name: Verify e2e shard lists cover all *E2eIT
         shell: bash
         # 守护 full-ci-gate / staging-gate 的硬编码 e2e shard 清单与实际 *E2eIT 一致,

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.config;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.security.SecretComparator;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -84,7 +85,7 @@ public class TriggerSecurityConfiguration {
       }
 
       String header = request.getHeader(HEADER_NAME);
-      if (header != null
+      if (EmptyChecks.isNotNull(header)
           && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
         setAuthenticated();
         chain.doFilter(request, response);

@@ -8,8 +8,10 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
@@ -107,7 +109,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     validateCommand(command);
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (fileRecord.isEmpty()) {
+    if (EmptyChecks.isEmpty(fileRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> security =
@@ -141,7 +143,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
     String storagePath = stringValue(fileRecord.get("storage_path"));
     String storageBucket = stringValue(fileRecord.get("storage_bucket"));
-    if (storagePath == null || storagePath.isBlank()) {
+    if (EmptyChecks.isBlank(storagePath)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
     int expirySeconds =
@@ -206,7 +208,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             "RECEIVED",
             command.traceId(),
             metadata));
-    if (fileId == null) {
+    if (EmptyChecks.isNull(fileId)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
@@ -242,7 +244,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     validateCommand(command);
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (fileRecord.isEmpty()) {
+    if (EmptyChecks.isEmpty(fileRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     String storagePath = stringValue(fileRecord.get("storage_path"));
@@ -287,18 +289,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     validateCommand(command);
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (fileRecord.isEmpty()) {
+    if (EmptyChecks.isEmpty(fileRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> dispatchRecord = fileGovernanceRepository.loadLatestDispatchRecord(
         command.tenantId(), command.fileId(), command.channelCode());
-    if (dispatchRecord.isEmpty()) {
+    if (EmptyChecks.isEmpty(dispatchRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.dispatch.record_not_found");
     }
     Long pipelineInstanceId = toLong(dispatchRecord.get("pipeline_instance_id"));
     Long relatedJobInstanceId =
         fileGovernanceRepository.loadRelatedJobInstanceId(pipelineInstanceId);
-    if (relatedJobInstanceId == null) {
+    if (EmptyChecks.isNull(relatedJobInstanceId)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.dispatch.pipeline_unbound");
     }
     JobInstanceEntity jobInstance = Guard.requireFound(
@@ -346,7 +348,12 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             command.tenantId(), command.fileGroupCode(), command.bizDate())
         : fileGovernanceRepository.selectArrivalGroupFiles(
             command.tenantId(), command.fileGroupCode());
-    if (groupFiles.isEmpty()) {
+    if (EmptyChecks.isEmpty(groupFiles)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
+    }
+    Map<String, Object> firstGroupFile =
+        groupFiles.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
+    if (EmptyChecks.isNull(firstGroupFile)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
     }
     rejectAmbiguousArrivalGroupOperation(command, groupFiles);
@@ -363,22 +370,26 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 "error.common.invalid_argument_detail",
                 "unsupported arrival action: " + command.action());
         };
-    if ("EMPTY_RUN".equals(action) && !toBoolean(groupFiles.get(0).get("allow_empty_run"))) {
+    if ("EMPTY_RUN".equals(action) && !toBoolean(firstGroupFile.get("allow_empty_run"))) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.arrival_group.empty_run_not_allowed");
     }
-    if ("SKIP_BATCH".equals(action) && !toBoolean(groupFiles.get(0).get("allow_skip_biz_date"))) {
+    if ("SKIP_BATCH".equals(action) && !toBoolean(firstGroupFile.get("allow_skip_biz_date"))) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.arrival_group.skip_batch_not_allowed");
     }
-    long extensionSeconds = command.extendWaitSeconds() == null || command.extendWaitSeconds() <= 0
-        ? fileGovernanceProperties.getArrival().getManualWaitExtensionSeconds()
-        : command.extendWaitSeconds();
+    long extensionSeconds =
+        EmptyChecks.isNull(command.extendWaitSeconds()) || command.extendWaitSeconds() <= 0
+            ? fileGovernanceProperties.getArrival().getManualWaitExtensionSeconds()
+            : command.extendWaitSeconds();
     String latestTolerableTime = "CONTINUE_WAITING".equals(action)
         ? now.plusSeconds(Math.max(1L, extensionSeconds)).toString()
-        : stringValue(groupFiles.get(0).get("latest_tolerable_time"));
+        : stringValue(firstGroupFile.get("latest_tolerable_time"));
     for (Map<String, Object> groupFile : groupFiles) {
+      if (EmptyChecks.isNull(groupFile)) {
+        continue;
+      }
       Long fileId = toLong(groupFile.get("id"));
-      if (fileId == null) {
+      if (EmptyChecks.isNull(fileId)) {
         continue;
       }
       Map<String, Object> metadata = new LinkedHashMap<>();
@@ -419,6 +430,9 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
     LinkedHashSet<String> bizDates = new LinkedHashSet<>();
     for (Map<String, Object> groupFile : groupFiles) {
+      if (EmptyChecks.isNull(groupFile)) {
+        continue;
+      }
       String bizDate = stringValue(groupFile.get("biz_date"));
       bizDates.add(Texts.hasText(bizDate) ? bizDate : "__MISSING_BIZ_DATE__");
       if (bizDates.size() > 1) {
@@ -431,14 +445,14 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
+    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private boolean truthy(Object value) {
     if (value instanceof Boolean bool) {
       return bool;
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return false;
     }
     return "true".equalsIgnoreCase(String.valueOf(value));
@@ -448,7 +462,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (batchSecurityProperties.isBypassMode()) {
       return false;
     }
-    if (security == null || security.isEmpty()) {
+    if (EmptyChecks.isEmpty(security)) {
       return false;
     }
     return truthy(security.get("download_requires_approval"))
@@ -461,7 +475,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     validateCommand(command);
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (fileRecord.isEmpty()) {
+    if (EmptyChecks.isEmpty(fileRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     String currentStatus = stringValue(fileRecord.get("file_status"));
@@ -557,17 +571,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private void validateCommand(FileGovernanceCommand command) {
-    Guard.require(command != null, "file governance command is required");
+    Guard.require(EmptyChecks.isNotNull(command), "file governance command is required");
     if (!Texts.hasText(command.tenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
-    if (command.fileId() == null) {
+    if (EmptyChecks.isNull(command.fileId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.id_required");
     }
   }
 
   private void validateArrivalGroupCommand(ArrivalGroupGovernanceCommand command) {
-    Guard.require(command != null, "arrival group command is required");
+    Guard.require(EmptyChecks.isNotNull(command), "arrival group command is required");
     if (!Texts.hasText(command.tenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
@@ -580,7 +594,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private void validateUploadSessionCommand(FileUploadSessionCommand command) {
-    Guard.require(command != null, "file upload session command is required");
+    Guard.require(EmptyChecks.isNotNull(command), "file upload session command is required");
     if (!Texts.hasText(command.tenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
@@ -597,25 +611,25 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private Long toLong(Object value) {
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     if (value instanceof Number number) {
       return number.longValue();
     }
     String text = String.valueOf(value);
-    return text.isBlank() ? null : Long.valueOf(text);
+    return EmptyChecks.isBlank(text) ? null : Long.valueOf(text);
   }
 
   private boolean toBoolean(Object value) {
     if (value instanceof Boolean bool) {
       return bool;
     }
-    return value != null && Boolean.parseBoolean(String.valueOf(value));
+    return EmptyChecks.isNotNull(value) && Boolean.parseBoolean(String.valueOf(value));
   }
 
   private String safeFileName(String fileName) {
-    String cleaned = fileName == null ? "" : fileName.trim();
+    String cleaned = Nullables.coalesce(fileName, "").trim();
     cleaned = cleaned.replace('\\', '/');
     int lastSlash = cleaned.lastIndexOf('/');
     if (lastSlash >= 0) {
@@ -630,12 +644,12 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private String safeKeySegment(String value) {
-    String cleaned = value == null ? "" : value.replaceAll("[^A-Za-z0-9._-]", "_");
+    String cleaned = Nullables.coalesce(value, "").replaceAll("[^A-Za-z0-9._-]", "_");
     return Texts.hasText(cleaned) ? cleaned : "tenant";
   }
 
   private String safeUrlQuery(String value) {
-    return value == null ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
+    return EmptyChecks.isNull(value) ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 
   private String fileFormatType(String fileName) {

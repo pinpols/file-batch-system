@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
@@ -25,11 +26,11 @@ final class TaskOutcomeStatePolicy {
 
   static Set<String> parseActiveNodes(String currentNodeCode) {
     Set<String> activeNodes = new LinkedHashSet<>();
-    if (currentNodeCode == null || currentNodeCode.isBlank()) {
+    if (EmptyChecks.isBlank(currentNodeCode)) {
       return activeNodes;
     }
     for (String nodeCode : currentNodeCode.split(",")) {
-      if (nodeCode == null || nodeCode.isBlank()) {
+      if (EmptyChecks.isBlank(nodeCode)) {
         continue;
       }
       activeNodes.add(nodeCode.trim());
@@ -40,7 +41,7 @@ final class TaskOutcomeStatePolicy {
   static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
     Map<String, WorkflowNodeRunEntity> latestByNode = new LinkedHashMap<>();
     for (WorkflowNodeRunEntity nodeRun : nodeRuns) {
-      if (nodeRun == null || nodeRun.getNodeCode() == null) {
+      if (EmptyChecks.isNull(nodeRun) || EmptyChecks.isNull(nodeRun.getNodeCode())) {
         continue;
       }
       latestByNode.merge(
@@ -110,7 +111,7 @@ final class TaskOutcomeStatePolicy {
   }
 
   static boolean isDryRun(JobInstanceEntity instance) {
-    return instance != null && Boolean.TRUE.equals(instance.getDryRun());
+    return EmptyChecks.isNotNull(instance) && Boolean.TRUE.equals(instance.getDryRun());
   }
 
   static String resolveWorkflowEvent(
@@ -126,7 +127,7 @@ final class TaskOutcomeStatePolicy {
 
   static String resolveWorkflowCurrentNode(
       Set<String> activeNodes, String workflowStatus, String fallbackNodeCode) {
-    if (activeNodes != null && !activeNodes.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(activeNodes)) {
       return String.join(",", activeNodes);
     }
     if (isWorkflowTerminal(workflowStatus)) {

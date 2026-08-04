@@ -138,6 +138,9 @@ final class RemoteFilesystemDispatchSupport {
       throw new IOException("NAS Files.copy interrupted", ie);
     } catch (ExecutionException ee) {
       Throwable cause = ee.getCause();
+      if (cause instanceof Error error) {
+        throw error;
+      }
       if (cause instanceof IOException ioe) {
         throw ioe;
       }

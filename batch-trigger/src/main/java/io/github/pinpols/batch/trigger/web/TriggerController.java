@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -44,8 +45,8 @@ public class TriggerController {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
     }
     String finalRequestId =
-        requestId == null || requestId.isBlank() ? IdGenerator.newBusinessNo("req") : requestId;
-    String finalTraceId = traceId == null || traceId.isBlank() ? IdGenerator.newTraceId() : traceId;
+        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
+    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
     return CommonResponse.success(triggerService.launch(
         new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId)));
   }

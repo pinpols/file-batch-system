@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -82,8 +83,8 @@ public class TaskDispatchOutboxService {
       String traceId,
       String eventKey,
       RunMode runModeOverride) {
-    Long jobPartitionId = partition != null ? partition.getId() : null;
-    String idempotencyKey = partition != null
+    Long jobPartitionId = EmptyChecks.isNotNull(partition) ? partition.getId() : null;
+    String idempotencyKey = EmptyChecks.isNotNull(partition)
         ? partition.getIdempotencyKey()
         : resolveIdempotencyKeyWithoutPartition(task, eventKey);
     // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
@@ -106,15 +107,16 @@ public class TaskDispatchOutboxService {
         idempotencyKey,
         BatchDateTimeSupport.utcNow(),
         buildSchedulingContext(jobInstance),
-        partition == null ? null : partition.getPartitionNo(),
+        EmptyChecks.isNull(partition) ? null : partition.getPartitionNo(),
         resolvePartitionCount(jobInstance));
 
     // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
     // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
     // 回退:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
-    Integer priority = task.getPriority() != null ? task.getPriority() : jobInstance.getPriority();
+    Integer priority =
+        EmptyChecks.isNotNull(task.getPriority()) ? task.getPriority() : jobInstance.getPriority();
     String resolvedKey =
-        eventKey == null || eventKey.isBlank() ? task.getTenantId() + ":" + task.getId() : eventKey;
+        EmptyChecks.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
     domainEventPublisher.publish(DomainEvent.builder(task.getTenantId())
         .aggregate("JOB_TASK", task.getId())
         .type(task.getTaskType())
@@ -141,7 +143,8 @@ public class TaskDispatchOutboxService {
     LocalDate bizDate = jobInstance.getBizDate();
     LocalDate prevBizDate = bizDateArithmetic.previousBusinessDay(bizDate);
     LocalDate nextBizDate = bizDateArithmetic.nextBusinessDay(bizDate);
-    Boolean isHoliday = bizDate != null ? bizDateArithmetic.isWeekend(bizDate) : null;
+    Boolean isHoliday =
+        EmptyChecks.isNotNull(bizDate) ? bizDateArithmetic.isWeekend(bizDate) : null;
     return new SchedulingContext(
         bizDate,
         prevBizDate,
@@ -154,11 +157,11 @@ public class TaskDispatchOutboxService {
   }
 
   private Integer resolvePartitionCount(JobInstanceEntity jobInstance) {
-    if (jobInstance == null) {
+    if (EmptyChecks.isNull(jobInstance)) {
       return null;
     }
     Integer expected = jobInstance.getExpectedPartitionCount();
-    if (expected != null && expected > 0) {
+    if (EmptyChecks.isNotNull(expected) && expected > 0) {
       return expected;
     }
     Map<String, Object> params = parsePayloadMap(jobInstance.getParamsSnapshot());
@@ -183,7 +186,9 @@ public class TaskDispatchOutboxService {
 
   @SuppressWarnings("unchecked")
   private Object nestedValue(Map<String, Object> params, String objectKey, String valueKey) {
-    if (params == null || objectKey == null || valueKey == null) {
+    if (EmptyChecks.isNull(params)
+        || EmptyChecks.isNull(objectKey)
+        || EmptyChecks.isNull(valueKey)) {
       return null;
     }
     Object nested = params.get(objectKey);
@@ -194,12 +199,12 @@ public class TaskDispatchOutboxService {
   }
 
   private Integer firstPositiveInt(Object... values) {
-    if (values == null) {
+    if (EmptyChecks.isNull(values)) {
       return null;
     }
     for (Object value : values) {
       Integer parsed = parsePositiveInt(value);
-      if (parsed != null) {
+      if (EmptyChecks.isNotNull(parsed)) {
         return parsed;
       }
     }
@@ -211,7 +216,7 @@ public class TaskDispatchOutboxService {
       int parsed = number.intValue();
       return parsed > 0 ? parsed : null;
     }
-    if (value instanceof String text && !text.isBlank()) {
+    if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
       try {
         int parsed = Integer.parseInt(text.trim());
         return parsed > 0 ? parsed : null;
@@ -227,7 +232,9 @@ public class TaskDispatchOutboxService {
    * task_payload, 看到 run_mode 即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
    */
   private void persistRunModeOverride(JobTaskEntity task, RunMode runModeOverride) {
-    if (runModeOverride == null || task == null || task.getId() == null) {
+    if (EmptyChecks.isNull(runModeOverride)
+        || EmptyChecks.isNull(task)
+        || EmptyChecks.isNull(task.getId())) {
       return;
     }
     Map<String, Object> payload = parsePayloadMap(task.getTaskPayload());
@@ -240,7 +247,7 @@ public class TaskDispatchOutboxService {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> parsePayloadMap(String payloadJson) {
-    if (payloadJson == null || payloadJson.isBlank()) {
+    if (EmptyChecks.isBlank(payloadJson)) {
       return new LinkedHashMap<>();
     }
     try {
@@ -259,14 +266,14 @@ public class TaskDispatchOutboxService {
 
   // C-9.1: idempotencyKey 不含 version，避免 Kafka 投递成功但 DB 回滚时因 version 变化生成新幂等键导致重复执行
   private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
-    if (eventKey != null && !eventKey.isBlank()) {
+    if (EmptyChecks.isNotBlank(eventKey)) {
       return eventKey;
     }
     return task.getTenantId() + ":task:" + task.getId() + ":instance:" + task.getJobInstanceId();
   }
 
   private String resolvePriorityBand(Integer priority) {
-    if (priority == null || priority <= 3) {
+    if (EmptyChecks.isNull(priority) || priority <= 3) {
       return SchedulingPriorityBand.HIGH.code();
     }
     if (priority <= 6) {

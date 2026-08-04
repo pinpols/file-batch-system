@@ -37,8 +37,7 @@ public class PlatformHttpClient {
     this.config = config;
     this.httpClient =
         HttpClient.newBuilder().connectTimeout(config.getHttpTimeout()).build();
-    this.objectMapper = new ObjectMapper()
-        .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    this.objectMapper = SdkJsonMapperFactory.create();
   }
 
   /** POST /internal/workers/register — body schema = WorkerHeartbeatDto。 */
