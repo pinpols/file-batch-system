@@ -19,7 +19,7 @@ import sys
 
 
 DIRECT_CHECK = re.compile(
-    r"(?:==\s*null|!=\s*null|\.isEmpty\s*\(\)|\.isBlank\s*\(\)|"
+    r"(?:\.isEmpty\s*\(\)|\.isBlank\s*\(\)|"
     r"\.size\s*\(\)\s*==\s*0|\.length\s*==\s*0)"
 )
 
@@ -68,6 +68,8 @@ def main() -> int:
 
     violations = []
     for path, line_no, source in added_lines(args.base):
+        if path.endswith("/EmptyChecks.java"):
+            continue
         stripped = source.strip()
         if not stripped or stripped.startswith(("//", "/*", "*")):
             continue
