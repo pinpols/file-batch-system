@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.Duration;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,24 +80,8 @@ public class ConsoleQueryCacheService {
    * @param loader 缓存未命中时的数据加载器
    */
   public <T> T getOrLoad(String cacheKey, Duration ttl, Class<T> resultType, Supplier<T> loader) {
-    String fullKey = PREFIX + cacheKey;
-    try {
-      String cached = redisTemplate.opsForValue().get(fullKey);
-      if (Texts.hasText(cached)) {
-        return JsonUtils.fromJson(cached, resultType);
-      }
-    } catch (Exception e) {
-      log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);
-    }
-    T result = loader.get();
-    try {
-      if (result != null) {
-        redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
-      }
-    } catch (Exception e) {
-      log.debug("cache write failed: key={}", logValue(fullKey), e);
-    }
-    return result;
+    return getOrLoadInternal(
+        cacheKey, ttl, loader, cached -> JsonUtils.fromJson(cached, resultType));
   }
 
   /**
@@ -105,11 +90,17 @@ public class ConsoleQueryCacheService {
    */
   public <T> T getOrLoad(
       String cacheKey, Duration ttl, TypeReference<T> resultType, Supplier<T> loader) {
+    return getOrLoadInternal(
+        cacheKey, ttl, loader, cached -> JsonUtils.fromJson(cached, resultType));
+  }
+
+  private <T> T getOrLoadInternal(
+      String cacheKey, Duration ttl, Supplier<T> loader, Function<String, T> decoder) {
     String fullKey = PREFIX + cacheKey;
     try {
       String cached = redisTemplate.opsForValue().get(fullKey);
       if (Texts.hasText(cached)) {
-        return JsonUtils.fromJson(cached, resultType);
+        return decoder.apply(cached);
       }
     } catch (Exception e) {
       log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);

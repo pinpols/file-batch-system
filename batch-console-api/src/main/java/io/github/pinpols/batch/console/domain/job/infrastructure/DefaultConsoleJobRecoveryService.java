@@ -60,6 +60,8 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
       return result;
     }
     ops.requireApprovedApproval(tenantId, request.getApprovalId());
+    // CPD-OFF: compensation and compensate intentionally normalize different request contracts
+    // into the same audited domain payload.
     String result = ops.submitCompensation(
         CompensationPayload.builder()
             .tenantId(tenantId)
@@ -80,6 +82,8 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
     ops.publishRefresh(tenantId);
     return result;
   }
+
+  // CPD-ON
 
   @Override
   public String compensate(CompensateRequest request, String idempotencyKey) {
