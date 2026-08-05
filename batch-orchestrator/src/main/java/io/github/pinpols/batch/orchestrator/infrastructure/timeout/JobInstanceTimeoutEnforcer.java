@@ -20,7 +20,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Job-level timeout 回退强制器（ADR-参考 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.1）。
+ * Job-level timeout 回退强制器（ADR-参考 docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md §2.1）。
  *
  * <p>周期扫 {@code job_instance.instance_status='RUNNING' AND now - started_at >
  * job_definition.timeout_seconds} 的实例，CAS 推到 FAILED 终态。

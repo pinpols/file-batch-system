@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -107,7 +108,7 @@ public abstract class SdkAbstractTypedImportHandler<I, O, R>
           "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
     }
     SdkRowResult counts = new SdkRowResult();
-    var resumed =
+    Optional<SdkTaskResult> resumed =
         restoreCheckpoint(ctx, counts, "import already completed (resumed checkpoint), skipped");
     if (resumed.isPresent()) {
       return resumed.get();

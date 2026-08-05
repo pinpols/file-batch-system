@@ -67,7 +67,7 @@ public class KafkaConsumerTriangleValidator {
               + partitionAssignmentStrategy
               + "]; it must include CooperativeStickyAssignor."
               + " The default RangeAssignor triggers a stop-the-world rebalance during worker rolling updates,"
-              + " pausing all partitions. See docs/runbook/kafka-consumer-rolling-upgrade.md.");
+              + " pausing all partitions. See docs/runbook/rolling-upgrade-workers.md.");
     }
     log.info(
         "Kafka consumer triangle validation passed: session.timeout={}ms heartbeat.interval={}ms max.poll.interval={}ms"

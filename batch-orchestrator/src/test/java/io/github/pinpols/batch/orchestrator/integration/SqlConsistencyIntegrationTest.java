@@ -18,7 +18,7 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * SQL 一致性门禁：在空 PostgreSQL 上跑通 Flyway 全链，并校验核心唯一约束及一条典型的 {@code ON CONFLICT} 路径。
  *
- * <p>说明：{@code docs/sql/system-test/platform_seed.sql} 含 PL/pgSQL 块，经 Spring 按分号切分的脚本加载器回放不可靠； 本测试以
+ * <p>说明：{@code scripts/db/test-seed/platform_seed.sql} 含 PL/pgSQL 块，经 Spring 按分号切分的脚本加载器回放不可靠； 本测试以
  * Flyway 迁移为权威的 DDL/DML 基线。
  *
  * <p><b>故意不继承 {@code AbstractIntegrationTest}</b>：本测试需要"空数据库"作为 Flyway 第一次跑的目标（测的就是 migration

@@ -88,7 +88,7 @@ public class ConsoleWorkflowDefinitionController {
   }
 
   /**
-   * 把 workflow 渲染为 mermaid flowchart 文本,可贴入 GitHub README / PR / 文档站。运行时 viewer 与 docs/PR review
+   * 把 workflow 渲染为 mermaid flowchart 文本,可贴入 GitHub README / PR / 文档站。运行时 viewer 与 PR review
    * 两种场景共享同一图形语言。
    */
   @GetMapping("/{id}/mermaid")

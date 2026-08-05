@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerWebhookPayload;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.LinkedHashMap;
@@ -116,7 +117,7 @@ public class AlertmanagerNotifyService {
       if (common != null && hasText(common.get(LABEL_TENANT))) {
         return common.get(LABEL_TENANT).trim();
       }
-      for (var alert : payload.safeAlerts()) {
+      for (AlertmanagerAlert alert : payload.safeAlerts()) {
         String tenant = alert == null ? null : alert.label(LABEL_TENANT);
         if (hasText(tenant)) {
           return tenant.trim();

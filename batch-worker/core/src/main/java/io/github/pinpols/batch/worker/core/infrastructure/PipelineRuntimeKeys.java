@@ -113,8 +113,8 @@ public final class PipelineRuntimeKeys {
   /**
    * ADR-030 §C: worker pipeline 成功路径运行 {@link
    * io.github.pinpols.batch.common.verifier.ContentVerifierRegistry} 后，把失败的 verifier 结果列表写入
-   * attributes 这一键；{@code DefaultTaskExecutionWrapper.buildReport} 提取后透传给 orchestrator （后续 PR 由
-   * orchestrator 写入 outbox 走告警面板）。null/empty 等价"全部通过"。
+   * attributes 这一键；{@code DefaultTaskExecutionWrapper.buildReport} 提取后透传给 orchestrator，
+   * 由 orchestrator 在处理成功上报的同一事务里写入 outbox 供告警面板订阅。null/empty 等价"全部通过"。
    *
    * <p>每个 List 元素 schema：{@code {code, message, evidence}}，与 {@link
    * io.github.pinpols.batch.common.verifier.VerifyResult} 一一对应。

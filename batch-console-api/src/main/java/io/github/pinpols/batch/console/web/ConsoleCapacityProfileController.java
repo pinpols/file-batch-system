@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriBuilder;
 
 /** P2 cost profile Console BFF。只做租户收敛和 orchestrator internal API 透传。 */
 @RestController
@@ -34,7 +35,7 @@ public class ConsoleCapacityProfileController {
     CommonResponse<CapacityProfileResponse> resp = proxyClient()
         .get()
         .uri(uriBuilder -> {
-          var builder = uriBuilder
+          UriBuilder builder = uriBuilder
               .path("/internal/orchestrator/capacity-profile")
               .queryParam("tenantId", resolved)
               .queryParam("groupBy", groupBy)

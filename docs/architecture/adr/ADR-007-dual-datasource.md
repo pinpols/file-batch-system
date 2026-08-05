@@ -58,7 +58,7 @@ Flyway 迁移：
 
 ## 系统测试配置
 
-`docs/sql/system-test/platform_seed.sql` 包含测试环境的 schema 初始化脚本，创建两个 schema 及对应用户权限。
+`scripts/db/test-seed/platform_seed.sql` 包含测试环境的 schema 初始化脚本，创建两个 schema 及对应用户权限。
 
 ## 2026-07-30 实现边界校准
 

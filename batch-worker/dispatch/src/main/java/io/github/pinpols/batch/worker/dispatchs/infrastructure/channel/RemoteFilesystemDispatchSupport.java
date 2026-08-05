@@ -13,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -521,7 +522,7 @@ final class RemoteFilesystemDispatchSupport {
           .build();
       if (dnsGuardEnabled) {
         String probeHost = URI.create(endpoint).getHost();
-        var resolved = DnsResolveGuard.resolveAndValidate(probeHost);
+        InetAddress resolved = DnsResolveGuard.resolveAndValidate(probeHost);
         client = client.newBuilder().dns(hostname -> List.of(resolved)).build();
       }
       Request request = new Request.Builder().url(endpoint).head().build();

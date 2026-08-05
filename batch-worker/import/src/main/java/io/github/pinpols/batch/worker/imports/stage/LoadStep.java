@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -562,7 +563,7 @@ public class LoadStep implements ImportStageStep {
     if (!Files.exists(path)) {
       return 0L;
     }
-    try (var stream = Files.lines(path, StandardCharsets.UTF_8)) {
+    try (Stream<String> stream = Files.lines(path, StandardCharsets.UTF_8)) {
       return stream.filter(Texts::hasText).count();
     } catch (Exception ignored) {
       return 0L;

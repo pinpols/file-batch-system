@@ -18,7 +18,7 @@ import org.springframework.core.env.Environment;
  * <p>覆盖：JWT 颁发 + 多租户路由 + session 单点 + bypass-mode 测试钩子。
  *
  * <p>主认证方式 = JWT（Authorization Bearer）；旧 X-Console-Token 共享密钥兼容路径已于 2026-04-30 物理删除（详见
- * docs/analysis/project-assessment-2026-04-29.md §8 S5-d）。
+ * docs/archive/analysis/project-assessment-2026-04-29.md §8 S5-d）。
  *
  * <p>详见 design/multi-tenant-and-security.md §3。
  */
@@ -140,7 +140,7 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
   }
 
   /**
-   * P2-1(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md): 启动期强校验 {@code
+   * P2-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md): 启动期强校验 {@code
    * cors-allowed-origins} 不含通配符 {@code "*"} / {@code "null"} / 空白。
    *
    * <p>{@code allowCredentials=true} 时浏览器规范本就拒收 {@code Access-Control-Allow-Origin: *},

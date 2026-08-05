@@ -108,7 +108,7 @@ public class TenantSchedulerSnapshotService {
       int baseParts = p.maxPartitionsPerTenant() == null ? 0 : p.maxPartitionsPerTenant();
       int pburst = p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit());
       int effParts = baseParts > 0 ? baseParts + pburst : 0;
-      var runtime =
+      QuotaRuntimeStateService.QuotaRuntimeSnapshot runtime =
           quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
               new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, "TENANT_JOBS", tenantId),
               p.quotaResetPolicy(),
@@ -179,7 +179,7 @@ public class TenantSchedulerSnapshotService {
       int qeff = qmax > 0 ? qmax + qburst : 0;
       int partitionCap = q.maxRunningPartitions() == null ? 0 : q.maxRunningPartitions();
       QueuePartitionBacklogStats backlog = backlogMap.getOrDefault(q.queueCode(), emptyBacklog(q));
-      var runtime =
+      QuotaRuntimeStateService.QuotaRuntimeSnapshot runtime =
           quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
               new QuotaRuntimeStateService.QuotaReservationOwner(
                   tenantId, "QUEUE_JOBS", q.queueCode()),

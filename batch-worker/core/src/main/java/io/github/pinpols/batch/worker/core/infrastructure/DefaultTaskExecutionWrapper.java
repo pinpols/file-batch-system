@@ -422,7 +422,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         report.setOutputs(typed);
       }
       // ADR-030 §C: PipelineVerifierHook 把失败结果写到 attributes.VERIFIER_FAILURES；
-      // 这里透传给 orchestrator（后续 PR 由 orchestrator 写入 outbox_event 走告警面板）。
+      // 这里透传给 orchestrator，由其在处理成功上报的同一事务里写入 outbox_event 供告警面板订阅。
       Object failures = executionContext.get(PipelineRuntimeKeys.VERIFIER_FAILURES);
       if (failures instanceof List<?> failureList && !failureList.isEmpty()) {
         @SuppressWarnings("unchecked")

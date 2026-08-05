@@ -29,7 +29,7 @@ public final class RlsTenantSessionSupport {
   /**
    * tenantId 形态白名单。
    *
-   * <p>P2-2(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):虽然 {@code
+   * <p>P2-2(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):虽然 {@code
    * set_config('app.tenant_id', ?, true)} 已是 PreparedStatement 绑定参数(SQL 注入路径关闭),仍保留形态白名单 做"纵深防御 +
    * 类型守护"——RLS 策略期望 tenant_id 是 ASCII 短串,任何 Unicode escape / 控制字符进 GUC 会让 RLS policy
    * 比较语义异常(NULL/类型转换/隐式 collation)。

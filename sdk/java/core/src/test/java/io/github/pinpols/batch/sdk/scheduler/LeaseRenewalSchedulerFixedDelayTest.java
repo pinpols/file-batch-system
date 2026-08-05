@@ -22,7 +22,7 @@ import org.mockito.ArgumentCaptor;
  * TOP #6:LeaseRenewalScheduler 必须用 fixed-delay,与 HeartbeatScheduler 对齐。
  *
  * <p>fixed-rate 在 tick 卡顿(HTTP 5xx 重试 ~3s)后会立刻追发下一轮,内存爆 / orchestrator 雪崩。 见
- * docs/analysis/2026-06-02-sdk-code-deep-review.md §3。
+ * docs/archive/analysis/2026-06-02-sdk-code-deep-review.md §3。
  */
 class LeaseRenewalSchedulerFixedDelayTest {
 

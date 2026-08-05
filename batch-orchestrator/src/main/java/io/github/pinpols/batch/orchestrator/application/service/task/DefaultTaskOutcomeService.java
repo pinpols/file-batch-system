@@ -123,8 +123,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       ResultVersionWriter resultVersionWriter,
       BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler,
       FailureClassifier failureClassifier,
-      // ⑦ follow-up: worker REPORT 终态写路径也要打 JobLifecycleMetrics,与
-      // JobInstanceTerminalStatusApplicationService 走同一 helper 复用 afterCommit 调度。
+      // worker REPORT 终态写路径与 JobInstanceTerminalStatusApplicationService 复用同一
+      // JobLifecycleMetrics helper，统一使用 afterCommit 调度。
       JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
       // ADR-041 Phase1.3b:节点产出写入数据库后跨阶段 count 连续性核对(仅告警)。
       CountContinuityOutboxService countContinuityOutboxService) {}
@@ -592,8 +592,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
     jobInstance.setInstanceStatus(instanceStatus);
     if (TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
-      // ⑦ follow-up: worker REPORT 路径的终态切换也要算入 JobLifecycleMetrics,
-      // 与 JobInstanceTerminalStatusApplicationService (运维/超时路径) 走同一 helper。
+      // worker REPORT 路径的终态切换也计入 JobLifecycleMetrics，与
+      // JobInstanceTerminalStatusApplicationService（运维/超时路径）走同一 helper。
       // jobFullyComplete 决定 finishedAt 是否进入实例 — null 时 helper 走 afterCommit 时刻回退。
       collaborators
           .jobLifecycleMetricsRecorder()

@@ -53,7 +53,7 @@ public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
    * <p>null/empty 等价"verifier 全部通过 / 无适用 verifier / verifier 未启用"。 worker 在成功路径不会因 verifier 失败把
    * success 翻成 false——硬中止策略由后续 PR 接入。
    *
-   * <p>orchestrator 后续 PR 消费：在同事务里写 {@code outbox_event(event_type='verifier.failure.v1')} 供告警面板订阅。
+   * <p>orchestrator 在处理成功上报时消费该字段，并在同一事务里写入 {@code outbox_event(event_type='verifier.failure.v1')} 供告警面板订阅。
    */
   private List<Map<String, Object>> verifierFailures;
 }

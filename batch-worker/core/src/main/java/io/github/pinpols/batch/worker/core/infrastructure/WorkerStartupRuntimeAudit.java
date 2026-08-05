@@ -170,23 +170,31 @@ public class WorkerStartupRuntimeAudit {
 
   private Map<String, Object> auditContributors(List<String> unhealthy) {
     Map<String, Object> results = new LinkedHashMap<>();
-    contributorProvider.orderedStream().forEach(contributor -> {
-      String name = contributor.name();
-      try {
-        WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
-        put(results, name, auditContributorDetails(result.healthy(), result.details(), null));
-        if (!result.healthy()) {
-          unhealthy.add(name);
-        }
-      } catch (RuntimeException ex) {
-        SwallowedExceptionLogger.warn(
-            WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+    List<WorkerStartupAuditContributor> contributors =
+        contributorProvider.orderedStream().toList();
+    for (WorkerStartupAuditContributor contributor : contributors) {
+      auditContributor(contributor, results, unhealthy);
+    }
+    return results;
+  }
 
-        put(results, name, auditContributorDetails(false, Map.of(), ex.getMessage()));
+  private void auditContributor(
+      WorkerStartupAuditContributor contributor,
+      Map<String, Object> results,
+      List<String> unhealthy) {
+    String name = contributor.name();
+    try {
+      WorkerStartupAuditContributor.WorkerStartupAuditResult result = contributor.audit();
+      put(results, name, auditContributorDetails(result.healthy(), result.details(), null));
+      if (!result.healthy()) {
         unhealthy.add(name);
       }
-    });
-    return results;
+    } catch (RuntimeException ex) {
+      SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+
+      put(results, name, auditContributorDetails(false, Map.of(), ex.getMessage()));
+      unhealthy.add(name);
+    }
   }
 
   private void requireText(List<String> issues, String workerType, String field, String value) {

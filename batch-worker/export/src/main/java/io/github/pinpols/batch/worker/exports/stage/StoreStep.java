@@ -12,6 +12,7 @@ import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -282,7 +283,7 @@ public class StoreStep implements ExportStageStep {
   private String sha256Hex(Path path) throws Exception {
     MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
     byte[] buffer = new byte[8192];
-    try (var inputStream = Files.newInputStream(path)) {
+    try (InputStream inputStream = Files.newInputStream(path)) {
       int read;
       while ((read = inputStream.read(buffer)) >= 0) {
         if (read > 0) {

@@ -59,7 +59,7 @@ public class ConsoleGovernanceController {
   public CommonResponse<Map<String, String>> list(@RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, String> result = new LinkedHashMap<>();
-    for (var entry : KNOWN_KEYS.entrySet()) {
+    for (Map.Entry<String, String> entry : KNOWN_KEYS.entrySet()) {
       Optional<String> value = parameterService.getValue(resolved, entry.getKey());
       result.put(entry.getKey(), value.orElse(entry.getValue()));
     }

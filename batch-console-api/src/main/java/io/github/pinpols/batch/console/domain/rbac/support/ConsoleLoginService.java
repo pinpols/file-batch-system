@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -84,7 +85,7 @@ public class ConsoleLoginService {
 
   /** 从 request metadata 取客户端 IP(已按 trust-forwarded-headers 解析);非 Servlet 上下文回退空串。 */
   private String resolveClientIp() {
-    var metadata = requestMetadataResolver.current();
+    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String ip = metadata == null ? null : metadata.clientIp();
     return ip == null ? "" : ip;
   }

@@ -23,7 +23,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * workflow_run stuck 回退（参考 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.2）。
+ * workflow_run stuck 回退（参考 docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md §2.2）。
  *
  * <p>主路径靠 {@code DefaultTaskOutcomeService} 反向推进 workflow_run；如果 task outcome 永远不来 （task 全 stuck /
  * partition 已 reclaim 但 workflow_run 没收到信号），workflow_run 会永远 RUNNING。

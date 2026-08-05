@@ -2,6 +2,14 @@
 
 本目录存放 GitHub Actions 与本地均可复用的 CI 门禁脚本。
 
+## `check-code-doc-references.py`
+
+校验后端 Java、XML、POM 和配置文件注释中引用的仓库内 `docs/`、`sdk/` 路径存在，避免文档归档或目录迁移后代码注释继续指向失效路径。
+
+```bash
+python3 scripts/ci/check-code-doc-references.py
+```
+
 ## `check-empty-checks.py`
 
 检查生产 Java 本次 diff 新增的 `null`、字符串空、集合空判断。统一入口为
@@ -117,4 +125,12 @@ e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「s
 
 ```bash
 bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
+```
+## `check-java-readability.py`
+
+检查生产 Java 主代码的可读性边界：禁止使用隐式 `var`，要求在业务、状态机和基础设施边界显式表达类型。
+脚本会忽略注释、Javadoc、字符串、字符字面量和测试代码，不会误报文档示例或业务文本。
+
+```bash
+python3 scripts/ci/check-java-readability.py
 ```

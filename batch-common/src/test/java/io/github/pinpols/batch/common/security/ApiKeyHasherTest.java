@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 /**
- * 单测 {@link ApiKeyHasher} —— P1-1(docs/analysis/2026-06-03-deep-scan-be-security.md)。
+ * 单测 {@link ApiKeyHasher} —— P1-1(docs/archive/analysis/2026-06-03-deep-scan-be-security.md)。
  *
  * <p>覆盖:
  *

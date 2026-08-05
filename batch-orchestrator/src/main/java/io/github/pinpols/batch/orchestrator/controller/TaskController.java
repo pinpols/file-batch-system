@@ -12,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskHeartbeatCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskLeaseRenewItemCommand;
@@ -93,7 +94,7 @@ public class TaskController {
       @PathVariable Long taskId,
       @RequestBody TaskHeartbeatRequest request,
       HttpServletRequest httpRequest) {
-    var result =
+    TaskHeartbeatResult result =
         taskControllerApplicationService.renew(taskId, toCommand(normalize(request, httpRequest)));
     return new TaskHeartbeatResponse(result.cancelRequested());
   }

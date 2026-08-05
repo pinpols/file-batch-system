@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -453,7 +454,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
             null));
         continue;
       }
-      var jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+      JobDefinitionEntity jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
       if (jobDef == null) {
         findings.add(DagValidationResult.Finding.error(
             "JOB_REF_NOT_FOUND",

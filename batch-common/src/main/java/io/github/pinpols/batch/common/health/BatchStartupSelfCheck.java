@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.MigrationVersion;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -194,7 +195,7 @@ public class BatchStartupSelfCheck {
     MigrationInfo[] applied = fw.info().applied();
     String[] versions = new String[applied.length];
     for (int i = 0; i < applied.length; i++) {
-      var version = applied[i].getVersion();
+      MigrationVersion version = applied[i].getVersion();
       versions[i] = version == null ? "" : version.getVersion();
     }
     return versions;
