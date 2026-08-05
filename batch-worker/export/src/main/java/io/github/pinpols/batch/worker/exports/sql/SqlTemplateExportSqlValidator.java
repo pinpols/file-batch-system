@@ -7,8 +7,6 @@ import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityPr
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.Select;
@@ -129,11 +127,12 @@ public class SqlTemplateExportSqlValidator {
   private void checkRequiredParams(String sql) {
     List<String> required =
         security == null ? List.of("tenantId", "batchNo") : security.getRequiredParams();
+    Set<String> referenced = extractNamedParameters(sql);
     for (String param : required) {
       if (!Texts.hasText(param)) {
         continue;
       }
-      if (!sql.contains(":" + param)) {
+      if (!referenced.contains(param)) {
         throw new IllegalArgumentException(
             "sql_template_export must reference named parameter :" + param);
       }
@@ -148,7 +147,6 @@ public class SqlTemplateExportSqlValidator {
     if (security != null && security.getAllowedExtraParams() != null) {
       allowed.addAll(security.getAllowedExtraParams());
     }
-    Set<String> referenced = extractNamedParameters(sql);
     for (String name : referenced) {
       if (!allowed.contains(name)) {
         throw new IllegalArgumentException(
@@ -161,15 +159,128 @@ public class SqlTemplateExportSqlValidator {
   }
 
   /**
-   * 提取 SQL 中所有 {@code :paramName} 引用。 简化处理：忽略字符串字面量 / 注释里的冒号；真需要全量覆盖可换用 JSqlParser 的 parameter
-   * visitor。 当前实现足以覆盖常见 SQL 模板（冒号参数不会出现在字符串里）。
+   * 提取 SQL 中所有 {@code :paramName} 引用。
+   *
+   * <p>这里不能使用简单的正则：SQL 字符串、标识符、注释和 PostgreSQL dollar-quote 都允许出现冒号。若把这些内容
+   * 误识别成参数，会错误放行缺失的租户参数；若把注释里的内容识别成未知参数，又会让合法模板在加载阶段失败。
    */
-  private Set<String> extractNamedParameters(String sql) {
+  static Set<String> extractNamedParameters(String sql) {
     Set<String> names = new LinkedHashSet<>();
-    Matcher matcher = Pattern.compile(":([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
-    while (matcher.find()) {
-      names.add(matcher.group(1));
+    int index = 0;
+    while (index < sql.length()) {
+      int nextIndex = scanToken(sql, index, names);
+      index = nextIndex > index ? nextIndex : index + 1;
     }
     return names;
+  }
+
+  private static int scanToken(String sql, int start, Set<String> names) {
+    char current = sql.charAt(start);
+    if (current == '\'') {
+      return skipQuoted(sql, start, '\'', '\\');
+    }
+    if (current == '"') {
+      return skipQuoted(sql, start, '"', '"');
+    }
+    if (current == '-' && hasNext(sql, start, '-')) {
+      return skipLineComment(sql, start + 2);
+    }
+    if (current == '/' && hasNext(sql, start, '*')) {
+      return skipBlockComment(sql, start + 2);
+    }
+    if (current == '$') {
+      int dollarQuoteEnd = skipDollarQuote(sql, start);
+      if (dollarQuoteEnd > start) {
+        return dollarQuoteEnd;
+      }
+    }
+    return captureNamedParameter(sql, start, names);
+  }
+
+  private static boolean hasNext(String sql, int index, char expected) {
+    return index + 1 < sql.length() && sql.charAt(index + 1) == expected;
+  }
+
+  private static int captureNamedParameter(String sql, int start, Set<String> names) {
+    if (sql.charAt(start) != ':'
+        || start + 1 >= sql.length()
+        || !isParameterStart(sql.charAt(start + 1))
+        || (start > 0 && sql.charAt(start - 1) == ':')
+        || sql.charAt(start + 1) == ':') {
+      return start;
+    }
+    int end = start + 2;
+    while (end < sql.length() && isParameterPart(sql.charAt(end))) {
+      end++;
+    }
+    names.add(sql.substring(start + 1, end));
+    return end;
+  }
+
+  private static boolean isParameterStart(char value) {
+    return value == '_' || Character.isLetter(value);
+  }
+
+  private static boolean isParameterPart(char value) {
+    return value == '_' || Character.isLetterOrDigit(value);
+  }
+
+  private static int skipQuoted(String sql, int start, char quote, char escape) {
+    int index = start + 1;
+    while (index < sql.length()) {
+      char current = sql.charAt(index);
+      if (current == quote) {
+        if (index + 1 < sql.length() && sql.charAt(index + 1) == quote) {
+          index += 2;
+        } else {
+          return index + 1;
+        }
+      } else if (quote == '\'' && current == escape && index + 1 < sql.length()) {
+        index += 2;
+      } else {
+        index++;
+      }
+    }
+    return sql.length();
+  }
+
+  private static int skipLineComment(String sql, int start) {
+    int newline = sql.indexOf('\n', start);
+    return newline < 0 ? sql.length() : newline + 1;
+  }
+
+  private static int skipBlockComment(String sql, int start) {
+    int end = sql.indexOf("*/", start);
+    return end < 0 ? sql.length() : end + 2;
+  }
+
+  /** 返回 dollar-quote 结束位置；当前字符不是 dollar-quote 时返回原位置。 */
+  private static int skipDollarQuote(String sql, int start) {
+    int delimiterEnd = dollarQuoteDelimiterEnd(sql, start);
+    if (delimiterEnd == start) {
+      return start;
+    }
+    String delimiter = sql.substring(start, delimiterEnd);
+    int contentEnd = sql.indexOf(delimiter, delimiterEnd);
+    return contentEnd < 0 ? sql.length() : contentEnd + delimiter.length();
+  }
+
+  private static int dollarQuoteDelimiterEnd(String sql, int start) {
+    int index = start + 1;
+    if (index >= sql.length()) {
+      return start;
+    }
+    if (sql.charAt(index) == '$') {
+      return index + 1;
+    }
+    if (!(sql.charAt(index) == '_' || Character.isLetter(sql.charAt(index)))) {
+      return start;
+    }
+    index++;
+    while (index < sql.length()
+        && (sql.charAt(index) == '_' || Character.isLetterOrDigit(sql.charAt(index)))) {
+      index++;
+    }
+    return index < sql.length() && sql.charAt(index) == '$' ? index + 1 : start;
   }
 }

@@ -4,17 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class StoreStepTest {
@@ -84,6 +88,45 @@ class StoreStepTest {
     assertThat(Files.exists(generated)).isFalse();
     verify(storage).copyObject(eq("tmp.part"), anyString());
     verify(storage).removeObject(eq("tmp.part"));
+  }
+
+  @Test
+  void execute_encryptsBeforeUpload_whenTemplateRequiresEncryption() throws Exception {
+    S3ExportStorage storage = mock(S3ExportStorage.class);
+    BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
+    when(crypto.shouldEncrypt(any())).thenReturn(true);
+    when(crypto.resolveKeyRef(any())).thenReturn("key-ref");
+    doAnswer(invocation -> {
+          Files.copy(
+              invocation.getArgument(0, Path.class),
+              invocation.getArgument(1, Path.class),
+              StandardCopyOption.REPLACE_EXISTING);
+          return invocation.getArgument(1, Path.class);
+        })
+        .when(crypto)
+        .encrypt(any(Path.class), any(Path.class), anyString());
+
+    Path generated = Files.createTempFile("export-encrypted-", ".json");
+    Files.writeString(generated, "{\"secret\":true}");
+    String expectedSha = TestSha256.sha256Hex(generated);
+    when(storage.writeObject(anyString(), any(Path.class), eq("application/octet-stream")))
+        .thenReturn("encrypted.part");
+    when(storage.sha256Hex(anyString())).thenReturn(expectedSha);
+
+    ExportJobContext ctx = new ExportJobContext();
+    ctx.setTenantId("t1");
+    ctx.getAttributes().put("generatedFilePath", generated.toString());
+    ctx.getAttributes().put("exportFileFormatType", "JSON");
+    ctx.getAttributes()
+        .put(
+            PipelineRuntimeKeys.TEMPLATE_CONFIG,
+            Map.of("content_encryption_enabled", true, "encryption_key_ref", "key-ref"));
+
+    var result = new StoreStep(storage, crypto).execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    assertThat(ctx.getAttributes()).containsEntry("contentEncryptionEnabled", true);
+    verify(crypto).encrypt(eq(generated), any(Path.class), eq("key-ref"));
   }
 
   /** Local helper to avoid duplicating StoreStep's sha256 calculation logic in tests. */

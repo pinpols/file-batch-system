@@ -34,6 +34,7 @@ SONAR_ADMIN_USER="admin"
 SONAR_ADMIN_PASS="admin"
 PROJECT_KEY="file-batch-system"
 PROJECT_NAME="File Batch System"
+SONAR_MAVEN_PLUGIN_VERSION="${SONAR_MAVEN_PLUGIN_VERSION:-5.7.0.6970}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/process.sh
 source "${PROJECT_ROOT}/scripts/lib/process.sh"
@@ -130,17 +131,42 @@ ok "Token generated."
 cd "$PROJECT_ROOT"
 
 if ! $SKIP_BUILD; then
-  info "Step 4/5 — Building project (mvn install -DskipTests)..."
-  mvn install -DskipTests -q --projects '!batch-e2e-tests' 2>&1 \
-    | grep -E "ERROR|BUILD" || true
+  info "Step 4/5 — Running tests and generating JaCoCo XML reports..."
+  BUILD_LOG=$(mktemp)
+  set +e
+  mvn clean test "org.jacoco:jacoco-maven-plugin:0.8.14:report" -q \
+    --projects '!batch-e2e-tests' 2>&1 \
+    | tee "$BUILD_LOG" \
+    | grep -E "ERROR|BUILD"
+  BUILD_STATUS=${PIPESTATUS[0]}
+  set -e
+  if [ "$BUILD_STATUS" -ne 0 ]; then
+    error "Build failed; Sonar analysis was not started."
+    tail -n 80 "$BUILD_LOG"
+    rm -f "$BUILD_LOG"
+    exit "$BUILD_STATUS"
+  fi
+  rm -f "$BUILD_LOG"
   ok "Build complete."
 else
-  info "Step 4/5 — Skipping build (--skip-build)."
+  info "Step 4/5 — Skipping test/report generation (--skip-build)."
 fi
+
+COVERAGE_REPORT_COUNT=$(find "$PROJECT_ROOT" \
+  -path '*/target/site/jacoco/jacoco.xml' \
+  -not -path '*/batch-e2e-tests/*' \
+  -type f \
+  | wc -l | tr -d ' ')
+if [ "$COVERAGE_REPORT_COUNT" -eq 0 ]; then
+  error "No JaCoCo XML report found. Run without --skip-build or generate target/site/jacoco/jacoco.xml before scanning."
+  exit 1
+fi
+ok "Found $COVERAGE_REPORT_COUNT JaCoCo XML report(s)."
 
 info "         Running Sonar analysis..."
 SONAR_LOG=$(mktemp)
-mvn sonar:sonar \
+set +e
+mvn "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
   --projects '!batch-e2e-tests' \
   -Dsonar.host.url="${SONAR_URL}" \
   -Dsonar.token="${SONAR_TOKEN}" \
@@ -148,7 +174,16 @@ mvn sonar:sonar \
   -Dsonar.projectName="${PROJECT_NAME}" \
   -Dsonar.java.source=21 \
   -Dsonar.java.target=21 \
-  2>&1 | tee "$SONAR_LOG" | grep -E "INFO.*task|INFO.*More|ERROR.*Unable|BUILD (SUCCESS|FAILURE)" || true
+  2>&1 | tee "$SONAR_LOG" | grep -E "INFO.*task|INFO.*More|ERROR.*Unable|BUILD (SUCCESS|FAILURE)"
+SONAR_STATUS=${PIPESTATUS[0]}
+set -e
+
+if [ "$SONAR_STATUS" -ne 0 ]; then
+  error "Sonar analysis failed."
+  tail -n 80 "$SONAR_LOG"
+  rm -f "$SONAR_LOG"
+  exit "$SONAR_STATUS"
+fi
 
 # 从同一份日志提取 task id
 TASK_URL=$(grep -oE 'http://[^ ]+/api/ce/task\?id=[a-z0-9-]+' "$SONAR_LOG" | tail -1 || echo "")

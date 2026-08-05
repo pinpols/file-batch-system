@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
 import java.io.BufferedWriter;
@@ -54,7 +55,7 @@ public class ImportErrorOutputStorage {
         + ".error.jsonl";
     Path spool = null;
     try {
-      spool = Files.createTempFile("import-error-", ".jsonl");
+      spool = PrivateTempFiles.createTempFile("import-error-", ".jsonl");
       try (BufferedWriter writer = Files.newBufferedWriter(spool, StandardCharsets.UTF_8)) {
         for (ImportBadRecordEntity badRecord : badRecords) {
           writer.write(JsonUtils.toJson(badRecord));

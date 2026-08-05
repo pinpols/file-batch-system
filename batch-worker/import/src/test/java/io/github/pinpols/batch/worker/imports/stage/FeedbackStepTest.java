@@ -37,6 +37,16 @@ class FeedbackStepTest {
   }
 
   @Test
+  @DisplayName("上下文为空时返回失败，不访问审计仓储")
+  void shouldFail_whenContextIsNull() {
+    ImportStageResult result = step.execute(null);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_FEEDBACK_CONTEXT_MISSING");
+    verifyNoInteractions(runtimeRepository);
+  }
+
+  @Test
   @DisplayName("happy path: 汇总 parsed/validated/loaded 三段计数 + pipelineInstanceId 写 audit")
   void shouldAggregateCountsIntoAudit_whenAllAttributesPresent() {
     // 准备

@@ -7,7 +7,10 @@ import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class SqlTemplateExportSqlValidatorTest {
 
@@ -155,6 +158,92 @@ class SqlTemplateExportSqlValidatorTest {
             validatorWithDefaults().validate("SELECT id FROM biz.t WHERE tenant_id = :tenantId"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining(":batchNo");
+  }
+
+  @Test
+  void validate_doesNotTreatStringLiteralAsRequiredParameter() {
+    SqlTemplateExportSqlValidator validator = validatorWithDefaults();
+    String sql = "SELECT id FROM biz.t WHERE note = ':tenantId' AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validator.validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(":tenantId");
+  }
+
+  @Test
+  void validate_doesNotTreatCommentAsRequiredParameter() {
+    SqlTemplateExportSqlValidator validator = validatorWithDefaults();
+    String sql = "SELECT id FROM biz.t WHERE batch_no = :batchNo -- :tenantId\n";
+    assertThatThrownBy(() -> validator.validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(":tenantId");
+  }
+
+  @ParameterizedTest
+  @MethodSource("sqlWithIgnoredParameterText")
+  void validate_ignoresParameterTextOutsideSqlParameters(String sql) {
+    assertThat(validatorWithDefaults().validate(sql)).isEqualTo(sql.trim());
+  }
+
+  private static Stream<String> sqlWithIgnoredParameterText() {
+    return Stream.of(
+        "SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo "
+            + "AND note = ':unknownInString' -- :unknownInComment\n",
+        "SELECT \"note:unknownInIdentifier\", id /* :unknownInBlock */ FROM biz.t "
+            + "WHERE tenant_id = :tenantId AND batch_no = :batchNo",
+        "SELECT 'backslash\\\\:unknownInEscape', 'it''s:unknownInDouble' FROM biz.t "
+            + "WHERE tenant_id = :tenantId AND batch_no = :batchNo",
+        "SELECT $body$:unknownInTaggedDollar$body$ AS note, id FROM biz.t "
+            + "WHERE tenant_id = :tenantId AND batch_no = :batchNo");
+  }
+
+  @Test
+  void validate_rejectsUnknownNamedParameter() {
+    String sql = "SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo "
+        + "AND customer_id = :extraParam";
+    SqlTemplateExportSqlValidator validator = validatorWithDefaults();
+    assertThatThrownBy(() -> validator.validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("unknown named parameter :extraParam");
+  }
+
+  @Test
+  void validate_acceptsAllowedExtraNamedParameter() {
+    SqlTemplateExportSecurityProperties props = new SqlTemplateExportSecurityProperties();
+    props.setAllowedExtraParams(List.of("customerId"));
+    SqlTemplateExportSqlValidator validator = new SqlTemplateExportSqlValidator(props);
+    String sql = "SELECT id FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo "
+        + "AND customer_id = :customerId";
+    assertThat(validator.validate(sql)).isEqualTo(sql);
+  }
+
+  @Test
+  void validate_doesNotTreatPostgresCastAsNamedParameter() {
+    String sql = "SELECT id::text FROM biz.t WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThat(validatorWithDefaults().validate(sql)).isEqualTo(sql);
+  }
+
+  @Test
+  void validate_doesNotTreatDollarQuoteAsNamedParameter() {
+    String sql = "SELECT $$:unknownInDollarQuote$$ AS note, id FROM biz.t "
+        + "WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThat(validatorWithDefaults().validate(sql)).isEqualTo(sql);
+  }
+
+  @Test
+  void scannerHandlesUnterminatedAndNonParameterDollarTokens() {
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("SELECT 'unterminated :x"))
+        .isEmpty();
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("SELECT id -- :x"))
+        .isEmpty();
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("SELECT id /* :x"))
+        .isEmpty();
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("$")).isEmpty();
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("$1 :tenantId"))
+        .containsExactly("tenantId");
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("$tag$ :x")).isEmpty();
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("$tag$:x")).isEmpty();
+    assertThat(SqlTemplateExportSqlValidator.extractNamedParameters("- / :tenantId"))
+        .containsExactly("tenantId");
   }
 
   // ── valid SQL ────────────────────────────────────────────────────────────────

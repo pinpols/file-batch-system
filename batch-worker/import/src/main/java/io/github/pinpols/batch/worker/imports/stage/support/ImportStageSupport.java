@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -94,7 +95,7 @@ public final class ImportStageSupport {
   public static Path createStagingFile(ImportJobContext context, String phase) throws Exception {
     String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
     String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
-    return Files.createTempFile(
+    return PrivateTempFiles.createTempFile(
         BatchFileConstants.importStagePrefix(fileId, workerId, phase),
         BatchFileConstants.NDJSON_SUFFIX);
   }
@@ -103,7 +104,7 @@ public final class ImportStageSupport {
   public static Path createValidatedFile(ImportJobContext context) throws Exception {
     String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
     String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
-    return Files.createTempFile(
+    return PrivateTempFiles.createTempFile(
         BatchFileConstants.validatedStagePrefix(fileId, workerId),
         BatchFileConstants.NDJSON_SUFFIX);
   }

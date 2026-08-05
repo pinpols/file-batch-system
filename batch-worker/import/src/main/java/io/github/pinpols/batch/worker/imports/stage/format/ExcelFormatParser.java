@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage.format;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -104,7 +105,7 @@ public class ExcelFormatParser implements FormatParser {
 
     Path tempFile = null;
     if (excelBytes.length > FILE_BACKED_THRESHOLD_BYTES) {
-      tempFile = Files.createTempFile("import-xlsx-", ".xlsx");
+      tempFile = PrivateTempFiles.createTempFile("import-xlsx-", ".xlsx");
       Files.write(tempFile, excelBytes);
     }
     try (OPCPackage pkg = tempFile != null

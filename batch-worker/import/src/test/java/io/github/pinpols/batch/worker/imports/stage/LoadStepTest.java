@@ -105,6 +105,14 @@ class LoadStepTest {
     assertThat(loadStep.stage()).isEqualTo(ImportStage.LOAD);
   }
 
+  @Test
+  void shouldFail_whenContextIsNull() {
+    ImportStageResult result = loadStep.execute(null);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONTEXT_MISSING");
+  }
+
   // ── streaming happy path ──
 
   @Test

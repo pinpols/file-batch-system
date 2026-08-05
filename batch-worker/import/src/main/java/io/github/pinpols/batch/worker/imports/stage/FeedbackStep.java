@@ -33,9 +33,12 @@ public class FeedbackStep implements ImportStageStep {
 
   @Override
   public ImportStageResult execute(ImportJobContext context) {
+    if (context == null) {
+      return ImportStageResult.failure(
+          stage(), "IMPORT_FEEDBACK_CONTEXT_MISSING", "context is required");
+    }
     // ADR-026: 演练模式不写 audit 日志（避免污染实盘 file_audit 历史），直接返回 success。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    if (DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
       return ImportStageResult.success(stage());
     }
     Map<String, Object> attrs = context.getAttributes();
