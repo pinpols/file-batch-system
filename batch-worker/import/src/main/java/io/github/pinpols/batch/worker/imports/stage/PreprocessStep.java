@@ -375,7 +375,7 @@ public class PreprocessStep implements ImportStageStep {
    * 是否可对 storagePath 对象走「流式直载」(不读进堆):纯文本格式 + 无 compress / encrypt(非 NONE)/ preprocess_pipeline
    * 变换。需变换或二进制(EXCEL/BINARY)时返回 false,回退 byte[] 路径(受对象大小配置限制)。
    */
-  private boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> tc) {
+  static boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> tc) {
     Map<String, Object> config = tc == null ? Map.of() : tc;
     String formatType = resolveFileFormatType(importPayload, config);
     if (formatType != null && isBinaryImportFormat(formatType)) {

@@ -223,11 +223,11 @@ make ops-compensate     # 触发补偿
 
 ## PR 自动归并（auto-merge）
 
-两条独立路径，都基于 GitHub 原生 `gh pr merge --auto`（等所有 required check 绿了自动 squash merge），**不跳 check、不无 review merge**。
+标签路径由 `label-automerge.yml` 监听 PR 门禁和 `full-ci-gate` 回退门禁；所有 required check 通过后执行普通 squash merge，**不跳 check、不绕过分支保护**。
 
 | 路径 | 触发 | 是否自动 approve | 是否自动 enable auto-merge |
 |---|---|---|---|
-| `label-automerge.yml` | 任意人开 PR + 打 `automerge` 标签 | ❌（必须有人 review approve） | ✅ |
+| `label-automerge.yml` | 任意人开 PR + 打 `automerge` 标签 | ❌ | ✅ |
 
 > Dependabot PR(`.github/dependabot.yml` 配置的 Maven 等生态)不走独立 auto-merge workflow,需人工或经 `automerge` 标签走 `label-automerge.yml` 路径。
 
@@ -235,7 +235,7 @@ make ops-compensate     # 触发补偿
 1. 开 PR
 2. 自己 review 一遍觉得 OK
 3. 给 PR 贴 `automerge` 标签
-4. Reviewer approve 后，所有 required check 一变绿 GH 自动 squash merge
+4. 所有 required check 一变绿后自动 squash merge
 
 **撤销**：移除 `automerge` label + 在 PR 页面点 "Disable auto-merge"，或命令 `gh pr merge --disable-auto <PR_URL>`。
 
@@ -302,7 +302,7 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
 ### Job 级分布
 
 **pr-gate(5 job 并行,瓶颈 unit-it-b2)**
-- static-checks 1:57 / security 1:16 / unit-it-a 2:49 / unit-it-b1 3:02 / **unit-it-b2 4:14** ← critical path
+- static-checks 1:57 / security-scan 1:16 / unit-it-a 2:49 / unit-it-b1 3:02 / **unit-it-b2 4:14** ← critical path
 
 **full-ci-gate(9 job 并行,瓶颈 security-scan)**
 - static-checks 1:36 / unit-it-a 3:04 / unit-it-b1 3:13 / unit-it-b2 4:06 / e2e-shard 1-4 各 4:23-4:58 / **security-scan 6:15** ← critical path

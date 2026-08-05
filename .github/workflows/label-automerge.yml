@@ -1,21 +1,19 @@
 name: Label auto-merge
 
-# 给 PR 打 'automerge' 标签 → 等所有 required check 绿了自动 admin squash merge
+# 给 PR 打 'automerge' 标签 → 等所有 required check 绿了自动 squash merge
 #
-# 2026-05-23 重写:原方案用 `gh pr merge --auto`,但 personal repo 不支持
-# bypass_pull_request_allowances,enforce_admins=false 又只对人工 merge 生效,
-# 导致 auto-merge 永远卡在等 review 上。改成 workflow 监听 workflow_run 完成
-# 事件,自己判断 required check 全过后用 --admin --squash 合,绕过 review。
+# 2026-08-06:改为监听 PR 快速门禁和 main 回退门禁,在保护规则要求的检查全部
+# 通过后用普通 `gh pr merge --squash` 合并,不再依赖旧版 branch protection API,
+# 也不使用 --admin 绕过保护规则。
 #
 # 用法:
 #   1) 开 PR
 #   2) 自己 review 一下 + 觉得 OK,在 PR 页面贴 label 'automerge'
-#   3) 所有 required check 一变绿,本 workflow 立即 admin squash merge
+#   3) 所有 required check 一变绿,本 workflow 立即 squash merge
 #
 # 安全性:
-#   - **不** 跳过 required status checks(必须 unit-it-a/b1/b2 / static-checks / security 全部通过)
+#   - **不** 跳过 required status checks(必须 unit-it-a/b1/b2 / static-checks / security-scan 全部通过)
 #   - **不** 自动加 label(必须人手贴)
-#   - --admin 绕过 required_reviews(因为只有 admin 能触发本 workflow 的 token 才有 admin 权限)
 #   - 撤销:删 'automerge' label 即可,workflow 不会再 fire
 #
 # 跟 dependabot-auto-merge 区别:
@@ -26,7 +24,7 @@ on:
   pull_request:
     types: [labeled, synchronize, reopened, ready_for_review]
   workflow_run:
-    workflows: ["pr-gate", "codeql"]
+    workflows: ["pr-gate", "codeql", "full-ci-gate"]
     types: [completed]
 
 permissions:
@@ -72,14 +70,16 @@ jobs:
             exit 0
           fi
 
-          # 读 main branch protection 拿 required checks 列表
-          REQUIRED=$(gh api "repos/${REPO}/branches/main/protection" \
-            --jq '.required_status_checks.contexts // [] | .[]' 2>/dev/null || echo "")
-          if [[ -z "${REQUIRED}" ]]; then
-            echo "::warning::无法读取 main branch protection 的 required checks,退出避免误合"
-            exit 0
-          fi
-          echo "required checks: $(echo ${REQUIRED} | tr '\n' ' ')"
+          # 当前 main ruleset 的 required checks。GitHub ruleset 不保证旧版
+          # /branches/{branch}/protection API 可读,这里直接与仓库 ruleset 登记保持一致。
+          REQUIRED_CHECKS=(
+            static-checks
+            unit-it-a
+            unit-it-b1
+            unit-it-b2
+            security-scan
+          )
+          echo "required checks: ${REQUIRED_CHECKS[*]}"
 
           for pr in ${PRS}; do
             echo
@@ -115,10 +115,15 @@ jobs:
 
             # 验所有 required check 都 SUCCESS
             ALL_GREEN=true
-            for check in ${REQUIRED}; do
-              CONCLUSION=$(echo "${META}" | jq -r ".statusCheckRollup[] | select(.name == \"${check}\") | .conclusion" | head -1)
+            for check in "${REQUIRED_CHECKS[@]}"; do
+              CONCLUSION=$(echo "${META}" | jq -r --arg check "${check}" '
+                [.statusCheckRollup[]? | select(.name == $check) | .conclusion]
+                | if length == 0 then "MISSING"
+                  elif all(.[]; . == "SUCCESS") then "SUCCESS"
+                  else (map(select(. != "SUCCESS")) | first)
+                  end')
               if [[ "${CONCLUSION}" != "SUCCESS" ]]; then
-                echo "  required check '${check}' = '${CONCLUSION:-MISSING}'(非 SUCCESS),等下次触发"
+                echo "  required check '${check}' = '${CONCLUSION}'(非 SUCCESS),等下次触发"
                 ALL_GREEN=false
                 break
               fi
@@ -128,7 +133,7 @@ jobs:
               continue
             fi
 
-            # 全部条件满足 — admin merge
-            echo "  ✅ 所有条件满足,执行 admin squash merge"
-            gh pr merge --admin --squash "${pr}" --repo "${REPO}"
+            # 全部条件满足 — 普通合并,由 GitHub 再次执行 ruleset 校验
+            echo "  ✅ 所有条件满足,执行 squash merge"
+            gh pr merge --squash "${pr}" --repo "${REPO}"
           done

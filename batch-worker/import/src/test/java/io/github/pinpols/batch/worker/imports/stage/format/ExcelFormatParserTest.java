@@ -62,6 +62,15 @@ class ExcelFormatParserTest {
         .hasMessageContaining("excel_binary_unsupported");
   }
 
+  @Test
+  void usesPrivateFileBackedPathForOversizedExcelPayload() {
+    byte[] oversizedPayload = new byte[16 * 1024 * 1024 + 1];
+
+    assertThatThrownBy(() ->
+            parser.parse(context(), request(oversizedPayload, null), writer(new StringWriter())))
+        .isInstanceOf(Exception.class);
+  }
+
   // ── Item 4: 无 field_mappings → 按 Excel 实际表头直通 ────────────────────────
 
   @Test
