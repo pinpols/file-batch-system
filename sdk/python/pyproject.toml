@@ -40,12 +40,12 @@ dev = [
     "pytest-httpx>=0.30",
     "ruff>=0.6",
     "mypy>=1.10",
-    "aiohttp>=3.10",
+    "aiohttp>=3.14.3",
 ]
 # P5 (Lane V) — in-process test fake (FakeBatchPlatform) needs aiohttp.
 # Kept optional so production tenant workers don't pay for the dep.
 testkit = [
-    "aiohttp>=3.10",
+    "aiohttp>=3.14.3",
 ]
 # SQL / stored-proc atomic handlers (handler/atomic/_sql.py,
 # handler/atomic/_stored_proc.py) talk to PostgreSQL via asyncpg.
