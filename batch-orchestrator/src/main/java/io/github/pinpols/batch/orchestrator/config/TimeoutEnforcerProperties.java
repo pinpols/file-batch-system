@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Job-level timeout 回退强制器配置。
  *
  * <p>背景：{@code job_definition.timeout_seconds} 列从 V4 起存在但无 enforcer，业务声明的"30 分钟 timeout"实际不生效（参考
- * {@code docs/analysis/orchestrator-vs-industry-2026-05-03.md} §2.1）。本 enforcer 周期扫 RUNNING 中超期的
+ * {@code docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md} §2.1）。本 enforcer 周期扫 RUNNING 中超期的
  * {@code job_instance}，CAS 推到 FAILED 终态，让 timeout 真正起作用。
  *
  * <p>与 {@code PartitionLeaseReclaimScheduler} 的差异：lease reclaim 回退 worker 心跳丢失（worker 宕机），timeout

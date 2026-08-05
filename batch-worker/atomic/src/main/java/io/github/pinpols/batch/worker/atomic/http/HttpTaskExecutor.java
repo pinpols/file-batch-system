@@ -168,7 +168,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     try {
       // Lane C:扫 parameters,但排除 HTTP executor 协议显式的 `auth` 子树(其内
       // username/password/token 是 protocol 一部分)。其他位置出现的 password / token / secret 仍拒。
-      // 后续 Lane C-FE follow-up 应在 console 表单层警示用户「auth.password 也强烈建议改用 env reference」。
+      // Console 表单层已负责提示 auth.password 优先使用 env reference；此处仍保留协议兼容白名单。
       Map<String, Object> paramsForScan = ctx.parameters();
       if (paramsForScan != null && paramsForScan.containsKey(PARAM_AUTH)) {
         Map<String, Object> filtered = new LinkedHashMap<>(paramsForScan);
@@ -545,7 +545,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       String responseBody = new String(kept, StandardCharsets.UTF_8);
 
       output.put("statusCode", statusCode);
-      // P2-3(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+      // P2-3(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):
       // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
       // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
       // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
@@ -613,7 +613,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   /**
    * 出口 HTTP 响应头写入数据库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
    *
-   * <p>对应 docs/analysis/2026-06-03-deep-scan-be-security.md P2-3。这些头若回声到 task_result.output 即等于把
+   * <p>对应 docs/archive/analysis/2026-06-03-deep-scan-be-security.md P2-3。这些头若回声到 task_result.output 即等于把
    * 下游会话凭据落 DB / Kafka,后续 forensic export 一并外泄。
    */
   private static final Set<String> SENSITIVE_RESPONSE_HEADERS =

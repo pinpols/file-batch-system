@@ -23,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -263,7 +264,7 @@ public class WorkflowRunManagementApplicationService {
           run.getId());
       return;
     }
-    var nextNodes =
+    List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(run.getWorkflowDefinitionId(), nodeCode, true, null);
     if (nextNodes == null || nextNodes.isEmpty()) {
       return;

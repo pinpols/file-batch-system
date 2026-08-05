@@ -45,7 +45,7 @@ public class ConsoleApiKeyService {
 
     String rawKey = generateRawKey();
     String prefix = rawKey.substring(0, 8);
-    // P1-1(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+    // P1-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):
     // 新 key 一律 PBKDF2-HMAC-SHA256 + per-key 16B salt(裸 SHA-256 仅 verifier 兼容老行)。
     ApiKeyHasher.SaltedHash hashed = ApiKeyHasher.hashWithSaltKdf(rawKey);
 

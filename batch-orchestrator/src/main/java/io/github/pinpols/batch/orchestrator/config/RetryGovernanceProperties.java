@@ -37,7 +37,7 @@ public class RetryGovernanceProperties {
    * <p>每次计算 {@code nextRetryAt} 时在 backoff 值上抖动 ±jitterRatio 比例，打散 thundering herd
    * （大批失败任务同步触发重试）。生产建议 0.1~0.3，参考 {@code OutboxProperties.retryJitterRatio} (默认 0.2)。
    *
-   * <p>详见 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.3。
+   * <p>详见 docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md §2.3。
    */
   private double jitterRatio = 0.0;
 }

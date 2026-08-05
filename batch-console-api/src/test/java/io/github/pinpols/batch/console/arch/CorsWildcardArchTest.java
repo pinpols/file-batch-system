@@ -13,7 +13,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * P2-1(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md): 静态扫描 batch-console-api 主源码,
+ * P2-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md): 静态扫描 batch-console-api 主源码,
  * 禁止任何 CORS API 直接传入通配符 {@code "*"} —— {@code allowCredentials=true} 与 {@code *} 不兼容(W3C),
  * 但代码层若漏配只会变成"浏览器静默 reject preflight",上线后才会被发现。
  *

@@ -11,6 +11,8 @@ import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.CronExpressionAdapter;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,7 +46,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
   @Override
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
-    var request = command.request();
+    TriggerLaunchRequest request = command.request();
     // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(request.getTenantId())
@@ -64,7 +66,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   @Override
   public LaunchRequest fromScheduledTrigger(
       ScheduledTriggerCommand command, CalendarBizDateDefinition calendar) {
-    var descriptor = command.descriptor();
+    TriggerDescriptor descriptor = command.descriptor();
     // timezone 未配置时 fallback 到平台默认（batch.timezone.default-zone），而非 JVM default。
     // 错误配置不应阻断所有调度触发，但会导致 bizDate 偏移，运维应在 Job 定义上明确填写 timezone。
     ZoneId zoneId = timezoneProvider.resolveOrDefault(descriptor.getTimezone());

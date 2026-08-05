@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.rbac.web.request.ConsoleLoginReque
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthProfileResponse;
 import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -85,7 +86,7 @@ public class ConsoleAuthApplicationService {
     }
     // N-3：requestMetadataResolver.current() 在非 Servlet 上下文（@Async / 后台任务）可能
     // 返回全 null 字段的 mock metadata；对 null 的链式调用会 NPE。这里整段防御。
-    var metadata = requestMetadataResolver.current();
+    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String resolved = metadata == null ? null : metadata.tenantId();
     return resolved == null || resolved.isBlank()
         ? securityProperties.getDefaultTenantId()

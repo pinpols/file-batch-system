@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-08-03"
+  x-last-updated: "2026-08-05"
   x-changelog:
+    - date: "2026-08-05"
+      summary: "后端 Controller 可读性治理：显式类型替换隐式 var；HTTP 路径、请求/响应字段、鉴权和事务语义均不变"
     - date: "2026-08-03"
       summary: "有界上下文治理仅调整内部 Java 依赖方向与共享 DTO 包位置；Console REST 路径、请求/响应字段和鉴权语义不变"
     - date: "2026-08-03"

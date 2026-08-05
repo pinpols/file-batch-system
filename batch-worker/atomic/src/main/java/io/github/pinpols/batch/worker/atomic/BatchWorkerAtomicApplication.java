@@ -18,7 +18,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * pipeline。复用 worker-core 运行时(CLAIM / lease / report / dispatch-consumer)。
  *
  * <p>安全定位:dual-use(RCE 级)能力隔离到本最小权限进程。部署时应配独立低权限 datasource(不连业务库)、 独立 K8s serviceaccount / 网络策略。见
- * docs/adr/ADR-029-dedicated-spi-worker.md。
+ * docs/architecture/adr/ADR-029-dedicated-spi-worker.md。
  *
  * <p>只 MapperScan 平台运行时 mapper(worker-core + common),无业务 mapper —— 本 worker 不碰业务表。
  */

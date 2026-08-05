@@ -56,7 +56,7 @@ public class LeaseRenewalScheduler implements AutoCloseable {
     long intervalMs = config.getLeaseRenewInterval().toMillis();
     // fixed-delay:与 HeartbeatScheduler 一致,避免 tick 卡顿后(HTTP 5xx 重试 ~3s)追赶式积压
     // 把下一轮立即追发出去导致内存爆 / orchestrator 雪崩。
-    // 见 docs/analysis/2026-06-02-sdk-code-deep-review.md §3 / TOP #6
+    // 见 docs/archive/analysis/2026-06-02-sdk-code-deep-review.md §3 / TOP #6
     scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
     log.info("LeaseRenewalScheduler started: interval={}ms (fixed-delay)", intervalMs);
   }

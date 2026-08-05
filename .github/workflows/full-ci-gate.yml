@@ -68,6 +68,14 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-helm-env-sync.py
 
+      - name: Verify code documentation references
+        shell: bash
+        run: python3 scripts/ci/check-code-doc-references.py
+
+      - name: Verify Java readability conventions
+        shell: bash
+        run: python3 scripts/ci/check-java-readability.py
+
       - name: Enforce centralized empty checks
         shell: bash
         # main push 工作树干净，按本次 push 的前一提交检查新增生产 Java 行。

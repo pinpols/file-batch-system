@@ -47,8 +47,9 @@ import org.springframework.stereotype.Service;
  *   <li>V14 edge 引用 node_code 不存在（ERROR）
  * </ul>
  *
- * <p>未实现：V5/V12（output contract，依赖 worker SPI）/ V8（OPTIONAL 传染性退化，依赖图层语义全展开）/ V15（timezone 一致性）— 见
- * ADR-025 §实施分阶段 Stage 4。
+ * <p>实现状态：V8（OPTIONAL 传染性退化）和 V15（calendar/timezone 一致性）已落地；V5 当前基于内置
+ * output contract 产生 WARN，V12 仅保留类型检查提示，完整类型校验仍依赖 worker SPI 扩展。未声明 jobType 的
+ * 老流程按 ADR-025 保持兼容并跳过相关检查。
  */
 @Slf4j
 @Service

@@ -211,7 +211,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     int matchedCount = 0;
     int terminalCount = 0;
     for (WorkflowEdgeEntity edge : incomingEdges) {
-      var predecessorRun = latestRunByCode.get(edge.getFromNodeCode());
+      WorkflowNodeRunEntity predecessorRun = latestRunByCode.get(edge.getFromNodeCode());
       if (predecessorRun == null || !isTerminal(predecessorRun.getNodeStatus())) {
         continue;
       }
@@ -300,7 +300,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       }
     }
     for (WorkflowEdgeEntity edge : incoming) {
-      var pred = latestRunByCode.get(edge.getFromNodeCode());
+      WorkflowNodeRunEntity pred = latestRunByCode.get(edge.getFromNodeCode());
       if (pred == null || !isTerminal(pred.getNodeStatus())) {
         return false;
       }

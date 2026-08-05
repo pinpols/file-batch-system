@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -150,7 +151,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
   }
 
   private static void deleteRecursively(Path dir) {
-    try (var paths = Files.walk(dir)) {
+    try (Stream<Path> paths = Files.walk(dir)) {
       paths.sorted(Comparator.reverseOrder()).forEach(p -> {
         try {
           Files.deleteIfExists(p);

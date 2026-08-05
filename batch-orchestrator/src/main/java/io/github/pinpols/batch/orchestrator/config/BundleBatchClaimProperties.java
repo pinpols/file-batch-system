@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>当前仅承载开关与批大小,**尚无任何热路径消费**:批量 claim/report 变体在切片 2.1/2.2 落地后才读取本配置决定是否走批量路径。默认 {@code
  * enabled=false},单 partition 路径不受影响。
  *
- * <p>设计护栏(见 {@code docs/backlog/adr046-phase2-plan-2026-06-23.md}):纯加法、默认关、 先只对 {@code BUNDLE_*} 作业
+ * <p>设计护栏(见 {@code docs/archive/analysis/adr046-phase2-plan-2026-06-23.md}):纯加法、默认关、 先只对 {@code BUNDLE_*} 作业
  * opt-in;批量只省控制面往返(O(N)→O(N/K)),不引入束状态机 / worker 束循环,partition 语义/幂等/lease 全不变。
  */
 @Data

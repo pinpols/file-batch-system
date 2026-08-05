@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  *   <li>禁止 inline build：{@code mapper.x(XxxParam.builder()...build())}
  * </ol>
  *
- * <p>方案见 {@code docs/analysis/positional-args-cleanup-plan.md} v3。
+ * <p>方案见 {@code docs/archive/analysis/positional-args-cleanup-plan.md} v3。
  */
 class PositionalArgsConventionTest {
 

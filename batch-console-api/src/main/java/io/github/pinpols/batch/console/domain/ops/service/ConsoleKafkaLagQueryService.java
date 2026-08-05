@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,8 @@ public class ConsoleKafkaLagQueryService {
   private List<Map<String, Object>> loadConsumerGroupLags(String groupIdFilter) {
     List<Map<String, Object>> result = new ArrayList<>();
     try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
-      var groups = admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      Collection<GroupListing> groups =
+          admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
       for (GroupListing group : groups) {
         String groupId = group.groupId();
         if (groupIdFilter != null && !groupIdFilter.isEmpty() && !groupId.contains(groupIdFilter)) {
@@ -90,12 +92,14 @@ public class ConsoleKafkaLagQueryService {
 
     // 查询相同分区的 end offset
     Map<TopicPartition, OffsetSpec> endOffsetRequests = new LinkedHashMap<>();
-    committedOffsets.keySet().forEach(tp -> endOffsetRequests.put(tp, OffsetSpec.latest()));
+    for (TopicPartition topicPartition : committedOffsets.keySet()) {
+      endOffsetRequests.put(topicPartition, OffsetSpec.latest());
+    }
     ListOffsetsResult endOffsetsResult = admin.listOffsets(endOffsetRequests);
 
     long totalLag = 0;
     List<Map<String, Object>> partitionLags = new ArrayList<>();
-    for (var entry : committedOffsets.entrySet()) {
+    for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
       TopicPartition tp = entry.getKey();
       long committed = entry.getValue().offset();
       long endOffset = endOffsetsResult

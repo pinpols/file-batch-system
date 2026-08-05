@@ -63,7 +63,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  *   <li>responseBody 与 OpenAPI schema 的深度字段比对(swagger-parser 引入成本高,先靠 fixture 自校验 + 人工评审回退)
  * </ul>
  *
- * <p>与 Python {@code sdk-python/tests/contract/test_contract_runner.py} 是镜像关系:两侧均已驱动决策核做行为断言(Python
+ * <p>与 Python {@code sdk/python/tests/contract/test_contract_runner.py} 是镜像关系:两侧均已驱动决策核做行为断言(Python
  * 早期曾全 xfail,现已落地)。
  */
 class JsonFixtureContractTest {

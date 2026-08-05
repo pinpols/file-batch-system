@@ -137,7 +137,9 @@ public class S3ObjectStore implements BatchObjectStore {
                   + " bucket={}, count={}",
               bucket,
               chunk.size());
-          chunk.forEach(k -> delete(bucket, k));
+          for (String key : chunk) {
+            delete(bucket, key);
+          }
         } else {
           throw mapException("deleteMany", bucket, chunk.isEmpty() ? null : chunk.get(0), ex);
         }

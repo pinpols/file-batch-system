@@ -12,7 +12,7 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
 /**
- * API key 哈希工具——P1-1(docs/analysis/2026-06-03-deep-scan-be-security.md)。
+ * API key 哈希工具——P1-1(docs/archive/analysis/2026-06-03-deep-scan-be-security.md)。
  *
  * <p>历史:V47 起 api_key.key_hash 是裸 SHA-256(无盐,无 KDF),DB 备份泄露后存在弱 key rainbow-table 暴力枚举风险。V166 起新增
  * {@code salt} + {@code key_hash_algo} 列,新 key 用 PBKDF2-HMAC-SHA256(600k iter) 算 + per-key 16B

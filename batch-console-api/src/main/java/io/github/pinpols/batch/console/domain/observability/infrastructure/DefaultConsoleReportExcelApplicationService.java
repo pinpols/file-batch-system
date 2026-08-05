@@ -284,7 +284,7 @@ public class DefaultConsoleReportExcelApplicationService
     try {
       BeanInfo beanInfo = Introspector.getBeanInfo(rowType, Object.class);
       Map<String, PropertyDescriptor> descriptors = new LinkedHashMap<>();
-      for (var descriptor : beanInfo.getPropertyDescriptors()) {
+      for (PropertyDescriptor descriptor : beanInfo.getPropertyDescriptors()) {
         descriptors.put(descriptor.getName(), descriptor);
       }
       for (String header : headers) {

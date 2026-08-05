@@ -6,6 +6,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -87,7 +88,7 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R>
           "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
     }
     SdkRowResult counts = new SdkRowResult();
-    var resumed =
+    Optional<SdkTaskResult> resumed =
         restoreCheckpoint(ctx, counts, "export already completed (resumed checkpoint), skipped");
     if (resumed.isPresent()) {
       return resumed.get();

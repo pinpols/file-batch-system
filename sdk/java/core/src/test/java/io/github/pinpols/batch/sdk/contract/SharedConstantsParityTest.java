@@ -37,8 +37,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>放行 keys(yaml 可有,Java 暂无):{@code atomic_error_codes}(预留 ADR-029,enum 落地后再纳管)。
  *
- * <p>Python 侧的对应校验由 Lane Q follow-up 实现(目前 sdk-python/tests/test_shared_constants_parity.py 仅
- * stub)。
+ * <p>Python 侧的对应校验已在 {@code sdk/python/tests/test_shared_constants_parity.py} 落地，
+ * 与本测试共同锁定 Java、YAML、Python 三方常量集合的一致性。
  */
 class SharedConstantsParityTest {
 

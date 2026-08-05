@@ -12,6 +12,7 @@ import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
 import net.sf.jsqlparser.statement.select.AllTableColumns;
+import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.OrderByElement;
 import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
@@ -125,10 +126,11 @@ public final class SelectSqlAstValidator {
       queue.add(sub);
     }
     if (ps.getJoins() != null) {
-      ps.getJoins().stream()
-          .filter(j -> j.getRightItem() instanceof Select)
-          .map(j -> (Select) j.getRightItem())
-          .forEach(queue::add);
+      for (Join join : ps.getJoins()) {
+        if (join.getRightItem() instanceof Select sub) {
+          queue.add(sub);
+        }
+      }
     }
   }
 

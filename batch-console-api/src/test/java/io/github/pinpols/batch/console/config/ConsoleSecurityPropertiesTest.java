@@ -7,7 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * P2-1(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md): 启动期 CORS allowlist 强校验单测——拒
+ * P2-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md): 启动期 CORS allowlist 强校验单测——拒
  * {@code *} / {@code null} / 空白条目。
  */
 class ConsoleSecurityPropertiesTest {

@@ -41,7 +41,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * </ol>
  *
  * <p>历史：第 3 条 Legacy X-Console-Token 共享密钥路径已于 2026-04-30 物理删除（S5-d）。详见
- * docs/analysis/project-assessment-2026-04-29.md §8 S5-d 修订记录。
+ * docs/archive/analysis/project-assessment-2026-04-29.md §8 S5-d 修订记录。
  *
  * <p>{@code finally clearContext()} 回退：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}， 防止容器线程池复用时
  * ThreadLocal 污染下一个请求。
@@ -138,7 +138,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             return;
           }
 
-          // P1-2 fix(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+          // P1-2 fix(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):
           // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
           // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
           // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。

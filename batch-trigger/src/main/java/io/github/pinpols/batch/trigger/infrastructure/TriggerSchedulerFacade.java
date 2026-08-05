@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -67,7 +68,12 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @SchedulerLock(name = "trigger_register_all", lockAtMostFor = "PT15M", lockAtLeastFor = "PT10S")
   public void registerAll() {
     List<TriggerDescriptor> descriptors = triggerDefinitionLoader.loadAll();
-    descriptors.stream().filter(TriggerDescriptor::isEnabled).forEach(this::scheduleDescriptor);
+    // 调度注册具有外部副作用，显式顺序执行，便于保留失败位置和逐项调试语义。
+    for (TriggerDescriptor descriptor : descriptors) {
+      if (descriptor.isEnabled()) {
+        scheduleDescriptor(descriptor);
+      }
+    }
   }
 
   @Override
@@ -219,7 +225,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         return "STANDBY";
       }
       if (scheduler.isStarted()) {
-        var pausedGroups = scheduler.getPausedTriggerGroups();
+        Set<String> pausedGroups = scheduler.getPausedTriggerGroups();
         if (pausedGroups.contains(JOB_GROUP)) {
           return "PAUSED";
         }
@@ -243,7 +249,8 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     try {
       String scheduleType = descriptor.getScheduleType();
       if (EmptyChecks.isNotNull(scheduleType)) {
-        var handler = scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
+        Consumer<TriggerDescriptor> handler =
+            scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
         if (EmptyChecks.isNotNull(handler)) {
           handler.accept(descriptor);
         }

@@ -14,7 +14,7 @@
     <!--
       专用 Task SPI worker:独占 shell / sql / stored-proc / http 原子任务执行器,不带任何文件 pipeline。
       安全定位:dual-use(RCE 级)能力隔离到本最小权限进程(独立 IAM / 网络 / 凭据),
-      四个 pipeline worker 物理上不含这些 executor。见 docs/adr/ADR-029-dedicated-spi-worker.md。
+      四个 pipeline worker 物理上不含这些 executor。见 docs/architecture/adr/ADR-029-dedicated-spi-worker.md。
     -->
 
     <dependencies>
