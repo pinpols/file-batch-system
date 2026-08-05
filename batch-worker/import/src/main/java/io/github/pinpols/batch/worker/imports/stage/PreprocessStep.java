@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -375,16 +376,18 @@ public class PreprocessStep implements ImportStageStep {
    * 变换。需变换或二进制(EXCEL/BINARY)时返回 false,回退 byte[] 路径(受对象大小配置限制)。
    */
   private boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> tc) {
-    if (isBinaryImportFormat(resolveFileFormatType(importPayload, tc))) {
+    Map<String, Object> config = tc == null ? Map.of() : tc;
+    String formatType = resolveFileFormatType(importPayload, config);
+    if (formatType != null && isBinaryImportFormat(formatType)) {
       return false;
     }
-    Object pp = tc.get("preprocess_pipeline");
+    Object pp = config.get("preprocess_pipeline");
     if (pp != null
         && Texts.hasText(String.valueOf(pp))
         && !"[]".equals(String.valueOf(pp).trim())) {
       return false;
     }
-    return isNoneOrBlank(tc.get("compress_type")) && isNoneOrBlank(tc.get("encrypt_type"));
+    return isNoneOrBlank(config.get("compress_type")) && isNoneOrBlank(config.get("encrypt_type"));
   }
 
   /** statObject 取对象字节数;失败(对象缺失/网络)返回 -1 → 调用方不走流式,交 byte[] 路径报明确错误。 */
@@ -424,7 +427,7 @@ public class PreprocessStep implements ImportStageStep {
     String object = importPayload.storagePath();
     Path spool = null;
     try {
-      spool = Files.createTempFile("batch-preprocess-obj-", ".raw");
+      spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-", ".raw");
       long bytes;
       try (InputStream in = objectStore.get(bucket, object)) {
         bytes = Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
@@ -562,7 +565,7 @@ public class PreprocessStep implements ImportStageStep {
         partitionNo == partitionCount ? objectBytes : objectBytes * partitionNo / partitionCount;
     Path spool = null;
     try {
-      spool = Files.createTempFile("batch-preprocess-obj-p" + partitionNo + "-", ".raw");
+      spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-p" + partitionNo + "-", ".raw");
       long keptBytes;
       try (InputStream in = objectStore.getFrom(bucket, object, rawStart);
           OutputStream out = Files.newOutputStream(
@@ -764,8 +767,8 @@ public class PreprocessStep implements ImportStageStep {
     Path encrypted = null;
     Path decrypted = null;
     try {
-      encrypted = Files.createTempFile("batch-preprocess-enc-", ".raw");
-      decrypted = Files.createTempFile("batch-preprocess-dec-", ".raw");
+      encrypted = PrivateTempFiles.createTempFile("batch-preprocess-enc-", ".raw");
+      decrypted = PrivateTempFiles.createTempFile("batch-preprocess-dec-", ".raw");
       Files.write(
           encrypted, rawBytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
       cryptoService.decrypt(encrypted, decrypted);
@@ -774,7 +777,8 @@ public class PreprocessStep implements ImportStageStep {
       // ByteArrayOutputStream 按文件大小预分配,Files.copy 内部用 BufferedInputStream 提供的 8K buffer 流式
       // transfer。
       long size = Files.size(decrypted);
-      int initialCapacity = (int) Math.min(size, Integer.MAX_VALUE - 8);
+      long maxByteArrayCapacity = Integer.MAX_VALUE - 8L;
+      int initialCapacity = (int) Math.min(size, maxByteArrayCapacity);
       try (InputStream in = new BufferedInputStream(
               Files.newInputStream(decrypted), DECRYPT_STREAM_BUFFER_BYTES);
           ByteArrayOutputStream out = new ByteArrayOutputStream(initialCapacity)) {
@@ -808,7 +812,7 @@ public class PreprocessStep implements ImportStageStep {
   private void spoolLargePayload(byte[] processed, Charset charset, ImportJobContext context) {
     Path spool;
     try {
-      spool = Files.createTempFile("batch-preprocess-", ".raw");
+      spool = PrivateTempFiles.createTempFile("batch-preprocess-", ".raw");
       Files.write(spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     } catch (IOException ex) {
       throw new ImportPreprocessException(

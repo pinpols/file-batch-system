@@ -6,9 +6,11 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -119,6 +121,10 @@ public class ParseStep implements ImportStageStep {
 
   @Override
   public ImportStageResult execute(ImportJobContext context) {
+    if (context == null) {
+      return ImportStageResult.failure(
+          stage(), ERROR_CODE_PARSE_FAILED, "import parse context is required");
+    }
     Path stagingFile = null;
     Path spoolFile = resolveSpoolPath(context);
     Map<String, Object> attrs = context.getAttributes();
@@ -291,7 +297,7 @@ public class ParseStep implements ImportStageStep {
       marker = template == null ? null : template.get("record_type");
     }
     String expected = marker == null ? null : String.valueOf(marker).trim();
-    if (!Texts.hasText(expected)) {
+    if (EmptyChecks.isNull(template) || EmptyChecks.isBlank(expected)) {
       return true;
     }
     String delimiter = strOr(template.get("delimiter"), ",");
@@ -570,7 +576,7 @@ public class ParseStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
       return totalCount;
     }
-    Path filtered = Files.createTempFile(
+    Path filtered = PrivateTempFiles.createTempFile(
         BatchFileConstants.importStagePrefix(
             String.valueOf(context.getFileId()),
             String.valueOf(context.getWorkerId()),

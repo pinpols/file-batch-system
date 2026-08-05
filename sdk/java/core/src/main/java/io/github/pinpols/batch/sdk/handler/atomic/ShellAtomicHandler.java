@@ -6,12 +6,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
@@ -75,7 +81,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
     cmd.add(command);
     cmd.addAll(args);
 
-    Path workdir = Files.createTempDirectory("sdk-shell-");
+    Path workdir = createPrivateWorkdir();
     try {
       return runProcess(cmd, workdir);
     } finally {
@@ -88,6 +94,55 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
   @Override
   protected Map<String, Object> asOutput(Map<String, Object> r) {
     return r;
+  }
+
+  private static Path createPrivateWorkdir() throws IOException {
+    Path root = Path.of(System.getProperty("java.io.tmpdir"), "batch-sdk-private");
+    FileAttribute<Set<PosixFilePermission>> directoryPermissions =
+        PosixFilePermissions.asFileAttribute(Set.of(
+            PosixFilePermission.OWNER_READ,
+            PosixFilePermission.OWNER_WRITE,
+            PosixFilePermission.OWNER_EXECUTE));
+    try {
+      Files.createDirectory(root, directoryPermissions);
+    } catch (UnsupportedOperationException ignored) {
+      try {
+        Files.createDirectory(root);
+      } catch (FileAlreadyExistsException alreadyExists) {
+        // Existing directory is validated below.
+      }
+    } catch (FileAlreadyExistsException alreadyExists) {
+      // Existing directory is validated below.
+    }
+    if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
+      throw new IOException("private SDK workdir is not a directory: " + root);
+    }
+    try {
+      Files.setPosixFilePermissions(
+          root,
+          Set.of(
+              PosixFilePermission.OWNER_READ,
+              PosixFilePermission.OWNER_WRITE,
+              PosixFilePermission.OWNER_EXECUTE));
+    } catch (UnsupportedOperationException ignored) {
+      // Windows ACLs and non-POSIX filesystems enforce permissions outside this API.
+    }
+    try {
+      return Files.createTempDirectory(root, "sdk-shell-", directoryPermissions);
+    } catch (UnsupportedOperationException ignored) {
+      Path path = Files.createTempDirectory(root, "sdk-shell-");
+      try {
+        Files.setPosixFilePermissions(
+            path,
+            Set.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.OWNER_EXECUTE));
+      } catch (UnsupportedOperationException ignoredPermissions) {
+        // Windows ACLs and non-POSIX filesystems enforce permissions outside this API.
+      }
+      return path;
+    }
   }
 
   private static String readCommand(SdkTaskContext ctx) {

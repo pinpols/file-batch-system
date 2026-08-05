@@ -59,6 +59,14 @@ class ParseStepStreamingTest {
     assertNdjsonRecordCount(context, 2);
   }
 
+  @Test
+  void shouldFail_whenContextIsNull() {
+    ImportStageResult result = parseStep.execute(null);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
+  }
+
   // ── JSON {"records":[...]} envelope — streaming path ──────────────────────
 
   @Test

@@ -130,12 +130,18 @@ public class WorkflowRunManagementApplicationService {
   }
 
   /** 老入口,backward-compat;新代码请传 operatorId / reason。 */
+  @Transactional
   public Map<String, Object> skipNode(String tenantId, Long id, String nodeCode) {
-    return skipNode(tenantId, id, nodeCode, null, null);
+    return skipNodeInternal(tenantId, id, nodeCode, null, null);
   }
 
   @Transactional
   public Map<String, Object> skipNode(
+      String tenantId, Long id, String nodeCode, String operatorId, String reason) {
+    return skipNodeInternal(tenantId, id, nodeCode, operatorId, reason);
+  }
+
+  private Map<String, Object> skipNodeInternal(
       String tenantId, Long id, String nodeCode, String operatorId, String reason) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!"RUNNING".equals(run.getRunStatus()) && !"FAILED".equals(run.getRunStatus())) {

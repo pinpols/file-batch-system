@@ -76,9 +76,12 @@ public class LoadStep implements ImportStageStep {
 
   @Override
   public ImportStageResult execute(ImportJobContext context) {
+    if (context == null) {
+      return ImportStageResult.failure(
+          stage(), "IMPORT_LOAD_CONTEXT_MISSING", "context is required");
+    }
     // ADR-026: 演练模式不写目标存储；以 validated path 行数为预估让 PROCESS / FEEDBACK 拿到完整 attribute
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    if (DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
       long expected = estimateDryRunLoadedCount(context);
       return markLoaded(context, expected);
     }

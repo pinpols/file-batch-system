@@ -37,12 +37,8 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
 
         withDown(
             ProxyTarget.PG,
-            () -> assertThatThrownBy(() -> {
-                  try (Statement s = conn.createStatement()) {
-                    s.executeQuery("SELECT 1").close();
-                  }
-                })
-                .isInstanceOf(SQLException.class));
+            () ->
+                assertThatThrownBy(() -> executeSelectOne(conn)).isInstanceOf(SQLException.class));
       }
     }
   }
@@ -83,5 +79,11 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
     cfg.setValidationTimeout(1500);
     cfg.setInitializationFailTimeout(-1); // 不在构造期校验,避免 IT 启动阶段被 toxic 残留波及
     return new HikariDataSource(cfg);
+  }
+
+  private static void executeSelectOne(Connection connection) throws SQLException {
+    try (Statement statement = connection.createStatement()) {
+      statement.executeQuery("SELECT 1").close();
+    }
   }
 }

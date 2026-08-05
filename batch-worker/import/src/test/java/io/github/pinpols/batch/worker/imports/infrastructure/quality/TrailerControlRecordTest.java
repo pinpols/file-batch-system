@@ -46,4 +46,16 @@ class TrailerControlRecordTest {
     Map<String, Object> tmpl = Map.of("present", true, "delimiter", "|", "recordCountIndex", 0);
     assertThat(TrailerControlRecord.parse("42|x", tmpl).declaredRecordCount()).isEqualTo(42L);
   }
+
+  @Test
+  @DisplayName("空字段不触发 trim 空指针")
+  void emptyFieldIsIgnored() {
+    Map<String, Object> tmpl =
+        Map.of("present", true, "recordCountIndex", 1, "controlTotalIndex", 2);
+
+    TrailerControlRecord result = TrailerControlRecord.parse("T,,", tmpl);
+
+    assertThat(result.declaredRecordCount()).isNull();
+    assertThat(result.declaredControlTotal()).isNull();
+  }
 }

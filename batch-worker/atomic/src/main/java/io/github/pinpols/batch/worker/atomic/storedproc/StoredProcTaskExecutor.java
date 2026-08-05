@@ -457,18 +457,27 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       schema = procName.substring(0, dot);
       name = procName.substring(dot + 1);
     }
-    String sql = "select p.prokind from pg_catalog.pg_proc p"
-        + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-        + " where p.proname = ?"
-        + (schema == null ? "" : " and n.nspname = ?")
-        + " limit 1";
-    try (PreparedStatement ps = conn.prepareStatement(sql)) {
-      ps.setString(1, name);
-      if (schema != null) {
-        ps.setString(2, schema);
+    try {
+      if (schema == null) {
+        String sql = "select p.prokind from pg_catalog.pg_proc p"
+            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+            + " where p.proname = ? limit 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+          ps.setString(1, name);
+          try (ResultSet rs = ps.executeQuery()) {
+            return rs.next() && "p".equals(rs.getString(1));
+          }
+        }
       }
-      try (ResultSet rs = ps.executeQuery()) {
-        return rs.next() && "p".equals(rs.getString(1));
+      String sql = "select p.prokind from pg_catalog.pg_proc p"
+          + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+          + " where p.proname = ? and n.nspname = ? limit 1";
+      try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        ps.setString(1, name);
+        ps.setString(2, schema);
+        try (ResultSet rs = ps.executeQuery()) {
+          return rs.next() && "p".equals(rs.getString(1));
+        }
       }
     } catch (SQLException | RuntimeException ex) {
       return false;

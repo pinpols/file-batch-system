@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -166,7 +167,8 @@ public class StoreStep implements ExportStageStep {
         .put("downloadRequiresApproval", security.get("download_requires_approval"));
     boolean encrypt = cryptoService.shouldEncrypt(security);
     if (encrypt) {
-      Path encryptedPath = Files.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
+      Path encryptedPath =
+          PrivateTempFiles.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
       cryptoService.encrypt(generatedFile, encryptedPath, cryptoService.resolveKeyRef(security));
       context.getAttributes().put("contentEncryptionEnabled", Boolean.TRUE);
       context.getAttributes().put("encryptionKeyRef", cryptoService.resolveKeyRef(security));

@@ -11,6 +11,8 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.List;
@@ -164,6 +166,25 @@ class StoredProcTaskExecutorTest {
 
   @Nested
   class MockedExecution {
+
+    @Test
+    void checksUnqualifiedProcedureMetadataBeforeFallbackCall() throws Exception {
+      Connection conn = mock(Connection.class);
+      CallableStatement cs = mock(CallableStatement.class);
+      PreparedStatement metadata = mock(PreparedStatement.class);
+      ResultSet resultSet = mock(ResultSet.class);
+      when(ds.getConnection()).thenReturn(conn);
+      when(conn.getAutoCommit()).thenReturn(true);
+      when(conn.prepareStatement(anyString())).thenReturn(metadata);
+      when(metadata.executeQuery()).thenReturn(resultSet);
+      when(resultSet.next()).thenReturn(false);
+      when(conn.prepareCall(anyString())).thenReturn(cs);
+
+      TaskResult result = executor.execute(ctxWithParams(Map.of("procedureName", "p")));
+
+      assertThat(result.success()).isTrue();
+      verify(conn).prepareCall("{call p()}");
+    }
 
     @Test
     void callsProcedureWithCorrectPlaceholders() throws Exception {

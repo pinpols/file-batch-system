@@ -33,6 +33,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
@@ -42,8 +43,10 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
@@ -242,11 +245,11 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   private String extractContent(ChatResponse chatResponse) {
-    if (chatResponse == null || chatResponse.getResult() == null) {
-      return "";
-    }
-    String text = chatResponse.getResult().getOutput().getText();
-    return text == null ? "" : text;
+    return Optional.ofNullable(chatResponse)
+        .map(ChatResponse::getResult)
+        .map(Generation::getOutput)
+        .map(AssistantMessage::getText)
+        .orElse("");
   }
 
   /** 模型调用失败 / 超时 → 优雅降级响应 + FAILED 审计(不裸抛 500)。 */

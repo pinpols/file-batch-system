@@ -1,0 +1,66 @@
+name: sonar-gate
+
+# Sonar 门禁预留配置。
+# 默认关闭：只有仓库变量 SONAR_GATE_ENABLED=true 时才执行。
+# 这样未配置 SonarCloud/SonarQube 凭据时不会影响现有 CI 和合并门禁。
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonar-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonar:
+    name: Sonar quality gate
+    if: vars.SONAR_GATE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run Sonar analysis and quality gate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY || 'file-batch-system' }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${SONAR_TOKEN}" ]] || { echo 'SONAR_TOKEN is required when SONAR_GATE_ENABLED=true' >&2; exit 1; }
+
+          sonar_args=(
+            "-Dsonar.host.url=${SONAR_HOST_URL}"
+            "-Dsonar.token=${SONAR_TOKEN}"
+            "-Dsonar.projectKey=${SONAR_PROJECT_KEY}"
+            '-Dsonar.qualitygate.wait=true'
+          )
+          if [[ -n "${SONAR_ORGANIZATION}" ]]; then
+            sonar_args+=("-Dsonar.organization=${SONAR_ORGANIZATION}")
+          fi
+
+          ./mvnw -B clean test \
+            org.jacoco:jacoco-maven-plugin:0.8.14:report \
+            --projects '!batch-e2e-tests' \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
+            "${sonar_args[@]}"

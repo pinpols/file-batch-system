@@ -335,3 +335,17 @@ build/
 
 pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配置
 ```
+### Sonar 门禁（预留，默认关闭）
+
+仓库已预留 `.github/workflows/sonar-gate.yml`，但默认不执行，不纳入当前
+required checks。只有配置仓库变量 `SONAR_GATE_ENABLED=true` 后才会运行。
+
+启用前配置：
+
+- Secret：`SONAR_TOKEN`
+- Variable：`SONAR_HOST_URL`（可选，默认 `https://sonarcloud.io`）
+- Variable：`SONAR_PROJECT_KEY`（可选，默认 `file-batch-system`）
+- Variable：`SONAR_ORGANIZATION`（SonarCloud 必填；自建 SonarQube 可不填）
+
+启用后工作流会等待 Sonar Quality Gate 结果。现有 PMD、Spotless、SpotBugs、
+依赖扫描和测试门禁保持不变，Sonar 不替代这些检查。

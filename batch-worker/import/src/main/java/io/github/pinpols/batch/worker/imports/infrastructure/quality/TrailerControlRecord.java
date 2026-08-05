@@ -69,7 +69,7 @@ public final class TrailerControlRecord {
 
   private static Long fieldLong(String[] fields, int index) {
     String raw = fieldAt(fields, index);
-    if (!Texts.hasText(raw)) {
+    if (raw == null || !Texts.hasText(raw)) {
       return null;
     }
     try {
@@ -83,7 +83,7 @@ public final class TrailerControlRecord {
 
   private static BigDecimal fieldDecimal(String[] fields, int index) {
     String raw = fieldAt(fields, index);
-    if (!Texts.hasText(raw)) {
+    if (raw == null || !Texts.hasText(raw)) {
       return null;
     }
     try {
