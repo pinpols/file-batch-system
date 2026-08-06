@@ -3,7 +3,7 @@ name: pr-gate
 # C 方案(2026-06-02):PR 只跑 unit + 文档全跳 + Merge Queue 入口。
 # 历史背景:Round-1 TOP-7 把 e2e 分级到 smoke(本 workflow)+ regression(staging-gate)。
 # C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后回退)+
-# staging-gate(nightly)。PR-gate 只保留 static-checks + unit + security 三类快速反馈。
+# staging-gate(nightly)。PR-gate 只保留 static-checks + unit + security-scan 三类快速反馈。
 # 风险:main 偶尔会被 full-ci-gate 拦,该 PR 作者负责立即 revert + 修复。
 # 详见 docs/runbook/ci-speedup-2026-06-02.md。
 #
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
   # PR 驱动:去掉 feature-branch 的 push 触发(2026-06-22 CI 优化)。
   # 此前 push + pull_request 双跑同一套 pr-gate(concurrency group 不同不互相取消),
-  # 每个 PR 把 static/unit/security 跑两遍。分支保护只认 PR-context run,push run 纯浪费。
+  # 每个 PR 把 static/unit/security-scan 跑两遍。分支保护只认 PR-context run,push run 纯浪费。
   # 现在:PR(pull_request)+ 合并队列(merge_group)覆盖所有门禁场景;main push 由
   # full-ci-gate 接管;想在开 PR 前跑 CI 就开 draft PR。docs-only 跳过由下方 changes job 处理。
   pull_request:
@@ -49,7 +49,7 @@ jobs:
   # ===========================================================================
   # Job 0: changes — dorny/paths-filter 判定 docs-only PR(C 方案 #2)
   # 文档/示例-only PR 跳过 3 个 unit job(GitHub 把 skipped 算 SUCCESS,ruleset
-  # required check 不挂),只保留 static-checks + security 回退。
+  # required check 不挂),只保留 static-checks + security-scan 回退。
   # ===========================================================================
   changes:
     runs-on: ubuntu-latest
@@ -75,7 +75,7 @@ jobs:
           # (即 code=true / docs-only=false),保证安全 — 回退跑 unit。
           #
           # `code` = 平台 Java 源 + schema + 构建配置。只有命中才跑 3 个 unit-it。
-          # **故意排除**(纯改这些 → docs-only=true → 跳 3 类测试,只保 static-checks + security):
+          # **故意排除**(纯改这些 → docs-only=true → 跳 3 类测试,只保 static-checks + security-scan):
           #   - sdk/**            → 走专用 sdk-contract-parity.yml / sdk-python.yml(path-triggered)
           #   - scripts/**        → sh/sql/py 脚本;其安全由 static-checks(DB 脚本 lint 等)兜
           #   - docs/** / *.md    → 不在 code filter 内
@@ -371,9 +371,9 @@ jobs:
   # ===========================================================================
 
   # ===========================================================================
-  # Job 5: security — secret scan(并发)
+  # Job 5: security-scan — secret scan(并发)
   # ===========================================================================
-  security:
+  security-scan:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15

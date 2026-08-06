@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +61,35 @@ class ShellAtomicHandlerTest {
     assertThat(result.output()).containsEntry("exitCode", 0);
     assertThat((String) result.output().get("stdout")).contains("hello");
     assertThat(result.output()).containsEntry("stdoutTruncated", false);
+  }
+
+  @Test
+  void createsPrivateRootWhenTempDirectoryDoesNotExist() throws Exception {
+    assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
+    Path tempRoot = Files.createTempDirectory("shell-private-root-test-");
+    String original = System.getProperty("java.io.tmpdir");
+    System.setProperty("java.io.tmpdir", tempRoot.toString());
+    try {
+      SdkTaskResult result = handler().execute(ctx(Map.of("command", ECHO, "args", List.of("ok"))));
+
+      assertThat(result.success()).isTrue();
+      assertThat(result.output()).containsEntry("exitCode", 0);
+    } finally {
+      if (original == null) {
+        System.clearProperty("java.io.tmpdir");
+      } else {
+        System.setProperty("java.io.tmpdir", original);
+      }
+      try (var paths = Files.walk(tempRoot)) {
+        paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+          try {
+            Files.deleteIfExists(path);
+          } catch (IOException ignored) {
+            // 测试清理失败不影响被测结果。
+          }
+        });
+      }
+    }
   }
 
   @Test

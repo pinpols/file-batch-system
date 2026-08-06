@@ -57,4 +57,30 @@ class PrivateTempFilesTest {
       Files.deleteIfExists(tempRoot);
     }
   }
+
+  @Test
+  void createsRootWhenTempPathIsFresh() throws Exception {
+    Path tempRoot = Files.createTempDirectory("private-temp-fresh-");
+    String original = System.getProperty("java.io.tmpdir");
+    System.setProperty("java.io.tmpdir", tempRoot.toString());
+    Path file = null;
+    Path directory = null;
+    try {
+      file = PrivateTempFiles.createTempFile("fresh-", ".tmp");
+      directory = PrivateTempFiles.createTempDirectory("fresh-");
+
+      assertThat(file).exists();
+      assertThat(directory).isDirectory();
+    } finally {
+      if (original == null) {
+        System.clearProperty("java.io.tmpdir");
+      } else {
+        System.setProperty("java.io.tmpdir", original);
+      }
+      Files.deleteIfExists(file);
+      Files.deleteIfExists(directory);
+      Files.deleteIfExists(tempRoot.resolve("file-batch-private"));
+      Files.deleteIfExists(tempRoot);
+    }
+  }
 }
