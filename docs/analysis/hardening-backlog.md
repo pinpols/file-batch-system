@@ -26,7 +26,7 @@ v6 周期（57 项硬化条目）**已实质收敛**。2026-06-15 重新核实�
 | 编号 | 主题 | 性质 | 触发 / 完成条件 |
 |---|---|---|---|
 | **V6-DBA-P1-1/P1-2** | `job_instance` / `workflow_run` 冗余索引 DROP | 🟡 加新已完成，DROP 待取证 | 需生产 `pg_stat_user_indexes.idx_scan` 数据证明旧索引零命中后，发 V14x `DROP INDEX`。流程见 [`runbook/index-consolidation-2026-05.md`](../runbook/index-consolidation-2026-05.md)（V142/V143 已加新索引 + 回退 UNIQUE，无功能缺口，纯瘦身）|
-| **V6-DBA-P1-4** | `ArchiveSchemaDriftCheck` 列**类型/nullability**比对 | 🟡 部分 | 现已比对热/冷表 column **名集合**（`ArchiveSchemaDriftCheck:86-87` hotCols vs coldCols，14 张表）；尚未比对列**类型/可空性**。补 `data_type`/`is_nullable` 比对即闭环（启动期 fail-fast 已在）|
+| **V6-DBA-P1-4** | `ArchiveSchemaDriftCheck` 列**类型/nullability**比对 | ✅ 完成 | `ArchiveSchemaDriftCheck.checkColumnTypesOnStartup()` 已比对 `data_type`、字符长度、数值精度/scale 和限制性 `is_nullable`；`ArchiveSchemaDriftCheckIntegrationTest` 覆盖类型漂移。|
 | **V6-D-5** | Worker 4 模块单测密度补齐 | 待办（低优先）| 各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 单测；非 blocker，趁改这些类时顺带补 |
 
 ### ❌ 不做（已论证，仅存档）
