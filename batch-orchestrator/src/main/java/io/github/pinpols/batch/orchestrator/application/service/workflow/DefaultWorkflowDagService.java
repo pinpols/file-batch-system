@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -63,10 +64,11 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
   private final org.springframework.beans.factory.ObjectProvider<
           io.micrometer.core.instrument.MeterRegistry>
       meterRegistryProvider;
-  private volatile io.micrometer.core.instrument.Timer cachedReadyCheckTimer;
+  private final AtomicReference<io.micrometer.core.instrument.Timer> cachedReadyCheckTimer =
+      new AtomicReference<>();
 
   private io.micrometer.core.instrument.Timer readyCheckTimer() {
-    io.micrometer.core.instrument.Timer t = cachedReadyCheckTimer;
+    io.micrometer.core.instrument.Timer t = cachedReadyCheckTimer.get();
     if (t != null) {
       return t;
     }
@@ -74,13 +76,15 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (registry == null) {
       return null;
     }
-    cachedReadyCheckTimer = io.micrometer.core.instrument.Timer.builder(
+    io.micrometer.core.instrument.Timer created = io.micrometer.core.instrument.Timer.builder(
             "batch.workflow.dag.ready_check.duration")
         .description(
             "DefaultWorkflowDagService.isNodeReadyForDispatch latency (DAG advance hot path)")
         .publishPercentiles(0.5, 0.95, 0.99)
         .register(registry);
-    return cachedReadyCheckTimer;
+    return cachedReadyCheckTimer.compareAndExchange(null, created) == null
+        ? created
+        : cachedReadyCheckTimer.get();
   }
 
   @Override

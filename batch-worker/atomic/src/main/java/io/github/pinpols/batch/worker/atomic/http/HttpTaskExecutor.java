@@ -29,6 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -106,13 +107,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
    * 共享 OkHttp 基础客户端(懒构造,因 dns 回调依赖注入的 props)。每次请求经 {@code newBuilder()} 派生 per-invocation
    * 超时,复用连接池/dispatcher。dns 回调做 resolve-then-connect SSRF 校验。
    */
-  private volatile OkHttpClient sharedClient;
+  private final AtomicReference<OkHttpClient> sharedClient = new AtomicReference<>();
 
   private OkHttpClient client() {
-    OkHttpClient c = sharedClient;
+    OkHttpClient c = sharedClient.get();
     if (c == null) {
       synchronized (this) {
-        c = sharedClient;
+        c = sharedClient.get();
         if (c == null) {
           c = new OkHttpClient.Builder()
               .followRedirects(false) // 重定向 target 不会再过 validateHost/dns 校验,显式禁
@@ -120,7 +121,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
               .retryOnConnectionFailure(false) // 重试由本类 runWithRetry 控制,避免双重重试
               .dns(guardedDns())
               .build();
-          sharedClient = c;
+          sharedClient.set(c);
         }
       }
     }

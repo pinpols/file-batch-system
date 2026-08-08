@@ -14,6 +14,7 @@ import org.springframework.context.MessageSource;
  * set，靠默认值回退（CLAUDE.md §调用方约束）。
  */
 @Builder
+@SuppressWarnings("java:S6218")
 public record DropdownValidationSpec(
     String[] values,
     String promptTitle,

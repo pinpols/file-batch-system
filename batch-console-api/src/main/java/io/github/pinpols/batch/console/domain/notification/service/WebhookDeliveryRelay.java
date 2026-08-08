@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -79,7 +80,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private ScheduledExecutorService executor;
-  private volatile ScheduledFuture<?> scheduledTask;
+  private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
 
   public WebhookDeliveryRelay(
       ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
@@ -110,11 +111,11 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       t.setDaemon(true);
       return t;
     });
-    scheduledTask = executor.scheduleWithFixedDelay(
+    scheduledTask.set(executor.scheduleWithFixedDelay(
         this::poll,
         properties.getPollIntervalMillis(),
         properties.getPollIntervalMillis(),
-        TimeUnit.MILLISECONDS);
+        TimeUnit.MILLISECONDS));
     log.info(
         "WebhookDeliveryRelay started: poll={}ms batch={} absoluteMax={}",
         properties.getPollIntervalMillis(),
@@ -148,7 +149,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     if (!stopping.compareAndSet(false, true)) {
       return;
     }
-    ScheduledFuture<?> task = scheduledTask;
+    ScheduledFuture<?> task = scheduledTask.getAndSet(null);
     if (task != null) {
       task.cancel(true);
     }

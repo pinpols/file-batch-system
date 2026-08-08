@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
@@ -30,8 +31,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
   private final BatchSecurityProperties securityProperties;
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final Environment environment;
-  // T-1：DCL 必须 volatile，否则另一线程可能读到未完全构造的 RestClient 对象引用
-  private volatile RestClient restClient;
+  private final AtomicReference<RestClient> restClient = new AtomicReference<>();
 
   @Override
   public WorkerRegistration register(WorkerRegistration registration) {
@@ -73,13 +73,14 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
   }
 
   private RestClient client() {
-    RestClient current = this.restClient;
+    RestClient current = this.restClient.get();
     if (current != null) {
       return current;
     }
     synchronized (this) {
-      if (this.restClient == null) {
-        this.restClient = restClientBuilderProvider
+      current = this.restClient.get();
+      if (current == null) {
+        current = restClientBuilderProvider
             .getObject()
             .baseUrl(resolveBaseUrl())
             .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
@@ -92,8 +93,9 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
                     .withConnectTimeout(Duration.ofSeconds(5))
                     .withReadTimeout(Duration.ofSeconds(10))))
             .build();
+        this.restClient.set(current);
       }
-      return this.restClient;
+      return current;
     }
   }
 

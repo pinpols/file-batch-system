@@ -39,6 +39,7 @@ import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
 /** 单 sheet Excel 导入场景的通用能力：解析 workbook、读取临时会话、生成预览错误 workbook。 */
+@SuppressWarnings("java:S2259")
 public final class ConsoleSingleSheetExcelImportSupport {
 
   private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;

@@ -50,6 +50,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2259")
 public class PreprocessStep implements ImportStageStep {
 
   private static final String ERROR_CODE_PREPROCESS_INVALID = "IMPORT_PREPROCESS_INVALID";

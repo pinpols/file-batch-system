@@ -20,6 +20,7 @@ import java.util.Map;
  *
  * <p><b>安全</b>:cursor 是用户可控输入,SQL 必须保证 tenant_id / 权限谓词在 cursor 谓词之前,绝不能让 cursor 解码出的 id 影响租户隔离。
  */
+@SuppressWarnings("java:S2583")
 public final class CursorCodec {
 
   private CursorCodec() {}

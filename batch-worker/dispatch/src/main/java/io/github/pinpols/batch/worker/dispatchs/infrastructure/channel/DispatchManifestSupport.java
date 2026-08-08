@@ -96,6 +96,7 @@ final class DispatchManifestSupport {
 
   record PayloadDigest(long sizeBytes, String sha256) {}
 
+  @SuppressWarnings("java:S6218")
   record ManifestPayload(String ref, String checksum, long sizeBytes, byte[] bytes) {
     DispatchManifestRef toRef() {
       return new DispatchManifestRef(ref, checksum, sizeBytes);

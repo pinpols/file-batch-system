@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -89,7 +91,8 @@ class HttpExecutorProdDefaultsTest {
   void shouldNoOp_whenHttpPropertiesBeanAbsent() {
     when(httpProvider.getIfAvailable()).thenReturn(null);
 
-    newDefaults().applyProdDefaults(); // 不抛
+    assertThatCode(() -> newDefaults().applyProdDefaults()).doesNotThrowAnyException();
+    verify(httpProvider).getIfAvailable();
   }
 
   /** Round-3 #8:隐式翻 true 时必须打 INFO 日志(运维 / Console 仪表盘可见信号)。 */

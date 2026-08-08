@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
@@ -75,14 +76,15 @@ public class OutboxPublishCircuitBreaker {
   private Counter failOpenCounter;
 
   /**
-   * T-2：把 {@code cachedOpenUntilMs} + {@code closedCacheExpiresAt} 捆绑成单个不可变 record， 通过 volatile
-   * 引用原子发布/读取，消除两字段的 torn-read（旧实现两个 volatile long 分别读取，高并发下可能组合出不存在的中间状态）。
+   * T-2：把 {@code cachedOpenUntilMs} + {@code closedCacheExpiresAt} 捆绑成单个不可变 record， 通过原子引用发布/读取，
+   * 消除两字段的 torn-read（旧实现两个 volatile long 分别读取，高并发下可能组合出不存在的中间状态）。
    */
   private record CircuitState(long openUntilMs, long closedCacheExpiresAt) {
     static final CircuitState CLOSED_EMPTY = new CircuitState(0L, 0L);
   }
 
-  private volatile CircuitState state = CircuitState.CLOSED_EMPTY;
+  private final AtomicReference<CircuitState> state =
+      new AtomicReference<>(CircuitState.CLOSED_EMPTY);
   // C-5.1: 用 AtomicBoolean.compareAndSet 保证只有一个线程进入半开探测
   private final AtomicBoolean halfOpenProbing = new AtomicBoolean(false);
 
@@ -123,7 +125,7 @@ public class OutboxPublishCircuitBreaker {
    * 同源),用于告警足够。
    */
   private int openStateSample() {
-    return state.openUntilMs() > BatchDateTimeSupport.utcEpochMillis() ? 1 : 0;
+    return state.get().openUntilMs() > BatchDateTimeSupport.utcEpochMillis() ? 1 : 0;
   }
 
   private void recordFailOpen() {
@@ -142,8 +144,8 @@ public class OutboxPublishCircuitBreaker {
       return true;
     }
     long now = BatchDateTimeSupport.utcEpochMillis();
-    // T-2：单次 volatile 读取拿到一致的 (openUntilMs, closedCacheExpiresAt) 快照
-    CircuitState snapshot = state;
+    // T-2：单次读取拿到一致的 (openUntilMs, closedCacheExpiresAt) 快照
+    CircuitState snapshot = state.get();
     // 快速路径 1：本地已知熔断开启，且冷却期未结束
     if (snapshot.openUntilMs() > now) {
       return false;
@@ -179,7 +181,7 @@ public class OutboxPublishCircuitBreaker {
       return snapshot.openUntilMs() <= now;
     }
     long resolvedOpen = openUntilMs;
-    state = new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis());
+    state.set(new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis()));
     return resolvedOpen <= now;
   }
 
@@ -214,7 +216,7 @@ public class OutboxPublishCircuitBreaker {
     }
     // T-2：原子发布新快照
     long resolvedOpen = openUntilMs != null ? openUntilMs : 0L;
-    state = new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis());
+    state.set(new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis()));
     // C-5.1: 探测完成后重置半开标记
     if (halfOpenProbing.compareAndSet(true, false)) {
       // 探测成功：cachedOpenUntilMs 已为 0，自然进入关闭状态

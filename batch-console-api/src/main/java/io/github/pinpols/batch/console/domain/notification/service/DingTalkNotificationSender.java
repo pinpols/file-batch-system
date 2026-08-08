@@ -31,6 +31,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2583")
 public class DingTalkNotificationSender implements NotificationSender {
 
   /** payloadJson 拼入文案前的最大字符数，防止文案过长被钉钉截断或拒绝。 */

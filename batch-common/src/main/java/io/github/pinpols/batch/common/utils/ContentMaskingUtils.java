@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
  *
  * <p>命名规则集均隐含对命名字段采用 STRICT 脱敏。
  */
+@SuppressWarnings("java:S2583")
 public final class ContentMaskingUtils {
 
   private static final Pattern DIGIT_RUNS = Pattern.compile("\\d{4,}");

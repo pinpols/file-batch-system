@@ -116,10 +116,14 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
           }
 
           @Override
-          public void commit(TransactionStatus status) {}
+          public void commit(TransactionStatus status) {
+            // no-op: config-init unit tests only verify mapper calls inside the callback.
+          }
 
           @Override
-          public void rollback(TransactionStatus status) {}
+          public void rollback(TransactionStatus status) {
+            // no-op: config-init unit tests do not simulate transaction rollback.
+          }
         },
         new TenantFileConfigApplySupport(fileChannelConfigMapper, fileTemplateConfigMapper),
         new TenantOperationalConfigApplySupport(

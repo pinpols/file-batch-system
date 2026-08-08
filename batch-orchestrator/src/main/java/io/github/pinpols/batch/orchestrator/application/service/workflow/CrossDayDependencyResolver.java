@@ -60,7 +60,7 @@ public class CrossDayDependencyResolver {
     if (!Texts.hasText(tenantId)
         || workflowBizDate == null
         || !Texts.hasText(crossDayDependenciesJson)) {
-      return ResolutionResult.resolved(Map.of());
+      return ResolutionResult.resolvedPayload(Map.of());
     }
     List<CrossDayDependencySpec> specs;
     try {
@@ -74,7 +74,7 @@ public class CrossDayDependencyResolver {
       return ResolutionResult.failed("CROSS_DAY_DEPS_PARSE_FAILED");
     }
     if (specs == null || specs.isEmpty()) {
-      return ResolutionResult.resolved(Map.of());
+      return ResolutionResult.resolvedPayload(Map.of());
     }
 
     Map<String, Object> resolved = new LinkedHashMap<>();
@@ -128,7 +128,7 @@ public class CrossDayDependencyResolver {
     if (!waitingReasons.isEmpty()) {
       return ResolutionResult.waiting(waitingReasons, resolved);
     }
-    return ResolutionResult.resolved(resolved);
+    return ResolutionResult.resolvedPayload(resolved);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
@@ -261,7 +261,7 @@ public class CrossDayDependencyResolver {
       return status == ResolutionStatus.FAILED;
     }
 
-    static ResolutionResult resolved(Map<String, Object> resolved) {
+    static ResolutionResult resolvedPayload(Map<String, Object> resolved) {
       return ResolutionResult.builder()
           .status(ResolutionStatus.RESOLVED)
           .resolved(resolved)

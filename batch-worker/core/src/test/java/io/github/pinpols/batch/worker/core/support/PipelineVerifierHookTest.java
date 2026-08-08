@@ -80,8 +80,11 @@ class PipelineVerifierHookTest {
   @Test
   void nullAttributesIsSafe() {
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf());
-    hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", null);
-    // 仅断言不抛异常
+
+    PipelineVerifierHook.VerifierHookResult result =
+        hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", null);
+
+    assertThat(result).isEqualTo(PipelineVerifierHook.VerifierHookResult.NO_FATAL);
   }
 
   @Test

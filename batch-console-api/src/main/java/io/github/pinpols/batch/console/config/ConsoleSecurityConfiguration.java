@@ -91,6 +91,7 @@ public class ConsoleSecurityConfiguration {
   }
 
   @Bean
+  @SuppressWarnings("java:S4502")
   public SecurityFilterChain consoleSecurityFilterChain(
       HttpSecurity http, ConsoleSecurityFilterChainComponents components) throws Exception {
     ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
@@ -104,6 +105,7 @@ public class ConsoleSecurityConfiguration {
     // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
     // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
     // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
+    // 例外 matcher 仅覆盖无 cookie 凭据的内部回调、登录前端点和本地 bypass-mode。
     http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
         .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(

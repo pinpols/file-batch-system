@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 通用 JDBC 映射导出插件：从模板配置的白名单表/列中查询批次头部及明细分页数据。 */
 @Component
+@SuppressWarnings("java:S2077")
 public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
   private final JdbcTemplate jdbcTemplate;
@@ -137,6 +138,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   }
 
   /** 构造明细分页 SQL + 顺序参数。partitionCount>1 时叠加 hashtext 分片谓词。 */
+  @SuppressWarnings("java:S6218")
   static record PagedQuery(String sql, Object[] args) {}
 
   /** 明细 SQL 片段打包(避免 buildDetailQuery 超 6 参,PMD ExcessiveParameterList)。 */

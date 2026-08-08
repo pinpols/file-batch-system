@@ -156,7 +156,7 @@ public class BizDateArithmetic {
   /** 是否周末(周六/周日);当前节假日语义即周末近似。 */
   public boolean isWeekend(LocalDate date) {
     DayOfWeek dow = date.getDayOfWeek();
-    return dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+    return DayOfWeek.SATURDAY.equals(dow) || DayOfWeek.SUNDAY.equals(dow);
   }
 
   private List<LocalDate> inclusiveRange(LocalDate start, LocalDate end) {

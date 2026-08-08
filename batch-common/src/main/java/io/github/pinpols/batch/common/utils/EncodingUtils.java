@@ -21,6 +21,7 @@ import java.nio.charset.UnsupportedCharsetException;
  *   <li>导出路径断言 UTF-8 → 用 {@link #requireUtf8(String)}
  * </ul>
  */
+@SuppressWarnings("java:S2583")
 public final class EncodingUtils {
 
   /** 系统内部字符集规范名；等价于 {@code StandardCharsets.UTF_8.name()}。 */

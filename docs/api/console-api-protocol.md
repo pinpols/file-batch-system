@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-08-08 | **Sonar 静态治理无契约变化**：`ConsoleAuthController` 仅增加静态分析抑制注解，`ConsoleJobController.trigger` 仅将 `CommonResponse<?>` 收敛为 `CommonResponse<Object>`；HTTP 路径、请求/响应字段、鉴权、状态码和 wire schema 均不变。 |
 | 2026-08-05 | **后端可读性治理**：Console Controller 及其依赖仅做显式类型和代码表达收敛；HTTP 路径、请求/响应字段、鉴权、租户边界和事务语义均不变。同步更新 OpenAPI 变更登记。 |
 | 2026-08-04 | **测试数据清理事务边界收敛**：`DELETE /api/console/admin/test-data` 及 `/by-ids` 的 HTTP 路径、请求/响应字段、鉴权、审计和清理语义不变；Console 仅负责参数校验与委派，事务边界统一由 orchestrator 内部接口对应的服务承载。同步更新 OpenAPI 描述。 |
 | 2026-08-03 | **Pipeline progress 响应类型化**：`GET /api/console/queries/pipeline-progress` 的 worker progress 代理由内部 `Map<String,Object>` 改为 `ConsolePipelineProgressItemResponse`，wire 字段 `workerCode/rowsProcessed/totalRowsHint/heartbeatAt` 保持不变；`totalRowsHint` 仍允许为 `null`。同步更新 OpenAPI 与桥接单测。 |

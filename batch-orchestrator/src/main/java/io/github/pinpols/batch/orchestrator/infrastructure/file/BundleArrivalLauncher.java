@@ -37,6 +37,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2583")
 public class BundleArrivalLauncher {
 
   private static final String META_BUNDLE_JOB_CODE = "bundleJobCode";

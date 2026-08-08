@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 /** 启动参数解析与合并工具：从请求参数、作业定义中提取/转换各类运行态字段。 */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2583")
 public class LaunchParamResolver {
 
   /** 模板占位符 {@code ${var}}(SDK Phase 3 M3.1 — descriptor.defaults 中的运行态变量)。 */

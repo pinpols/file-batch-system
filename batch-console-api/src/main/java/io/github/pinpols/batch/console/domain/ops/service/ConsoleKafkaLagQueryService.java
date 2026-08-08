@@ -32,6 +32,8 @@ public class ConsoleKafkaLagQueryService {
   private final ConsoleQueryCacheService cacheService;
 
   private static final long TIMEOUT_SECONDS = 10;
+  private static final String KEY_GROUP_ID = "groupId";
+  private static final String KEY_ERROR = "error";
 
   /** 列出所有 batch 相关 consumer group 的积压情况。 */
   public List<Map<String, Object>> consumerGroupLags(String groupIdFilter) {
@@ -57,11 +59,19 @@ public class ConsoleKafkaLagQueryService {
         }
         try {
           result.add(queryGroupLag(admin, groupId));
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          log.warn("Kafka lag query interrupted for group {}: {}", groupId, e.getMessage());
+          Map<String, Object> errorEntry = new LinkedHashMap<>();
+          errorEntry.put(KEY_GROUP_ID, groupId);
+          errorEntry.put(KEY_ERROR, "Kafka admin query interrupted: " + e.getMessage());
+          result.add(errorEntry);
+          break;
         } catch (Exception e) {
           log.warn("Failed to query lag for group {}: {}", groupId, e.getMessage());
           Map<String, Object> errorEntry = new LinkedHashMap<>();
-          errorEntry.put("groupId", groupId);
-          errorEntry.put("error", e.getMessage());
+          errorEntry.put(KEY_GROUP_ID, groupId);
+          errorEntry.put(KEY_ERROR, e.getMessage());
           result.add(errorEntry);
         }
       }
@@ -69,12 +79,12 @@ public class ConsoleKafkaLagQueryService {
       Thread.currentThread().interrupt();
       log.error("Kafka consumer group query was interrupted", e);
       Map<String, Object> errorEntry = new LinkedHashMap<>();
-      errorEntry.put("error", "Kafka admin query interrupted: " + e.getMessage());
+      errorEntry.put(KEY_ERROR, "Kafka admin query interrupted: " + e.getMessage());
       result.add(errorEntry);
     } catch (ExecutionException | TimeoutException e) {
       log.error("Failed to query Kafka consumer group list (Kafka may be unreachable)", e);
       Map<String, Object> errorEntry = new LinkedHashMap<>();
-      errorEntry.put("error", "Failed to list consumer groups: " + e.getMessage());
+      errorEntry.put(KEY_ERROR, "Failed to list consumer groups: " + e.getMessage());
       result.add(errorEntry);
     }
     return result;
@@ -120,7 +130,7 @@ public class ConsoleKafkaLagQueryService {
     }
 
     Map<String, Object> groupInfo = new LinkedHashMap<>();
-    groupInfo.put("groupId", groupId);
+    groupInfo.put(KEY_GROUP_ID, groupId);
     groupInfo.put("totalLag", totalLag);
     groupInfo.put("partitionCount", committedOffsets.size());
     if (!partitionLags.isEmpty()) {

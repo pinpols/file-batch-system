@@ -9,6 +9,7 @@ import org.springframework.web.util.HtmlUtils;
  * 首尾空白，可选截断长度； {@code safeDisplay} 系列方法在 {@code safeInput} 基础上追加 HTML 转义，防止 XSS。 输入为 {@code null}
  * 时所有方法均返回 {@code null}，不抛异常。
  */
+@SuppressWarnings("java:S2583")
 public final class ConsoleTextSanitizer {
 
   private static final Pattern CONTROL_CHARS = Pattern.compile("[\\p{Cntrl}&&[^\\r\\n\\t]]");

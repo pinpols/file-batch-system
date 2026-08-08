@@ -14,6 +14,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -80,7 +81,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    * Lane E #5:消费线程引用 —— {@link #close(Duration)} 用来 join 等其退出,确保 offset commit / {@code
    * consumer.close()} 完成,避免 SIGKILL 时 in-flight offset 丢失。 由 {@link #run()} 进入时记录。
    */
-  private volatile Thread kafkaThread;
+  private final AtomicReference<Thread> kafkaThread = new AtomicReference<>();
 
   /**
    * P0 hardening:**容量维度** pause —— in-flight 达上限(或平台 PAUSED/DRAINING)时 pause 整个 assignment;掉下来再
@@ -152,7 +153,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */
   @Override
   public void run() {
-    this.kafkaThread = Thread.currentThread();
+    this.kafkaThread.set(Thread.currentThread());
     consumer.subscribe(
         Pattern.compile(config.getKafkaTopicPattern()), new PauseAwareRebalanceListener());
     log.info(
@@ -441,7 +442,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     } catch (Exception ex) {
       log.warn("kafka consumer.wakeup() failed: {}", ex.getMessage());
     }
-    Thread t = this.kafkaThread;
+    Thread t = this.kafkaThread.get();
     if (t != null && t != Thread.currentThread()) {
       long timeoutMs = Math.max(100L, joinTimeout == null ? 5_000L : joinTimeout.toMillis());
       try {

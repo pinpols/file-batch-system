@@ -12,6 +12,7 @@ import java.util.Map;
  * <p>解析逻辑复用 {@link AbstractExportFormat} 的 {@code toMap / firstNonNull / integerValue / textValue}
  * 工具方法,避免重复实现,也不污染 AbstractExportFormat 的公共 API。
  */
+@SuppressWarnings("java:S6218")
 record ExcelStyleOptions(
     boolean bold,
     byte[] backgroundRgb,

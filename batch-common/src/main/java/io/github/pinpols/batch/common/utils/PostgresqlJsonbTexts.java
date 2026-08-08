@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
  * JDBC 驱动可能把 PG {@code json/jsonb} 列映射为 {@code org.postgresql.util.PGobject}；该类仅在运行时存在于 classpath，
  * 编译期不可用（postgresql driver 为 {@code runtime} scope），故用反射取原始 JSON 字符串。
  */
+@SuppressWarnings("java:S2583")
 public final class PostgresqlJsonbTexts {
 
   private static final String PG_OBJECT_CLASS = "org.postgresql.util.PGobject";

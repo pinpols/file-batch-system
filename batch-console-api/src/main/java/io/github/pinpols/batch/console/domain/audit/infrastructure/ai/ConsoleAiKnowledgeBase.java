@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -40,7 +41,7 @@ public class ConsoleAiKnowledgeBase {
       new PathMatchingResourcePatternResolver();
 
   private final Object indexLock = new Object();
-  private volatile List<Chunk> index;
+  private final AtomicReference<List<Chunk>> index = new AtomicReference<>();
 
   /** 检索与 query 最相关的若干片段(已按相似度降序、过滤低于阈值、截断到 topK)。RAG 关闭或无可用片段时返回空。 */
   public List<Snippet> retrieve(String query) {
@@ -73,15 +74,17 @@ public class ConsoleAiKnowledgeBase {
   }
 
   private List<Chunk> ensureIndex() {
-    List<Chunk> local = index;
+    List<Chunk> local = index.get();
     if (local != null) {
       return local;
     }
     synchronized (indexLock) {
-      if (index == null) {
-        index = buildIndex();
+      local = index.get();
+      if (local == null) {
+        local = buildIndex();
+        index.set(local);
       }
-      return index;
+      return local;
     }
   }
 
@@ -176,5 +179,6 @@ public class ConsoleAiKnowledgeBase {
   /** 检索命中的片段:来源文件名 + 文本 + 相似度分。 */
   public record Snippet(String source, String text, double score) {}
 
+  @SuppressWarnings("java:S6218")
   private record Chunk(String source, String text, float[] vector) {}
 }

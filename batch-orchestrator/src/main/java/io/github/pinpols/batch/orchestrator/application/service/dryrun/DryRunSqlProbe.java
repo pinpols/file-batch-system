@@ -46,8 +46,11 @@ final class DryRunSqlProbe {
     return probed;
   }
 
+  @SuppressWarnings("java:S2077")
   private void probeSingleSql(
       String key, String sql, JdbcTemplate jdbcTemplate, List<DryRunFinding> findings) {
+    // The dry-run probe rejects unparsable, multi-statement, EXPLAIN-prefixed, and non-SELECT
+    // payloads before prefixing EXPLAIN; this path never executes data-changing SQL.
     if (EXPLAIN_PREFIX.matcher(sql).find()) {
       findings.add(DryRunFinding.error(
           "EXEC_SQL_EXPLAIN_REJECTED",

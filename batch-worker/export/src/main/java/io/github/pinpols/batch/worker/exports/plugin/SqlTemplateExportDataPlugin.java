@@ -35,6 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2077")
 public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
   public static final String PLUGIN_ID = WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE;

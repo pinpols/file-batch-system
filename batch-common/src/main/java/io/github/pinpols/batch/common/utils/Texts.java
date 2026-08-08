@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Contract;
  *
  * <p>语义和 Spring 版本完全等价：{@code null} / 空 / 全空白 → {@code false}，其他情况 → {@code true}。
  */
+@SuppressWarnings("java:S2583")
 public final class Texts {
 
   private Texts() {}

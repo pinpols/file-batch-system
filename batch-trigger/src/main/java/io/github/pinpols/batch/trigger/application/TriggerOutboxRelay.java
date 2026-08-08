@@ -17,6 +17,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -75,7 +76,7 @@ public class TriggerOutboxRelay {
   private final AtomicLong stalePublishingEvents = new AtomicLong();
   private final AtomicBoolean started = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private volatile ScheduledFuture<?> scheduledTask;
+  private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
   private Counter giveUpCounter;
 
   public TriggerOutboxRelay(
@@ -131,8 +132,8 @@ public class TriggerOutboxRelay {
         .tags("result", "fail")
         .publishPercentiles(0.5, 0.95, 0.99)
         .register(meterRegistry);
-    scheduledTask = scheduler.scheduleWithFixedDelay(
-        this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
+    scheduledTask.set(scheduler.scheduleWithFixedDelay(
+        this::poll, Duration.ofMillis(properties.getPollIntervalMillis())));
     log.info(
         "TriggerOutboxRelay started: poll={}ms batch={} backoff_max={}s",
         properties.getPollIntervalMillis(),
@@ -147,7 +148,7 @@ public class TriggerOutboxRelay {
     if (!stopping.compareAndSet(false, true)) {
       return;
     }
-    ScheduledFuture<?> task = scheduledTask;
+    ScheduledFuture<?> task = scheduledTask.getAndSet(null);
     if (EmptyChecks.isNotNull(task)) {
       task.cancel(true);
     }

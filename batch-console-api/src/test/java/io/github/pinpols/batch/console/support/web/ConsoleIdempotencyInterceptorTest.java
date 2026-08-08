@@ -84,6 +84,8 @@ class ConsoleIdempotencyInterceptorTest {
 
   static class SampleController {
     @Idempotent
-    void mutate() {}
+    void mutate() {
+      // no-op: the interceptor test only needs the method annotation.
+    }
   }
 }

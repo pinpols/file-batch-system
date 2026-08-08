@@ -65,10 +65,14 @@ class ProcessStepBeanRegistrarTest {
       }
 
       @Override
-      public void commit(TransactionStatus status) {}
+      public void commit(TransactionStatus status) {
+        // no-op: registrar tests do not need real transaction completion.
+      }
 
       @Override
-      public void rollback(TransactionStatus status) {}
+      public void rollback(TransactionStatus status) {
+        // no-op: registrar tests do not need real rollback behavior.
+      }
     };
 
     new ProcessStepBeanRegistrar(applicationContext, mapper, txManager)

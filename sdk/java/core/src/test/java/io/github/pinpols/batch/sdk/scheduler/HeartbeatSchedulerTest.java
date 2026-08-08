@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,10 +118,13 @@ class HeartbeatSchedulerTest {
   void closeIsIdempotent() {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
-    try (HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher)) {
-      s.close();
-      s.close(); // 不应抛
-    }
+    ScheduledExecutorService exec = mock(ScheduledExecutorService.class);
+    HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher, null, exec);
+
+    s.close();
+    s.close();
+
+    verify(exec, times(2)).shutdown();
   }
 
   @Test

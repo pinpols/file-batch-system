@@ -129,7 +129,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
             new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode),
             policy,
             burstLimit,
-            quotaProperties.getSnapshot() == null ? 24 : 24));
+            24));
     if (snap == null
         || snap.peakBorrowedCount() == null
         || snap.peakBorrowedCount() == 0

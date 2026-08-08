@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -47,7 +48,7 @@ public abstract class AbstractWorkerLoop {
   private final BatchDateTimeSupport dateTimeSupport;
   private final AtomicBoolean started = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
-  private volatile WorkerRegistration registration;
+  private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
 
   @Value("${batch.worker.registry.fail-fast-on-startup:true}")
   private boolean failFastOnStartup;
@@ -118,11 +119,11 @@ public abstract class AbstractWorkerLoop {
   /** 幂等启动：首次调用注册 worker，后续调用直接返回注册信息；双重检查加锁保证线程安全。 */
   public WorkerRegistration ensureStarted() {
     if (started.get()) {
-      return registration;
+      return registration.get();
     }
     synchronized (this) {
       if (started.get()) {
-        return registration;
+        return registration.get();
       }
       WorkerConfiguration cfg = workerConfiguration();
       WorkerRegistration workerRegistration = new WorkerRegistration();
@@ -138,23 +139,25 @@ public abstract class AbstractWorkerLoop {
       workerRegistration.setRegisteredAt(now);
       workerRegistration.setLastHeartbeatAt(now);
       workerRegistration.setCapabilityTags(cfg.capabilityTags());
-      registration = workerRuntimeFacade.start(workerRegistration);
+      WorkerRegistration startedRegistration = workerRuntimeFacade.start(workerRegistration);
+      registration.set(startedRegistration);
       started.set(true);
       log.info(
           "{} worker started: workerId={}, tenantId={}",
           workerGroup(),
-          registration.getWorkerId(),
-          registration.getTenantId());
-      return registration;
+          startedRegistration.getWorkerId(),
+          startedRegistration.getTenantId());
+      return startedRegistration;
     }
   }
 
   @PreDestroy
   public void shutdown() {
     stopping.set(true);
-    if (registration != null) {
+    WorkerRegistration current = registration.get();
+    if (current != null) {
       try {
-        workerRuntimeFacade.shutdown(registration.getWorkerId());
+        workerRuntimeFacade.shutdown(current.getWorkerId());
       } catch (Exception ex) {
         log.warn(
             "{} worker shutdown signal failed: {} ({})",

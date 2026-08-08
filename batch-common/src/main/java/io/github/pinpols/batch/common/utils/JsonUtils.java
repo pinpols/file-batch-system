@@ -24,6 +24,7 @@ import java.util.Map;
  * <p><b>S-1.6 选型建议</b>：新增 DTO 默认走 {@link #fromJsonStrict}；只在对外接收未知 payload 或跨版本消息场景才用 {@link
  * #fromJson}。
  */
+@SuppressWarnings("java:S2583")
 public final class JsonUtils {
 
   private static final ObjectMapper MAPPER = new ObjectMapper()

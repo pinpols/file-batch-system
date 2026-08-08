@@ -491,6 +491,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
   // ─── execution ──────────────────────────────────────────────────────────────
 
+  @SuppressWarnings("java:S2077")
   private TaskResult runStatements(TaskContext ctx, SqlInvocation inv) {
     long start = System.currentTimeMillis();
     ExecResult execResult = new ExecResult();

@@ -35,7 +35,9 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
   }
 
   @Override
-  public void triggerFired(Trigger trigger, JobExecutionContext context) {}
+  public void triggerFired(Trigger trigger, JobExecutionContext context) {
+    // no-op: only misfire events need recovery scheduling.
+  }
 
   @Override
   public boolean vetoJobExecution(Trigger trigger, JobExecutionContext context) {
@@ -74,5 +76,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
   public void triggerComplete(
       Trigger trigger,
       JobExecutionContext context,
-      Trigger.CompletedExecutionInstruction triggerInstructionCode) {}
+      Trigger.CompletedExecutionInstruction triggerInstructionCode) {
+    // no-op: completion events do not affect misfire recovery.
+  }
 }

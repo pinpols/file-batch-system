@@ -19,6 +19,7 @@ import org.springframework.dao.DataAccessException;
 /** 通知订阅规则的匹配、去重及限流策略，不承担异步投递和重试。 */
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("java:S2583")
 final class SubscriptionRuleDispatchPolicy {
 
   private static final List<String> SEVERITY_KEYS = List.of("severity");

@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
+@SuppressWarnings("java:S2583")
 public class WeComNotificationSender implements NotificationSender {
 
   /** 企业微信群机器人 text 内容上限 2048 字节，摘要保守截断到 1500 字符。 */

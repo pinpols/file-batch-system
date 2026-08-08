@@ -84,7 +84,7 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(BizException.class)
-  public ResponseEntity<?> handleBizException(BizException exception) {
+  public ResponseEntity<CommonResponse<Object>> handleBizException(BizException exception) {
     log.warn(
         "console biz exception: code={} message={}", exception.getCode(), exception.getMessage());
     String message =
@@ -94,14 +94,14 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(SystemException.class)
-  public ResponseEntity<?> handleSystemException(SystemException exception) {
+  public ResponseEntity<CommonResponse<Object>> handleSystemException(SystemException exception) {
     log.error("console system exception", exception);
     return ResponseEntity.status(exception.getCode().httpStatus())
         .body(responseFactory.failure(exception.getCode(), exception.getMessage()));
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<?> handleMethodArgumentNotValidException(
+  public ResponseEntity<CommonResponse<Object>> handleMethodArgumentNotValidException(
       MethodArgumentNotValidException exception) {
     log.warn("console validation exception: {}", exception.getMessage());
     String message = exception.getBindingResult().getFieldErrors().stream()
@@ -114,7 +114,7 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(ConstraintViolationException.class)
-  public ResponseEntity<?> handleConstraintViolationException(
+  public ResponseEntity<CommonResponse<Object>> handleConstraintViolationException(
       ConstraintViolationException exception) {
     log.warn("console constraint violation exception: {}", exception.getMessage());
     return ResponseEntity.badRequest()
@@ -122,7 +122,7 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(MissingRequestHeaderException.class)
-  public ResponseEntity<?> handleMissingRequestHeaderException(
+  public ResponseEntity<CommonResponse<Object>> handleMissingRequestHeaderException(
       MissingRequestHeaderException exception) {
     log.warn("console missing request header exception: header={}", exception.getHeaderName());
     ResultCode code =
@@ -139,7 +139,7 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-  public ResponseEntity<?> handleMethodNotSupported(
+  public ResponseEntity<CommonResponse<Object>> handleMethodNotSupported(
       HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
     // 405 是客户端调用方法错误，**非 server bug**。打印请求行 + 支持的方法即可，
     // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
@@ -153,7 +153,8 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
-  public ResponseEntity<?> handleAccessDenied(Exception exception, HttpServletRequest request) {
+  public ResponseEntity<CommonResponse<Object>> handleAccessDenied(
+      Exception exception, HttpServletRequest request) {
     // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
     log.warn(
         "console access denied: {} {} - {}",
@@ -169,14 +170,15 @@ public class ConsoleApiExceptionHandler {
    * CommonResponse} 语义透传给前端，避免一律降级成 SYSTEM_ERROR。
    */
   @ExceptionHandler(RestClientResponseException.class)
-  public ResponseEntity<?> handleDownstreamRestError(RestClientResponseException exception) {
+  public ResponseEntity<CommonResponse<Object>> handleDownstreamRestError(
+      RestClientResponseException exception) {
     String body = exception.getResponseBodyAsString();
     log.warn(
         "console downstream rest error: status={}, body={}",
         exception.getStatusCode().value(),
         body);
     try {
-      CommonResponse<?> downstream = JsonUtils.fromJson(body, CommonResponse.class);
+      CommonResponse<Object> downstream = JsonUtils.fromJson(body, CommonResponse.class);
       if (downstream != null && downstream.code() != null) {
         // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
         return ResponseEntity.status(downstream.code().httpStatus())
@@ -218,14 +220,15 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
-  public ResponseEntity<?> handleNoResourceFound(NoResourceFoundException exception) {
+  public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(
+      NoResourceFoundException exception) {
     log.warn("console resource not found: {}", exception.getMessage());
     return ResponseEntity.status(404)
         .body(responseFactory.failure(ResultCode.NOT_FOUND, exception.getMessage()));
   }
 
   @ExceptionHandler(MissingServletRequestParameterException.class)
-  public ResponseEntity<?> handleMissingParam(
+  public ResponseEntity<CommonResponse<Object>> handleMissingParam(
       MissingServletRequestParameterException exception, HttpServletRequest request) {
     // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
     log.warn(
@@ -238,7 +241,8 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
-  public ResponseEntity<?> handleMessageNotReadable(HttpMessageNotReadableException exception) {
+  public ResponseEntity<CommonResponse<Object>> handleMessageNotReadable(
+      HttpMessageNotReadableException exception) {
     log.warn("console message not readable: {}", exception.getMessage());
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -255,7 +259,7 @@ public class ConsoleApiExceptionHandler {
     MultipartException.class,
     HttpMediaTypeNotSupportedException.class,
   })
-  public ResponseEntity<?> handleMultipart(Exception exception) {
+  public ResponseEntity<CommonResponse<Object>> handleMultipart(Exception exception) {
     log.warn("console multipart/media-type error: {}", exception.getMessage());
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -288,7 +292,8 @@ public class ConsoleApiExceptionHandler {
    * 每类都附人话中文提示。
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
-  public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+  public ResponseEntity<CommonResponse<Object>> handleDataIntegrityViolation(
+      DataIntegrityViolationException exception) {
     log.warn(
         "console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
     Throwable root = exception.getMostSpecificCause();
@@ -383,7 +388,7 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(Exception.class)
-  public ResponseEntity<?> handleException(Exception exception) {
+  public ResponseEntity<CommonResponse<Object>> handleException(Exception exception) {
     log.error("console unexpected exception", exception);
     return ResponseEntity.internalServerError()
         .body(responseFactory.failure(ResultCode.SYSTEM_ERROR, CommonErrorMessages.SYSTEM_ERROR));

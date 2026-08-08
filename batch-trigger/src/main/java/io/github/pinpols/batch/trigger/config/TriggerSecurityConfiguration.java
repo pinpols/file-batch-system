@@ -40,7 +40,10 @@ public class TriggerSecurityConfiguration {
   private final BatchSecurityProperties securityProperties;
 
   @Bean
+  @SuppressWarnings("java:S4502")
   public SecurityFilterChain triggerSecurityFilterChain(HttpSecurity http) throws Exception {
+    // Trigger exposes stateless internal APIs authenticated by X-Internal-Secret; no browser
+    // cookie/session credential is accepted, so CSRF protection is not applicable to this chain.
     http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth ->

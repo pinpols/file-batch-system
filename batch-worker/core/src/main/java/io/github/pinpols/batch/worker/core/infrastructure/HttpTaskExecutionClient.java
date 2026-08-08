@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -57,8 +58,8 @@ public class HttpTaskExecutionClient
   private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
   private final int renewBatchMaxItems;
   private final int claimBatchMaxItems;
-  // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
-  private volatile RestClient restClient;
+  // L-2: AtomicReference 保证懒初始化发布安全，避免其他线程读到未完全构造的 RestClient。
+  private final AtomicReference<RestClient> restClient = new AtomicReference<>();
 
   // 构造器注入(CLAUDE.md §Java #3 合规)。MeterRegistry 为 optional bean,沿用
   // @Autowired(required=false) 在 ctor 参数上 — 这是构造器注入,不是 field/setter 注入。
@@ -582,25 +583,27 @@ public class HttpTaskExecutionClient
   }
 
   private RestClient client() {
-    RestClient current = this.restClient;
+    RestClient current = this.restClient.get();
     if (current != null) {
       return current;
     }
     synchronized (this) {
-      if (this.restClient == null) {
+      current = this.restClient.get();
+      if (current == null) {
         JdkClientHttpRequestFactory factory =
             new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
                 .build());
         factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
-        this.restClient = restClientBuilderProvider
+        current = restClientBuilderProvider
             .getObject()
             .baseUrl(resolveBaseUrl())
             .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
             .requestFactory(factory)
             .build();
+        this.restClient.set(current);
       }
-      return this.restClient;
+      return current;
     }
   }
 

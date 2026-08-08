@@ -10,6 +10,7 @@ package io.github.pinpols.batch.common.utils;
  * {@code T} 的子类、{@code b} 为 {@code T}（如 {@code coalesce(String, Object)}）， 匹配类似 {@code Map.get()}
  * 返回 {@code Object} 的回退写法。
  */
+@SuppressWarnings("java:S2583")
 public final class Nullables {
 
   private Nullables() {}

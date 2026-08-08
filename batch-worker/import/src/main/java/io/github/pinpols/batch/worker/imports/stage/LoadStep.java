@@ -190,8 +190,11 @@ public class LoadStep implements ImportStageStep {
     try (BufferedReader reader =
         Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
       // 续跑:跳过上次已处理到的行号(空行也算行,保持与首跑一致的行号语义)
-      for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
-        // 空循环体:只消费需要跳过的行
+      for (long i = 0; i < skipLines; i++) {
+        String skippedLine = reader.readLine();
+        if (skippedLine == null) {
+          break;
+        }
       }
       List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
       String line;

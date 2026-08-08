@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
  * <p><b>异常路径</b>：归一后格式不匹配即抛 {@link BizException} ({@code
  * ResultCode.INVALID_ARGUMENT})，错误消息包含原始值以便排查。
  */
+@SuppressWarnings("java:S2583")
 public final class CodeNormalizer {
 
   private static final Pattern GROUP_PATTERN = Pattern.compile("^[A-Z][A-Z0-9_]*$");

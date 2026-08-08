@@ -76,10 +76,14 @@ class BatchDayOpenSchedulerTest {
       }
 
       @Override
-      public void commit(TransactionStatus status) {}
+      public void commit(TransactionStatus status) {
+        // no-op: scheduler tests use transaction callbacks only as boundaries.
+      }
 
       @Override
-      public void rollback(TransactionStatus status) {}
+      public void rollback(TransactionStatus status) {
+        // no-op: scheduler tests use transaction callbacks only as boundaries.
+      }
     };
   }
 
