@@ -56,7 +56,7 @@ public class ConsoleJobController {
   /** 手工触发作业运行（所有已认证用户均可触发）。dryRun=true 时仅校验不执行。 */
   @PostMapping("/trigger")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
-  public CommonResponse<?> trigger(
+  public CommonResponse<Object> trigger(
       @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
           String idempotencyKey,
       @Valid @RequestBody TriggerRequest request) {

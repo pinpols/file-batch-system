@@ -261,10 +261,14 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {}
+    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+      // no-op: this fake store only exercises acquire failure handling.
+    }
 
     @Override
-    public void release(String key) {}
+    public void release(String key) {
+      // no-op: no placeholder is recorded when acquire fails.
+    }
   }
 
   static final class RecordThrowingStore implements SdkIdempotencyStore {
