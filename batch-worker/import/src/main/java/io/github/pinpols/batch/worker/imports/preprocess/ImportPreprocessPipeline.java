@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.preprocess;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -260,7 +261,7 @@ public final class ImportPreprocessPipeline {
         if (entry.isDirectory()) {
           continue;
         }
-        if (entryName != null && !entryName.isBlank() && !entryName.equals(entry.getName())) {
+        if (EmptyChecks.isNotBlank(entryName) && !entryName.equals(entry.getName())) {
           continue;
         }
         return boundedReadAll(zis, input.length, "UNZIP", properties);
@@ -596,10 +597,10 @@ public final class ImportPreprocessPipeline {
   }
 
   private static String trimToNull(String value) {
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     String trimmed = value.trim();
-    return trimmed.isEmpty() ? null : trimmed;
+    return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
   }
 }
