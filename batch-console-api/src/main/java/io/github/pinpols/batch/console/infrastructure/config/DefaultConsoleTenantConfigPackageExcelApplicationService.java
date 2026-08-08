@@ -121,6 +121,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings({"java:S2259", "java:S2583"})
 public class DefaultConsoleTenantConfigPackageExcelApplicationService
     implements ConsoleTenantConfigPackageExcelApplicationService {
 

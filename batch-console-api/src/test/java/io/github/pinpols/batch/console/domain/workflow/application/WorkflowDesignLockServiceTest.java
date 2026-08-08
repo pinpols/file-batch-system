@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.workflow.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -113,7 +115,9 @@ class WorkflowDesignLockServiceTest {
             org.mockito.ArgumentMatchers.<RedisScript<Long>>any(), anyList(), any()))
         .thenReturn(1L);
 
-    service.release(TENANT, DEF_ID, USER_ALICE);
+    assertThatCode(() -> service.release(TENANT, DEF_ID, USER_ALICE)).doesNotThrowAnyException();
+    verify(redisTemplate)
+        .execute(org.mockito.ArgumentMatchers.<RedisScript<Long>>any(), anyList(), any());
   }
 
   @Test

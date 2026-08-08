@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.Timer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -42,9 +43,9 @@ public class ProcessMetrics {
 
   private final MeterRegistry registry;
   // 单例 meter(不再按租户拆 — tenantId 已从 tag 去掉)
-  private volatile DistributionSummary stagedSummary;
-  private volatile DistributionSummary publishedSummary;
-  private volatile Counter feedbackSwallowedCounter;
+  private final AtomicReference<DistributionSummary> stagedSummary = new AtomicReference<>();
+  private final AtomicReference<DistributionSummary> publishedSummary = new AtomicReference<>();
+  private final AtomicReference<Counter> feedbackSwallowedCounter = new AtomicReference<>();
   // ruleName 是 低基数(规则定义有限,通常 <100),保留为 tag
   private final ConcurrentMap<String, Counter> validationFailedByRule = new ConcurrentHashMap<>();
   // stage + success 都是 低基数,组合 < 12 种
@@ -71,32 +72,38 @@ public class ProcessMetrics {
     if (EmptyChecks.isNull(registry)) {
       return;
     }
-    if (EmptyChecks.isNull(stagedSummary)) {
+    DistributionSummary summary = stagedSummary.get();
+    if (EmptyChecks.isNull(summary)) {
       synchronized (this) {
-        if (EmptyChecks.isNull(stagedSummary)) {
-          stagedSummary = DistributionSummary.builder(STAGED_ROWS)
+        summary = stagedSummary.get();
+        if (EmptyChecks.isNull(summary)) {
+          summary = DistributionSummary.builder(STAGED_ROWS)
               .description("PROCESS COMPUTE 写 staging 的行数")
               .register(registry);
+          stagedSummary.set(summary);
         }
       }
     }
-    stagedSummary.record(stagedRows);
+    summary.record(stagedRows);
   }
 
   public void recordCommitPublishedRows(String tenantId, long publishedRows) {
     if (EmptyChecks.isNull(registry)) {
       return;
     }
-    if (EmptyChecks.isNull(publishedSummary)) {
+    DistributionSummary summary = publishedSummary.get();
+    if (EmptyChecks.isNull(summary)) {
       synchronized (this) {
-        if (EmptyChecks.isNull(publishedSummary)) {
-          publishedSummary = DistributionSummary.builder(PUBLISHED_ROWS)
+        summary = publishedSummary.get();
+        if (EmptyChecks.isNull(summary)) {
+          summary = DistributionSummary.builder(PUBLISHED_ROWS)
               .description("PROCESS COMMIT 落 target 表的行数")
               .register(registry);
+          publishedSummary.set(summary);
         }
       }
     }
-    publishedSummary.record(publishedRows);
+    summary.record(publishedRows);
   }
 
   public void incrementValidationFailed(String tenantId, String ruleName) {
@@ -121,16 +128,19 @@ public class ProcessMetrics {
     if (EmptyChecks.isNull(registry)) {
       return;
     }
-    if (EmptyChecks.isNull(feedbackSwallowedCounter)) {
+    Counter counter = feedbackSwallowedCounter.get();
+    if (EmptyChecks.isNull(counter)) {
       synchronized (this) {
-        if (EmptyChecks.isNull(feedbackSwallowedCounter)) {
-          feedbackSwallowedCounter = Counter.builder(FEEDBACK_SWALLOWED)
+        counter = feedbackSwallowedCounter.get();
+        if (EmptyChecks.isNull(counter)) {
+          counter = Counter.builder(FEEDBACK_SWALLOWED)
               .description("PROCESS FEEDBACK 阶段捕获并抑制的异常累计 (target 已落,但 cleanup/audit 失败)")
               .register(registry);
+          feedbackSwallowedCounter.set(counter);
         }
       }
     }
-    feedbackSwallowedCounter.increment();
+    counter.increment();
   }
 
   public void recordStageDuration(

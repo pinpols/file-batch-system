@@ -347,7 +347,10 @@ class ApiKeyVerifierTest {
   @Test
   void touchAsyncSwallowsExceptions() {
     when(mapper.touchLastUsedAt(anyLong())).thenThrow(new RuntimeException("DB down"));
-    verifier.touchAsync(7L); // 不抛
+
+    verifier.touchAsync(7L);
+
+    verify(mapper).touchLastUsedAt(7L);
   }
 
   /**

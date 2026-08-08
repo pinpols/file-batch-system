@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.sdk.checkpoint.InMemorySdkCheckpoint;
@@ -109,10 +110,17 @@ class SdkCommitCoordinatorTest {
   @Test
   @DisplayName("未取消时 commit 正常返回,不抛")
   void shouldNotThrowWhenNotCancelled() {
-    SdkCommitCoordinator c = coordinator(
-        new InMemorySdkCheckpoint(), new ProgressReporter(), new CancellationSignal(), true, 1);
+    InMemorySdkCheckpoint cp = new InMemorySdkCheckpoint();
+    ProgressReporter progress = new ProgressReporter();
+    SdkCommitCoordinator c = coordinator(cp, progress, new CancellationSignal(), true, 1);
     c.recordBatch(1, 0);
-    c.commit(Map.of("id", 1)); // no exception
+
+    assertThatCode(() -> c.commit(Map.of("id", 1))).doesNotThrowAnyException();
+    assertThat(cp.load("task-1")).get().satisfies(saved -> {
+      assertThat(saved.succeedCount()).isEqualTo(1L);
+      assertThat(saved.breakPosition()).containsEntry("id", 1);
+    });
+    assertThat(progress.latest()).containsEntry("succeed", 1L);
   }
 
   @Test

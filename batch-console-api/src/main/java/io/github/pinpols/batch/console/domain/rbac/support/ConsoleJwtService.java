@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
@@ -145,10 +146,9 @@ public class ConsoleJwtService {
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
   // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
-  // volatile：fallback 路径 encoder()/decoder() 是 DCL 模式,无 volatile JIT 重排序可能让其他线程读到
-  // 未完全构造的对象,虽然 SecretKey 重复构造无副作用但仍是 JMM 不安全模式。
-  private volatile NimbusJwtEncoder cachedEncoder;
-  private volatile JwtDecoder cachedDecoder;
+  // AtomicReference：fallback 路径 encoder()/decoder() 是懒初始化模式,需要安全发布构造完成的对象。
+  private final AtomicReference<NimbusJwtEncoder> cachedEncoder = new AtomicReference<>();
+  private final AtomicReference<JwtDecoder> cachedDecoder = new AtomicReference<>();
 
   @PostConstruct
   void validateSecuritySecrets() {
@@ -184,8 +184,8 @@ public class ConsoleJwtService {
       }
     }
     SecretKey key = signingKey();
-    this.cachedEncoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
-    this.cachedDecoder = buildDecoder(key);
+    this.cachedEncoder.set(new NimbusJwtEncoder(new ImmutableSecret<>(key)));
+    this.cachedDecoder.set(buildDecoder(key));
   }
 
   /**
@@ -380,14 +380,14 @@ public class ConsoleJwtService {
   }
 
   private NimbusJwtEncoder encoder() {
-    NimbusJwtEncoder e = cachedEncoder;
+    NimbusJwtEncoder e = cachedEncoder.get();
     if (e == null) {
       // 单元测试 / 非 Spring 场景 PostConstruct 未触发时的回退初始化（同 SecretKey 多次构造无副作用）
       synchronized (this) {
-        e = cachedEncoder;
+        e = cachedEncoder.get();
         if (e == null) {
           e = new NimbusJwtEncoder(new ImmutableSecret<>(signingKey()));
-          cachedEncoder = e;
+          cachedEncoder.set(e);
         }
       }
     }
@@ -395,14 +395,14 @@ public class ConsoleJwtService {
   }
 
   private JwtDecoder decoder() {
-    JwtDecoder d = cachedDecoder;
+    JwtDecoder d = cachedDecoder.get();
     if (d == null) {
       synchronized (this) {
-        d = cachedDecoder;
+        d = cachedDecoder.get();
         if (d == null) {
           // R4-P2-6：fallback 路径走 buildDecoder，与 @PostConstruct 一致带 clock skew validator
           d = buildDecoder(signingKey());
-          cachedDecoder = d;
+          cachedDecoder.set(d);
         }
       }
     }

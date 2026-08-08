@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -56,7 +57,8 @@ public class WorkerTaskLeaseRenewer {
   // P1-8: 进程级熔断 — 整轮 100% renew 失败时 OPEN,跳过后续 tick 直到半开探测;orch 恢复任一成功 → CLOSE
   private final AtomicBoolean circuitOpen = new AtomicBoolean(false);
   private final AtomicInteger ticksSinceOpen = new AtomicInteger(0);
-  private volatile DistributionSummary renewBatchSizeSummary;
+  private final AtomicReference<DistributionSummary> renewBatchSizeSummary =
+      new AtomicReference<>();
 
   public WorkerTaskLeaseRenewer(
       ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
@@ -275,15 +277,15 @@ public class WorkerTaskLeaseRenewer {
     if (registry == null || size <= 0) {
       return;
     }
-    DistributionSummary s = renewBatchSizeSummary;
+    DistributionSummary s = renewBatchSizeSummary.get();
     if (s == null) {
       synchronized (this) {
-        s = renewBatchSizeSummary;
+        s = renewBatchSizeSummary.get();
         if (s == null) {
           s = DistributionSummary.builder("batch.worker.lease.renew.batch.size")
               .description("ADR-016: active leases per renew tick (before HTTP chunking)")
               .register(registry);
-          renewBatchSizeSummary = s;
+          renewBatchSizeSummary.set(s);
         }
       }
     }

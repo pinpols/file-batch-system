@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.tenant.routing;
 
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -19,12 +20,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li><b>冷启动(从未成功加载)+ 读失败</b> → 退 hash(此时表里本就没有 silo 指派可丢),下次 resolve 重试。
  * </ul>
  *
- * <p>缓存用单个不可变 {@code Snapshot} 的 volatile 引用,跨字段一致(避免 mapping 与 loadedAt 撕裂)。
+ * <p>缓存用单个不可变 {@code Snapshot} 的原子引用,跨字段一致(避免 mapping 与 loadedAt 撕裂)。
  */
 @Slf4j
 public final class DbTablePlacementResolver implements BusinessPlacementResolver {
 
-  /** 不可变缓存快照:单次 volatile 写保证 mapping/时间/已加载标志三者一致。 */
+  /** 不可变缓存快照:单次原子写保证 mapping/时间/已加载标志三者一致。 */
   private record Snapshot(Map<String, String> mapping, long loadedAtMs, boolean everLoaded) {}
 
   private final TenantPlacementRepository repository;
@@ -32,7 +33,8 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
   private final long cacheTtlMs;
   private final LongSupplier clockMs;
 
-  private volatile Snapshot snapshot = new Snapshot(Map.of(), 0L, false);
+  private final AtomicReference<Snapshot> snapshot =
+      new AtomicReference<>(new Snapshot(Map.of(), 0L, false));
 
   public DbTablePlacementResolver(
       TenantPlacementRepository repository,
@@ -58,15 +60,15 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
   }
 
   private Map<String, String> currentMapping() {
-    Snapshot current = snapshot;
+    Snapshot current = snapshot.get();
     long now = clockMs.getAsLong();
     if (current.everLoaded() && now - current.loadedAtMs() < cacheTtlMs) {
       return current.mapping();
     }
     try {
       Map<String, String> fresh = repository.loadAll();
-      // 并发下多线程可能同时重载,均幂等;各自单次 volatile 写,无撕裂
-      snapshot = new Snapshot(fresh, now, true);
+      // 并发下多线程可能同时重载,均幂等;各自单次快照写入,无撕裂
+      snapshot.set(new Snapshot(fresh, now, true));
       return fresh;
     } catch (RuntimeException ex) {
       if (current.everLoaded()) {
@@ -75,7 +77,7 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
             "placement reload failed, keep stale mapping ({} entries): {}",
             current.mapping().size(),
             ex.getMessage());
-        snapshot = new Snapshot(current.mapping(), now, true);
+        snapshot.set(new Snapshot(current.mapping(), now, true));
         return current.mapping();
       }
       // 冷启动读失败:表里本无 silo 指派可丢,退 hash;不写 snapshot,下次 resolve 重试

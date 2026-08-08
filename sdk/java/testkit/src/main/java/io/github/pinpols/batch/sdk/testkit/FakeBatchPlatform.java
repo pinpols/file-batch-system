@@ -22,6 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -77,7 +78,7 @@ public final class FakeBatchPlatform implements AutoCloseable {
   /** taskId → claim 时携带的 partitionInvocationId(仅分区任务),供 renew/report 回校防回归。 */
   private final Map<Long, String> claimedInvocations = new ConcurrentHashMap<>();
 
-  private volatile Producer<String, byte[]> producer;
+  private final AtomicReference<Producer<String, byte[]>> producer = new AtomicReference<>();
 
   private FakeBatchPlatform(
       EmbeddedKafkaBroker broker, HttpServer httpServer, String baseUrl, String kafkaBootstrap) {
@@ -360,24 +361,27 @@ public final class FakeBatchPlatform implements AutoCloseable {
   }
 
   private synchronized Producer<String, byte[]> producer() {
-    if (producer == null) {
+    Producer<String, byte[]> current = producer.get();
+    if (current == null) {
       Properties props = new Properties();
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrap);
       props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
       props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
       props.put(ProducerConfig.ACKS_CONFIG, "all");
-      producer = new KafkaProducer<>(props);
+      current = new KafkaProducer<>(props);
+      producer.set(current);
     }
-    return producer;
+    return current;
   }
 
   // ─── 杂项 ─────────────────────────────────────────────────────────────────────
 
   @Override
   public void close() {
-    if (producer != null) {
+    Producer<String, byte[]> current = producer.getAndSet(null);
+    if (current != null) {
       try {
-        producer.close(Duration.ofSeconds(2));
+        current.close(Duration.ofSeconds(2));
       } catch (RuntimeException ignored) {
         // 关闭 producer 失败不应淹没测试结果
       }

@@ -42,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2583")
 public class ResultVersionWriter {
 
   static final String STATUS_EFFECTIVE = "EFFECTIVE";

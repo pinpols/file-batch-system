@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscri
 import java.util.Map;
 
 /** Shared channel delivery and synthetic webhook mapping used by notification entry points. */
+@SuppressWarnings("java:S2583")
 public final class WebhookDeliverySupport {
 
   private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";

@@ -21,6 +21,7 @@ import java.nio.file.Path;
  * InputStreamReader(FileInputStream, charset)} 流式按 行解码消费。{@code spoolPath == null} 时回落 {@code
  * payloadText} 走 {@link StringReader}。
  */
+@SuppressWarnings("java:S6218")
 public record FormatParseRequest(
     String payloadText,
     byte[] binaryPayload,

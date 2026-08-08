@@ -53,6 +53,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /** 校验从租户配置包 Excel 工作簿解析出的行。从 DefaultConsoleTenantConfigPackageExcelApplicationService 抽出以缩减类体积。 */
+@SuppressWarnings("java:S2583")
 public class ConfigPackageExcelValidator {
 
   public static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;

@@ -25,6 +25,7 @@ public class RequestSignatureVerifier {
   }
 
   /** 待校验的签名请求；body 为原始字节，tenantId 为鉴权解析出的租户（nonce 归属域）。 */
+  @SuppressWarnings("java:S6218")
   public record SignedRequest(
       String apiKey,
       String method,

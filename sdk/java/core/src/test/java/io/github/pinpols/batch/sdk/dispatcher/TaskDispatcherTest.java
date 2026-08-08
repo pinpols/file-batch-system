@@ -314,13 +314,16 @@ class TaskDispatcherTest {
   // ─── invalid message 跳过 ────────────────────────────────────────────────────
 
   @Test
-  void invalidMessageSkippedWithoutSubmit() {
+  void invalidMessageSkippedWithoutSubmit() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     dispatcher = new TaskDispatcher(config, Map.of(), http);
 
     TaskDispatchMessage bad =
         new TaskDispatchMessage(null, "tx", "j", "t", "ti", Map.of(), Map.of());
-    dispatcher.onMessage(bad); // 不抛
+
+    assertThat(dispatcher.onMessage(bad)).isEqualTo(TaskDispatcher.DispatchDecision.DROP_TERMINAL);
+    assertThat(dispatcher.inFlightCount()).isZero();
+    verify(http, never()).claim(anyLong(), anyString(), any());
   }
 
   // ─── helpers ───────────────────────────────────────────────────────────────

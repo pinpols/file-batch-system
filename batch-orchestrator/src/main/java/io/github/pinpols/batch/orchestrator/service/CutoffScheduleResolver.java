@@ -100,7 +100,7 @@ public class CutoffScheduleResolver {
       Object weekdayValue = map.get("weekdayPattern");
       if (weekdayValue == null) continue;
       DayOfWeek weekday = parseDayOfWeek(weekdayValue.toString());
-      if (weekday == null || weekday != bizDate.getDayOfWeek()) continue;
+      if (weekday == null || !weekday.equals(bizDate.getDayOfWeek())) continue;
       LocalDate from = parseLocalDate(stringValue(map.get("from")));
       LocalDate to = parseLocalDate(stringValue(map.get("to")));
       if (from != null && bizDate.isBefore(from)) continue;

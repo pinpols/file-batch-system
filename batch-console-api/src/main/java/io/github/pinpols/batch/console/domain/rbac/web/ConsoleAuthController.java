@@ -40,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/auth")
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2583")
 public class ConsoleAuthController {
 
   private final ConsoleAuthApplicationService authApplicationService;

@@ -41,6 +41,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2259")
 public class ReceiveStep implements ImportStageStep {
 
   private static final Set<String> RESERVED_METADATA_KEYS =

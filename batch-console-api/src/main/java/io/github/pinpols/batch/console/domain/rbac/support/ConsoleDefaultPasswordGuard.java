@@ -32,6 +32,7 @@ public class ConsoleDefaultPasswordGuard {
   static final List<String> BUILTIN_USERNAMES = List.of("admin", "auditor", "config-admin");
 
   /** V52 / 文档公示的出厂明文密码。 */
+  @SuppressWarnings("java:S2068")
   static final String FACTORY_DEFAULT_PASSWORD = "admin123";
 
   private final ConsoleUserAccountMapper userAccountMapper;

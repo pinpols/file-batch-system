@@ -22,6 +22,7 @@ import java.util.Set;
  *
  * <p>该工具不做深递归，默认只处理 map 顶层。嵌套 Map 的敏感字段需调用方递归（避免意外展开 不该展开的数据结构）。
  */
+@SuppressWarnings("java:S2583")
 public final class SecretMasking {
 
   private static final Set<String> SENSITIVE_KEYWORDS = Set.of(

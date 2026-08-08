@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -178,8 +179,9 @@ class ConsoleJwtServiceTest {
     environment.setActiveProfiles("local");
     properties.setJwtSecret("change-me-anything-goes-locally");
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    // local 不在 prod-like 名单，placeholder 也不抛
-    ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets");
+
+    assertThatCode(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
+        .doesNotThrowAnyException();
   }
 
   // ─── encoder/decoder 缓存 + clock skew ───────────────────────────────

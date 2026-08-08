@@ -249,6 +249,22 @@ class ImportPreprocessPipelineTest {
     assertThat(out).isEqualTo(plain);
   }
 
+  @Test
+  void shouldParseJsonPipelineAndSkipBlankStepType() {
+    byte[] raw = "hello".getBytes(StandardCharsets.UTF_8);
+    String pipeline = """
+        [
+          {"type":"   "},
+          {"type":"CHARSET_TRANSCODE","fromCharset":"UTF-8","toCharset":"UTF-16BE"}
+        ]
+        """;
+    Map<String, Object> template = Map.of("preprocess_pipeline", pipeline);
+
+    byte[] out = ImportPreprocessPipeline.run(raw, null, template, true);
+
+    assertThat(new String(out, StandardCharsets.UTF_16BE)).isEqualTo("hello");
+  }
+
   private static byte[] gzip(byte[] payload) throws Exception {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     try (GZIPOutputStream gos = new GZIPOutputStream(bos)) {

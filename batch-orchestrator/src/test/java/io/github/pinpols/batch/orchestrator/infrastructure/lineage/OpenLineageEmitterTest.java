@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
@@ -11,7 +14,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 
 class OpenLineageEmitterTest {
@@ -26,15 +28,15 @@ class OpenLineageEmitterTest {
 
   @SuppressWarnings("unchecked")
   private ObjectProvider<MeterRegistry> noRegistry() {
-    ObjectProvider<MeterRegistry> provider = Mockito.mock(ObjectProvider.class);
-    Mockito.when(provider.getIfAvailable()).thenReturn(null);
+    ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(null);
     return provider;
   }
 
   @SuppressWarnings("unchecked")
   private ObjectProvider<OpenLineageDatasetMapper> noDatasetMapper() {
-    ObjectProvider<OpenLineageDatasetMapper> provider = Mockito.mock(ObjectProvider.class);
-    Mockito.when(provider.getIfAvailable()).thenReturn(null);
+    ObjectProvider<OpenLineageDatasetMapper> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(null);
     return provider;
   }
 
@@ -53,10 +55,16 @@ class OpenLineageEmitterTest {
 
   @Test
   void disabled_emitIsNoOp() {
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<OpenLineageDatasetMapper> datasetProvider = mock(ObjectProvider.class);
     OpenLineageEmitter emitter =
-        new OpenLineageEmitter(props(false, ""), noRegistry(), noDatasetMapper());
-    // 不抛异常即可:disabled 时 executor=null,直接 return
+        new OpenLineageEmitter(props(false, ""), meterProvider, datasetProvider);
+
     emitter.emitWorkflowTerminal(run("SUCCESS"), "SUCCESS", Instant.now());
+
+    verifyNoInteractions(meterProvider, datasetProvider);
   }
 
   @Test

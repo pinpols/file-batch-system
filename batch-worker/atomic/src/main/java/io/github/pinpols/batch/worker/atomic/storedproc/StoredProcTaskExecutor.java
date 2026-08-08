@@ -525,6 +525,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
    * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL),autoCommit=true 时无事务, 退化为对单条语句生效。非 PG /
    * 不支持时静默忽略(由白名单 + 限定名回退)。
    */
+  @SuppressWarnings("java:S2077")
   private void pinSearchPath(Connection conn, String procName) {
     String schema = schemaOf(procName);
     if (schema == null) {

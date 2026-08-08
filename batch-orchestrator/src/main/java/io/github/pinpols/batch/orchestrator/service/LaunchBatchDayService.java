@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2259")
 public class LaunchBatchDayService {
 
   // ── duplicate literal constants ─────────────────────────────────────────

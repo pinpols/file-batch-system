@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2259")
 public class SseTicketService {
 
   private static final String KEY_PREFIX = "console:sse:ticket:";

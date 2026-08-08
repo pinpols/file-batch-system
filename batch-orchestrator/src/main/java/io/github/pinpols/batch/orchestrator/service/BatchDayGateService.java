@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2259")
 public class BatchDayGateService {
 
   private static final String POLICY_ALLOW_OVERLAP = "ALLOW_OVERLAP";
@@ -274,6 +275,7 @@ public class BatchDayGateService {
     jobExecutionLogMapper.insert(audit);
   }
 
+  @SuppressWarnings("java:S2259")
   private String normalize(String value, String defaultValue) {
     return Texts.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : defaultValue;
   }

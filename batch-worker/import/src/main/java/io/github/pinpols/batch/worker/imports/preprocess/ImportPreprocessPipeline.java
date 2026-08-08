@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -61,6 +62,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
  *
  * <p>{@code bypassMode=true} 时跳过 AES 解密、摘要校验和 RSA 验签，便于测试环境无密钥运行。
  */
+@SuppressWarnings("java:S2259")
 public final class ImportPreprocessPipeline {
 
   // ── duplicate literal constants ─────────────────────────────────────────
@@ -73,15 +75,16 @@ public final class ImportPreprocessPipeline {
    * ImportPreprocessObjectMapperInitializer} 替换为容器管理的全局 bean,确保自定义 Module(JavaTime / Kotlin / 项目内
    * mixin)与其他模块行为一致。
    */
-  private static volatile ObjectMapper OBJECT_MAPPER = JsonUtils.newDefaultMapper();
+  private static final AtomicReference<ObjectMapper> OBJECT_MAPPER =
+      new AtomicReference<>(JsonUtils.newDefaultMapper());
 
   /**
-   * 仅由 Spring 启动期(单线程)调用,把 fallback 实例替换为容器管理的 ObjectMapper。volatile 写一次,后续解析步骤读到的就是项目全局
+   * 仅由 Spring 启动期(单线程)调用,把 fallback 实例替换为容器管理的 ObjectMapper。后续解析步骤读到的就是项目全局
    * ObjectMapper。
    */
   static void setObjectMapper(ObjectMapper objectMapper) {
     if (objectMapper != null) {
-      OBJECT_MAPPER = objectMapper;
+      OBJECT_MAPPER.set(objectMapper);
     }
   }
 
@@ -132,8 +135,8 @@ public final class ImportPreprocessPipeline {
         verifyImplicitChecksum(current, payload, template);
       }
       for (Map<String, Object> step : steps) {
-        String type = stringProp(step, KEY_TYPE);
-        if (!Texts.hasText(type)) {
+        String type = trimToNull(stringProp(step, KEY_TYPE));
+        if (type == null) {
           continue;
         }
         switch (type.toUpperCase(Locale.ROOT)) {
@@ -202,7 +205,11 @@ public final class ImportPreprocessPipeline {
     if (!Texts.hasText(rawType)) {
       return false;
     }
-    String stepType = lookup.get(rawType.trim().toUpperCase(Locale.ROOT));
+    String normalizedType = trimToNull(rawType);
+    if (normalizedType == null) {
+      return false;
+    }
+    String stepType = lookup.get(normalizedType.toUpperCase(Locale.ROOT));
     if (stepType == null) {
       return false;
     }
@@ -224,7 +231,9 @@ public final class ImportPreprocessPipeline {
     }
     if (raw instanceof String text && Texts.hasText(text)) {
       try {
-        return OBJECT_MAPPER.readValue(text, new TypeReference<List<Map<String, Object>>>() {});
+        return OBJECT_MAPPER
+            .get()
+            .readValue(text, new TypeReference<List<Map<String, Object>>>() {});
       } catch (Exception ex) {
         throw new ImportPreprocessException(
             "IMPORT_PREPROCESS_PIPELINE_JSON", "invalid preprocess_pipeline json", ex);
@@ -251,7 +260,7 @@ public final class ImportPreprocessPipeline {
         if (entry.isDirectory()) {
           continue;
         }
-        if (Texts.hasText(entryName) && !entryName.equals(entry.getName())) {
+        if (entryName != null && !entryName.isBlank() && !entryName.equals(entry.getName())) {
           continue;
         }
         return boundedReadAll(zis, input.length, "UNZIP", properties);
@@ -349,14 +358,14 @@ public final class ImportPreprocessPipeline {
         firstNonBlank(stringProp(step, "aesKeyBase64"), metaString(meta, "decryptAesKeyBase64"));
     String ivB64 =
         firstNonBlank(stringProp(step, "aesIvBase64"), metaString(meta, "decryptAesIvBase64"));
-    if (!Texts.hasText(keyB64) || !Texts.hasText(ivB64)) {
+    if (keyB64 == null || ivB64 == null) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_AES_KEY_MISSING",
           "AES_GCM_DECRYPT requires aesKeyBase64 and aesIvBase64 on the step or metadata"
               + " decryptAesKeyBase64 / decryptAesIvBase64");
     }
-    byte[] keyBytes = Base64.getDecoder().decode(keyB64.trim());
-    byte[] ivBytes = Base64.getDecoder().decode(ivB64.trim());
+    byte[] keyBytes = Base64.getDecoder().decode(keyB64);
+    byte[] ivBytes = Base64.getDecoder().decode(ivB64);
     Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
     cipher.init(
         Cipher.DECRYPT_MODE,
@@ -376,7 +385,7 @@ public final class ImportPreprocessPipeline {
           "VERIFY_DIGEST requires a concrete digest algorithm");
     }
     String expected = firstNonBlank(stringProp(step, "expectedHex"), checksumExpected(payload));
-    if (!Texts.hasText(expected)) {
+    if (expected == null) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_EXPECTED_MISSING",
           "VERIFY_DIGEST requires expectedHex or ImportPayload.checksumValue");
@@ -384,7 +393,7 @@ public final class ImportPreprocessPipeline {
     MessageDigest digest = messageDigestForFileIntegrity(algorithm);
     byte[] hash = digest.digest(input);
     String actual = HexFormat.of().formatHex(hash);
-    if (!actual.equalsIgnoreCase(expected.trim().replace(" ", EMPTY))) {
+    if (!actual.equalsIgnoreCase(expected.replace(" ", EMPTY))) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_MISMATCH", "digest mismatch for " + algorithm);
     }
@@ -397,13 +406,14 @@ public final class ImportPreprocessPipeline {
       return;
     }
     String expected = checksumExpected(payload);
-    if (!Texts.hasText(expected)) {
+    expected = trimToNull(expected);
+    if (expected == null) {
       return;
     }
     MessageDigest digest = messageDigestForFileIntegrity(algorithm);
     byte[] hash = digest.digest(input);
     String actual = HexFormat.of().formatHex(hash);
-    if (!actual.equalsIgnoreCase(expected.trim().replace(" ", EMPTY))) {
+    if (!actual.equalsIgnoreCase(expected.replace(" ", EMPTY))) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_CHECKSUM_MISMATCH", "checksum mismatch for " + algorithm);
     }
@@ -423,10 +433,11 @@ public final class ImportPreprocessPipeline {
   }
 
   private static String normalizeDigestName(String raw) {
-    if (!Texts.hasText(raw)) {
+    raw = trimToNull(raw);
+    if (raw == null) {
       return POLICY_NONE;
     }
-    String upper = raw.trim().toUpperCase(Locale.ROOT);
+    String upper = raw.toUpperCase(Locale.ROOT);
     if ("SHA-256".equals(upper) || "SHA256".equals(upper)) {
       return "SHA-256";
     }
@@ -455,7 +466,8 @@ public final class ImportPreprocessPipeline {
     String signatureB64 = firstNonBlank(
         stringProp(step, "signatureBase64"),
         metaString(payload == null ? Map.of() : payload.metadata(), "signatureBase64"));
-    if (!Texts.hasText(pem) || !Texts.hasText(signatureB64)) {
+    pem = trimToNull(pem);
+    if (pem == null || signatureB64 == null) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_RSA_CONFIG_MISSING",
           "VERIFY_RSA_SHA256 requires publicKeyPem and signatureBase64 (step or"
@@ -465,7 +477,7 @@ public final class ImportPreprocessPipeline {
     Signature signature = Signature.getInstance("SHA256withRSA");
     signature.initVerify(publicKey);
     signature.update(input);
-    byte[] signBytes = Base64.getDecoder().decode(signatureB64.trim());
+    byte[] signBytes = Base64.getDecoder().decode(signatureB64);
     if (!signature.verify(signBytes)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_RSA_VERIFY_FAILED", "RSA signature verification failed");
@@ -540,11 +552,12 @@ public final class ImportPreprocessPipeline {
   }
 
   private static long parseLong(String raw, long fallback) {
-    if (!Texts.hasText(raw)) {
+    raw = trimToNull(raw);
+    if (raw == null) {
       return fallback;
     }
     try {
-      long parsed = Long.parseLong(raw.trim());
+      long parsed = Long.parseLong(raw);
       return parsed > 0 ? parsed : fallback;
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
@@ -571,12 +584,22 @@ public final class ImportPreprocessPipeline {
   }
 
   private static String firstNonBlank(String a, String b) {
-    if (Texts.hasText(a)) {
-      return a;
+    String normalized = trimToNull(a);
+    if (normalized != null) {
+      return normalized;
     }
-    if (Texts.hasText(b)) {
-      return b;
+    normalized = trimToNull(b);
+    if (normalized != null) {
+      return normalized;
     }
     return null;
+  }
+
+  private static String trimToNull(String value) {
+    if (value == null) {
+      return null;
+    }
+    String trimmed = value.trim();
+    return trimmed.isEmpty() ? null : trimmed;
   }
 }

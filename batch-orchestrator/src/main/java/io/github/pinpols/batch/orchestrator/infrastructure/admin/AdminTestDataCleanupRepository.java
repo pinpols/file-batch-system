@@ -34,7 +34,10 @@ public class AdminTestDataCleanupRepository {
    * @param prefix 已由 Controller 层正则约束 (`^[a-zA-Z][a-zA-Z0-9-]{2,32}$`,禁 `_/%/\\`),本方法不重复校验
    * @return 每张表删了多少行的 ordered map(LinkedHashMap 保留依赖顺序)
    */
+  @SuppressWarnings("java:S2077")
   public Map<String, Integer> cleanupByPrefix(String prefix) {
+    // The only concatenated fragment is a fixed subquery reused across statements; request
+    // values remain bound named parameters after the controller-level prefix allowlist.
     String escapedPrefix = escapeLike(prefix);
     String like = escapedPrefix + "-%";
     String opLike = "op-" + escapedPrefix + "-%";

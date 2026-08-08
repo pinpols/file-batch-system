@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Notification;
@@ -56,7 +57,7 @@ public class ConsolePushSender {
   private final ConsolePushSubscriptionMapper repository;
   private final ObjectMapper objectMapper;
 
-  private volatile PushAsyncService pushService;
+  private final AtomicReference<PushAsyncService> pushService = new AtomicReference<>();
 
   /** 单条推送 payload。{@code tag} 用于通知折叠;{@code url} 是点击后导航的 PWA 路由。 */
   public record PushPayload(String title, String body, String tag, String url) {}
@@ -70,13 +71,13 @@ public class ConsolePushSender {
         && properties.getPublicKey() != null
         && properties.getPrivateKey() != null) {
       try {
-        this.pushService = new PushAsyncService(
-                properties.getPublicKey(), properties.getPrivateKey())
-            .setSubject(properties.getSubject());
+        this.pushService.set(
+            new PushAsyncService(properties.getPublicKey(), properties.getPrivateKey())
+                .setSubject(properties.getSubject()));
         log.info("[push] ConsolePushSender initialized, subject={}", properties.getSubject());
       } catch (Exception e) {
         log.error("[push] init failed; push disabled", e);
-        this.pushService = null;
+        this.pushService.set(null);
       }
     } else {
       log.info("[push] disabled (console.push.enabled=false or keys missing)");
@@ -86,7 +87,7 @@ public class ConsolePushSender {
   /** 给某租户某用户全部设备推送。失败的 endpoint 自动按规则清理。 */
   @Async("pushTaskExecutor")
   public void sendToUser(String tenantId, String username, PushPayload payload) {
-    if (pushService == null) return;
+    if (pushService.get() == null) return;
     List<ConsolePushSubscriptionEntity> subs = repository.findByTenantAndUser(tenantId, username);
     sendBatch(subs, payload);
   }
@@ -94,7 +95,7 @@ public class ConsolePushSender {
   /** 给整个租户全部用户全部设备广播(罕用,系统级公告) */
   @Async("pushTaskExecutor")
   public void broadcastToTenant(String tenantId, PushPayload payload) {
-    if (pushService == null) return;
+    if (pushService.get() == null) return;
     List<ConsolePushSubscriptionEntity> subs = repository.findByTenant(tenantId);
     sendBatch(subs, payload);
   }
@@ -130,7 +131,11 @@ public class ConsolePushSender {
           properties.getTtlSeconds());
 
       // sendOne 已在 pushTaskExecutor,但发送仍要封顶等待,避免慢 endpoint 占住线程。
-      CompletableFuture<Response> future = pushService.send(notification);
+      PushAsyncService service = pushService.get();
+      if (service == null) {
+        return;
+      }
+      CompletableFuture<Response> future = service.send(notification);
       Response resp = future.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       int code = resp.getStatusCode();
       if (code >= 200 && code < 300) {

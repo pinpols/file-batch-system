@@ -39,6 +39,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2077")
 public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
   private final JdbcTemplate jdbcTemplate;

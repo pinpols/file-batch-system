@@ -171,7 +171,7 @@ public final class AtomicConnectionManager {
       return new Options(false, false, true);
     }
 
-    public static Options readOnly() {
+    public static Options forReadOnlyTransaction() {
       return new Options(false, true, true);
     }
 

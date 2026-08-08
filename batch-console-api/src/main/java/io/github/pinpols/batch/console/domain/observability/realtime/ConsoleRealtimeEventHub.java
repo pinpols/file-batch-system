@@ -21,6 +21,7 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
@@ -96,10 +97,10 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     registerLifecycle(subscription);
 
     long interval = resolveHeartbeatInterval(heartbeatMillis);
-    subscription.heartbeatFuture = scheduler.scheduleAtFixedRate(
+    subscription.heartbeatFuture.set(scheduler.scheduleAtFixedRate(
         () -> sendHeartbeat(subscription),
         Instant.now().plusMillis(interval),
-        Duration.ofMillis(interval));
+        Duration.ofMillis(interval)));
 
     // 订阅建立后立即回一个 ready 事件，前端可据此确认流已连通并拿到当前 cursor/stream。
     sendLifecycleEvent(
@@ -266,7 +267,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     // 之前 subscriptions.remove 在 finally 外，中间任一步骤抛异常会导致
     // subscription 残留在列表里（active=false 但未 remove），publish() 每次遍历都做无效比对。
     try {
-      ScheduledFuture<?> heartbeatFuture = subscription.heartbeatFuture;
+      ScheduledFuture<?> heartbeatFuture = subscription.heartbeatFuture.getAndSet(null);
       if (heartbeatFuture != null) {
         heartbeatFuture.cancel(true);
       }
@@ -333,7 +334,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     private final String cursor;
     private final SseEmitter emitter;
     private final AtomicBoolean active = new AtomicBoolean(true);
-    private volatile ScheduledFuture<?> heartbeatFuture;
+    private final AtomicReference<ScheduledFuture<?>> heartbeatFuture = new AtomicReference<>();
 
     private Subscription(
         String tenantId, String stream, String eventType, String cursor, SseEmitter emitter) {

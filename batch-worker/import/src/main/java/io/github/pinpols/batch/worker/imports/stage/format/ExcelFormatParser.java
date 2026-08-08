@@ -52,6 +52,7 @@ import org.xml.sax.XMLReader;
  * 报缺哪列)。未配 {@code field_mappings} 时按 Excel 实际表头名直通(不再硬编码 customer 7 列)。 可选 {@code
  * template_config.excel_sheet_name} 按名选 sheet;{@code template_config.preview_rows} 抽样前 N 行。
  */
+@SuppressWarnings("java:S2259")
 public class ExcelFormatParser implements FormatParser {
 
   private static final int MAX_EXCEL_COLUMNS = 1000;

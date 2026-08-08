@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2259")
 public class BatchDayTimePolicyResolver {
 
   public static final String DEFAULT_GAP_POLICY = "RUN_AT_NEXT_VALID_TIME";
@@ -113,6 +114,7 @@ public class BatchDayTimePolicyResolver {
     return transition.getInstant();
   }
 
+  @SuppressWarnings("java:S2259")
   private String normalize(String value, String defaultValue) {
     return Texts.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : defaultValue;
   }

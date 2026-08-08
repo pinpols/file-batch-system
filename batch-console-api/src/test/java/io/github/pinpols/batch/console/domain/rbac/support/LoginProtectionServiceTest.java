@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -96,7 +97,9 @@ class LoginProtectionServiceTest {
     when(failureTracker.currentFailures("alice", "1.2.3.4")).thenReturn(5L);
     when(captchaVerifier.verify("good", "1.2.3.4")).thenReturn(CaptchaResult.ok());
 
-    service.assertCaptchaSatisfied("alice", "1.2.3.4", "good");
+    assertThatCode(() -> service.assertCaptchaSatisfied("alice", "1.2.3.4", "good"))
+        .doesNotThrowAnyException();
+    verify(captchaVerifier).verify("good", "1.2.3.4");
   }
 
   @Test
@@ -122,6 +125,7 @@ class LoginProtectionServiceTest {
   void backoff_capped() {
     when(failureTracker.recordFailure(anyString(), anyString())).thenReturn(1000L);
 
-    service.onLoginFailure("alice", "1.2.3.4"); // step=0 → delay=0,瞬时返回
+    assertThatCode(() -> service.onLoginFailure("alice", "1.2.3.4")).doesNotThrowAnyException();
+    verify(failureTracker).recordFailure("alice", "1.2.3.4");
   }
 }

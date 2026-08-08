@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@SuppressWarnings("java:S2583")
 public class SlackNotificationSender implements NotificationSender {
 
   /** 摘要文案截断上限，避免把整份 payload 灌进 Slack 消息。 */

@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
@@ -61,6 +62,7 @@ import org.springframework.web.client.ResourceAccessException;
  * </ul>
  */
 @Slf4j
+@SuppressWarnings("java:S2259")
 public abstract class AbstractTaskConsumer implements WorkerLoadProvider, ApplicationContextAware {
 
   /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
@@ -133,7 +135,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    */
   @Override
   public int currentLoad() {
-    Semaphore local = semaphore;
+    Semaphore local = semaphore.get();
     if (local == null) {
       return 0;
     }
@@ -144,14 +146,14 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private volatile Counter backpressurePauseCounter;
-  private volatile Counter backpressureResumeCounter;
+  private final AtomicReference<Counter> backpressurePauseCounter = new AtomicReference<>();
+  private final AtomicReference<Counter> backpressureResumeCounter = new AtomicReference<>();
 
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
   private WorkerKafkaSubscribeProperties subscribeProperties;
 
-  private volatile Semaphore semaphore;
+  private final AtomicReference<Semaphore> semaphore = new AtomicReference<>();
 
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
@@ -509,35 +511,36 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   }
 
   private Semaphore ensureSemaphore() {
-    Semaphore local = semaphore;
+    Semaphore local = semaphore.get();
     if (local != null) {
       return local;
     }
     synchronized (this) {
-      if (semaphore == null) {
+      local = semaphore.get();
+      if (local == null) {
         int permits = Math.max(1, maxConcurrentTasks);
-        semaphore = new Semaphore(permits);
+        local = new Semaphore(permits);
+        semaphore.set(local);
         // #6-2: 暴露信号量可用许可数到 Actuator/Prometheus
         MeterRegistry registry = meterRegistryProvider.getIfAvailable();
         if (registry != null) {
-          Semaphore captured = semaphore;
           registry.gauge(
               "batch.worker.semaphore.available",
               Tags.of("workerType", workerConfiguration().workerType()),
-              captured,
+              local,
               Semaphore::availablePermits);
           String workerType = workerConfiguration().workerType();
-          backpressurePauseCounter = Counter.builder("batch.worker.consumer.pause.total")
+          backpressurePauseCounter.set(Counter.builder("batch.worker.consumer.pause.total")
               .description("Kafka listener pause events caused by exhausted worker permits")
               .tag("workerType", workerType)
-              .register(registry);
-          backpressureResumeCounter = Counter.builder("batch.worker.consumer.resume.total")
+              .register(registry));
+          backpressureResumeCounter.set(Counter.builder("batch.worker.consumer.resume.total")
               .description("Kafka listener resume events after worker permits became available")
               .tag("workerType", workerType)
-              .register(registry);
+              .register(registry));
         }
       }
-      return semaphore;
+      return local;
     }
   }
 
@@ -550,7 +553,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     try {
       if (!container.isPauseRequested()) {
         container.pause();
-        Counter counter = backpressurePauseCounter;
+        Counter counter = backpressurePauseCounter.get();
         if (counter != null) {
           counter.increment();
         }
@@ -570,7 +573,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     try {
       if (container.isPauseRequested()) {
         container.resume();
-        Counter counter = backpressureResumeCounter;
+        Counter counter = backpressureResumeCounter.get();
         if (counter != null) {
           counter.increment();
         }
@@ -643,9 +646,10 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         ? null
         : "\\.node\\." + escapeRegex(configuredWorkerCode);
 
-    WorkerKafkaSubscribeProperties.Mode mode = subscribeProperties == null
+    WorkerKafkaSubscribeProperties properties = subscribeProperties;
+    WorkerKafkaSubscribeProperties.Mode mode = properties == null
         ? WorkerKafkaSubscribeProperties.Mode.PATTERN
-        : subscribeProperties.getSubscribeMode();
+        : properties.getSubscribeMode();
 
     String suffixAlt;
     switch (mode) {
@@ -655,9 +659,9 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         break;
       case TENANT_SCOPED:
         // 只订阅 allowlist 中的 tenant 后缀（+ node-direct）；其他 tenant 的后缀不接
-        List<String> allow = subscribeProperties.getTenantAllowlist() == null
+        List<String> allow = properties == null || properties.getTenantAllowlist() == null
             ? List.of()
-            : subscribeProperties.getTenantAllowlist();
+            : properties.getTenantAllowlist();
         if (allow.isEmpty()) {
           suffixAlt = nodeDirect;
         } else {

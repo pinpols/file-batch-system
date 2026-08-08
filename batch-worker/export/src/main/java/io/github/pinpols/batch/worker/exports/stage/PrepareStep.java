@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 
 /** 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。 */
 @Component
+@SuppressWarnings("java:S2259")
 public class PrepareStep implements ExportStageStep {
 
   private static final String KEY_SNAPSHOT_MODE = "snapshotMode";

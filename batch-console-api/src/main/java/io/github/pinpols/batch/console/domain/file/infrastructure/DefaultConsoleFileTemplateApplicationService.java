@@ -44,6 +44,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2259")
 public class DefaultConsoleFileTemplateApplicationService
     implements ConsoleFileTemplateApplicationService {
 

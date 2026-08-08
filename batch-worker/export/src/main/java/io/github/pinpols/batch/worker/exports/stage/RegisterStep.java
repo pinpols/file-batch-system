@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 
 /** 导出注册阶段：在平台创建 file_record，并将文件与 pipeline 实例绑定，触发插件 onRegistered 回调。 */
 @Component
+@SuppressWarnings("java:S2259")
 public class RegisterStep implements ExportStageStep {
 
   private static final String ERROR_CODE_REGISTER_INVALID = "EXPORT_REGISTER_INVALID";

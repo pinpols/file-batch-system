@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Contract;
  * <p>禁止用 {@code Objects.requireNonNull} 或 Spring {@code Assert}—— 它们抛 {@link
  * IllegalArgumentException}，与项目统一的 {@link BizException} 错误体系不兼容。
  */
+@SuppressWarnings("java:S2583")
 public final class Guard {
 
   private Guard() {}

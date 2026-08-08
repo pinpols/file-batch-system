@@ -41,6 +41,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2583")
 public class ConsoleQueryCacheService {
 
   private static final String PREFIX = "console:cache:";

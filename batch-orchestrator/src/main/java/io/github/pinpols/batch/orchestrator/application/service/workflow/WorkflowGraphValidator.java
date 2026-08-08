@@ -54,6 +54,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S2583")
 public class WorkflowGraphValidator {
 
   private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.");
@@ -700,6 +701,7 @@ public class WorkflowGraphValidator {
     }
   }
 
+  @SuppressWarnings("java:S6218")
   private record JoinMode(boolean allOf, int[] nOfM) {}
 
   private ValidationIssue issue(String code, String message, String nodeCode) {

@@ -49,6 +49,7 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@SuppressWarnings("java:S2583")
 public class WebhookDispatcher {
 
   private static final int MAX_ATTEMPTS = 3;

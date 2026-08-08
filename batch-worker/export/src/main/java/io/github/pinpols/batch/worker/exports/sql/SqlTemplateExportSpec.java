@@ -34,7 +34,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
         templateConfig.get("defaultQuerySql"),
         templateConfig.get("detail_query_sql"),
         templateConfig.get("detailQuerySql")));
-    if (!Texts.hasText(detailSql)) {
+    if (detailSql == null) {
       throw new WorkerConfigException("default_query_sql is required for sql_template_export");
     }
 
@@ -59,7 +59,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     // 早校验：包装层 SQL 会附加 `ORDER BY base."<cursorColumn>" ASC`，base 是用户 SQL 的 CTE。
     // 如果用户 SELECT 里没出这列，运行期才会失败 PostgreSQL `bad SQL grammar`，debug 成本极高。
     // 这里用词界正则做廉价启发式检测：拦住「忘 SELECT id」的主流坏配置，同时允许显式换 cursorColumn。
-    String trimmedSql = detailSql.trim();
+    String trimmedSql = detailSql;
     if (!mentionsIdentifier(trimmedSql, cursorColumn)) {
       throw new IllegalArgumentException(
           "sql_template_export default_query_sql must reference cursor column `"
