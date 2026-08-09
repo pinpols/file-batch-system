@@ -22,8 +22,10 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "batch-common/src/main/java/io/github/pinpols/batch/common/enums/ResultCode.java"
 OUT = ROOT / "docs/dict/error-codes.md"
 
+ENUM_START = re.compile(r"^\s*[A-Z_]+\s*\(")
 ENUM_LINE = re.compile(
-    r'^\s*(?P<name>[A-Z_]+)\("(?P<code>[^"]+)",\s*"(?P<label>[^"]+)",\s*"(?P<msg>[^"]+)",\s*(?P<status>\d+)\)'
+    r'^\s*(?P<name>[A-Z_]+)\s*\(\s*"(?P<code>[^"]+)",\s*"(?P<label>[^"]+)",\s*"(?P<msg>[^"]+)",'
+    r'\s*(?P<status>\d+)(?:\s*,\s*"(?P<detail>[^"]+)")?\s*\)\s*,?\s*;?\s*$'
 )
 COMMENT_LINE = re.compile(r"^\s*//\s*(.+)$")
 
@@ -32,25 +34,38 @@ def parse_result_code(src_path: Path) -> list[dict]:
     """每条枚举可带行内 // 注释作为说明。返回有序列表。"""
     rows = []
     pending_comment: str | None = None
-    for raw in src_path.read_text(encoding="utf-8").splitlines():
+    lines = src_path.read_text(encoding="utf-8").splitlines()
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
         if (m := COMMENT_LINE.match(raw)):
             pending_comment = m.group(1).strip()
+            i += 1
             continue
-        if (m := ENUM_LINE.match(raw)):
-            rows.append(
-                {
-                    "name": m.group("name"),
-                    "code": m.group("code"),
-                    "label": m.group("label"),
-                    "msg": m.group("msg"),
-                    "status": int(m.group("status")),
-                    "note": pending_comment,
-                }
-            )
+        if ENUM_START.match(raw):
+            # 枚举常量可能被格式化折成多行（palantir/spotless），先拼回单行再匹配
+            buf = raw
+            while ")" not in buf and i + 1 < len(lines):
+                i += 1
+                buf += " " + lines[i].strip()
+            buf = " ".join(buf.split())
+            m = ENUM_LINE.match(buf)
+            if m:
+                rows.append(
+                    {
+                        "name": m.group("name"),
+                        "code": m.group("code"),
+                        "label": m.group("label"),
+                        "msg": m.group("msg"),
+                        "status": int(m.group("status")),
+                        "note": pending_comment,
+                    }
+                )
             pending_comment = None
         elif raw.strip() and not raw.lstrip().startswith(("package", "import", "@", "}", "private", "public ")):
             # 任何非空非头部行打断 pending 注释
             pending_comment = None
+        i += 1
     return rows
 
 
