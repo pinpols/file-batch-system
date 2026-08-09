@@ -220,7 +220,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
    * ⚠4 (2026-05-03): 流式读 attachment 到 bounded byte[]. 边读边检 cap 防 OOM, 不再用 Files.copy 落 temp.
    * MAX_ATTACHMENT_BYTES (25MB) cap 撑得住 byte[] 中转, 几个并发 SMTP 也不到 200MB 堆.
    */
-  private byte[] readBoundedAttachment(Map<String, Object> fileRecord) throws Exception {
+  private byte[] readBoundedAttachment(Map<String, Object> fileRecord) throws IOException {
     ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
       byte[] chunk = new byte[8192];

@@ -273,7 +273,7 @@ public class ValidateStep implements ImportStageStep {
       ValidationSession session,
       Path parsedRecordsPath,
       Path validatedRecordsPath)
-      throws Exception {
+      throws IOException {
     int chunkSize = resolveChunkSize(context);
     long recordNo = 0L;
     long validatedCount = 0L;

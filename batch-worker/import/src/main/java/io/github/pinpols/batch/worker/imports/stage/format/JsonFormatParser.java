@@ -103,7 +103,7 @@ public class JsonFormatParser implements FormatParser {
       JsonParser parser,
       BufferedWriter writer,
       boolean preserveLogicalRow)
-      throws Exception {
+      throws IOException {
     ObjectMapper mapper = support.objectMapper();
     long recordNo = 0L;
     while (parser.nextToken() != JsonToken.END_ARRAY) {
