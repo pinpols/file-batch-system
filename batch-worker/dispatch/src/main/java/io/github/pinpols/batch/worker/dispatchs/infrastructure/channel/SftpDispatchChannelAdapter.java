@@ -7,6 +7,7 @@ import com.jcraft.jsch.SftpException;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.annotation.PreDestroy;
@@ -84,7 +85,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
     String[] active = environment.getActiveProfiles();
     // Spring 约定 getActiveProfiles() 永不为 null，无激活 profile 时返回空数组
-    if (active.length == 0) {
+    if (EmptyChecks.isEmpty(active)) {
       return false;
     }
     return Arrays.stream(active)
