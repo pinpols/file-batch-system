@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
@@ -12,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -30,13 +30,8 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  private final S3ExportStorage storage;
-  private final S3StorageProperties s3Properties;
-
-  S3ExportStorageIntegrationTest(S3ExportStorage storage, S3StorageProperties s3Properties) {
-    this.storage = storage;
-    this.s3Properties = s3Properties;
-  }
+  @Autowired
+  private S3ExportStorage storage;
 
   @Test
   void shouldWriteAndDetectJsonObject() {
@@ -118,7 +113,7 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
     storage.writeJson(objectName, content);
 
-    byte[] bytes = readObject(s3Properties.getBucket(), objectName);
+    byte[] bytes = readObject(s3Bucket(), objectName);
     String read = new String(bytes, StandardCharsets.UTF_8);
     assertThat(read).isEqualTo(content);
   }

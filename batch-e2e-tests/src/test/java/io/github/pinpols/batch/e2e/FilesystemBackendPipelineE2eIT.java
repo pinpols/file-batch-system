@@ -33,6 +33,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -57,6 +58,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @EnabledIfSystemProperty(named = "batch.test.storage.backend", matches = "filesystem")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
