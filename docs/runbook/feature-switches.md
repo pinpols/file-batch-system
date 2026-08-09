@@ -121,6 +121,13 @@ SELECT feature_key, backend, backend_identity, generation, updated_at
  ORDER BY feature_key;
 ```
 
+> **本地开发：Docker 栈 ↔ 本地直跑切换**。同一套本地 PG 会分别登记两套基线——Docker 容器网络（如 `valkey:6379` / `minio:9000`）与宿主机映射（如 `localhost:16379` / `19000`）。来回切换运行形态时，守卫会因“registered 与 requested 身份不一致”拒绝启动（这是设计行为，不是故障）。本地开发库可直接清空绑定表让下次启动重登记基线；**生产环境禁止清表，必须走上面的 cutover-id 流程**：
+>
+> ```sql
+> DELETE FROM batch.stateful_backend_binding;
+> DELETE FROM batch.stateful_backend_cutover_history;
+> ```
+
 ### 1.2 Worker checkpoint（P0 默认启用）
 
 `batch.worker.checkpoint.enabled` 默认 **true**（P0，2026-07），改动需重启 worker 生效。系统未上线故不做影子期 / 按租户
