@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 
@@ -36,18 +37,18 @@ public record ConsoleNotificationDeliveryLogResponse(
       return null;
     }
     return new ConsoleNotificationDeliveryLogResponse(
-        NotificationResponseFieldReader.longValue(row, "id"),
-        NotificationResponseFieldReader.stringValue(row, "tenant_id"),
-        NotificationResponseFieldReader.longValue(row, "rule_id"),
-        NotificationResponseFieldReader.stringValue(row, "channel_code"),
-        NotificationResponseFieldReader.stringValue(row, "event_type"),
-        NotificationResponseFieldReader.longValue(row, "alert_event_id"),
-        NotificationResponseFieldReader.value(row, "payload_json"),
-        NotificationResponseFieldReader.stringValue(row, "delivery_status"),
-        NotificationResponseFieldReader.stringValue(row, "error_message"),
-        NotificationResponseFieldReader.stringValue(row, "error_key"),
-        NotificationResponseFieldReader.value(row, "error_args"),
-        NotificationResponseFieldReader.integerValue(row, "attempt"),
-        NotificationResponseFieldReader.instantValue(row, "created_at"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
+        ConsoleResponseFieldReader.longValue(row, "rule_id"),
+        ConsoleResponseFieldReader.stringValue(row, "channel_code"),
+        ConsoleResponseFieldReader.stringValue(row, "event_type"),
+        ConsoleResponseFieldReader.longValue(row, "alert_event_id"),
+        ConsoleResponseFieldReader.value(row, "payload_json"),
+        ConsoleResponseFieldReader.stringValue(row, "delivery_status"),
+        ConsoleResponseFieldReader.stringValue(row, "error_message"),
+        ConsoleResponseFieldReader.stringValue(row, "error_key"),
+        ConsoleResponseFieldReader.value(row, "error_args"),
+        ConsoleResponseFieldReader.integerValue(row, "attempt"),
+        ConsoleResponseFieldReader.instantValue(row, "created_at"));
   }
 }

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
@@ -26,13 +27,13 @@ public record ConsoleHolidayResponse(
       return null;
     }
     return new ConsoleHolidayResponse(
-        JobResponseFieldReader.longValue(row, "id"),
-        JobResponseFieldReader.longValue(row, "calendarId", "calendar_id"),
-        JobResponseFieldReader.localDateValue(row, "bizDate", "biz_date"),
-        JobResponseFieldReader.stringValue(row, "dayType", "day_type"),
-        JobResponseFieldReader.stringValue(row, "holidayName", "holiday_name"),
-        JobResponseFieldReader.stringValue(row, "description"),
-        JobResponseFieldReader.instantValue(row, "createdAt", "created_at"),
-        JobResponseFieldReader.instantValue(row, "updatedAt", "updated_at"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.longValue(row, "calendarId", "calendar_id"),
+        ConsoleResponseFieldReader.localDateValue(row, "bizDate", "biz_date"),
+        ConsoleResponseFieldReader.stringValue(row, "dayType", "day_type"),
+        ConsoleResponseFieldReader.stringValue(row, "holidayName", "holiday_name"),
+        ConsoleResponseFieldReader.stringValue(row, "description"),
+        ConsoleResponseFieldReader.instantValue(row, "createdAt", "created_at"),
+        ConsoleResponseFieldReader.instantValue(row, "updatedAt", "updated_at"));
   }
 }

@@ -402,8 +402,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     int n = records.size();
     txTemplate.execute(status -> {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-      Connection conn = DataSourceUtils.getConnection(businessDataSource);
-      try {
+      try (DataSourceConnection lease = DataSourceConnection.get(businessDataSource)) {
+        Connection conn = lease.connection();
         CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
         long copied = copyManager.copyIn(copySql, new StringReader(csv));
         if (copied != n) {
@@ -413,11 +413,21 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         return null;
       } catch (Exception ex) {
         throw new IllegalStateException("PostgreSQL COPY failed: " + ex.getMessage(), ex);
-      } finally {
-        DataSourceUtils.releaseConnection(conn, businessDataSource);
       }
     });
     return n;
+  }
+
+  private record DataSourceConnection(Connection connection, DataSource dataSource)
+      implements AutoCloseable {
+    private static DataSourceConnection get(DataSource dataSource) {
+      return new DataSourceConnection(DataSourceUtils.getConnection(dataSource), dataSource);
+    }
+
+    @Override
+    public void close() {
+      DataSourceUtils.releaseConnection(connection, dataSource);
+    }
   }
 
   private String buildDeleteSql(JdbcMappedImportSpec spec) {

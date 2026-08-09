@@ -115,6 +115,32 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       boolean acknowledged,
       boolean pending) {}
 
+  private final class SftpConnection implements AutoCloseable {
+    private final Session session;
+    private final ChannelSftp sftp;
+    private final String host;
+
+    private SftpConnection(Session session, ChannelSftp sftp, String host) {
+      this.session = session;
+      this.sftp = sftp;
+      this.host = host;
+    }
+
+    private ChannelSftp sftp() {
+      return sftp;
+    }
+
+    @Override
+    public void close() {
+      // D-1：JSch disconnect 在网络抖动 / 半关闭连接上可能挂住 30+s（TCP 关半开），
+      // 之前的 try/catch(ignored) 虽然吞了异常但不管挂住——dispatch worker 线程被卡住，
+      // 线程池堆积僵尸。改异步 disconnect + 5s 硬超时；超时则让后台线程自然结束，
+      // 主路径立即返回不阻塞下一个 dispatch。
+      disconnectWithTimeout(sftp, "sftp-channel", host);
+      disconnectWithTimeout(session, "sftp-session", host);
+    }
+  }
+
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
     Map<String, Object> channelConfig = command.channelConfig();
@@ -182,10 +208,81 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private DispatchResult uploadViaSftp(SftpUploadContext ctx) {
+    try (SftpConnection connection = openSftpConnection(ctx)) {
+      ChannelSftp sftp = connection.sftp();
+      String tempRemotePath = null;
+      String manifestTempRemotePath = null;
+      try {
+        String remotePath = ctx.remoteTarget().remotePath();
+        tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
+        DispatchManifestSupport.PayloadDigest payloadDigest;
+        try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord());
+            DispatchManifestSupport.DigestingInputStream digesting =
+                DispatchManifestSupport.digesting(in)) {
+          sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
+          payloadDigest = digesting.finish();
+        }
+        publishRemoteFile(sftp, tempRemotePath, remotePath);
+        tempRemotePath = null;
+        String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
+        DispatchManifestSupport.ManifestPayload manifest = null;
+        if (DispatchManifestSupport.enabled(ctx.channelConfig())) {
+          String manifestRemotePath =
+              remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
+          manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
+          String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
+          manifest = DispatchManifestSupport.manifestPayload(
+              ctx.command(),
+              evidence,
+              ctx.remoteTarget().remoteName(),
+              ctx.externalRequestId(),
+              ctx.receiptCode(),
+              payloadDigest,
+              manifestRef);
+          sftp.put(
+              new ByteArrayInputStream(manifest.bytes()),
+              manifestTempRemotePath,
+              ChannelSftp.OVERWRITE);
+          publishRemoteFile(sftp, manifestTempRemotePath, manifestRemotePath);
+          manifestTempRemotePath = null;
+        }
+        if (manifest != null) {
+          return new DispatchResult(
+              true,
+              ctx.externalRequestId(),
+              ctx.receiptCode(),
+              ctx.acknowledged(),
+              ctx.pending(),
+              "uploaded via SFTP",
+              evidence,
+              manifest.toRef());
+        }
+        return new DispatchResult(
+            true,
+            ctx.externalRequestId(),
+            ctx.receiptCode(),
+            ctx.acknowledged(),
+            ctx.pending(),
+            "uploaded via SFTP",
+            evidence);
+      } catch (Exception ex) {
+        cleanupRemoteTemp(sftp, manifestTempRemotePath);
+        cleanupRemoteTemp(sftp, tempRemotePath);
+        SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
+
+        return new DispatchResult(
+            false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
+      }
+    } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
+      return new DispatchResult(
+          false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
+    }
+  }
+
+  private SftpConnection openSftpConnection(SftpUploadContext ctx) throws Exception {
     Session session = null;
     ChannelSftp sftp = null;
-    String tempRemotePath = null;
-    String manifestTempRemotePath = null;
     try {
       JSch jsch = new JSch();
       // S-1.2 a: 生产 profile 强制 StrictHostKeyChecking=yes，不允许渠道配置翻盘；
@@ -228,72 +325,11 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       session.connect(30_000);
       sftp = (ChannelSftp) session.openChannel("sftp");
       sftp.connect(30_000);
-      String remotePath = ctx.remoteTarget().remotePath();
-      tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
-      DispatchManifestSupport.PayloadDigest payloadDigest;
-      try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord());
-          DispatchManifestSupport.DigestingInputStream digesting =
-              DispatchManifestSupport.digesting(in)) {
-        sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
-        payloadDigest = digesting.finish();
-      }
-      publishRemoteFile(sftp, tempRemotePath, remotePath);
-      tempRemotePath = null;
-      String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
-      DispatchManifestSupport.ManifestPayload manifest = null;
-      if (DispatchManifestSupport.enabled(ctx.channelConfig())) {
-        String manifestRemotePath =
-            remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
-        manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
-        String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
-        manifest = DispatchManifestSupport.manifestPayload(
-            ctx.command(),
-            evidence,
-            ctx.remoteTarget().remoteName(),
-            ctx.externalRequestId(),
-            ctx.receiptCode(),
-            payloadDigest,
-            manifestRef);
-        sftp.put(
-            new ByteArrayInputStream(manifest.bytes()),
-            manifestTempRemotePath,
-            ChannelSftp.OVERWRITE);
-        publishRemoteFile(sftp, manifestTempRemotePath, manifestRemotePath);
-        manifestTempRemotePath = null;
-      }
-      if (manifest != null) {
-        return new DispatchResult(
-            true,
-            ctx.externalRequestId(),
-            ctx.receiptCode(),
-            ctx.acknowledged(),
-            ctx.pending(),
-            "uploaded via SFTP",
-            evidence,
-            manifest.toRef());
-      }
-      return new DispatchResult(
-          true,
-          ctx.externalRequestId(),
-          ctx.receiptCode(),
-          ctx.acknowledged(),
-          ctx.pending(),
-          "uploaded via SFTP",
-          evidence);
+      return new SftpConnection(session, sftp, ctx.connConfig().host());
     } catch (Exception ex) {
-      cleanupRemoteTemp(sftp, manifestTempRemotePath);
-      cleanupRemoteTemp(sftp, tempRemotePath);
-      SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
-
-      return new DispatchResult(
-          false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
-    } finally {
-      // D-1：JSch disconnect 在网络抖动 / 半关闭连接上可能挂住 30+s（TCP 关半开），
-      // 之前的 try/catch(ignored) 虽然吞了异常但不管挂住——dispatch worker 线程被卡住，
-      // 线程池堆积僵尸。改异步 disconnect + 5s 硬超时；超时则让后台线程自然结束，
-      // 主路径立即返回不阻塞下一个 dispatch。
       disconnectWithTimeout(sftp, "sftp-channel", ctx.connConfig().host());
       disconnectWithTimeout(session, "sftp-session", ctx.connConfig().host());
+      throw ex;
     }
   }
 

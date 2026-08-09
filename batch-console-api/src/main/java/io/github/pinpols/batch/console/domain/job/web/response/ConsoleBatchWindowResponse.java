@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 
@@ -36,19 +37,19 @@ public record ConsoleBatchWindowResponse(
       return null;
     }
     return new ConsoleBatchWindowResponse(
-        JobResponseFieldReader.longValue(row, "id"),
-        JobResponseFieldReader.stringValue(row, "tenant_id", "tenantId"),
-        JobResponseFieldReader.stringValue(row, "window_code", "windowCode"),
-        JobResponseFieldReader.stringValue(row, "window_name", "windowName"),
-        JobResponseFieldReader.stringValue(row, "timezone"),
-        JobResponseFieldReader.localTimeValue(row, "start_time", "startTime"),
-        JobResponseFieldReader.localTimeValue(row, "end_time", "endTime"),
-        JobResponseFieldReader.stringValue(row, "end_strategy", "endStrategy"),
-        JobResponseFieldReader.stringValue(row, "out_of_window_action", "outOfWindowAction"),
-        JobResponseFieldReader.booleanValue(row, "allow_cross_day", "allowCrossDay"),
-        JobResponseFieldReader.booleanValue(row, "enabled"),
-        JobResponseFieldReader.stringValue(row, "description"),
-        JobResponseFieldReader.instantValue(row, "created_at", "createdAt"),
-        JobResponseFieldReader.instantValue(row, "updated_at", "updatedAt"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "tenant_id", "tenantId"),
+        ConsoleResponseFieldReader.stringValue(row, "window_code", "windowCode"),
+        ConsoleResponseFieldReader.stringValue(row, "window_name", "windowName"),
+        ConsoleResponseFieldReader.stringValue(row, "timezone"),
+        ConsoleResponseFieldReader.localTimeValue(row, "start_time", "startTime"),
+        ConsoleResponseFieldReader.localTimeValue(row, "end_time", "endTime"),
+        ConsoleResponseFieldReader.stringValue(row, "end_strategy", "endStrategy"),
+        ConsoleResponseFieldReader.stringValue(row, "out_of_window_action", "outOfWindowAction"),
+        ConsoleResponseFieldReader.booleanValue(row, "allow_cross_day", "allowCrossDay"),
+        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
+        ConsoleResponseFieldReader.stringValue(row, "description"),
+        ConsoleResponseFieldReader.instantValue(row, "created_at", "createdAt"),
+        ConsoleResponseFieldReader.instantValue(row, "updated_at", "updatedAt"));
   }
 }

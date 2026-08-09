@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 
@@ -34,17 +35,17 @@ public record ConsolePipelineDefinitionListItemResponse(
       return null;
     }
     return new ConsolePipelineDefinitionListItemResponse(
-        WorkflowResponseFieldReader.longValue(row, "id"),
-        WorkflowResponseFieldReader.stringValue(row, "tenant_id"),
-        WorkflowResponseFieldReader.stringValue(row, "job_code"),
-        WorkflowResponseFieldReader.stringValue(row, "pipeline_name"),
-        WorkflowResponseFieldReader.stringValue(row, "pipeline_type"),
-        WorkflowResponseFieldReader.stringValue(row, "biz_type"),
-        WorkflowResponseFieldReader.stringValue(row, "worker_group"),
-        WorkflowResponseFieldReader.integerValue(row, "version"),
-        WorkflowResponseFieldReader.booleanValue(row, "enabled"),
-        WorkflowResponseFieldReader.stringValue(row, "description"),
-        WorkflowResponseFieldReader.instantValue(row, "created_at"),
-        WorkflowResponseFieldReader.instantValue(row, "updated_at"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
+        ConsoleResponseFieldReader.stringValue(row, "job_code"),
+        ConsoleResponseFieldReader.stringValue(row, "pipeline_name"),
+        ConsoleResponseFieldReader.stringValue(row, "pipeline_type"),
+        ConsoleResponseFieldReader.stringValue(row, "biz_type"),
+        ConsoleResponseFieldReader.stringValue(row, "worker_group"),
+        ConsoleResponseFieldReader.integerValue(row, "version"),
+        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
+        ConsoleResponseFieldReader.stringValue(row, "description"),
+        ConsoleResponseFieldReader.instantValue(row, "created_at"),
+        ConsoleResponseFieldReader.instantValue(row, "updated_at"));
   }
 }

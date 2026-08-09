@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 
@@ -33,16 +34,16 @@ public record ConsoleNotificationChannelResponse(
       return null;
     }
     return new ConsoleNotificationChannelResponse(
-        NotificationResponseFieldReader.longValue(row, "id"),
-        NotificationResponseFieldReader.stringValue(row, "tenant_id"),
-        NotificationResponseFieldReader.stringValue(row, "channel_code"),
-        NotificationResponseFieldReader.stringValue(row, "channel_name"),
-        NotificationResponseFieldReader.stringValue(row, "channel_type"),
-        NotificationResponseFieldReader.value(row, "config_json"),
-        NotificationResponseFieldReader.booleanValue(row, "enabled"),
-        NotificationResponseFieldReader.stringValue(row, "created_by"),
-        NotificationResponseFieldReader.stringValue(row, "updated_by"),
-        NotificationResponseFieldReader.instantValue(row, "created_at"),
-        NotificationResponseFieldReader.instantValue(row, "updated_at"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
+        ConsoleResponseFieldReader.stringValue(row, "channel_code"),
+        ConsoleResponseFieldReader.stringValue(row, "channel_name"),
+        ConsoleResponseFieldReader.stringValue(row, "channel_type"),
+        ConsoleResponseFieldReader.value(row, "config_json"),
+        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
+        ConsoleResponseFieldReader.stringValue(row, "created_by"),
+        ConsoleResponseFieldReader.stringValue(row, "updated_by"),
+        ConsoleResponseFieldReader.instantValue(row, "created_at"),
+        ConsoleResponseFieldReader.instantValue(row, "updated_at"));
   }
 }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.List;
 import java.util.Map;
 
@@ -17,11 +18,11 @@ public record ConsoleRetryFailedPartitionsResponse(
       return null;
     }
     return new ConsoleRetryFailedPartitionsResponse(
-        JobResponseFieldReader.longValue(row, "id"),
-        JobResponseFieldReader.stringValue(row, "instanceNo"),
-        JobResponseFieldReader.integerValue(row, "requested"),
-        JobResponseFieldReader.integerValue(row, "retried"),
-        JobResponseFieldReader.integerValue(row, "conflicts"),
-        JobResponseFieldReader.longListValue(row, "partitionIds"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "instanceNo"),
+        ConsoleResponseFieldReader.integerValue(row, "requested"),
+        ConsoleResponseFieldReader.integerValue(row, "retried"),
+        ConsoleResponseFieldReader.integerValue(row, "conflicts"),
+        ConsoleResponseFieldReader.longListValue(row, "partitionIds"));
   }
 }

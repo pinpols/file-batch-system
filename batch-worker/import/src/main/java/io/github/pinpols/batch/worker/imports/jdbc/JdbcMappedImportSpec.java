@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code
@@ -261,7 +262,7 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
-  private static Boolean toBoolean(Object value) {
+  private static @Nullable Boolean toBoolean(Object value) {
     if (value == null) {
       return null;
     }
