@@ -140,7 +140,7 @@ public class TaskControllerApplicationService {
       meterRegistry
           .counter(
               BatchMetricsNames.BATCH_CLAIM_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "skipped")
-          .increment(items.size() - claimed);
+          .increment((double) items.size() - claimed);
     }
     return new TaskClaimBatchResult(results);
   }
@@ -228,7 +228,7 @@ public class TaskControllerApplicationService {
       meterRegistry
           .counter(
               BatchMetricsNames.BATCH_REPORT_ITEMS_TOTAL, BatchMetricsNames.TAG_OUTCOME, "failed")
-          .increment(items.size() - ok);
+          .increment((double) items.size() - ok);
     }
     return new TaskReportBatchResult(results);
   }

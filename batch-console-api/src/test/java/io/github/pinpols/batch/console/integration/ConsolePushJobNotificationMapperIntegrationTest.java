@@ -51,11 +51,13 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_SCHED");
     long instanceId = insertJobInstance(tenant, defId, "JOB_SCHED", "SUCCESS", null, "0 minute");
+    long controlId = insertEligibleJobInstance(tenant);
 
     List<PendingJobNotification> pending = mapper.findPending(10, 50);
 
     assertThat(pending)
         .extracting(PendingJobNotification::getJobInstanceId)
+        .contains(controlId)
         .doesNotContain(instanceId);
   }
 
@@ -64,6 +66,7 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_RUN");
     long instanceId = insertJobInstance(tenant, defId, "JOB_RUN", "RUNNING", "alice", "0 minute");
+    long controlId = insertEligibleJobInstance(tenant);
     // RUNNING 的 finished_at 强制设 null 也合理,这里测状态过滤
     jdbc.update("update batch.job_instance set finished_at = null where id = ?", instanceId);
 
@@ -71,6 +74,7 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
 
     assertThat(pending)
         .extracting(PendingJobNotification::getJobInstanceId)
+        .contains(controlId)
         .doesNotContain(instanceId);
   }
 
@@ -79,11 +83,13 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_OLD");
     long instanceId = insertJobInstance(tenant, defId, "JOB_OLD", "SUCCESS", "alice", "30 minute");
+    long controlId = insertEligibleJobInstance(tenant);
 
     List<PendingJobNotification> pending = mapper.findPending(10, 50);
 
     assertThat(pending)
         .extracting(PendingJobNotification::getJobInstanceId)
+        .contains(controlId)
         .doesNotContain(instanceId);
   }
 
@@ -96,11 +102,13 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
     n.setTenantId(tenant);
     n.setJobInstanceId(instanceId);
     mapper.insertIgnore(n);
+    long controlId = insertEligibleJobInstance(tenant);
 
     List<PendingJobNotification> pending = mapper.findPending(10, 50);
 
     assertThat(pending)
         .extracting(PendingJobNotification::getJobInstanceId)
+        .contains(controlId)
         .doesNotContain(instanceId);
   }
 
@@ -135,6 +143,12 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
         VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
         RETURNING id
         """, Long.class, tenantId, jobCode, jobCode + "-name");
+  }
+
+  private long insertEligibleJobInstance(String tenantId) {
+    String jobCode = "JOB_ELIGIBLE_" + System.nanoTime();
+    long defId = ensureJobDefinition(tenantId, jobCode);
+    return insertJobInstance(tenantId, defId, jobCode, "SUCCESS", "control", "0 minute");
   }
 
   private long insertJobInstance(

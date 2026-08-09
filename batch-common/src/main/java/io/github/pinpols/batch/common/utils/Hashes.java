@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 通用哈希工具:抹掉重复的 SHA-256 + hex 编码样板。
@@ -26,7 +27,7 @@ public final class Hashes {
    *
    * <p>SHA-256 算法不可用时(理论不会发生)返回 null,调用方需做 null-safe 处理。
    */
-  public static String sha256Short(String raw) {
+  public static @Nullable String sha256Short(@Nullable String raw) {
     if (raw == null || raw.isEmpty()) {
       return null;
     }

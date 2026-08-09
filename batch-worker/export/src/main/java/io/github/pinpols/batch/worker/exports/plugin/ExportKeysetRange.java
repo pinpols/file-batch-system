@@ -31,7 +31,7 @@ public record ExportKeysetRange(
       return inactiveFor(partitionCount, partitionNo);
     }
     BigDecimal span = hi.subtract(lo);
-    BigDecimal loN = lo.add(span.multiply(BigDecimal.valueOf(partitionNo - 1))
+    BigDecimal loN = lo.add(span.multiply(BigDecimal.valueOf((long) partitionNo - 1L))
         .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
     boolean last = partitionNo == partitionCount;
     BigDecimal hiN = last

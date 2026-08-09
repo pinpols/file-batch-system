@@ -44,6 +44,11 @@ public class OutboxOpsApplicationService {
   @Transactional
   public OutboxCleanupResponse cleanup(
       String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
+    return cleanupInternal(tenantId, retainDays, dryRun, operatorId, reason);
+  }
+
+  private OutboxCleanupResponse cleanupInternal(
+      String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
     Instant cutoff = BatchDateTimeSupport.utcNow().minus(retainDays, ChronoUnit.DAYS);
     int published;
     int giveUp;
@@ -72,6 +77,11 @@ public class OutboxOpsApplicationService {
   @Transactional
   public OutboxRepublishResponse republish(
       String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
+    return republishInternal(tenantId, ids, dryRun, operatorId, reason);
+  }
+
+  private OutboxRepublishResponse republishInternal(
+      String tenantId, List<Long> ids, boolean dryRun, String operatorId, String reason) {
     if (ids == null || ids.isEmpty()) {
       return new OutboxRepublishResponse(0, 0, dryRun ? 1 : 0);
     }
@@ -96,12 +106,12 @@ public class OutboxOpsApplicationService {
   // ── 向后兼容入口(老 controller 路径,无 dryRun/operatorId)──────────────────────────
   @Transactional
   public OutboxCleanupResponse cleanup(String tenantId, int retainDays) {
-    return cleanup(tenantId, retainDays, false, null, null);
+    return cleanupInternal(tenantId, retainDays, false, null, null);
   }
 
   @Transactional
   public OutboxRepublishResponse republish(String tenantId, List<Long> ids) {
-    return republish(tenantId, ids, false, null, null);
+    return republishInternal(tenantId, ids, false, null, null);
   }
 
   private void appendOutboxAudit(

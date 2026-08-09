@@ -590,20 +590,18 @@ public class LaunchBatchDayService {
     logEntity.setTraceId(p.traceId());
     logEntity.setMessage("BATCH_DAY_INSTANCE_STATE_CHANGED");
     logEntity.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-    logEntity.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {
-      {
-        put("calendarCode", p.calendarCode());
-        put("bizDate", p.bizDate() == null ? null : p.bizDate().toString());
-        put("fromDayStatus", p.fromDayStatus());
-        put("toDayStatus", p.toDayStatus());
-        put("reasonCode", p.reasonCode());
-        put("operatorId", p.operatorId());
-        put("operatorType", p.operatorType());
-        put("lateCount", p.lateCount());
-        put("catchupCount", p.catchupCount());
-        put("cutoffAt", p.cutoffAt() == null ? null : p.cutoffAt().toString());
-      }
-    }));
+    Map<String, Object> extra = new LinkedHashMap<>();
+    extra.put("calendarCode", p.calendarCode());
+    extra.put("bizDate", p.bizDate() == null ? null : p.bizDate().toString());
+    extra.put("fromDayStatus", p.fromDayStatus());
+    extra.put("toDayStatus", p.toDayStatus());
+    extra.put("reasonCode", p.reasonCode());
+    extra.put("operatorId", p.operatorId());
+    extra.put("operatorType", p.operatorType());
+    extra.put("lateCount", p.lateCount());
+    extra.put("catchupCount", p.catchupCount());
+    extra.put("cutoffAt", p.cutoffAt() == null ? null : p.cutoffAt().toString());
+    logEntity.setExtraJson(JsonUtils.toJson(extra));
     jobExecutionLogMapper.insert(logEntity);
   }
 }

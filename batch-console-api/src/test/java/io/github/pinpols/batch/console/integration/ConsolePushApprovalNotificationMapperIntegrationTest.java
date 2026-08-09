@@ -45,30 +45,42 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   void findPendingShouldExcludePending() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "CATCH_UP", "PENDING", "alice", null, null, "0 minute");
+    String controlNo = insertEligibleApproval(tenant);
 
     List<PendingApprovalNotification> pending = mapper.findPending(10, 50);
 
-    assertThat(pending).extracting(PendingApprovalNotification::getApprovalNo).doesNotContain(no);
+    assertThat(pending)
+        .extracting(PendingApprovalNotification::getApprovalNo)
+        .contains(controlNo)
+        .doesNotContain(no);
   }
 
   @Test
   void findPendingShouldExcludeNullRequester() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "COMPENSATION", "APPROVED", null, "bob", "ok", "0 minute");
+    String controlNo = insertEligibleApproval(tenant);
 
     List<PendingApprovalNotification> pending = mapper.findPending(10, 50);
 
-    assertThat(pending).extracting(PendingApprovalNotification::getApprovalNo).doesNotContain(no);
+    assertThat(pending)
+        .extracting(PendingApprovalNotification::getApprovalNo)
+        .contains(controlNo)
+        .doesNotContain(no);
   }
 
   @Test
   void findPendingShouldExcludeOutsideLookbackWindow() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "DOWNLOAD", "REJECTED", "alice", "bob", "no", "30 minute");
+    String controlNo = insertEligibleApproval(tenant);
 
     List<PendingApprovalNotification> pending = mapper.findPending(10, 50);
 
-    assertThat(pending).extracting(PendingApprovalNotification::getApprovalNo).doesNotContain(no);
+    assertThat(pending)
+        .extracting(PendingApprovalNotification::getApprovalNo)
+        .contains(controlNo)
+        .doesNotContain(no);
   }
 
   @Test
@@ -79,10 +91,14 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
     n.setTenantId(tenant);
     n.setApprovalNo(no);
     mapper.insertIgnore(n);
+    String controlNo = insertEligibleApproval(tenant);
 
     List<PendingApprovalNotification> pending = mapper.findPending(10, 50);
 
-    assertThat(pending).extracting(PendingApprovalNotification::getApprovalNo).doesNotContain(no);
+    assertThat(pending)
+        .extracting(PendingApprovalNotification::getApprovalNo)
+        .contains(controlNo)
+        .doesNotContain(no);
   }
 
   @Test
@@ -100,6 +116,11 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
+
+  private String insertEligibleApproval(String tenantId) {
+    return insertApproval(
+        tenantId, "CATCH_UP", "APPROVED", "control", "approver", "ok", "0 minute");
+  }
 
   private String insertApproval(
       String tenantId,

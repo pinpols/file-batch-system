@@ -161,6 +161,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     List<String> tcWorkerCodes =
         tcWorkers.stream().map(r -> (String) r.get("worker_code")).toList();
 
+    assertThat(tbWorkerCodes).isNotEmpty();
+    assertThat(tcWorkerCodes).isNotEmpty();
     for (String tbCode : tbWorkerCodes) {
       assertThat(tcWorkerCodes).doesNotContain(tbCode);
     }

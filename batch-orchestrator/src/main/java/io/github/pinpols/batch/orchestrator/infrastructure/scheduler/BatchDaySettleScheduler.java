@@ -322,19 +322,17 @@ public class BatchDaySettleScheduler {
     audit.setTraceId(null);
     audit.setMessage("BATCH_DAY_INSTANCE_STATUS_CHANGED");
     audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-    audit.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {
-      {
-        put("calendarCode", from.calendarCode());
-        put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
-        put("fromDayStatus", from.dayStatus());
-        put("toDayStatus", to.dayStatus());
-        put("reasonCode", reasonCode);
-        put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
-        put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-        put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
-        put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
-      }
-    }));
+    Map<String, Object> extra = new LinkedHashMap<>();
+    extra.put("calendarCode", from.calendarCode());
+    extra.put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
+    extra.put("fromDayStatus", from.dayStatus());
+    extra.put("toDayStatus", to.dayStatus());
+    extra.put("reasonCode", reasonCode);
+    extra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
+    extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+    extra.put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
+    extra.put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
+    audit.setExtraJson(JsonUtils.toJson(extra));
     jobExecutionLogMapper.insert(audit);
   }
 

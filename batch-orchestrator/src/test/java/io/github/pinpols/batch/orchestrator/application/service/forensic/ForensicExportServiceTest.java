@@ -31,6 +31,7 @@ import java.util.zip.ZipFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.ObjectProvider;
 
 class ForensicExportServiceTest {
 
@@ -54,8 +55,14 @@ class ForensicExportServiceTest {
     properties.setEnabled(true);
     BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
         Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    ObjectProvider<ForensicExportService> selfProvider = new ObjectProvider<>() {
+      @Override
+      public ForensicExportService getObject() {
+        return service;
+      }
+    };
     service = new ForensicExportService(
-        logMapper, jobInstanceMapper, auditMapper, properties, dateTimeSupport);
+        logMapper, jobInstanceMapper, auditMapper, properties, dateTimeSupport, selfProvider);
   }
 
   @Test
