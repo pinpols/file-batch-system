@@ -138,7 +138,10 @@ jobs:
 
       - name: Verify generated dicts in sync
         shell: bash
-        run: python3 scripts/codegen/gen-error-codes-dict.py --check
+        # codegen 依赖 PyYAML；runner 镜像通常已预装，缺失时补装（失败会由下方 import 报错暴露）
+        run: |
+          python3 -m pip install --user pyyaml >/dev/null 2>&1 || true
+          python3 scripts/codegen/gen-error-codes-dict.py --check
 
       - name: Verify yml ↔ docker-compose default sync
         shell: bash

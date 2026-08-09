@@ -1,0 +1,129 @@
+# =============================================================================
+# 错误码单一事实源
+#
+# 修改错误码请改本文件，然后运行:
+#     python3 scripts/codegen/gen-error-codes-dict.py
+# 重新生成 ResultCode.java 与 docs/dict/error-codes.md，并一起提交。
+# CI（pr-gate 的 "Verify generated dicts in sync"）会用 --check 校验生成物同步。
+#
+# 字段说明:
+#   name        - 枚举常量名（对外 API 契约：只增不删不改语义）
+#   code        - 持久化/对外 code，通常与 name 相同
+#   label       - 中文展示名
+#   message     - 默认英文 message
+#   httpStatus  - HTTP 状态码
+#   detailKey   - i18n message key，必须已存在于 messages.properties 与
+#                 messages_zh_CN.properties（--check 会校验）
+#   comment     - 可选；触发说明，生成到 Java 枚举注释与字典文档
+# =============================================================================
+error-codes:
+  - name: SUCCESS
+    code: SUCCESS
+    label: 成功
+    message: success
+    httpStatus: 200
+    detailKey: error.common.success_detail
+  - name: INVALID_ARGUMENT
+    code: INVALID_ARGUMENT
+    label: 参数非法
+    message: invalid argument
+    httpStatus: 400
+    detailKey: error.common.invalid_argument_detail
+  - name: VALIDATION_ERROR
+    code: VALIDATION_ERROR
+    label: 参数校验失败
+    message: validation failed
+    httpStatus: 400
+    detailKey: error.common.validation_failed_detail
+  - name: MISSING_IDEMPOTENCY_KEY
+    code: MISSING_IDEMPOTENCY_KEY
+    label: 缺少幂等键
+    message: idempotency key is required
+    httpStatus: 400
+    detailKey: error.common.missing_idempotency_key_detail
+  - name: NOT_FOUND
+    code: NOT_FOUND
+    label: 资源不存在
+    message: resource not found
+    httpStatus: 404
+    detailKey: error.common.not_found_detail
+  - name: CONFLICT
+    code: CONFLICT
+    label: 资源冲突
+    message: resource conflict
+    httpStatus: 409
+    detailKey: error.common.conflict_detail
+  - name: STATE_CONFLICT
+    code: STATE_CONFLICT
+    label: 状态冲突
+    message: state conflict
+    httpStatus: 409
+    detailKey: error.common.state_conflict_detail
+  - name: UNAUTHORIZED
+    code: UNAUTHORIZED
+    label: 未授权
+    message: unauthorized
+    httpStatus: 401
+    detailKey: error.common.unauthorized_detail
+  - name: FORBIDDEN
+    code: FORBIDDEN
+    label: 禁止访问
+    message: forbidden
+    httpStatus: 403
+    detailKey: error.common.forbidden_detail
+  - name: RATE_LIMITED
+    code: RATE_LIMITED
+    label: 请求过于频繁
+    message: too many requests
+    httpStatus: 429
+    detailKey: error.common.rate_limited_detail
+  - name: CAPTCHA_REQUIRED
+    code: CAPTCHA_REQUIRED
+    label: 需要人机验证
+    message: captcha verification required
+    httpStatus: 401
+    detailKey: error.common.unauthorized_detail
+    comment: |
+      登录风控:失败次数达阈值后要求人机验证(验证码),不锁账号——规避 account-lockout DoS。
+      FE 据该 code 弹验证码组件,过验证码后带 captchaToken 重试登录。
+  - name: BUSINESS_ERROR
+    code: BUSINESS_ERROR
+    label: 业务错误
+    message: business error
+    httpStatus: 422
+    detailKey: error.common.business_error_detail
+  - name: TENANT_SUSPENDED
+    code: TENANT_SUSPENDED
+    label: 租户已暂停
+    message: tenant is suspended
+    httpStatus: 422
+    detailKey: error.common.business_error_detail
+    comment: |
+      R-arch-audit-2026-05-23 P1: 替代 QuartzLaunchJob 中 e.getMessage().contains("tenant is suspended")
+      字符串匹配。租户被运维 / 计费侧暂停后，调度路径需识别该语义并暂停对应 Quartz job 防止日志风暴。
+  - name: NOT_IMPLEMENTED
+    code: NOT_IMPLEMENTED
+    label: 未实现
+    message: not implemented
+    httpStatus: 501
+    detailKey: error.common.not_implemented_detail
+  - name: SERVICE_UNAVAILABLE
+    code: SERVICE_UNAVAILABLE
+    label: 依赖组件暂不可用
+    message: dependency temporarily unavailable
+    httpStatus: 503
+    detailKey: error.common.service_unavailable_detail
+    comment: R-4.1 · 依赖组件短暂不可用（如 Redis 抖动）；表达"稍后重试安全"语义
+  - name: CREDENTIAL_REF_UNRESOLVED
+    code: CREDENTIAL_REF_UNRESOLVED
+    label: 凭据引用无法解析
+    message: credential reference unresolved
+    httpStatus: 400
+    detailKey: error.common.invalid_argument_detail
+    comment: ADR-039 · 凭据 envRef(${ENV_NAME})在部署环境未定义,fail-fast 不静默回落明文
+  - name: SYSTEM_ERROR
+    code: SYSTEM_ERROR
+    label: 系统错误
+    message: system error
+    httpStatus: 500
+    detailKey: error.common.system_error_detail

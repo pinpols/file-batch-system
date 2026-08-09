@@ -441,6 +441,11 @@
                     <version>2.44.5</version>
                     <configuration>
                         <java>
+                            <!-- ResultCode.java 由 scripts/codegen/gen-error-codes-dict.py 生成，
+                                 生成器输出即最终格式，不参与 palantir 格式化（避免折行差异）。 -->
+                            <excludes>
+                                <exclude>src/main/java/io/github/pinpols/batch/common/enums/ResultCode.java</exclude>
+                            </excludes>
                             <palantirJavaFormat>
                                 <version>2.92.0</version>
                                 <style>GOOGLE</style>
