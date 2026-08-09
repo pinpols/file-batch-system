@@ -35,49 +35,78 @@
 
 ## 1. 开关索引
 
-| 配置 key | 模块 | 实际默认 (jar 直跑) | docker-compose 默认 | 风险等级 | env 变量 |
-|---|---|---|---|---|---|
-| `batch.console.read-replica.enabled` | console-api | **true**（yml fallback / compose / .env.example 一致） | **true** | 🟢 低 | `BATCH_CONSOLE_READ_REPLICA_ENABLED`；测试在 `application-test.yml` 覆盖为 `false` |
-| `batch.scheduler.worker-cache.enabled` | orchestrator | **true** | **true**（继承 yml） | 🟢 低 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` |
-| `batch.mq.routing.mode` | orchestrator | **TENANT** | **TENANT**（继承 yml） | 🟡 中 | `BATCH_MQ_ROUTING_MODE` |
-| `batch.shedlock.provider` | 全部模块（48 处 `@SchedulerLock`） | **redis** | **redis**（继承 yml） | 🔴 高 | `BATCH_SHEDLOCK_PROVIDER`=redis/jdbc；**必须全停 → 切配置 → 全起**，两个 provider 同时跑会重复触发任务；jdbc 模式 dev 可用 `BATCH_SHEDLOCK_AUTO_CREATE` 建表 |
-| ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
-| `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟡 中 | `BATCH_QUOTA_RUNTIME_STORE`；后端或连接定位变化需先迁移，再提供一次性 `BATCH_QUOTA_BACKEND_CUTOVER_ID` |
-| `batch.quota.redis.failure-mode` | orchestrator | **FAIL_CLOSED** | **FAIL_CLOSED** | 🔴 高 | `BATCH_QUOTA_REDIS_FAILURE_MODE`=FAIL_CLOSED/FAIL_OPEN；生产必须 FAIL_CLOSED，只有隔离的本地兼容场景才允许显式 FAIL_OPEN，详见 §3.5 |
-| `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
-| `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；启停、PG/SQLite 或定位变化需先排空/迁移，再提供一次性 `BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID` |
-| `batch.worker.lease.renew-batch-max-items` | worker（ADR-016） | **256** | **256**（继承 yml） | 🟢 低 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`：单 `renew-batch` HTTP 最多携带任务数，超出自动拆单 |
-| `batch.worker.checkpoint.enabled` | worker-import / worker-export | **true**（P0 生产化，2026-07；旧默认 false） | **true** | 🟡 中 | `BATCH_WORKER_CHECKPOINT_ENABLED`；Import 要求 load plugin 明确声明幂等能力（`NONE/UNKNOWN` 拒跑）；`PARTITION_REPLACE_COPY` 与续跑互斥须显式设 false；Export 仅 JSON/DELIMITED/FIXED_WIDTH 且 cursor 可序列化时续跑，详见 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md) |
-| `batch.worker.checkpoint.stage-skip.enabled` | worker-process | **false**（P1 阶段级续跑，#812；仅交付能力不默认启用） | **false** | 🟡 中 | `BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED`；只对 PROCESS 的 COMPUTE+VALIDATE 生效（副作用落 `process_staging` 可重建），Import/Export/Dispatch 靠内存中间产物**不跳过**，多分片自动降级不跳过。**翻开关前置=判定语义修复**（"每个 step 最新一次 run 为 SUCCESS 才可跳过",旧"曾成功"会漏发布），详见 [`platform-worker-checkpoint-howto.md`](./platform-worker-checkpoint-howto.md) §阶段级续跑 |
-| `batch.datasource.business.routing.enabled` | import/export/process worker | **false**（单片无损，全租户落 shard-0=现库） | **false** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED`；开后按 `placement-source`（CONFIG/TABLE）+ `shards[*]` 路由；未配置 shard 时启动失败，详见 [`biz-tenant-routing.md`](./biz-tenant-routing.md) §8 |
-| `batch.datasource.business.routing.placement-source` | 同上 | **CONFIG**（hash+silo） | **CONFIG** | 🟡 中 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE`=CONFIG/TABLE；TABLE 读 `batch.business_tenant_placement`（在线维护,见 console `/api/console/ops/tenant-placements`） |
-| ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
-| `batch.resource-scheduler.default-exceeded-strategy` | orchestrator | **QUEUE_DEFER**（有界队列+背压，峰值流量不误拒） | **QUEUE_DEFER** | 🟡 中 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY`=QUEUE_DEFER/REJECT；ADR-042 Phase2.3 **改了平台默认行为**（旧默认硬拒 REJECT）→ 设 `REJECT` 可回退。仅作用于未显式配 `exceeded_strategy` 的租户，显式配的以租户策略为准 |
-| `batch.console.ai.enabled` | console-api | **false** | **false** | 🟡 中 | `BATCH_CONSOLE_AI_ENABLED`；开启后才允许 Console AI 入口调用外部 LLM，仍受用户/角色白名单、AI 独立限流和 provider 超时约束 |
-| `batch.console.ai.provider` | console-api | **ANTHROPIC** | **ANTHROPIC** | 🟢 低 | `BATCH_CONSOLE_AI_PROVIDER`=anthropic/openai；枚举绑定，拼写错误启动失败，不再静默选择其他 provider |
-| `batch.console.captcha.provider` | console-api | **none** | **none**（继承 yml） | 🟡 中 | `BATCH_CONSOLE_CAPTCHA_PROVIDER`=none/selfhosted/tencent/aliyun；任一时刻只装一个实现；tencent/aliyun 需站点 key / 密钥且外联 |
-| `batch.worker.atomic.enabled-task-types` | worker-atomic | **空（注册全部已启用执行器）** | **空** | 🟡 中 | `BATCH_WORKER_ATOMIC_ENABLED_TYPES`；正式键为 `enabled-task-types`，旧 `enabled-types` 暂保留兼容；配置非空时只注册白名单内 task type |
-| `batch.worker.import.scanner.done-file-format` | worker-import | **MARKER** | **MARKER** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT`=MARKER/MANIFEST/JSON；JSON 是 MANIFEST 兼容别名，均执行 sidecar manifest 强校验（#570），未知值启动失败 |
-| `batch.worker.import.scanner.done-file-suffix` | worker-import | **`.done`** | **`.done`** | 🟢 低 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX`；done 文件后缀可配（#569） |
-| `batch.worker.import.scanner.batch-manifest-enabled` | worker-import | **false** | **false** | 🟡 中 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED`；开后扫描期强校验批次清单（文件完整性，#570）|
-| `batch.file-governance.arrival.require-verified` | orchestrator | **false** | **true** | 🟡 中 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED`；生产 Helm 默认开启，到达组要求文件已校验通过才放行（#570）|
-| `batch.rate-limit.enabled` | orchestrator | **true**（2026-06-24 起防接口盗刷；旧默认 false） | **true** | 🟢 低 | `BATCH_RATE_LIMIT_ENABLED`；按租户固定窗口限流总开关，关闸后所有 action 放行。详见 §1.2 限流防盗刷 |
-| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | orchestrator | launch/release **3000**、register **300**、claim/report **12000** | 同 | 🟡 中 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE`；高水位只拦 runaway，<=0 关闭单项 |
-| `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | console-api | **10** | **10** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE`；导出/导入/Excel/报表按用户限流，fail-open |
-| `batch.console.security.rate-limit.file-op-user-limit-per-minute` | console-api | **60** | **60** | 🟢 低 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE`；`/api/console/files/` 子树（下载/错误导出/归档/重派/到达组）按用户限流，fail-open；前缀可配 `file-op-path-prefixes` |
-| `batch.console.security.rate-limit.redis-failure-threshold` / `redis-circuit-open-seconds` | console-api | **3 / 15s** | **3 / 15s** | 🟡 中 | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD` / `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS`；Redis 连续失败时本进程短路，仍 fail-open；冷却期只允许单探测请求，观察 `batch.console.rate_limit.redis.*` |
-| `batch.request-signing.enabled` | orchestrator | **false** | **false** | 🟡 中 | `BATCH_REQUEST_SIGNING_ENABLED`；开后对 api_key 鉴权的 `/internal/tasks·workers` 写请求强制 HMAC 签名+ts+nonce 防重放，详见 §1.3。灰度须先升级 SDK（`BATCH_SDK_REQUEST_SIGNING_ENABLED=true`）再开服务端 |
-| `batch.security.bypass-mode` | 全部模块 | **false** | **false** | 🔴 高 | `BATCH_SECURITY_BYPASS_MODE`；放宽认证/脱敏/加解密/审批/渠道校验，**仅限本地/联调/E2E**；生产 profile 启动守护拒绝 `true` |
-| `batch.worker.executors.http.max-request-body-bytes` | worker-atomic | **1048576** | **1048576** | 🟡 中 | `BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES`；限制 atomic HTTP 任务请求体字节数，避免任务参数被物化成无界请求体 |
-| `batch.storage.backend` | orchestrator + 所有 worker + console | **s3** | **s3** | 🟡 中 | `BATCH_STORAGE_BACKEND`=s3/filesystem；后端、endpoint、bucket 或 root 变化需先迁移对象，再提供一次性 `BATCH_STORAGE_BACKEND_CUTOVER_ID`；FS list 由 `BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES` 兜住宽 prefix |
-| `batch.storage.encryption.decorator-enabled` | 全部模块 | **false** | **false**（继承 yml） | 🟡 中 | `BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED`；BATCHENC 整对象加密装饰层；开启后 presign 直传禁用、range 读退化；与 `StoreStep` manual encryption 并存会双重加密，future 迁移后再切 true |
-| `batch.storage.startup-check.enabled` | 全部模块 | **true**（`matchIfMissing`） | **true** | 🟢 低 | `BATCH_STORAGE_STARTUP_CHECK_ENABLED`；启动期对配置 bucket 做 put/exists/statSize/get/list/delete 冒烟自检，失败 fail-fast；关掉失去“后端不兼容/无权限”启动守护 |
-| `batch.storage.s3.auto-create-bucket` | 全部模块 | **true** | **true** | 🟡 中 | `BATCH_S3_AUTO_CREATE_BUCKET`；自建 MinIO/Ceph 默认 true；AWS S3 / 阿里 OSS / 腾讯 COS 等托管云**必须 false**（bucket 预建、凭据无 CreateBucket 权限），详见 `object-storage-s3-backends.md` |
-| `batch.sensor.enabled` | orchestrator | **true**（`matchIfMissing`，ADR-028 Sensor 轮询调度总开关） | **true** | 🟢 低 | `BATCH_SENSOR_ENABLED`；false 时 `SensorPollScheduler` 不调度（SPI bean 仍可人工/测试调用），不影响已有 WAIT 节点数据。注:Kafka offset sensor 另有 `batch.sensor.kafka-offset.enabled`（默认 true） |
+> **重要度**：**P0** = 有状态后端/迁移义务或安全红线，动前必读对应小节；**P1** = 常见生产运维开关；**P2** = 低风险调优。
+> **枚举值** = 该开关的合法取值；布尔开关为 `true` / `false`。
+> **设置方式**：环境变量（compose / .env / Helm）或 yml 均可；标注“需 cutover-id”的开关必须同时提供一次性切换 ID。
 
-> 风险等级判定：🔴 高 = 启用前需准备独立基础设施或迁移，否则启动失败；🟡 中 = 启用后行为或持久状态归属变化明显，需要监控验证；🟢 低 = 影响面局部且具备明确回退路径。是否 fail-open 以各项说明为准。
+### 1.A 有状态后端切换（P0，需迁移 + cutover-id 或全停切换）
+
+| 配置 key | 枚举值 | 默认 | 作用 | env |
+|---|---|---|---|---|
+| `batch.storage.backend` | `s3` / `filesystem` | **s3** | 对象存储后端：S3 协议全系（MinIO/AWS S3/阿里 OSS/腾讯 COS）或本地 NAS/文件系统；切换需迁移对象 + `BATCH_STORAGE_BACKEND_CUTOVER_ID` | `BATCH_STORAGE_BACKEND` |
+| `batch.quota.runtime-store` | `redis` / `database` | **redis** | 配额限流运行时状态后端（Lua 原子 vs PG 乐观锁）；切换需 snapshot 核对 + `BATCH_QUOTA_BACKEND_CUTOVER_ID` | `BATCH_QUOTA_RUNTIME_STORE` |
+| `batch.worker.report-outbox.enabled` | `true` / `false` | **false** | worker 上报走事务性 Outbox（防 Kafka 写失败丢报告）；启停/换存储需排空 + `BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID` | `BATCH_WORKER_REPORT_OUTBOX_ENABLED` |
+| `batch.shedlock.provider` | `redis` / `jdbc` | **redis** | 调度锁后端（48 处 `@SchedulerLock`）；**必须全停 → 切配置 → 全起**，双 provider 会重复触发任务 | `BATCH_SHEDLOCK_PROVIDER` |
+
+### 1.B 调度与正确性
+
+| 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env |
+|---|---|---|---|---|---|
+| `batch.mq.routing.mode` | `SINGLE` / `TENANT` / `PRIORITY` | **TENANT** | 派发 Kafka topic 分流粒度；切换必须先升 consumer 再切 producer | **P0** | `BATCH_MQ_ROUTING_MODE` |
+| `batch.worker.checkpoint.enabled` | `true` / `false` | **true** | 断点续跑总开关（P0 默认开，显式 false 回滚到全量重跑） | **P0** | `BATCH_WORKER_CHECKPOINT_ENABLED` |
+| `batch.worker.checkpoint.stage-skip.enabled` | `true` / `false` | **false** | PROCESS 阶段级续跑（仅 COMPUTE+VALIDATE，多分片自动降级） | P1 | `BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED` |
+| `batch.resource-scheduler.default-exceeded-strategy` | `QUEUE_DEFER` / `REJECT` | **QUEUE_DEFER** | 超配额租户的默认策略（REJECT 为旧行为，可回退） | P1 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY` |
+| `batch.worker.lease.renew-batch-max-items` | 正整数 | **256** | 单次 renew-batch HTTP 最多携带任务数，超出自动拆单 | P2 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS` |
+
+### 1.C 安全
+
+| 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env |
+|---|---|---|---|---|---|
+| `batch.security.bypass-mode` | `true` / `false` | **false** | 安全旁路（认证/脱敏/加解密/审批/渠道校验全放宽）；**仅本地/E2E**，生产 profile 拒绝 true | **P0** | `BATCH_SECURITY_BYPASS_MODE` |
+| `batch.request-signing.enabled` | `true` / `false` | **false** | 内部写请求 HMAC 签名+ts+nonce 防重放；灰度先升 SDK 再开服务端 | P1 | `BATCH_REQUEST_SIGNING_ENABLED` |
+| `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级固定窗口限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` |
+| `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` |
+| `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` |
+| `batch.console.captcha.provider` | `none` / `selfhosted` / `tencent` / `aliyun` | **none** | 登录验证码实现；任一时刻只装一个；tencent/aliyun 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` |
+
+### 1.D 弹性 / 性能 / 观测
+
+| 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env |
+|---|---|---|---|---|---|
+| `batch.quota.redis.failure-mode` | `FAIL_CLOSED` / `FAIL_OPEN` | **FAIL_CLOSED** | Redis 故障时配额行为；FAIL_OPEN 等同关闭限流，**生产禁止** | **P0** | `BATCH_QUOTA_REDIS_FAILURE_MODE` |
+| `batch.console.read-replica.enabled` | `true` / `false` | **true** | 读副本路由；无从库部署建议显式 false 避免反复探测 | P1 | `BATCH_CONSOLE_READ_REPLICA_ENABLED` |
+| `batch.storage.startup-check.enabled` | `true` / `false` | **true** | 启动冒烟自检（put/exists/statSize/get/list/delete），失败 fail-fast | P1 | `BATCH_STORAGE_STARTUP_CHECK_ENABLED` |
+| `batch.storage.encryption.decorator-enabled` | `true` / `false` | **false** | BATCHENC 整对象加密装饰层；开启后 presign 直传禁用、range 读退化 | P1 | `BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED` |
+| `batch.storage.s3.auto-create-bucket` | `true` / `false` | **true** | 启动自动建桶；AWS/OSS/COS 等托管云**必须 false** | P1 | `BATCH_S3_AUTO_CREATE_BUCKET` |
+| `batch.scheduler.worker-cache.enabled` | `true` / `false` | **true** | ONLINE worker 列表缓存（Redis 故障 fail-open 直通 DB） | P2 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` |
+| `batch.quota.snapshot.enabled` | `true` / `false` | **true** | Redis 配额状态周期快照到 PG（审计 / 降级数据源） | P2 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
+
+### 1.E 分片路由 / 导入扫描 / 原子任务
+
+| 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env |
+|---|---|---|---|---|---|
+| `batch.datasource.business.routing.enabled` | `true` / `false` | **false** | 业务库租户分片路由（未配 shard 启动失败） | P1 | `BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED` |
+| `batch.datasource.business.routing.placement-source` | `CONFIG` / `TABLE` | **CONFIG** | 分片放置来源（CONFIG=hash+silo；TABLE=在线维护表） | P1 | `BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE` |
+| `batch.worker.import.scanner.done-file-format` | `MARKER` / `MANIFEST` / `JSON` | **MARKER** | done 文件格式；MANIFEST/JSON 走 sidecar 清单强校验 | P2 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT` |
+| `batch.worker.import.scanner.done-file-suffix` | 字符串 | **`.done`** | done 文件后缀 | P2 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX` |
+| `batch.worker.import.scanner.batch-manifest-enabled` | `true` / `false` | **false** | 扫描期强校验批次清单（文件完整性） | P1 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED` |
+| `batch.file-governance.arrival.require-verified` | `true` / `false` | **false**（jar）/ **true**（helm） | 到达组要求文件已校验通过才放行 | P1 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED` |
+| `batch.worker.atomic.enabled-task-types` | 白名单：`shell`/`sql`/`stored_proc`/`http` | **空（全部启用）** | atomic 执行器白名单 | P1 | `BATCH_WORKER_ATOMIC_ENABLED_TYPES` |
+| `batch.worker.executors.http.max-request-body-bytes` | 正整数 | **1048576** | atomic HTTP 任务请求体上限 | P2 | `BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES` |
+| `batch.sensor.enabled` | `true` / `false` | **true** | Sensor 轮询调度总开关（不影响已有 WAIT 数据） | P2 | `BATCH_SENSOR_ENABLED` |
+
+### 1.F 限流阈值（P2 调参类）
+
+| 配置 key | 默认 | 作用 | env |
+|---|---|---|---|
+| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | launch/release 3000、register 300、claim/report 12000 | 租户级高水位限流；<=0 关闭单项 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE` |
+| `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | 10 | 导出/导入/Excel/报表按用户限流（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE` |
+| `batch.console.security.rate-limit.file-op-user-limit-per-minute` | 60 | `/api/console/files/` 子树按用户限流（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE` |
+| `batch.console.security.rate-limit.redis-failure-threshold` / `redis-circuit-open-seconds` | 3 / 15s | Redis 连续失败短路与冷却期（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD` / `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS` |
+
+> **已移除开关（历史，勿再配置）**：`batch.trigger.quartz-datasource.enabled`（2026-04-25，Phase 2 半成品）、`batch.trigger.async-launch.enabled`（2026-05-02，异步路径固化）。
 >
-> **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读(#578/580/582/584)是模板/渠道级配置(`trailer_template` / control-total rule / `readback_verify_enabled`),归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md);本表只收全局 yml/env 开关。
+> **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读是模板/渠道级配置，归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md)；本表只收全局 yml/env 开关。
 
 ### 1.1 有状态后端切换守护
 
