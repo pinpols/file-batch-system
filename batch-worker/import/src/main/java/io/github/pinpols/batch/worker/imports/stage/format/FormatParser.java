@@ -11,6 +11,7 @@ public interface FormatParser {
    *
    * @return 解析出的记录总数
    */
+  @SuppressWarnings("java:S112")
   long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception;
 }

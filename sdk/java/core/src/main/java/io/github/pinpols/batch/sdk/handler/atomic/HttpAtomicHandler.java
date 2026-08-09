@@ -4,6 +4,7 @@ import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
@@ -109,7 +110,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     return out;
   }
 
-  private void checkSsrf(String host) throws Exception {
+  private void checkSsrf(String host) throws UnknownHostException {
     if (config.blockPrivateIps()) {
       InetAddress addr = InetAddress.getByName(host);
       if (addr.isLoopbackAddress()

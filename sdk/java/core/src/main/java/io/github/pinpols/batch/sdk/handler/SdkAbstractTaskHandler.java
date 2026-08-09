@@ -43,8 +43,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
           ctx == null ? null : ctx.taskId(),
           stopped.breakPosition());
       return SdkTaskResult.cancelled(stopped.breakPosition());
-    } catch (Throwable t) {
-      rethrowFatal(t);
+    } catch (Exception t) {
       log.error(
           "SDK handler {} failed (taskType={}, taskId={}): {}",
           getClass().getSimpleName(),
@@ -58,8 +57,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
       if (started) {
         try {
           cleanup(ctx);
-        } catch (Throwable cleanupEx) {
-          rethrowFatal(cleanupEx);
+        } catch (Exception cleanupEx) {
           log.warn(
               "SDK handler {} cleanup() failed: {}",
               getClass().getSimpleName(),
@@ -87,12 +85,6 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
   protected abstract SdkTaskResult doExecute(SdkTaskContext ctx);
 
   /** 不能把 JVM 级故障伪装成单个任务失败。 */
-  private static void rethrowFatal(Throwable throwable) {
-    if (throwable instanceof Error error) {
-      throw error;
-    }
-  }
-
   /** doExecute 成功完成后调(异常路径不调)。默认 no-op。 */
   protected void after(SdkTaskContext ctx, SdkTaskResult result) {
     // 无操作

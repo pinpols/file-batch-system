@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -63,7 +64,7 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
 
   private void writeFixedWidthHeaderRows(
       BufferedWriter writer, List<ColumnLayout> columns, int recordLength, int headerRows)
-      throws Exception {
+      throws IOException {
     int effectiveHeaderRows = Math.max(1, headerRows);
     String header = fixedWidthLine(columns, recordLength, ColumnLayout::header);
     for (int i = 0; i < effectiveHeaderRows; i++) {

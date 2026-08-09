@@ -8,6 +8,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
@@ -123,7 +124,7 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
     }
   }
 
-  private void checkSsrf(URI uri) throws Exception {
+  private void checkSsrf(URI uri) throws UnknownHostException {
     String host = uri.getHost();
     if (host == null || host.isBlank()) {
       throw new IllegalArgumentException("invalid endpoint, no host: " + config.endpoint());

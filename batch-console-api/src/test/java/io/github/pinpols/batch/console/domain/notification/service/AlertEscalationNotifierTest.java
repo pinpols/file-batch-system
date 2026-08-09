@@ -41,12 +41,12 @@ class AlertEscalationNotifierTest {
     lockExecutor = mock(LockingTaskExecutor.class);
     meterRegistry = new SimpleMeterRegistry();
     doAnswer(inv -> {
-          LockingTaskExecutor.Task t = inv.getArgument(0);
-          t.call();
+          Runnable t = inv.getArgument(0);
+          t.run();
           return null;
         })
         .when(lockExecutor)
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+        .executeWithLock(any(Runnable.class), any());
     notifier = new AlertEscalationNotifier(
         alertEventMapper,
         domainEventPublisher,
@@ -154,7 +154,7 @@ class AlertEscalationNotifierTest {
 
     notifier.poll();
 
-    verify(lockExecutor, never()).executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    verify(lockExecutor, never()).executeWithLock(any(Runnable.class), any());
     verify(alertEventMapper, never()).selectEscalatedPendingNotify(anyInt());
   }
 

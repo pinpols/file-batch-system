@@ -18,8 +18,10 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.Charset;
+import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
@@ -353,7 +355,7 @@ public final class ImportPreprocessPipeline {
   }
 
   private static byte[] aesGcmDecrypt(byte[] input, Map<String, Object> step, ImportPayload payload)
-      throws Exception {
+      throws GeneralSecurityException {
     Map<String, Object> meta = payload != null ? payload.metadata() : Map.of();
     String keyB64 =
         firstNonBlank(stringProp(step, "aesKeyBase64"), metaString(meta, "decryptAesKeyBase64"));
@@ -445,7 +447,8 @@ public final class ImportPreprocessPipeline {
     return upper;
   }
 
-  private static MessageDigest messageDigestForFileIntegrity(String algorithm) throws Exception {
+  private static MessageDigest messageDigestForFileIntegrity(String algorithm)
+      throws NoSuchAlgorithmException {
     if ("SHA-256".equals(algorithm)) {
       return MessageDigest.getInstance("SHA-256");
     }
@@ -485,7 +488,7 @@ public final class ImportPreprocessPipeline {
     }
   }
 
-  private static PublicKey readPublicKeyFromPem(String pem) throws Exception {
+  private static PublicKey readPublicKeyFromPem(String pem) throws GeneralSecurityException {
     String stripped = pem.replace("-----BEGIN PUBLIC KEY-----", EMPTY)
         .replace("-----END PUBLIC KEY-----", EMPTY)
         .replaceAll("\\s", EMPTY);

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -162,7 +163,8 @@ public class WeComNotificationSender implements NotificationSender {
   }
 
   /** HTTP POST 抽出便于单测打桩（覆盖此方法返回预置 JSON，不走真实网络）。 */
-  protected WeComHttpResponse postJson(String url, String body) throws Exception {
+  protected WeComHttpResponse postJson(String url, String body)
+      throws IOException, InterruptedException {
     Request request =
         new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
     try (Response response = httpClient.newCall(request).execute()) {

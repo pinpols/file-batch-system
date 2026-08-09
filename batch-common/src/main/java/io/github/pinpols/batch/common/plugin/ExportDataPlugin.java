@@ -14,12 +14,15 @@ public interface ExportDataPlugin {
 
   record DelimitedColumn(String header, String source) {}
 
+  @SuppressWarnings("java:S112")
   String id();
 
   /** 加载批次行数据（如结算批次），返回空 map 表示未找到。 */
+  @SuppressWarnings("java:S112")
   Map<String, Object> loadBatch(ExportDataContext context) throws Exception;
 
   /** 按插件定义的游标语义加载一页明细数据，{@code nextCursor == null} 表示无更多数据。 */
+  @SuppressWarnings("java:S112")
   DetailPage loadDetailPage(ExportDataContext context, Long batchId, int pageSize, Object cursor)
       throws Exception;
 

@@ -20,6 +20,8 @@ import java.util.stream.Stream;
  * @param <I> 输入行类型
  * @param <O> 输出行类型
  */
+// S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
+@SuppressWarnings("java:S112")
 public abstract class SdkAbstractProcessHandler<I, O>
     extends SdkAbstractTypedProcessHandler<Map<String, Object>, I, O, Void> {
 

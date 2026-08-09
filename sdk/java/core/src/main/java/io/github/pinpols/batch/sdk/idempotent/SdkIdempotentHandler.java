@@ -108,11 +108,15 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
     }
 
     SdkTaskResult result;
+    boolean completed = false;
     try {
       result = delegate.execute(ctx);
-    } catch (RuntimeException | Error ex) {
-      store.release(key);
-      throw ex;
+      completed = true;
+    } finally {
+      // Error 也释放占位：占位不放行会一直卡到 TTL，等价旧的 catch(RuntimeException|Error)
+      if (!completed) {
+        store.release(key);
+      }
     }
     if (result.success()) {
       store.record(key, SdkIdempotencyEntity.ofResult(result), annotation.ttlMillis());

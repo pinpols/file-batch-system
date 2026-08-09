@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
 import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
@@ -13,6 +14,7 @@ import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.util.ByteArrayDataSource;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -168,7 +170,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private MimeMessage buildMimeMessage(
-      MailConfig mailConfig, DispatchCommand command, String externalRequestId) throws Exception {
+      MailConfig mailConfig, DispatchCommand command, String externalRequestId)
+      throws MessagingException {
     Properties props = new Properties();
     props.put("mail.smtp.host", mailConfig.host());
     props.put("mail.smtp.port", String.valueOf(mailConfig.port()));
@@ -237,7 +240,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private void addAttachment(
       MimeMessage message, byte[] attachmentBytes, Map<String, Object> fileRecord)
-      throws Exception {
+      throws MessagingException, IOException {
     String attachName = firstNonBlank(
         String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
         String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin")));
@@ -255,7 +258,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     message.setContent(multipart);
   }
 
-  private void sendMail(MailConfig mailConfig, MimeMessage message) throws Exception {
+  private void sendMail(MailConfig mailConfig, MimeMessage message) throws MessagingException {
     try (Transport transport = message.getSession().getTransport("smtp")) {
       transport.connect(
           mailConfig.host(), mailConfig.port(), mailConfig.smtpUser(), mailConfig.smtpPass());

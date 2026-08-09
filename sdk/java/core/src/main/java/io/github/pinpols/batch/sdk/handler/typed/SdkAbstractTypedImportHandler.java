@@ -61,6 +61,8 @@ import java.util.stream.Stream;
  * @param <O> 业务结果(序列化进 output;返 null 则用计数器 output 回退)
  * @param <R> 行类型
  */
+// S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
+@SuppressWarnings("java:S112")
 public abstract class SdkAbstractTypedImportHandler<I, O, R>
     extends SdkAbstractTypedRowStreamHandler<I, O, R> {
 

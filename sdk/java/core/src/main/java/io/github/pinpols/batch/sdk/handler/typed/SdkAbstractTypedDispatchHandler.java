@@ -19,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
  * @param <R> payload 行类型
  */
 @Slf4j
+// S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
+@SuppressWarnings("java:S112")
 public abstract class SdkAbstractTypedDispatchHandler<I, O, R> extends SdkAbstractTaskHandler {
 
   private final SdkTypedParameters<I> params;

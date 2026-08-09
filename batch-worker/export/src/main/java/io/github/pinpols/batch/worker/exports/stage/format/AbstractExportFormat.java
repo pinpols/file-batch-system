@@ -20,7 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+// S112 抑制：导出格式 SPI 刻意声明宽泛 throws Exception（第三方格式库抛各种受检异常）。
 
+@SuppressWarnings("java:S112")
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   private static final String KEY_DETAIL_PREFIX = "detail.";
@@ -169,6 +171,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   /** 分页边界文件同步回调:flush + fsync,返回当前字节数(续跑 truncate 目标)。 */
   @FunctionalInterface
+  @SuppressWarnings("java:S112")
   protected interface FileSync {
     long flushAndSync() throws Exception;
   }
@@ -181,6 +184,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
    * @param rowIndex 当前行序号（0-based），便于 format 决定是否插分隔符 / 换行 / flush
    */
   @FunctionalInterface
+  @SuppressWarnings("java:S112")
   protected interface PageRowWriter {
     void writeRow(Map<String, Object> batch, Map<String, Object> detail, long rowIndex)
         throws Exception;

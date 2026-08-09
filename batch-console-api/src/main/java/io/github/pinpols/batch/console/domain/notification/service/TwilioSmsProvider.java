@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.console.config.SmsProperties;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -165,7 +166,8 @@ public class TwilioSmsProvider implements SmsProvider {
   protected record TwilioResponse(int status, String body) {}
 
   /** 抽出便于单测覆盖：以 {@code application/x-www-form-urlencoded} POST 表单到 url，带 Basic 鉴权头，返回状态码 + 响应体。 */
-  protected TwilioResponse postForm(String url, String authHeader, String body) throws Exception {
+  protected TwilioResponse postForm(String url, String authHeader, String body)
+      throws IOException, InterruptedException {
     HttpRequest request = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(REQUEST_TIMEOUT)

@@ -146,7 +146,7 @@ public class ParseSupport {
     return fields;
   }
 
-  public void writeParsedRecord(ParsedRecordWriteParam param) throws Exception {
+  public void writeParsedRecord(ParsedRecordWriteParam param) throws IOException {
     if (param.row() == null || param.row().isEmpty()) {
       recordParseError(
           param.context(),

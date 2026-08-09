@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -72,7 +73,7 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
   }
 
   /** 执行 application/x-www-form-urlencoded POST,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
-  protected String postForm(String url, String body) throws Exception {
+  protected String postForm(String url, String body) throws IOException, InterruptedException {
     HttpRequest request = HttpRequest.newBuilder(URI.create(url))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .timeout(REQUEST_TIMEOUT)
