@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,8 +50,8 @@ class DefaultAlertEventServiceEscalationTest {
     // arrange
     when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
         .thenReturn(List.of(overdueAlert(1L, 0), overdueAlert(2L, 1)));
-    when(alertEventMapper.markEscalated(eq(1L), eq("t1"), eq(0))).thenReturn(1);
-    when(alertEventMapper.markEscalated(eq(2L), eq("t1"), eq(1))).thenReturn(1);
+    when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(1);
+    when(alertEventMapper.markEscalated(2L, "t1", 1)).thenReturn(1);
 
     // act
     int escalated = service().escalateOverdue(30, 3, 200);
@@ -68,8 +67,8 @@ class DefaultAlertEventServiceEscalationTest {
     // arrange
     when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
         .thenReturn(List.of(overdueAlert(1L, 0), overdueAlert(2L, 0)));
-    when(alertEventMapper.markEscalated(eq(1L), eq("t1"), eq(0))).thenReturn(0);
-    when(alertEventMapper.markEscalated(eq(2L), eq("t1"), eq(0))).thenReturn(1);
+    when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(0);
+    when(alertEventMapper.markEscalated(2L, "t1", 0)).thenReturn(1);
 
     // act
     int escalated = service().escalateOverdue(30, 3, 200);
@@ -84,7 +83,7 @@ class DefaultAlertEventServiceEscalationTest {
     // arrange
     when(alertEventMapper.selectOverdueForEscalation(30, 3, 200))
         .thenReturn(List.of(overdueAlert(1L, null)));
-    when(alertEventMapper.markEscalated(eq(1L), eq("t1"), eq(0))).thenReturn(1);
+    when(alertEventMapper.markEscalated(1L, "t1", 0)).thenReturn(1);
 
     // act
     int escalated = service().escalateOverdue(30, 3, 200);

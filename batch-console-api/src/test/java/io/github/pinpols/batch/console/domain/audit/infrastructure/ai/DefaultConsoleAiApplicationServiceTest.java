@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -140,7 +141,7 @@ class DefaultConsoleAiApplicationServiceTest {
   @DisplayName("授权失败 → 透传 BizException，prompt guard / chat client 完全不触达")
   void shouldPropagateAuthorizationException_whenAuthorizationDenies() {
     BizException denied = BizException.of(ResultCode.FORBIDDEN, "error.ai.forbidden");
-    org.mockito.Mockito.doThrow(denied).when(authorizationService).assertAllowed();
+    doThrow(denied).when(authorizationService).assertAllowed();
 
     assertThatThrownBy(() -> service.chat(request("t-1", "查询失败的作业"), "idem-1")).isSameAs(denied);
     verify(promptGuard, never()).check(any());

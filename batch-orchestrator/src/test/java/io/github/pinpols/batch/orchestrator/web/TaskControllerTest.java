@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -66,8 +67,7 @@ class TaskControllerTest {
 
   @Test
   void shouldReturn429WhenClaimRateLimited() throws Exception {
-    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.TASK_CLAIM)))
-        .thenReturn(false);
+    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.TASK_CLAIM)).thenReturn(false);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -75,13 +75,12 @@ class TaskControllerTest {
             .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isTooManyRequests());
 
-    verify(taskExecutionService, org.mockito.Mockito.never()).assignWorker(any(), any(), any());
+    verify(taskExecutionService, never()).assignWorker(any(), any(), any());
   }
 
   @Test
   void shouldReturn429WhenReportRateLimited() throws Exception {
-    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.TASK_REPORT)))
-        .thenReturn(false);
+    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.TASK_REPORT)).thenReturn(false);
 
     mockMvc
         .perform(post("/internal/tasks/5/report")
@@ -89,7 +88,7 @@ class TaskControllerTest {
             .content("{\"tenantId\":\"t1\",\"success\":true,\"resultSummary\":\"ok\"}"))
         .andExpect(status().isTooManyRequests());
 
-    verify(taskExecutionService, org.mockito.Mockito.never()).applyTaskOutcome(any());
+    verify(taskExecutionService, never()).applyTaskOutcome(any());
   }
 
   @Test
@@ -97,7 +96,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
-    when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
+    when(taskExecutionService.assignWorker("t1", 10L, "w1")).thenReturn(task);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -111,7 +110,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
-    when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
+    when(taskExecutionService.assignWorker("t1", 10L, "w1")).thenReturn(task);
     EffectiveTaskConfig config = new EffectiveTaskConfig(
         "t1",
         10L,
@@ -182,7 +181,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
-    when(taskExecutionService.assignWorker(eq("tenant-a"), eq(10L), eq("w1"))).thenReturn(task);
+    when(taskExecutionService.assignWorker("tenant-a", 10L, "w1")).thenReturn(task);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -210,7 +209,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("other");
-    when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
+    when(taskExecutionService.assignWorker("t1", 10L, "w1")).thenReturn(task);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")

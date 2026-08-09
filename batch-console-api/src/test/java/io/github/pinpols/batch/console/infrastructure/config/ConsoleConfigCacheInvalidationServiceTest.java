@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -77,7 +78,7 @@ class ConsoleConfigCacheInvalidationServiceTest {
   @Test
   @SuppressWarnings("unchecked")
   void evictAllJobDefinitionsUsesScanInsteadOfKeys() {
-    Cursor<String> cursor = (Cursor<String>) org.mockito.Mockito.mock(Cursor.class);
+    Cursor<String> cursor = (Cursor<String>) mock(Cursor.class);
     Iterator<Boolean> hasNext = List.of(true, true, true, false).iterator();
     Iterator<String> next = List.of(
             "config:t1:job-definition:JOB1",

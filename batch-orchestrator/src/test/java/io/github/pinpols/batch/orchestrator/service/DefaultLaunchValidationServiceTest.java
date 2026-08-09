@@ -108,8 +108,7 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
   void rejectsWhenTriggerRequestMissing() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
-        .thenReturn(null);
+    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001")).thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req))
         .isInstanceOf(BizException.class)
@@ -123,9 +122,9 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("job_definition 缺失 → trigger_request 打 REJECTED + 抛 NOT_FOUND")
   void rejects_when_jobDefinition_missing_and_marks_rejected() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
+    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001"))
         .thenReturn(triggerRequestEntity());
-    when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok"))).thenReturn(null);
+    when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper)
@@ -136,12 +135,11 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("WORKFLOW 类型缺 workflow_definition → trigger_request 打 REJECTED + 抛 NOT_FOUND")
   void rejectsWhenWorkflowTypeMissingWorkflowDef() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
+    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001"))
         .thenReturn(triggerRequestEntity());
-    when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok")))
+    when(configCacheService.findEnabledJobDefinition("ta", "job_ok"))
         .thenReturn(jobDefinitionEntity(JobType.WORKFLOW.code()));
-    when(configCacheService.findEnabledWorkflowDefinition(eq("ta"), eq("job_ok")))
-        .thenReturn(null);
+    when(configCacheService.findEnabledWorkflowDefinition("ta", "job_ok")).thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
     verify(triggerRequestMapper)
@@ -155,9 +153,8 @@ class DefaultLaunchValidationServiceTest {
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.GENERAL.code());
 
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
-        .thenReturn(trig);
-    when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok"))).thenReturn(jobDef);
+    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001")).thenReturn(trig);
+    when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
     when(jobInstanceMapper.selectByTenantAndDedupKey(eq("ta"), anyString())).thenReturn(null);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);
@@ -178,11 +175,9 @@ class DefaultLaunchValidationServiceTest {
         new WorkflowDefinitionEntity(1L, "ta", "job_ok", "wf-name", "DAG", 1, true);
     JobInstanceEntity existing = new JobInstanceEntity();
 
-    when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
-        .thenReturn(trig);
-    when(configCacheService.findEnabledJobDefinition(eq("ta"), eq("job_ok"))).thenReturn(jobDef);
-    when(configCacheService.findEnabledWorkflowDefinition(eq("ta"), eq("job_ok")))
-        .thenReturn(wf);
+    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001")).thenReturn(trig);
+    when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
+    when(configCacheService.findEnabledWorkflowDefinition("ta", "job_ok")).thenReturn(wf);
     when(jobInstanceMapper.selectByTenantAndDedupKey(eq("ta"), anyString())).thenReturn(existing);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);

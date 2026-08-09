@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -218,10 +219,10 @@ class DefaultTaskCreationServiceTest {
 
     // task 与 step 各切 3 批
     ArgumentCaptor<List<JobTaskEntity>> taskCap = ArgumentCaptor.forClass(List.class);
-    verify(jobTaskMapper, org.mockito.Mockito.times(3)).insertBatch(taskCap.capture());
+    verify(jobTaskMapper, times(3)).insertBatch(taskCap.capture());
     assertThat(taskCap.getAllValues()).extracting(List::size).containsExactly(500, 500, 200);
     ArgumentCaptor<List<JobStepInstanceEntity>> stepCap = ArgumentCaptor.forClass(List.class);
-    verify(jobStepInstanceMapper, org.mockito.Mockito.times(3)).insertBatch(stepCap.capture());
+    verify(jobStepInstanceMapper, times(3)).insertBatch(stepCap.capture());
     assertThat(stepCap.getAllValues()).extracting(List::size).containsExactly(500, 500, 200);
 
     // 回填顺序:原 tasks 第 i 个拿到第 i 个生成 id;step 镜像的 jobTaskId 与之一致。

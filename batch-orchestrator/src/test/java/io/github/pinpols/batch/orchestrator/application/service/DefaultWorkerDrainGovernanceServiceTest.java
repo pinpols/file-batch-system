@@ -121,7 +121,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         .thenReturn(registry)
         .thenReturn(registry)
         .thenReturn(decommissioned);
-    when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"))).thenReturn(1);
+    when(workerRegistryMapper.markDecommissioned("t1", "w1")).thenReturn(1);
 
     JobTaskEntity task = new JobTaskEntity();
     task.setId(100L);
@@ -143,7 +143,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         .thenReturn(registry)
         .thenReturn(registry)
         .thenReturn(decommissioned);
-    when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"))).thenReturn(1);
+    when(workerRegistryMapper.markDecommissioned("t1", "w1")).thenReturn(1);
     when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
 
     WorkerRegistryEntity result = service.forceOffline("t1", "w1");
@@ -216,12 +216,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry);
-    when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"))).thenReturn(1);
+    when(workerRegistryMapper.markDecommissioned("t1", "w1")).thenReturn(1);
     when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
 
     service.takeoverAfterDrainTimeout("t1", "w1");
 
-    verify(workerRegistryMapper).markDecommissioned(eq("t1"), eq("w1"));
+    verify(workerRegistryMapper).markDecommissioned("t1", "w1");
   }
 
   @Test
@@ -234,7 +234,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         .thenReturn(registry)
         .thenReturn(registry)
         .thenReturn(decommissioned);
-    when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"))).thenReturn(1);
+    when(workerRegistryMapper.markDecommissioned("t1", "w1")).thenReturn(1);
 
     JobTaskEntity task1 = new JobTaskEntity();
     task1.setId(301L);

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -39,8 +38,7 @@ class PrepareStepTest {
     PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
-    when(runtimeRepository.loadLatestTemplateConfig(
-            eq("t1"), eq("TPL_1"), eq(ExportWorkerType.EXPORT)))
+    when(runtimeRepository.loadLatestTemplateConfig("t1", "TPL_1", ExportWorkerType.EXPORT))
         .thenReturn(Map.of(
             "file_format_type", "DELIMITED",
             "naming_rule", "exp_${bizDate}_${tenantId}_${batchNo}_${version}"));

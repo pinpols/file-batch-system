@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -64,7 +63,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("claimPartition: 分片不存在 → 返 null,不写表")
   void claimReturnsNullWhenPartitionMissing() {
-    when(jobPartitionMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
+    when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(null);
 
     JobPartitionEntity result = service.claimPartition("ta", 100L, "worker-1", Instant.now());
     assertThat(result).isNull();
@@ -76,7 +75,7 @@ class DefaultPartitionLifecycleServiceTest {
   void claimReturnsFreshWhenCasSucceeds() {
     JobPartitionEntity existing = partition(100L, 1L);
     JobPartitionEntity fresh = partition(100L, 2L);
-    when(jobPartitionMapper.selectById(eq("ta"), eq(100L))).thenReturn(existing, fresh);
+    when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing, fresh);
     when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(1);
 
     JobPartitionEntity result = service.claimPartition("ta", 100L, "worker-1", Instant.now());
@@ -94,13 +93,13 @@ class DefaultPartitionLifecycleServiceTest {
   @DisplayName("claimPartition: CAS 失败 → 返已读到的原对象,不再读 DB")
   void claimReturnsExistingWhenCasFails() {
     JobPartitionEntity existing = partition(100L, 5L);
-    when(jobPartitionMapper.selectById(eq("ta"), eq(100L))).thenReturn(existing);
+    when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing);
     when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(0);
 
     JobPartitionEntity result = service.claimPartition("ta", 100L, "worker-1", Instant.now());
     assertThat(result).isSameAs(existing);
     // 只读一次(claim 前);CAS 失败不应再读
-    verify(jobPartitionMapper, times(1)).selectById(eq("ta"), eq(100L));
+    verify(jobPartitionMapper, times(1)).selectById("ta", 100L);
   }
 
   // ===== renewLease =====
@@ -108,7 +107,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("renewLease: 分片不存在 → 返 null")
   void renewReturnsNullWhenPartitionMissing() {
-    when(jobPartitionMapper.selectById(eq("ta"), eq(200L))).thenReturn(null);
+    when(jobPartitionMapper.selectById("ta", 200L)).thenReturn(null);
 
     JobPartitionEntity result = service.renewLease("ta", 200L, "worker-1", Instant.now());
     assertThat(result).isNull();
@@ -120,7 +119,7 @@ class DefaultPartitionLifecycleServiceTest {
   void renewReturnsFreshWhenSucceeds() {
     JobPartitionEntity existing = partition(200L, 3L);
     JobPartitionEntity fresh = partition(200L, 4L);
-    when(jobPartitionMapper.selectById(eq("ta"), eq(200L))).thenReturn(existing, fresh);
+    when(jobPartitionMapper.selectById("ta", 200L)).thenReturn(existing, fresh);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
     JobPartitionEntity result = service.renewLease("ta", 200L, "worker-1", Instant.now());
@@ -131,7 +130,7 @@ class DefaultPartitionLifecycleServiceTest {
   @DisplayName("renewLease: CAS 失败 → 返原对象")
   void renewReturnsExistingWhenCasFails() {
     JobPartitionEntity existing = partition(200L, 3L);
-    when(jobPartitionMapper.selectById(eq("ta"), eq(200L))).thenReturn(existing);
+    when(jobPartitionMapper.selectById("ta", 200L)).thenReturn(existing);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(0);
 
     JobPartitionEntity result = service.renewLease("ta", 200L, "worker-1", Instant.now());
@@ -146,7 +145,7 @@ class DefaultPartitionLifecycleServiceTest {
     JobPartitionEntity p1 = partition(300L, 1L);
     JobPartitionEntity p2 = partition(301L, 2L);
     when(jobPartitionMapper.selectExpiredLeases(
-            eq("ta"), eq(PartitionStatus.READY.code()), eq(PartitionStatus.RUNNING.code())))
+            "ta", PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
         .thenReturn(List.of(p1, p2));
     when(jobPartitionMapper.markStatus(any(MarkPartitionStatusParam.class))).thenReturn(1);
 
@@ -208,11 +207,7 @@ class DefaultPartitionLifecycleServiceTest {
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
     when(jobPartitionMapper.promoteStatus(
-            eq("ta"),
-            eq(1L),
-            eq(PartitionStatus.WAITING.code()),
-            eq(PartitionStatus.READY.code()),
-            eq(0L)))
+            "ta", 1L, PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), 0L))
         .thenReturn(0);
 
     boolean ok =

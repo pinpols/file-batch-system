@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -121,7 +122,7 @@ class GracefulKafkaShutdownTest {
 
     shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
 
-    verify(registryService, org.mockito.Mockito.never()).deactivate(blank);
+    verify(registryService, never()).deactivate(blank);
   }
 
   /** 占位 stub：ContextClosedEvent 需要一个 ApplicationContext source；测试不实际使用。 */

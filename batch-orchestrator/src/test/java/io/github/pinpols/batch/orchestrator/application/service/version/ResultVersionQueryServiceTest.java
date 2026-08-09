@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.version;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -47,7 +46,7 @@ class ResultVersionQueryServiceTest {
     assertThat(service.findEffective(null, "job:JOB:2026-05-04")).isEmpty();
     assertThat(service.findEffective("t1", null)).isEmpty();
     assertThat(service.findEffective("", "")).isEmpty();
-    verify(mapper, never()).selectEffective(eq("t1"), eq("job:JOB:2026-05-04"));
+    verify(mapper, never()).selectEffective("t1", "job:JOB:2026-05-04");
   }
 
   @Test
@@ -84,7 +83,7 @@ class ResultVersionQueryServiceTest {
   @Test
   void findEffectiveByJobReturnsEmptyOnNullBizDate() {
     assertThat(service.findEffectiveByJob("t1", "JOB_A", null)).isEmpty();
-    verify(mapper, never()).selectEffective(eq("t1"), eq("any"));
+    verify(mapper, never()).selectEffective("t1", "any");
   }
 
   @Test

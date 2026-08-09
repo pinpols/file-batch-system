@@ -112,7 +112,7 @@ class ApiKeyVerifierTest {
 
     verifier.verify(RAW_KEY, "tx");
 
-    verify(mapper, times(1)).touchLastUsedAt(eq(7L));
+    verify(mapper, times(1)).touchLastUsedAt(7L);
   }
 
   @Test
@@ -329,7 +329,7 @@ class ApiKeyVerifierTest {
     advance(Duration.ofSeconds(20));
     verifier.verify(RAW_KEY, "tx"); // 累计 50s,仍跳过
 
-    verify(mapper, times(1)).touchLastUsedAt(eq(7L));
+    verify(mapper, times(1)).touchLastUsedAt(7L);
   }
 
   @Test
@@ -341,7 +341,7 @@ class ApiKeyVerifierTest {
     advance(Duration.ofSeconds(61)); // 越过 60s 节流窗口
     verifier.verify(RAW_KEY, "tx"); // 再写一次
 
-    verify(mapper, times(2)).touchLastUsedAt(eq(7L));
+    verify(mapper, times(2)).touchLastUsedAt(7L);
   }
 
   @Test

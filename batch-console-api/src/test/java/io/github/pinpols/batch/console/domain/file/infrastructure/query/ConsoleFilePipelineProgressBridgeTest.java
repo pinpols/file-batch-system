@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -171,7 +170,7 @@ class ConsoleFilePipelineProgressBridgeTest {
   @DisplayName("未知 pipelineInstanceId(无租户)返回空 steps 且 fileId/fileName 为 null")
   void shouldReturnEmptyWhenTenantUnresolved() {
     // arrange
-    when(stepRunMapper.selectTenantIdByPipelineInstanceId(eq(999L))).thenReturn(null);
+    when(stepRunMapper.selectTenantIdByPipelineInstanceId(999L)).thenReturn(null);
 
     // act
     ConsoleFilePipelineProgressResponse resp = service.pipelineProgress(999L);

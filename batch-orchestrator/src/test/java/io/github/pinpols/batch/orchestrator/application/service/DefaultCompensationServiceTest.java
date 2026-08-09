@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
@@ -67,7 +68,7 @@ class DefaultCompensationServiceTest {
         fileGovernanceService,
         launchServiceProvider,
         taskExecutionService);
-    Mockito.when(launchServiceProvider.getObject()).thenReturn(launchService);
+    when(launchServiceProvider.getObject()).thenReturn(launchService);
     ReflectionTestUtils.setField(service, "self", service);
   }
 
@@ -170,7 +171,7 @@ class DefaultCompensationServiceTest {
   // ── happy path ────────────────────────────────────────────────────────────
   // V5-P2-4: compensation 6 类 source_type happy-path 验证（PARTITION / STEP / DLQ / FILE / JOB /
   // BATCH）。
-  // submit() 返回 commandNo (String)；happy-path 通过 Mockito.verify() 校验侧效（确认 handler
+  // submit() 返回 commandNo (String)；happy-path 通过 verify() 校验侧效（确认 handler
   // 真正调到对应下游服务），不依赖返回值结构。
 
   @Test
@@ -183,7 +184,7 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    Mockito.verify(retryGovernanceService)
+    verify(retryGovernanceService)
         .retryPartition(Mockito.eq("t1"), Mockito.eq(10L), Mockito.anyString());
   }
 
@@ -197,7 +198,7 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    Mockito.verify(retryGovernanceService).replayDeadLetter("t1", 999L);
+    verify(retryGovernanceService).replayDeadLetter("t1", 999L);
   }
 
   @Test
@@ -217,7 +218,7 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    Mockito.verify(retryGovernanceService)
+    verify(retryGovernanceService)
         .retryTask(Mockito.eq("t1"), Mockito.eq(50L), Mockito.anyString());
   }
 
@@ -246,7 +247,7 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    Mockito.verify(fileGovernanceService).redispatchFile(any());
+    verify(fileGovernanceService).redispatchFile(any());
   }
 
   @Test
@@ -275,8 +276,8 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    Mockito.verify(launchService).launch(any(LaunchRequest.class));
-    Mockito.verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
+    verify(launchService).launch(any(LaunchRequest.class));
+    verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
   }
 
   @Test
@@ -307,8 +308,8 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    Mockito.verify(launchService).launch(any(LaunchRequest.class));
-    Mockito.verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
+    verify(launchService).launch(any(LaunchRequest.class));
+    verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

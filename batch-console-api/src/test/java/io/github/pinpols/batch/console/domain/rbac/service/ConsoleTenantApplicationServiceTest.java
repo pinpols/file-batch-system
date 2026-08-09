@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -262,7 +263,7 @@ class ConsoleTenantApplicationServiceTest {
     @Test
     void getTenant_crossTenant_deniedByGuard_neverQueries() {
       // arrange:守卫对越权 tenantId 抛 FORBIDDEN(等价 TENANT_ADMIN 读他租户)
-      org.mockito.Mockito.doThrow(io.github.pinpols.batch.common.exception.BizException.of(
+      doThrow(io.github.pinpols.batch.common.exception.BizException.of(
               io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN, "error.tenant.mismatch"))
           .when(tenantGuard)
           .assertTenantAllowed("tenant-b");

@@ -187,7 +187,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadyReadyReturnsZero() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.READY.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
 
     int result = service.dispatchNode(
         instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace");
@@ -201,7 +201,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadyRunningReturnsZero() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
 
     assertThat(service.dispatchNode(
             instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
@@ -213,7 +213,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadySuccessReturnsZero() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
 
     assertThat(service.dispatchNode(
             instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
@@ -225,7 +225,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadyFailedProceedsToDagCheck() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(false);
 
@@ -259,8 +259,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
-        .thenReturn(null);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(null);
 
     assertThat(service.dispatchNode(
             instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
@@ -280,8 +279,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
     node.setNodeType("TASK");
     node.setCrossDayDependencies(
         "[{\"jobCode\":\"upstream\",\"daysOffset\":-1,\"required\":true}]");
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
-        .thenReturn(node);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(node);
     // 跨日依赖未就绪 → WAITING
     when(crossDayDependencyResolver.resolve(any(), any(), any()))
         .thenReturn(CrossDayDependencyResolver.ResolutionResult.builder()
@@ -306,8 +304,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
     WorkflowNodeEntity node = new WorkflowNodeEntity();
     node.setNodeCode("n1");
     node.setNodeType("TASK");
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
-        .thenReturn(node);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(node);
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("WF_JOB");

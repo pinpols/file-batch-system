@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -89,7 +90,7 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("claim: 状态非 RUNNING → CONFLICT,不返 config")
   void claimThrowsConflictWhenNotRunning() {
     JobTaskEntity task = task(TaskStatus.READY.code(), "w1");
-    when(taskExecutionService.assignWorker(eq("ta"), eq(100L), eq("w1"))).thenReturn(task);
+    when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(task);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
@@ -110,7 +111,7 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("claim: 状态 RUNNING + workerId 匹配 → 返回 effective config")
   void claimSucceedsAndReturnsConfig() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w1");
-    when(taskExecutionService.assignWorker(eq("ta"), eq(100L), eq("w1"))).thenReturn(task);
+    when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(task);
     // PERF(5.2b): claim 成功后复用 assignWorker 返回的 task 实体拉 config,不再按 id 重查
     when(taskExecutionService.loadEffectiveConfig(eq("ta"), same(task))).thenReturn(null);
 
@@ -147,7 +148,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(resp.results().get(2).claimed()).isFalse();
     // 只对领到的 task 1 拉 config(且复用 assignWorker 返回的实体)
     verify(taskExecutionService).loadEffectiveConfig(eq("ta"), same(claimedTask));
-    verify(taskExecutionService, org.mockito.Mockito.times(1))
+    verify(taskExecutionService, times(1))
         .loadEffectiveConfig(anyString(), any(JobTaskEntity.class));
   }
 
@@ -211,7 +212,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(resp.results().get(1).error()).contains("CAS");
     assertThat(resp.results().get(2).ok()).isTrue();
     // 三项都被尝试推进(失败项不阻断后续)
-    verify(taskExecutionService, org.mockito.Mockito.times(3)).applyTaskOutcome(any());
+    verify(taskExecutionService, times(3)).applyTaskOutcome(any());
   }
 
   @Test

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -111,7 +110,7 @@ class PrepareDispatchStepTest {
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).isEqualTo(10L);
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD)).isEqualTo(fileRecord);
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG)).isNotNull();
-    verify(runtimeRepository).bindFileToPipelineInstance(eq(100L), eq(10L));
+    verify(runtimeRepository).bindFileToPipelineInstance(100L, 10L);
   }
 
   @Test

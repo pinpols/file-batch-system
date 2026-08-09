@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.console.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 class RouteToPrimaryAspectTest {
 
@@ -17,9 +18,9 @@ class RouteToPrimaryAspectTest {
   @Test
   void aspectSetsForcePrimaryDuringInvocationAndRestoresAfter() throws Throwable {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
-    ProceedingJoinPoint pjp = Mockito.mock(ProceedingJoinPoint.class);
+    ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
     boolean[] insideHint = new boolean[1];
-    Mockito.when(pjp.proceed()).thenAnswer(inv -> {
+    when(pjp.proceed()).thenAnswer(inv -> {
       insideHint[0] = RoutingHints.isForcePrimary();
       return "ok";
     });
@@ -36,8 +37,8 @@ class RouteToPrimaryAspectTest {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
     Boolean prev = RoutingHints.enterForcePrimary();
     try {
-      ProceedingJoinPoint pjp = Mockito.mock(ProceedingJoinPoint.class);
-      Mockito.when(pjp.proceed()).thenReturn("inner");
+      ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
+      when(pjp.proceed()).thenReturn("inner");
 
       aspect.wrap(pjp);
 
@@ -52,8 +53,8 @@ class RouteToPrimaryAspectTest {
   @Test
   void aspectStillRestoresHintIfMethodThrows() throws Throwable {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
-    ProceedingJoinPoint pjp = Mockito.mock(ProceedingJoinPoint.class);
-    Mockito.when(pjp.proceed()).thenThrow(new RuntimeException("boom"));
+    ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
+    when(pjp.proceed()).thenThrow(new RuntimeException("boom"));
 
     try {
       aspect.wrap(pjp);

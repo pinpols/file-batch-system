@@ -218,7 +218,7 @@ class ConsoleUserAccountServiceTest {
       when(userAccountMapper.selectById(99L)).thenReturn(accountRow(99L, "tenant-b", "victim"));
 
       service.resetPassword(99L, "new-pw");
-      verify(userAccountMapper).updatePasswordHashAndMustChange(eq(99L), eq("hashed"), eq(true));
+      verify(userAccountMapper).updatePasswordHashAndMustChange(99L, "hashed", true);
     }
   }
 

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -51,7 +52,7 @@ class WorkerControllerTest {
 
   @Test
   void shouldBindDrainRequestTimeoutSeconds() throws Exception {
-    when(workerDrainGovernanceService.startDrain(eq("t1"), eq("worker-1"), eq(1)))
+    when(workerDrainGovernanceService.startDrain("t1", "worker-1", 1))
         .thenReturn(new WorkerRegistryEntity(
             1L,
             "t1",
@@ -82,7 +83,7 @@ class WorkerControllerTest {
 
   @Test
   void shouldRouteWarmupToGovernanceService() throws Exception {
-    when(workerDrainGovernanceService.warmup(eq("t1"), eq("worker-1")))
+    when(workerDrainGovernanceService.warmup("t1", "worker-1"))
         .thenReturn(new WorkerRegistryEntity(
             1L,
             "t1",
@@ -152,7 +153,7 @@ class WorkerControllerTest {
 
   @Test
   void registerAllowedWhenRateLimiterPasses() throws Exception {
-    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.WORKER_REGISTER)))
+    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
         .thenReturn(true);
     when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
         .thenReturn(onlineWorker("ONLINE", 10));
@@ -168,7 +169,7 @@ class WorkerControllerTest {
 
   @Test
   void registerRejectedWith429WhenRateLimited() throws Exception {
-    when(tenantActionRateLimiter.tryConsume(eq("t1"), eq(RateLimitAction.WORKER_REGISTER)))
+    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
         .thenReturn(false);
 
     mockMvc
@@ -177,8 +178,7 @@ class WorkerControllerTest {
             .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
         .andExpect(status().isTooManyRequests());
 
-    verify(workerRegistryService, org.mockito.Mockito.never())
-        .register(any(WorkerHeartbeatDto.class));
+    verify(workerRegistryService, never()).register(any(WorkerHeartbeatDto.class));
   }
 
   private WorkerRegistryEntity onlineWorker(String status, Integer maxConcurrent) {

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
@@ -13,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +47,7 @@ class ConsoleLoginServiceTest {
     request.setUsername("admin");
     request.setPassword("admin123");
     // 用户名全局唯一，按 username 查找，租户从账号记录中获取
-    Mockito.when(userAccountService.findByUsername("admin"))
+    when(userAccountService.findByUsername("admin"))
         .thenReturn(Optional.of(new ConsoleUserAccount(
             "default-tenant",
             "admin",
@@ -56,10 +56,10 @@ class ConsoleLoginServiceTest {
             Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
             true,
             false)));
-    Mockito.when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
+    when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
         .thenReturn(true);
-    Mockito.when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
-    Mockito.when(jwtService.issueToken(
+    when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
+    when(jwtService.issueToken(
             "admin",
             "default-tenant",
             Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
@@ -85,7 +85,7 @@ class ConsoleLoginServiceTest {
     ConsoleLoginRequest request = new ConsoleLoginRequest();
     request.setUsername("admin");
     request.setPassword("wrong");
-    Mockito.when(userAccountService.findByUsername("admin"))
+    when(userAccountService.findByUsername("admin"))
         .thenReturn(Optional.of(new ConsoleUserAccount(
             "default-tenant",
             "admin",
@@ -94,7 +94,7 @@ class ConsoleLoginServiceTest {
             Set.of("ROLE_ADMIN"),
             true,
             false)));
-    Mockito.when(passwordHasher.matches("wrong", "hash")).thenReturn(false);
+    when(passwordHasher.matches("wrong", "hash")).thenReturn(false);
 
     assertThatThrownBy(() -> loginService.login(request))
         .isInstanceOf(BizException.class)
@@ -106,7 +106,7 @@ class ConsoleLoginServiceTest {
     ConsoleLoginRequest request = new ConsoleLoginRequest();
     request.setUsername("nonexistent");
     request.setPassword("admin123");
-    Mockito.when(userAccountService.findByUsername("nonexistent")).thenReturn(Optional.empty());
+    when(userAccountService.findByUsername("nonexistent")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> loginService.login(request))
         .isInstanceOf(BizException.class)

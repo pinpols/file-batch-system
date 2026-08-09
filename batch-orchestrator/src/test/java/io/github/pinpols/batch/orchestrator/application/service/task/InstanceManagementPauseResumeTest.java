@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,8 +71,7 @@ class InstanceManagementPauseResumeTest {
     when(jobInstanceMapper.selectById("t1", 1L)).thenReturn(instance("WAITING"));
 
     assertThatThrownBy(() -> service.pause("t1", 1L)).isInstanceOf(BizException.class);
-    verify(jobInstanceMapper, never())
-        .updateLifecycleStatus(eq("t1"), eq(1L), eq("PAUSED"), eq(3L));
+    verify(jobInstanceMapper, never()).updateLifecycleStatus("t1", 1L, "PAUSED", 3L);
   }
 
   @Test

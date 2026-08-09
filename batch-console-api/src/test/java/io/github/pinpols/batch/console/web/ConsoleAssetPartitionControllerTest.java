@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -121,6 +122,6 @@ class ConsoleAssetPartitionControllerTest {
             .param("bizDate", "2026-06-30"))
         .andExpect(status().isForbidden());
 
-    verify(orchestratorInternalRestClient, org.mockito.Mockito.never()).build();
+    verify(orchestratorInternalRestClient, never()).build();
   }
 }

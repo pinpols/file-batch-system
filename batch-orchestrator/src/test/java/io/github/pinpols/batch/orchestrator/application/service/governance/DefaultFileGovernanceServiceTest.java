@@ -297,8 +297,7 @@ class DefaultFileGovernanceServiceTest {
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
-    when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), eq(60)))
-        .thenReturn("u");
+    when(s3GovernanceStorage.createPresignedDownloadUrl("b", "p", 60)).thenReturn("u");
 
     String url = service.presignFileDownload(cmd);
 

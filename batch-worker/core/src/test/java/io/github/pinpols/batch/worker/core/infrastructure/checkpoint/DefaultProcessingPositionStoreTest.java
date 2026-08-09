@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -128,7 +127,7 @@ class DefaultProcessingPositionStoreTest {
   void shouldDelegateAdvance() {
     store.advance(TENANT, INSTANCE, ProcessingStage.LOAD, "row:500", 500L);
 
-    verify(mapper).advance(eq(TENANT), eq(INSTANCE), eq("LOAD"), eq("row:500"), eq(500L));
+    verify(mapper).advance(TENANT, INSTANCE, "LOAD", "row:500", 500L);
     assertMetric("LOAD", "advance", "success", 1.0);
   }
 
@@ -137,7 +136,7 @@ class DefaultProcessingPositionStoreTest {
   void shouldDelegateMarkCompleted() {
     store.markCompleted(TENANT, INSTANCE, ProcessingStage.GENERATE);
 
-    verify(mapper).markCompleted(eq(TENANT), eq(INSTANCE), eq("GENERATE"));
+    verify(mapper).markCompleted(TENANT, INSTANCE, "GENERATE");
     assertMetric("GENERATE", "complete", "success", 1.0);
   }
 
@@ -146,7 +145,7 @@ class DefaultProcessingPositionStoreTest {
   void shouldDelegateDeleteAllStages() {
     store.deleteAllStages(TENANT, INSTANCE);
 
-    verify(mapper).deleteByInstance(eq(TENANT), eq(INSTANCE));
+    verify(mapper).deleteByInstance(TENANT, INSTANCE);
     assertMetric("ALL", "delete", "success", 1.0);
   }
 

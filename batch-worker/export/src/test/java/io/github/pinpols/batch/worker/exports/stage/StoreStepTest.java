@@ -73,7 +73,7 @@ class StoreStepTest {
     // We don't know expectedSha beforehand; so return whatever StoreStep computed by echoing
     // back via Answer-like behavior isn't available here; instead compute it ourselves:
     String expectedSha = TestSha256.sha256Hex(generated);
-    when(storage.sha256Hex(eq("tmp.part"))).thenReturn(expectedSha);
+    when(storage.sha256Hex("tmp.part")).thenReturn(expectedSha);
     when(storage.sha256Hex(anyString())).thenReturn(expectedSha);
 
     ExportJobContext ctx = new ExportJobContext();
@@ -87,7 +87,7 @@ class StoreStepTest {
     assertThat(ctx.getAttributes().get("exportStoreCommitted")).isEqualTo(Boolean.TRUE);
     assertThat(Files.exists(generated)).isFalse();
     verify(storage).copyObject(eq("tmp.part"), anyString());
-    verify(storage).removeObject(eq("tmp.part"));
+    verify(storage).removeObject("tmp.part");
   }
 
   @Test

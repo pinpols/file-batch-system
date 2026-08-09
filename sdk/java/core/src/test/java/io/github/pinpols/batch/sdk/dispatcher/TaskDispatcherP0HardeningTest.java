@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
@@ -82,7 +83,7 @@ class TaskDispatcherP0HardeningTest {
     dispatcher.onMessage(new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
 
     // 不应调 claim 也不应进 handler
-    org.mockito.Mockito.verify(http, never()).claim(anyLong(), anyString(), any());
+    verify(http, never()).claim(anyLong(), anyString(), any());
     assertThat(seenCtx.get()).isNull();
     dispatcher = null;
   }

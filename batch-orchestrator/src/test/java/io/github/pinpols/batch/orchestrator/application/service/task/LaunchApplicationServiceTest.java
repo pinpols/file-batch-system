@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,7 +56,7 @@ class LaunchApplicationServiceTest {
   @DisplayName("限流失败 → 抛 429,LaunchService 不被调用")
   void throws429WhenRateLimited() {
     LaunchRequest req = request("ta");
-    when(rateLimiter.tryConsume(eq("ta"), eq(RateLimitAction.LAUNCH))).thenReturn(false);
+    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(false);
 
     assertThatThrownBy(() -> service.launch(req))
         .isInstanceOf(ResponseStatusException.class)
@@ -72,8 +71,8 @@ class LaunchApplicationServiceTest {
   void delegatesToLaunchServiceWhenAllowed() {
     LaunchRequest req = request("ta");
     LaunchResponse expected = new LaunchResponse("inst-001", "trace");
-    when(rateLimiter.tryConsume(eq("ta"), eq(RateLimitAction.LAUNCH))).thenReturn(true);
-    when(launchService.launch(eq(req))).thenReturn(expected);
+    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
+    when(launchService.launch(req)).thenReturn(expected);
 
     LaunchResponse result = service.launch(req);
     assertThat(result).isSameAs(expected);
@@ -83,9 +82,9 @@ class LaunchApplicationServiceTest {
   @DisplayName("限流 key 使用 request.tenantId(不漂移到其他租户)")
   void rateLimitsByRequestTenantId() {
     LaunchRequest req = request("tenant-X");
-    when(rateLimiter.tryConsume(eq("tenant-X"), eq(RateLimitAction.LAUNCH))).thenReturn(false);
+    when(rateLimiter.tryConsume("tenant-X", RateLimitAction.LAUNCH)).thenReturn(false);
 
     assertThatThrownBy(() -> service.launch(req)).isInstanceOf(ResponseStatusException.class);
-    verify(rateLimiter).tryConsume(eq("tenant-X"), eq(RateLimitAction.LAUNCH));
+    verify(rateLimiter).tryConsume("tenant-X", RateLimitAction.LAUNCH);
   }
 }

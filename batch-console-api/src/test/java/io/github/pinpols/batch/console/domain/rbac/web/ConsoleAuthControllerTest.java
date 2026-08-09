@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,7 +22,6 @@ import java.time.Instant;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -33,9 +33,9 @@ class ConsoleAuthControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleSecurityProperties securityProperties = new ConsoleSecurityProperties();
-    authApplicationService = Mockito.mock(ConsoleAuthApplicationService.class);
+    authApplicationService = mock(ConsoleAuthApplicationService.class);
     ConsoleRequestMetadataResolver requestMetadataResolver =
-        Mockito.mock(ConsoleRequestMetadataResolver.class);
+        mock(ConsoleRequestMetadataResolver.class);
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", null, null, null, "127.0.0.1"));
     when(requestMetadataResolver.responseMeta())
@@ -44,11 +44,11 @@ class ConsoleAuthControllerTest {
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAuthController(
             authApplicationService,
             new ConsoleResponseFactory(requestMetadataResolver),
-            Mockito.mock(SseTicketService.class),
+            mock(SseTicketService.class),
             securityProperties,
-            Mockito.mock(ConsoleJwtService.class),
-            Mockito.mock(ConsoleLoginKeyPairService.class),
-            Mockito.mock(
+            mock(ConsoleJwtService.class),
+            mock(ConsoleLoginKeyPairService.class),
+            mock(
                 io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService
                     .class)))
         .build();

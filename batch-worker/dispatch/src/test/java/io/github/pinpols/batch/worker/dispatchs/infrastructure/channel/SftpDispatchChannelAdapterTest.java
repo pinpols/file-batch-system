@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.jcraft.jsch.ChannelSftp;
@@ -27,7 +28,7 @@ class SftpDispatchChannelAdapterTest {
     SftpDispatchChannelAdapter.publishRemoteFile(sftp, tempRemotePath, remotePath);
 
     verify(sftp).rm(remotePath);
-    verify(sftp, org.mockito.Mockito.times(2)).rename(tempRemotePath, remotePath);
+    verify(sftp, times(2)).rename(tempRemotePath, remotePath);
   }
 
   @Test

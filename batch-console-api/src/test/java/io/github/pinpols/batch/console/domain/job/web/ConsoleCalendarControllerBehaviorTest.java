@@ -69,7 +69,7 @@ class ConsoleCalendarControllerBehaviorTest {
         .perform(get("/api/console/calendars").param("tenantId", "ta"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).list(eq("ta"), eq(null), eq(null), eq(1), eq(20));
+    verify(service).list("ta", null, null, 1, 20);
   }
 
   @Test

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -74,7 +73,7 @@ class ConsoleAiToolsTest {
 
   @Test
   void getJobInstanceRendersStatusAndBindsTenant() {
-    when(queryService.jobInstance(eq(TENANT), eq(42L)))
+    when(queryService.jobInstance(TENANT, 42L))
         .thenReturn(instance(42L, "FAILED", "DOWNSTREAM_ERROR"));
 
     String out = tools().getJobInstance(42L);
@@ -89,7 +88,7 @@ class ConsoleAiToolsTest {
 
   @Test
   void getJobInstanceReturnsNotFoundMessage() {
-    when(queryService.jobInstance(eq(TENANT), eq(99L))).thenReturn(null);
+    when(queryService.jobInstance(TENANT, 99L)).thenReturn(null);
     assertThat(tools().getJobInstance(99L)).contains("未找到").contains("99");
   }
 
@@ -160,7 +159,7 @@ class ConsoleAiToolsTest {
     diagnostics.put("workers", workers);
     diagnostics.put("outbox", outbox);
     diagnostics.put("terminalChildren", terminalChildren);
-    when(diagnosticService.diagnose(eq(TENANT))).thenReturn(diagnostics);
+    when(diagnosticService.diagnose(TENANT)).thenReturn(diagnostics);
 
     String out = tools().getClusterDiagnostics();
 
@@ -178,7 +177,7 @@ class ConsoleAiToolsTest {
 
   @Test
   void getClusterDiagnosticsHandlesEmptyResult() {
-    when(diagnosticService.diagnose(eq(TENANT))).thenReturn(Map.of());
+    when(diagnosticService.diagnose(TENANT)).thenReturn(Map.of());
     assertThat(tools().getClusterDiagnostics()).isNotBlank();
   }
 

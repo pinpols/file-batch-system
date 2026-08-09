@@ -2,6 +2,9 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -79,7 +82,7 @@ class ConsoleTenantReadinessServiceTest {
   /** SEC-IDOR(S2):非全局角色对他租户跑就绪自检 → 守卫抛 FORBIDDEN,不落任何只读查询。 */
   @Test
   void shouldDenyCrossTenantReadiness_beforeQuerying() {
-    org.mockito.Mockito.doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
+    doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
         .when(tenantGuard)
         .assertTenantAllowed("t-other");
 
@@ -87,8 +90,7 @@ class ConsoleTenantReadinessServiceTest {
         .isInstanceOf(BizException.class)
         .extracting(ex -> ((BizException) ex).getCode())
         .isEqualTo(ResultCode.FORBIDDEN);
-    org.mockito.Mockito.verify(tenantMapper, org.mockito.Mockito.never())
-        .selectByTenantId("t-other");
+    verify(tenantMapper, never()).selectByTenantId("t-other");
   }
 
   @Test

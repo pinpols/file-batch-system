@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -233,7 +234,7 @@ class LoadStepTest {
 
   @Test
   void shouldUseLoadTargetRefFromTemplateConfig() throws Exception {
-    ImportLoadPlugin custom = org.mockito.Mockito.mock(ImportLoadPlugin.class);
+    ImportLoadPlugin custom = mock(ImportLoadPlugin.class);
     when(custom.id()).thenReturn("custom_plugin");
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
@@ -295,7 +296,7 @@ class LoadStepTest {
   // ── helpers ──
 
   private ImportPayload mockPayload() {
-    return org.mockito.Mockito.mock(ImportPayload.class);
+    return mock(ImportPayload.class);
   }
 
   private ImportJobContext baseContext() {

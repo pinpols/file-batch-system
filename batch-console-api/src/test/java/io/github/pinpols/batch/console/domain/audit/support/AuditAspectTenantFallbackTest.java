@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.audit.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
@@ -143,22 +144,22 @@ class AuditAspectTenantFallbackTest {
   private ProceedingJoinPoint buildJoinPoint() throws Throwable {
     Method m = getClass().getMethod("sampleAuthLogout");
     MethodSignature sig = mock(MethodSignature.class);
-    org.mockito.Mockito.when(sig.getMethod()).thenReturn(m);
+    when(sig.getMethod()).thenReturn(m);
     ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
-    org.mockito.Mockito.when(pjp.getSignature()).thenReturn((Signature) sig);
-    org.mockito.Mockito.when(pjp.getArgs()).thenReturn(new Object[0]);
-    org.mockito.Mockito.when(pjp.proceed()).thenReturn(null);
+    when(pjp.getSignature()).thenReturn((Signature) sig);
+    when(pjp.getArgs()).thenReturn(new Object[0]);
+    when(pjp.proceed()).thenReturn(null);
     return pjp;
   }
 
   private ProceedingJoinPoint buildTenantUpdateJoinPoint(String tenantIdArg) throws Throwable {
     Method m = getClass().getMethod("sampleTenantUpdate", String.class);
     MethodSignature sig = mock(MethodSignature.class);
-    org.mockito.Mockito.when(sig.getMethod()).thenReturn(m);
+    when(sig.getMethod()).thenReturn(m);
     ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
-    org.mockito.Mockito.when(pjp.getSignature()).thenReturn((Signature) sig);
-    org.mockito.Mockito.when(pjp.getArgs()).thenReturn(new Object[] {tenantIdArg});
-    org.mockito.Mockito.when(pjp.proceed()).thenReturn(null);
+    when(pjp.getSignature()).thenReturn((Signature) sig);
+    when(pjp.getArgs()).thenReturn(new Object[] {tenantIdArg});
+    when(pjp.proceed()).thenReturn(null);
     return pjp;
   }
 }

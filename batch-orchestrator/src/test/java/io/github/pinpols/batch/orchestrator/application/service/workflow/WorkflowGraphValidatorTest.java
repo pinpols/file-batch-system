@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -162,8 +161,8 @@ class WorkflowGraphValidatorTest {
 
   @Test
   void emptyWorkflowIsClean() {
-    when(nodeMapper.selectByWorkflowDefinitionId(eq(1L))).thenReturn(List.of());
-    when(edgeMapper.selectAllByWorkflowDefinitionId(eq(1L))).thenReturn(List.of());
+    when(nodeMapper.selectByWorkflowDefinitionId(1L)).thenReturn(List.of());
+    when(edgeMapper.selectAllByWorkflowDefinitionId(1L)).thenReturn(List.of());
     var result = validator.validate(1L);
     assertThat(result.hasErrors()).isFalse();
   }
@@ -342,8 +341,8 @@ class WorkflowGraphValidatorTest {
   // ── helpers ─────────────────────────────────────────────────────────────
 
   private void seed(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
-    when(nodeMapper.selectByWorkflowDefinitionId(eq(1L))).thenReturn(nodes);
-    when(edgeMapper.selectAllByWorkflowDefinitionId(eq(1L))).thenReturn(edges);
+    when(nodeMapper.selectByWorkflowDefinitionId(1L)).thenReturn(nodes);
+    when(edgeMapper.selectAllByWorkflowDefinitionId(1L)).thenReturn(edges);
   }
 
   private static List<WorkflowNodeEntity> nodes(String... codes) {

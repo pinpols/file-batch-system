@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
@@ -22,7 +24,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.core.env.Environment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -48,16 +49,16 @@ class ConsoleSecurityConfigurationTest {
 
     batchSecurityProperties = new BatchSecurityProperties();
     batchSecurityProperties.setBypassMode(false);
-    sessionRegistry = Mockito.mock(ConsoleSessionRegistry.class);
-    Environment environment = Mockito.mock(Environment.class);
-    Mockito.when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
+    sessionRegistry = mock(ConsoleSessionRegistry.class);
+    Environment environment = mock(Environment.class);
+    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
     jwtService = new ConsoleJwtService(properties, sessionRegistry, environment);
     filter = new ConsoleAuthenticationFilter(
         properties,
         batchSecurityProperties,
         jwtService,
         new ConsoleSecurityResponseWriter(new ObjectMapper()),
-        Mockito.mock(SseTicketService.class));
+        mock(SseTicketService.class));
     SecurityContextHolder.clearContext();
   }
 
@@ -104,7 +105,7 @@ class ConsoleSecurityConfigurationTest {
     // ADR-030 §D7 Stage B 收尾：JWT 通过 HttpOnly cookie batch_console_token 入站
     String token =
         jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L).accessToken();
-    Mockito.when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
+    when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
 
     MockHttpServletRequest request = baseRequest();
     request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", token));

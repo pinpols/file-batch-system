@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -70,7 +69,7 @@ class ConsoleWorkflowVersionsControllerTest {
     Instant updatedAt = Instant.parse("2026-06-04T03:00:00Z");
     WorkflowDefinitionVersionSummaryResponse summary =
         new WorkflowDefinitionVersionSummaryResponse(3, null, updatedAt, null, Boolean.TRUE);
-    when(service.listVersions(eq(42L), eq("ta"))).thenReturn(List.of(summary));
+    when(service.listVersions(42L, "ta")).thenReturn(List.of(summary));
 
     // 执行并断言
     mockMvc
@@ -90,7 +89,7 @@ class ConsoleWorkflowVersionsControllerTest {
     // 准备:模拟仅当前版本 = 1 的新 workflow(刚 create 未编辑)
     WorkflowDefinitionVersionSummaryResponse summary = new WorkflowDefinitionVersionSummaryResponse(
         1, null, Instant.parse("2026-06-04T01:00:00Z"), null, Boolean.TRUE);
-    when(service.listVersions(eq(7L), eq("ta"))).thenReturn(List.of(summary));
+    when(service.listVersions(7L, "ta")).thenReturn(List.of(summary));
 
     // 执行并断言
     mockMvc
@@ -104,7 +103,7 @@ class ConsoleWorkflowVersionsControllerTest {
   @Test
   @DisplayName("跨租户:租户不匹配 → service 抛 NOT_FOUND → 404")
   void shouldReturnNotFound_whenTenantMismatch() throws Exception {
-    when(service.listVersions(eq(42L), eq("other_tenant")))
+    when(service.listVersions(42L, "other_tenant"))
         .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.common.not_found", "wf:42"));
 
     mockMvc
@@ -131,8 +130,8 @@ class ConsoleWorkflowVersionsControllerTest {
         Instant.parse("2026-06-04T03:00:00Z"),
         List.of(),
         List.of());
-    when(service.getVersion(eq(42L), eq("ta"), eq(3))).thenReturn(detail);
-    when(service.getVersion(eq(42L), eq("ta"), eq(1)))
+    when(service.getVersion(42L, "ta", 3)).thenReturn(detail);
+    when(service.getVersion(42L, "ta", 1))
         .thenThrow(
             BizException.of(ResultCode.NOT_FOUND, "error.workflow_version.not_found", 42L, 1, 3));
 

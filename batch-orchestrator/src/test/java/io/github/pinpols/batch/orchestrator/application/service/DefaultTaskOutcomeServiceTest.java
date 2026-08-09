@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -241,7 +240,7 @@ class DefaultTaskOutcomeServiceTest {
     when(jobPartitionMapper.selectStatusRefsByInstance("t1", 10L))
         .thenReturn(List.of(new PartitionStatusRef(99L, PartitionStatus.RUNNING.code())));
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
-    when(jobTaskMapper.selectNodeAssignmentsByInstance(eq("t1"), eq(10L)))
+    when(jobTaskMapper.selectNodeAssignmentsByInstance("t1", 10L))
         .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
@@ -258,7 +257,7 @@ class DefaultTaskOutcomeServiceTest {
 
     InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
     // instance 级 advisory lock 必须先于针对自己分区的 markStatus 写锁。
-    inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock(eq("t1"), eq(10L));
+    inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
     inOrder.verify(jobPartitionMapper).markStatus(any());
     // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
     assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
@@ -297,7 +296,7 @@ class DefaultTaskOutcomeServiceTest {
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(jobPartitionMapper.selectStatusRefsByInstance("t1", 10L))
         .thenReturn(List.of(new PartitionStatusRef(99L, PartitionStatus.SUCCESS.code())));
-    when(jobTaskMapper.selectNodeAssignmentsByInstance(eq("t1"), eq(10L)))
+    when(jobTaskMapper.selectNodeAssignmentsByInstance("t1", 10L))
         .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));

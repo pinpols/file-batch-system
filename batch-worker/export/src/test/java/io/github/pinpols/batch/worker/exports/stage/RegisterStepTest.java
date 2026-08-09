@@ -58,9 +58,9 @@ class RegisterStepTest {
     ctx.getAttributes().put("objectName", "obj.json");
     ctx.getAttributes().put("checksumValue", "aaa");
 
-    when(runtimeRepository.existsFileRecordByStoragePath(eq("t1"), eq("bucket-1"), eq("obj.json")))
+    when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(true);
-    when(runtimeRepository.loadFileRecordByStoragePath(eq("t1"), eq("bucket-1"), eq("obj.json")))
+    when(runtimeRepository.loadFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(Map.of("id", 1L, "checksum_value", "bbb"));
 
     var result = step.execute(ctx);
@@ -78,20 +78,20 @@ class RegisterStepTest {
     ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 99L);
     ctx.getAttributes().put("exportDataRef", "jdbc_mapped_export");
 
-    when(runtimeRepository.existsFileRecordByStoragePath(eq("t1"), eq("bucket-1"), eq("obj.json")))
+    when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(true);
-    when(runtimeRepository.loadFileRecordByStoragePath(eq("t1"), eq("bucket-1"), eq("obj.json")))
+    when(runtimeRepository.loadFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(Map.of("id", 1L, "checksum_value", "aaa", "file_generation_no", 2));
-    when(runtimeRepository.toLong(eq(1L))).thenReturn(1L);
-    when(runtimeRepository.toLong(eq(99L))).thenReturn(99L);
-    when(runtimeRepository.toLong(eq(10L))).thenReturn(10L);
-    when(exportDataPluginRegistry.require(eq("jdbc_mapped_export"))).thenReturn(exportDataPlugin);
+    when(runtimeRepository.toLong(1L)).thenReturn(1L);
+    when(runtimeRepository.toLong(99L)).thenReturn(99L);
+    when(runtimeRepository.toLong(10L)).thenReturn(10L);
+    when(exportDataPluginRegistry.require("jdbc_mapped_export")).thenReturn(exportDataPlugin);
 
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
     assertThat(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).isEqualTo(1L);
-    verify(runtimeRepository).bindFileToPipelineInstance(eq(99L), eq(1L));
+    verify(runtimeRepository).bindFileToPipelineInstance(99L, 1L);
     verify(exportDataPlugin).onRegistered(any(), anyLong(), eq(2), anyString());
   }
 

@@ -129,7 +129,7 @@ class TriggerLaunchConsumerTest {
     assertThatThrownBy(() -> consumer.consume(record(envelope), ack))
         .isInstanceOf(ResponseStatusException.class);
 
-    verify(ack, org.mockito.Mockito.never()).acknowledge();
+    verify(ack, never()).acknowledge();
     assertThat(failed("rate_limited")).isEqualTo(1.0);
   }
 
