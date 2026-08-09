@@ -203,7 +203,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   protected void writeText(
       BufferedWriter writer, String text, String rowLabel, String column, ExportFormatContext ctx)
       throws IOException {
-    if (text != null && !text.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(text)) {
       CharsetEncoder encoder = strictEncoder(exportCharset(ctx));
       try {
         encoder.encode(CharBuffer.wrap(text));
