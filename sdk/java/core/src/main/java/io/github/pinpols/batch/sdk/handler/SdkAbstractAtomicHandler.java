@@ -8,6 +8,8 @@ import java.util.Map;
  * ADR-036 — Atomic 业务模板:单次原子调用(shell / sql 单语句 / HTTP / pure compute)。 子类只实现 doInvoke,异常自动转
  * fail,不用拼 SdkTaskResult。 对应平台 batch-worker-atomic 的 shell/sql/stored-proc/http,SDK 侧由租户自实现。
  */
+// S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
+@SuppressWarnings("java:S112")
 public abstract class SdkAbstractAtomicHandler<R> extends SdkAbstractTaskHandler {
 
   /** 子类实现单次原子调用。 */

@@ -13,10 +13,12 @@ import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -160,7 +162,7 @@ public class StoreStep implements ExportStageStep {
   }
 
   private EncryptionOutcome encryptIfNeeded(ExportJobContext context, Path generatedFile)
-      throws Exception {
+      throws IOException {
     Map<String, Object> security = templateSecurity(context);
     context
         .getAttributes()
@@ -180,7 +182,7 @@ public class StoreStep implements ExportStageStep {
   }
 
   private ExportStageResult verifyPartUpload(String expectedSha, String tempKey, Path encryptedPath)
-      throws Exception {
+      throws IOException {
     String remotePartSha = s3ExportStorage.sha256Hex(tempKey);
     if (!expectedSha.equalsIgnoreCase(remotePartSha)) {
       s3ExportStorage.removeObject(tempKey);
@@ -199,7 +201,8 @@ public class StoreStep implements ExportStageStep {
   }
 
   private ExportStageResult promoteAndVerifyFinal(
-      String expectedSha, String tempKey, String objectName, Path encryptedPath) throws Exception {
+      String expectedSha, String tempKey, String objectName, Path encryptedPath)
+      throws IOException {
     s3ExportStorage.copyObject(tempKey, objectName);
     String remoteFinalSha = s3ExportStorage.sha256Hex(objectName);
     if (!expectedSha.equalsIgnoreCase(remoteFinalSha)) {
@@ -226,7 +229,7 @@ public class StoreStep implements ExportStageStep {
       String tempKey,
       Path generatedFile,
       Path encryptedPath)
-      throws Exception {
+      throws IOException {
     context.getAttributes().put("objectName", objectName);
     context.getAttributes().put("tempObjectName", tempKey);
     context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
@@ -282,7 +285,7 @@ public class StoreStep implements ExportStageStep {
     return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : fallback;
   }
 
-  private String sha256Hex(Path path) throws Exception {
+  private String sha256Hex(Path path) throws NoSuchAlgorithmException, IOException {
     MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
     byte[] buffer = new byte[8192];
     try (InputStream inputStream = Files.newInputStream(path)) {

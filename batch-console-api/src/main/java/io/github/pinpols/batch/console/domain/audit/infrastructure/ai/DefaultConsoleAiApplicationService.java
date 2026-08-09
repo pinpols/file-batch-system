@@ -34,11 +34,13 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -235,7 +237,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
    * 应用层硬超时:把 blocking 的 SDK 调用丢到有界线程池,{@code Future.get(timeout)} 封顶等待时间。 超时 / provider 卡死 → 抛异常由上层
    * catch 转优雅降级,Tomcat 线程最多等 {@code requestTimeout}。
    */
-  private ChatResponse callModel(ChatClient.ChatClientRequestSpec spec) throws Exception {
+  private ChatResponse callModel(ChatClient.ChatClientRequestSpec spec)
+      throws InterruptedException, ExecutionException, TimeoutException {
     long timeoutMillis = aiProperties.getRequestTimeout().toMillis();
     Future<ChatResponse> future = modelCallExecutor.submit(() -> spec.call().chatResponse());
     try {
@@ -244,7 +247,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       future.cancel(true);
       Thread.currentThread().interrupt();
       throw interrupted;
-    } catch (Exception exception) {
+    } catch (ExecutionException | TimeoutException exception) {
       future.cancel(true);
       throw exception;
     }

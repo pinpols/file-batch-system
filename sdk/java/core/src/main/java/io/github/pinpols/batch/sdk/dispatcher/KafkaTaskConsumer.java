@@ -152,6 +152,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
 
   /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */
   @Override
+  // S1181 抑制：Error 也必须先置 crashed（K8s liveness 先感知再让进程死），属刻意契约，
+  // 见 KafkaTaskConsumerCrashTest.fatalErrorIsRethrownAfterCrashStateIsRecorded。
+  @SuppressWarnings("java:S1181")
   public void run() {
     this.kafkaThread.set(Thread.currentThread());
     consumer.subscribe(
@@ -192,7 +195,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       // 不静默死。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
       crashed.set(true);
       running.set(false);
-      rethrowFatal(t);
+      if (t instanceof Error error) {
+        throw error;
+      }
       log.error("KafkaTaskConsumer poll loop died (marked crashed)", t);
     } finally {
       try {
@@ -205,12 +210,6 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   }
 
   /** poll 线程可以隔离普通运行时故障，但不能吞掉 JVM 级故障。 */
-  private static void rethrowFatal(Throwable throwable) {
-    if (throwable instanceof Error error) {
-      throw error;
-    }
-  }
-
   /**
    * 处理一次 poll 返回的批次。某分区遇到 RETRY_LATER 后,seek 回失败 offset 并跳过该分区在本批内的剩余记录;其它分区继续处理。 Kafka poll
    * 已推进所有返回分区的 position,若直接 break 整个批次,其它分区未处理记录可能被后续 commit 跨过。

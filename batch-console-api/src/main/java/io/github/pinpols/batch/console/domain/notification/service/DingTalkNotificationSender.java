@@ -1,13 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Base64;
 import javax.crypto.Mac;
@@ -140,7 +143,7 @@ public class DingTalkNotificationSender implements NotificationSender {
   /**
    * 按钉钉加签规则追加 timestamp/sign。签名串 = {@code timestamp + "\n" + secret}，HmacSHA256+Base64+urlencode。
    */
-  private String signedUrl(String url, String secret) throws Exception {
+  private String signedUrl(String url, String secret) throws GeneralSecurityException {
     long timestamp = epochMillis();
     String stringToSign = timestamp + "\n" + secret;
     Mac mac = Mac.getInstance("HmacSHA256");
@@ -153,7 +156,7 @@ public class DingTalkNotificationSender implements NotificationSender {
   }
 
   /** 构造钉钉 text 消息 body：{@code {"msgtype":"text","text":{"content":<摘要>}}}。 */
-  private String buildBody(NotificationMessage message) throws Exception {
+  private String buildBody(NotificationMessage message) throws JsonProcessingException {
     ObjectNode root = objectMapper.createObjectNode();
     root.put("msgtype", "text");
     ObjectNode text = root.putObject("text");
@@ -184,7 +187,7 @@ public class DingTalkNotificationSender implements NotificationSender {
   }
 
   /** 同步 POST JSON，返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
-  protected String postJson(String url, String body) throws Exception {
+  protected String postJson(String url, String body) throws IOException, HttpStatusException {
     Request request =
         new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
     try (Response response = httpClient.newCall(request).execute()) {

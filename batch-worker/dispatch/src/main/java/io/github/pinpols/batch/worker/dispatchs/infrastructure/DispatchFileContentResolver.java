@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStoreException;
 import io.github.pinpols.batch.common.utils.Texts;
 import jakarta.annotation.PostConstruct;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +35,7 @@ public class DispatchFileContentResolver {
   }
 
   /** 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。 */
-  public InputStream openInputStream(Map<String, Object> fileRecord) throws Exception {
+  public InputStream openInputStream(Map<String, Object> fileRecord) throws IOException {
     String storageType =
         String.valueOf(fileRecord.getOrDefault("storage_type", "")).toUpperCase(Locale.ROOT);
     String storagePath = String.valueOf(fileRecord.getOrDefault("storage_path", ""));

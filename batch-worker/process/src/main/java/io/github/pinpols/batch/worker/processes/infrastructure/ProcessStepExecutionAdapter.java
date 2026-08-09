@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
@@ -73,7 +74,7 @@ public class ProcessStepExecutionAdapter
 
   @SuppressWarnings("unchecked")
   private void enrichProcessAttributes(String rawPayload, Map<String, Object> attributes)
-      throws Exception {
+      throws JsonProcessingException {
     if (EmptyChecks.isBlank(rawPayload)) {
       return;
     }

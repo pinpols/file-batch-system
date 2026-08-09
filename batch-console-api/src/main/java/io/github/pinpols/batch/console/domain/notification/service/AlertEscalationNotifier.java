@@ -164,8 +164,7 @@ public class AlertEscalationNotifier {
       if (stopping.get()) {
         return;
       }
-      lockingTaskExecutor.executeWithLock(
-          (LockingTaskExecutor.Task) this::pollLocked, lockConfig());
+      lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
       if (stopping.get() && isShutdownNoise(dae)) {
         log.info("AlertEscalationNotifier poll skipped during shutdown: {}", dae.getMessage());
@@ -176,8 +175,7 @@ public class AlertEscalationNotifier {
           dae.getMostSpecificCause() == null
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
-    } catch (Throwable t) {
-      rethrowFatal(t);
+    } catch (Exception t) {
       if (stopping.get() && isShutdownNoise(t)) {
         log.info("AlertEscalationNotifier poll skipped during shutdown: {}", t.getMessage());
         return;
@@ -219,8 +217,7 @@ public class AlertEscalationNotifier {
       }
       try {
         notifyOne(alert);
-      } catch (Throwable t) {
-        rethrowFatal(t);
+      } catch (Exception t) {
         // 单条异常不能拖累整批;水位线未推进,下轮会重试
         log.error(
             "AlertEscalationNotifier failed to deliver one notification: alertId={} tenantId={}",
@@ -232,12 +229,6 @@ public class AlertEscalationNotifier {
   }
 
   /** 通知失败可以按单条隔离重试，但 JVM 级故障不能伪装成业务投递失败。 */
-  private static void rethrowFatal(Throwable throwable) {
-    if (throwable instanceof Error error) {
-      throw error;
-    }
-  }
-
   private void notifyOne(AlertEventEntity alert) {
     int tier = alert.getEscalationTier() == null ? 0 : alert.getEscalationTier();
     int notifiedTier =

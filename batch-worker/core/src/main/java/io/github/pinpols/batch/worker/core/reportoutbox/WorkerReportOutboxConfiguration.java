@@ -6,8 +6,10 @@ import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteSessionFactorySupport;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -39,7 +41,8 @@ public class WorkerReportOutboxConfiguration {
   static class SqliteWorkerReportOutboxConfiguration {
 
     @Bean(name = "workerReportOutboxDataSource")
-    DataSource workerReportOutboxDataSource(WorkerReportOutboxProperties props) throws Exception {
+    DataSource workerReportOutboxDataSource(WorkerReportOutboxProperties props)
+        throws SQLException, IOException {
       Path path = props.resolveSqlitePath();
       Path parent = path.toAbsolutePath().getParent();
       if (parent != null) {

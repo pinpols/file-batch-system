@@ -46,6 +46,8 @@ import org.springframework.beans.factory.ObjectProvider;
  *   <li>{@link #handlePipelineFailure} 用于在 pipeline 失败后触发补偿（如错误文件上传、状态回写）。
  * </ul>
  */
+// S112 抑制：执行器 SPI 刻意声明宽泛 throws Exception。
+@SuppressWarnings("java:S112")
 public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionContext, R>
     implements StepExecutionAdapter {
 

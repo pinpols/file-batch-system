@@ -13,6 +13,8 @@ import java.util.Map;
  *
  * @param <R> payload 行类型
  */
+// S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，收窄会破坏租户编译兼容性。
+@SuppressWarnings("java:S112")
 public abstract class SdkAbstractDispatchHandler<R>
     extends SdkAbstractTypedDispatchHandler<Map<String, Object>, Void, R> {
 

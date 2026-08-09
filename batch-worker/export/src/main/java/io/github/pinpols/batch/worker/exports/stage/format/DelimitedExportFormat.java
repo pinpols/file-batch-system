@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +96,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       long recordCount,
       BigDecimal controlTotal,
       DelimitedFormatConfig formatConfig)
-      throws Exception {
+      throws IOException {
     List<String> values =
         OutboundTrailerRecord.buildValues(trailerTemplate, recordCount, controlTotal);
     writer.write(buildDelimitedLine(values, formatConfig));
@@ -121,7 +122,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
 
   private void writeDelimitedHeaderRows(
       BufferedWriter writer, List<ColumnLayout> columns, DelimitedFormatConfig formatConfig)
-      throws Exception {
+      throws IOException {
     int headerRows = Math.max(1, formatConfig.headerRows());
     String headerLine =
         buildDelimitedLine(columns.stream().map(ColumnLayout::header).toList(), formatConfig);

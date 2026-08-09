@@ -124,8 +124,7 @@ public class HeartbeatScheduler implements AutoCloseable {
       // Phase 2 §2.4:回包是 platform directive,据此驱动 dispatcher 4 态状态机
       directive = HeartbeatDirective.fromResponse(resp);
       dispatcher.applyPlatformDirective(directive);
-    } catch (Throwable t) {
-      rethrowFatal(t);
+    } catch (Exception t) {
       // 不能让心跳异常杀掉 scheduler — fixed-rate 一旦抛会停
       log.warn("heartbeat failed: {}", t.getMessage());
     }
@@ -134,12 +133,6 @@ public class HeartbeatScheduler implements AutoCloseable {
     // null = 不下发,保持当前间隔(向后兼容老平台 / 老回包)。
     if (directive != null && directive.nextHeartbeatHint() != null) {
       applyHeartbeatHint(directive.nextHeartbeatHint().longValue() * 1_000L);
-    }
-  }
-
-  private static void rethrowFatal(Throwable throwable) {
-    if (throwable instanceof Error error) {
-      throw error;
     }
   }
 

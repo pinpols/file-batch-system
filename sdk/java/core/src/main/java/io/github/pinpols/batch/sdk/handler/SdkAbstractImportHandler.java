@@ -14,6 +14,9 @@ import java.util.stream.Stream;
  *
  * @param <R> 行类型
  */
+// S112 抑制：租户 SPI 刻意声明宽泛 throws Exception，允许租户实现抛任意受检异常；
+// 收窄为具体异常会破坏已接入租户的编译兼容性。
+@SuppressWarnings("java:S112")
 public abstract class SdkAbstractImportHandler<R>
     extends SdkAbstractTypedImportHandler<Map<String, Object>, Void, R> {
 

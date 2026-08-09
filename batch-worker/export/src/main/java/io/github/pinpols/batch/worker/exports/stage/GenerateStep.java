@@ -315,7 +315,7 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private Path createGeneratedFile(
-      ExportJobContext context, ExportPayload payload, String fileFormatType) throws Exception {
+      ExportJobContext context, ExportPayload payload, String fileFormatType) throws IOException {
     String suffix =
         switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
           case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;
@@ -377,7 +377,7 @@ public class GenerateStep implements ExportStageStep {
    * 重派落到同一文件,崩溃后下次能找到残文件续写。STORE 成功上传后照常删除该文件。
    */
   private Path deterministicGeneratedFile(long pipelineInstanceId, String fileFormatType)
-      throws Exception {
+      throws IOException {
     String suffix =
         switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
           case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;
@@ -394,7 +394,7 @@ public class GenerateStep implements ExportStageStep {
     return path;
   }
 
-  private static Path privateExportDirectory() throws Exception {
+  private static Path privateExportDirectory() throws IOException {
     Path dir = Path.of(System.getProperty("java.io.tmpdir"), "file-batch-export");
     Files.createDirectories(dir);
     setOwnerOnlyPermissions(dir);
@@ -432,7 +432,7 @@ public class GenerateStep implements ExportStageStep {
   /** 幂等跳过(GENERATE 已完成且文件仍在):不重生成,仅补齐下游 STORE/FEEDBACK 需要的 attribute。 */
   private ExportStageResult completeWithoutRegenerate(
       ExportJobContext context, Map<String, Object> batch, Path generatedFile, long recordCount)
-      throws Exception {
+      throws IOException {
     context.getAttributes().put("exportBatch", batch);
     context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
     context.getAttributes().put("recordCount", recordCount);

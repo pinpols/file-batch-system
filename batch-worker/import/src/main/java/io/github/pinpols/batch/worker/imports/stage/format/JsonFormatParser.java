@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.util.Map;
 
 /** Parses JSON payloads (array, envelope, single object) into NDJSON records. */
@@ -102,7 +103,7 @@ public class JsonFormatParser implements FormatParser {
       JsonParser parser,
       BufferedWriter writer,
       boolean preserveLogicalRow)
-      throws Exception {
+      throws IOException {
     ObjectMapper mapper = support.objectMapper();
     long recordNo = 0L;
     while (parser.nextToken() != JsonToken.END_ARRAY) {
@@ -123,7 +124,7 @@ public class JsonFormatParser implements FormatParser {
       JsonNode node,
       long recordNo,
       boolean preserveLogicalRow)
-      throws Exception {
+      throws IOException {
     ObjectMapper mapper = support.objectMapper();
     try {
       Map<String, Object> row = mapper.convertValue(node, MAP_TYPE);

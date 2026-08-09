@@ -7,12 +7,14 @@ import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -201,7 +203,7 @@ public class AliyunSmsProvider implements SmsProvider {
    */
   private String buildAuthorization(
       SortedMap<String, String> queryParams, String acsDate, String nonce, String endpoint)
-      throws Exception {
+      throws GeneralSecurityException {
     String hashedPayload = sha256Hex("");
 
     // signedHeaders 必须按字典序且与 canonicalHeaders 一致。
@@ -282,7 +284,7 @@ public class AliyunSmsProvider implements SmsProvider {
     }
   }
 
-  private static String hmacSha256Hex(String secret, String data) throws Exception {
+  private static String hmacSha256Hex(String secret, String data) throws GeneralSecurityException {
     Mac mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
     byte[] digest = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
@@ -313,7 +315,8 @@ public class AliyunSmsProvider implements SmsProvider {
   }
 
   /** 同步 GET（RPC 风格，body 空，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
-  protected String postJson(String url, Map<String, String> headers) throws Exception {
+  protected String postJson(String url, Map<String, String> headers)
+      throws IOException, InterruptedException, HttpStatusException {
     HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(REQUEST_TIMEOUT);
     for (Map.Entry<String, String> e : headers.entrySet()) {
       builder.header(e.getKey(), e.getValue());

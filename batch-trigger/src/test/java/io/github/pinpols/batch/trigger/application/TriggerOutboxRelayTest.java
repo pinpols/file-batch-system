@@ -82,12 +82,12 @@ class TriggerOutboxRelayTest {
     when(mapper.countStalePublishing(anyString(), anyLong())).thenReturn(0L);
     // executeWithLock(Task,LockConfiguration) 返回 void → 必须用 doAnswer 而非 when
     doAnswer(inv -> {
-          LockingTaskExecutor.Task task = inv.getArgument(0);
-          task.call();
+          Runnable task = inv.getArgument(0);
+          task.run();
           return null;
         })
         .when(lockingTaskExecutor)
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+        .executeWithLock(any(Runnable.class), any());
   }
 
   @AfterEach
@@ -114,8 +114,7 @@ class TriggerOutboxRelayTest {
 
     relay.poll();
 
-    verify(lockingTaskExecutor, never())
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    verify(lockingTaskExecutor, never()).executeWithLock(any(Runnable.class), any());
     verify(mapper, never()).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
   }
 
@@ -126,7 +125,7 @@ class TriggerOutboxRelayTest {
           throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
         })
         .when(lockingTaskExecutor)
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+        .executeWithLock(any(Runnable.class), any());
 
     relay.poll();
 

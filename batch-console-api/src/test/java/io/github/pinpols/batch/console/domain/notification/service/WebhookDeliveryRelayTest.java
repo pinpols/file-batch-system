@@ -43,12 +43,12 @@ class WebhookDeliveryRelayTest {
     meterRegistry = new SimpleMeterRegistry();
     lockExecutor = mock(LockingTaskExecutor.class);
     doAnswer(inv -> {
-          LockingTaskExecutor.Task t = inv.getArgument(0);
-          t.call();
+          Runnable t = inv.getArgument(0);
+          t.run();
           return null;
         })
         .when(lockExecutor)
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+        .executeWithLock(any(Runnable.class), any());
     // 用户在 e1de09db 等 refactor 把 WebhookDeliveryRelay 的 @Value 配置抽到 WebhookRelayProperties,
     // 测试需要同步更新构造器调用以反映新签名
     io.github.pinpols.batch.console.config.WebhookRelayProperties props =
@@ -68,7 +68,7 @@ class WebhookDeliveryRelayTest {
 
     relay.poll();
 
-    verify(lockExecutor, never()).executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    verify(lockExecutor, never()).executeWithLock(any(Runnable.class), any());
     verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
   }
 
@@ -79,7 +79,7 @@ class WebhookDeliveryRelayTest {
           throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
         })
         .when(lockExecutor)
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+        .executeWithLock(any(Runnable.class), any());
 
     relay.poll();
 

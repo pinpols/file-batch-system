@@ -3,11 +3,13 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -88,7 +90,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   }
 
   /** 构造 ACS3-HMAC-SHA256 签名所需的全部请求头(含 Authorization)。date / nonce 走 protected 方法以便测试固定值保证确定性。 */
-  private Map<String, String> signedHeaders(String host, String body) throws Exception {
+  private Map<String, String> signedHeaders(String host, String body)
+      throws GeneralSecurityException {
     String hashedPayload = CaptchaCrypto.sha256Hex(body);
     String date = acsDate();
     String nonce = nonce();
@@ -117,7 +120,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   }
 
   /** 执行 application/json POST,带上签名头,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
-  protected String postJson(String url, Map<String, String> headers, String body) throws Exception {
+  protected String postJson(String url, Map<String, String> headers, String body)
+      throws IOException, InterruptedException {
     HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
         .header("Content-Type", "application/json; charset=utf-8")
         .header("Accept", "application/json")

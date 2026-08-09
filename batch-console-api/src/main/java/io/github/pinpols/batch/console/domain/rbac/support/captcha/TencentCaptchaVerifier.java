@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -200,7 +201,8 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   }
 
   /** 执行 application/json POST 带签名头,返回响应体字符串。抽 protected 以便单测覆盖返回预置 JSON、无网络验证各分支。 */
-  protected String postJson(String url, Map<String, String> headers, String body) throws Exception {
+  protected String postJson(String url, Map<String, String> headers, String body)
+      throws IOException, InterruptedException {
     HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
         .timeout(REQUEST_TIMEOUT)
         .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));

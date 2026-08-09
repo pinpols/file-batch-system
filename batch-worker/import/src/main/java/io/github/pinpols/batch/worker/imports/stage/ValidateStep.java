@@ -21,6 +21,7 @@ import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationS
 import io.github.pinpols.batch.worker.imports.stage.support.ImportStageSupport;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -272,7 +273,7 @@ public class ValidateStep implements ImportStageStep {
       ValidationSession session,
       Path parsedRecordsPath,
       Path validatedRecordsPath)
-      throws Exception {
+      throws IOException {
     int chunkSize = resolveChunkSize(context);
     long recordNo = 0L;
     long validatedCount = 0L;
@@ -415,7 +416,7 @@ public class ValidateStep implements ImportStageStep {
       List<Map<String, Object>> chunk,
       long chunkStartRecordNo,
       BufferedWriter writer)
-      throws Exception {
+      throws IOException {
     // ADR-041 Phase1.2:控制金额对账按到达的全量记录累加(含将被判无效的行——trailer 声明的是上游发出的总额,
     // 对账「数对不对/全不全」,在 finalize 比对前于每 chunk 累加)。
     controlTotalEvaluator.accumulate(session, chunk);

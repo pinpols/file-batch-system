@@ -7,6 +7,7 @@ import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -163,7 +164,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
   }
 
   /** 闸 4 — current_user 对目标过程无 EXECUTE 权限则拒(has_function_privilege)。 */
-  private void requireExecutePrivilege(Connection conn, String procName) throws Exception {
+  private void requireExecutePrivilege(Connection conn, String procName) throws SQLException {
     String sql = "select has_function_privilege(current_user, ?, 'EXECUTE')";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       // has_function_privilege 需要 regprocedure 形式(proc 名 + 参数签名);简化:用 proc 名 + "()" 回退,
@@ -242,7 +243,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
    * 闸 1:拒绝 OS 能力 DB 角色(superuser / pg_execute_server_program / pg_read_server_files /
    * pg_write_server_files),命中即抛 {@link SecurityException}。
    */
-  private void requireNonOsCapableRole(Connection conn) throws Exception {
+  private void requireNonOsCapableRole(Connection conn) throws SQLException {
     String sql = "select rolsuper"
         + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
         + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
@@ -263,7 +264,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
    * 闸 3:拒绝 SECURITY DEFINER 过程({@code pg_proc.prosecdef=true})。它以 owner 身份运行,若 owner 是 OS 能力角色,可绕过闸
    * 1 提权碰 OS。
    */
-  private void requireNotSecurityDefiner(Connection conn, String procName) throws Exception {
+  private void requireNotSecurityDefiner(Connection conn, String procName) throws SQLException {
     String schema = schemaOf(procName);
     String name = nameOf(procName);
     String sql = schema == null
