@@ -104,6 +104,7 @@ import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
 import io.github.pinpols.batch.common.enums.ResourceQueueType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import java.util.ArrayList;
 import java.util.List;
@@ -624,14 +625,14 @@ final class ConfigPackageSheetSpecs {
         locale);
     // impl_code(第 7 列 index=6):动态下拉,格式 MODULE:beanName 让用户一眼看出模块归属。
     // registry 空时不加下拉(首次部署没 worker 启动过也能下载模板)。
-    if (registeredImplCodesByModule != null && !registeredImplCodesByModule.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(registeredImplCodesByModule)) {
       List<String> options = new ArrayList<>();
       registeredImplCodesByModule.forEach((module, beans) -> {
         for (String bean : beans) {
           options.add(module + ":" + bean);
         }
       });
-      if (!options.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(options)) {
         addDropdownValidation(
             sheet,
             6,

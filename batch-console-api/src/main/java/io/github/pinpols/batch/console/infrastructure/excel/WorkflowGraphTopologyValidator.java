@@ -17,6 +17,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.normalize;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.normalizeEnum;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.ArrayList;
@@ -112,7 +113,7 @@ final class WorkflowGraphTopologyValidator {
     }
     int fallbackRowNo = 2;
     // V11 — START 数量、END 数量、START 入边、END 出边
-    if (startCodes.isEmpty() && !byCode.isEmpty()) {
+    if (EmptyChecks.isEmpty(startCodes) && EmptyChecks.isNotEmpty(byCode)) {
       // 没有 START 节点,挑首节点定位
       Map<String, String> first = byCode.values().iterator().next();
       issues.add(new WorkbookIssue(
@@ -121,7 +122,7 @@ final class WorkflowGraphTopologyValidator {
           COL_NODE_TYPE,
           "workflow graph missing START node"));
     }
-    if (endCodes.isEmpty() && !byCode.isEmpty()) {
+    if (EmptyChecks.isEmpty(endCodes) && EmptyChecks.isNotEmpty(byCode)) {
       Map<String, String> first = byCode.values().iterator().next();
       issues.add(new WorkbookIssue(
           WF_NODE_SHEET,
@@ -140,7 +141,7 @@ final class WorkflowGraphTopologyValidator {
       }
     }
     for (String s : startCodes) {
-      if (!incoming.getOrDefault(s, List.of()).isEmpty()) {
+      if (EmptyChecks.isNotEmpty(incoming.getOrDefault(s, List.of()))) {
         Map<String, String> n = byCode.get(s);
         issues.add(new WorkbookIssue(
             WF_NODE_SHEET,
@@ -150,7 +151,7 @@ final class WorkflowGraphTopologyValidator {
       }
     }
     for (String e : endCodes) {
-      if (!outgoing.getOrDefault(e, List.of()).isEmpty()) {
+      if (EmptyChecks.isNotEmpty(outgoing.getOrDefault(e, List.of()))) {
         Map<String, String> n = byCode.get(e);
         issues.add(new WorkbookIssue(
             WF_NODE_SHEET,
@@ -184,7 +185,7 @@ final class WorkflowGraphTopologyValidator {
     for (String s : startCodes) {
       dfsCollect(s, outgoing, reachFromStart);
     }
-    if (!startCodes.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(startCodes)) {
       for (String code : byCode.keySet()) {
         if (!reachFromStart.contains(code)) {
           Map<String, String> n = byCode.get(code);
@@ -201,7 +202,7 @@ final class WorkflowGraphTopologyValidator {
     for (String e : endCodes) {
       dfsCollect(e, incoming, reachToEnd);
     }
-    if (!endCodes.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(endCodes)) {
       for (String code : byCode.keySet()) {
         if (!reachToEnd.contains(code) && !endCodes.contains(code)) {
           Map<String, String> n = byCode.get(code);

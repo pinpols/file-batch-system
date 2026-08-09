@@ -62,6 +62,7 @@ import static io.github.pinpols.batch.console.support.excel.SheetValidationHelpe
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
@@ -371,7 +372,7 @@ final class ConfigPackageExcelRowValidators {
     }
     Set<String> registered = registryByModule.computeIfAbsent(
         pipelineType, m -> new HashSet<>(stepRegistryQueryMapper.selectImplCodesByModule(m)));
-    if (!registered.isEmpty() && !registered.contains(normalizedImpl)) {
+    if (EmptyChecks.isNotEmpty(registered) && !registered.contains(normalizedImpl)) {
       ri.add("impl_code '"
           + normalizedImpl
           + "' not registered in module "
@@ -513,11 +514,11 @@ final class ConfigPackageExcelRowValidators {
     if (ref.version() != null) {
       Map<String, Object> found =
           fileTemplateConfigMapper.selectByUniqueKey(tenantId, ref.templateCode(), ref.version());
-      return found != null && !found.isEmpty();
+      return EmptyChecks.isNotEmpty(found);
     }
     Map<String, Object> found =
         fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, ref.templateCode());
-    return found != null && !found.isEmpty();
+    return EmptyChecks.isNotEmpty(found);
   }
 
   static String templateKey(String templateCode, Integer version) {
