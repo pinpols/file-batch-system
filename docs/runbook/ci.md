@@ -93,7 +93,7 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | Spotless 代码格式 | `spotless-maven-plugin` | 全部（run-full-regression） | Palantir Java Format 2.92.0（Google 风格兼容、120 列） |
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
-| 依赖漏洞扫描 | `security-scan.sh --mode=deps` | full-ci-gate | 已知 CVE |
+| 依赖漏洞扫描 | Trivy `fs`（vuln） | full-ci-gate | 已知 CVE；OWASP dependency-check 的 NVD 全量下载在 CI 上过慢（5 分钟超时仍下不到 1/5）且不拦门禁，2026-08 起 CI 由 trivy 覆盖，`--mode=deps` 保留本地按需使用 |
 | Dockerfile lint | Hadolint | full-ci-gate | `docker/Dockerfile.app` |
 | 文件系统安全扫描 | Trivy `fs` | full-ci-gate | CRITICAL/HIGH 漏洞 + IaC 配置 |
 | K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
@@ -305,7 +305,9 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
 - static-checks 1:57 / security-scan 1:16 / unit-it-a 2:49 / unit-it-b1 3:02 / **unit-it-b2 4:14** ← critical path
 
 **full-ci-gate(9 job 并行,瓶颈 security-scan)**
-- static-checks 1:36 / unit-it-a 3:04 / unit-it-b1 3:13 / unit-it-b2 4:06 / e2e-shard 1-4 各 4:23-4:58 / **security-scan 6:15** ← critical path
+- static-checks 1:36 / unit-it-a 3:04 / unit-it-b1 3:13 / unit-it-b2 4:06 / e2e-shard 1-4 各 4:23-4:58 / security-scan 6:15（历史值，含 OWASP dependency-check NVD 下载）
+
+> 2026-08-09:security-scan job 移除 OWASP dependency-check 步骤（NVD 下载 5 分钟超时仍只下到 70k/352k，且该步骤 continue-on-error 不拦门禁；依赖漏洞已由同 job 的 Trivy fs 覆盖），job 预计从 6:15 降到 ~2:00，full-ci-gate 瓶颈随之变为 e2e-shard。
 
 > 2026-05-23:PR #27 合并后,本仓删除了 `capacity-gate` / `promote-staging`(dead code,见本文档开头说明);`staging-gate` 仍保留为 nightly 全量 E2E 回退闸门。
 
