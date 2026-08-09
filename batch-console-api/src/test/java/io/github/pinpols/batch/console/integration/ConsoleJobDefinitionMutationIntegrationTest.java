@@ -69,8 +69,8 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         "SELECT tenant_id, job_code, enabled FROM batch.job_definition WHERE job_code = ?",
         jobCode);
     assertThat(rows).hasSize(1);
-    assertThat(rows.get(0).get("tenant_id")).isEqualTo("int-ta");
-    assertThat(rows.get(0).get("job_code")).isEqualTo(jobCode);
+    assertThat(rows.get(0)).containsEntry("tenant_id", "int-ta");
+    assertThat(rows.get(0)).containsEntry("job_code", jobCode);
 
     // 清理
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);

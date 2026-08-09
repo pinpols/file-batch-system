@@ -148,7 +148,7 @@ class RlsTenantIsolationIntegrationTest {
       JDBC.execute("SET LOCAL ROLE rls_app_user");
       return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
     });
-    assertThat(total).isEqualTo(0L);
+    assertThat(total).isZero();
   }
 
   @Test
@@ -194,7 +194,7 @@ class RlsTenantIsolationIntegrationTest {
       JDBC.execute("SET LOCAL app.tenant_id = ''");
       return JDBC.queryForObject("SELECT count(*) FROM biz.customer_account", Long.class);
     });
-    assertThat(total).isEqualTo(0L);
+    assertThat(total).isZero();
   }
 
   @Test

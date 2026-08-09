@@ -20,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,7 +59,8 @@ class ResultVersionWriterTest {
 
   @Test
   void firstSuccessRunWritesV1Effective() {
-    JobInstanceEntity instance = success("t1", 100L, "DAILY_PNL", LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance =
+        success("t1", 100L, "DAILY_PNL", LocalDate.of(2026, Month.MAY, 4), null);
     when(mapper.selectByJobInstanceId("t1", 100L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(null);
 
@@ -85,7 +87,7 @@ class ResultVersionWriterTest {
         "t1",
         101L,
         "DAILY_PNL",
-        LocalDate.of(2026, 5, 4),
+        LocalDate.of(2026, Month.MAY, 4),
         "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
     when(mapper.selectByJobInstanceId("t1", 101L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(1);
@@ -102,7 +104,11 @@ class ResultVersionWriterTest {
   @Test
   void rerunWithKeepBothCreatesPendingVersion() {
     JobInstanceEntity instance = success(
-        "t1", 102L, "DAILY_PNL", LocalDate.of(2026, 5, 4), "{\"resultPolicy\":\"KEEP_BOTH\"}");
+        "t1",
+        102L,
+        "DAILY_PNL",
+        LocalDate.of(2026, Month.MAY, 4),
+        "{\"resultPolicy\":\"KEEP_BOTH\"}");
     when(mapper.selectByJobInstanceId("t1", 102L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(1);
 
@@ -124,7 +130,7 @@ class ResultVersionWriterTest {
         "t1",
         103L,
         "DAILY_PNL",
-        LocalDate.of(2026, 5, 4),
+        LocalDate.of(2026, Month.MAY, 4),
         "{\"resultPolicy\":\"MANUAL_CONFIRM_EFFECTIVE\"}");
     when(mapper.selectByJobInstanceId("t1", 103L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(2);
@@ -139,7 +145,8 @@ class ResultVersionWriterTest {
 
   @Test
   void duplicateReportIsIdempotent() {
-    JobInstanceEntity instance = success("t1", 200L, "JOB_A", LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance =
+        success("t1", 200L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     when(mapper.selectByJobInstanceId("t1", 200L))
         .thenReturn(ResultVersionEntity.builder().id(99L).versionNo(1).build());
 
@@ -153,7 +160,8 @@ class ResultVersionWriterTest {
 
   @Test
   void nonSuccessTerminalIsSkipped() {
-    JobInstanceEntity instance = success("t1", 300L, "JOB_A", LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance =
+        success("t1", 300L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     instance.setInstanceStatus("FAILED");
 
     writer.writeOnTerminal(instance, Map.of("k", "v"));
@@ -165,7 +173,7 @@ class ResultVersionWriterTest {
 
   @Test
   void missingJobCodeIsSkipped() {
-    JobInstanceEntity instance = success("t1", 301L, null, LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance = success("t1", 301L, null, LocalDate.of(2026, Month.MAY, 4), null);
 
     writer.writeOnTerminal(instance, Map.of());
 
@@ -185,7 +193,8 @@ class ResultVersionWriterTest {
   void partialFailedTerminalWritesPendingNotEffective() {
     // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
     // 完整结果当完整消费。落 PENDING/MANUAL_APPROVAL、不 supersede 旧 EFFECTIVE、不物化 readiness。
-    JobInstanceEntity instance = success("t1", 303L, "JOB_A", LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance =
+        success("t1", 303L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     instance.setInstanceStatus("PARTIAL_FAILED");
     when(mapper.selectByJobInstanceId("t1", 303L)).thenReturn(null);
     when(mapper.selectMaxVersionNo(anyString(), anyString())).thenReturn(null);
@@ -205,7 +214,8 @@ class ResultVersionWriterTest {
 
   @Test
   void dryRunInstanceWritesDryRunStatusWithoutSupersede() {
-    JobInstanceEntity instance = success("t1", 400L, "DAILY_PNL", LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance =
+        success("t1", 400L, "DAILY_PNL", LocalDate.of(2026, Month.MAY, 4), null);
     instance.setDryRun(true);
     when(mapper.selectByJobInstanceId("t1", 400L)).thenReturn(null);
     when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(3);
@@ -228,7 +238,7 @@ class ResultVersionWriterTest {
         "t1",
         500L,
         "DAILY_PNL",
-        LocalDate.of(2026, 5, 4),
+        LocalDate.of(2026, Month.MAY, 4),
         "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
     when(mapper.selectByJobInstanceId("t1", 500L)).thenReturn(null);
     when(mapper.selectMaxVersionNo(anyString(), anyString())).thenReturn(null);
@@ -255,7 +265,8 @@ class ResultVersionWriterTest {
 
   @Test
   void emptyOutputsSerializeAsEmptyObject() {
-    JobInstanceEntity instance = success("t1", 304L, "JOB_A", LocalDate.of(2026, 5, 4), null);
+    JobInstanceEntity instance =
+        success("t1", 304L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     when(mapper.selectByJobInstanceId("t1", 304L)).thenReturn(null);
     when(mapper.selectMaxVersionNo(anyString(), anyString())).thenReturn(null);
 

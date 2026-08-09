@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.support.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -63,7 +62,7 @@ class ConsoleIdempotencyInterceptorTest {
 
     assertThat(allowed).isTrue();
     assertThat(request.getAttribute("console.idempotency.redisKey")).isEqualTo(redisKey);
-    verify(valueOps).setIfAbsent(eq(redisKey), eq("PENDING"), eq(Duration.ofSeconds(30)));
+    verify(valueOps).setIfAbsent(redisKey, "PENDING", Duration.ofSeconds(30));
   }
 
   @Test

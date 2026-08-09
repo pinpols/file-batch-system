@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.InstanceMan
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunManagementApplicationService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,7 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "pause-it";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
   private JdbcTemplate jdbcTemplate;

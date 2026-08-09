@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.orchestrator.domain.statemachine.Stateful;
+import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;

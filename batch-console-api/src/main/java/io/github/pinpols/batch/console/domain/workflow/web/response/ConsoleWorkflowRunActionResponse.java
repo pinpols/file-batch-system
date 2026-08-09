@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.workflow.web.response;
 
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.Map;
 
 /**
@@ -16,7 +17,7 @@ public record ConsoleWorkflowRunActionResponse(Long id, String status) {
       return null;
     }
     return new ConsoleWorkflowRunActionResponse(
-        WorkflowResponseFieldReader.longValue(row, "id"),
-        WorkflowResponseFieldReader.stringValue(row, "status"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "status"));
   }
 }

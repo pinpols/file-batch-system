@@ -44,8 +44,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
   static final String PARAM_OUT = "outParams";
 
   /** 过程名规则:schema.proc 或 proc;identifier 字符集 + 一个可选 dot。 */
-  private static final Pattern PROC_NAME =
-      Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$");
+  private static final Pattern PROC_NAME = Pattern.compile("^[A-Za-z_]\\w*(\\.[A-Za-z_]\\w*)?$");
 
   private final StoredProcAtomicConfig config;
   private final DataSource dataSource;
@@ -126,7 +125,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
 
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("outValues", outValues);
-        output.put("procedureName", procName);
+        output.put(PARAM_PROC, procName);
         log.info(
             "stored proc {} called (in={}, out={})", procName, inParams.size(), outTypes.size());
         return output;

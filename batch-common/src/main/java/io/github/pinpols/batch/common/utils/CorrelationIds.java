@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.utils;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * HTTP correlation id normalization for requestId / traceId headers.
  *
@@ -13,7 +15,7 @@ public final class CorrelationIds {
 
   private CorrelationIds() {}
 
-  public static String normalize(String value, String fallback) {
+  public static String normalize(@Nullable String value, String fallback) {
     String normalized = normalize(value);
     if (normalized == null || normalized.isBlank()) {
       return fallback;
@@ -21,7 +23,7 @@ public final class CorrelationIds {
     return normalized;
   }
 
-  public static String normalize(String value) {
+  public static @Nullable String normalize(@Nullable String value) {
     if (value == null || value.isBlank()) {
       return null;
     }

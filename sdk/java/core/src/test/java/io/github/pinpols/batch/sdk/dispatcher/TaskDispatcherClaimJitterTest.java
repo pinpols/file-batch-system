@@ -24,8 +24,7 @@ class TaskDispatcherClaimJitterTest {
     long upperExclusive = exponentialMs + Math.max(1L, exponentialMs / 10L);
     for (int i = 0; i < 200; i++) {
       long actual = TaskDispatcher.backoffWithJitter(baseDelayMs, attempt);
-      assertThat(actual).isGreaterThanOrEqualTo(exponentialMs);
-      assertThat(actual).isLessThan(upperExclusive);
+      assertThat(actual).isGreaterThanOrEqualTo(exponentialMs).isLessThan(upperExclusive);
     }
   }
 
@@ -52,7 +51,8 @@ class TaskDispatcherClaimJitterTest {
     // attempt=100 被钳到 30,200ms << 30 仍是有限大 long
     long actual = TaskDispatcher.backoffWithJitter(200L, 100);
     long expectedExp = 200L << 30;
-    assertThat(actual).isGreaterThanOrEqualTo(expectedExp);
-    assertThat(actual).isLessThan(expectedExp + Math.max(1L, expectedExp / 10L));
+    assertThat(actual)
+        .isGreaterThanOrEqualTo(expectedExp)
+        .isLessThan(expectedExp + Math.max(1L, expectedExp / 10L));
   }
 }

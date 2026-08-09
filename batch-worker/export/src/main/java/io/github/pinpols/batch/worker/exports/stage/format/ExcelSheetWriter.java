@@ -18,6 +18,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 封装 Excel 数据导出的 sheet 生命周期:表头写入、按列缓存 {@link CellStyle}、类型化 cell 写入、按 {@code rowsPerSheet} 自动滚动到下一个
@@ -214,7 +215,7 @@ final class ExcelSheetWriter {
     }
   }
 
-  private Boolean toBoolean(Object value) {
+  private @Nullable Boolean toBoolean(Object value) {
     if (value instanceof Boolean bool) {
       return bool;
     }

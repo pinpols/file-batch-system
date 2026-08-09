@@ -123,7 +123,6 @@ class SuccessInstanceArchiveServiceTest {
     verify(mapper).selectArchivableInstanceIds(cutoffCaptor.capture(), anyInt());
     Instant cutoff = cutoffCaptor.getValue();
     Instant now = BatchDateTimeSupport.utcNow();
-    assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5));
-    assertThat(cutoff).isAfter(now.minusSeconds(86_400 + 5));
+    assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5)).isAfter(now.minusSeconds(86_400 + 5));
   }
 }

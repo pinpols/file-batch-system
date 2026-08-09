@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -48,9 +49,9 @@ class TaskDispatchMessageTest {
     TaskDispatchMessage msg = timeAwareMapper.readValue(json, TaskDispatchMessage.class);
 
     assertThat(msg.schedulingContext()).isNotNull();
-    assertThat(msg.schedulingContext().bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
-    assertThat(msg.schedulingContext().prevBizDate()).isEqualTo(LocalDate.of(2026, 5, 29));
-    assertThat(msg.schedulingContext().nextBizDate()).isEqualTo(LocalDate.of(2026, 6, 2));
+    assertThat(msg.schedulingContext().bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
+    assertThat(msg.schedulingContext().prevBizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 29));
+    assertThat(msg.schedulingContext().nextBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 2));
     assertThat(msg.schedulingContext().isHoliday()).isFalse();
     assertThat(msg.schedulingContext().attemptNo()).isEqualTo(2);
     assertThat(msg.schedulingContext().triggerType()).isEqualTo("SCHEDULED");
@@ -102,7 +103,7 @@ class TaskDispatchMessageTest {
   }
 
   @Test
-  void schemaVersionRejectedWhenMalformedLeadingNonAlnum() throws Exception {
+  void schemaVersionRejectedWhenMalformedLeadingNonAlnum() {
     // P1:首字符非字母数字的畸形 schemaVersion(前导空格 / 标点 / BOM)不能回退 v1 accept。
     // 否则 " v3" 会被本 SDK 按 v1 假设吃掉,违反 fixture 18 sdkMustNot "process v3 under v1"。
     // 用 record 构造直接锁 resolvedMajor(避免 Jackson 对畸形值的 trim 干扰)。

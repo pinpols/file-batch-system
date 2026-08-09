@@ -34,7 +34,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,9 +63,6 @@ class LoadStepCheckpointTest {
   private ObjectMapper objectMapper;
   private WorkerCheckpointProperties checkpointProps;
   private LoadStep loadStep;
-
-  @TempDir
-  Path tempDir;
 
   private final List<Path> tempPaths = new ArrayList<>();
 

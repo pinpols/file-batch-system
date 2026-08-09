@@ -56,16 +56,18 @@ public final class AlertLabels {
       return GROUP_DEFAULT;
     }
     String lower = alertType.toLowerCase(Locale.ROOT);
-    if (lower.contains("dispatch")) {
+    if (lower.contains(GROUP_DISPATCH)) {
       return GROUP_DISPATCH;
     }
     if (lower.contains("sla")) {
       return GROUP_SLA;
     }
-    if (lower.contains("freshness") || lower.contains("asset") || lower.contains("stale")) {
+    if (lower.contains(GROUP_FRESHNESS) || lower.contains("asset") || lower.contains("stale")) {
       return GROUP_FRESHNESS;
     }
-    if (lower.contains("capacity") || lower.contains("drain") || lower.contains("backpressure")) {
+    if (lower.contains(GROUP_CAPACITY)
+        || lower.contains("drain")
+        || lower.contains("backpressure")) {
       return GROUP_CAPACITY;
     }
     return GROUP_DEFAULT;

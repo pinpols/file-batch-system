@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegratio
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest schedRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.SCHEDULED)
         .requestId(seed.requestId())
         .traceId("tr-sched")
@@ -63,7 +64,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest blockRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("tr-block")
@@ -73,14 +74,13 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
 
     long outboxAfter =
         LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
-    assertThat(outboxAfter - outboxBefore).isEqualTo(0L);
+    assertThat(outboxAfter - outboxBefore).isZero();
 
     Integer waiting = jdbcTemplate.queryForObject("""
             select count(*)::int from batch.job_partition jp
             join batch.job_instance ji on ji.id = jp.job_instance_id
             where ji.tenant_id = ? and ji.dedup_key = ? and jp.partition_status = 'WAITING'
             """, Integer.class, TENANT, seed.dedupKey());
-    assertThat(waiting).isNotNull();
-    assertThat(waiting).isGreaterThanOrEqualTo(1);
+    assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
   }
 }

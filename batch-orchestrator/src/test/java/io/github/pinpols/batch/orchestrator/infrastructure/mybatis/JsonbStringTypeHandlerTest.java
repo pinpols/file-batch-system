@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mybatis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
@@ -55,7 +56,7 @@ class JsonbStringTypeHandlerTest {
     handler.setNonNullParameter(ps, 3, value, JdbcType.OTHER);
 
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-    org.mockito.Mockito.verify(ps).setString(org.mockito.Mockito.eq(3), captor.capture());
+    verify(ps).setString(org.mockito.Mockito.eq(3), captor.capture());
     assertThat(captor.getValue()).isEqualTo("{\"a\":\"b\"}");
   }
 }

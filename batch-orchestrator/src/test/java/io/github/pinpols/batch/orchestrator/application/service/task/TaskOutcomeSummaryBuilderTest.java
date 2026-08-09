@@ -25,12 +25,12 @@ class TaskOutcomeSummaryBuilderTest {
         .verifierFailures(List.of(Map.of("code", "COUNT_MISMATCH")))
         .build();
 
-    Map<?, ?> summary =
+    Map<String, Object> summary =
         JsonUtils.fromJson(TaskOutcomeSummaryBuilder.buildOutputSummary(command, null), Map.class);
 
-    assertThat(summary.get("outputs")).isEqualTo(Map.of("rows", 100, "objectKey", "exports/a.csv"));
-    assertThat(summary.get("verifierFailures"))
-        .isEqualTo(List.of(Map.of("code", "COUNT_MISMATCH")));
+    assertThat(summary).containsEntry("outputs", Map.of("rows", 100, "objectKey", "exports/a.csv"));
+    assertThat(summary)
+        .containsEntry("verifierFailures", List.of(Map.of("code", "COUNT_MISMATCH")));
   }
 
   @Test
@@ -63,26 +63,28 @@ class TaskOutcomeSummaryBuilderTest {
         .containsEntry("partitionCount", 3)
         .containsEntry("successPartitionCount", 2)
         .containsEntry("failedPartitionCount", 1L);
-    assertThat(outputs.get("partitionedOutputs"))
-        .isEqualTo(List.of(
-            Map.of(
-                "partitionId",
-                1L,
-                "partitionNo",
-                1,
-                "partitionKey",
-                "p1",
-                "outputs",
-                Map.of("rows", 100)),
-            Map.of(
-                "partitionId",
-                2L,
-                "partitionNo",
-                2,
-                "partitionKey",
-                "p2",
-                "outputs",
-                Map.of("rows", 200))));
+    assertThat(outputs)
+        .containsEntry(
+            "partitionedOutputs",
+            List.of(
+                Map.of(
+                    "partitionId",
+                    1L,
+                    "partitionNo",
+                    1,
+                    "partitionKey",
+                    "p1",
+                    "outputs",
+                    Map.of("rows", 100)),
+                Map.of(
+                    "partitionId",
+                    2L,
+                    "partitionNo",
+                    2,
+                    "partitionKey",
+                    "p2",
+                    "outputs",
+                    Map.of("rows", 200))));
   }
 
   @Test
@@ -135,10 +137,10 @@ class TaskOutcomeSummaryBuilderTest {
         .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
         .count();
 
-    Map<?, ?> listBased = JsonUtils.fromJson(
+    Map<String, Object> listBased = JsonUtils.fromJson(
         TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(jobInstance, partitions, command),
         Map.class);
-    Map<?, ?> countBased = JsonUtils.fromJson(
+    Map<String, Object> countBased = JsonUtils.fromJson(
         TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
             jobInstance,
             successCount,
@@ -146,12 +148,12 @@ class TaskOutcomeSummaryBuilderTest {
             command),
         Map.class);
 
-    assertThat(countBased.get("successPartitions")).isEqualTo(listBased.get("successPartitions"));
-    assertThat(countBased.get("failedPartitions")).isEqualTo(listBased.get("failedPartitions"));
-    assertThat(countBased.get("successPartitions")).isEqualTo(2);
-    assertThat(countBased.get("failedPartitions")).isEqualTo(3); // FAILED + CANCELLED + TERMINATED
-    assertThat(countBased.get("jobInstanceId")).isEqualTo(listBased.get("jobInstanceId"));
-    assertThat(countBased.get("lastErrorCode")).isEqualTo(listBased.get("lastErrorCode"));
+    assertThat(countBased).containsEntry("successPartitions", listBased.get("successPartitions"));
+    assertThat(countBased).containsEntry("failedPartitions", listBased.get("failedPartitions"));
+    assertThat(countBased).containsEntry("successPartitions", 2);
+    assertThat(countBased).containsEntry("failedPartitions", 3); // FAILED + CANCELLED + TERMINATED
+    assertThat(countBased).containsEntry("jobInstanceId", listBased.get("jobInstanceId"));
+    assertThat(countBased).containsEntry("lastErrorCode", listBased.get("lastErrorCode"));
   }
 
   @Test

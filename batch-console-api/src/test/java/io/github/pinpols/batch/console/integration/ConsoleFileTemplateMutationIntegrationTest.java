@@ -64,11 +64,11 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
         "SELECT tenant_id, template_code, template_type, charset, encrypt_type"
             + " FROM batch.file_template_config WHERE template_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-ft-ta");
-    assertThat(row.get("template_code")).isEqualTo(code);
-    assertThat(row.get("template_type")).isEqualTo("IMPORT");
-    assertThat(row.get("charset")).isEqualTo("UTF-8");
-    assertThat(row.get("encrypt_type")).isEqualTo("NONE");
+    assertThat(row).containsEntry("tenant_id", "int-ft-ta");
+    assertThat(row).containsEntry("template_code", code);
+    assertThat(row).containsEntry("template_type", "IMPORT");
+    assertThat(row).containsEntry("charset", "UTF-8");
+    assertThat(row).containsEntry("encrypt_type", "NONE");
 
     jdbcTemplate.update("DELETE FROM batch.file_template_config WHERE template_code = ?", code);
   }

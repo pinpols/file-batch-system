@@ -269,10 +269,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           workerConfiguration().workerType(),
           parseOrStartupEx.getMessage(),
           parseOrStartupEx);
-      if (!publishToDlqSafely(payload, parseOrStartupEx.getMessage())) {
-        return false;
-      }
-      return true;
+      return publishToDlqSafely(payload, parseOrStartupEx.getMessage());
     } finally {
       // 无论处理成功/失败/抛异常，都必须释放 permit；
       // 若之前触发过 pause，则在释放后尝试恢复消费。

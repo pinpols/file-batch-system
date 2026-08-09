@@ -91,9 +91,9 @@ public class ConsoleSecurityConfiguration {
   }
 
   @Bean
-  @SuppressWarnings("java:S4502")
+  @SuppressWarnings({"java:S4502", "java:S3330"})
   public SecurityFilterChain consoleSecurityFilterChain(
-      HttpSecurity http, ConsoleSecurityFilterChainComponents components) throws Exception {
+      HttpSecurity http, ConsoleSecurityFilterChainComponents components) {
     ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
     ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
     MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();
@@ -106,6 +106,8 @@ public class ConsoleSecurityConfiguration {
     // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
     // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
     // 例外 matcher 仅覆盖无 cookie 凭据的内部回调、登录前端点和本地 bypass-mode。
+    // XSRF-TOKEN intentionally stays readable by browser JavaScript: axios copies it into the
+    // X-XSRF-TOKEN header for Spring Security's double-submit CSRF validation.
     http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
         .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(

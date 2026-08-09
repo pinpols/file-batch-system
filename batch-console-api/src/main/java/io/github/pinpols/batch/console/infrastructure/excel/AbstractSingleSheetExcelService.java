@@ -37,7 +37,7 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 
 /** 单 sheet Excel 模板与导出基类：export 因查询参数各异由子类实现，复用 {@link #doExport} 生成 workbook。 */
-public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
+public abstract class AbstractSingleSheetExcelService<R, T> {
 
   protected final ConsoleTenantGuard tenantGuard;
   protected final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -62,22 +62,22 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected abstract Map<String, ColumnGuide> columnGuides();
 
   /** 校验问题写入 issues。 */
-  protected abstract ROW parseRow(
+  protected abstract R parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues);
 
-  protected abstract String rowUniqueKey(ROW row);
+  protected abstract String rowUniqueKey(R row);
 
-  protected abstract RESP toResponse(ROW row);
+  protected abstract T toResponse(R row);
 
   /**
    * @return true=新增, false=更新
    */
-  protected abstract boolean upsertRow(ROW row, String tenantId, String operatorId);
+  protected abstract boolean upsertRow(R row, String tenantId, String operatorId);
 
   protected abstract void logChange(
-      String tenantId, ROW row, String reason, String operatorId, String traceId, String action);
+      String tenantId, R row, String reason, String operatorId, String traceId, String action);
 
-  protected boolean rowExists(ROW row, String tenantId) {
+  protected boolean rowExists(R row, String tenantId) {
     return false;
   }
 
@@ -129,15 +129,15 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected record Validated<R>(
       int totalRows, int validRows, int invalidRows, List<R> rows, List<ExcelRowIssue> issues) {}
 
-  protected final Validated<ROW> validateRows(
+  protected final Validated<R> validateRows(
       ConsoleSingleSheetExcelImportSupport.ParsedSession session) {
-    List<ROW> validRows = new ArrayList<>();
+    List<R> validRows = new ArrayList<>();
     List<ExcelRowIssue> issues = new ArrayList<>();
     Set<String> uniqueKeys = new LinkedHashSet<>();
     int rowNo = 2;
     for (Map<String, String> rawRow : session.rows()) {
       List<String> rowIssues = new ArrayList<>();
-      ROW row = parseRow(session.tenantId(), rowNo, rawRow, rowIssues);
+      R row = parseRow(session.tenantId(), rowNo, rawRow, rowIssues);
       String key = rowUniqueKey(row);
       if (!uniqueKeys.add(key)) {
         rowIssues.add("duplicate key in excel: " + key);

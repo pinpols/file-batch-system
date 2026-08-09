@@ -51,12 +51,13 @@ class DeadLetterPublisherTest {
     verify(kafkaTemplate).send(eq(BatchTopics.TASK_DEAD_LETTER), valueCaptor.capture());
 
     String sent = valueCaptor.getValue();
-    assertThat(sent).contains("\"envelopeVersion\":1");
-    assertThat(sent).contains("originalPayload");
-    assertThat(sent).contains("sourceTopic");
-    assertThat(sent).contains("workerType");
-    assertThat(sent).contains("errorMessage");
-    assertThat(sent).contains("failedAt");
+    assertThat(sent)
+        .contains("\"envelopeVersion\":1")
+        .contains("originalPayload")
+        .contains("sourceTopic")
+        .contains("workerType")
+        .contains("errorMessage")
+        .contains("failedAt");
     assertThat(registry
             .counter("worker.dlq.publish.success.total", "topic", BatchTopics.TASK_DEAD_LETTER)
             .count())

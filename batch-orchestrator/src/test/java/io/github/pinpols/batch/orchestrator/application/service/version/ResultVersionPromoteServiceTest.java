@@ -20,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.Month;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -63,7 +64,7 @@ class ResultVersionPromoteServiceTest {
     instance.setTenantId("t1");
     instance.setId(200L);
     instance.setJobCode("JOB");
-    instance.setBizDate(LocalDate.of(2026, 5, 4));
+    instance.setBizDate(LocalDate.of(2026, Month.MAY, 4));
     when(mapper.selectById("t1", 2L)).thenReturn(pending, promoted);
     when(mapper.promoteToEffective(eq("t1"), eq(2L), any())).thenReturn(1);
     when(jobInstanceMapper.selectById("t1", 200L)).thenReturn(instance);

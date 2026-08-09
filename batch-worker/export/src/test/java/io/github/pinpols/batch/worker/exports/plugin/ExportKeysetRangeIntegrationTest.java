@@ -260,7 +260,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("用例4 sql_template+keyset: 单分片翻多页时 min/max 边界缓存进 exportSnapshot 且跨页稳定")
-  void sqlTemplate_keyset_boundaryComputedOncePerPartition() throws Exception {
+  void sqlTemplate_keyset_boundaryComputedOncePerPartition() {
     // 准备: partitionNo=1，pageSize 小到保证多页（1000 行 / 4 片 ≈ 250 行，PAGE_SIZE=200 → ≥2 页）
     Map<String, Object> templateConfig = Map.of(
         "default_query_sql",

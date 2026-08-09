@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.event.DomainEvent;
@@ -44,7 +45,7 @@ class VerifierFailureOutboxServiceTest {
 
     assertThat(written).isEqualTo(2);
     ArgumentCaptor<DomainEvent> captor = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(publisher, org.mockito.Mockito.times(2)).publish(captor.capture());
+    verify(publisher, times(2)).publish(captor.capture());
     List<DomainEvent> events = captor.getAllValues();
     assertThat(events).extracting(DomainEvent::eventType).containsOnly("verifier.failure.v1");
     assertThat(events).extracting(DomainEvent::aggregateId).containsOnly(7L);
@@ -73,7 +74,7 @@ class VerifierFailureOutboxServiceTest {
     service.writeVerifierFailures(command, task);
 
     ArgumentCaptor<DomainEvent> captor = ArgumentCaptor.forClass(DomainEvent.class);
-    verify(publisher, org.mockito.Mockito.times(2)).publish(captor.capture());
+    verify(publisher, times(2)).publish(captor.capture());
     assertThat(captor.getAllValues())
         .extracting(DomainEvent::eventKey)
         .containsExactly("t1:verifier:7:DUP_CODE:0", "t1:verifier:7:DUP_CODE:1");
@@ -126,6 +127,6 @@ class VerifierFailureOutboxServiceTest {
     int written = service.writeVerifierFailures(command, task);
 
     assertThat(written).isEqualTo(1);
-    verify(publisher, org.mockito.Mockito.times(1)).publish(any());
+    verify(publisher, times(1)).publish(any());
   }
 }

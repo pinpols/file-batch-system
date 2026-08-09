@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -186,13 +187,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put("dryRun", true);
         planned.put("plannedAction", "http");
-        planned.put("method", inv.method);
+        planned.put(PARAM_METHOD, inv.method);
         planned.put("url", inv.uri.toString());
         planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
         planned.put(
             "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
-        planned.put("timeoutSeconds", inv.timeout.toSeconds());
-        planned.put("expectStatus", inv.expectedStatus);
+        planned.put(PARAM_TIMEOUT, inv.timeout.toSeconds());
+        planned.put(PARAM_EXPECT_STATUS, inv.expectedStatus);
         log.info(
             "http executor dry-run skipped real request: tenantId={}, jobCode={}, method={},"
                 + " url={}",
@@ -242,12 +243,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object urlObj = params.get(PARAM_URL);
-    if (!(urlObj instanceof String) || ((String) urlObj).isBlank()) {
+    if (!(urlObj instanceof String urlString) || EmptyChecks.isBlank(urlString)) {
       throw new HttpValidationException("parameters.url required");
     }
     URI uri;
     try {
-      uri = new URI(((String) urlObj).trim());
+      uri = new URI(urlString.trim());
     } catch (URISyntaxException e) {
       throw new HttpValidationException("parameters.url not a valid URI: " + e.getMessage());
     }
@@ -263,15 +264,15 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
 
     Map<String, String> headers =
-        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, "headers") : Map.of();
+        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, PARAM_HEADERS) : Map.of();
 
     String body = params.get(PARAM_BODY) instanceof String s ? s : null;
     validateRequestBodySize(body);
 
     Duration timeout = props.getDefaultTimeout();
     Object t = params.get(PARAM_TIMEOUT);
-    if (t instanceof Number) {
-      long sec = ((Number) t).longValue();
+    if (t instanceof Number number) {
+      long sec = number.longValue();
       if (sec <= 0) {
         throw new HttpValidationException("timeoutSeconds must be positive");
       }
@@ -374,8 +375,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     if (raw instanceof List<?> list) {
       HashSet<Integer> out = new HashSet<>();
       for (Object o : list) {
-        if (o instanceof Number) {
-          out.add(((Number) o).intValue());
+        if (o instanceof Number number) {
+          out.add(number.intValue());
         } else {
           throw new HttpValidationException("expectStatus list must contain integers");
         }
@@ -434,7 +435,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
-    return v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : fallback;
+    return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
   }
 
   private void validateRequestBodySize(String body) {
@@ -570,13 +571,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
    * 的响应,读到的内容与全量读完全一致。try-with-resources 关闭 {@link Response} 会释放底层连接,未读完的剩余流不会阻塞。
    */
   private static byte[] readBounded(ResponseBody body, int max) throws IOException {
-    long limit = (long) max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
+    long limit = max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
     try (InputStream in = body.byteStream()) {
       ByteArrayOutputStream buf = new ByteArrayOutputStream((int) Math.min(limit, 8192L));
       byte[] chunk = new byte[8192];
       long total = 0;
       while (total < limit) {
-        int toRead = (int) Math.min((long) chunk.length, limit - total);
+        int toRead = (int) Math.min(chunk.length, limit - total);
         int n = in.read(chunk, 0, toRead);
         if (n == -1) {
           break;

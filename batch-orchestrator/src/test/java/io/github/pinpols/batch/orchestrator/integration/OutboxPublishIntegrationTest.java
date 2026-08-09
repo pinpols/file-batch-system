@@ -106,9 +106,9 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
-      for (ConsumerRecord<String, String> record : records) {
-        if ("key-fallback-001".equals(record.key())) {
-          matched = record;
+      for (ConsumerRecord<String, String> consumerRecord : records) {
+        if ("key-fallback-001".equals(consumerRecord.key())) {
+          matched = consumerRecord;
           break;
         }
       }
@@ -142,9 +142,9 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
-      for (ConsumerRecord<String, String> record : records) {
-        if ("t1:IT_JOB:it-instance-001:1".equals(record.key())) {
-          matched = record;
+      for (ConsumerRecord<String, String> consumerRecord : records) {
+        if ("t1:IT_JOB:it-instance-001:1".equals(consumerRecord.key())) {
+          matched = consumerRecord;
           break;
         }
       }
@@ -178,9 +178,9 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
-      for (ConsumerRecord<String, String> record : records) {
-        if ("t1:IT_JOB:it-instance-001:1".equals(record.key())) {
-          matched = record;
+      for (ConsumerRecord<String, String> consumerRecord : records) {
+        if ("t1:IT_JOB:it-instance-001:1".equals(consumerRecord.key())) {
+          matched = consumerRecord;
           break;
         }
       }

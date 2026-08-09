@@ -82,9 +82,9 @@ class RemoteFilesystemNasPathTest {
     Map<String, Object> manifestJson = JsonUtils.fromJson(
         Files.readString(manifest, StandardCharsets.UTF_8),
         new TypeReference<Map<String, Object>>() {});
-    assertThat(manifestJson.get("checksumType")).isEqualTo("SHA-256");
-    assertThat(manifestJson.get("sizeBytes")).isEqualTo(payload.length);
-    assertThat(manifestJson.get("checksumValue")).isEqualTo(sha256(payload));
+    assertThat(manifestJson).containsEntry("checksumType", "SHA-256");
+    assertThat(manifestJson).containsEntry("sizeBytes", payload.length);
+    assertThat(manifestJson).containsEntry("checksumValue", sha256(payload));
   }
 
   @Test

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -169,7 +170,7 @@ class DefaultConsoleConfigApplicationServiceTest {
 
     assertThat(status).isEqualTo(ConfigLifecycleStatus.GRAY.code());
     // grayScope updated twice — once in grayConfigRelease, once inside changeReleaseStatus
-    verify(configReleaseMapper, org.mockito.Mockito.times(2)).updateGrayScope(anyMap());
+    verify(configReleaseMapper, times(2)).updateGrayScope(anyMap());
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
   }
 
@@ -184,7 +185,7 @@ class DefaultConsoleConfigApplicationServiceTest {
 
     assertThat(status).isEqualTo(ConfigLifecycleStatus.GRAY.code());
     // outer updateGrayScope still called once (with null), inner branch skipped
-    verify(configReleaseMapper, org.mockito.Mockito.times(1)).updateGrayScope(anyMap());
+    verify(configReleaseMapper, times(1)).updateGrayScope(anyMap());
   }
 
   @Test
@@ -207,7 +208,7 @@ class DefaultConsoleConfigApplicationServiceTest {
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.STATE_CONFLICT);
-    verify(configReleaseMapper, org.mockito.Mockito.never()).updateConfigReleaseStatus(anyMap());
+    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
   }
 
   @Test
@@ -267,8 +268,8 @@ class DefaultConsoleConfigApplicationServiceTest {
     verify(secretVersionMapper).deactivateCurrentVersion(anyMap());
     ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
     verify(secretVersionMapper).insertSecretVersion(captor.capture());
-    assertThat(captor.getValue().get("secretStatus")).isEqualTo("PUBLISHED");
-    assertThat(captor.getValue().get("currentVersion")).isEqualTo(true);
+    assertThat(captor.getValue()).containsEntry("secretStatus", "PUBLISHED");
+    assertThat(captor.getValue()).containsEntry("currentVersion", true);
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
   }
 
@@ -292,8 +293,8 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThat(versionNo).isEqualTo(1L);
     ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
     verify(secretVersionMapper).insertSecretVersion(captor.capture());
-    assertThat(captor.getValue().get("secretStatus"))
-        .isEqualTo(ConfigLifecycleStatus.PUBLISHED.code());
+    assertThat(captor.getValue())
+        .containsEntry("secretStatus", ConfigLifecycleStatus.PUBLISHED.code());
   }
 
   // ── configChangeLogs ────────────────────────────────────────────────────

@@ -63,7 +63,7 @@ class ParseStepPartitionSliceTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
     assertThat(((Number) context.getAttributes().get("parsedCount")).longValue())
         .isEqualTo(9L);
     assertNdjsonLineCount(context, 9);
@@ -78,14 +78,14 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     // 关闭后 totalCount = parsedCount = 9(完整文件,不切分)
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
     assertNdjsonLineCount(context, 9);
   }
 
   // ── 切分场景 ──────────────────────────────────────────────────────────────
 
   @Test
-  void shouldSliceWithoutOverlapAcrossPartitions() throws Exception {
+  void shouldSliceWithoutOverlapAcrossPartitions() {
     String json = buildJsonArray(9);
 
     // 跑 3 个 partition,各自捕获 NDJSON 行集合
@@ -99,8 +99,9 @@ class ParseStepPartitionSliceTest {
     assertThat(partition3).hasSize(3);
 
     // 两两不交(零重叠)
-    assertThat(partition1).doesNotContainAnyElementsOf(partition2);
-    assertThat(partition1).doesNotContainAnyElementsOf(partition3);
+    assertThat(partition1)
+        .doesNotContainAnyElementsOf(partition2)
+        .doesNotContainAnyElementsOf(partition3);
     assertThat(partition2).doesNotContainAnyElementsOf(partition3);
 
     // 并集 = 完整原始集(全覆盖)
@@ -130,7 +131,7 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     // 不再按 lineNo%3 过滤 → 9 行全保留(本片内容由 PREPROCESS 的 range 切分决定,这里输入即全量)
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
     assertNdjsonLineCount(context, 9);
   }
 
@@ -143,7 +144,7 @@ class ParseStepPartitionSliceTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 5L);
     assertNdjsonLineCount(context, 5);
   }
 

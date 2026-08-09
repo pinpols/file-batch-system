@@ -78,7 +78,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceCreateUpdateValidationTe
   @DisplayName("create:validator 抛错 → 异常传播,绝不 insert 节点/边")
   void create_blocksPersist_whenValidatorThrows() {
     // arrange
-    when(definitionMapper.selectByUniqueKey(eq(TENANT), eq("WF_CYCLE"), eq(1))).thenReturn(null);
+    when(definitionMapper.selectByUniqueKey(TENANT, "WF_CYCLE", 1)).thenReturn(null);
     doThrow(BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected"))
         .when(dagValidator)
         .validate(eq(TENANT), any());

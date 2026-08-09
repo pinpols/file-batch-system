@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.web.response;
 
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.Map;
 
 /**
@@ -26,12 +27,12 @@ public record ConsoleNotificationTestResultResponse(
       return null;
     }
     return new ConsoleNotificationTestResultResponse(
-        NotificationResponseFieldReader.stringValue(row, "channelCode"),
-        NotificationResponseFieldReader.stringValue(row, "channelType"),
-        NotificationResponseFieldReader.booleanValue(row, "success"),
-        NotificationResponseFieldReader.stringValue(row, "status"),
-        NotificationResponseFieldReader.stringValue(row, "message"),
-        NotificationResponseFieldReader.integerValue(row, "httpStatus"),
-        NotificationResponseFieldReader.stringValue(row, "errorSummary"));
+        ConsoleResponseFieldReader.stringValue(row, "channelCode"),
+        ConsoleResponseFieldReader.stringValue(row, "channelType"),
+        ConsoleResponseFieldReader.booleanValue(row, "success"),
+        ConsoleResponseFieldReader.stringValue(row, "status"),
+        ConsoleResponseFieldReader.stringValue(row, "message"),
+        ConsoleResponseFieldReader.integerValue(row, "httpStatus"),
+        ConsoleResponseFieldReader.stringValue(row, "errorSummary"));
   }
 }

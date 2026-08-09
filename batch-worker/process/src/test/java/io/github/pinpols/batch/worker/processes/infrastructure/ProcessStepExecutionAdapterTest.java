@@ -51,8 +51,7 @@ class ProcessStepExecutionAdapterTest {
         runtimeRepository,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(runtimeRepository.findPipelineDefinition(eq("tenant-a"), eq("job-process")))
-        .thenReturn(10L);
+    when(runtimeRepository.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
     when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
@@ -86,8 +85,7 @@ class ProcessStepExecutionAdapterTest {
         runtimeRepository,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(runtimeRepository.findPipelineDefinition(eq("tenant-a"), eq("job-process")))
-        .thenReturn(10L);
+    when(runtimeRepository.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
     when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))

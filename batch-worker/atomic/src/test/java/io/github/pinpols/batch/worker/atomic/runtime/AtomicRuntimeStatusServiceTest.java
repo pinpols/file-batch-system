@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
@@ -89,9 +90,9 @@ class AtomicRuntimeStatusServiceTest {
     sp.setAllowedSchemas(Set.of("batch", "app"));
     when(storedProcProvider.getIfAvailable()).thenReturn(sp);
 
-    DataSource ds = org.mockito.Mockito.mock(DataSource.class);
-    Connection conn = org.mockito.Mockito.mock(Connection.class);
-    DatabaseMetaData md = org.mockito.Mockito.mock(DatabaseMetaData.class);
+    DataSource ds = mock(DataSource.class);
+    Connection conn = mock(Connection.class);
+    DatabaseMetaData md = mock(DatabaseMetaData.class);
     when(ds.getConnection()).thenReturn(conn);
     when(conn.getMetaData()).thenReturn(md);
     when(md.getDatabaseProductName()).thenReturn("PostgreSQL");
@@ -139,7 +140,7 @@ class AtomicRuntimeStatusServiceTest {
     SqlExecutorProperties sql = new SqlExecutorProperties();
     sql.setEnabled(true);
     when(sqlProvider.getIfAvailable()).thenReturn(sql);
-    DataSource ds = org.mockito.Mockito.mock(DataSource.class);
+    DataSource ds = mock(DataSource.class);
     when(ds.getConnection()).thenThrow(new java.sql.SQLException("boom"));
     when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
 

@@ -38,17 +38,14 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
         .load()
         .migrate();
 
-    SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
-        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
-    try {
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
       JdbcTemplate jdbc = new JdbcTemplate(dataSource);
       Long cnt = jdbc.queryForObject("""
               select count(*) from information_schema.tables
               where table_schema = 'batch' and table_name = 'batch_day_instance'
               """, Long.class);
       assertThat(cnt).isEqualTo(1L);
-    } finally {
-      dataSource.destroy();
     }
   }
 }

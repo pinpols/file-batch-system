@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
@@ -150,10 +151,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     planned.put("plannedAction", "sql");
     planned.put("statementCount", inv.statements.size());
     planned.put("statements", inv.statements);
-    planned.put("dataSourceBean", dsBean == null ? "<default>" : dsBean);
-    planned.put("autoCommit", inv.autoCommit);
+    planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
+    planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
     planned.put("readOnly", inv.allSelect);
-    planned.put("statementTimeoutSeconds", inv.timeoutSec);
+    planned.put(PARAM_STMT_TIMEOUT, inv.timeoutSec);
     log.info(
         "sql executor dry-run skipped real execution: tenantId={}, jobCode={}, statements={}",
         ctx.tenantId(),
@@ -169,10 +170,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object sqlObj = params.get(PARAM_SQL);
-    if (!(sqlObj instanceof String) || ((String) sqlObj).isBlank()) {
+    if (!(sqlObj instanceof String sqlString) || EmptyChecks.isBlank(sqlString)) {
       throw new SqlValidationException("parameters.sql required (non-blank string)");
     }
-    String sql = ((String) sqlObj).trim();
+    String sql = sqlString.trim();
 
     List<String> statements = splitStatements(sql);
     if (statements.isEmpty()) {
@@ -197,8 +198,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
     Object t = params.get(PARAM_STMT_TIMEOUT);
-    if (t instanceof Number) {
-      long requested = ((Number) t).longValue();
+    if (t instanceof Number number) {
+      long requested = number.longValue();
       if (requested <= 0) {
         throw new SqlValidationException("statementTimeoutSeconds must be positive");
       }
@@ -209,8 +210,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
     boolean autoCommit = props.isDefaultAutoCommit();
     Object ac = params.get(PARAM_AUTO_COMMIT);
-    if (ac instanceof Boolean) {
-      autoCommit = (Boolean) ac;
+    if (ac instanceof Boolean booleanValue) {
+      autoCommit = booleanValue;
     }
 
     return new SqlInvocation(statements, ds, timeoutSec, autoCommit, allSelect);
@@ -228,9 +229,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   String resolveDataSourceBeanName(Map<String, Object> params) {
     String configured = props.getDataSourceBeanName();
     Object v = params.get(PARAM_DS_BEAN);
-    String paramBean = v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : null;
+    String paramBean =
+        v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : null;
 
-    if (paramBean == null || paramBean.equals(configured)) {
+    if (EmptyChecks.isNull(paramBean) || paramBean.equals(configured)) {
       return configured;
     }
     if (!props.getAllowedDataSourceBeans().contains(paramBean)) {
@@ -498,7 +500,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
     // 全 SELECT 时强制显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段内生效。
     // 写任务保持原有 autoCommit 语义。
-    boolean effectiveAutoCommit = inv.allSelect ? false : inv.autoCommit;
+    boolean effectiveAutoCommit = !inv.allSelect && inv.autoCommit;
     AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
         .withAutoCommit(effectiveAutoCommit)
         .withReadOnly(inv.allSelect)

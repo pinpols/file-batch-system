@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Param;
 @SuppressWarnings("PMD.ExcessiveParameterList")
 public interface BatchDayReplaySessionMapper {
 
-  int insert(BatchDayReplaySessionEntity record);
+  int insert(BatchDayReplaySessionEntity entity);
 
   BatchDayReplaySessionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 

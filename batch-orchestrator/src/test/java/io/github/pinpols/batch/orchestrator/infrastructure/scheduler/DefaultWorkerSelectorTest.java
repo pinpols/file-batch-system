@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -120,7 +119,7 @@ class DefaultWorkerSelectorTest {
 
   private void stubCandidates(List<WorkerRegistryEntity> candidates) {
     when(workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
-            eq(TENANT), eq(GROUP), eq(WorkerRegistryStatus.ONLINE.code())))
+            TENANT, GROUP, WorkerRegistryStatus.ONLINE.code()))
         .thenReturn(candidates);
   }
 

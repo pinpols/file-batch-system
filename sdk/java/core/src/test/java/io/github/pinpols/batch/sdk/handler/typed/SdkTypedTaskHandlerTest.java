@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +49,7 @@ class SdkTypedTaskHandlerTest {
 
     assertThat(handler.seen.sourcePath()).isEqualTo("/data/in.csv");
     assertThat(handler.seen.batchSize()).isEqualTo(500);
-    assertThat(handler.seen.bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
+    assertThat(handler.seen.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
     assertThat(result.success()).isTrue();
   }
 

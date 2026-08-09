@@ -35,6 +35,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -113,7 +114,8 @@ class CrossDayDependencyReconcilerTest {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(101L, "AGG", "TASK", Instant.now().minusSeconds(60), 7L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 7L, 200L, 333L);
-    JobInstanceEntity jobInstance = jobInstance("t1", 333L, "AGG", LocalDate.of(2026, 5, 4));
+    JobInstanceEntity jobInstance =
+        jobInstance("t1", 333L, "AGG", LocalDate.of(2026, Month.MAY, 4));
     WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
 
     when(nodeRunMapper.selectByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
@@ -121,7 +123,7 @@ class CrossDayDependencyReconcilerTest {
     when(runMapper.selectByIdAnyTenant(7L)).thenReturn(workflowRun);
     when(jobInstanceMapper.selectById("t1", 333L)).thenReturn(jobInstance);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(200L, "AGG")).thenReturn(node);
-    when(resolver.resolve(eq("t1"), eq(LocalDate.of(2026, 5, 4)), anyString()))
+    when(resolver.resolve(eq("t1"), eq(LocalDate.of(2026, Month.MAY, 4)), anyString()))
         .thenReturn(ResolutionResult.builder()
             .status(CrossDayDependencyResolver.ResolutionStatus.RESOLVED)
             .resolved(Map.of("alias", Map.of("k", "v")))
@@ -144,7 +146,8 @@ class CrossDayDependencyReconcilerTest {
     Instant farPast = Instant.now().minusSeconds(100_000L);
     WorkflowNodeRunEntity waiting = waitingNodeRun(102L, "AGG", "TASK", farPast, 8L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
-    JobInstanceEntity jobInstance = jobInstance("t1", 334L, "AGG", LocalDate.of(2026, 5, 4));
+    JobInstanceEntity jobInstance =
+        jobInstance("t1", 334L, "AGG", LocalDate.of(2026, Month.MAY, 4));
     WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
     node.setCrossDayDependencyTimeoutSeconds(60);
 
@@ -172,7 +175,8 @@ class CrossDayDependencyReconcilerTest {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(103L, "AGG", "TASK", Instant.now().minusSeconds(30), 9L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 9L, 200L, 335L);
-    JobInstanceEntity jobInstance = jobInstance("t1", 335L, "AGG", LocalDate.of(2026, 5, 4));
+    JobInstanceEntity jobInstance =
+        jobInstance("t1", 335L, "AGG", LocalDate.of(2026, Month.MAY, 4));
     WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", null);
 
     when(nodeRunMapper.selectByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
@@ -192,7 +196,8 @@ class CrossDayDependencyReconcilerTest {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(104L, "AGG", "TASK", Instant.now().minusSeconds(10), 10L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 10L, 200L, 336L);
-    JobInstanceEntity jobInstance = jobInstance("t1", 336L, "AGG", LocalDate.of(2026, 5, 4));
+    JobInstanceEntity jobInstance =
+        jobInstance("t1", 336L, "AGG", LocalDate.of(2026, Month.MAY, 4));
     WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
     node.setCrossDayDependencyTimeoutSeconds(86_400);
 
@@ -219,7 +224,8 @@ class CrossDayDependencyReconcilerTest {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(105L, "AGG", "TASK", Instant.now().minusSeconds(30), 11L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 11L, 200L, 337L);
-    JobInstanceEntity jobInstance = jobInstance("t1", 337L, "AGG", LocalDate.of(2026, 5, 4));
+    JobInstanceEntity jobInstance =
+        jobInstance("t1", 337L, "AGG", LocalDate.of(2026, Month.MAY, 4));
     WorkflowNodeEntity node = workflowNode(200L, "AGG", "TASK", "[{\"jobCode\":\"X\"}]");
 
     when(nodeRunMapper.selectByNodeStatus(eq("WAITING_DEPENDENCY"), anyInt()))
@@ -264,7 +270,7 @@ class CrossDayDependencyReconcilerTest {
     entity.setTenantId(tenantId);
     entity.setWorkflowDefinitionId(workflowDefinitionId);
     entity.setRelatedJobInstanceId(relatedJobInstanceId);
-    entity.setBizDate(LocalDate.of(2026, 5, 4));
+    entity.setBizDate(LocalDate.of(2026, Month.MAY, 4));
     entity.setRunStatus("RUNNING");
     return entity;
   }

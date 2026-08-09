@@ -70,13 +70,13 @@ public class JsonFormatParser implements FormatParser {
         JsonNode recordsNode = rootObj == null ? null : rootObj.get(KEY_RECORDS);
         if (recordsNode != null && recordsNode.isArray()) {
           long recordNo = 0L;
-          for (JsonNode record : recordsNode) {
-            if (record == null || record.isNull()) {
+          for (JsonNode item : recordsNode) {
+            if (item == null || item.isNull()) {
               continue;
             }
             recordNo++;
-            support.collectSchemaFields(context, record);
-            writeJsonRecord(context, writer, record, recordNo, preserveLogicalRow);
+            support.collectSchemaFields(context, item);
+            writeJsonRecord(context, writer, item, recordNo, preserveLogicalRow);
           }
           return recordNo;
         }

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 
@@ -46,24 +47,24 @@ public record ConsoleAlertRoutingResponse(
       return null;
     }
     return new ConsoleAlertRoutingResponse(
-        NotificationResponseFieldReader.longValue(row, "id"),
-        NotificationResponseFieldReader.stringValue(row, "tenant_id"),
-        NotificationResponseFieldReader.stringValue(row, "route_code"),
-        NotificationResponseFieldReader.stringValue(row, "route_name"),
-        NotificationResponseFieldReader.stringValue(row, "team"),
-        NotificationResponseFieldReader.stringValue(row, "alert_group"),
-        NotificationResponseFieldReader.stringValue(row, "severity"),
-        NotificationResponseFieldReader.stringValue(row, "receiver"),
-        NotificationResponseFieldReader.stringValue(row, "group_by"),
-        NotificationResponseFieldReader.integerValue(row, "group_wait_seconds"),
-        NotificationResponseFieldReader.integerValue(row, "group_interval_seconds"),
-        NotificationResponseFieldReader.integerValue(row, "repeat_interval_seconds"),
-        NotificationResponseFieldReader.booleanValue(row, "enabled"),
-        NotificationResponseFieldReader.stringValue(row, "description"),
-        NotificationResponseFieldReader.stringValue(row, "created_by"),
-        NotificationResponseFieldReader.stringValue(row, "updated_by"),
-        NotificationResponseFieldReader.instantValue(row, "created_at"),
-        NotificationResponseFieldReader.instantValue(row, "updated_at"),
-        NotificationResponseFieldReader.booleanValue(row, "is_deleted"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
+        ConsoleResponseFieldReader.stringValue(row, "route_code"),
+        ConsoleResponseFieldReader.stringValue(row, "route_name"),
+        ConsoleResponseFieldReader.stringValue(row, "team"),
+        ConsoleResponseFieldReader.stringValue(row, "alert_group"),
+        ConsoleResponseFieldReader.stringValue(row, "severity"),
+        ConsoleResponseFieldReader.stringValue(row, "receiver"),
+        ConsoleResponseFieldReader.stringValue(row, "group_by"),
+        ConsoleResponseFieldReader.integerValue(row, "group_wait_seconds"),
+        ConsoleResponseFieldReader.integerValue(row, "group_interval_seconds"),
+        ConsoleResponseFieldReader.integerValue(row, "repeat_interval_seconds"),
+        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
+        ConsoleResponseFieldReader.stringValue(row, "description"),
+        ConsoleResponseFieldReader.stringValue(row, "created_by"),
+        ConsoleResponseFieldReader.stringValue(row, "updated_by"),
+        ConsoleResponseFieldReader.instantValue(row, "created_at"),
+        ConsoleResponseFieldReader.instantValue(row, "updated_at"),
+        ConsoleResponseFieldReader.booleanValue(row, "is_deleted"));
   }
 }

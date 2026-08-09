@@ -32,7 +32,7 @@ public final class BatchWindowExcelRowParser {
   public static WindowRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    WindowRow row = WindowRow.builder()
+    return WindowRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
         .windowCode(requireText(values, "window_code", 128, issues))
@@ -48,7 +48,6 @@ public final class BatchWindowExcelRowParser {
         .enabled(optionalBoolean(values, "enabled", true, issues))
         .description(optionalText(values, "description", 512, issues))
         .build();
-    return row;
   }
 
   public static BatchWindowUpsertParam toUpsertParam(WindowRow row) {

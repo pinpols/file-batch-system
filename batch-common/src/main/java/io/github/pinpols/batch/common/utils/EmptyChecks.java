@@ -28,7 +28,7 @@ public final class EmptyChecks {
   }
 
   public static boolean isEmpty(CharSequence value) {
-    return value == null || value.length() == 0;
+    return value == null || value.isEmpty();
   }
 
   public static boolean isNotEmpty(CharSequence value) {

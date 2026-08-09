@@ -65,9 +65,8 @@ public class DefaultConsoleBatchWindowApplicationService
     params.put(
         "out_of_window_action",
         request.getOutOfWindowAction() != null ? request.getOutOfWindowAction() : "WAIT");
-    params.put(
-        "allow_cross_day", request.getAllowCrossDay() != null ? request.getAllowCrossDay() : false);
-    params.put("enabled", request.getEnabled() != null ? request.getEnabled() : true);
+    params.put("allow_cross_day", request.getAllowCrossDay() != null && request.getAllowCrossDay());
+    params.put("enabled", request.getEnabled() == null || request.getEnabled());
     params.put("description", request.getDescription());
     batchWindowMapper.insert(params);
     cacheInvalidationService.evictBatchWindow(tenantId, request.getWindowCode());

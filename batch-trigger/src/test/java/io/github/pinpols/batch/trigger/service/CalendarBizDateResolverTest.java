@@ -8,6 +8,7 @@ import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Set;
@@ -25,7 +26,7 @@ class CalendarBizDateResolverTest {
         ZoneId.of("Asia/Shanghai"),
         calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
 
-    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, Month.MARCH, 28));
   }
 
   @Test
@@ -35,7 +36,7 @@ class CalendarBizDateResolverTest {
         ZoneId.of("Asia/Shanghai"),
         calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
 
-    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 29));
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, Month.MARCH, 29));
   }
 
   @Test
@@ -43,7 +44,7 @@ class CalendarBizDateResolverTest {
     LocalDate bizDate = resolver.resolve(
         instant("2026-03-29T02:00:00+08:00"),
         ZoneId.of("Asia/Shanghai"),
-        calendar("Asia/Shanghai", "SKIP", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
+        calendar("Asia/Shanghai", "SKIP", Set.of(LocalDate.of(2026, Month.MARCH, 28)), Set.of()));
 
     assertThat(bizDate).isNull();
   }
@@ -53,9 +54,13 @@ class CalendarBizDateResolverTest {
     LocalDate bizDate = resolver.resolve(
         instant("2026-03-29T02:00:00+08:00"),
         ZoneId.of("Asia/Shanghai"),
-        calendar("Asia/Shanghai", "PREV_WORKDAY", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
+        calendar(
+            "Asia/Shanghai",
+            "PREV_WORKDAY",
+            Set.of(LocalDate.of(2026, Month.MARCH, 28)),
+            Set.of()));
 
-    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 27));
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
   }
 
   @Test
@@ -63,7 +68,7 @@ class CalendarBizDateResolverTest {
     LocalDate bizDate =
         resolver.resolve(instant("2026-03-27T16:30:00Z"), ZoneId.of("Asia/Shanghai"), null);
 
-    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, Month.MARCH, 28));
   }
 
   private CalendarBizDateDefinition calendar(

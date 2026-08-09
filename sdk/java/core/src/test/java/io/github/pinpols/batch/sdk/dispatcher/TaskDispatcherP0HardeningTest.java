@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
@@ -82,7 +83,7 @@ class TaskDispatcherP0HardeningTest {
     dispatcher.onMessage(new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
 
     // 不应调 claim 也不应进 handler
-    org.mockito.Mockito.verify(http, never()).claim(anyLong(), anyString(), any());
+    verify(http, never()).claim(anyLong(), anyString(), any());
     assertThat(seenCtx.get()).isNull();
     dispatcher = null;
   }
@@ -123,10 +124,11 @@ class TaskDispatcherP0HardeningTest {
 
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
     Map<String, String> mdc = seenMdc.get();
-    assertThat(mdc).isNotNull();
-    assertThat(mdc).containsEntry("traceId", "tr-abc");
-    assertThat(mdc).containsEntry("tenantId", "tx");
-    assertThat(mdc).containsEntry("taskId", "42");
+    assertThat(mdc)
+        .isNotNull()
+        .containsEntry("traceId", "tr-abc")
+        .containsEntry("tenantId", "tx")
+        .containsEntry("taskId", "42");
   }
 
   @Test
@@ -174,8 +176,7 @@ class TaskDispatcherP0HardeningTest {
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
     Map<String, String> mdc = seenMdc.get();
     assertThat(mdc).doesNotContainKey("traceId"); // 不在则不 put
-    assertThat(mdc).containsEntry("tenantId", "tx");
-    assertThat(mdc).containsEntry("taskId", "42");
+    assertThat(mdc).containsEntry("tenantId", "tx").containsEntry("taskId", "42");
   }
 
   // ─── P0: 容量 permit backpressure(提交前占容量,满则 RETRY_LATER 不提交 offset)──────────
@@ -214,7 +215,7 @@ class TaskDispatcherP0HardeningTest {
     while (dispatcher.submittedCount() != 0 && System.nanoTime() < deadline) {
       Thread.sleep(10);
     }
-    assertThat(dispatcher.submittedCount()).isEqualTo(0);
+    assertThat(dispatcher.submittedCount()).isZero();
   }
 
   private record GatedHandler(CountDownLatch started, CountDownLatch gate)

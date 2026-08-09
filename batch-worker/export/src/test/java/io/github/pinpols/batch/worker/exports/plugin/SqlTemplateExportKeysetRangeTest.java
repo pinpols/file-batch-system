@@ -19,9 +19,10 @@ class SqlTemplateExportKeysetRangeTest {
 
     String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
 
-    assertThat(sql).contains("base.\"id\" >= :__loN");
-    assertThat(sql).contains("base.\"id\" < :__hiN");
-    assertThat(sql).doesNotContain("hashtext");
+    assertThat(sql)
+        .contains("base.\"id\" >= :__loN")
+        .contains("base.\"id\" < :__hiN")
+        .doesNotContain("hashtext");
   }
 
   @Test
@@ -32,8 +33,7 @@ class SqlTemplateExportKeysetRangeTest {
 
     String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
 
-    assertThat(sql).contains("base.\"id\" <= :__hiN");
-    assertThat(sql).doesNotContain("hashtext");
+    assertThat(sql).contains("base.\"id\" <= :__hiN").doesNotContain("hashtext");
   }
 
   @Test
@@ -43,8 +43,7 @@ class SqlTemplateExportKeysetRangeTest {
 
     String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", false, range);
 
-    assertThat(sql).contains("hashtext");
-    assertThat(sql).doesNotContain(":__loN");
+    assertThat(sql).contains("hashtext").doesNotContain(":__loN");
   }
 
   @Test
@@ -55,7 +54,6 @@ class SqlTemplateExportKeysetRangeTest {
 
     String sql = SqlTemplateExportDataPlugin.buildPagedSql(BASE_SQL, "id", true, range);
 
-    assertThat(sql).contains("base.\"id\" > :__cursor");
-    assertThat(sql).contains("base.\"id\" < :__hiN");
+    assertThat(sql).contains("base.\"id\" > :__cursor").contains("base.\"id\" < :__hiN");
   }
 }

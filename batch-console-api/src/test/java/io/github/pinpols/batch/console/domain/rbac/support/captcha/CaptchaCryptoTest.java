@@ -34,6 +34,6 @@ class CaptchaCryptoTest {
   void sanitizeForLog_stripsCrlf() {
     assertThat(CaptchaCrypto.sanitizeForLog("1.2.3.4\nFAKE LOG")).isEqualTo("1.2.3.4_FAKE LOG");
     assertThat(CaptchaCrypto.sanitizeForLog("a\r\nb")).isEqualTo("a__b");
-    assertThat(CaptchaCrypto.sanitizeForLog(null)).isEqualTo("");
+    assertThat(CaptchaCrypto.sanitizeForLog(null)).isEmpty();
   }
 }

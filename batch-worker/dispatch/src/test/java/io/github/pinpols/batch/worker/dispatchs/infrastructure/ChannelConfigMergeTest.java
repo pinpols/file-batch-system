@@ -40,12 +40,12 @@ class ChannelConfigMergeTest {
     row.put("config_json", cj);
 
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
-    assertThat(merged.get("tenant_id")).isEqualTo("t1");
-    assertThat(merged.get("sftp_host")).isEqualTo("override.example.com");
-    assertThat(merged.get("sftp_port")).isEqualTo(2222);
-    assertThat(merged.get("receipt_poll_url")).isEqualTo("http://callback.example/receipt");
-    assertThat(merged.get("dispatch_manifest_enabled")).isEqualTo(false);
-    assertThat(merged.get("dispatch_manifest_suffix")).isEqualTo(".sha256");
+    assertThat(merged).containsEntry("tenant_id", "t1");
+    assertThat(merged).containsEntry("sftp_host", "override.example.com");
+    assertThat(merged).containsEntry("sftp_port", 2222);
+    assertThat(merged).containsEntry("receipt_poll_url", "http://callback.example/receipt");
+    assertThat(merged).containsEntry("dispatch_manifest_enabled", false);
+    assertThat(merged).containsEntry("dispatch_manifest_suffix", ".sha256");
     assertThat(merged).doesNotContainKeys("enabled", "receipt_policy", "random_key");
   }
 
@@ -57,7 +57,7 @@ class ChannelConfigMergeTest {
         "{\"sftp_host\":\"example.com\",\"tenant_id\":\"ignored\",\"random_ext\":\"x\"}");
 
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
-    assertThat(merged.get("sftp_host")).isEqualTo("example.com");
+    assertThat(merged).containsEntry("sftp_host", "example.com");
     assertThat(merged).doesNotContainKeys("ignored", "tenant_id", "random_ext");
   }
 
@@ -73,9 +73,9 @@ class ChannelConfigMergeTest {
 
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
 
-    assertThat(merged.get("target_endpoint")).isEqualTo("http://objectStore:9000");
-    assertThat(merged.get("oss_bucket")).isEqualTo("batch-dev");
-    assertThat(merged.get("oss_object_prefix")).isEqualTo("tb/outbound/statement/");
+    assertThat(merged).containsEntry("target_endpoint", "http://objectStore:9000");
+    assertThat(merged).containsEntry("oss_bucket", "batch-dev");
+    assertThat(merged).containsEntry("oss_object_prefix", "tb/outbound/statement/");
     assertThat(merged).doesNotContainKeys("endpoint", "bucket", "prefix");
   }
 
@@ -88,7 +88,7 @@ class ChannelConfigMergeTest {
 
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
 
-    assertThat(merged.get("target_endpoint")).isEqualTo("/tmp/batch/outbox");
+    assertThat(merged).containsEntry("target_endpoint", "/tmp/batch/outbox");
     assertThat(merged).doesNotContainKeys("local_directory", "local_file_name");
   }
 }

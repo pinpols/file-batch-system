@@ -28,6 +28,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.github.pinpols.batch.console.web.ConsoleQueryController;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -360,7 +361,7 @@ class ConsoleQueryControllerTest {
             "t1",
             "job-001",
             "inst-001",
-            LocalDate.of(2026, 3, 29),
+            LocalDate.of(2026, Month.MARCH, 29),
             "MANUAL",
             "SUCCESS",
             "batch-1",
@@ -427,7 +428,7 @@ class ConsoleQueryControllerTest {
             "t1",
             100L,
             11L,
-            LocalDate.of(2026, 3, 29),
+            LocalDate.of(2026, Month.MARCH, 29),
             "RUNNING",
             "node-1",
             "trace-1",
@@ -475,7 +476,7 @@ class ConsoleQueryControllerTest {
             "t1",
             "IMPORT_JOB",
             "INS-001",
-            LocalDate.of(2026, 3, 29),
+            LocalDate.of(2026, Month.MARCH, 29),
             "MANUAL",
             "RUNNING",
             "batch-1",

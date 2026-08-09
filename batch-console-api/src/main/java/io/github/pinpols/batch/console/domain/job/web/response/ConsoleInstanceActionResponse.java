@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.Map;
 
 /**
@@ -18,9 +19,9 @@ public record ConsoleInstanceActionResponse(
       return null;
     }
     return new ConsoleInstanceActionResponse(
-        JobResponseFieldReader.longValue(row, "id"),
-        JobResponseFieldReader.stringValue(row, "instanceNo"),
-        JobResponseFieldReader.stringValue(row, "status"),
-        JobResponseFieldReader.integerValue(row, "cancelRequestedTasks"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "instanceNo"),
+        ConsoleResponseFieldReader.stringValue(row, "status"),
+        ConsoleResponseFieldReader.integerValue(row, "cancelRequestedTasks"));
   }
 }

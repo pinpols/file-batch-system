@@ -167,8 +167,7 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
       TreeMap<String, String> canonicalHeaders,
       String hashedPayload,
       String accessKeyId,
-      String accessKeySecret)
-      throws Exception {
+      String accessKeySecret) {
     String signedHeaders = String.join(";", canonicalHeaders.navigableKeySet());
 
     StringBuilder headerLines = new StringBuilder();

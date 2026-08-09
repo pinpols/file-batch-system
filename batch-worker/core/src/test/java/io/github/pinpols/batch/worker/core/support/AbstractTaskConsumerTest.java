@@ -421,7 +421,7 @@ class AbstractTaskConsumerTest {
 
     WorkerConfiguration cfg = workerConfiguration(workerType, workerCode);
 
-    AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
+    return new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
         return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport()) {
@@ -462,7 +462,6 @@ class AbstractTaskConsumerTest {
         return dlqArg;
       }
     };
-    return consumer;
   }
 
   private static BatchDateTimeSupport dateTimeSupport() {

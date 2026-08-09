@@ -129,8 +129,9 @@ class AliyunCaptchaVerifierTest {
             "x-acs-signature-nonce",
             "x-acs-content-sha256",
             "host");
-    assertThat(headers.get("x-acs-action")).isEqualTo("VerifyIntelligentCaptcha");
-    assertThat(headers.get("x-acs-version")).isEqualTo("2023-03-05");
+    assertThat(headers)
+        .containsEntry("x-acs-action", "VerifyIntelligentCaptcha")
+        .containsEntry("x-acs-version", "2023-03-05");
     assertThat(verifier.sentBody.get()).contains("scene-123").contains("tok-abc");
   }
 
@@ -148,7 +149,7 @@ class AliyunCaptchaVerifierTest {
 
   @Test
   @DisplayName("hexSha256 / hexHmacSha256 输出 64 位小写 hex 且确定")
-  void digestPrimitives_are64HexAndDeterministic() throws Exception {
+  void digestPrimitives_are64HexAndDeterministic() {
     String h1 = CaptchaCrypto.sha256Hex("hello");
     String h2 = CaptchaCrypto.sha256Hex("hello");
     assertThat(h1).isEqualTo(h2).hasSize(64).matches("[0-9a-f]{64}");

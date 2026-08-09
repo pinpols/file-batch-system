@@ -23,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -182,7 +183,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .id(id)
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope("ALL_FAILED")
         .resultPolicy("CREATE_NEW_VERSION")
         .configVersionPolicy("USE_ORIGINAL_CONFIG")

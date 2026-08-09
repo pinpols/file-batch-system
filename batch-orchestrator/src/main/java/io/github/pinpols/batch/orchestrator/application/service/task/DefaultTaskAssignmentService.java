@@ -87,12 +87,17 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   @Override
   @Transactional
   public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
-    return assignWorker(tenantId, taskId, workerCode, null);
+    return assignWorkerInternal(tenantId, taskId, workerCode, null);
   }
 
   @Override
   @Transactional
   public JobTaskEntity assignWorker(
+      String tenantId, Long taskId, String workerCode, WorkerLookupMemo workerMemo) {
+    return assignWorkerInternal(tenantId, taskId, workerCode, workerMemo);
+  }
+
+  private JobTaskEntity assignWorkerInternal(
       String tenantId, Long taskId, String workerCode, WorkerLookupMemo workerMemo) {
     // 入口语义：如果不可认领（worker 不在线/组不匹配/状态不允许），返回 current（由 controller 转换为 409/404）。
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);

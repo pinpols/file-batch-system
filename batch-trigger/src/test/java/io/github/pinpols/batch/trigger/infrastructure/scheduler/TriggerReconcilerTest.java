@@ -103,7 +103,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
-  void drainingState_skipsReconcile() throws Exception {
+  void drainingState_skipsReconcile() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
     reconciler.reconcile();

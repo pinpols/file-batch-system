@@ -56,9 +56,9 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
         "SELECT tenant_id, route_code, severity, receiver FROM batch.alert_routing_config"
             + " WHERE route_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-ar-ta");
-    assertThat(row.get("route_code")).isEqualTo(code);
-    assertThat(row.get("severity")).isEqualTo("WARN");
+    assertThat(row).containsEntry("tenant_id", "int-ar-ta");
+    assertThat(row).containsEntry("route_code", code);
+    assertThat(row).containsEntry("severity", "WARN");
 
     jdbcTemplate.update("DELETE FROM batch.alert_routing_config WHERE route_code = ?", code);
   }

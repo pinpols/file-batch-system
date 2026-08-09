@@ -79,10 +79,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     Map<String, Object> row =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
     assertThat(row).isNotEmpty();
-    assertThat(row.get("tenant_id")).isEqualTo("t1");
-    assertThat(row.get("storage_bucket")).isEqualTo(bucket);
-    assertThat(row.get("storage_path")).isEqualTo(objectName);
-    assertThat(row.get("file_status")).isEqualTo("RECEIVED");
+    assertThat(row).containsEntry("tenant_id", "t1");
+    assertThat(row).containsEntry("storage_bucket", bucket);
+    assertThat(row).containsEntry("storage_path", objectName);
+    assertThat(row).containsEntry("file_status", "RECEIVED");
     assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
   }
 

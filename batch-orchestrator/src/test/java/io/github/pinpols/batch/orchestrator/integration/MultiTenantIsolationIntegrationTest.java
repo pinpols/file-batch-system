@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.PlatformTestdataSql;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest isolationRequest = LaunchRequest.builder()
         .tenantId("t1")
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("trace-isolation")
@@ -72,7 +73,7 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest outboxIsolationRequest = LaunchRequest.builder()
         .tenantId("t1")
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.MANUAL)
         .requestId(seed.requestId())
         .traceId("trace-outbox-isolation")
@@ -140,10 +141,10 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
             + "where tenant_id = 'tc' and policy_code = 'DEFAULT' order by id desc limit 1");
 
-    assertThat((Integer) tbPolicy.get("max_running_jobs_per_tenant")).isEqualTo(50);
-    assertThat((Integer) tcPolicy.get("max_running_jobs_per_tenant")).isEqualTo(30);
-    assertThat(tbPolicy.get("quota_reset_policy")).isEqualTo("CALENDAR_DAY");
-    assertThat(tcPolicy.get("quota_reset_policy")).isEqualTo("SLIDING_WINDOW");
+    assertThat(tbPolicy).containsEntry("max_running_jobs_per_tenant", 50);
+    assertThat(tcPolicy).containsEntry("max_running_jobs_per_tenant", 30);
+    assertThat(tbPolicy).containsEntry("quota_reset_policy", "CALENDAR_DAY");
+    assertThat(tcPolicy).containsEntry("quota_reset_policy", "SLIDING_WINDOW");
   }
 
   @Test
@@ -161,6 +162,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     List<String> tcWorkerCodes =
         tcWorkers.stream().map(r -> (String) r.get("worker_code")).toList();
 
+    assertThat(tbWorkerCodes).isNotEmpty();
+    assertThat(tcWorkerCodes).isNotEmpty();
     for (String tbCode : tbWorkerCodes) {
       assertThat(tcWorkerCodes).doesNotContain(tbCode);
     }
@@ -176,7 +179,7 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest t2Request = LaunchRequest.builder()
         .tenantId("t2")
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("trace-t2-launch")

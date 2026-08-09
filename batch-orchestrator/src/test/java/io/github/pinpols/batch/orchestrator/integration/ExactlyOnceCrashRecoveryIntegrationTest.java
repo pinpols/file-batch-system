@@ -63,7 +63,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
       // assert:恰好一次被接受;状态只前进一次,版本 0→1
       assertThat(first).as("首次 REPORT 应被接受").isEqualTo(1);
-      assertThat(second).as("重投 REPORT 必须被终态 CAS 拒绝(幂等空转)").isEqualTo(0);
+      assertThat(second).as("重投 REPORT 必须被终态 CAS 拒绝(幂等空转)").isZero();
       assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
       assertThat(taskVersion(taskId)).as("版本只前进一次,无重复推进").isEqualTo(1L);
     } finally {
@@ -88,7 +88,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
           .build());
 
       // assert:陈旧写被乐观锁拒绝;终态仍是新 leader 落定的 SUCCESS
-      assertThat(stale).as("陈旧版本号的写入必须被 version CAS 拒绝").isEqualTo(0);
+      assertThat(stale).as("陈旧版本号的写入必须被 version CAS 拒绝").isZero();
       assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
       assertThat(taskVersion(taskId)).isEqualTo(1L);
     } finally {
@@ -107,7 +107,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
       // assert:第二次空转;DB 中该 (tenant_id,event_key) 只有一行 → 下游不会重复出账
       assertThat(first).as("首次 outbox 写入应成功").isEqualTo(1);
-      assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isEqualTo(0);
+      assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isZero();
       Integer rows = jdbcTemplate.queryForObject(
           "SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?",
           Integer.class,
@@ -180,13 +180,12 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
         jobCode,
         "INST_" + suffix,
         "DEDUP_" + suffix);
-    Long taskId = jdbcTemplate.queryForObject("""
+    return jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_task (
                 tenant_id, job_instance_id, task_type, task_seq, task_status, version
             ) VALUES (?, ?, 'EXECUTION', 1, 'RUNNING', 0)
             RETURNING id
             """, Long.class, TENANT, jobInstanceId);
-    return taskId;
   }
 
   private String taskStatus(long taskId) {

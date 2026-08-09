@@ -53,7 +53,7 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> records = List.of(record(1L, "w-1"));
+    List<WorkerRegistryEntity> records = List.of(workerRecord(1L, "w-1"));
 
     List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
       calls.incrementAndGet();
@@ -106,7 +106,7 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenThrow(new QueryTimeoutException("redis down"));
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> records = List.of(record(2L, "w-2"));
+    List<WorkerRegistryEntity> records = List.of(workerRecord(2L, "w-2"));
 
     List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
       calls.incrementAndGet();
@@ -125,7 +125,7 @@ class WorkerRegistryCacheTest {
         .when(redis)
         .setStringCache(anyString(), anyString(), any(Duration.class));
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> records = List.of(record(3L, "w-3"));
+    List<WorkerRegistryEntity> records = List.of(workerRecord(3L, "w-3"));
 
     List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
       calls.incrementAndGet();
@@ -142,7 +142,7 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn("not-a-json");
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> records = List.of(record(4L, "w-4"));
+    List<WorkerRegistryEntity> records = List.of(workerRecord(4L, "w-4"));
 
     List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
       calls.incrementAndGet();
@@ -169,11 +169,11 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void cachedEmptyJsonArrayShouldIgnoreAndReload() throws Exception {
+  void cachedEmptyJsonArrayShouldIgnoreAndReload() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn("[]");
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryEntity> records = List.of(record(5L, "w-5"));
+    List<WorkerRegistryEntity> records = List.of(workerRecord(5L, "w-5"));
     List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
       calls.incrementAndGet();
       return records;
@@ -184,7 +184,7 @@ class WorkerRegistryCacheTest {
         .setStringCache(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
   }
 
-  private static WorkerRegistryEntity record(Long id, String code) {
+  private static WorkerRegistryEntity workerRecord(Long id, String code) {
     return new WorkerRegistryEntity(
         id,
         "t1",

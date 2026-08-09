@@ -51,6 +51,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -153,7 +154,7 @@ class DefaultLaunchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         TriggerType.API,
         "req-001",
         "trace-001",
@@ -198,14 +199,14 @@ class DefaultLaunchServiceTest {
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
     assertThat(jobCaptor.getValue().getJobDefinitionVersion()).isEqualTo(jobDefinition.version());
-    Map<?, ?> rerunPolicy =
+    Map<String, Object> rerunPolicy =
         JsonUtils.fromJson(jobCaptor.getValue().getRerunPolicySnapshot(), Map.class);
-    assertThat(rerunPolicy.get("resultIsolation")).isEqualTo("NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
-    assertThat(rerunPolicy.get("configVersionPolicy"))
-        .isEqualTo("SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
-    Map<?, ?> paramsSnapshot =
+    assertThat(rerunPolicy).containsEntry("resultIsolation", "NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
+    assertThat(rerunPolicy)
+        .containsEntry("configVersionPolicy", "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
+    Map<String, Object> paramsSnapshot =
         JsonUtils.fromJson(jobCaptor.getValue().getParamsSnapshot(), Map.class);
-    assertThat(paramsSnapshot.get("jobDefinitionVersion")).isEqualTo(jobDefinition.version());
+    assertThat(paramsSnapshot).containsEntry("jobDefinitionVersion", jobDefinition.version());
     ArgumentCaptor<BatchDayInstanceEntity> captor =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).insert(captor.capture());
@@ -231,7 +232,7 @@ class DefaultLaunchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         TriggerType.API,
         "req-002",
         "trace-002",
@@ -303,7 +304,7 @@ class DefaultLaunchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         TriggerType.EVENT,
         "req-003",
         "trace-003",
@@ -372,7 +373,7 @@ class DefaultLaunchServiceTest {
     BatchDayInstanceEntity saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.lateCount()).isEqualTo(1);
-    assertThat(saved.catchupCount()).isEqualTo(0);
+    assertThat(saved.catchupCount()).isZero();
   }
 
   @Test
@@ -380,7 +381,7 @@ class DefaultLaunchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         TriggerType.EVENT,
         "req-004",
         "trace-004",
@@ -451,7 +452,7 @@ class DefaultLaunchServiceTest {
     BatchDayInstanceEntity saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.catchupCount()).isEqualTo(1);
-    assertThat(saved.lateCount()).isEqualTo(0);
+    assertThat(saved.lateCount()).isZero();
   }
 
   @Test
@@ -459,7 +460,7 @@ class DefaultLaunchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         TriggerType.API,
         "req-dispatch-reject",
         "trace-dispatch-reject",
@@ -577,7 +578,7 @@ class DefaultLaunchServiceTest {
   }
 
   private Instant expectedSlaDeadline() {
-    return LocalDate.of(2026, 3, 27)
+    return LocalDate.of(2026, Month.MARCH, 27)
         .plusDays(1)
         .atTime(LocalTime.of(6, 0))
         .atZone(ZoneId.of("Asia/Shanghai"))

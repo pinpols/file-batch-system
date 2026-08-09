@@ -35,14 +35,23 @@ import java.util.stream.Stream;
  * <pre>{@code
  * public class CsvImportHandler
  *     extends SdkAbstractTypedImportHandler<ImportRequest, ImportResult, CsvRow> {
- *   @Override public String taskType() { return "tenant_csv_import"; }
- *   @Override protected Stream<CsvRow> readRows(ImportRequest req, SdkTaskContext ctx) {
+ *   @Override
+ *   public String taskType() {
+ *     return "tenant_csv_import";
+ *   }
+ *
+ *   @Override
+ *   protected Stream<CsvRow> readRows(ImportRequest req, SdkTaskContext ctx) {
  *     return Files.lines(Path.of(req.sourcePath())).map(CsvRow::parse);
  *   }
- *   @Override protected void loadBatch(ImportRequest req, SdkTaskContext ctx, List<CsvRow> b) {
+ *
+ *   @Override
+ *   protected void loadBatch(ImportRequest req, SdkTaskContext ctx, List<CsvRow> b) {
  *     jdbc.batchInsert(b);
  *   }
- *   @Override protected ImportResult summarize(ImportRequest req, SdkRowResult c) {
+ *
+ *   @Override
+ *   protected ImportResult summarize(ImportRequest req, SdkRowResult c) {
  *     return new ImportResult(c.success());
  *   }
  * }

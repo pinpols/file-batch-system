@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -122,7 +123,7 @@ class DefaultConsoleFileApplicationServiceTest {
         .isInstanceOf(BizException.class)
         .extracting(e -> ((BizException) e).getCode())
         .isEqualTo(ResultCode.FORBIDDEN);
-    verify(approvalClient, org.mockito.Mockito.never()).submitApproval(any());
+    verify(approvalClient, never()).submitApproval(any());
   }
 
   /** stub 校验通过后紧接的 /internal/files/{fileId}/presign REST 链(返回 null body 即可)。 */

@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -195,7 +194,7 @@ class AlertmanagerNotifyServiceTest {
 
     assertThat(outcome.delivered()).isTrue();
     // 反查命中租户 ta 的渠道,不是 system。
-    verify(channelMapper).selectByCode(eq("ta"), eq("batch-sla"));
+    verify(channelMapper).selectByCode("ta", "batch-sla");
   }
 
   @Test
@@ -208,7 +207,7 @@ class AlertmanagerNotifyServiceTest {
     // payload() 的 commonLabels 无 tenant → 回退到 properties.tenantId=system。
     service.deliver("batch-sla", payload("batch-sla"));
 
-    verify(channelMapper).selectByCode(eq("system"), eq("batch-sla"));
+    verify(channelMapper).selectByCode("system", "batch-sla");
   }
 
   @Test
@@ -222,6 +221,6 @@ class AlertmanagerNotifyServiceTest {
 
     assertThat(outcome.delivered()).isTrue();
     verify(webhookDispatcher).attemptDelivery(any(), any(), anyString());
-    verify(senderRegistry, never()).resolve(eq("WEBHOOK"));
+    verify(senderRegistry, never()).resolve("WEBHOOK");
   }
 }

@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
 /** ADR-023 calendar_dependency MyBatis 映射。 */
 public interface CalendarDependencyMapper {
 
-  int insert(CalendarDependencyEntity record);
+  int insert(CalendarDependencyEntity entity);
 
   /** 找指定 downstream 的所有 enabled 依赖（通常 1-3 条），open scheduler 决策用。 */
   List<CalendarDependencyEntity> selectEnabledByDownstream(

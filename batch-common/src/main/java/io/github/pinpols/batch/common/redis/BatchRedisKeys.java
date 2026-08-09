@@ -2,6 +2,8 @@ package io.github.pinpols.batch.common.redis;
 
 public final class BatchRedisKeys {
 
+  public static final String OUTBOX_CIRCUIT = "circuit:outbox_publish";
+
   private BatchRedisKeys() {}
 
   /**
@@ -13,7 +15,7 @@ public final class BatchRedisKeys {
   }
 
   public static String outboxCircuit() {
-    return "circuit:outbox_publish";
+    return OUTBOX_CIRCUIT;
   }
 
   public static String shedLock(String environment, String name) {

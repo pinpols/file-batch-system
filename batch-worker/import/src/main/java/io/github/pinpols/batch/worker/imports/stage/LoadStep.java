@@ -247,7 +247,7 @@ public class LoadStep implements ImportStageStep {
    *
    * <p>详见 {@code docs/runbook/platform-worker-checkpoint-howto.md} §前置校验。
    *
-   * <p>TODO(ADR-038 P2-1 已知局限,YAGNI 后置):本校验按 <b>plugin 粒度</b>(plugin 自报 {@code
+   * <p>已知局限(ADR-038 P2-1,YAGNI 后置):本校验按 <b>plugin 粒度</b>(plugin 自报 {@code
    * idempotencyCapability()})。但真实幂等取决于<b>模板级</b> {@code conflict_columns} —— 同一 {@code
    * IDEMPOTENT_BY_UNIQUE_CONSTRAINT} plugin,若某模板未配唯一约束列,崩溃窗口重做 chunk 仍会双写。当前靠 {@code
    * JdbcMappedImportSecurityProperties.strictIdempotency=true} 在 plugin 内兜底(无 conflict_columns

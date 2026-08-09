@@ -64,9 +64,9 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void cacheMissLoadsFromRepositoryAndPopulatesRedis() {
     String tenantId = "t-cache-" + System.nanoTime();
     String jobCode = "JOB-" + System.nanoTime();
-    JobDefinitionEntity record = jobDefinitionRecord(tenantId, jobCode);
+    JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
-        .thenReturn(record);
+        .thenReturn(jobRecord);
 
     JobDefinitionEntity result = configCacheService.findEnabledJobDefinition(tenantId, jobCode);
 
@@ -80,9 +80,9 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void cacheHitSkipsRepository() {
     String tenantId = "t-hit-" + System.nanoTime();
     String jobCode = "JOB-HIT-" + System.nanoTime();
-    JobDefinitionEntity record = jobDefinitionRecord(tenantId, jobCode);
+    JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
-        .thenReturn(record);
+        .thenReturn(jobRecord);
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // cache miss — populates
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // cache hit — skips repo
@@ -95,9 +95,9 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void evictClearsRedisKeyAndNextCallHitsRepository() {
     String tenantId = "t-evict-" + System.nanoTime();
     String jobCode = "JOB-EVICT-" + System.nanoTime();
-    JobDefinitionEntity record = jobDefinitionRecord(tenantId, jobCode);
+    JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
-        .thenReturn(record);
+        .thenReturn(jobRecord);
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // populates cache
     configCacheService.evictJobDefinition(tenantId, jobCode); // clears cache

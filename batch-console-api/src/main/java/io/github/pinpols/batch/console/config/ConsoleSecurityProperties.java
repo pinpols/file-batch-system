@@ -121,7 +121,7 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
   }
 
   // 经 EnvironmentAware 框架回调注入(非 @Autowired field);@Data 生成的 setEnvironment 即回调实现。
-  private transient Environment environment;
+  private Environment environment;
 
   /**
    * P0-1 (pre-launch audit 2026-05-18)：prod-like profile 下禁止 {@code enabled=false}。

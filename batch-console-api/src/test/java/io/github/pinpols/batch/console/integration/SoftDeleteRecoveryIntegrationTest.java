@@ -91,10 +91,10 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
         "SELECT id, channel_name, channel_type, is_deleted FROM batch.file_channel_config "
             + "WHERE tenant_id = ? AND channel_code = 'sdr-ch-1'",
         TENANT);
-    assertThat(row.get("id")).isEqualTo(originalId);
-    assertThat(row.get("channel_name")).isEqualTo("second");
-    assertThat(row.get("channel_type")).isEqualTo("API");
-    assertThat(row.get("is_deleted")).isEqualTo(false);
+    assertThat(row).containsEntry("id", originalId);
+    assertThat(row).containsEntry("channel_name", "second");
+    assertThat(row).containsEntry("channel_type", "API");
+    assertThat(row).containsEntry("is_deleted", false);
 
     Long totalRows = jdbc.queryForObject(
         "SELECT COUNT(*) FROM batch.file_channel_config WHERE tenant_id = ? AND channel_code ="
@@ -136,9 +136,9 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
         "SELECT id, channel_name, channel_type, is_deleted FROM batch.notification_channel "
             + "WHERE tenant_id = ? AND channel_code = 'sdr-nc-1'",
         TENANT);
-    assertThat(row.get("id")).isEqualTo(originalId);
-    assertThat(row.get("channel_type")).isEqualTo("DINGTALK");
-    assertThat(row.get("is_deleted")).isEqualTo(false);
+    assertThat(row).containsEntry("id", originalId);
+    assertThat(row).containsEntry("channel_type", "DINGTALK");
+    assertThat(row).containsEntry("is_deleted", false);
   }
 
   // ===== alert_routing_config update guard =====
@@ -210,10 +210,10 @@ class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
         "SELECT id, callback_url, event_types, is_deleted FROM batch.webhook_subscription "
             + "WHERE tenant_id = ? AND name = 'sdr-wh-1'",
         TENANT);
-    assertThat(row.get("id")).isEqualTo(id);
-    assertThat(row.get("callback_url")).isEqualTo("https://b.example");
-    assertThat(row.get("event_types")).isEqualTo("workflow.*");
-    assertThat(row.get("is_deleted")).isEqualTo(false);
+    assertThat(row).containsEntry("id", id);
+    assertThat(row).containsEntry("callback_url", "https://b.example");
+    assertThat(row).containsEntry("event_types", "workflow.*");
+    assertThat(row).containsEntry("is_deleted", false);
   }
 
   // ===== file_template_config (V144 已加 is_deleted, V146 配套 upsert 复活) =====

@@ -272,8 +272,7 @@ class DefaultProcessStageExecutorTest {
 
     List<ProcessStageResult> results = executor.execute(context);
 
-    assertThat(results).hasSize(5);
-    assertThat(results).allMatch(ProcessStageResult::success);
+    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
     assertThat(context.getResolvedPlugin()).isNull();
     assertThat(context.getAttributes()).containsEntry("processedCount", 0);
   }
@@ -406,9 +405,9 @@ class DefaultProcessStageExecutorTest {
     executor.execute(context);
 
     // COMPUTE 被跳过,但其上次成功产出的水位/计数已回灌 attributes(供 report 正常推水位)。
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT))
-        .isEqualTo("20260708120000");
-    assertThat(context.getAttributes().get("processedCount")).isEqualTo(42);
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "20260708120000");
+    assertThat(context.getAttributes()).containsEntry("processedCount", 42);
     verify(plugin, never()).compute(any());
   }
 

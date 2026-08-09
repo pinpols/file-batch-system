@@ -117,7 +117,6 @@ class WorkflowArchiveServiceTest {
     Instant cutoff = cutoffCaptor.getValue();
     Instant now = BatchDateTimeSupport.utcNow();
     // cutoff 应大约在 1 天前，允许 5s 误差
-    assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5));
-    assertThat(cutoff).isAfter(now.minusSeconds(86_400 + 5));
+    assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5)).isAfter(now.minusSeconds(86_400 + 5));
   }
 }

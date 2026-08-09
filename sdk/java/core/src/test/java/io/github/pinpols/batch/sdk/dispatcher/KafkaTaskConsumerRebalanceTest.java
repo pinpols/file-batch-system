@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
@@ -39,7 +40,7 @@ class KafkaTaskConsumerRebalanceTest {
   }
 
   private TaskDispatcher newDispatcher() {
-    return new TaskDispatcher(config, Map.of(), org.mockito.Mockito.mock(PlatformHttpClient.class));
+    return new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
   }
 
   @Test

@@ -49,7 +49,7 @@ class KafkaConsumerAuthFailureTest {
   }
 
   @Test
-  void authenticationExceptionTriggersFailFast() throws Exception {
+  void authenticationExceptionTriggersFailFast() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));

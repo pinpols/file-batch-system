@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -161,7 +160,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   @Test
   @DisplayName("JOB 类型 → 走 childJobLaunchSupport.dispatchJobNode 分支")
   void jobNodeRoutesToChildJobLaunchSupport() {
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
         .thenReturn(nodeWithType(WorkflowNodeType.JOB.code()));
     when(childJobLaunchSupport.dispatchJobNode(any(), any(), any(), any(), any(), any()))
         .thenReturn(1);
@@ -180,7 +179,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   @DisplayName(
       "GATEWAY 节点 → 走 dispatchGatewayNode (无工作负载),不调 childJobLaunchSupport / schedulePlanBuilder")
   void gatewayNodeShouldNotInvokeJobOrTaskDispatch() {
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
         .thenReturn(nodeWithType(WorkflowNodeType.GATEWAY.code()));
 
     // gateway 内部会递归 dispatchNode 下游;这里我们只需断言 JOB / TASK 都没被走
@@ -195,7 +194,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   @Test
   @DisplayName("START 节点 → 走 gateway 同分支(isGatewayNode 接受 START)")
   void startNodeShouldBeTreatedAsGateway() {
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
         .thenReturn(nodeWithType(WorkflowNodeType.START.code()));
 
     service.dispatchNode(

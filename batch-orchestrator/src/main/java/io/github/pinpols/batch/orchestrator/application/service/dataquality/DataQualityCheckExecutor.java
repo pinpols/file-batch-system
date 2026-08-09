@@ -217,9 +217,8 @@ public class DataQualityCheckExecutor {
     if (expected instanceof Number n) {
       return actual == n.longValue();
     }
-    if (min instanceof Number minN && actual < minN.longValue()) return false;
-    if (max instanceof Number maxN && actual > maxN.longValue()) return false;
-    return true;
+    return !(min instanceof Number minN && actual < minN.longValue())
+        && !(max instanceof Number maxN && actual > maxN.longValue());
   }
 
   private void writeCheck(

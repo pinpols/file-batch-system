@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.List;
 import java.util.Map;
 
@@ -16,12 +17,12 @@ public record ConsoleDryRunResultResponse(
     if (row == null) {
       return null;
     }
-    Object errors = JobResponseFieldReader.value(row, "errors");
+    Object errors = ConsoleResponseFieldReader.value(row, "errors");
     return new ConsoleDryRunResultResponse(
-        JobResponseFieldReader.stringValue(row, "tenantId"),
-        JobResponseFieldReader.stringValue(row, "jobCode"),
-        JobResponseFieldReader.stringValue(row, "bizDate"),
-        JobResponseFieldReader.booleanValue(row, "valid"),
+        ConsoleResponseFieldReader.stringValue(row, "tenantId"),
+        ConsoleResponseFieldReader.stringValue(row, "jobCode"),
+        ConsoleResponseFieldReader.stringValue(row, "bizDate"),
+        ConsoleResponseFieldReader.booleanValue(row, "valid"),
         errors == null ? null : (List<String>) errors);
   }
 }

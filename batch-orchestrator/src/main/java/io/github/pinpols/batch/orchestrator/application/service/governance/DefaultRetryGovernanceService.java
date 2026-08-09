@@ -285,11 +285,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     // 否则同类自调用会跳过 replayDeadLetter 的 REQUIRES_NEW，Outbox MANDATORY 会失败。
     List<DeadLetterTaskEntity> dueRecords =
         deadLetterTaskMapper.selectDueAutoRetries(governance.retry().getBatchSize());
-    for (DeadLetterTaskEntity record : dueRecords) {
-      String tenantId = record.getTenantId();
-      Long deadLetterId = record.getId();
-      int currentReplayCount = record.getReplayCount() == null ? 0 : record.getReplayCount();
-      int maxReplayCount = record.getMaxReplayCount() == null ? 0 : record.getMaxReplayCount();
+    for (DeadLetterTaskEntity deadLetter : dueRecords) {
+      String tenantId = deadLetter.getTenantId();
+      Long deadLetterId = deadLetter.getId();
+      int currentReplayCount =
+          deadLetter.getReplayCount() == null ? 0 : deadLetter.getReplayCount();
+      int maxReplayCount =
+          deadLetter.getMaxReplayCount() == null ? 0 : deadLetter.getMaxReplayCount();
       // 边界保护: scheduler 选出的应满足 replay_count < max_replay_count, 但配置 / 数据漂移可能让 max=0 漏进来
       if (currentReplayCount >= maxReplayCount) {
         deadLetterTaskMapper.markGiveUp(tenantId, deadLetterId);

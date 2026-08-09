@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class ReadinessServiceTest {
   @InjectMocks
   private ReadinessService readinessService;
 
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 6, 20);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JUNE, 20);
 
   @Test
   @DisplayName("上游该批次日 asset partition 有 EFFECTIVE 版本 → ready")

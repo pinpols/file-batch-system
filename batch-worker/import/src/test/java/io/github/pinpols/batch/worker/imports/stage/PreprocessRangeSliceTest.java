@@ -93,7 +93,7 @@ class PreprocessRangeSliceTest {
         all.append(new String(out.toByteArray(), StandardCharsets.UTF_8));
       }
     }
-    assertThat(all.toString()).isEqualTo(content);
+    assertThat(all).hasToString(content);
   }
 
   // ---- 资格判定 gate ----

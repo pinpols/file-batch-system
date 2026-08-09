@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +36,7 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
   private static final String CALENDAR = "CAL";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 5, 4);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.MAY, 4);
   private static final String JOB_CODE = "DAILY_PNL";
   private static final String BUSINESS_KEY = "job:" + JOB_CODE + ":" + BIZ_DATE;
 

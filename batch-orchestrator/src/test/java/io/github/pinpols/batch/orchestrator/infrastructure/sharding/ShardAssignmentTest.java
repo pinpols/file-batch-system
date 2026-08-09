@@ -11,7 +11,7 @@ class ShardAssignmentTest {
   void singleReturnsTotal1Index0() {
     ShardAssignment assignment = ShardAssignment.single();
     assertThat(assignment.shardTotal()).isEqualTo(1);
-    assertThat(assignment.shardIndex()).isEqualTo(0);
+    assertThat(assignment.shardIndex()).isZero();
   }
 
   @Test

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -200,12 +199,12 @@ class ConsoleWebhookServiceTest {
 
     verify(subscriptionRepository)
         .insert(
-            eq("t1"),
-            eq("hook-norm"),
-            eq("https://example.com/hook"),
-            eq("JOB-SUCCESS,JOB_FAILED"),
-            eq("secret"),
-            eq(true),
-            eq("admin"));
+            "t1",
+            "hook-norm",
+            "https://example.com/hook",
+            "JOB-SUCCESS,JOB_FAILED",
+            "secret",
+            true,
+            "admin");
   }
 }

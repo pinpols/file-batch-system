@@ -131,7 +131,7 @@ public class AlertmanagerSilenceBridge {
     try {
       executor.execute(task);
     } catch (RejectedExecutionException ex) {
-      record("rejected", action);
+      recordSilenceMetric("rejected", action);
       SwallowedExceptionLogger.info(
           AlertmanagerSilenceBridge.class, "catch:RejectedExecutionException", ex);
     }
@@ -190,18 +190,18 @@ public class AlertmanagerSilenceBridge {
       HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int sc = resp.statusCode();
       if (sc >= 200 && sc < 300) {
-        record("success", action);
+        recordSilenceMetric("success", action);
       } else {
-        record("http_error", action);
+        recordSilenceMetric("http_error", action);
         log.warn("am_silence bridge non-2xx: action={} status={}", action, sc);
       }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      record("interrupted", action);
+      recordSilenceMetric("interrupted", action);
       SwallowedExceptionLogger.info(
           AlertmanagerSilenceBridge.class, "catch:InterruptedException", ex);
     } catch (RuntimeException | java.io.IOException ex) {
-      record("failed", action);
+      recordSilenceMetric("failed", action);
       SwallowedExceptionLogger.warn(AlertmanagerSilenceBridge.class, "catch:am_silence", ex);
     }
   }
@@ -210,7 +210,7 @@ public class AlertmanagerSilenceBridge {
     return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
   }
 
-  private void record(String outcome, String action) {
+  private void recordSilenceMetric(String outcome, String action) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
       return;

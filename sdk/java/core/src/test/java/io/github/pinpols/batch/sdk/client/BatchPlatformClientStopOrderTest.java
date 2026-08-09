@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.client;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -78,7 +79,7 @@ class BatchPlatformClientStopOrderTest {
   void deactivateFailureSwallowedSoStopAlwaysFinishes() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    Mockito.doThrow(new IOException("network down")).when(http).deactivate(anyString(), any());
+    doThrow(new IOException("network down")).when(http).deactivate(anyString(), any());
 
     inject(client, "httpClient", http);
     inject(client, "started", true);

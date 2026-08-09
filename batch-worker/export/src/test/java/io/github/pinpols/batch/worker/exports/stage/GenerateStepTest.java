@@ -217,8 +217,7 @@ class GenerateStepTest {
     String content = readGeneratedFile(context);
     // "A" left-padded to 5 chars → "A    "
     // "10" right-aligned to 8 with '0' → "00000010"
-    assertThat(content).contains("A    ");
-    assertThat(content).contains("00000010");
+    assertThat(content).contains("A    ").contains("00000010");
   }
 
   @Test
@@ -240,8 +239,7 @@ class GenerateStepTest {
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
     // "AliceLongName" truncated to 5 chars → "Alice"
-    assertThat(content).contains("Alice");
-    assertThat(content).doesNotContain("AliceLongName");
+    assertThat(content).contains("Alice").doesNotContain("AliceLongName");
   }
 
   @Test
@@ -361,7 +359,7 @@ class GenerateStepTest {
     ExportStageResult result = generateStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("recordCount")).isEqualTo(3L);
+    assertThat(context.getAttributes()).containsEntry("recordCount", 3L);
     String content = readGeneratedFile(context);
     assertThat(content).contains("\"1\"").contains("\"2\"").contains("\"3\"");
   }

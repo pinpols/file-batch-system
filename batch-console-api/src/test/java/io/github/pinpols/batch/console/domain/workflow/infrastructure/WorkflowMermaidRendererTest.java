@@ -19,12 +19,13 @@ class WorkflowMermaidRendererTest {
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
-    assertThat(mermaid).startsWith("flowchart LR\n");
-    assertThat(mermaid).contains("START_0([起点 · START_0])");
-    assertThat(mermaid).contains("LOAD[加载 · LOAD]");
-    assertThat(mermaid).contains("END_0([终点 · END_0])");
-    assertThat(mermaid).contains("START_0 --> LOAD");
-    assertThat(mermaid).contains("LOAD -- success --> END_0");
+    assertThat(mermaid)
+        .startsWith("flowchart LR\n")
+        .contains("START_0([起点 · START_0])")
+        .contains("LOAD[加载 · LOAD]")
+        .contains("END_0([终点 · END_0])")
+        .contains("START_0 --> LOAD")
+        .contains("LOAD -- success --> END_0");
   }
 
   @Test
@@ -43,9 +44,10 @@ class WorkflowMermaidRendererTest {
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
-    assertThat(mermaid).contains("GW{分流 · GW}");
-    assertThat(mermaid).contains("GW -- \"x > 0\" --> A");
-    assertThat(mermaid).contains("GW -- \"x <= 0\" --> END_0");
+    assertThat(mermaid)
+        .contains("GW{分流 · GW}")
+        .contains("GW -- \"x > 0\" --> A")
+        .contains("GW -- \"x <= 0\" --> END_0");
   }
 
   @Test
@@ -63,8 +65,7 @@ class WorkflowMermaidRendererTest {
 
     String mermaid = WorkflowMermaidRenderer.render(detail);
 
-    assertThat(mermaid).contains("FILE_1[(文件导入 · FILE_1)]");
-    assertThat(mermaid).contains("WAIT_1[[等到货 · WAIT_1]]");
+    assertThat(mermaid).contains("FILE_1[(文件导入 · FILE_1)]").contains("WAIT_1[[等到货 · WAIT_1]]");
   }
 
   @Test
@@ -94,8 +95,9 @@ class WorkflowMermaidRendererTest {
 
   @Test
   void escapeLabelStripsQuotesAndNewlines() {
-    assertThat(WorkflowMermaidRenderer.escapeLabel("a \"quoted\"\nlabel")).doesNotContain("\"");
-    assertThat(WorkflowMermaidRenderer.escapeLabel("a \"quoted\"\nlabel")).doesNotContain("\n");
+    assertThat(WorkflowMermaidRenderer.escapeLabel("a \"quoted\"\nlabel"))
+        .doesNotContain("\"")
+        .doesNotContain("\n");
   }
 
   @Test

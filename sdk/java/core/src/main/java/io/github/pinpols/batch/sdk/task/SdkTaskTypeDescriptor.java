@@ -20,7 +20,8 @@ import lombok.Builder;
  * <p>典型用法:
  *
  * <pre>{@code
- * @Override public SdkTaskTypeDescriptor descriptor() {
+ * @Override
+ * public SdkTaskTypeDescriptor descriptor() {
  *   return SdkTaskTypeDescriptor.builder()
  *       .displayName("每日对账导入")
  *       .version("v1")

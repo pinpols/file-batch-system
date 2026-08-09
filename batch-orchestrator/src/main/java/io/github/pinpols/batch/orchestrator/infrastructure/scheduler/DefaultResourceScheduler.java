@@ -354,9 +354,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         + load.queueActiveJobs()
         + load.queueActivePartitions();
     return bandWeight * 10_000L
-        + (long) normalizedPriority * 1_000L
-        + (long) weights.tenantWeight() * 100L
-        + (long) weights.queueWeight() * 10L
+        + normalizedPriority * 1_000L
+        + weights.tenantWeight() * 100L
+        + weights.queueWeight() * 10L
         - loadPenalty;
   }
 

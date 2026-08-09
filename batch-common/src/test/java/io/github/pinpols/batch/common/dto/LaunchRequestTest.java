@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +16,7 @@ class LaunchRequestTest {
     LaunchRequest r = new LaunchRequest(
         "t1",
         "JOB_A",
-        LocalDate.of(2026, 5, 7),
+        LocalDate.of(2026, Month.MAY, 7),
         TriggerType.MANUAL,
         "req-1",
         "trace-1",
@@ -34,7 +35,7 @@ class LaunchRequestTest {
     LaunchRequest r = new LaunchRequest(
         "t1",
         "JOB_A",
-        LocalDate.of(2026, 5, 7),
+        LocalDate.of(2026, Month.MAY, 7),
         TriggerType.SCHEDULED,
         "req-1",
         "trace-1",
@@ -53,7 +54,7 @@ class LaunchRequestTest {
     LaunchRequest r = new LaunchRequest(
         "t1",
         "JOB_A",
-        LocalDate.of(2026, 5, 7),
+        LocalDate.of(2026, Month.MAY, 7),
         TriggerType.MANUAL,
         "req-1",
         "trace-1",
@@ -71,7 +72,7 @@ class LaunchRequestTest {
     LaunchRequest r = LaunchRequest.builder()
         .tenantId("t1")
         .jobCode("JOB_A")
-        .bizDate(LocalDate.of(2026, 5, 7))
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
         .triggerType(TriggerType.MANUAL)
         .requestId("req-1")
         .traceId("trace-1")

@@ -57,9 +57,9 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2583")
 public class WorkflowGraphValidator {
 
-  private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.");
+  private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.(\\w+)\\.");
   private static final Pattern DSL_OUTPUT_KEY_REF =
-      Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.output\\.([A-Za-z0-9_]+)");
+      Pattern.compile("\\$\\.nodes\\.(\\w+)\\.output\\.(\\w+)");
   private static final TypeReference<List<CrossDayDependencySpec>> SPEC_LIST_TYPE =
       new TypeReference<>() {};
   private static final int MAX_RANGE_DAYS = 90;

@@ -61,7 +61,7 @@ class ConsolePipelineDefinitionControllerBehaviorTest {
 
   @Test
   void listShouldPassFilters() throws Exception {
-    when(service.list(eq("ta"), eq("JOB_A"), eq("IMPORT"), eq(true), eq(1), eq(20)))
+    when(service.list("ta", "JOB_A", "IMPORT", true, 1, 20))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
         .perform(get("/api/console/pipeline-definitions")

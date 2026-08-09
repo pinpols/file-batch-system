@@ -116,8 +116,8 @@ class FileGovernanceArrivalGroupGuardTest {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
     verify(repository).updateFileMetadata(eq("default-tenant"), eq(5400L), captor.capture());
-    assertThat(captor.getValue().get("arrivalState")).isEqualTo("WAITING_ARRIVAL");
-    assertThat(captor.getValue().get("arrivalReason")).isEqualTo("ARRIVED_PENDING_VERIFY");
+    assertThat(captor.getValue()).containsEntry("arrivalState", "WAITING_ARRIVAL");
+    assertThat(captor.getValue()).containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
   }
 
   @Test
@@ -135,7 +135,7 @@ class FileGovernanceArrivalGroupGuardTest {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
     verify(repository).updateFileMetadata(eq("default-tenant"), eq(5401L), captor.capture());
-    assertThat(captor.getValue().get("arrivalState")).isEqualTo("TRIGGERED");
+    assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
   }
 
   @Test

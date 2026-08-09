@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -402,7 +403,7 @@ class SubscriptionRuleWebhookDispatcherTest {
         "config_json", "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}");
     when(subscriptionRuleMapper.selectEnabledByEventType("tenant-a", "JOB_FAILED"))
         .thenReturn(List.of(rule));
-    NotificationSender sender = org.mockito.Mockito.mock(NotificationSender.class);
+    NotificationSender sender = mock(NotificationSender.class);
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.failure(200, "wecom errcode=93000"));
 

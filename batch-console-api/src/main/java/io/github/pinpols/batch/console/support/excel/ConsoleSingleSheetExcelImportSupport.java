@@ -107,8 +107,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
       String originalFileName,
       String defaultFileName,
       List<String> columns,
-      Set<String> requiredHeaders)
-      throws IOException {
+      Set<String> requiredHeaders) {
     if (bytes.length > SAX_THRESHOLD_BYTES) {
       return parseWorkbookSax(
           bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);

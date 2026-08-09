@@ -124,11 +124,11 @@ class WorkflowParamResolverTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = (Map<String, Object>) resolver.resolve(params, ctx);
-    assertThat(result.get("fileId")).isEqualTo(999L);
-    assertThat(result.get("channelCode")).isEqualTo("ftp_outbound");
+    assertThat(result).containsEntry("fileId", 999L);
+    assertThat(result).containsEntry("channelCode", "ftp_outbound");
     @SuppressWarnings("unchecked")
     Map<String, Object> resultNested = (Map<String, Object>) result.get("_meta");
-    assertThat(resultNested.get("date")).isEqualTo("2026-04-29");
+    assertThat(resultNested).containsEntry("date", "2026-04-29");
   }
 
   @Test

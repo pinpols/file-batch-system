@@ -51,9 +51,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class BatchDaySettleScheduler {
 
-  private static final List<String> TRACKED_STATUSES = List.of("CUTOFF", "IN_FLIGHT", "SETTLING");
   private static final String STATUS_SETTLING = "SETTLING";
   private static final String STATUS_IN_FLIGHT = "IN_FLIGHT";
+  private static final List<String> TRACKED_STATUSES =
+      List.of("CUTOFF", STATUS_IN_FLIGHT, STATUS_SETTLING);
 
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final JobInstanceMapper jobInstanceMapper;
@@ -242,13 +243,13 @@ public class BatchDaySettleScheduler {
   }
 
   /** 替换原 {@code repository.save}：CAS 失败抛 OLF，被外层循环 catch 跳过本条候选下 tick 重扫。 */
-  private void casUpdate(BatchDayInstanceEntity record) {
-    int rows = batchDayInstanceMapper.updateWithCas(record);
+  private void casUpdate(BatchDayInstanceEntity batchDay) {
+    int rows = batchDayInstanceMapper.updateWithCas(batchDay);
     if (rows == 0) {
       throw new OptimisticLockingFailureException("batch_day_instance version mismatch: id="
-          + record.id()
+          + batchDay.id()
           + ", version="
-          + record.version());
+          + batchDay.version());
     }
   }
 
@@ -322,19 +323,17 @@ public class BatchDaySettleScheduler {
     audit.setTraceId(null);
     audit.setMessage("BATCH_DAY_INSTANCE_STATUS_CHANGED");
     audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-    audit.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {
-      {
-        put("calendarCode", from.calendarCode());
-        put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
-        put("fromDayStatus", from.dayStatus());
-        put("toDayStatus", to.dayStatus());
-        put("reasonCode", reasonCode);
-        put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
-        put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-        put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
-        put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
-      }
-    }));
+    Map<String, Object> extra = new LinkedHashMap<>();
+    extra.put("calendarCode", from.calendarCode());
+    extra.put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
+    extra.put("fromDayStatus", from.dayStatus());
+    extra.put("toDayStatus", to.dayStatus());
+    extra.put("reasonCode", reasonCode);
+    extra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
+    extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+    extra.put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
+    extra.put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
+    audit.setExtraJson(JsonUtils.toJson(extra));
     jobExecutionLogMapper.insert(audit);
   }
 

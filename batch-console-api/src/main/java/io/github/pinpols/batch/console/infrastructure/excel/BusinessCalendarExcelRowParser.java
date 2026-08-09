@@ -42,7 +42,7 @@ public final class BusinessCalendarExcelRowParser {
   public static CalendarRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    CalendarRow row = CalendarRow.builder()
+    return CalendarRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
         .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
@@ -57,7 +57,6 @@ public final class BusinessCalendarExcelRowParser {
         .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
         .description(normalize(values.get(COL_DESCRIPTION)))
         .build();
-    return row;
   }
 
   public static BusinessCalendarUpsertParam toUpsertParam(CalendarRow row, String operatorId) {

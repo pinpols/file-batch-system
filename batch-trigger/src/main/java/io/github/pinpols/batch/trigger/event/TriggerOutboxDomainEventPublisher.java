@@ -50,7 +50,7 @@ public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
   @Override
   @Transactional(propagation = Propagation.MANDATORY)
   public Long publish(DomainEvent event) {
-    return publishRaw(
+    return insertOutboxEvent(
         event.tenantId(), event.eventKey(), event.traceId(), JsonUtils.toJson(event.payload()));
   }
 
@@ -65,6 +65,11 @@ public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public Long publishRaw(String tenantId, String requestId, String traceId, String payloadJson) {
+    return insertOutboxEvent(tenantId, requestId, traceId, payloadJson);
+  }
+
+  private Long insertOutboxEvent(
+      String tenantId, String requestId, String traceId, String payloadJson) {
     TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
     entity.setTenantId(tenantId);
     entity.setRequestId(requestId);

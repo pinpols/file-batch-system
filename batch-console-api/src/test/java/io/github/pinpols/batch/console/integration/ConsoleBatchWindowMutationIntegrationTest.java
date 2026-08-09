@@ -60,9 +60,9 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
         "SELECT tenant_id, window_code, timezone, end_strategy FROM batch.batch_window"
             + " WHERE window_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-win-ta");
-    assertThat(row.get("window_code")).isEqualTo(code);
-    assertThat(row.get("end_strategy")).isEqualTo("FINISH_RUNNING");
+    assertThat(row).containsEntry("tenant_id", "int-win-ta");
+    assertThat(row).containsEntry("window_code", code);
+    assertThat(row).containsEntry("end_strategy", "FINISH_RUNNING");
 
     jdbcTemplate.update("DELETE FROM batch.batch_window WHERE window_code = ?", code);
   }

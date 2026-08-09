@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -64,8 +65,8 @@ public class BizDateArithmetic {
         YearMonth quarterEnd = YearMonth.of(bizDate.getYear(), startMonth + 2);
         yield quarterEnd.atEndOfMonth();
       }
-      case "YEAR_START" -> LocalDate.of(bizDate.getYear(), 1, 1);
-      case "YEAR_END" -> LocalDate.of(bizDate.getYear(), 12, 31);
+      case "YEAR_START" -> LocalDate.of(bizDate.getYear(), Month.JANUARY, 1);
+      case "YEAR_END" -> LocalDate.of(bizDate.getYear(), Month.DECEMBER, 31);
       case "PREV_BIZ_DAY" -> previousBusinessDay(bizDate);
       default -> null;
     };

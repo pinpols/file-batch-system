@@ -159,7 +159,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     DefaultProcessStageExecutor executorNoSkip = newExecutor(disabledStageSkip());
     ProcessJobContext attempt1 = newContext(stepsThrough(ProcessStage.VALIDATE));
     List<ProcessStageResult> r1 = executorNoSkip.execute(attempt1);
-    assertThat(r1).allMatch(ProcessStageResult::success);
+    assertThat(r1).isNotEmpty().allMatch(ProcessStageResult::success);
     // staging 已落 2 行(A/B 聚合),target 仍空(COMMIT 未跑)
     assertThat(stagingCount()).isEqualTo(2);
     assertThat(targetCount()).isZero();
@@ -175,7 +175,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     ProcessJobContext attempt2 = newContext(stepsThrough(ProcessStage.FEEDBACK));
     List<ProcessStageResult> r2 = executorSkip.execute(attempt2);
 
-    assertThat(r2).allMatch(ProcessStageResult::success);
+    assertThat(r2).isNotEmpty().allMatch(ProcessStageResult::success);
     // 跳过的 COMPUTE/VALIDATE 不进 results:只剩 PREPARE + COMMIT + FEEDBACK
     assertThat(r2)
         .extracting(ProcessStageResult::stage)
@@ -206,7 +206,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     ProcessJobContext context = newContext(stepsThrough(ProcessStage.FEEDBACK));
     List<ProcessStageResult> results = executorSkip.execute(context);
 
-    assertThat(results).allMatch(ProcessStageResult::success);
+    assertThat(results).isNotEmpty().allMatch(ProcessStageResult::success);
     // COMPUTE 真跑了(未误跳):陈旧 STALE 被 pre-DELETE 清掉,空源无新行 → target 零
     assertThat(targetCount()).isZero();
     assertThat(jdbcTemplate.queryForObject(

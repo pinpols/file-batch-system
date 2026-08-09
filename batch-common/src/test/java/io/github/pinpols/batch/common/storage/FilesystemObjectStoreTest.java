@@ -163,7 +163,7 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void listShouldPaginateByMaxKeysWithMarker(@TempDir Path root) throws Exception {
+  void listShouldPaginateByMaxKeysWithMarker(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     for (int i = 0; i < 5; i++) {
       byte[] b = new byte[] {(byte) i};
@@ -262,7 +262,7 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void deleteShouldRemoveObject(@TempDir Path root) throws IOException {
+  void deleteShouldRemoveObject(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     store.put(BUCKET, "x", new ByteArrayInputStream(new byte[] {1}), 1, "x");
     store.delete(BUCKET, "x");

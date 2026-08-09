@@ -73,8 +73,9 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     List<RetryScheduleEntity> partitionRetries = retryScheduleMapper.selectByQuery(
         RetryScheduleQuery.ofRelatedType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
-    assertThat(partitionRetries).hasSize(2);
-    assertThat(partitionRetries).allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));
+    assertThat(partitionRetries)
+        .hasSize(2)
+        .allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

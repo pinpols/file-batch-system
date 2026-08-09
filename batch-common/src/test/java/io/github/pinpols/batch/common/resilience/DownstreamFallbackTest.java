@@ -2,6 +2,8 @@ package io.github.pinpols.batch.common.resilience;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -233,16 +235,16 @@ class DownstreamFallbackTest {
 
   @SuppressWarnings("unchecked")
   private static <T> ObjectProvider<T> providerOf(T value) {
-    ObjectProvider<T> mock = org.mockito.Mockito.mock(ObjectProvider.class);
-    org.mockito.Mockito.when(mock.getIfAvailable()).thenReturn(value);
+    ObjectProvider<T> mock = mock(ObjectProvider.class);
+    when(mock.getIfAvailable()).thenReturn(value);
     return mock;
   }
 
   /** 模拟 R4J autoconfig 不在场:getIfAvailable(Supplier) 回退到内置默认 registry。 */
   @SuppressWarnings("unchecked")
   private static ObjectProvider<CircuitBreakerRegistry> emptyProvider() {
-    ObjectProvider<CircuitBreakerRegistry> mock = org.mockito.Mockito.mock(ObjectProvider.class);
-    org.mockito.Mockito.when(mock.getIfAvailable(org.mockito.ArgumentMatchers.any()))
+    ObjectProvider<CircuitBreakerRegistry> mock = mock(ObjectProvider.class);
+    when(mock.getIfAvailable(org.mockito.ArgumentMatchers.any()))
         .thenAnswer(inv ->
             ((java.util.function.Supplier<CircuitBreakerRegistry>) inv.getArgument(0)).get());
     return mock;

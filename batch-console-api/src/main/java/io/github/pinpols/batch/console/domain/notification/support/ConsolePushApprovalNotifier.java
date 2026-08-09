@@ -109,10 +109,11 @@ public class ConsolePushApprovalNotifier {
       if (stopping.get()) {
         return;
       }
-      ConsolePushApprovalNotificationEntity record = new ConsolePushApprovalNotificationEntity();
-      record.setTenantId(p.getTenantId());
-      record.setApprovalNo(p.getApprovalNo());
-      int inserted = notificationMapper.insertIgnore(record);
+      ConsolePushApprovalNotificationEntity notification =
+          new ConsolePushApprovalNotificationEntity();
+      notification.setTenantId(p.getTenantId());
+      notification.setApprovalNo(p.getApprovalNo());
+      int inserted = notificationMapper.insertIgnore(notification);
       if (inserted == 0) {
         continue;
       }

@@ -168,9 +168,8 @@ public class SensorStateMachine {
             probeCount);
         finishSuccess(wfRun, nodeRun, now, result.output());
       }
-      case NOT_YET -> {
+      case NOT_YET ->
         nodeRunMapper.updateSensorProbeState(nodeRun.getId(), next, now, probeCount, 0);
-      }
       case ERROR -> {
         int newErrors = errorCount + 1;
         if (newErrors >= MAX_CONSECUTIVE_ERRORS) {

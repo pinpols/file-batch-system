@@ -338,7 +338,7 @@ public class TaskDispatcher {
     // CLAIM — body 对齐 TaskController.TaskClaimRequest(tenantId/workerId/partitionInvocationId)
     String idemClaim = BatchPlatformClient.newIdempotencyKey();
     Map<String, Object> claimBody = new HashMap<>();
-    claimBody.put("tenantId", msg.tenantId());
+    claimBody.put(MDC_TENANT_ID, msg.tenantId());
     claimBody.put(
         "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
     String partitionInvocationId = extractPartitionInvocation(msg);
@@ -598,8 +598,7 @@ public class TaskDispatcher {
    * <p>契约见 {@code docs/api/sdk-contract-fixtures/09-report-5xx-retry-backoff.json}:5xx 必须指数退避
    * (200/400/800ms),不能定长、不能无限重试、不能阻塞心跳调度。退避 sleep 被打断时抛出 {@link IOException} 停止重试。
    */
-  void reportWithRetry(Long taskId, String idemKey, Map<String, Object> body)
-      throws IOException, PlatformHttpException {
+  void reportWithRetry(Long taskId, String idemKey, Map<String, Object> body) throws IOException {
     int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
     long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
     int attempt = 0;
@@ -724,7 +723,7 @@ public class TaskDispatcher {
     String idem = BatchPlatformClient.newIdempotencyKey();
     try {
       Map<String, Object> body = new HashMap<>();
-      body.put("taskId", msg.taskId());
+      body.put(MDC_TASK_ID, msg.taskId());
       body.put("tenantId", msg.tenantId());
       body.put("workerId", config.getWorkerCode());
       putPartitionInvocation(body, msg);

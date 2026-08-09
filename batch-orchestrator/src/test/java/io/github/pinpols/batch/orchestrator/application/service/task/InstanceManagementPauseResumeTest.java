@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,8 +71,7 @@ class InstanceManagementPauseResumeTest {
     when(jobInstanceMapper.selectById("t1", 1L)).thenReturn(instance("WAITING"));
 
     assertThatThrownBy(() -> service.pause("t1", 1L)).isInstanceOf(BizException.class);
-    verify(jobInstanceMapper, never())
-        .updateLifecycleStatus(eq("t1"), eq(1L), eq("PAUSED"), eq(3L));
+    verify(jobInstanceMapper, never()).updateLifecycleStatus("t1", 1L, "PAUSED", 3L);
   }
 
   @Test
@@ -117,7 +115,7 @@ class InstanceManagementPauseResumeTest {
         .containsEntry("requested", 2)
         .containsEntry("retried", 2)
         .containsEntry("conflicts", 0);
-    assertThat(result.get("partitionIds")).isEqualTo(List.of(10L, 11L));
+    assertThat(result).containsEntry("partitionIds", List.of(10L, 11L));
     verify(retryGovernanceService).retryPartition("t1", 10L, "t1:manual-partition-retry:10:1");
     verify(retryGovernanceService).retryPartition("t1", 11L, "t1:manual-partition-retry:11:3");
   }

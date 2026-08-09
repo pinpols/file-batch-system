@@ -55,7 +55,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(2L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
     assertNdjsonRecordCount(context, 2);
   }
 
@@ -87,7 +87,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 5L);
     assertNdjsonRecordCount(context, 5);
   }
 
@@ -118,7 +118,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo((long) count);
+    assertThat(context.getAttributes()).containsEntry("totalCount", (long) count);
   }
 
   // ── JSON object without "records" ──────────────────────────────────────────
@@ -132,7 +132,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(1L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 1L);
     assertNdjsonRecordCount(context, 1);
   }
 
@@ -149,7 +149,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(2L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

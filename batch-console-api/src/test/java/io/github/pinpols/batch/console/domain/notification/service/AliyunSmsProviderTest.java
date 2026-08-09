@@ -113,8 +113,8 @@ class AliyunSmsProviderTest {
     // 结构 / 确定性断言:Action / 模板参数进 query,Authorization 头按 ACS3 构造。
     assertThat(sentUrl.get()).contains("TemplateCode=SMS_123");
     assertThat(sentUrl.get()).contains("TemplateParam=");
-    assertThat(sentHeaders.get().get("x-acs-action")).isEqualTo("SendSms");
-    assertThat(sentHeaders.get().get("x-acs-version")).isEqualTo("2017-05-25");
+    assertThat(sentHeaders.get()).containsEntry("x-acs-action", "SendSms");
+    assertThat(sentHeaders.get()).containsEntry("x-acs-version", "2017-05-25");
     assertThat(sentHeaders.get().get("Authorization"))
         .startsWith("ACS3-HMAC-SHA256 Credential=ak-test")
         .contains("SignedHeaders=")
@@ -122,7 +122,7 @@ class AliyunSmsProviderTest {
     // 签名确定:固定 date/nonce/secret → 相同 signature(防漂移)。
     String auth1 = sentHeaders.get().get("Authorization");
     provider.send(PHONE_NUMBERS, message(fullConfig()));
-    assertThat(sentHeaders.get().get("Authorization")).isEqualTo(auth1);
+    assertThat(sentHeaders.get()).containsEntry("Authorization", auth1);
   }
 
   @Test

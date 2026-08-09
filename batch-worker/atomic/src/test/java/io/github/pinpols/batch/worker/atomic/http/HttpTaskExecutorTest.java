@@ -254,7 +254,7 @@ class HttpTaskExecutorTest {
 
       assertThat(r.success()).isTrue();
       assertThat(r.output()).containsEntry("statusCode", 200);
-      assertThat(r.output().get("responseBody")).isEqualTo("world");
+      assertThat(r.output()).containsEntry("responseBody", "world");
     }
 
     @Test
@@ -344,7 +344,7 @@ class HttpTaskExecutorTest {
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/big"))));
 
       assertThat(r.success()).isTrue();
-      assertThat(((String) r.output().get("responseBody")).length()).isEqualTo(10);
+      assertThat(((String) r.output().get("responseBody"))).hasSize(10);
       assertThat(r.output()).containsEntry("responseTruncated", true);
     }
 
@@ -360,7 +360,7 @@ class HttpTaskExecutorTest {
           executor.execute(ctxWithParams(Map.of("url", url("/empty"), "expectStatus", 204)));
 
       assertThat(r.success()).isTrue();
-      assertThat(r.output().get("responseBody")).isEqualTo("");
+      assertThat(r.output()).containsEntry("responseBody", "");
       assertThat(r.output()).containsEntry("responseTruncated", false);
     }
 
@@ -378,7 +378,7 @@ class HttpTaskExecutorTest {
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/exact"))));
 
       assertThat(r.success()).isTrue();
-      assertThat(r.output().get("responseBody")).isEqualTo("0123456789"); // 恰前 10 字节
+      assertThat(r.output()).containsEntry("responseBody", "0123456789"); // 恰前 10 字节
       assertThat(r.output()).containsEntry("responseTruncated", true);
     }
 
@@ -415,7 +415,7 @@ class HttpTaskExecutorTest {
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/huge"))));
 
       assertThat(r.success()).isTrue();
-      assertThat(((String) r.output().get("responseBody")).length()).isEqualTo(16);
+      assertThat(((String) r.output().get("responseBody"))).hasSize(16);
       assertThat(r.output()).containsEntry("responseTruncated", true);
       // 核心断言:server 无法把 64 MiB 全部推给客户端 —— 客户端在读到 max+1 字节后即停止消费。
       assertThat(written.get())

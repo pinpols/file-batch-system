@@ -46,7 +46,9 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
     String key = PROBE_PREFIX + UUID.randomUUID();
     byte[] payload = ("batch-startup-probe-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
     try {
-      objectStore.put(bucket, key, new ByteArrayInputStream(payload), payload.length, "text/plain");
+      try (InputStream probe = new ByteArrayInputStream(payload)) {
+        objectStore.put(bucket, key, probe, payload.length, "text/plain");
+      }
 
       if (!objectStore.exists(bucket, key)) {
         throw fail("put 后 exists 返回 false", key, null);

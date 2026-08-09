@@ -50,7 +50,7 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
         .isNotNull();
     assertThat(circuitBreaker).isNotNull();
     assertThat(circuitBreaker.allow("t1|API|ch-1")).isTrue();
-    assertThat(circuitBreaker.currentOpenCircuits()).isEqualTo(0);
+    assertThat(circuitBreaker.currentOpenCircuits()).isZero();
   }
 
   /**

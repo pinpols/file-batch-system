@@ -36,7 +36,7 @@ public class BatchSecurityProperties implements EnvironmentAware {
 
   // 注入 Environment 用于启动时 profile 检查;经 EnvironmentAware 框架回调注入(非 @Autowired field),
   // 容器内由 Spring 调 @Data 生成的 setEnvironment 注入;单测 new 该类时不调用 → environment 为 null,守护逻辑已 null-safe。
-  private transient Environment environment;
+  private Environment environment;
 
   // #5-1: 生产 profile 下强制禁止 bypassMode，防止误配导致认证被绕过
   // #9-1: 生产 profile 下校验密码占位符已被替换

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
 
@@ -29,17 +30,17 @@ public record ConsoleCalendarResponse(
       return null;
     }
     return new ConsoleCalendarResponse(
-        JobResponseFieldReader.longValue(row, "id"),
-        JobResponseFieldReader.stringValue(row, "tenantId", "tenant_id"),
-        JobResponseFieldReader.stringValue(row, "calendarCode", "calendar_code"),
-        JobResponseFieldReader.stringValue(row, "calendarName", "calendar_name"),
-        JobResponseFieldReader.stringValue(row, "timezone"),
-        JobResponseFieldReader.stringValue(row, "holidayRollRule", "holiday_roll_rule"),
-        JobResponseFieldReader.stringValue(row, "catchUpPolicy", "catch_up_policy"),
-        JobResponseFieldReader.integerValue(row, "catchUpMaxDays", "catch_up_max_days"),
-        JobResponseFieldReader.booleanValue(row, "enabled"),
-        JobResponseFieldReader.stringValue(row, "description"),
-        JobResponseFieldReader.instantValue(row, "createdAt", "created_at"),
-        JobResponseFieldReader.instantValue(row, "updatedAt", "updated_at"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "tenantId", "tenant_id"),
+        ConsoleResponseFieldReader.stringValue(row, "calendarCode", "calendar_code"),
+        ConsoleResponseFieldReader.stringValue(row, "calendarName", "calendar_name"),
+        ConsoleResponseFieldReader.stringValue(row, "timezone"),
+        ConsoleResponseFieldReader.stringValue(row, "holidayRollRule", "holiday_roll_rule"),
+        ConsoleResponseFieldReader.stringValue(row, "catchUpPolicy", "catch_up_policy"),
+        ConsoleResponseFieldReader.integerValue(row, "catchUpMaxDays", "catch_up_max_days"),
+        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
+        ConsoleResponseFieldReader.stringValue(row, "description"),
+        ConsoleResponseFieldReader.instantValue(row, "createdAt", "created_at"),
+        ConsoleResponseFieldReader.instantValue(row, "updatedAt", "updated_at"));
   }
 }

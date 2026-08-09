@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,7 +39,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "ta";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 5, 4);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.MAY, 4);
   private static final String PARTITION_KEY = "2026-05-04";
   // result_version.job_instance_id 是 NOT NULL 但 V108..V189 均无 FK；用固定桩值即可。
   private static final long STUB_JOB_INSTANCE_ID = 1L;

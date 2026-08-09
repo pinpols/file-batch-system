@@ -12,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ class AssetPartitionServiceTest {
 
   @Test
   void findEffectiveJobPartitionPrefersMaterializedPartition() {
-    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     AssetPartitionSnapshot snapshot = new AssetPartitionSnapshot(
         "t1",
         "JOB_A",
@@ -64,7 +65,7 @@ class AssetPartitionServiceTest {
 
   @Test
   void findEffectiveJobPartitionIgnoresStaleMaterializedPartitionWhenLatestEffectiveIsNewer() {
-    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     AssetPartitionSnapshot stale = new AssetPartitionSnapshot(
         "t1",
         "JOB_A",
@@ -102,7 +103,7 @@ class AssetPartitionServiceTest {
 
   @Test
   void findEffectiveJobPartitionFallsBackToResultVersionProjection() {
-    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     ResultVersionEntity version = ResultVersionEntity.builder()
         .tenantId("t1")
         .businessKey("job:JOB_A:2026-06-30")
@@ -130,7 +131,7 @@ class AssetPartitionServiceTest {
 
   @Test
   void findEffectiveJobPartitionReturnsEmptyForInvalidInput() {
-    assertThat(service.findEffectiveJobPartition("t1", " ", LocalDate.of(2026, 6, 30)))
+    assertThat(service.findEffectiveJobPartition("t1", " ", LocalDate.of(2026, Month.JUNE, 30)))
         .isEmpty();
     assertThat(service.findEffectiveJobPartition("t1", "JOB_A", null)).isEmpty();
     verify(assetPartitionMapper, never()).selectEffectiveJobPartition(null, null, null);
@@ -139,7 +140,7 @@ class AssetPartitionServiceTest {
 
   @Test
   void isJobPartitionReadyRequiresEffectiveVersion() {
-    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(ResultVersionEntity.builder()
             .tenantId("t1")
@@ -153,7 +154,7 @@ class AssetPartitionServiceTest {
 
   @Test
   void findEffectiveJobPartitionBlocksOldEffectiveWhenLatestAttemptPending() {
-    LocalDate bizDate = LocalDate.of(2026, 6, 30);
+    LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(ResultVersionEntity.builder()
             .tenantId("t1")
@@ -175,7 +176,7 @@ class AssetPartitionServiceTest {
     instance.setTenantId("t1");
     instance.setId(100L);
     instance.setJobCode("JOB_A");
-    instance.setBizDate(LocalDate.of(2026, 6, 30));
+    instance.setBizDate(LocalDate.of(2026, Month.JUNE, 30));
     Instant effectiveAt = Instant.parse("2026-06-30T01:02:03Z");
     ResultVersionEntity version = ResultVersionEntity.builder()
         .id(900L)
@@ -199,7 +200,7 @@ class AssetPartitionServiceTest {
             10L,
             "JOB_A",
             "2026-06-30",
-            LocalDate.of(2026, 6, 30),
+            LocalDate.of(2026, Month.JUNE, 30),
             900L,
             "job:JOB_A:2026-06-30",
             100L,
@@ -214,7 +215,7 @@ class AssetPartitionServiceTest {
     instance.setTenantId("t1");
     instance.setId(100L);
     instance.setJobCode("JOB_A");
-    instance.setBizDate(LocalDate.of(2026, 6, 30));
+    instance.setBizDate(LocalDate.of(2026, Month.JUNE, 30));
     ResultVersionEntity version = ResultVersionEntity.builder()
         .tenantId("t1")
         .jobInstanceId(100L)

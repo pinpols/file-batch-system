@@ -36,10 +36,10 @@ public interface SdkIdempotencyStore {
    * 记录一次成功执行结果。
    *
    * @param key 解析后的幂等键
-   * @param record 结果快照(message + output)
+   * @param entity 结果快照(message + output)
    * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
    */
-  void record(String key, SdkIdempotencyEntity record, long ttlMillis);
+  void record(String key, SdkIdempotencyEntity entity, long ttlMillis);
 
   /**
    * 释放未回填成功结果的执行中占位。业务失败或抛异常时调用,让平台重派后可重新抢占。已回填成功结果的 key 应保持不动。
@@ -61,7 +61,7 @@ public interface SdkIdempotencyStore {
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
       // 无操作
     }
 

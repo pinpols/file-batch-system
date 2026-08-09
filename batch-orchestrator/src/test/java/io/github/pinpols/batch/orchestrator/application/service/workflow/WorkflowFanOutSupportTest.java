@@ -86,10 +86,10 @@ class WorkflowFanOutSupportTest {
     String base = "{\"tenantId\":\"t1\",\"channelCode\":\"C1\"}";
     String out = WorkflowFanOutSupport.injectItem(base, "shard", Map.of("id", 7), 2, 4);
     Map<String, Object> parsed = (Map<String, Object>) JsonUtils.fromJson(out, Object.class);
-    assertThat(parsed.get("tenantId")).isEqualTo("t1");
-    assertThat(parsed.get("channelCode")).isEqualTo("C1");
+    assertThat(parsed).containsEntry("tenantId", "t1");
+    assertThat(parsed).containsEntry("channelCode", "C1");
     assertThat(parsed).containsKey("shard");
-    assertThat(parsed.get("fanOutIndex")).isEqualTo(2);
-    assertThat(parsed.get("fanOutTotal")).isEqualTo(4);
+    assertThat(parsed).containsEntry("fanOutIndex", 2);
+    assertThat(parsed).containsEntry("fanOutTotal", 4);
   }
 }

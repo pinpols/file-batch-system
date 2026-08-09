@@ -92,18 +92,18 @@ public class TriggerLaunchConsumer {
       topics = BatchTopics.TRIGGER_LAUNCH_V1,
       groupId = "${batch.trigger.consumer.group-id:orchestrator-trigger-launch}",
       containerFactory = OrchestratorKafkaConsumerConfiguration.TRIGGER_LISTENER_FACTORY)
-  public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
+  public void consume(ConsumerRecord<String, String> consumerRecord, Acknowledgment ack) {
     LaunchEnvelope envelope;
     try {
-      envelope = JsonUtils.fromJson(record.value(), LaunchEnvelope.class);
+      envelope = JsonUtils.fromJson(consumerRecord.value(), LaunchEnvelope.class);
     } catch (RuntimeException ex) {
       // payload 反序列化失败 = 数据问题/协议演进未兼容;记 metric + ack 跳过,避免无限重试堆积
       log.error(
           "TriggerLaunchConsumer failed to deserialize the message; skipping: topic={} partition={} offset={} key={}",
-          record.topic(),
-          record.partition(),
-          record.offset(),
-          record.key(),
+          consumerRecord.topic(),
+          consumerRecord.partition(),
+          consumerRecord.offset(),
+          consumerRecord.key(),
           ex);
       counter(METRIC_FAILED, "reason", "deserialize").increment();
       ack.acknowledge();
@@ -112,7 +112,7 @@ public class TriggerLaunchConsumer {
     if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
       log.warn(
           "TriggerLaunchConsumer envelope/launchRequest is null; skipping: offset={}",
-          record.offset());
+          consumerRecord.offset());
       counter(METRIC_FAILED, "reason", "empty_envelope").increment();
       ack.acknowledge();
       return;

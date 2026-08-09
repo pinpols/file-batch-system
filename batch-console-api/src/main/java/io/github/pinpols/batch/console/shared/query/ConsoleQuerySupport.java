@@ -19,6 +19,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.ToLongFunction;
+import org.jspecify.annotations.Nullable;
 
 /** 控制台查询子服务的共享工具方法。 */
 public final class ConsoleQuerySupport {
@@ -35,11 +37,11 @@ public final class ConsoleQuerySupport {
   }
 
   public static <S, T> PageResponse<T> cursorPage(
-      PageRequest pageRequest, List<S> rows, Function<S, T> mapper, Function<S, Long> idExtractor) {
+      PageRequest pageRequest, List<S> rows, Function<S, T> mapper, ToLongFunction<S> idExtractor) {
     List<T> items = rows.stream().map(mapper).toList();
     String nextCursor = rows.size() < pageRequest.pageSize() || rows.isEmpty()
         ? null
-        : CursorCodec.encode(Map.of("id", idExtractor.apply(rows.get(rows.size() - 1))));
+        : CursorCodec.encode(Map.of("id", idExtractor.applyAsLong(rows.get(rows.size() - 1))));
     return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
   }
 
@@ -215,7 +217,7 @@ public final class ConsoleQuerySupport {
     return Integer.parseInt(String.valueOf(value));
   }
 
-  public static Boolean booleanValue(Map<String, Object> row, String key) {
+  public static @Nullable Boolean booleanValue(Map<String, Object> row, String key) {
     Object value = row == null ? null : row.get(key);
     if (value == null) {
       return null;

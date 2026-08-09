@@ -32,6 +32,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,6 +73,7 @@ public class ForensicExportService {
   private final BatchDayOperationAuditMapper batchDayOperationAuditMapper;
   private final ForensicExportProperties properties;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final ObjectProvider<ForensicExportService> selfProvider;
 
   /** 查询 forensic export 日志 — Controller 不直调 Mapper(分层约束)。 */
   public ForensicExportLogEntity findLog(String tenantId, String exportId) {
@@ -89,7 +91,7 @@ public class ForensicExportService {
     Instant requestedAt = dateTimeSupport.nowInstant();
     String format = Texts.hasText(request.exportFormat()) ? request.exportFormat() : "BUNDLE";
 
-    insertProcessingRow(request, exportId, format, requestedAt);
+    selfProvider.getObject().insertProcessingRow(request, exportId, format, requestedAt);
 
     try {
       ExportResult result = doExport(request, exportId);
@@ -125,7 +127,7 @@ public class ForensicExportService {
 
   /** insert PROCESSING 行使用独立事务，确保即使后续打包失败也有 audit 痕迹。 */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  protected void insertProcessingRow(
+  public void insertProcessingRow(
       ForensicExportRequest request, String exportId, String format, Instant requestedAt) {
     String scopeJson =
         JsonUtils.toJson(List.of("job_instances", "batch_day_operation_audits", "manifest"));

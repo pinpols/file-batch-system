@@ -95,7 +95,7 @@ public interface WorkerRegistryMapper {
    *
    * @return 实际写入行数（0 表示并发已被另一节点抢先创建）
    */
-  int insert(WorkerRegistryEntity record);
+  int insert(WorkerRegistryEntity entity);
 
   /**
    * ADR-035 §2 — 标记 worker 为租户自托管(SDK 注册)。Service 在 register 路径检测 {@code
@@ -111,18 +111,18 @@ public interface WorkerRegistryMapper {
    *
    * @return 影响行数（0 表示行不存在）
    */
-  int updateById(WorkerRegistryEntity record);
+  int updateById(WorkerRegistryEntity entity);
 
   /**
-   * 测试夹具用 SDJ-like 等价 save 助手：record.id() 为空时走 {@link #insert} + 重新 select 拿到带 id 的版本， 否则走 {@link
+   * 测试夹具用 SDJ-like 等价 save 助手：entity.id() 为空时走 {@link #insert} + 重新 select 拿到带 id 的版本， 否则走 {@link
    * #updateById}。仅供 integration / test fixture 使用，不要在生产路径调用（生产 callsite 应明确知道走的是新建还是更新，调对应方法语义更清晰）。
    */
-  default WorkerRegistryEntity saveLikeSdj(WorkerRegistryEntity record) {
-    if (record.id() == null) {
-      insert(record);
-      return selectByTenantAndWorkerCode(record.tenantId(), record.workerCode());
+  default WorkerRegistryEntity saveLikeSdj(WorkerRegistryEntity entity) {
+    if (entity.id() == null) {
+      insert(entity);
+      return selectByTenantAndWorkerCode(entity.tenantId(), entity.workerCode());
     }
-    updateById(record);
-    return selectByTenantAndWorkerCode(record.tenantId(), record.workerCode());
+    updateById(entity);
+    return selectByTenantAndWorkerCode(entity.tenantId(), entity.workerCode());
   }
 }

@@ -191,17 +191,18 @@ public class BatchObjectCryptoService {
     }
     // S-1.1: setup 过程中任何异常都要关闭底层流，避免 MinIO 连接 / 文件句柄泄漏。
     // 返回成功后的 close 由调用方负责（CipherInputStream.close 会级联 close 底层流 + 校验 GCM tag）。
-    boolean handedOff = false;
-    try {
+    InputStreamCloseGuard closeGuard = new InputStreamCloseGuard(inputStream);
+    try (closeGuard) {
       // 用 PushbackInputStream 偷看头部字节，若不是魔数则 unread 还原，对调用方透明；
       // 缓冲 64B 远大于魔数 8B，预留版本头扩展空间
       PushbackInputStream pushbackInputStream = new PushbackInputStream(inputStream, 64);
+      closeGuard.replace(pushbackInputStream);
       byte[] magic = pushbackInputStream.readNBytes(MAGIC.length);
       if (magic.length < MAGIC.length || !Arrays.equals(magic, MAGIC)) {
         if (magic.length > 0) {
           pushbackInputStream.unread(magic);
         }
-        handedOff = true;
+        closeGuard.release();
         return pushbackInputStream;
       }
       int version = pushbackInputStream.read();
@@ -218,19 +219,40 @@ public class BatchObjectCryptoService {
           new SecretKeySpec(resolveKeyBytes(keyRef), "AES"),
           new GCMParameterSpec(GCM_TAG_BITS, iv));
       CipherInputStream cipherInputStream = new CipherInputStream(pushbackInputStream, cipher);
-      handedOff = true;
+      closeGuard.release();
       return cipherInputStream;
     } catch (Exception exception) {
       throw new IllegalStateException("failed to open decrypted stream", exception);
-    } finally {
-      if (!handedOff) {
-        try {
-          inputStream.close();
-        } catch (Exception ignored) {
-          SwallowedExceptionLogger.warn(BatchObjectCryptoService.class, "catch:Exception", ignored);
+    }
+  }
 
-          // best-effort: 下游已经抛出 IllegalStateException，关闭失败不再叠加
-        }
+  private static final class InputStreamCloseGuard implements AutoCloseable {
+    private InputStream inputStream;
+    private boolean released;
+
+    private InputStreamCloseGuard(InputStream inputStream) {
+      this.inputStream = inputStream;
+    }
+
+    private void replace(InputStream replacement) {
+      this.inputStream = replacement;
+    }
+
+    private void release() {
+      this.released = true;
+    }
+
+    @Override
+    public void close() {
+      if (released || inputStream == null) {
+        return;
+      }
+      try {
+        inputStream.close();
+      } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(BatchObjectCryptoService.class, "catch:Exception", ignored);
+
+        // best-effort: 下游已经抛出 IllegalStateException，关闭失败不再叠加
       }
     }
   }

@@ -67,8 +67,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   @Override
   public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
     ApprovalRecordResponse recordResponse = loadApproval(tenantId, approvalNo);
-    ApprovalRecord record = recordResponse.getRecord();
-    String status = record.getApprovalStatus();
+    ApprovalRecord approvalRecord = recordResponse.getRecord();
+    String status = approvalRecord.getApprovalStatus();
     // EXECUTED:已完成,幂等返回。REJECTED:反动作冲突 → 409。
     if ("EXECUTED".equalsIgnoreCase(status)) {
       return approvalNo;
@@ -83,18 +83,18 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     if ("PENDING".equalsIgnoreCase(status)) {
       approveRemote(tenantId, approvalNo, operatorId, reason);
     }
-    String actionType = record.getActionType();
+    String actionType = approvalRecord.getActionType();
     String result =
         switch (actionType) {
           case "COMPENSATION" -> {
-            CompensationCommandRequest request =
-                JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
+            CompensationCommandRequest request = JsonUtils.fromJson(
+                approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
             request.setApprovalId(approvalNo);
             // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
             // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
             if (request.getCompensationType() == null
                 || request.getCompensationType().isBlank()) {
-              request.setCompensationType(deriveCompensationType(record.getTargetType()));
+              request.setCompensationType(deriveCompensationType(approvalRecord.getTargetType()));
             }
             yield consoleJobApplicationService.compensation(request, approvalNo);
           }
@@ -102,27 +102,28 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
             // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
             // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
-            RerunRequest request = JsonUtils.fromJson(record.getPayloadJson(), RerunRequest.class);
+            RerunRequest request =
+                JsonUtils.fromJson(approvalRecord.getPayloadJson(), RerunRequest.class);
             request.setApprovalId(approvalNo);
             yield consoleJobApplicationService.rerun(request, approvalNo);
           }
           case "DLQ_REPLAY" -> {
             DeadLetterReplayRequest request =
-                JsonUtils.fromJson(record.getPayloadJson(), DeadLetterReplayRequest.class);
+                JsonUtils.fromJson(approvalRecord.getPayloadJson(), DeadLetterReplayRequest.class);
             request.setApprovalId(approvalNo);
             yield consoleJobApplicationService.replayDeadLetter(request, approvalNo);
           }
           case "DOWNLOAD" -> {
-            PresignDownloadFileRequest request =
-                JsonUtils.fromJson(record.getPayloadJson(), PresignDownloadFileRequest.class);
+            PresignDownloadFileRequest request = JsonUtils.fromJson(
+                approvalRecord.getPayloadJson(), PresignDownloadFileRequest.class);
             request.setApprovalId(approvalNo);
             ConsolePresignDownloadResponse downloadResponse =
                 consoleFileApplicationService.presignDownload(request, approvalNo);
             yield downloadResponse == null ? null : downloadResponse.downloadUrl();
           }
           case "CATCH_UP" -> {
-            ConsoleCatchUpApprovalRequest request =
-                JsonUtils.fromJson(record.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
+            ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(
+                approvalRecord.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
             request.setApprovalId(approvalNo);
             yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
           }
@@ -130,8 +131,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             // ADR-020 Stage 3 审批接入：payload = {"sessionId":<long>, "tenantId":<str>}。
             // approve 后转发到 orchestrator 推进 session 状态 PENDING_APPROVAL → RUNNING；
             // 复用 batch-day-replay/sessions/{id}/approve 端点，approver 取审批人 operatorId。
-            BatchDayReplayApprovalPayload payload =
-                JsonUtils.fromJson(record.getPayloadJson(), BatchDayReplayApprovalPayload.class);
+            BatchDayReplayApprovalPayload payload = JsonUtils.fromJson(
+                approvalRecord.getPayloadJson(), BatchDayReplayApprovalPayload.class);
             if (payload == null
                 || payload.getSessionId() == null
                 || payload.getTenantId() == null
@@ -166,16 +167,16 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   public String reject(String tenantId, String approvalNo, String operatorId, String reason) {
     // 同动作幂等:已 REJECTED 再 reject 直接返回;反动作冲突:已 APPROVED 不可再 reject → 409
     // (此前 reject 无守卫,对已 APPROVED 委托远端静默忽略、返 200 却不改状态,误导操作员)。
-    ApprovalRecord record = loadApproval(tenantId, approvalNo).getRecord();
-    if ("REJECTED".equalsIgnoreCase(record.getApprovalStatus())) {
+    ApprovalRecord approvalRecord = loadApproval(tenantId, approvalNo).getRecord();
+    if ("REJECTED".equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
       return approvalNo;
     }
-    if (!"PENDING".equalsIgnoreCase(record.getApprovalStatus())) {
+    if (!"PENDING".equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.approval.not_pending_for_action",
           approvalNo,
-          record.getApprovalStatus());
+          approvalRecord.getApprovalStatus());
     }
     rejectRemote(tenantId, approvalNo, operatorId, reason);
     return approvalNo;

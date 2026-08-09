@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.Map;
 
 /** 分区级动作（cancel / retry）结果。 */
@@ -10,7 +11,7 @@ public record ConsolePartitionActionResponse(Long id, String status) {
       return null;
     }
     return new ConsolePartitionActionResponse(
-        JobResponseFieldReader.longValue(row, "id"),
-        JobResponseFieldReader.stringValue(row, "status"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "status"));
   }
 }

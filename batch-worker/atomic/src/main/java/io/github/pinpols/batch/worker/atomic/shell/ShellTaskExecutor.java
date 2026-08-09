@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -139,9 +140,9 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put("dryRun", true);
         planned.put("plannedAction", "shell");
-        planned.put("command", inv.command);
+        planned.put(PARAM_COMMAND, inv.command);
         planned.put("args", inv.args);
-        planned.put("timeoutSeconds", inv.timeout.toSeconds());
+        planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
         // env 只暴露 key(白名单过滤过),value 不出库以防泄密
         planned.put("envKeys", List.copyOf(inv.env.keySet()));
         log.info(
@@ -191,10 +192,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object cmdObj = params.get(PARAM_COMMAND);
-    if (!(cmdObj instanceof String) || ((String) cmdObj).isBlank()) {
+    if (!(cmdObj instanceof String commandString) || EmptyChecks.isBlank(commandString)) {
       throw new ShellValidationException("parameters.command required (non-blank string)");
     }
-    String command = ((String) cmdObj).trim();
+    String command = commandString.trim();
 
     // 白名单
     if (!props.getCommandWhitelist().isEmpty() && !props.getCommandWhitelist().contains(command)) {
@@ -218,8 +219,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     Duration timeout = props.getDefaultTimeout();
     Object timeoutObj = params.get(PARAM_TIMEOUT_SECONDS);
-    if (timeoutObj instanceof Number) {
-      long sec = ((Number) timeoutObj).longValue();
+    if (timeoutObj instanceof Number number) {
+      long sec = number.longValue();
       if (sec <= 0) {
         throw new ShellValidationException("timeoutSeconds must be positive");
       }

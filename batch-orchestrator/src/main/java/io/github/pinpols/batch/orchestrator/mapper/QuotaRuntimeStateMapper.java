@@ -27,14 +27,14 @@ public interface QuotaRuntimeStateMapper {
    *
    * @return 实际写入行数（0 表示并发已被另一节点抢先创建）
    */
-  int insert(QuotaRuntimeStateEntity record);
+  int insert(QuotaRuntimeStateEntity entity);
 
   /**
    * CAS 更新：必须 id + version 都匹配才生效。{@code SET version = version + 1}。
    *
    * @return 影响行数；0 表示 version 冲突 → 调用方抛 {@code OptimisticLockingFailureException}
    */
-  int updateWithCas(QuotaRuntimeStateEntity record);
+  int updateWithCas(QuotaRuntimeStateEntity entity);
 
   /** 按租户 + 维度 + owner（unique constraint 三元组）查询当前行。 */
   QuotaRuntimeStateEntity selectByTenantQuotaScopeOwner(

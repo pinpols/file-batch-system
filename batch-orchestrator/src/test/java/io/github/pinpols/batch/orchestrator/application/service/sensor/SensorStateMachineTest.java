@@ -3,7 +3,9 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -80,8 +81,7 @@ class SensorStateMachineTest {
     OrchestratorJobMappers jobMappers =
         new OrchestratorJobMappers(jobInstanceMapper, null, null, null, null);
     @SuppressWarnings("unchecked")
-    ObjectProvider<WorkflowNodeDispatchService> dispatchProvider =
-        Mockito.mock(ObjectProvider.class);
+    ObjectProvider<WorkflowNodeDispatchService> dispatchProvider = mock(ObjectProvider.class);
     when(dispatchProvider.getObject()).thenReturn(dispatchService);
     sm = new SensorStateMachine(
         registry,
@@ -119,7 +119,7 @@ class SensorStateMachineTest {
 
     verify(taskOutcomeService, never()).recordNodeRunFinish(any());
     Instant expectedNext = NOW.plusSeconds(30); // pollInterval=30
-    verify(nodeRunMapper).updateSensorProbeState(eq(99L), eq(expectedNext), eq(NOW), eq(6), eq(0));
+    verify(nodeRunMapper).updateSensorProbeState(99L, expectedNext, NOW, 6, 0);
   }
 
   @Test
@@ -251,7 +251,7 @@ class SensorStateMachineTest {
 
     verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
     // WAIT finish + END finish = 2 calls
-    verify(taskOutcomeService, Mockito.times(2)).recordNodeRunFinish(any());
+    verify(taskOutcomeService, times(2)).recordNodeRunFinish(any());
   }
 
   @Test
@@ -291,7 +291,7 @@ class SensorStateMachineTest {
     JobInstanceEntity ji = new JobInstanceEntity();
     ji.setId(500L);
     ji.setTenantId("ta");
-    when(jobInstanceMapper.selectById(eq("ta"), eq(500L))).thenReturn(ji);
+    when(jobInstanceMapper.selectById("ta", 500L)).thenReturn(ji);
     // 让 workflowRun 有 relatedJobInstanceId
     WorkflowRunEntity wfRun = new WorkflowRunEntity();
     wfRun.setId(1L);

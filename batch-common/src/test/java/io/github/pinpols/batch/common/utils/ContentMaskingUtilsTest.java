@@ -28,7 +28,6 @@ class ContentMaskingUtilsTest {
   @Test
   void shouldApplyStrictRuleSetWhenRequested() {
     String masked = ContentMaskingUtils.maskPlainText("name: Alice and phone=1234567890", "STRICT");
-    assertThat(masked).contains("name=***");
-    assertThat(masked).contains("phone=***");
+    assertThat(masked).contains("name=***").contains("phone=***");
   }
 }

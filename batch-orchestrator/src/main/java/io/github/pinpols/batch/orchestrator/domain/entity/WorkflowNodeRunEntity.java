@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
 import io.github.pinpols.batch.common.i18n.AbstractLocalizedErrorEntity;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.Stateful;
+import io.github.pinpols.batch.common.persistence.Stateful;
 import java.time.Instant;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

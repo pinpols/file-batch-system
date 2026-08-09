@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +90,7 @@ class LaunchParamResolverTest {
     Map<String, Object> params = new HashMap<>();
     params.put("batchNo", "B001");
 
-    String result = resolver.resolveBatchNo(LocalDate.of(2026, 4, 10), params);
+    String result = resolver.resolveBatchNo(LocalDate.of(2026, Month.APRIL, 10), params);
 
     assertThat(result).isEqualTo("B001");
   }
@@ -98,7 +99,7 @@ class LaunchParamResolverTest {
   void shouldFallbackBatchNoToBizDate() {
     Map<String, Object> params = new HashMap<>();
 
-    String result = resolver.resolveBatchNo(LocalDate.of(2026, 4, 10), params);
+    String result = resolver.resolveBatchNo(LocalDate.of(2026, Month.APRIL, 10), params);
 
     assertThat(result).isEqualTo("2026-04-10");
   }
@@ -242,7 +243,7 @@ class LaunchParamResolverTest {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"path\":\"/data/${bizDate}/in\"}}"));
     JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of());
-    LaunchRequest request = launchRequest(Map.of(), LocalDate.of(2026, 6, 1));
+    LaunchRequest request = launchRequest(Map.of(), LocalDate.of(2026, Month.JUNE, 1));
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
 
@@ -254,7 +255,7 @@ class LaunchParamResolverTest {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"path\":\"/data/${unknownVar}/in\"}}"));
     JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of());
-    LaunchRequest request = launchRequest(Map.of(), LocalDate.of(2026, 6, 1));
+    LaunchRequest request = launchRequest(Map.of(), LocalDate.of(2026, Month.JUNE, 1));
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
 
@@ -268,8 +269,7 @@ class LaunchParamResolverTest {
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
 
-    assertThat(merged).containsEntry("region", "cn");
-    assertThat(merged).doesNotContainKey("batchSize");
+    assertThat(merged).containsEntry("region", "cn").doesNotContainKey("batchSize");
   }
 
   @Test

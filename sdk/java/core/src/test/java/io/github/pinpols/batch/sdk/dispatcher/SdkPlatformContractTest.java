@@ -87,7 +87,7 @@ class SdkPlatformContractTest {
   // ─── register body 契约 → WorkerHeartbeatDto 字段集 ──────────────────────────
 
   @Test
-  void registerBodyMatchesWorkerHeartbeatDtoSchema() throws IOException {
+  void registerBodyMatchesWorkerHeartbeatDtoSchema() {
     // 直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
     Map<String, Object> simulated = new HashMap<>();
     simulated.put("tenantId", "tx");
@@ -124,13 +124,12 @@ class SdkPlatformContractTest {
     // TaskExecutionReportDto 关键字段必须都在(taskId/tenantId/workerId/success/message/outputs)
     assertThat(body)
         .containsKeys("taskId", "tenantId", "workerId", "success", "message", "outputs");
-    assertThat(body.get("success")).isEqualTo(true);
+    assertThat(body).containsEntry("success", true);
     assertThat(body.get("outputs")).isInstanceOf(Map.class);
     // 严禁错名:旧版用过 "output"(单数),平台读不到 → 必须是 "outputs"
     assertThat(body).doesNotContainKey("output");
     // 错名 errorClass / errorMessage 已废,平台读 errorCode / resultSummary
-    assertThat(body).doesNotContainKey("errorClass");
-    assertThat(body).doesNotContainKey("errorMessage");
+    assertThat(body).doesNotContainKey("errorClass").doesNotContainKey("errorMessage");
   }
 
   @Test
@@ -138,7 +137,7 @@ class SdkPlatformContractTest {
     List<Map<String, Object>> reports =
         captureReports(SdkTaskResult.fail(new IllegalStateException("boom")));
     Map<String, Object> body = reports.get(0);
-    assertThat(body.get("success")).isEqualTo(false);
+    assertThat(body).containsEntry("success", false);
     // #P2 errorCode 词表统一:未捕获异常 → protocol 常量 EXECUTION_FAILED(跨语言可聚合),
     // 不再用异常类 SimpleName;原类名 IllegalStateException 保留在 resultSummary.message 可诊断。
     assertThat(body).containsEntry("errorCode", "EXECUTION_FAILED");

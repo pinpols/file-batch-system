@@ -128,6 +128,10 @@ public class ConsoleTenantApplicationService {
 
   @Transactional
   public ConsoleTenantResponse createTenant(CreateTenantCommand cmd) {
+    return createTenantInternal(cmd);
+  }
+
+  private ConsoleTenantResponse createTenantInternal(CreateTenantCommand cmd) {
     // 命名规范守卫双模式(2026-05-21):
     //   PROD:拒 test prefix(防 test 污染生产)
     //   NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(ta/tb/tc/default-tenant),防无前缀 ID 残留无主
@@ -158,7 +162,7 @@ public class ConsoleTenantApplicationService {
    */
   @Transactional
   public ProvisionTenantResponse provisionTenant(CreateTenantCommand cmd, ConfigInitOption init) {
-    ConsoleTenantResponse tenant = createTenant(cmd);
+    ConsoleTenantResponse tenant = createTenantInternal(cmd);
     TenantConfigBatchInitResponse configInit = null;
     if (init != null && init.enabled()) {
       TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();

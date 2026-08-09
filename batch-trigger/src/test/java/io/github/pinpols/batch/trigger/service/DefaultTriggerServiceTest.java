@@ -31,6 +31,7 @@ import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,7 +104,7 @@ class DefaultTriggerServiceTest {
     LaunchRequest launchRequest = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         TriggerType.API,
         "req-001",
         "trace-001",
@@ -136,7 +137,7 @@ class DefaultTriggerServiceTest {
     pending.setTenantId("t1");
     pending.setRequestId("req-pending");
     pending.setJobCode("EXPORT_JOB");
-    pending.setBizDate(LocalDate.of(2026, 3, 27));
+    pending.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     pending.setTriggerType(TriggerType.CATCH_UP.code());
     pending.setRequestStatus("ACCEPTED");
     pending.setTraceId("trace-pending");
@@ -177,7 +178,7 @@ class DefaultTriggerServiceTest {
     pendingRequest.setTenantId("t1");
     pendingRequest.setRequestId("req-linked");
     pendingRequest.setJobCode("EXPORT_JOB");
-    pendingRequest.setBizDate(LocalDate.of(2026, 3, 27));
+    pendingRequest.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     pendingRequest.setTriggerType(TriggerType.CATCH_UP.code());
     pendingRequest.setRequestStatus("ACCEPTED");
     pendingRequest.setTraceId("trace-linked");
@@ -262,14 +263,15 @@ class DefaultTriggerServiceTest {
     LaunchRequest launchRequest = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 28),
+        LocalDate.of(2026, Month.MARCH, 28),
         TriggerType.SCHEDULED,
         "req-nr",
         "trace-nr",
         Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
-    when(upstreamReadinessChecker.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, 3, 28)))
+    when(upstreamReadinessChecker.isReady(
+            "t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
         .thenReturn(false);
 
     assertThatThrownBy(() -> service.launchScheduled(command))
@@ -294,14 +296,15 @@ class DefaultTriggerServiceTest {
     LaunchRequest launchRequest = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 28),
+        LocalDate.of(2026, Month.MARCH, 28),
         TriggerType.SCHEDULED,
         "req-ok",
         "trace-ok",
         Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
-    when(upstreamReadinessChecker.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, 3, 28)))
+    when(upstreamReadinessChecker.isReady(
+            "t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
         .thenReturn(true);
 
     LaunchResponse response = service.launchScheduled(command);
@@ -322,7 +325,7 @@ class DefaultTriggerServiceTest {
     LaunchRequest launchRequest = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
-        LocalDate.of(2026, 3, 28),
+        LocalDate.of(2026, Month.MARCH, 28),
         TriggerType.CATCH_UP,
         "req-cu",
         "trace-cu",
@@ -389,7 +392,7 @@ class DefaultTriggerServiceTest {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setJobCode("IMPORT_JOB");
-    request.setBizDate(LocalDate.of(2026, 3, 27));
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of());
     return request;

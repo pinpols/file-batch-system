@@ -52,8 +52,9 @@ class RetryDispatchStepTest {
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_RETRY_NO_PAYLOAD");
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.COMPENSATE.name());
+    assertThat(context.getAttributes())
+        .containsEntry(
+            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
   }
 
   @Test
@@ -62,8 +63,9 @@ class RetryDispatchStepTest {
     context.getAttributes().put("retryRequested", Boolean.FALSE);
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.COMPENSATE.name());
+    assertThat(context.getAttributes())
+        .containsEntry(
+            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
   }
 
   @Test
@@ -78,9 +80,9 @@ class RetryDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.ACK.name());
-    assertThat(context.getAttributes().get("retryRecovered")).isEqualTo(Boolean.TRUE);
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
+    assertThat(context.getAttributes()).containsEntry("retryRecovered", Boolean.TRUE);
     verify(fileDispatchRepository).incrementAttempt("t1", 10L, "CH1");
   }
 
@@ -96,8 +98,9 @@ class RetryDispatchStepTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_RETRY_FAILED");
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.COMPENSATE.name());
+    assertThat(context.getAttributes())
+        .containsEntry(
+            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
   }
 
   @Test
@@ -113,8 +116,9 @@ class RetryDispatchStepTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_RETRY_FAILED");
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.COMPENSATE.name());
+    assertThat(context.getAttributes())
+        .containsEntry(
+            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
   }
 
   private DispatchJobContext buildContext() {

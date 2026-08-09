@@ -34,6 +34,10 @@ public class OutboxArchiveService {
    */
   @Transactional
   public ArchiveBatchResult archiveOnce(String publishStatus, int retentionDays) {
+    return archiveOnceInternal(publishStatus, retentionDays);
+  }
+
+  private ArchiveBatchResult archiveOnceInternal(String publishStatus, int retentionDays) {
     if (!properties.isEnabled()) {
       return ArchiveBatchResult.disabled();
     }
@@ -69,14 +73,15 @@ public class OutboxArchiveService {
   /** 便捷：用 properties 里的 publishedRetentionDays 跑 PUBLISHED 归档。 */
   @Transactional
   public ArchiveBatchResult archivePublished() {
-    return archiveOnce(
+    return archiveOnceInternal(
         OutboxPublishStatus.PUBLISHED.code(), properties.getPublishedRetentionDays());
   }
 
   /** 便捷：用 properties 里的 giveUpRetentionDays 跑 GIVE_UP 归档。 */
   @Transactional
   public ArchiveBatchResult archiveGiveUp() {
-    return archiveOnce(OutboxPublishStatus.GIVE_UP.code(), properties.getGiveUpRetentionDays());
+    return archiveOnceInternal(
+        OutboxPublishStatus.GIVE_UP.code(), properties.getGiveUpRetentionDays());
   }
 
   public record ArchiveBatchResult(

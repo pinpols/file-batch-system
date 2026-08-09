@@ -114,13 +114,13 @@ public class CrossDayDependencyResolver {
           }
           resolved.put(alias, toEntry(hit.get()));
         }
-      } catch (Exception spec_failure) {
+      } catch (Exception specFailure) {
         log.warn(
             "cross_day_dep resolve error: tenantId={}, alias={}, jobCode={}, msg={}",
             tenantId,
             alias,
             spec.jobCode(),
-            spec_failure.getMessage());
+            specFailure.getMessage());
         return ResolutionResult.failed("CROSS_DAY_DEP_RESOLVE_ERROR");
       }
     }

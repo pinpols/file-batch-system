@@ -121,9 +121,11 @@ public class FixedWidthFormatParser implements FormatParser {
         Object target = map.get("target");
         Object start = map.get("start");
         Object length = map.get("length");
-        if (target != null && start instanceof Number && length instanceof Number) {
+        if (target != null
+            && start instanceof Number startNumber
+            && length instanceof Number lengthNumber) {
           out.add(new FixedWidthField(
-              String.valueOf(target), ((Number) start).intValue(), ((Number) length).intValue()));
+              String.valueOf(target), startNumber.intValue(), lengthNumber.intValue()));
         }
       }
     }

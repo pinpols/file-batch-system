@@ -31,6 +31,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,7 @@ class BatchDayGateServiceTest {
         .thenReturn(calendar("ALLOW_OVERLAP"));
     // 当日 batch_day 缺失或非 frozen 时, FROZEN 检查直通; ALLOW_OVERLAP 不再触发前日检查。
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(null);
 
     BatchDayGateService.GateDecision decision =
@@ -83,7 +84,7 @@ class BatchDayGateServiceTest {
     assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.ALLOW);
     // 前一日(2026-05-04)无需查询
     verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4));
+        .selectByTenantCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4));
   }
 
   @Test
@@ -91,7 +92,7 @@ class BatchDayGateServiceTest {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(currentFrozen());
 
     BatchDayGateService.GateDecision decision =
@@ -105,13 +106,19 @@ class BatchDayGateServiceTest {
     // 不会查 calendar 也不会查前一日
     verify(configCacheService, never()).findEnabledBusinessCalendar(any(), any());
     verify(batchDayInstanceMapper, never())
-        .selectByTenantCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4));
+        .selectByTenantCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4));
   }
 
   @Test
   void shouldBypassFrozenForCatchUpTrigger() {
     LaunchRequest request = new LaunchRequest(
-        "t1", "JOB", LocalDate.of(2026, 5, 5), TriggerType.CATCH_UP, "req-1", "trace-1", Map.of());
+        "t1",
+        "JOB",
+        LocalDate.of(2026, Month.MAY, 5),
+        TriggerType.CATCH_UP,
+        "req-1",
+        "trace-1",
+        Map.of());
     LaunchValidationService.LaunchLoadResult loaded = loaded("NONE");
 
     BatchDayGateService.GateDecision decision =
@@ -129,7 +136,7 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(previous("IN_FLIGHT"));
 
     BatchDayGateService.GateDecision decision =
@@ -141,7 +148,7 @@ class BatchDayGateServiceTest {
     verify(waitingLaunchMapper).insert(waitingCaptor.capture());
     assertThat(waitingCaptor.getValue().waitStatus())
         .isEqualTo(BatchLifecycleStatus.WAITING.code());
-    assertThat(waitingCaptor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, 5, 5));
+    assertThat(waitingCaptor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 5));
     verify(triggerRequestMapper)
         .updateAcceptance("t1", "req-1", BatchLifecycleStatus.WAITING.code(), null);
     verify(jobExecutionLogMapper).insert(any());
@@ -154,7 +161,7 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("REJECT_IF_PREVIOUS_OPEN"));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(previous("FAILED"));
 
     BatchDayGateService.GateDecision decision =
@@ -174,7 +181,7 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(previous("SETTLED"));
 
     BatchDayGateService.GateDecision decision =
@@ -187,7 +194,13 @@ class BatchDayGateServiceTest {
 
   private LaunchRequest request() {
     return new LaunchRequest(
-        "t1", "JOB", LocalDate.of(2026, 5, 5), TriggerType.SCHEDULED, "req-1", "trace-1", Map.of());
+        "t1",
+        "JOB",
+        LocalDate.of(2026, Month.MAY, 5),
+        TriggerType.SCHEDULED,
+        "req-1",
+        "trace-1",
+        Map.of());
   }
 
   private LaunchValidationService.LaunchLoadResult loaded(String scope) {
@@ -210,7 +223,7 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
     when(jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
-            "t1", "JOB", LocalDate.of(2026, 5, 4)))
+            "t1", "JOB", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(0);
 
     BatchDayGateService.GateDecision decision =
@@ -226,10 +239,10 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
     when(jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
-            "t1", "JOB", LocalDate.of(2026, 5, 4)))
+            "t1", "JOB", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(1);
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(previous("IN_FLIGHT"));
 
     BatchDayGateService.GateDecision decision =
@@ -246,10 +259,10 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
     when(jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
-            "t1", "settle", LocalDate.of(2026, 5, 4)))
+            "t1", "settle", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(2);
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(previous("IN_FLIGHT"));
 
     BatchDayGateService.GateDecision decision =
@@ -268,7 +281,7 @@ class BatchDayGateServiceTest {
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
         .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
     when(jobInstanceMapper.countNonTerminalByJobCodeAndBizDate(
-            "t1", "JOB", LocalDate.of(2026, 5, 4)))
+            "t1", "JOB", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(0);
 
     BatchDayGateService.GateDecision decision =
@@ -368,7 +381,7 @@ class BatchDayGateServiceTest {
         1L,
         "t1",
         "CAL",
-        LocalDate.of(2026, 5, 4),
+        LocalDate.of(2026, Month.MAY, 4),
         status,
         at,
         at,
@@ -388,7 +401,7 @@ class BatchDayGateServiceTest {
         2L,
         "t1",
         "CAL",
-        LocalDate.of(2026, 5, 5),
+        LocalDate.of(2026, Month.MAY, 5),
         "OPEN",
         at,
         at,

@@ -25,10 +25,19 @@ import lombok.extern.slf4j.Slf4j;
  * <pre>{@code
  * @Component
  * public class MyAtomicExecutor extends AbstractBatchTaskExecutor {
- *   @Override public String taskType() { return "my_type"; }
- *   @Override protected void validate(TaskContext ctx) { ... }
- *   @Override protected TaskResult doExecute(TaskContext ctx) { ... }
- *   @Override protected void cleanup(TaskContext ctx) { ... }  // 必跑,即使 doExecute 抛异常
+ *   @Override
+ *   public String taskType() {
+ *     return "my_type";
+ *   }
+ *
+ *   @Override
+ *   protected void validate(TaskContext ctx) { ... }
+ *
+ *   @Override
+ *   protected TaskResult doExecute(TaskContext ctx) { ... }
+ *
+ *   @Override
+ *   protected void cleanup(TaskContext ctx) { ... }  // 必跑,即使 doExecute 抛异常
  * }
  * }</pre>
  */

@@ -102,7 +102,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   }
 
   @Test
-  void shouldDownload_whenApprovalTargetsSameFile() throws Exception {
+  void shouldDownload_whenApprovalTargetsSameFile() {
     stubEncryptedFile(100L);
     stubApproval("APPROVED", "FILE", "100");
     when(objectStore.get("bucket-a", "uploads/t1/100.bin"))

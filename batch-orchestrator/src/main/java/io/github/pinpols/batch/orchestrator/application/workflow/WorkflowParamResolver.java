@@ -35,8 +35,7 @@ import org.springframework.stereotype.Component;
 public class WorkflowParamResolver {
 
   /** 引用语法形如 "$.nodes.SETTLE.output.fileId" / "$.workflowRun.bizDate"。 */
-  private static final Pattern REF_PATTERN =
-      Pattern.compile("^\\$\\.([a-zA-Z_][a-zA-Z0-9_]*)(\\..+)?$");
+  private static final Pattern REF_PATTERN = Pattern.compile("^\\$\\.([a-zA-Z_]\\w*)(\\..+)?$");
 
   private static final String NODES_ROOT = "nodes";
   private static final String WORKFLOW_RUN_ROOT = "workflowRun";

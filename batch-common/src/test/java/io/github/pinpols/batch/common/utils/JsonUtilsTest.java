@@ -14,8 +14,8 @@ class JsonUtilsTest {
     Map<String, Object> original = Map.of("k", "v", "n", 1);
     String json = JsonUtils.toJson(original);
     Map<String, Object> parsed = JsonUtils.fromJson(json, Map.class);
-    assertThat(parsed.get("k")).isEqualTo("v");
-    assertThat(parsed.get("n")).isEqualTo(1);
+    assertThat(parsed).containsEntry("k", "v");
+    assertThat(parsed).containsEntry("n", 1);
   }
 
   @Test

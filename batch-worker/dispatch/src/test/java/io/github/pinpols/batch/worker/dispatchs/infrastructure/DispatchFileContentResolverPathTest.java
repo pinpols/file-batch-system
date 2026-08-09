@@ -51,8 +51,9 @@ class DispatchFileContentResolverPathTest {
     Path file = tempDir.resolve("test.csv");
     Files.writeString(file, "col1,col2\nval1,val2", StandardCharsets.UTF_8);
 
-    Map<String, Object> record = Map.of("storage_type", "LOCAL", "storage_path", file.toString());
-    try (InputStream in = resolver.openInputStream(record)) {
+    Map<String, Object> fileRecord =
+        Map.of("storage_type", "LOCAL", "storage_path", file.toString());
+    try (InputStream in = resolver.openInputStream(fileRecord)) {
       String content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
       assertThat(content).contains("col1,col2");
     }
@@ -60,26 +61,27 @@ class DispatchFileContentResolverPathTest {
 
   @Test
   void openInputStream_pathWithDotDot_throwsSecurity() {
-    Map<String, Object> record = Map.of(
+    Map<String, Object> fileRecord = Map.of(
         "storage_type", "LOCAL",
         "storage_path", "/tmp/../etc/passwd");
-    assertThatThrownBy(() -> resolver.openInputStream(record))
+    assertThatThrownBy(() -> resolver.openInputStream(fileRecord))
         .isInstanceOf(SecurityException.class)
         .hasMessageContaining("..");
   }
 
   @Test
   void openInputStream_missingStoragePath_throwsIllegalState() {
-    Map<String, Object> record = Map.of("storage_type", "LOCAL");
-    assertThatThrownBy(() -> resolver.openInputStream(record))
+    Map<String, Object> fileRecord = Map.of("storage_type", "LOCAL");
+    assertThatThrownBy(() -> resolver.openInputStream(fileRecord))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("storage_path");
   }
 
   @Test
   void openInputStream_remoteWithoutObjectStore_throwsObjectStoreException() {
-    Map<String, Object> record = Map.of("storage_type", "OSS", "storage_path", "bucket/file.csv");
-    assertThatThrownBy(() -> resolver.openInputStream(record))
+    Map<String, Object> fileRecord =
+        Map.of("storage_type", "OSS", "storage_path", "bucket/file.csv");
+    assertThatThrownBy(() -> resolver.openInputStream(fileRecord))
         .isInstanceOf(ObjectStoreException.class)
         .hasMessageContaining("object store not configured");
   }

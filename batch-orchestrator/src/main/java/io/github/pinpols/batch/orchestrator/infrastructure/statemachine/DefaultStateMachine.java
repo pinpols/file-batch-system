@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.statemachine;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.persistence.Stateful;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.Stateful;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;

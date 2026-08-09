@@ -10,8 +10,13 @@ package io.github.pinpols.batch.sdk.task;
  *
  * <pre>{@code
  * public class MyImportHandler implements SdkTaskHandler {
- *   @Override public String taskType() { return "tenant_xyz_import"; }
- *   @Override public SdkTaskResult execute(SdkTaskContext ctx) {
+ *   @Override
+ *   public String taskType() {
+ *     return "tenant_xyz_import";
+ *   }
+ *
+ *   @Override
+ *   public SdkTaskResult execute(SdkTaskContext ctx) {
  *     // 业务逻辑:读 ctx.parameters() / 调自己的 DB / 返结果
  *     return SdkTaskResult.ok("imported " + n + " rows");
  *   }

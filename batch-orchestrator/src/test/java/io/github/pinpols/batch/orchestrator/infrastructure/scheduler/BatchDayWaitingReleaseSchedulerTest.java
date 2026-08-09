@@ -16,6 +16,7 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.service.BatchDayOperationService;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +30,7 @@ class BatchDayWaitingReleaseSchedulerTest {
 
   private static final String TENANT = "tenantA";
   private static final String CAL = "RECON_DAILY";
-  private static final LocalDate DAY2 = LocalDate.of(2026, 5, 31);
+  private static final LocalDate DAY2 = LocalDate.of(2026, Month.MAY, 31);
   private static final LocalDate DAY1 = DAY2.minusDays(1);
 
   @Mock

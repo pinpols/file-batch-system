@@ -245,16 +245,16 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
   private static Map<String, Object> fileRecord(
       String storagePath, String storageType, String bucket, String originalName, String mimeType) {
-    Map<String, Object> record = new LinkedHashMap<>();
-    record.put("storage_type", storageType);
-    record.put("storage_path", storagePath);
-    record.put("original_file_name", originalName);
-    record.put("file_name", originalName);
-    record.put("mime_type", mimeType);
+    Map<String, Object> fileRecord = new LinkedHashMap<>();
+    fileRecord.put("storage_type", storageType);
+    fileRecord.put("storage_path", storagePath);
+    fileRecord.put("original_file_name", originalName);
+    fileRecord.put("file_name", originalName);
+    fileRecord.put("mime_type", mimeType);
     if (bucket != null) {
-      record.put("storage_bucket", bucket);
+      fileRecord.put("storage_bucket", bucket);
     }
-    return record;
+    return fileRecord;
   }
 
   private DispatchResult dispatch(

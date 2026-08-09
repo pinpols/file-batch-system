@@ -53,8 +53,8 @@ class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrat
         "SELECT tenant_id, policy_code, max_running_jobs_per_tenant"
             + " FROM batch.tenant_quota_policy WHERE policy_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-qp-ta");
-    assertThat(row.get("policy_code")).isEqualTo(code);
+    assertThat(row).containsEntry("tenant_id", "int-qp-ta");
+    assertThat(row).containsEntry("policy_code", code);
     assertThat(((Number) row.get("max_running_jobs_per_tenant")).intValue()).isEqualTo(10);
 
     jdbcTemplate.update("DELETE FROM batch.tenant_quota_policy WHERE policy_code = ?", code);

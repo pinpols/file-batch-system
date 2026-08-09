@@ -66,11 +66,11 @@ public class DefaultConsoleNotificationApplicationService
   private static final String KEY_CHANNEL_NAME = "channelName";
   private static final String KEY_CHANNEL_TYPE = "channelType";
   private static final String KEY_TENANT_ID = "tenantId";
+  private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";
 
   private static final Set<String> CHANNEL_TYPES =
-      Set.of("EMAIL", "DINGTALK", "WECOM", "WEBHOOK", "SMS");
+      Set.of("EMAIL", "DINGTALK", "WECOM", CHANNEL_TYPE_WEBHOOK, "SMS");
 
-  private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";
   private static final String COL_CHANNEL_TYPE = "channel_type";
   private static final String COL_CONFIG_JSON = "config_json";
   private static final String TEST_EVENT_TYPE = "TEST";
@@ -106,9 +106,8 @@ public class DefaultConsoleNotificationApplicationService
   @Override
   public Map<String, Object> getChannel(String tenantId, String channelCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> channel = Guard.requireFound(
+    return Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
-    return channel;
   }
 
   @Override
@@ -214,9 +213,8 @@ public class DefaultConsoleNotificationApplicationService
   @Override
   public Map<String, Object> getRule(String tenantId, Long ruleId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> rule = Guard.requireFound(
+    return Guard.requireFound(
         ruleMapper.selectById(resolved, ruleId), "subscription rule not found: " + ruleId);
-    return rule;
   }
 
   @Override

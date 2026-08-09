@@ -47,7 +47,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
     assertThat(snapshot.channelCode()).isEqualTo("ch-001");
     assertThat(snapshot.channelType()).isEqualTo("API");
     assertThat(snapshot.healthStatus()).isEqualTo("HEALTHY");
-    assertThat(snapshot.consecutiveFailures()).isEqualTo(0);
+    assertThat(snapshot.consecutiveFailures()).isZero();
     assertThat(snapshot.lastSuccessAt()).isNotNull();
     assertThat(snapshot.probeMessage()).isEqualTo("ok");
   }
@@ -78,7 +78,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
     DispatchChannelHealthSnapshot snapshot = healthRepository.findHealth("t1", "ch-003");
     assertThat(snapshot).isNotNull();
     assertThat(snapshot.healthStatus()).isEqualTo("HEALTHY");
-    assertThat(snapshot.consecutiveFailures()).isEqualTo(0);
+    assertThat(snapshot.consecutiveFailures()).isZero();
     assertThat(snapshot.probeMessage()).isEqualTo("ok");
   }
 

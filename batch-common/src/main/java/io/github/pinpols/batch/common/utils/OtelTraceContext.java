@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
+import org.jspecify.annotations.Nullable;
 
 /**
  * OTel TraceContext 桥接工具。
@@ -26,7 +27,7 @@ public final class OtelTraceContext {
    *
    * @return 有效 traceId，或 null（无 active span / span context invalid / 全 0）
    */
-  public static String currentTraceIdOrNull() {
+  public static @Nullable String currentTraceIdOrNull() {
     Span current = Span.current();
     if (current == null) {
       return null;

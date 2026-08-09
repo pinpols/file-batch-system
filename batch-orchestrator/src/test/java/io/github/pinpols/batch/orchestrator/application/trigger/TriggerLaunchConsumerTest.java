@@ -78,7 +78,7 @@ class TriggerLaunchConsumerTest {
     when(launchApplicationService.launch(any(LaunchRequest.class)))
         .thenReturn(new LaunchResponse("inst-001", "trace-1"));
 
-    consumer.consume(record(envelope), ack);
+    consumer.consume(consumerRecord(envelope), ack);
 
     verify(launchApplicationService, times(1)).launch(any(LaunchRequest.class));
     verify(ack).acknowledge();
@@ -87,10 +87,10 @@ class TriggerLaunchConsumerTest {
 
   @Test
   void consume_invalidJson_acksAndSkips() {
-    ConsumerRecord<String, String> record =
+    ConsumerRecord<String, String> consumerRecord =
         new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "key", "{not-json");
 
-    consumer.consume(record, ack);
+    consumer.consume(consumerRecord, ack);
 
     verify(launchApplicationService, never()).launch(any());
     verify(ack).acknowledge();
@@ -99,9 +99,9 @@ class TriggerLaunchConsumerTest {
 
   @Test
   void consume_emptyEnvelope_acksAndSkips() {
-    ConsumerRecord<String, String> record = record(null);
+    ConsumerRecord<String, String> consumerRecord = consumerRecord(null);
 
-    consumer.consume(record, ack);
+    consumer.consume(consumerRecord, ack);
 
     verify(launchApplicationService, never()).launch(any());
     verify(ack).acknowledge();
@@ -114,7 +114,7 @@ class TriggerLaunchConsumerTest {
     when(launchApplicationService.launch(any(LaunchRequest.class)))
         .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "dedup hit"));
 
-    consumer.consume(record(envelope), ack);
+    consumer.consume(consumerRecord(envelope), ack);
 
     verify(ack).acknowledge();
     assertThat(deduped("tenant-a")).isEqualTo(1.0);
@@ -126,10 +126,10 @@ class TriggerLaunchConsumerTest {
     when(launchApplicationService.launch(any(LaunchRequest.class)))
         .thenThrow(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "rate limit"));
 
-    assertThatThrownBy(() -> consumer.consume(record(envelope), ack))
+    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
         .isInstanceOf(ResponseStatusException.class);
 
-    verify(ack, org.mockito.Mockito.never()).acknowledge();
+    verify(ack, never()).acknowledge();
     assertThat(failed("rate_limited")).isEqualTo(1.0);
   }
 
@@ -139,7 +139,7 @@ class TriggerLaunchConsumerTest {
     when(launchApplicationService.launch(any(LaunchRequest.class)))
         .thenThrow(new IllegalStateException("downstream down"));
 
-    assertThatThrownBy(() -> consumer.consume(record(envelope), ack))
+    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
         .isInstanceOf(IllegalStateException.class);
 
     verify(ack, never()).acknowledge();
@@ -155,7 +155,7 @@ class TriggerLaunchConsumerTest {
     job.setId(7701L);
     when(jobInstanceMapper.selectByInstanceNo("tenant-a", "inst-77")).thenReturn(job);
 
-    consumer.consume(record(envelope), ack);
+    consumer.consume(consumerRecord(envelope), ack);
 
     verify(triggerRequestMapper).updateAcceptance("tenant-a", "req-wb1", "LAUNCHED", 7701L);
     verify(ack).acknowledge();
@@ -168,7 +168,7 @@ class TriggerLaunchConsumerTest {
         .thenReturn(new LaunchResponse("inst-missing", "trace-2"));
     when(jobInstanceMapper.selectByInstanceNo("tenant-a", "inst-missing")).thenReturn(null);
 
-    consumer.consume(record(envelope), ack);
+    consumer.consume(consumerRecord(envelope), ack);
 
     // 仍回写 LAUNCHED,relatedJobInstanceId 为 null(让对账 reconciler 后续回退补 PK)
     verify(triggerRequestMapper).updateAcceptance("tenant-a", "req-wb2", "LAUNCHED", null);
@@ -184,7 +184,7 @@ class TriggerLaunchConsumerTest {
         .thenThrow(new IllegalStateException("DB transient down"));
 
     // 主路径已 launch 成功,回写抛异常仅 WARN,绝不能阻断 ack(否则消息会被重投触发重复 launch)
-    consumer.consume(record(envelope), ack);
+    consumer.consume(consumerRecord(envelope), ack);
 
     verify(ack).acknowledge();
     verify(triggerRequestMapper, never()).updateAcceptance(any(), any(), any(), any());
@@ -205,7 +205,7 @@ class TriggerLaunchConsumerTest {
     return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
   }
 
-  private static ConsumerRecord<String, String> record(LaunchEnvelope envelope) {
+  private static ConsumerRecord<String, String> consumerRecord(LaunchEnvelope envelope) {
     String value = envelope == null ? "null" : JsonUtils.toJson(envelope);
     return new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "key", value);
   }

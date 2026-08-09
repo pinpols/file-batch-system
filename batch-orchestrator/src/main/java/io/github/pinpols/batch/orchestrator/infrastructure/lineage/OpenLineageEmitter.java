@@ -104,7 +104,7 @@ public class OpenLineageEmitter {
       executor.execute(() -> sendQuietly(run, terminalStatus, finishedAt));
     } catch (RejectedExecutionException ex) {
       // 池满:丢弃 + 计数,不回压主链。
-      record("rejected", terminalStatus);
+      recordLineageMetric("rejected", terminalStatus);
       SwallowedExceptionLogger.info(
           OpenLineageEmitter.class, "catch:RejectedExecutionException", ex);
     }
@@ -123,17 +123,17 @@ public class OpenLineageEmitter {
       HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int sc = resp.statusCode();
       if (sc >= 200 && sc < 300) {
-        record("success", terminalStatus);
+        recordLineageMetric("success", terminalStatus);
       } else {
-        record("http_error", terminalStatus);
+        recordLineageMetric("http_error", terminalStatus);
         log.warn("OpenLineage emit non-2xx: status={}, workflowRunId={}", sc, run.getId());
       }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      record("interrupted", terminalStatus);
+      recordLineageMetric("interrupted", terminalStatus);
       SwallowedExceptionLogger.info(OpenLineageEmitter.class, "catch:InterruptedException", ex);
     } catch (RuntimeException | java.io.IOException ex) {
-      record("error", terminalStatus);
+      recordLineageMetric("error", terminalStatus);
       SwallowedExceptionLogger.warn(OpenLineageEmitter.class, "catch:emit", ex);
     }
   }
@@ -221,7 +221,7 @@ public class OpenLineageEmitter {
       return mapper.selectWorkflowDatasets(
           run.getTenantId(), run.getRelatedJobInstanceId(), run.getTraceId());
     } catch (RuntimeException ex) {
-      record("dataset_error", run.getRunStatus());
+      recordLineageMetric("dataset_error", run.getRunStatus());
       SwallowedExceptionLogger.warn(OpenLineageEmitter.class, "catch:datasetLookup", ex);
       return List.of();
     }
@@ -304,7 +304,7 @@ public class OpenLineageEmitter {
         .toString();
   }
 
-  private void record(String outcome, String terminalStatus) {
+  private void recordLineageMetric(String outcome, String terminalStatus) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
       return;

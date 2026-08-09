@@ -109,7 +109,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
         quotaRuntimeStateMapper,
         new BatchTimezoneProvider(new BatchTimezoneProperties()),
         selfProvider);
-    org.mockito.Mockito.when(selfProvider.getObject()).thenReturn(service);
+    when(selfProvider.getObject()).thenReturn(service);
   }
 
   // ── evaluateAndReserve — guard conditions ─────────────────────────────────

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +19,7 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -90,7 +92,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     assertThat(updatedId.getValue()).as("必须按 sourceInstanceId 命中第二条 entry").isEqualTo(102L);
     assertThat(updatedId.getValue()).as("不得误更新第一条 entry").isNotEqualTo(entryA.id());
     // 不应回退到线性扫
-    verify(entryMapper, org.mockito.Mockito.never()).selectBySessionId(anyLong());
+    verify(entryMapper, never()).selectBySessionId(anyLong());
   }
 
   @Test
@@ -117,9 +119,9 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     verify(entryMapper)
         .updateStatus(eq(201L), eq(ENTRY_SUCCEEDED), eq(7100L), any(), any(), any(), any(), any());
     // 不需要 source 回退也不需要线性扫
-    verify(entryMapper, org.mockito.Mockito.never())
+    verify(entryMapper, never())
         .selectBySessionAndSourceInstanceId(anyLong(), anyString(), anyLong());
-    verify(entryMapper, org.mockito.Mockito.never()).selectBySessionId(anyLong());
+    verify(entryMapper, never()).selectBySessionId(anyLong());
   }
 
   @Test
@@ -150,7 +152,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
         .id(id)
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope("ALL")
         .resultPolicy("CREATE_NEW_VERSION")
         .configVersionPolicy("USE_ORIGINAL_CONFIG")

@@ -67,7 +67,7 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
 
   @Test
   void listShouldPassFilters() throws Exception {
-    when(service.list(eq("ta"), eq("QP_A"), eq(true), eq(1), eq(20)))
+    when(service.list("ta", "QP_A", true, 1, 20))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
         .perform(get("/api/console/quota-policies")

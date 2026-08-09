@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -201,8 +200,7 @@ class WorkflowDagValidatorTest {
     fs.setRelatedPipelineCode("ghost_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(eq(TENANT), eq("ghost_pipeline")))
-        .thenReturn(0L);
+    when(pipelineDefinitionMapper.countByJobCode(TENANT, "ghost_pipeline")).thenReturn(0L);
 
     // 不能走 assertBizError helper(那个 helper 会 lenient stub 覆盖此处的 0L)
     assertThatThrownBy(() -> validator.validate(TENANT, req))
@@ -221,8 +219,7 @@ class WorkflowDagValidatorTest {
     fs.setRelatedPipelineCode("known_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(eq(TENANT), eq("known_pipeline")))
-        .thenReturn(1L);
+    when(pipelineDefinitionMapper.countByJobCode(TENANT, "known_pipeline")).thenReturn(1L);
 
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
   }

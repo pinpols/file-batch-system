@@ -57,9 +57,9 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
         "SELECT tenant_id, calendar_code, timezone FROM batch.business_calendar"
             + " WHERE calendar_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-cal-ta");
-    assertThat(row.get("calendar_code")).isEqualTo(code);
-    assertThat(row.get("timezone")).isEqualTo("Asia/Shanghai");
+    assertThat(row).containsEntry("tenant_id", "int-cal-ta");
+    assertThat(row).containsEntry("calendar_code", code);
+    assertThat(row).containsEntry("timezone", "Asia/Shanghai");
 
     jdbcTemplate.update("DELETE FROM batch.business_calendar WHERE calendar_code = ?", code);
   }

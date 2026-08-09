@@ -68,13 +68,17 @@ class ConsoleMetaEnumRegistrationTest {
 
   @Test
   void excludedEnumsAreNotRegistered() {
+    assertThat(EXCLUDED)
+        .as("EXCLUDED 白名单为空时 doesNotContainAnyElementsOf 无法提供有效断言")
+        .isNotEmpty();
     Set<String> registered = ConsoleMetaQueryService.registeredEnumClasses().stream()
         .map(Class::getSimpleName)
         .collect(Collectors.toUnmodifiableSet());
 
-    assertThat(registered)
-        .as("EXCLUDED 白名单中的枚举不应同时出现在 REGISTRATIONS 中")
-        .doesNotContainAnyElementsOf(EXCLUDED);
+    Set<String> registeredExcluded = new TreeSet<>(registered);
+    registeredExcluded.retainAll(EXCLUDED);
+
+    assertThat(registeredExcluded).as("EXCLUDED 白名单中的枚举不应同时出现在 REGISTRATIONS 中").isEmpty();
   }
 
   @Test

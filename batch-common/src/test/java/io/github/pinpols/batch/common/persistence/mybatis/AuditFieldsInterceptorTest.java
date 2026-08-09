@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.common.persistence.mybatis;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import java.time.Clock;
@@ -16,7 +18,6 @@ import org.apache.ibatis.plugin.Invocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.slf4j.MDC;
 
 class AuditFieldsInterceptorTest {
@@ -120,14 +121,14 @@ class AuditFieldsInterceptorTest {
   }
 
   private void runIntercept(Object param, SqlCommandType type) throws Throwable {
-    MappedStatement ms = Mockito.mock(MappedStatement.class);
-    Mockito.when(ms.getSqlCommandType()).thenReturn(type);
-    Executor executor = Mockito.mock(Executor.class);
+    MappedStatement ms = mock(MappedStatement.class);
+    when(ms.getSqlCommandType()).thenReturn(type);
+    Executor executor = mock(Executor.class);
     Invocation invocation = new Invocation(
         executor,
         Executor.class.getMethod("update", MappedStatement.class, Object.class),
         new Object[] {ms, param});
-    Mockito.when(executor.update(ms, param)).thenReturn(1);
+    when(executor.update(ms, param)).thenReturn(1);
     interceptor.intercept(invocation);
   }
 

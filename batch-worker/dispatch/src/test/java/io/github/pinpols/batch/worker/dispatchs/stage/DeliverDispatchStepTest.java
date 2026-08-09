@@ -120,9 +120,9 @@ class DeliverDispatchStepTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_SEND_FAILED");
-    assertThat(context.getAttributes().get("retryRequested")).isEqualTo(Boolean.TRUE);
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.RETRY.name());
+    assertThat(context.getAttributes()).containsEntry("retryRequested", Boolean.TRUE);
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
     verify(fileDispatchRepository).markFailed(any(), any(), any(), any(), any());
   }
 

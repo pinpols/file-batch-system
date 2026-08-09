@@ -98,10 +98,11 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(approvalNo).isNotBlank();
 
-    ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.get("t1", approvalNo);
-    assertThat(record.approvalStatus()).isEqualTo("PENDING");
-    assertThat(record.tenantId()).isEqualTo("t1");
-    assertThat(record.approvalType()).isEqualTo("COMPENSATION");
+    ApprovalWorkflowService.ApprovalRecord approvalRecord =
+        approvalWorkflowService.get("t1", approvalNo);
+    assertThat(approvalRecord.approvalStatus()).isEqualTo("PENDING");
+    assertThat(approvalRecord.tenantId()).isEqualTo("t1");
+    assertThat(approvalRecord.approvalType()).isEqualTo("COMPENSATION");
   }
 
   @Test
@@ -198,7 +199,8 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
         .approvalReason("verify payload")
         .build());
 
-    ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.get("t1", approvalNo);
-    assertThat(JSON.readTree(record.payloadJson())).isEqualTo(JSON.readTree(payload));
+    ApprovalWorkflowService.ApprovalRecord approvalRecord =
+        approvalWorkflowService.get("t1", approvalNo);
+    assertThat(JSON.readTree(approvalRecord.payloadJson())).isEqualTo(JSON.readTree(payload));
   }
 }

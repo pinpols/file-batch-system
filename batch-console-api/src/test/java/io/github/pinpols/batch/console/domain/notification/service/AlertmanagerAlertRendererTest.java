@@ -138,7 +138,7 @@ class AlertmanagerAlertRendererTest {
     assertThat(rendered.body()).contains("... and 2 more");
     // alertCount 保留原始总量,但 alertnames 只累积展开的 shown 条(防超大批量下无界膨胀)。
     assertThat(rendered.structured()).containsEntry("alertCount", 3);
-    assertThat(rendered.structured().get("alertnames")).isEqualTo(List.of("Noise"));
+    assertThat(rendered.structured()).containsEntry("alertnames", List.of("Noise"));
   }
 
   @Test

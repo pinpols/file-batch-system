@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -164,7 +164,7 @@ class DefaultTaskOutcomeServiceTest {
   @Test
   @DisplayName("recordNodeRunReady: 首次插入 → runSeq=1,状态 READY")
   void readyFirstInsertSetsRunSeq1() {
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null);
 
     WorkflowNodeRunEntity result = service.recordNodeRunReady(10L, "n1", "TASK");
@@ -180,7 +180,7 @@ class DefaultTaskOutcomeServiceTest {
   void readySubsequentInsertsIncrementRunSeq() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setRunSeq(2);
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(existing);
 
     WorkflowNodeRunEntity result = service.recordNodeRunReady(10L, "n1", "TASK");
@@ -191,10 +191,10 @@ class DefaultTaskOutcomeServiceTest {
   @Test
   @DisplayName("recordNodeRunReady: 并发 insert 撞唯一约束 → 不抛错,返回已有记录")
   void readyHandlesDuplicateKey() {
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null) // nextRunSeq 读
         .thenReturn(existingRunSeq(5)); // catch block 重读
-    org.mockito.Mockito.doThrow(new DuplicateKeyException("uk_conflict"))
+    doThrow(new DuplicateKeyException("uk_conflict"))
         .when(workflowNodeRunMapper)
         .insert(any());
 
@@ -209,7 +209,7 @@ class DefaultTaskOutcomeServiceTest {
   @Test
   @DisplayName("recordNodeRunStart: 首次插入 → 状态 RUNNING + startedAt 透传")
   void startFirstInsertRunningWithStartedAt() {
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null);
 
     java.time.Instant t = java.time.Instant.parse("2026-05-20T10:00:00Z");
@@ -223,10 +223,10 @@ class DefaultTaskOutcomeServiceTest {
   @Test
   @DisplayName("recordNodeRunStart: 并发 insert 撞唯一约束 → 返回已有记录,不抛")
   void startHandlesDuplicateKey() {
-    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null)
         .thenReturn(existingRunSeq(2));
-    org.mockito.Mockito.doThrow(new DuplicateKeyException("uk_conflict"))
+    doThrow(new DuplicateKeyException("uk_conflict"))
         .when(workflowNodeRunMapper)
         .insert(any());
 

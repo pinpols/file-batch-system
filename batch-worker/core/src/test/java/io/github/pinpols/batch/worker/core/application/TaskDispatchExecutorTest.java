@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.core.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -40,7 +39,7 @@ class TaskDispatchExecutorTest {
   @Test
   void shouldReturnNullWhenClaimDenied() {
     TaskDispatchMessage message = sampleMessage();
-    when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.empty());
+    when(workerRuntimeFacade.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
 
     WorkerExecutionResult result = executor.execute(message, "w1");
 
@@ -84,7 +83,7 @@ class TaskDispatchExecutorTest {
         null,
         null,
         "inv-fresh");
-    when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.of(fresh));
+    when(workerRuntimeFacade.claim("t1", 42L, "w1")).thenReturn(Optional.of(fresh));
     when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 
     executor.execute(message, "w1");

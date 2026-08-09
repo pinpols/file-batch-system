@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -97,7 +98,7 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("assignWorker: task 不存在 → null,不读 worker / 不调 CAS")
   void assignTaskMissingReturnsNull() {
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
 
     assertThat(service.assignWorker("ta", 100L, "w1")).isNull();
     verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
@@ -108,7 +109,7 @@ class DefaultTaskAssignmentServiceTest {
   @DisplayName("assignWorker: workerCode 为空 → 返 current,不读 worker")
   void assignBlankWorkercodeReturnsCurrentUnchanged() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "  ");
     assertThat(result).isSameAs(task);
@@ -119,8 +120,8 @@ class DefaultTaskAssignmentServiceTest {
   @DisplayName("assignWorker: worker 不在线 → 返 current,不 CAS")
   void assignWorkerOfflineReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
@@ -132,8 +133,8 @@ class DefaultTaskAssignmentServiceTest {
   @DisplayName("assignWorker: worker DRAINING → 返 current,不 CAS")
   void assignWorkerDrainingReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.DRAINING.code(), "default"));
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
@@ -145,12 +146,12 @@ class DefaultTaskAssignmentServiceTest {
   void assignWorkerGroupMismatchReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     task.setJobPartitionId(50L);
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), "wrong-group"));
     JobPartitionEntity p = new JobPartitionEntity();
     p.setWorkerGroup("default");
-    when(jobPartitionMapper.selectById(eq("ta"), eq(50L))).thenReturn(p);
+    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(p);
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
     assertThat(result).isSameAs(task);
@@ -162,8 +163,8 @@ class DefaultTaskAssignmentServiceTest {
   void assignCasConflictReturnsRefreshed() {
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity refreshed = task(100L, 2L, TaskStatus.RUNNING.code());
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(initial, refreshed);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial, refreshed);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), null));
     when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(0);
 
@@ -176,7 +177,7 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("renewTaskLease: task 不存在 → false")
   void renewTaskMissing() {
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
@@ -185,7 +186,7 @@ class DefaultTaskAssignmentServiceTest {
   void renewTaskWithoutPartition() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(null);
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
@@ -195,7 +196,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity t = task(100L, 1L, TaskStatus.READY.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
@@ -205,7 +206,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w-other");
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
@@ -215,7 +216,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     assertThat(service.renewTaskLease("ta", 100L, "w1", null)).isFalse();
     assertThat(service.renewTaskLease("ta", 100L, "w1", "")).isFalse();
     assertThat(service.renewTaskLease("ta", 100L, "w1", "  ")).isFalse();
@@ -228,7 +229,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isTrue();
@@ -240,7 +241,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(0);
 
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
@@ -251,7 +252,7 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("recordHeartbeat: 续租失败 → leaseRenewed=false,不写 details / 不读取消标记")
   void recordHeartbeatLeaseFails() {
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
 
     var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"p\":1}");
 
@@ -267,7 +268,7 @@ class DefaultTaskAssignmentServiceTest {
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
     t.setCancelRequested(true);
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
     var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"processed\":42}");
@@ -283,7 +284,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
 
     var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", null);
@@ -405,8 +406,7 @@ class DefaultTaskAssignmentServiceTest {
         new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
         new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
 
-    assertThat(results).hasSize(4);
-    assertThat(results).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
+    assertThat(results).hasSize(4).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
     verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
   }
 
@@ -425,18 +425,17 @@ class DefaultTaskAssignmentServiceTest {
   void assignWorkerMemoDeduplicatesWorkerRegistryLookup() {
     JobTaskEntity t1 = task(101L, 1L, TaskStatus.READY.code());
     JobTaskEntity t2 = task(102L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById(eq("ta"), eq(101L))).thenReturn(t1);
-    when(jobTaskMapper.selectById(eq("ta"), eq(102L))).thenReturn(t2);
+    when(jobTaskMapper.selectById("ta", 101L)).thenReturn(t1);
+    when(jobTaskMapper.selectById("ta", 102L)).thenReturn(t2);
     // worker 离线:两次 claim 都判不可认领,但 worker_registry 只应查一次
-    when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
     var memo = new TaskAssignmentService.WorkerLookupMemo();
 
     assertThat(service.assignWorker("ta", 101L, "w1", memo)).isSameAs(t1);
     assertThat(service.assignWorker("ta", 102L, "w1", memo)).isSameAs(t2);
 
-    verify(workerRegistryMapper, org.mockito.Mockito.times(1))
-        .selectByTenantAndWorkerCode(eq("ta"), eq("w1"));
+    verify(workerRegistryMapper, times(1)).selectByTenantAndWorkerCode("ta", "w1");
   }
 
   // ===== updateTaskStatus =====

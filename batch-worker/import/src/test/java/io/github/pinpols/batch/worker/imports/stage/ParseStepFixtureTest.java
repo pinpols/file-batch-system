@@ -56,7 +56,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).as(result.message()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(10L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 10L);
   }
 
   // ── Pipe-delimited (5 data rows) ───────────────────────────────────────────
@@ -69,7 +69,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).as(result.message()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
   }
 
   // ── Tab-separated (5 data rows) ────────────────────────────────────────────
@@ -82,7 +82,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
   }
 
   // ── JSON array fixture (5 records) ─────────────────────────────────────────
@@ -95,7 +95,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
   }
 
   // ── JSON envelope fixture (5 records inside "records" key) ─────────────────
@@ -108,7 +108,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
   }
 
   // ── UTF-8 BOM CSV (header with BOM prefix stripped) ────────────────────────
@@ -132,13 +132,13 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(3L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 3L);
   }
 
   // ── Excel fixture (programmatically built, 3 data rows) ───────────────────
 
   @Test
-  void shouldParseExcelFixture_programmaticallyBuilt() throws Exception {
+  void shouldParseExcelFixture_programmaticallyBuilt() {
     byte[] xlsx = TestExcelFileBuilder.customerImport(List.of(
         Map.of(
             "customerNo",
@@ -211,7 +211,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(3L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 3L);
   }
 
   // ── Bad-records CSV (2 valid rows: C001 and C010) ──────────────────────────
@@ -226,7 +226,7 @@ class ParseStepFixtureTest {
 
     // ParseStep 写入每一行（包括坏记录行）（共 10 行减 1 行表头）
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(10L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 10L);
   }
 
   @Test
@@ -238,8 +238,8 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).as(result.toString()).isTrue();
-    assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(2L);
-    assertThat(ctx.getAttributes().get("declaredRecordCount")).isEqualTo(2L);
+    assertThat(ctx.getAttributes()).containsEntry("totalCount", 2L);
+    assertThat(ctx.getAttributes()).containsEntry("declaredRecordCount", 2L);
     assertThat(String.valueOf(ctx.getAttributes().get("declaredControlTotal"))).isEqualTo("30.00");
   }
 

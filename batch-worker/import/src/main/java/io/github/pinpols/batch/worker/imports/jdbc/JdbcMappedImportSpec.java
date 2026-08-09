@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code
@@ -261,7 +263,7 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
-  private static Boolean toBoolean(Object value) {
+  private static @Nullable Boolean toBoolean(Object value) {
     if (value == null) {
       return null;
     }
@@ -292,7 +294,7 @@ public record JdbcMappedImportSpec(
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       if (c == '_' || c == '-' || c == ' ') {
-        if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '_') {
+        if (EmptyChecks.isNotEmpty(sb) && sb.charAt(sb.length() - 1) != '_') {
           sb.append('_');
         }
         continue;
@@ -301,7 +303,7 @@ public record JdbcMappedImportSpec(
         boolean prevLowerOrDigit =
             i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
         boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
-        if (sb.length() > 0
+        if (EmptyChecks.isNotEmpty(sb)
             && sb.charAt(sb.length() - 1) != '_'
             && (prevLowerOrDigit || nextLower)) {
           sb.append('_');

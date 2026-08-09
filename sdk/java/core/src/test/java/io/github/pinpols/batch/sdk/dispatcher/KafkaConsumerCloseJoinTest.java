@@ -163,7 +163,7 @@ class KafkaConsumerCloseJoinTest {
 
   /** 二次调用 close() 幂等,不重复 wakeup / 不阻塞。 */
   @Test
-  void closeIsIdempotent() throws Exception {
+  void closeIsIdempotent() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.workflow.web.response;
 
+import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.Map;
 
 /**
@@ -16,8 +17,8 @@ public record ConsoleWorkflowRunSkipNodeResponse(Long id, String nodeCode, Strin
       return null;
     }
     return new ConsoleWorkflowRunSkipNodeResponse(
-        WorkflowResponseFieldReader.longValue(row, "id"),
-        WorkflowResponseFieldReader.stringValue(row, "nodeCode"),
-        WorkflowResponseFieldReader.stringValue(row, "nodeStatus"));
+        ConsoleResponseFieldReader.longValue(row, "id"),
+        ConsoleResponseFieldReader.stringValue(row, "nodeCode"),
+        ConsoleResponseFieldReader.stringValue(row, "nodeStatus"));
   }
 }

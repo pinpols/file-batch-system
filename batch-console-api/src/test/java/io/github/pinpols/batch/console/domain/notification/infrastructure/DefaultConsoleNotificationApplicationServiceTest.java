@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -142,7 +143,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     // Critical 回归堵口:WEBHOOK 渠道 url 存前经 CallbackUrlValidator fail-closed,拦字面量内网/元数据 IP,
     // 不让它入库(OkHttp Dns pin 对字面量 IP 短路不生效,此处是主修)。
     when(channelMapper.selectByCode("tenant-a", "hook-1")).thenReturn(null);
-    org.mockito.Mockito.doThrow(io.github.pinpols.batch.common.exception.BizException.of(
+    doThrow(io.github.pinpols.batch.common.exception.BizException.of(
             io.github.pinpols.batch.common.enums.ResultCode.INVALID_ARGUMENT,
             "error.callback.restricted_address"))
         .when(callbackUrlValidator)

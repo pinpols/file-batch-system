@@ -164,7 +164,7 @@ class ConsoleTenantGuardTest {
         .setAuthentication(new UsernamePasswordAuthenticationToken(
             new ConsolePrincipal("bob", null, Set.of("ROLE_TENANT_USER")), "ignored"));
 
-    assertThatThrownBy(() -> tenantGuard.currentTenantScopeOrNull())
+    assertThatThrownBy(tenantGuard::currentTenantScopeOrNull)
         .isInstanceOf(BizException.class)
         .extracting(ex -> ((BizException) ex).getCode())
         .isEqualTo(ResultCode.FORBIDDEN);

@@ -67,7 +67,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(3L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 3L);
     assertNdjsonRecordCount(context, 3);
     assertNdjsonContains(context, "C00001", "Alice", "ACTIVE");
     assertNdjsonContains(context, "C00003", "Charlie", "ACTIVE");
@@ -101,7 +101,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(2L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
     assertNdjsonRecordCount(context, 2);
   }
 
@@ -125,7 +125,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(1L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 1L);
     assertNdjsonRecordCount(context, 1);
     assertNdjsonContains(context, "C00004", "Dana", "ACTIVE");
   }
@@ -157,7 +157,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(2L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
     assertNdjsonRecordCount(context, 2);
     assertNdjsonContains(context, "C001", "Alice", "ACTIVE");
     assertNdjsonContains(context, "C002", "Bob", "INACTIVE");

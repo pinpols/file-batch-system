@@ -172,7 +172,7 @@ class GenerateStepCheckpointTest {
     ExportStageResult r2 = generateStep.execute(run2);
 
     assertThat(r2.success()).isTrue();
-    assertThat(run2.getAttributes().get("recordCount")).isEqualTo(3L);
+    assertThat(run2.getAttributes()).containsEntry("recordCount", 3L);
 
     String content = Files.readString(deterministicFile);
     // 收尾后缀只在完成时写一次:整体是合法 JSON。
@@ -198,7 +198,7 @@ class GenerateStepCheckpointTest {
     ExportStageResult result = generateStep.execute(rerun);
 
     assertThat(result.success()).isTrue();
-    assertThat(rerun.getAttributes().get("recordCount")).isEqualTo(1L);
+    assertThat(rerun.getAttributes()).containsEntry("recordCount", 1L);
     assertThat(positionStore.advanceCalls).isEqualTo(advancesAfterFirst);
   }
 

@@ -69,7 +69,7 @@ class ConsoleAlertRoutingControllerBehaviorTest {
 
   @Test
   void listShouldPassAllFilters() throws Exception {
-    when(service.list(eq("ta"), eq("RT_A"), eq("ops"), eq("WARN"), eq(true), eq(1), eq(20)))
+    when(service.list("ta", "RT_A", "ops", "WARN", true, 1, 20))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
         .perform(get("/api/console/alert-routings")

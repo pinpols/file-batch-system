@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,11 +78,11 @@ class DefaultScheduleForwarderSetBasedTest {
     OutboxEventEntity exhausted = event("ta", 3L, 4);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail, exhausted));
     when(outboxEventMapper.markPublishingBatch(
-            eq("ta"),
-            eq(List.of(1L, 2L, 3L)),
-            eq(OutboxPublishStatus.PUBLISHING.code()),
-            eq(OutboxPublishStatus.NEW.code()),
-            eq(OutboxPublishStatus.FAILED.code())))
+            "ta",
+            List.of(1L, 2L, 3L),
+            OutboxPublishStatus.PUBLISHING.code(),
+            OutboxPublishStatus.NEW.code(),
+            OutboxPublishStatus.FAILED.code()))
         .thenReturn(List.of(1L, 2L, 3L));
     when(outboxPublisher.publish(ok)).thenReturn(CompletableFuture.completedFuture(true));
     when(outboxPublisher.publish(fail)).thenReturn(CompletableFuture.completedFuture(false));
@@ -101,10 +102,10 @@ class DefaultScheduleForwarderSetBasedTest {
     // 阶段三守卫:批量版必须保留 publish_status='PUBLISHING'(R3-P0-6)
     verify(outboxEventMapper)
         .markPublishedBatch(
-            eq("ta"),
-            eq(List.of(1L)),
-            eq(OutboxPublishStatus.PUBLISHED.code()),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            "ta",
+            List.of(1L),
+            OutboxPublishStatus.PUBLISHED.code(),
+            OutboxPublishStatus.PUBLISHING.code());
     verify(outboxEventMapper)
         .markFailedBatch(
             eq("ta"),
@@ -114,10 +115,10 @@ class DefaultScheduleForwarderSetBasedTest {
             eq(OutboxPublishStatus.PUBLISHING.code()));
     verify(outboxEventMapper)
         .markGiveUpBatch(
-            eq("ta"),
-            eq(List.of(3L)),
-            eq(OutboxPublishStatus.GIVE_UP.code()),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            "ta",
+            List.of(3L),
+            OutboxPublishStatus.GIVE_UP.code(),
+            OutboxPublishStatus.PUBLISHING.code());
     // 单条路径彻底退役
     verify(outboxEventMapper, never())
         .markPublishing(anyString(), anyLong(), anyString(), anyString(), anyString());
@@ -129,7 +130,7 @@ class DefaultScheduleForwarderSetBasedTest {
     // 失败 + GIVE_UP 各一条 event_outbox_retry 审计
     ArgumentCaptor<EventOutboxRetryEntity> retryCap =
         ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
-    verify(eventOutboxRetryMapper, org.mockito.Mockito.times(2)).insert(retryCap.capture());
+    verify(eventOutboxRetryMapper, times(2)).insert(retryCap.capture());
     assertThat(retryCap.getAllValues())
         .extracting(EventOutboxRetryEntity::getOutboxEventId)
         .containsExactlyInAnyOrder(2L, 3L);
@@ -225,10 +226,10 @@ class DefaultScheduleForwarderSetBasedTest {
     assertThat(result.publishFailed()).isEqualTo(1);
     verify(outboxEventMapper)
         .markPublishedBatch(
-            eq("ta"),
-            eq(List.of(1L)),
-            eq(OutboxPublishStatus.PUBLISHED.code()),
-            eq(OutboxPublishStatus.PUBLISHING.code()));
+            "ta",
+            List.of(1L),
+            OutboxPublishStatus.PUBLISHED.code(),
+            OutboxPublishStatus.PUBLISHING.code());
     verify(outboxEventMapper)
         .markFailedBatch(
             eq("ta"),
@@ -239,7 +240,7 @@ class DefaultScheduleForwarderSetBasedTest {
     // 失败事件落一条 event_outbox_retry 审计。
     ArgumentCaptor<EventOutboxRetryEntity> retryCap =
         ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
-    verify(eventOutboxRetryMapper, org.mockito.Mockito.times(1)).insert(retryCap.capture());
+    verify(eventOutboxRetryMapper, times(1)).insert(retryCap.capture());
     assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(2L);
   }
 

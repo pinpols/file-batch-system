@@ -191,7 +191,7 @@ public class ReceiveStep implements ImportStageStep {
     if (!(fileRecordObj instanceof Map<?, ?> fileRecord) || fileRecord.isEmpty()) {
       return payload;
     }
-    Map<String, Object> asMap = (Map<String, Object>) objectMapper.convertValue(payload, Map.class);
+    Map<String, Object> asMap = objectMapper.convertValue(payload, Map.class);
     backfillBlank(asMap, "storagePath", fileRecord.get("storage_path"));
     backfillBlank(asMap, "storageBucket", fileRecord.get("storage_bucket"));
     backfillBlank(asMap, "storageType", fileRecord.get("storage_type"));
@@ -271,8 +271,7 @@ public class ReceiveStep implements ImportStageStep {
             return importPayload;
           }
           @SuppressWarnings("unchecked")
-          Map<String, Object> asMap =
-              (Map<String, Object>) objectMapper.convertValue(importPayload, Map.class);
+          Map<String, Object> asMap = objectMapper.convertValue(importPayload, Map.class);
           asMap.put("content", trimmed);
           asMap.put("contentBase64", null);
           return objectMapper.convertValue(asMap, ImportPayload.class);

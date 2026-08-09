@@ -195,7 +195,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
-  void poll_publisherFailureAtMaxAttempts_marksGiveUp() throws Exception {
+  void poll_publisherFailureAtMaxAttempts_marksGiveUp() {
     relayProperties.setMaxPublishAttempts(3);
     TriggerOutboxEventEntity event = buildPendingEvent(107L, validEnvelopePayload());
     event.setPublishAttempt(2);

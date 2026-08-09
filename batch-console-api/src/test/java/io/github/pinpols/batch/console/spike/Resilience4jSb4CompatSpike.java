@@ -39,7 +39,7 @@ import org.springframework.test.context.TestPropertySource;
  *
  * <p>未验(独立 PR):{@code @CircuitBreaker} 注解切面在 RestClient 路径命中(需 Web 上下文 + AOP)。
  */
-@SpringBootTest(classes = Resilience4jSb4CompatSpike.SpikeApp.class)
+@SpringBootTest(classes = Resilience4jSb4CompatSpikeTest.SpikeApp.class)
 @ActiveProfiles("test")
 @TestPropertySource(
     properties = {
@@ -50,7 +50,7 @@ import org.springframework.test.context.TestPropertySource;
       "resilience4j.retry.instances.test.max-attempts=3",
       "spring.main.web-application-type=none",
     })
-class Resilience4jSb4CompatSpike {
+class Resilience4jSb4CompatSpikeTest {
 
   @Autowired
   private CircuitBreakerRegistry circuitBreakerRegistry;

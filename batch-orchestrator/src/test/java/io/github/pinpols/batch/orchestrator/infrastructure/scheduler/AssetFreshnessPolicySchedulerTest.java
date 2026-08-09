@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,7 +10,6 @@ import io.github.pinpols.batch.orchestrator.config.AssetFreshnessPolicyPropertie
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 class AssetFreshnessPolicySchedulerTest {
 
@@ -20,8 +20,8 @@ class AssetFreshnessPolicySchedulerTest {
 
   @BeforeEach
   void setUp() {
-    freshnessPolicyService = Mockito.mock(AssetFreshnessPolicyService.class);
-    gracefulShutdown = Mockito.mock(OrchestratorGracefulShutdown.class);
+    freshnessPolicyService = mock(AssetFreshnessPolicyService.class);
+    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     properties = new AssetFreshnessPolicyProperties();
     properties.setEnabled(true);
     properties.setBatchLimit(25);

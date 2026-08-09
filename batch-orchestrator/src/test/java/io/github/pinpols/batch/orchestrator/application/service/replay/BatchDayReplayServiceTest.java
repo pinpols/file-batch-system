@@ -31,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,16 +68,16 @@ class BatchDayReplayServiceTest {
   @Test
   void submitAllFailedScopeMaterializesEntriesFromCandidates() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
-    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4)))
+    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(sessionAt("t1", 7L, "RUNNING", "ALL_FAILED"));
 
     BatchDayReplaySessionEntity result = service.submit(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope("ALL_FAILED")
         .resultPolicy("CREATE_NEW_VERSION")
         .configVersionPolicy("USE_ORIGINAL_CONFIG")
@@ -92,13 +93,13 @@ class BatchDayReplayServiceTest {
   @Test
   void previewAllFailedScopeReturnsImpactWithoutWritingSession() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
 
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope("ALL_FAILED")
         .resultPolicy("CREATE_NEW_VERSION")
         .configVersionPolicy("USE_ORIGINAL_CONFIG")
@@ -120,7 +121,7 @@ class BatchDayReplayServiceTest {
   @Test
   void previewShouldIncludeAssetPartitionAndDispatchImpacts() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(entryMapper.selectAssetPartitionImpacts(eq("t1"), any()))
         .thenReturn(List.of(Map.of(
@@ -140,7 +141,7 @@ class BatchDayReplayServiceTest {
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope("ALL_FAILED")
         .reason("upstream backfill")
         .requestedBy("ops")
@@ -160,13 +161,13 @@ class BatchDayReplayServiceTest {
   @Test
   void previewWithoutCandidatesReturnsWarningInsteadOfCreatingEmptySession() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of());
 
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope("ALL_FAILED")
         .reason("precheck")
         .requestedBy("ops")
@@ -181,13 +182,13 @@ class BatchDayReplayServiceTest {
   @Test
   void submitWithoutCandidatesThrows() {
     when(jobInstanceMapper.selectBatchDayCandidates(
-            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, 5, 4)), anyList(), anyList()))
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of());
 
     assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
+            .bizDate(LocalDate.of(2026, Month.MAY, 4))
             .scope("ALL_FAILED")
             .reason("...")
             .requestedBy("ops")
@@ -207,7 +208,7 @@ class BatchDayReplayServiceTest {
     assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
+            .bizDate(LocalDate.of(2026, Month.MAY, 4))
             .scope("ALL_FAILED")
             .reason("...")
             .requestedBy("ops")
@@ -221,7 +222,7 @@ class BatchDayReplayServiceTest {
     assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
+            .bizDate(LocalDate.of(2026, Month.MAY, 4))
             .scope("SUBSET_JOB_CODES")
             .reason("...")
             .requestedBy("ops")
@@ -238,13 +239,13 @@ class BatchDayReplayServiceTest {
             resultVersion(11L, "job:JOB_A:2026-05-04", 100L),
             resultVersion(12L, "job:JOB_B:2026-05-04", 101L)));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
-    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4)))
+    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code()));
 
     BatchDayReplaySessionEntity result = service.submit(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope(BatchDayReplayScope.OUTPUTS_ONLY.code())
         .versionIds(List.of(11L, 12L))
         .reason("regulatory restate")
@@ -266,7 +267,7 @@ class BatchDayReplayServiceTest {
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope(BatchDayReplayScope.OUTPUTS_ONLY.code())
         .versionIds(List.of(11L))
         .reason("regulatory restate")
@@ -409,7 +410,7 @@ class BatchDayReplayServiceTest {
         .id(id)
         .tenantId(tenantId)
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .scope(scope)
         .resultPolicy("CREATE_NEW_VERSION")
         .configVersionPolicy("USE_ORIGINAL_CONFIG")

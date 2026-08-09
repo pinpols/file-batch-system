@@ -45,20 +45,20 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
       PipelineProgressEntity row =
           mapper.findByInstanceAndStage(tenantId, pipelineInstanceId, stage.code());
       if (row == null) {
-        record(stage, "load", "empty");
+        recordCheckpointMetric(stage, "load", "empty");
         return ProcessingPosition.empty();
       }
-      if (row.completed()) {
-        record(stage, "load", "completed");
+      if (Boolean.TRUE.equals(row.completed())) {
+        recordCheckpointMetric(stage, "load", "completed");
         // P1-2:completed 行保留 position_marker(Export 完成 marker 含文件字节数指纹,GenerateStep
         // 幂等跳过前须据此校验残文件完整性);LOAD completed 路径只用 processedCount,保留 marker 无副作用。
         return new ProcessingPosition(row.positionMarker(), row.processedCount(), true);
       }
-      record(stage, "load", "resumable");
+      recordCheckpointMetric(stage, "load", "resumable");
       recordResumeSkipped(stage, row.processedCount());
       return new ProcessingPosition(row.positionMarker(), row.processedCount(), false);
     } catch (RuntimeException exception) {
-      record(stage, "load", "failure");
+      recordCheckpointMetric(stage, "load", "failure");
       throw exception;
     }
   }
@@ -73,9 +73,9 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
     try {
       mapper.advance(
           tenantId, pipelineInstanceId, stage.code(), newMarker, processedCountIncrement);
-      record(stage, "advance", "success");
+      recordCheckpointMetric(stage, "advance", "success");
     } catch (RuntimeException exception) {
-      record(stage, "advance", "failure");
+      recordCheckpointMetric(stage, "advance", "failure");
       throw exception;
     }
   }
@@ -84,9 +84,9 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
   public void markCompleted(String tenantId, long pipelineInstanceId, ProcessingStage stage) {
     try {
       mapper.markCompleted(tenantId, pipelineInstanceId, stage.code());
-      record(stage, "complete", "success");
+      recordCheckpointMetric(stage, "complete", "success");
     } catch (RuntimeException exception) {
-      record(stage, "complete", "failure");
+      recordCheckpointMetric(stage, "complete", "failure");
       throw exception;
     }
   }
@@ -103,7 +103,7 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
     }
   }
 
-  private void record(ProcessingStage stage, String operation, String outcome) {
+  private void recordCheckpointMetric(ProcessingStage stage, String operation, String outcome) {
     if (meterRegistry != null) {
       meterRegistry
           .counter(

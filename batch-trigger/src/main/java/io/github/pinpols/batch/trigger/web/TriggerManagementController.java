@@ -86,7 +86,7 @@ public class TriggerManagementController {
   @PostMapping("/pause-tenant")
   public CommonResponse<Map<String, String>> pauseByTenant(@RequestParam String tenantId) {
     triggerRegistrationService.pauseByTenant(tenantId);
-    return CommonResponse.success(Map.of(KEY_STATUS, "TENANT_PAUSED", "tenantId", tenantId));
+    return CommonResponse.success(Map.of(KEY_STATUS, "TENANT_PAUSED", KEY_TENANT_ID, tenantId));
   }
 
   @PostMapping("/resume-tenant")

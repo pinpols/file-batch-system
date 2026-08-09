@@ -15,7 +15,7 @@ class StaticShardAssignmentProviderTest {
 
     ShardAssignment a = provider.current();
     assertThat(a.shardTotal()).isEqualTo(1);
-    assertThat(a.shardIndex()).isEqualTo(0);
+    assertThat(a.shardIndex()).isZero();
   }
 
   @Test
@@ -40,7 +40,7 @@ class StaticShardAssignmentProviderTest {
 
     ShardAssignment a = provider.current();
     assertThat(a.shardTotal()).isEqualTo(1);
-    assertThat(a.shardIndex()).isEqualTo(0);
+    assertThat(a.shardIndex()).isZero();
   }
 
   @Test

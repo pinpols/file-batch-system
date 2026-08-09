@@ -100,7 +100,7 @@ public class AlertmanagerEmitPublisher {
     try {
       executor.execute(() -> sendQuietly(entity));
     } catch (RejectedExecutionException ex) {
-      record("rejected");
+      recordEmitMetric("rejected");
       SwallowedExceptionLogger.info(
           AlertmanagerEmitPublisher.class, "catch:RejectedExecutionException", ex);
     }
@@ -139,18 +139,18 @@ public class AlertmanagerEmitPublisher {
       HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
       int sc = resp.statusCode();
       if (sc >= 200 && sc < 300) {
-        record("success");
+        recordEmitMetric("success");
       } else {
-        record("http_error");
+        recordEmitMetric("http_error");
         log.warn("am_emit non-2xx: status={} alertType={}", sc, entity.getAlertType());
       }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      record("interrupted");
+      recordEmitMetric("interrupted");
       SwallowedExceptionLogger.info(
           AlertmanagerEmitPublisher.class, "catch:InterruptedException", ex);
     } catch (RuntimeException | java.io.IOException ex) {
-      record("failed");
+      recordEmitMetric("failed");
       SwallowedExceptionLogger.warn(AlertmanagerEmitPublisher.class, "catch:am_emit", ex);
     }
   }
@@ -199,7 +199,7 @@ public class AlertmanagerEmitPublisher {
     return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
   }
 
-  private void record(String outcome) {
+  private void recordEmitMetric(String outcome) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
       return;

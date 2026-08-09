@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,7 +93,7 @@ class BatchDayOpenSchedulerTest {
     Instant now = Instant.parse("2026-05-05T00:30:00Z"); // 08:30 Asia/Shanghai
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(null);
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
 
@@ -103,7 +104,7 @@ class BatchDayOpenSchedulerTest {
     verify(batchDayInstanceMapper).insert(captor.capture());
     BatchDayInstanceEntity opened = captor.getValue();
     assertThat(opened.dayStatus()).isEqualTo("OPEN");
-    assertThat(opened.bizDate()).isEqualTo(LocalDate.of(2026, 5, 5));
+    assertThat(opened.bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 5));
     assertThat(opened.timezoneSnapshot()).isEqualTo("Asia/Shanghai");
     assertThat(opened.cutoffAt()).isEqualTo(Instant.parse("2026-05-05T22:00:00Z"));
     assertThat(opened.slaDeadlineAt()).isEqualTo(Instant.parse("2026-05-06T00:00:00Z"));
@@ -115,7 +116,7 @@ class BatchDayOpenSchedulerTest {
     Instant now = Instant.parse("2026-05-04T21:30:00Z"); // 05:30 Asia/Shanghai
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(null);
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
 
@@ -124,7 +125,7 @@ class BatchDayOpenSchedulerTest {
     ArgumentCaptor<BatchDayInstanceEntity> captor =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).insert(captor.capture());
-    assertThat(captor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, 5, 4));
+    assertThat(captor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 4));
     assertThat(captor.getValue().cutoffAt()).isEqualTo(Instant.parse("2026-05-04T22:00:00Z"));
   }
 
@@ -133,7 +134,7 @@ class BatchDayOpenSchedulerTest {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(null);
     when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
         .thenReturn(List.of(CalendarDependencyEntity.builder()
@@ -148,11 +149,11 @@ class BatchDayOpenSchedulerTest {
         .id(99L)
         .tenantId("t1")
         .calendarCode("CAL_CN")
-        .bizDate(LocalDate.of(2026, 5, 5))
+        .bizDate(LocalDate.of(2026, Month.MAY, 5))
         .dayStatus("IN_FLIGHT")
         .build();
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL_CN", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL_CN", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(upstreamRunning);
 
     scheduler.openDueBatchDays(now);
@@ -165,7 +166,7 @@ class BatchDayOpenSchedulerTest {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(null);
     when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
         .thenReturn(List.of(CalendarDependencyEntity.builder()
@@ -180,11 +181,11 @@ class BatchDayOpenSchedulerTest {
         .id(99L)
         .tenantId("t1")
         .calendarCode("CAL_CN")
-        .bizDate(LocalDate.of(2026, 5, 5))
+        .bizDate(LocalDate.of(2026, Month.MAY, 5))
         .dayStatus("SETTLED")
         .build();
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL_CN", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL_CN", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(upstreamSettled);
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
 
@@ -198,15 +199,15 @@ class BatchDayOpenSchedulerTest {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(null);
     when(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5), now))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5), now))
         .thenReturn(DisasterDayOverrideEntity.builder()
             .id(1L)
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 5))
+            .bizDate(LocalDate.of(2026, Month.MAY, 5))
             .action("SKIP")
             .reason("typhoon shutdown")
             .approvedBy("ops-1")
@@ -231,15 +232,15 @@ class BatchDayOpenSchedulerTest {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(null);
     when(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5), now))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5), now))
         .thenReturn(DisasterDayOverrideEntity.builder()
             .id(2L)
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 5))
+            .bizDate(LocalDate.of(2026, Month.MAY, 5))
             .action("DEFER_TO_NEXT_BIZDAY")
             .reason("system maintenance")
             .approvedBy("ops-2")
@@ -259,7 +260,7 @@ class BatchDayOpenSchedulerTest {
     BusinessCalendarEntity calendar = calendar();
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar));
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
         .thenReturn(existing());
 
     scheduler.openDueBatchDays(now);
@@ -290,7 +291,7 @@ class BatchDayOpenSchedulerTest {
         1L,
         "t1",
         "CAL",
-        LocalDate.of(2026, 5, 5),
+        LocalDate.of(2026, Month.MAY, 5),
         "OPEN",
         at,
         at,

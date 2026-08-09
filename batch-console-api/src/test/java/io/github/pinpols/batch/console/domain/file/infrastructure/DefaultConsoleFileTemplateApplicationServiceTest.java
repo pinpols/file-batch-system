@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.file.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -137,6 +138,6 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
     verify(mapper).upsertFileTemplateConfig(captor.capture());
     assertThat(captor.getValue().getBasicInfo().getVersion()).isEqualTo(1);
     // 回读按 path id 命中被就地更新的同一行(而非幽灵新行)。
-    verify(mapper, org.mockito.Mockito.times(2)).selectById("t1", 1L);
+    verify(mapper, times(2)).selectById("t1", 1L);
   }
 }
