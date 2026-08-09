@@ -80,7 +80,7 @@ public class AlertmanagerAlertRenderer {
     structured.put("status", payload.status());
     structured.put("alertCount", alerts.size());
     structured.put("truncatedAlerts", payload.truncatedAlerts());
-    structured.put("severity", severity);
+    structured.put(LABEL_SEVERITY, severity);
     structured.put("alertnames", alertnames);
     structured.put("text", body.toString());
 

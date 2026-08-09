@@ -338,7 +338,7 @@ public class TaskDispatcher {
     // CLAIM — body 对齐 TaskController.TaskClaimRequest(tenantId/workerId/partitionInvocationId)
     String idemClaim = BatchPlatformClient.newIdempotencyKey();
     Map<String, Object> claimBody = new HashMap<>();
-    claimBody.put("tenantId", msg.tenantId());
+    claimBody.put(MDC_TENANT_ID, msg.tenantId());
     claimBody.put(
         "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
     String partitionInvocationId = extractPartitionInvocation(msg);
@@ -724,7 +724,7 @@ public class TaskDispatcher {
     String idem = BatchPlatformClient.newIdempotencyKey();
     try {
       Map<String, Object> body = new HashMap<>();
-      body.put("taskId", msg.taskId());
+      body.put(MDC_TASK_ID, msg.taskId());
       body.put("tenantId", msg.tenantId());
       body.put("workerId", config.getWorkerCode());
       putPartitionInvocation(body, msg);

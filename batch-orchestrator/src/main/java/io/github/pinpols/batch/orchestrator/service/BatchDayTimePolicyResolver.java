@@ -97,7 +97,7 @@ public class BatchDayTimePolicyResolver {
     }
     if (offsets.size() == 2) {
       ZoneOffset selected =
-          "RUN_ONCE_LATER_OFFSET".equals(overlapPolicy) ? offsets.getLast() : offsets.getFirst();
+          DEFAULT_OVERLAP_POLICY.equals(overlapPolicy) ? offsets.getLast() : offsets.getFirst();
       return ZonedDateTime.ofLocal(localDateTime, zoneId, selected).toInstant();
     }
     ZoneOffsetTransition transition = rules.getTransition(localDateTime);

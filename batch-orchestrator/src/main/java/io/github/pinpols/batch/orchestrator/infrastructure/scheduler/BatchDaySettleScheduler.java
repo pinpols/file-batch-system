@@ -51,9 +51,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class BatchDaySettleScheduler {
 
-  private static final List<String> TRACKED_STATUSES = List.of("CUTOFF", "IN_FLIGHT", "SETTLING");
   private static final String STATUS_SETTLING = "SETTLING";
   private static final String STATUS_IN_FLIGHT = "IN_FLIGHT";
+  private static final List<String> TRACKED_STATUSES =
+      List.of("CUTOFF", STATUS_IN_FLIGHT, STATUS_SETTLING);
 
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final JobInstanceMapper jobInstanceMapper;

@@ -402,16 +402,17 @@ public class ConfigPackageExcelValidator {
   private static void validateJobRow(
       String tenantId, Map<String, String> row, Set<String> seen, List<String> ri) {
     String jobCode = normalize(row.get(COL_JOB_CODE));
-    requireField(ri, jobCode, "job_code");
-    requireField(ri, normalize(row.get(COL_JOB_NAME)), "job_name");
-    requiredEnum(normalizeEnum(row.get(COL_JOB_TYPE)), "job_type", JOB_TYPES, ri);
-    requiredEnum(normalizeEnum(row.get(COL_SCHEDULE_TYPE)), "schedule_type", SCHEDULE_TYPES, ri);
-    optionalEnum(normalizeEnum(row.get(COL_RETRY_POLICY)), "retry_policy", RETRY_POLICIES, ri);
+    requireField(ri, jobCode, COL_JOB_CODE);
+    requireField(ri, normalize(row.get(COL_JOB_NAME)), COL_JOB_NAME);
+    requiredEnum(normalizeEnum(row.get(COL_JOB_TYPE)), COL_JOB_TYPE, JOB_TYPES, ri);
+    requiredEnum(normalizeEnum(row.get(COL_SCHEDULE_TYPE)), COL_SCHEDULE_TYPE, SCHEDULE_TYPES, ri);
+    optionalEnum(normalizeEnum(row.get(COL_RETRY_POLICY)), COL_RETRY_POLICY, RETRY_POLICIES, ri);
     optionalEnum(
-        normalizeEnum(row.get(COL_SHARD_STRATEGY)), "shard_strategy", SHARD_STRATEGIES, ri);
-    optionalEnum(normalizeEnum(row.get(COL_EXECUTION_MODE)), "execution_mode", EXECUTION_MODES, ri);
+        normalizeEnum(row.get(COL_SHARD_STRATEGY)), COL_SHARD_STRATEGY, SHARD_STRATEGIES, ri);
+    optionalEnum(
+        normalizeEnum(row.get(COL_EXECUTION_MODE)), COL_EXECUTION_MODE, EXECUTION_MODES, ri);
     validateOptionalJobCodeRef(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)), ri);
-    validateJsonField(row.get(COL_PARAM_SCHEMA), "param_schema", false, ri);
+    validateJsonField(row.get(COL_PARAM_SCHEMA), COL_PARAM_SCHEMA, false, ri);
     validateCronSchedule(row, ri);
     if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode)) {
       ri.add("duplicate job_code in excel: " + jobCode);
@@ -451,13 +452,13 @@ public class ConfigPackageExcelValidator {
   private static void validateChannelRow(
       String tenantId, Map<String, String> row, Set<String> seen, List<String> ri) {
     String code = normalize(row.get(COL_CHANNEL_CODE));
-    requireField(ri, code, "channel_code");
-    requireField(ri, normalize(row.get(COL_CHANNEL_NAME)), "channel_name");
-    requiredEnum(normalizeEnum(row.get(COL_CHANNEL_TYPE)), "channel_type", CHANNEL_TYPES, ri);
-    requiredEnum(normalizeEnum(row.get(COL_AUTH_TYPE)), "auth_type", AUTH_TYPES, ri);
+    requireField(ri, code, COL_CHANNEL_CODE);
+    requireField(ri, normalize(row.get(COL_CHANNEL_NAME)), COL_CHANNEL_NAME);
+    requiredEnum(normalizeEnum(row.get(COL_CHANNEL_TYPE)), COL_CHANNEL_TYPE, CHANNEL_TYPES, ri);
+    requiredEnum(normalizeEnum(row.get(COL_AUTH_TYPE)), COL_AUTH_TYPE, AUTH_TYPES, ri);
     requiredEnum(
-        normalizeEnum(row.get(COL_RECEIPT_POLICY)), "receipt_policy", RECEIPT_POLICIES, ri);
-    validateJsonField(row.get(COL_CONFIG_JSON), "config_json", true, ri);
+        normalizeEnum(row.get(COL_RECEIPT_POLICY)), COL_RECEIPT_POLICY, RECEIPT_POLICIES, ri);
+    validateJsonField(row.get(COL_CONFIG_JSON), COL_CONFIG_JSON, true, ri);
     if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code)) {
       ri.add("duplicate channel_code in excel: " + code);
     }
@@ -568,9 +569,9 @@ public class ConfigPackageExcelValidator {
     String jobCode = normalize(row.get(COL_JOB_CODE));
     String version = normalize(row.get(COL_VERSION));
     requireField(ri, jobCode, "job_code");
-    requireField(ri, normalize(row.get(COL_PIPELINE_NAME)), "pipeline_name");
-    requiredEnum(normalizeEnum(row.get(COL_PIPELINE_TYPE)), "pipeline_type", PIPELINE_TYPES, ri);
-    requireIntField(version, "version", ri);
+    requireField(ri, normalize(row.get(COL_PIPELINE_NAME)), COL_PIPELINE_NAME);
+    requiredEnum(normalizeEnum(row.get(COL_PIPELINE_TYPE)), COL_PIPELINE_TYPE, PIPELINE_TYPES, ri);
+    requireIntField(version, COL_VERSION, ri);
     if (hasText(jobCode)
         && hasText(version)
         && !seen.add(tenantId + KEY_SEP_HASH + jobCode + KEY_SEP_COLON + version)) {
@@ -622,8 +623,8 @@ public class ConfigPackageExcelValidator {
     String implCode = normalize(row.get(COL_IMPL_CODE));
     requireField(ri, jobCode, "job_code");
     requireField(ri, version, "version");
-    requireField(ri, stepCode, "step_code");
-    requireField(ri, normalize(row.get(COL_STEP_NAME)), "step_name");
+    requireField(ri, stepCode, COL_STEP_CODE);
+    requireField(ri, normalize(row.get(COL_STEP_NAME)), COL_STEP_NAME);
 
     String pipelineKey = jobCode + KEY_SEP_COLON + version;
     validateStageCode(row, pipelineKey, pipelineKeyToType, ri);
@@ -742,9 +743,9 @@ public class ConfigPackageExcelValidator {
       String tenantId, Map<String, String> row, Set<String> seen, List<String> ri) {
     String wfCode = normalize(row.get(COL_WORKFLOW_CODE));
     String version = normalize(row.get(COL_VERSION));
-    requireField(ri, wfCode, "workflow_code");
-    requireField(ri, normalize(row.get(COL_WORKFLOW_NAME)), "workflow_name");
-    requiredEnum(normalizeEnum(row.get(COL_WORKFLOW_TYPE)), "workflow_type", WORKFLOW_TYPES, ri);
+    requireField(ri, wfCode, COL_WORKFLOW_CODE);
+    requireField(ri, normalize(row.get(COL_WORKFLOW_NAME)), COL_WORKFLOW_NAME);
+    requiredEnum(normalizeEnum(row.get(COL_WORKFLOW_TYPE)), COL_WORKFLOW_TYPE, WORKFLOW_TYPES, ri);
     requireIntField(version, "version", ri);
     if (hasText(wfCode)
         && hasText(version)
@@ -770,12 +771,12 @@ public class ConfigPackageExcelValidator {
     String wfVersion = normalize(row.get(COL_WORKFLOW_VERSION));
     String nodeCode = normalize(row.get(COL_NODE_CODE));
     requireField(ri, wfCode, "workflow_code");
-    requireField(ri, wfVersion, "workflow_version");
-    requireField(ri, nodeCode, "node_code");
-    requireField(ri, normalize(row.get(COL_NODE_NAME)), "node_name");
-    requiredEnum(normalizeEnum(row.get(COL_NODE_TYPE)), "node_type", NODE_TYPES, ri);
+    requireField(ri, wfVersion, COL_WORKFLOW_VERSION);
+    requireField(ri, nodeCode, COL_NODE_CODE);
+    requireField(ri, normalize(row.get(COL_NODE_NAME)), COL_NODE_NAME);
+    requiredEnum(normalizeEnum(row.get(COL_NODE_TYPE)), COL_NODE_TYPE, NODE_TYPES, ri);
     optionalEnum(normalizeEnum(row.get(COL_RETRY_POLICY)), "retry_policy", RETRY_POLICIES, ri);
-    validateJsonField(row.get(COL_NODE_PARAMS), "node_params", false, ri);
+    validateJsonField(row.get(COL_NODE_PARAMS), COL_NODE_PARAMS, false, ri);
     String wfKey = wfCode + KEY_SEP_COLON + wfVersion;
     if (hasText(wfCode) && hasText(wfVersion) && !wfKeys.contains(wfKey)) {
       ri.add("workflow node references missing definition: " + wfKey);
@@ -816,9 +817,9 @@ public class ConfigPackageExcelValidator {
     String toNode = normalize(row.get(COL_TO_NODE_CODE));
     requireField(ri, wfCode, "workflow_code");
     requireField(ri, wfVersion, "workflow_version");
-    requireField(ri, fromNode, "from_node_code");
-    requireField(ri, toNode, "to_node_code");
-    requiredEnum(normalizeEnum(row.get(COL_EDGE_TYPE)), "edge_type", EDGE_TYPES, ri);
+    requireField(ri, fromNode, COL_FROM_NODE_CODE);
+    requireField(ri, toNode, COL_TO_NODE_CODE);
+    requiredEnum(normalizeEnum(row.get(COL_EDGE_TYPE)), COL_EDGE_TYPE, EDGE_TYPES, ri);
     String wfKey = wfCode + KEY_SEP_COLON + wfVersion;
     if (hasText(wfCode) && hasText(wfVersion) && !wfKeys.contains(wfKey)) {
       ri.add("workflow edge references missing definition: " + wfKey);
@@ -866,9 +867,9 @@ public class ConfigPackageExcelValidator {
         .filter(Texts::hasText)
         .collect(Collectors.toSet());
     Set<String> fileTemplatesInExcel = buildFileTemplateKeys(validFileTemplates);
-    Set<String> queueCodesInExcel = extractCodes(validResourceQueues, "queue_code");
-    Set<String> calendarCodesInExcel = extractCodes(validBusinessCalendars, "calendar_code");
-    Set<String> windowCodesInExcel = extractCodes(validBatchWindows, "window_code");
+    Set<String> queueCodesInExcel = extractCodes(validResourceQueues, COL_QUEUE_CODE);
+    Set<String> calendarCodesInExcel = extractCodes(validBusinessCalendars, COL_CALENDAR_CODE);
+    Set<String> windowCodesInExcel = extractCodes(validBatchWindows, COL_WINDOW_CODE);
     List<WorkbookIssue> issues = new ArrayList<>();
 
     addJobDependencyIssues(

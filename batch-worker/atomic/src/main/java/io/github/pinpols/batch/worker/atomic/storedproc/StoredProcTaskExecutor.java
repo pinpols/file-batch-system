@@ -128,12 +128,12 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put("dryRun", true);
         planned.put("plannedAction", "storedProc");
-        planned.put("procedureName", inv.procName);
+        planned.put(PARAM_PROC, inv.procName);
         planned.put("inParamCount", inv.inParams.size());
         planned.put("outParamTypes", inv.outTypes);
-        planned.put("dataSourceBean", dsBean == null ? "<default>" : dsBean);
-        planned.put("autoCommit", inv.autoCommit);
-        planned.put("statementTimeoutSeconds", inv.timeoutSec);
+        planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
+        planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
+        planned.put(PARAM_TIMEOUT, inv.timeoutSec);
         log.info(
             "stored proc executor dry-run skipped real CALL: tenantId={}, jobCode={}, proc={}",
             ctx.tenantId(),

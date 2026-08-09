@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.jdbc.DataSourceConnectionLease;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
@@ -28,7 +29,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -402,7 +402,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     int n = records.size();
     txTemplate.execute(status -> {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-      try (DataSourceConnection lease = DataSourceConnection.get(businessDataSource)) {
+      try (DataSourceConnectionLease lease =
+          DataSourceConnectionLease.acquire(businessDataSource)) {
         Connection conn = lease.connection();
         CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
         long copied = copyManager.copyIn(copySql, new StringReader(csv));
@@ -416,18 +417,6 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       }
     });
     return n;
-  }
-
-  private record DataSourceConnection(Connection connection, DataSource dataSource)
-      implements AutoCloseable {
-    private static DataSourceConnection get(DataSource dataSource) {
-      return new DataSourceConnection(DataSourceUtils.getConnection(dataSource), dataSource);
-    }
-
-    @Override
-    public void close() {
-      DataSourceUtils.releaseConnection(connection, dataSource);
-    }
   }
 
   private String buildDeleteSql(JdbcMappedImportSpec spec) {

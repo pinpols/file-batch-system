@@ -185,7 +185,7 @@ public class ConsoleAuthController {
         maxAge = delta;
       }
     }
-    return ResponseCookie.from("batch_console_token", body.accessToken())
+    return ResponseCookie.from(CONSOLE_TOKEN_COOKIE, body.accessToken())
         .httpOnly(true)
         .secure(securityProperties.isCookieSecure())
         .sameSite("Lax")

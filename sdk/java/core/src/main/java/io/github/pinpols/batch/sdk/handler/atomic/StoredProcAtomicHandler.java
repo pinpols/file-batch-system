@@ -126,7 +126,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
 
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("outValues", outValues);
-        output.put("procedureName", procName);
+        output.put(PARAM_PROC, procName);
         log.info(
             "stored proc {} called (in={}, out={})", procName, inParams.size(), outTypes.size());
         return output;

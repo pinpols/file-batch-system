@@ -49,14 +49,14 @@ public class WorkflowRunManagementApplicationService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String STATUS_TERMINATED = "TERMINATED";
+  private static final String STATUS_PAUSED = "PAUSED";
+  private static final String STATUS_RUNNING = "RUNNING";
 
-  private static final Set<String> CANCELLABLE = Set.of("CREATED", "RUNNING");
+  private static final Set<String> CANCELLABLE = Set.of("CREATED", STATUS_RUNNING);
   private static final Set<String> TERMINABLE = Set.of("RUNNING");
   // ADR-044:仅 RUNNING 可暂停 DAG 推进;PAUSED 可恢复回 RUNNING。
   private static final Set<String> PAUSABLE = Set.of("RUNNING");
-  private static final Set<String> RESUMABLE = Set.of("PAUSED");
-  private static final String STATUS_PAUSED = "PAUSED";
-  private static final String STATUS_RUNNING = "RUNNING";
+  private static final Set<String> RESUMABLE = Set.of(STATUS_PAUSED);
 
   private final WorkflowRunMapper workflowRunMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;

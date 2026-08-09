@@ -186,13 +186,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put("dryRun", true);
         planned.put("plannedAction", "http");
-        planned.put("method", inv.method);
+        planned.put(PARAM_METHOD, inv.method);
         planned.put("url", inv.uri.toString());
         planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
         planned.put(
             "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
-        planned.put("timeoutSeconds", inv.timeout.toSeconds());
-        planned.put("expectStatus", inv.expectedStatus);
+        planned.put(PARAM_TIMEOUT, inv.timeout.toSeconds());
+        planned.put(PARAM_EXPECT_STATUS, inv.expectedStatus);
         log.info(
             "http executor dry-run skipped real request: tenantId={}, jobCode={}, method={},"
                 + " url={}",
@@ -263,7 +263,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
 
     Map<String, String> headers =
-        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, "headers") : Map.of();
+        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, PARAM_HEADERS) : Map.of();
 
     String body = params.get(PARAM_BODY) instanceof String s ? s : null;
     validateRequestBodySize(body);

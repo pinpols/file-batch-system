@@ -150,10 +150,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     planned.put("plannedAction", "sql");
     planned.put("statementCount", inv.statements.size());
     planned.put("statements", inv.statements);
-    planned.put("dataSourceBean", dsBean == null ? "<default>" : dsBean);
-    planned.put("autoCommit", inv.autoCommit);
+    planned.put(PARAM_DS_BEAN, dsBean == null ? "<default>" : dsBean);
+    planned.put(PARAM_AUTO_COMMIT, inv.autoCommit);
     planned.put("readOnly", inv.allSelect);
-    planned.put("statementTimeoutSeconds", inv.timeoutSec);
+    planned.put(PARAM_STMT_TIMEOUT, inv.timeoutSec);
     log.info(
         "sql executor dry-run skipped real execution: tenantId={}, jobCode={}, statements={}",
         ctx.tenantId(),

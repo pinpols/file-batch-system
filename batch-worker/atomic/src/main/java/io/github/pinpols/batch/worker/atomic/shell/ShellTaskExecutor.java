@@ -139,9 +139,9 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put("dryRun", true);
         planned.put("plannedAction", "shell");
-        planned.put("command", inv.command);
+        planned.put(PARAM_COMMAND, inv.command);
         planned.put("args", inv.args);
-        planned.put("timeoutSeconds", inv.timeout.toSeconds());
+        planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
         // env 只暴露 key(白名单过滤过),value 不出库以防泄密
         planned.put("envKeys", List.copyOf(inv.env.keySet()));
         log.info(

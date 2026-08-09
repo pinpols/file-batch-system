@@ -16,8 +16,13 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
  *
  * <pre>{@code
  * public class MyImportHandler extends SdkTypedTaskHandler<ImportRequest, ImportResult> {
- *   @Override public String taskType() { return "tenant_xyz_import"; }
- *   @Override protected ImportResult handle(ImportRequest req, SdkTaskContext ctx) {
+ *   @Override
+ *   public String taskType() {
+ *     return "tenant_xyz_import";
+ *   }
+ *
+ *   @Override
+ *   protected ImportResult handle(ImportRequest req, SdkTaskContext ctx) {
  *     int n = importRows(req.sourcePath());     // 直接拿强类型字段,无需 cast
  *     return new ImportResult(n);               // 框架转 output map
  *   }
