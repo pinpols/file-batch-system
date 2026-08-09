@@ -53,7 +53,7 @@
 
 | 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env | 测试 |
 |---|---|---|---|---|---|---|
-| `batch.mq.routing.mode` | `SINGLE` / `TENANT` / `PRIORITY` | **TENANT** | 派发 Kafka topic 分流粒度；切换必须先升 consumer 再切 producer | **P0** | `BATCH_MQ_ROUTING_MODE` | ❌ |
+| `batch.mq.routing.mode` | `SINGLE` / `TENANT` / `PRIORITY` | **TENANT** | 派发 Kafka topic 分流粒度；切换必须先升 consumer 再切 producer | **P0** | `BATCH_MQ_ROUTING_MODE` | ✅ |
 | `batch.worker.checkpoint.enabled` | `true` / `false` | **true** | 断点续跑总开关（P0 默认开，显式 false 回滚到全量重跑） | **P0** | `BATCH_WORKER_CHECKPOINT_ENABLED` | ✅ |
 | `batch.worker.checkpoint.stage-skip.enabled` | `true` / `false` | **false** | PROCESS 阶段级续跑（仅 COMPUTE+VALIDATE，多分片自动降级） | P1 | `BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED` | ✅ |
 | `batch.resource-scheduler.default-exceeded-strategy` | `QUEUE_DEFER` / `REJECT` | **QUEUE_DEFER** | 超配额租户的默认策略（REJECT 为旧行为，可回退） | P1 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY` | ❌ |
@@ -64,19 +64,19 @@
 | 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env | 测试 |
 |---|---|---|---|---|---|---|
 | `batch.security.bypass-mode` | `true` / `false` | **false** | 安全旁路（认证/脱敏/加解密/审批/渠道校验全放宽）；**仅本地/E2E**，生产 profile 拒绝 true | **P0** | `BATCH_SECURITY_BYPASS_MODE` | ✅ |
-| `batch.request-signing.enabled` | `true` / `false` | **false** | 内部写请求 HMAC 签名+ts+nonce 防重放；灰度先升 SDK 再开服务端 | P1 | `BATCH_REQUEST_SIGNING_ENABLED` | ❌ |
+| `batch.request-signing.enabled` | `true` / `false` | **false** | 内部写请求 HMAC 签名+ts+nonce 防重放；灰度先升 SDK 再开服务端 | P1 | `BATCH_REQUEST_SIGNING_ENABLED` | ✅ |
 | `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级固定窗口限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` | ✅ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
 | `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
-| `batch.console.captcha.provider` | `none` / `selfhosted` / `tencent` / `aliyun` | **none** | 登录验证码实现；任一时刻只装一个；tencent/aliyun 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ❌ |
+| `batch.console.captcha.provider` | `none` / `selfhosted` / `tencent` / `aliyun` | **none** | 登录验证码实现；任一时刻只装一个；tencent/aliyun 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
 
 ### 1.D 弹性 / 性能 / 观测
 
 | 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env | 测试 |
 |---|---|---|---|---|---|---|
-| `batch.quota.redis.failure-mode` | `FAIL_CLOSED` / `FAIL_OPEN` | **FAIL_CLOSED** | Redis 故障时配额行为；FAIL_OPEN 等同关闭限流，**生产禁止** | **P0** | `BATCH_QUOTA_REDIS_FAILURE_MODE` | ❌ |
+| `batch.quota.redis.failure-mode` | `FAIL_CLOSED` / `FAIL_OPEN` | **FAIL_CLOSED** | Redis 故障时配额行为；FAIL_OPEN 等同关闭限流，**生产禁止** | **P0** | `BATCH_QUOTA_REDIS_FAILURE_MODE` | ✅ |
 | `batch.console.read-replica.enabled` | `true` / `false` | **true** | 读副本路由；无从库部署建议显式 false 避免反复探测 | P1 | `BATCH_CONSOLE_READ_REPLICA_ENABLED` | ✅ |
-| `batch.storage.startup-check.enabled` | `true` / `false` | **true** | 启动冒烟自检（put/exists/statSize/get/list/delete），失败 fail-fast | P1 | `BATCH_STORAGE_STARTUP_CHECK_ENABLED` | ❌ |
+| `batch.storage.startup-check.enabled` | `true` / `false` | **true** | 启动冒烟自检（put/exists/statSize/get/list/delete），失败 fail-fast | P1 | `BATCH_STORAGE_STARTUP_CHECK_ENABLED` | ✅（每个挂存储的应用 IT 启动都跑探针） |
 | `batch.storage.encryption.decorator-enabled` | `true` / `false` | **false** | BATCHENC 整对象加密装饰层；开启后 presign 直传禁用、range 读退化 | P1 | `BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED` | ❌ |
 | `batch.storage.s3.auto-create-bucket` | `true` / `false` | **true** | 启动自动建桶；AWS/OSS/COS 等托管云**必须 false** | P1 | `BATCH_S3_AUTO_CREATE_BUCKET` | ❌ |
 | `batch.scheduler.worker-cache.enabled` | `true` / `false` | **true** | ONLINE worker 列表缓存（Redis 故障 fail-open 直通 DB） | P2 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` | ❌ |
