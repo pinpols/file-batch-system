@@ -8,7 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * Redis 键集合操作通用工具:抽走 console-api 内重复的 SCAN-based 模式删除样板 （{@link ConsoleQueryCacheService} 与 {@link
- * io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService}）。
+ * io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService}）。
  *
  * <p><b>为什么不用 KEYS:</b> Redis {@code KEYS pattern} 是 O(N) 阻塞主线程命令,大库 100k+ key 时可阻塞主线程 秒级,生产严禁。SCAN
  * 是 cursor 增量扫描,每轮只返回 ~count 个 key,主线程被阻塞时间可控。

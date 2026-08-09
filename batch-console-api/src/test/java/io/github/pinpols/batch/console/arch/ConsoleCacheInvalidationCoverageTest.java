@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  * 守护测试：5 个"受缓存配置" application service（job-definition / workflow-definition / business-calendar /
  * batch-window / tenant-quota-policy）里，任何 <b>写</b>了 mapper（调用了
  * insert/update/delete/upsert/batch/toggle/copy 类方法）的方法，<b>必须同时</b>调用 {@link
- * io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService} 的某个
+ * io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService} 的某个
  * evict* 方法，否则 orchestrator 在 launch 热路径上读到的 Redis 配置缓存会留陈旧值。
  *
  * <p>背景：之前用 {@code @InvalidatesConsoleCache} 注解 + {@code ConsoleCacheInvalidationAspect} AOP
@@ -63,7 +63,7 @@ class ConsoleCacheInvalidationCoverageTest {
       List.of("insert", "update", "delete", "upsert", "batch", "toggle", "copy");
 
   private static final String CACHE_SERVICE_FQN =
-      "io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService";
+      "io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService";
 
   /**
    * 显式豁免集："全限定类名#方法名"。每条必须注释说明"为何这个写方法语义上不需要 evict"（典型：写的是非缓存的侧表 / 历史快照表，不进 orchestrator 读热点；或私有

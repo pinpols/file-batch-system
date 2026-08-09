@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.workflow.infrastructure;
+package io.github.pinpols.batch.console.domain.workflow.web.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

@@ -7,13 +7,13 @@ import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkfl
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
-import io.github.pinpols.batch.console.domain.workflow.infrastructure.WorkflowMermaidRenderer;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDesignLockResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowMermaidResponse;
+import io.github.pinpols.batch.console.domain.workflow.web.support.WorkflowMermaidRenderer;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;

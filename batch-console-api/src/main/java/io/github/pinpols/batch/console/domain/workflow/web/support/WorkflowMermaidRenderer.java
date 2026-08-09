@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.workflow.infrastructure;
+package io.github.pinpols.batch.console.domain.workflow.web.support;
 
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;

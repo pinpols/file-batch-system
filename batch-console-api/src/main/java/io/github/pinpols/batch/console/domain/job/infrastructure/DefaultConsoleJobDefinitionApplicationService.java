@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
@@ -14,7 +15,6 @@ import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCopyR
 import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCreateRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobDefinitionResponse;
-import io.github.pinpols.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;

@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.infrastructure.config;
+package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;

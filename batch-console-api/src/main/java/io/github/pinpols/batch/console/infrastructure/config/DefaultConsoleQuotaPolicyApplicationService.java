@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
 import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
