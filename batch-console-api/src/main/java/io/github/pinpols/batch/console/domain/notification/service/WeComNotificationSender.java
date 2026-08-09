@@ -83,6 +83,9 @@ public class WeComNotificationSender implements NotificationSender {
       WeComHttpResponse response = postJson(url, body);
       return interpret(response);
     } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       // 净化:不打 url，只记异常类型，避免泄露群机器人密钥
       log.warn(
           "WeCom notification delivery failed: tenantId={} channelCode={} cause={}",

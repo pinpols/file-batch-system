@@ -173,6 +173,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     try {
       chatResponse = callModel(spec);
     } catch (Exception exception) {
+      if (exception instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       return degradeAndAudit(
           AuditRequest.builder()
               .tenantId(tenantId)

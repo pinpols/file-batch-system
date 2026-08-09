@@ -192,6 +192,9 @@ public class TencentSmsProvider implements SmsProvider {
           ex.status());
       return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
     } catch (Exception ex) {
+      if (ex instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       log.warn(
           "tencent sms delivery failed channel={} recipients={} reason={}",
           message.channelCode(),

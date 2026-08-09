@@ -175,6 +175,9 @@ public class AliyunSmsProvider implements SmsProvider {
           ex.status());
       return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
     } catch (Exception ex) {
+      if (ex instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       log.warn(
           "aliyun sms delivery failed channel={} recipients={} reason={}",
           message.channelCode(),
