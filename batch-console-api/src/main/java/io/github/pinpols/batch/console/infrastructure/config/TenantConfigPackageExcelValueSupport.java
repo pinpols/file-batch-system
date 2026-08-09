@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /** 配置包 Excel 行值规范化/解析的共享静态工具（解析与 apply 两侧共用）。 */
+@SuppressWarnings("java:S2583")
 final class TenantConfigPackageExcelValueSupport {
 
   private TenantConfigPackageExcelValueSupport() {}
