@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.shared.client;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
@@ -50,6 +51,7 @@ public class OrchestratorInternalRestClient {
   /** 构造一个新的 {@link RestClient}，已绑定 baseUrl + internal-secret header + connect/read 超时。 */
   public RestClient build() {
     String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
+    Guard.requireText(baseUrl, "orchestrator base url is not configured");
     String secret = batchSecurityProperties.getInternalSecret();
     RestClient.Builder builder = restClientBuilderProvider
         .getObject()

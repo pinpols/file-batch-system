@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.utils;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * JDBC 驱动可能把 PG {@code json/jsonb} 列映射为 {@code org.postgresql.util.PGobject}；该类仅在运行时存在于 classpath，

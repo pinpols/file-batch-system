@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
 import java.util.regex.Pattern;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * 配置码（configuration code）归一与格式校验工具。

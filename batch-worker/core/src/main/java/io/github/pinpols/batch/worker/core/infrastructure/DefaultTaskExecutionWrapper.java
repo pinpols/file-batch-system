@@ -67,6 +67,21 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   static final String TIMEOUT_ERROR_CODE = "WORKER_EXECUTION_TIMEOUT";
   static final String CANCELLED_ERROR_CODE = "WORKER_EXECUTION_CANCELLED";
 
+  /** errorCode → failureClass 归一映射；未知错误码返回 null（不归类）。 */
+  private static final Map<String, String> FAILURE_CLASS_BY_CODE = Map.of(
+      TIMEOUT_ERROR_CODE,
+      "TIMEOUT",
+      "TIMEOUT",
+      "TIMEOUT",
+      "CONFIG_INVALID",
+      "CONFIG",
+      "SECURITY_REJECTED",
+      "CONFIG",
+      "NO_EXECUTOR",
+      "CONFIG",
+      "EXECUTOR_FAILURE",
+      "CONFIG");
+
   private final StepExecutionAdapter stepExecutionAdapter;
   private final TaskExecutionClient taskExecutionClient;
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
@@ -437,11 +452,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (errorCode == null || errorCode.isBlank()) {
       return null;
     }
-    return switch (errorCode) {
-      case TIMEOUT_ERROR_CODE, "TIMEOUT" -> "TIMEOUT";
-      case "CONFIG_INVALID", "SECURITY_REJECTED", "NO_EXECUTOR", "EXECUTOR_FAILURE" -> "CONFIG";
-      default -> null;
-    };
+    return FAILURE_CLASS_BY_CODE.get(errorCode);
   }
 
   @SuppressWarnings("unchecked")

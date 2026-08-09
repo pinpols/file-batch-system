@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.utils;
 
+import javax.annotation.Nullable;
 import org.jetbrains.annotations.Contract;
 
 /**
@@ -16,7 +17,7 @@ public final class Texts {
 
   /** 字符序列是否非空且含至少一个非空白字符。 */
   @Contract("null -> false")
-  public static boolean hasText(CharSequence str) {
+  public static boolean hasText(@Nullable CharSequence str) {
     if (str == null) {
       return false;
     }
@@ -34,7 +35,7 @@ public final class Texts {
 
   /** String 重载，避免调用方因 {@code null} 字面量歧义触发 {@code CharSequence} 路径的 NPE。 */
   @Contract("null -> false")
-  public static boolean hasText(String str) {
+  public static boolean hasText(@Nullable String str) {
     return hasText((CharSequence) str);
   }
 }

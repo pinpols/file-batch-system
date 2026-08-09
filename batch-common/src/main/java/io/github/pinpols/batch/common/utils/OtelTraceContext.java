@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * OTel TraceContext 桥接工具。

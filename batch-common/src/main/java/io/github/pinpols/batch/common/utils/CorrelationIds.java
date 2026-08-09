@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.utils;
 
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * HTTP correlation id normalization for requestId / traceId headers.

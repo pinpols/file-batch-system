@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;

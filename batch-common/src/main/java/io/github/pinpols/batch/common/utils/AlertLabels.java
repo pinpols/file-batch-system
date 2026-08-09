@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * {@code alert_event} 字段 → Alertmanager label 的映射规则（emit 直连 / silence 桥接共用）。
@@ -31,6 +31,13 @@ public final class AlertLabels {
   public static final String GROUP_FRESHNESS = "freshness";
   public static final String GROUP_CAPACITY = "capacity";
   public static final String GROUP_DEFAULT = "ops";
+
+  /** alert_group → team 收敛映射（v1 一一对应，供 route 二次分流/展示）；未知 group 回落 batch-ops。 */
+  private static final Map<String, String> TEAM_BY_GROUP = Map.of(
+      GROUP_DISPATCH, "batch-dispatch",
+      GROUP_SLA, "batch-sla",
+      GROUP_FRESHNESS, "batch-data",
+      GROUP_CAPACITY, "batch-sre");
 
   private AlertLabels() {}
 
@@ -105,12 +112,6 @@ public final class AlertLabels {
 
   /** 由 alert_group 派生 team（v1 收敛：group→team 一一对应，供 route 二次分流/展示）。 */
   public static String team(String alertType) {
-    return switch (alertGroup(alertType)) {
-      case GROUP_DISPATCH -> "batch-dispatch";
-      case GROUP_SLA -> "batch-sla";
-      case GROUP_FRESHNESS -> "batch-data";
-      case GROUP_CAPACITY -> "batch-sre";
-      default -> "batch-ops";
-    };
+    return TEAM_BY_GROUP.getOrDefault(alertGroup(alertType), "batch-ops");
   }
 }

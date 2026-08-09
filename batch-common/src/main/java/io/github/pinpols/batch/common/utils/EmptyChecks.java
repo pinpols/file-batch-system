@@ -2,7 +2,8 @@ package io.github.pinpols.batch.common.utils;
 
 import java.util.Collection;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
+import org.jetbrains.annotations.Contract;
 
 /**
  * 统一的空值判断工具。
@@ -20,14 +21,17 @@ public final class EmptyChecks {
 
   private EmptyChecks() {}
 
-  public static boolean isNull(Object value) {
+  @Contract("null -> true")
+  public static boolean isNull(@Nullable Object value) {
     return value == null;
   }
 
-  public static boolean isNotNull(Object value) {
+  @Contract("null -> false")
+  public static boolean isNotNull(@Nullable Object value) {
     return value != null;
   }
 
+  @Contract("null -> true")
   public static boolean isEmpty(@Nullable CharSequence value) {
     return value == null || value.isEmpty();
   }
@@ -36,14 +40,17 @@ public final class EmptyChecks {
     return !isEmpty(value);
   }
 
-  public static boolean isBlank(CharSequence value) {
+  @Contract("null -> true")
+  public static boolean isBlank(@Nullable CharSequence value) {
     return !Texts.hasText(value);
   }
 
-  public static boolean isNotBlank(CharSequence value) {
+  @Contract("null -> false")
+  public static boolean isNotBlank(@Nullable CharSequence value) {
     return !isBlank(value);
   }
 
+  @Contract("null -> true")
   public static boolean isEmpty(@Nullable Collection<?> value) {
     return value == null || value.isEmpty();
   }
@@ -52,6 +59,7 @@ public final class EmptyChecks {
     return !isEmpty(value);
   }
 
+  @Contract("null -> true")
   public static boolean isEmpty(@Nullable Map<?, ?> value) {
     return value == null || value.isEmpty();
   }
@@ -60,7 +68,8 @@ public final class EmptyChecks {
     return !isEmpty(value);
   }
 
-  public static boolean isEmpty(Object @Nullable [] value) {
+  @Contract("null -> true")
+  public static boolean isEmpty(@Nullable Object[] value) {
     return value == null || value.length == 0;
   }
 

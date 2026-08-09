@@ -64,6 +64,9 @@
         <!-- org.jetbrains:annotations(@Contract/@Nullable):batch-common Guard/Texts 编译期用。
              此前靠 minio→okhttp→kotlin-stdlib 传递带入,#401 删 minio 后改为显式直依赖。 -->
         <jetbrains-annotations.version>17.0.0</jetbrains-annotations.version>
+        <!-- JSR-305 @javax.annotation.Nullable:SonarJava S4449 只认声明级 @Nullable(JSpecify 的
+             @Nullable 是 TYPE_USE,该规则不识别,见 utils/package-info.java 说明)。 -->
+        <jsr305.version>3.0.2</jsr305.version>
         <lombok.version>1.18.46</lombok.version>
         <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.1</mybatis-spring-boot.version>
@@ -180,6 +183,11 @@
                 <groupId>org.jetbrains</groupId>
                 <artifactId>annotations</artifactId>
                 <version>${jetbrains-annotations.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.code.findbugs</groupId>
+                <artifactId>jsr305</artifactId>
+                <version>${jsr305.version}</version>
             </dependency>
 
             <dependency>

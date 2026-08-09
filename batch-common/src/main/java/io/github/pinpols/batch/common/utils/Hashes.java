@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * 通用哈希工具:抹掉重复的 SHA-256 + hex 编码样板。

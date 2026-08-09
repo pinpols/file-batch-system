@@ -14,7 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code
