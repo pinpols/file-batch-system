@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.utils;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * JDBC 驱动可能把 PG {@code json/jsonb} 列映射为 {@code org.postgresql.util.PGobject}；该类仅在运行时存在于 classpath，
@@ -17,7 +17,8 @@ public final class PostgresqlJsonbTexts {
   /**
    * @return PG json/jsonb 的原始 UTF-8 文本；非 PGobject 时返回 {@code null}
    */
-  public static @Nullable String tryExtract(@Nullable Object raw) {
+  @Nullable
+  public static String tryExtract(@Nullable Object raw) {
     if (raw == null) {
       return null;
     }

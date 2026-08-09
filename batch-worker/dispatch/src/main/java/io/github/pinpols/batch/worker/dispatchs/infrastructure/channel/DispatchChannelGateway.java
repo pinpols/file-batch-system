@@ -64,7 +64,8 @@ public class DispatchChannelGateway {
           "unsupported channel type: " + requestedChannelType,
           null);
     }
-    String channelCode = channelConfig == null || channelConfig.get("channel_code") == null
+    // channelConfig 非空由上方 rawChannelType 判空早返保证
+    String channelCode = channelConfig.get("channel_code") == null
         ? DispatchGatewayConstants.DEFAULT_CHANNEL_CODE
         : String.valueOf(channelConfig.get(DispatchGatewayConstants.CHANNEL_CODE_KEY));
     if (!healthService.allowDispatch(channelConfig)) {

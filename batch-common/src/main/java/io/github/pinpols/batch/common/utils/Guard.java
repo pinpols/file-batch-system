@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import javax.annotation.Nullable;
 import org.jetbrains.annotations.Contract;
 
 /**
@@ -36,7 +37,7 @@ public final class Guard {
    * }</pre>
    */
   @Contract("null, _ -> fail; !null, _ -> param1")
-  public static <T> T requireFound(T entity, String message) {
+  public static <T> T requireFound(@Nullable T entity, String message) {
     if (entity == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
     }
@@ -45,7 +46,7 @@ public final class Guard {
 
   /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
   @Contract("null, _ -> fail")
-  public static void requireText(String str, String message) {
+  public static void requireText(@Nullable String str, String message) {
     if (!Texts.hasText(str)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", message);
@@ -75,7 +76,7 @@ public final class Guard {
 
   /** S-1.9：带错误码的字符串非空断言。 */
   @Contract("null, _, _ -> fail")
-  public static void requireText(String str, ResultCode resultCode, String message) {
+  public static void requireText(@Nullable String str, ResultCode resultCode, String message) {
     if (!Texts.hasText(str)) {
       ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
       throw BizException.of(code, detailKey(code), message);
@@ -83,22 +84,6 @@ public final class Guard {
   }
 
   private static String detailKey(ResultCode code) {
-    return switch (code) {
-      case NOT_FOUND -> "error.common.not_found_detail";
-      case CONFLICT -> "error.common.conflict_detail";
-      case STATE_CONFLICT -> "error.common.state_conflict_detail";
-      case UNAUTHORIZED, CAPTCHA_REQUIRED -> "error.common.unauthorized_detail";
-      case FORBIDDEN -> "error.common.forbidden_detail";
-      case RATE_LIMITED -> "error.common.rate_limited_detail";
-      case BUSINESS_ERROR -> "error.common.business_error_detail";
-      case TENANT_SUSPENDED -> "error.common.business_error_detail";
-      case NOT_IMPLEMENTED -> "error.common.not_implemented_detail";
-      case SERVICE_UNAVAILABLE -> "error.common.service_unavailable_detail";
-      case SYSTEM_ERROR -> "error.common.system_error_detail";
-      case INVALID_ARGUMENT, CREDENTIAL_REF_UNRESOLVED -> "error.common.invalid_argument_detail";
-      case VALIDATION_ERROR -> "error.common.validation_failed_detail";
-      case MISSING_IDEMPOTENCY_KEY -> "error.common.missing_idempotency_key_detail";
-      case SUCCESS -> "error.common.success_detail";
-    };
+    return code.detailKey();
   }
 }

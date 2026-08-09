@@ -215,6 +215,7 @@ public class ConsoleJwtService {
   }
 
   /** 签发访问令牌及过期时间。 */
+  @SuppressWarnings("java:S2589")
   public ConsoleAuthTokenResponse issueToken(
       String username, String tenantId, Set<String> authorities, long sessionVersion) {
     Guard.requireText(username, "username is required");
@@ -239,6 +240,8 @@ public class ConsoleJwtService {
     if (currentRequest != null) {
       String ipHash = hashClientIp(currentRequest);
       String uaHash = hashUserAgent(currentRequest);
+      // 两个 hash 均来自 Hashes.sha256Short（声明 @Nullable）：User-Agent 头可缺失、RemoteAddr
+      // 极端场景也可能缺失，null 时不写入 claim 是防御性必要检查，Sonar 的 servlet 模型误判恒非空。
       if (ipHash != null) {
         claimsBuilder.claim(CLAIM_IP_HASH, ipHash);
       }

@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.ToLongFunction;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /** 控制台查询子服务的共享工具方法。 */
 public final class ConsoleQuerySupport {
@@ -217,7 +217,8 @@ public final class ConsoleQuerySupport {
     return Integer.parseInt(String.valueOf(value));
   }
 
-  public static @Nullable Boolean booleanValue(Map<String, Object> row, String key) {
+  @Nullable
+  public static Boolean booleanValue(Map<String, Object> row, String key) {
     Object value = row == null ? null : row.get(key);
     if (value == null) {
       return null;

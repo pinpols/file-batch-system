@@ -79,7 +79,7 @@ public final class ConsoleTextSanitizer {
     }
 
     public Chain htmlEscape() {
-      return new Chain(value == null ? null : HtmlUtils.htmlEscape(value));
+      return value == null ? this : new Chain(HtmlUtils.htmlEscape(value));
     }
 
     public Chain maxLength(int maxLength) {
@@ -90,7 +90,7 @@ public final class ConsoleTextSanitizer {
     }
 
     public Chain strip() {
-      return new Chain(value == null ? null : value.strip());
+      return value == null ? this : new Chain(value.strip());
     }
 
     public String get() {

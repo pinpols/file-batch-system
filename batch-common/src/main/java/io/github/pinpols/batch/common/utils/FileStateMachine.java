@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.util.EnumSet;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * 文件状态机，维护 {@link io.github.pinpols.batch.common.enums.FileStatus} 的合法流转规则。 初始状态仅允许 {@code
@@ -55,7 +56,8 @@ public final class FileStateMachine {
     }
   }
 
-  public static void assertTransition(String currentStatusCode, String nextStatusCode) {
+  public static void assertTransition(
+      @Nullable String currentStatusCode, @Nullable String nextStatusCode) {
     FileStatus current = parse(currentStatusCode);
     FileStatus next = parse(nextStatusCode);
     if (current == next) {
@@ -82,7 +84,7 @@ public final class FileStateMachine {
     }
   }
 
-  private static FileStatus parse(String statusCode) {
+  private static FileStatus parse(@Nullable String statusCode) {
     FileStatus status = FileStatus.fromCode(statusCode);
     Guard.require(status != null, "file status is required");
     return status;

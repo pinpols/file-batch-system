@@ -127,6 +127,54 @@ TOKEN_JSON=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
 SONAR_TOKEN=$(echo "$TOKEN_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 ok "Token generated."
 
+# ── 3.5 质量配置：S3776 认知复杂度阈值 15→20 ─────────────────────────────
+# 团队约定（避免把 CC 16-21 的轻度越限当作必须重构项）。内置 Sonar way 不可改，
+# 这里复制一份自定义 profile 并激活新阈值后绑定项目；幂等，每次扫描前执行。
+info "Step 3.5/5 — Applying quality profile (S3776 Threshold=20)..."
+CUSTOM_PROFILE_NAME="Batch Platform Sonar Way"
+# 提前创建项目，便于绑定 profile（已存在时忽略失败）
+curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+  "${SONAR_URL}/api/projects/create" \
+  --data-urlencode "name=${PROJECT_NAME}" \
+  --data-urlencode "project=${PROJECT_KEY}" &>/dev/null || true
+CUSTOM_PROFILE_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+  "${SONAR_URL}/api/qualityprofiles/search?language=java" \
+  | python3 -c "
+import json,sys
+ps=json.load(sys.stdin)['profiles']
+print(next((p['key'] for p in ps if p['name']=='${CUSTOM_PROFILE_NAME}'), ''))")
+if [ -z "${CUSTOM_PROFILE_KEY}" ]; then
+  FROM_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    "${SONAR_URL}/api/qualityprofiles/search?language=java" \
+    | python3 -c "import json,sys; print(next(p['key'] for p in json.load(sys.stdin)['profiles'] if p['isDefault']))")
+  CUSTOM_PROFILE_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+    "${SONAR_URL}/api/qualityprofiles/copy" \
+    --data-urlencode "fromKey=${FROM_KEY}" \
+    --data-urlencode "toName=${CUSTOM_PROFILE_NAME}" \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['key'])")
+fi
+curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+  "${SONAR_URL}/api/qualityprofiles/activate_rule" \
+  --data-urlencode "key=${CUSTOM_PROFILE_KEY}" \
+  --data-urlencode "rule=java:S3776" \
+  --data-urlencode "params=Threshold=20" >/dev/null
+# add_project 的 API 参数是 language + qualityProfile(名称),不是 profile key;
+# 先 remove 再 add 保证幂等(重复绑定会 400)。
+curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+  "${SONAR_URL}/api/qualityprofiles/remove_project" \
+  --data-urlencode "language=java" \
+  --data-urlencode "qualityProfile=${CUSTOM_PROFILE_NAME}" \
+  --data-urlencode "project=${PROJECT_KEY}" &>/dev/null || true
+if curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+  "${SONAR_URL}/api/qualityprofiles/add_project" \
+  --data-urlencode "language=java" \
+  --data-urlencode "qualityProfile=${CUSTOM_PROFILE_NAME}" \
+  --data-urlencode "project=${PROJECT_KEY}" >/dev/null; then
+  ok "S3776 threshold set to 20 (profile ${CUSTOM_PROFILE_KEY})"
+else
+  warn "S3776 quality profile activation failed; report may use default threshold 15."
+fi
+
 # ── 4. 构建 + 扫描 ────────────────────────────────────────────────────────────
 cd "$PROJECT_ROOT"
 
@@ -174,6 +222,8 @@ mvn "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSI
   -Dsonar.projectName="${PROJECT_NAME}" \
   -Dsonar.java.source=21 \
   -Dsonar.java.target=21 \
+  -Dsonar.java.skipUnchanged=false \
+  -Dsonar.analysisCache.enabled=false \
   2>&1 | tee "$SONAR_LOG" | grep -E "INFO.*task|INFO.*More|ERROR.*Unable|BUILD (SUCCESS|FAILURE)"
 SONAR_STATUS=${PIPESTATUS[0]}
 set -e

@@ -20,6 +20,15 @@
             <version>1.0.0</version>
         </dependency>
         <!--
+          JSR-305 @javax.annotation.Nullable：全仓统一的可空标注,兼容 SonarJava S4449
+          (Sonar 不识别 TYPE_USE 型的 JSpecify @Nullable)。compile 非 optional,与 jspecify
+          同策略,下游模块可直接使用;注解不进业务数据,运行时无副作用。
+        -->
+        <dependency>
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>jsr305</artifactId>
+        </dependency>
+        <!--
           共享配置基线 batch-defaults.yml 直接放在 src/main/resources/,所有服务模块通过
           batch-common 传递引入(application.yml 只 overlay)。基线缺失由
           BatchDefaultsClasspathPresenceTest 守护,见 ADR-029。

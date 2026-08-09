@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
 import java.util.regex.Pattern;
-import org.jspecify.annotations.Nullable;
+import javax.annotation.Nullable;
 
 /**
  * 配置码（configuration code）归一与格式校验工具。
@@ -38,7 +38,8 @@ public final class CodeNormalizer {
   private CodeNormalizer() {}
 
   /** 分组码归一（大写）：worker_group / tenant_id 等。 */
-  public static @Nullable String normalizeGroupCode(@Nullable String raw, String fieldName) {
+  @Nullable
+  public static String normalizeGroupCode(@Nullable String raw, String fieldName) {
     String trimmed = trimToNull(raw);
     if (trimmed == null) {
       return null;
@@ -60,7 +61,8 @@ public final class CodeNormalizer {
   }
 
   /** 配置码归一（小写 + 下划线）：window_code / calendar_code / queue_code / channel_code 等。 */
-  public static @Nullable String normalizeConfigCode(@Nullable String raw, String fieldName) {
+  @Nullable
+  public static String normalizeConfigCode(@Nullable String raw, String fieldName) {
     String trimmed = trimToNull(raw);
     if (trimmed == null) {
       return null;
@@ -82,18 +84,21 @@ public final class CodeNormalizer {
   }
 
   /** 宽松归一：只 trim + upper/lower，不做格式校验（供 Excel 预览阶段用，真正 apply 时再强校验）。 */
-  public static @Nullable String toUpperOrNull(@Nullable String raw) {
+  @Nullable
+  public static String toUpperOrNull(@Nullable String raw) {
     String trimmed = trimToNull(raw);
     return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
   }
 
-  public static @Nullable String toConfigFormOrNull(@Nullable String raw) {
+  @Nullable
+  public static String toConfigFormOrNull(@Nullable String raw) {
     String trimmed = trimToNull(raw);
     return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT).replace('-', '_');
   }
 
   /** 纯归一:trim + 空白→null,不改大小写。供大小写敏感的码引用(如 job_code 引用)复用。 */
-  public static @Nullable String trimToNull(@Nullable String raw) {
+  @Nullable
+  public static String trimToNull(@Nullable String raw) {
     if (raw == null) {
       return null;
     }

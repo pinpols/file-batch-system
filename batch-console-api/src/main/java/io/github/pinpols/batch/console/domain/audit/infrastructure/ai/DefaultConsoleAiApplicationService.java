@@ -79,6 +79,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationService {
 
+  /** AiPromptDecision → 拒绝文案（展示层文案，归属 service 而非 batch-common 枚举）。 */
+  private static final Map<AiPromptDecision, String> REFUSAL_MESSAGES = Map.of(
+      AiPromptDecision.REJECTED_DISABLED, "AI assistant is disabled.",
+      AiPromptDecision.REJECTED_SAFETY, "Prompt rejected by safety policy.",
+      AiPromptDecision.REJECTED_SCOPE, "Prompt is outside the batch platform scope.");
+
   private final ObjectProvider<ChatClient> chatClientProvider;
   private final ConsoleAiProperties aiProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -326,12 +332,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   private String refusalMessage(AiPromptGateResult gateResult) {
-    return switch (gateResult.decision()) {
-      case REJECTED_DISABLED -> "AI assistant is disabled.";
-      case REJECTED_SAFETY -> "Prompt rejected by safety policy.";
-      case REJECTED_SCOPE -> "Prompt is outside the batch platform scope.";
-      default -> "Request rejected.";
-    };
+    return REFUSAL_MESSAGES.getOrDefault(gateResult.decision(), "Request rejected.");
   }
 
   private AiAuditCommand buildAuditCommand(AuditContext context) {

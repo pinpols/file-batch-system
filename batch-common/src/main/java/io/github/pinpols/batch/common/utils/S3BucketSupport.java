@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
@@ -26,7 +27,11 @@ public final class S3BucketSupport {
   private S3BucketSupport() {}
 
   public static boolean ensureBucket(
-      S3Client s3Client, String bucket, Logger log, String componentName, boolean autoCreate) {
+      @Nullable S3Client s3Client,
+      String bucket,
+      Logger log,
+      String componentName,
+      boolean autoCreate) {
     if (s3Client == null || !Texts.hasText(bucket)) {
       return false;
     }

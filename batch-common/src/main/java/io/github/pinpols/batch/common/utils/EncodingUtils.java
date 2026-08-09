@@ -7,6 +7,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
+import javax.annotation.Nullable;
 
 /**
  * 字符集归一工具。配合 CLAUDE.md §字符编码 约束：全系统内部一律 UTF-8，导入边界允许外部以 别名声明（{@code utf8} / {@code UTF8} / {@code
@@ -46,7 +47,7 @@ public final class EncodingUtils {
   }
 
   /** 归一并返回对应 {@link Charset}；空/空白返回 {@link StandardCharsets#UTF_8}。 */
-  public static Charset resolve(String raw) {
+  public static Charset resolve(@Nullable String raw) {
     if (!Texts.hasText(raw)) {
       return StandardCharsets.UTF_8;
     }

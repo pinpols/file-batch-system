@@ -105,12 +105,9 @@ public class ResultVersionWriter {
     } else {
       // ADR-021 DQ gate：若 BLOCKER 失败 → 强制 MANUAL_APPROVAL（即使 resultPolicy=CREATE_NEW_VERSION）
       DataQualityGateOutcome dqOutcome = runDqGateSafely(instance, businessKey);
-      dqGateStatus = switch (dqOutcome.status()) {
-        case BLOCKED -> "BLOCKED";
-        case WARN -> "WARN";
-        case PASS -> "PASS";
-        case NO_RULES -> null;
-      };
+      DataQualityGateOutcome.GateStatus gateStatus = dqOutcome.status();
+      dqGateStatus =
+          gateStatus == DataQualityGateOutcome.GateStatus.NO_RULES ? null : gateStatus.name();
       boolean dqBlocked = dqOutcome.status() == DataQualityGateOutcome.GateStatus.BLOCKED;
       // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
       // 完整结果当完整消费（违反 roadmap §2.2「PARTIAL_FAILED 不得被静默消费」）。强制 PENDING +
