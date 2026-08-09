@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.io.ByteArrayInputStream;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,7 +176,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   private static List<String> sheetNames(XSSFWorkbook wb) {
-    java.util.ArrayList<String> names = new java.util.ArrayList<>();
+    ArrayList<String> names = new ArrayList<>();
     for (int i = 0; i < wb.getNumberOfSheets(); i++) {
       names.add(wb.getSheetName(i));
     }
@@ -183,13 +184,13 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   private static List<String> concat(List<String> a, List<String> b) {
-    java.util.ArrayList<String> out = new java.util.ArrayList<>(a);
+    ArrayList<String> out = new ArrayList<>(a);
     out.addAll(b);
     return out;
   }
 
   private static List<List<Map<String, Object>>> emptyExportData() {
-    List<List<Map<String, Object>>> data = new java.util.ArrayList<>();
+    List<List<Map<String, Object>>> data = new ArrayList<>();
     for (int i = 0; i < DATA_SHEET_NAMES.size(); i++) {
       data.add(List.of());
     }
