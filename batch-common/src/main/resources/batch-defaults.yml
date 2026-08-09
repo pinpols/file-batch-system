@@ -209,6 +209,10 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
   level:
+    # Kafka 客户端在构造 Consumer/Producer 时默认以 INFO 转储完整 ConsumerConfig/ProducerConfig
+    # （bootstrap.servers / security.protocol / ssl.* / sasl.jaas.config 等），
+    # 生产走 SASL/SCRAM 时会把明文凭证打进日志。压到 WARN：保留客户端错误，抑制配置转储。
+    org.apache.kafka.clients: WARN
     # Flyway 幂等 migration(IF NOT EXISTS / IF EXISTS)在 PG 走 NOTICE → JDBC SQLWarning →
     # Flyway 7+ 默认全转 WARN log,刷屏"schema/column already exists, skipping"假阳。
     # 这些 statement 设计就是为重跑设计的,安全的。压到 ERROR 级别只保留真问题。
