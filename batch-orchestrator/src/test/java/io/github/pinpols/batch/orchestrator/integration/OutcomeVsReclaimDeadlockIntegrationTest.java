@@ -26,6 +26,7 @@ import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +79,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   /** 分区数 = 每轮并发对数;2*N 线程需 2*N 个平台库连接(pool=50),取 12 → 24 并发,留足余量。 */
   private static final int PARTITIONS = 12;
@@ -200,9 +201,9 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
     assertStateConverges(fannedOut, shards);
 
     // 交待良性并发冲突计数(非断言目标,仅证明确有真并发争用发生、窗口被真正压到)。
-    assertThat(benignConflicts.size())
+    assertThat(benignConflicts)
         .as("并发争用应真实发生(否则说明两路径没抢到一起,测试没压到窗口)")
-        .isGreaterThanOrEqualTo(0);
+        .hasSizeGreaterThanOrEqualTo(0);
   }
 
   // ---- 收尾结算 ----

@@ -68,7 +68,7 @@ class RedisShardAssignmentProviderTest {
     ShardAssignment a = p.current();
 
     assertThat(a.shardTotal()).isEqualTo(1);
-    assertThat(a.shardIndex()).isEqualTo(0);
+    assertThat(a.shardIndex()).isZero();
     assertThat(p.canPoll()).isTrue();
   }
 

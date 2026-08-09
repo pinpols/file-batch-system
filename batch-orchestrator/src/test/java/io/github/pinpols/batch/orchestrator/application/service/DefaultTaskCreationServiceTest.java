@@ -43,7 +43,7 @@ class DefaultTaskCreationServiceTest {
   void createTask_setsVersionToZeroWhenNull() {
     JobTaskEntity task = buildTask(null, null, "IMPORT", null);
     service.createTask(task);
-    assertThat(task.getVersion()).isEqualTo(0L);
+    assertThat(task.getVersion()).isZero();
   }
 
   @Test
@@ -172,7 +172,7 @@ class DefaultTaskCreationServiceTest {
     List<JobTaskEntity> result = service.createTasks(List.of(t1, t2));
 
     assertThat(result).containsExactly(t1, t2);
-    assertThat(t1.getVersion()).isEqualTo(0L);
+    assertThat(t1.getVersion()).isZero();
     verify(jobTaskMapper).insertBatch(List.of(t1, t2));
     verify(jobTaskMapper, never()).insert(any());
     ArgumentCaptor<List<JobStepInstanceEntity>> cap = ArgumentCaptor.forClass(List.class);

@@ -150,7 +150,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
     assertThat(response.successTenants()).isEqualTo(1);
     assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(1);
-    assertThat(response.results().get(0).jobDefinitions().skipped()).isEqualTo(0);
+    assertThat(response.results().get(0).jobDefinitions().skipped()).isZero();
     verify(jobDefinitionMapper)
         .insert(argThat(entity -> "upstream-job".equals(entity.getDependsOnJobCode())
             && "t1".equals(entity.getTenantId())));
@@ -204,7 +204,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
     assertThat(response.results().get(0).jobDefinitions().skipped()).isEqualTo(1);
-    assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(0);
+    assertThat(response.results().get(0).jobDefinitions().created()).isZero();
     verify(jobDefinitionMapper, never()).insert(any());
   }
 
@@ -362,8 +362,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     assertThat(response.results()).hasSize(2);
     response.results().forEach(r -> {
       assertThat(r.success()).isTrue();
-      assertThat(r.jobDefinitions().created()).isEqualTo(0);
-      assertThat(r.fileChannels().created()).isEqualTo(0);
+      assertThat(r.jobDefinitions().created()).isZero();
+      assertThat(r.fileChannels().created()).isZero();
     });
   }
 

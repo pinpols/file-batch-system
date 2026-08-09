@@ -44,7 +44,7 @@ class OrchestratorGracefulShutdownTest {
 
     assertThat(shutdown.isDraining()).isTrue();
     Map<String, Object> status = shutdown.status();
-    assertThat(status.get("reason")).isEqualTo("first");
+    assertThat(status).containsEntry("reason", "first");
   }
 
   @Test
@@ -52,9 +52,9 @@ class OrchestratorGracefulShutdownTest {
     shutdown.startDraining("manual");
 
     Map<String, Object> status = shutdown.status();
-    assertThat(status.get("draining")).isEqualTo(true);
+    assertThat(status).containsEntry("draining", true);
     assertThat(status.get("drainingSince")).isNotNull();
-    assertThat(status.get("reason")).isEqualTo("manual");
+    assertThat(status).containsEntry("reason", "manual");
   }
 
   @Test
@@ -64,6 +64,6 @@ class OrchestratorGracefulShutdownTest {
     shutdown.onApplicationEvent(event);
 
     assertThat(shutdown.isDraining()).isTrue();
-    assertThat(shutdown.status().get("reason")).isEqualTo("context-closed");
+    assertThat(shutdown.status()).containsEntry("reason", "context-closed");
   }
 }

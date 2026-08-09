@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,7 +30,7 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void emptyDependenciesIsResolved() {
-    var result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), null);
+    var result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), null);
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResolved()).isEmpty();
   }
@@ -46,27 +47,27 @@ class CrossDayDependencyResolverTest {
         .jobInstanceId(100L)
         .businessKey("job:DAILY_PNL:2026-05-03")
         .build();
-    when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, 5, 3)))
+    when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, Month.MAY, 3)))
         .thenReturn(Optional.of(hit));
 
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
 
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResolved()).containsKey("t_minus_1");
     @SuppressWarnings("unchecked")
     Map<String, Object> entry = (Map<String, Object>) result.getResolved().get("t_minus_1");
-    assertThat(entry.get("versionNo")).isEqualTo(2);
-    assertThat(entry.get("status")).isEqualTo("EFFECTIVE");
+    assertThat(entry).containsEntry("versionNo", 2);
+    assertThat(entry).containsEntry("status", "EFFECTIVE");
   }
 
   @Test
   void requiredMissingPutsResolutionInWaitingState() {
     String json = "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
         + "\"scope\":\"REQUIRED\"}]";
-    when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, 5, 3)))
+    when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, Month.MAY, 3)))
         .thenReturn(Optional.empty());
 
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
 
     assertThat(result.isWaiting()).isTrue();
     assertThat(result.getWaitingReasons())
@@ -81,10 +82,10 @@ class CrossDayDependencyResolverTest {
   void optionalMissingStillResolves() {
     String json = "[{\"alias\":\"market_data\",\"jobCode\":\"MARKET_DATA\",\"bizDateOffset\":-1,"
         + "\"scope\":\"OPTIONAL\"}]";
-    when(queryService.findEffectiveByJob("t1", "MARKET_DATA", LocalDate.of(2026, 5, 3)))
+    when(queryService.findEffectiveByJob("t1", "MARKET_DATA", LocalDate.of(2026, Month.MAY, 3)))
         .thenReturn(Optional.empty());
 
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
 
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResolved()).doesNotContainKey("market_data");
@@ -104,7 +105,7 @@ class CrossDayDependencyResolverTest {
     when(queryService.findEffectiveByJob(eq("t1"), eq("DAILY_PNL"), any(LocalDate.class)))
         .thenReturn(Optional.of(hit));
 
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
 
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResolved()).containsKey("prev_5");
@@ -117,7 +118,8 @@ class CrossDayDependencyResolverTest {
 
   @Test
   void invalidJsonPutsResolutionInFailedState() {
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), "not-json{[");
+    ResolutionResult result =
+        resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), "not-json{[");
     assertThat(result.isFailed()).isTrue();
     assertThat(result.getFailureCode()).isEqualTo("CROSS_DAY_DEPS_PARSE_FAILED");
   }
@@ -125,7 +127,7 @@ class CrossDayDependencyResolverTest {
   @Test
   void specWithoutJobCodeFails() {
     String json = "[{\"alias\":\"x\",\"bizDateOffset\":-1}]";
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
     assertThat(result.isFailed()).isTrue();
     assertThat(result.getFailureCode()).isEqualTo("CROSS_DAY_DEP_INVALID_SPEC");
   }
@@ -135,7 +137,7 @@ class CrossDayDependencyResolverTest {
     String json = "[{\"alias\":\"t1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
         + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"BOGUS\"}]";
 
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
 
     assertThat(result.isWaiting()).isTrue();
   }
@@ -150,7 +152,7 @@ class CrossDayDependencyResolverTest {
     when(queryService.listVersions("t1", "job:DAILY_PNL:2026-05-03", 50))
         .thenReturn(List.of(v2, v1));
 
-    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, 5, 4), json);
+    ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
 
     assertThat(result.isResolved()).isTrue();
   }

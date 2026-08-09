@@ -42,7 +42,7 @@ class FileArrivalSensorPolicyTest {
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "settle-*", "maxAgeSeconds", 3600)));
 
     assertThat(r.status()).isEqualTo(SensorProbeStatus.MATCHED);
-    assertThat(r.output().get("fileId")).isEqualTo(42L);
+    assertThat(r.output()).containsEntry("fileId", 42L);
   }
 
   @Test

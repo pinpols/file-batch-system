@@ -24,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -144,7 +145,7 @@ class LaunchBatchDayServiceTest {
   @Test
   @DisplayName("jobDefinition=null → 早退")
   void null_jobDefinition_short_circuits() {
-    LaunchRequest r = req("j1", LocalDate.of(2026, 5, 20), TriggerType.SCHEDULED);
+    LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
     service.doUpsertBatchDayInstance(r, null, Map.of(), Instant.now());
     verify(batchDayInstanceMapper, never())
         .selectByTenantCalendarBizDate(anyString(), anyString(), any());
@@ -153,7 +154,7 @@ class LaunchBatchDayServiceTest {
   @Test
   @DisplayName("calendarCode 缺失 → 早退,不维护 batch_day")
   void missingCalendarCodeShortCircuits() {
-    LaunchRequest r = req("j1", LocalDate.of(2026, 5, 20), TriggerType.SCHEDULED);
+    LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
     service.doUpsertBatchDayInstance(r, jobDef(null), Map.of(), Instant.now());
     verify(batchDayInstanceMapper, never())
         .selectByTenantCalendarBizDate(anyString(), anyString(), any());

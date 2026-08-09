@@ -65,9 +65,9 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         "SELECT tenant_id, channel_code, channel_type, target_endpoint"
             + " FROM batch.file_channel_config WHERE channel_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-fc-ta");
-    assertThat(row.get("channel_code")).isEqualTo(code);
-    assertThat(row.get("channel_type")).isEqualTo("SFTP");
+    assertThat(row).containsEntry("tenant_id", "int-fc-ta");
+    assertThat(row).containsEntry("channel_code", code);
+    assertThat(row).containsEntry("channel_type", "SFTP");
 
     jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
   }

@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,7 @@ class BatchDayCutoffSchedulerTest {
     candidate.setId(id);
     candidate.setTenantId("t1");
     candidate.setCalendarCode("CAL");
-    candidate.setBizDate(LocalDate.of(2026, 3, 27));
+    candidate.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     candidate.setDayStatus("OPEN");
     candidate.setTimezone("UTC");
     candidate.setCutoffTime(cutoffTime);

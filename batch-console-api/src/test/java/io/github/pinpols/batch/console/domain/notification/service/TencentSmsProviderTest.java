@@ -143,9 +143,9 @@ class TencentSmsProviderTest {
     assertThat(sentBody.get()).contains("\"TemplateId\":\"1234567\"");
     assertThat(sentBody.get()).contains("\"PhoneNumberSet\":[\"+8613800138000\"]");
     assertThat(sentBody.get()).contains("\"TemplateParamSet\":[\"JOB_FAILED\"]");
-    assertThat(sentHeaders.get().get("X-TC-Action")).isEqualTo("SendSms");
-    assertThat(sentHeaders.get().get("X-TC-Version")).isEqualTo("2021-01-11");
-    assertThat(sentHeaders.get().get("X-TC-Region")).isEqualTo("ap-guangzhou");
+    assertThat(sentHeaders.get()).containsEntry("X-TC-Action", "SendSms");
+    assertThat(sentHeaders.get()).containsEntry("X-TC-Version", "2021-01-11");
+    assertThat(sentHeaders.get()).containsEntry("X-TC-Region", "ap-guangzhou");
     assertThat(sentHeaders.get().get("Authorization"))
         .startsWith("TC3-HMAC-SHA256 Credential=sid-test/")
         .contains("/sms/tc3_request")
@@ -154,7 +154,7 @@ class TencentSmsProviderTest {
     // 签名确定:固定 timestamp/secret + 同 body → 相同 signature(防漂移)。
     String auth1 = sentHeaders.get().get("Authorization");
     provider.send(PHONE_NUMBERS, message(fullConfig()));
-    assertThat(sentHeaders.get().get("Authorization")).isEqualTo(auth1);
+    assertThat(sentHeaders.get()).containsEntry("Authorization", auth1);
   }
 
   @Test

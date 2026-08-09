@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,7 @@ class ResultVersionQueryServiceTest {
     when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
         .thenReturn(List.of(row));
 
-    var found = service.findEffectiveByJob("t1", "JOB_A", LocalDate.of(2026, 5, 4));
+    var found = service.findEffectiveByJob("t1", "JOB_A", LocalDate.of(2026, Month.MAY, 4));
 
     assertThat(found).isPresent();
     verify(mapper).listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1);
@@ -75,7 +76,7 @@ class ResultVersionQueryServiceTest {
     when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
         .thenReturn(List.of(row));
 
-    var found = service.findEffectiveByJob("t1", "JOB_A", LocalDate.of(2026, 5, 4));
+    var found = service.findEffectiveByJob("t1", "JOB_A", LocalDate.of(2026, Month.MAY, 4));
 
     assertThat(found).isEmpty();
   }
@@ -97,7 +98,7 @@ class ResultVersionQueryServiceTest {
     when(mapper.listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1))
         .thenReturn(List.of(row));
 
-    var found = service.findLatestByJob("t1", "JOB_A", LocalDate.of(2026, 5, 4));
+    var found = service.findLatestByJob("t1", "JOB_A", LocalDate.of(2026, Month.MAY, 4));
 
     assertThat(found).contains(row);
     verify(mapper).listVersionsByBusinessKey("t1", "job:JOB_A:2026-05-04", 1);

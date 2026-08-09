@@ -58,8 +58,8 @@ class TriggerGracefulShutdownTest {
 
     Map<String, Object> status = shutdown.status();
 
-    assertThat(status.get("draining")).isEqualTo(false);
-    assertThat(status.get("schedulerStatus")).isEqualTo("STANDBY");
+    assertThat(status).containsEntry("draining", false);
+    assertThat(status).containsEntry("schedulerStatus", "STANDBY");
   }
 
   @Test

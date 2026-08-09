@@ -215,7 +215,7 @@ class TaskDispatcherP0HardeningTest {
     while (dispatcher.submittedCount() != 0 && System.nanoTime() < deadline) {
       Thread.sleep(10);
     }
-    assertThat(dispatcher.submittedCount()).isEqualTo(0);
+    assertThat(dispatcher.submittedCount()).isZero();
   }
 
   private record GatedHandler(CountDownLatch started, CountDownLatch gate)

@@ -32,6 +32,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -251,7 +252,7 @@ class BatchDaySettleSchedulerTest {
         1L,
         "t1",
         "CAL",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         status,
         Instant.parse("2026-03-27T00:00:00Z"),
         Instant.parse("2026-03-27T06:00:00Z"),

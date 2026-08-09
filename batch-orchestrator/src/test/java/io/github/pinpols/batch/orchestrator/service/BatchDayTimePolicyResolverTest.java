@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import org.junit.jupiter.api.Test;
 
 class BatchDayTimePolicyResolverTest {
@@ -22,7 +23,7 @@ class BatchDayTimePolicyResolverTest {
     BusinessCalendarEntity calendar =
         calendar("America/New_York", LocalTime.of(2, 30), "RUN_AT_NEXT_VALID_TIME", null);
 
-    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 3, 7));
+    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, Month.MARCH, 7));
 
     assertThat(cutoffAt).isEqualTo(Instant.parse("2026-03-08T07:00:00Z"));
     // R4-P1-5 后 DEFAULT_OVERLAP_POLICY 改成 RUN_ONCE_LATER_OFFSET（保护未配置 tenant 不被早 1h 触发误判
@@ -36,7 +37,7 @@ class BatchDayTimePolicyResolverTest {
     BusinessCalendarEntity calendar =
         calendar("America/New_York", LocalTime.of(2, 30), "FAIL_FAST", null);
 
-    assertThatThrownBy(() -> resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 3, 7)))
+    assertThatThrownBy(() -> resolver.resolveCutoffAt(calendar, LocalDate.of(2026, Month.MARCH, 7)))
         .isInstanceOf(BizException.class);
   }
 
@@ -45,7 +46,7 @@ class BatchDayTimePolicyResolverTest {
     BusinessCalendarEntity calendar =
         calendar("America/New_York", LocalTime.of(1, 30), null, "RUN_ONCE_LATER_OFFSET");
 
-    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 10, 31));
+    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, Month.OCTOBER, 31));
 
     assertThat(cutoffAt).isEqualTo(Instant.parse("2026-11-01T06:30:00Z"));
   }
@@ -57,7 +58,7 @@ class BatchDayTimePolicyResolverTest {
 
     // RUN_TWICE 不支持用于 cutoff, 必须降级到 DEFAULT_OVERLAP_POLICY；R4-P1-5 后默认是 RUN_ONCE_LATER_OFFSET，
     // 对应秋令 overlap 选标准时 offset → 2026-11-01 01:30 本地（标准时 -05:00）= 06:30Z。
-    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 10, 31));
+    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, Month.OCTOBER, 31));
 
     assertThat(cutoffAt).isEqualTo(Instant.parse("2026-11-01T06:30:00Z"));
     assertThat(resolver.snapshot(calendar))

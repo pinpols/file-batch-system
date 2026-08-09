@@ -20,6 +20,7 @@ import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,7 +176,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
         new io.github.pinpols.batch.common.dto.LaunchRequest(
             tenantId,
             "JOB_RECOVER",
-            LocalDate.of(2026, 4, 30),
+            LocalDate.of(2026, Month.APRIL, 30),
             TriggerType.MANUAL,
             requestId,
             "tr-recover",
@@ -249,7 +250,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId(tenantId);
     request.setJobCode(jobCode);
-    request.setBizDate(LocalDate.of(2026, 4, 30));
+    request.setBizDate(LocalDate.of(2026, Month.APRIL, 30));
     request.setTriggerType(TriggerType.API);
     request.setParams(new HashMap<>());
     return request;

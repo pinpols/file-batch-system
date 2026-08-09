@@ -115,7 +115,7 @@ class InstanceManagementPauseResumeTest {
         .containsEntry("requested", 2)
         .containsEntry("retried", 2)
         .containsEntry("conflicts", 0);
-    assertThat(result.get("partitionIds")).isEqualTo(List.of(10L, 11L));
+    assertThat(result).containsEntry("partitionIds", List.of(10L, 11L));
     verify(retryGovernanceService).retryPartition("t1", 10L, "t1:manual-partition-retry:10:1");
     verify(retryGovernanceService).retryPartition("t1", 11L, "t1:manual-partition-retry:11:3");
   }

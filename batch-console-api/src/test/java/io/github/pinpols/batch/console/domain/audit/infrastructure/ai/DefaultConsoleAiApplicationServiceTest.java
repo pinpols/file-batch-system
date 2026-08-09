@@ -308,10 +308,10 @@ class DefaultConsoleAiApplicationServiceTest {
 
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
     // EmptyUsage 的 token 计数为 0,不触发指标自增(仅 >0 才 increment)
-    assertThat(tokenCount("prompt")).isEqualTo(0.0);
+    assertThat(tokenCount("prompt")).isZero();
     ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
     verify(auditService).record(captor.capture());
-    assertThat(captor.getValue().promptTokens()).isEqualTo(0);
+    assertThat(captor.getValue().promptTokens()).isZero();
   }
 
   // ── ② 调用限流 ────────────────────────────────────────────────────────────

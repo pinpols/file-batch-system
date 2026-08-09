@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ class DefaultPartitionDispatchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "tc",
         "TC_EXPORT_RISK_ALERT",
-        LocalDate.of(2026, 4, 22),
+        LocalDate.of(2026, Month.APRIL, 22),
         TriggerType.SCHEDULED,
         "req-1",
         "trace-1",
@@ -40,7 +41,7 @@ class DefaultPartitionDispatchServiceTest {
     LaunchRequest request = new LaunchRequest(
         "tc",
         "TC_EXPORT_RISK_ALERT",
-        LocalDate.of(2026, 4, 22),
+        LocalDate.of(2026, Month.APRIL, 22),
         TriggerType.SCHEDULED,
         "req-2",
         "trace-2",

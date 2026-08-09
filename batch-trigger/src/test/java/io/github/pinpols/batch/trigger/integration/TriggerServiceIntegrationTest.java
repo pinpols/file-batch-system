@@ -14,6 +14,7 @@ import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setJobCode("IMPORT_JOB");
-    request.setBizDate(LocalDate.of(2026, 3, 27));
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "integration"));
 
@@ -108,7 +109,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
         "pending-001",
         TriggerType.CATCH_UP.code(),
         "EXPORT_JOB",
-        LocalDate.of(2026, 3, 27),
+        LocalDate.of(2026, Month.MARCH, 27),
         "dedup-pending-001",
         "ACCEPTED",
         "trace-pending-001");

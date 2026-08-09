@@ -61,9 +61,9 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
         "SELECT tenant_id, job_code, pipeline_type, biz_type FROM batch.pipeline_definition"
             + " WHERE job_code = ?",
         code);
-    assertThat(row.get("tenant_id")).isEqualTo("int-pd-ta");
-    assertThat(row.get("pipeline_type")).isEqualTo("IMPORT");
-    assertThat(row.get("biz_type")).isEqualTo("settlement");
+    assertThat(row).containsEntry("tenant_id", "int-pd-ta");
+    assertThat(row).containsEntry("pipeline_type", "IMPORT");
+    assertThat(row).containsEntry("biz_type", "settlement");
 
     jdbcTemplate.update("DELETE FROM batch.pipeline_definition WHERE job_code = ?", code);
   }

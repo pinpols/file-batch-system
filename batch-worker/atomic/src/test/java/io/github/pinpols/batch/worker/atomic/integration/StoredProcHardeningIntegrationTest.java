@@ -122,7 +122,7 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
         .execute(ctx(
             Map.of("procedureName", "spi_it.it_proc_cursor", "outParams", List.of("REF_CURSOR"))));
     assertThat(r.success()).isTrue();
-    assertThat(r.output().get("truncated")).isEqualTo(true);
+    assertThat(r.output()).containsEntry("truncated", true);
   }
 
   @Test

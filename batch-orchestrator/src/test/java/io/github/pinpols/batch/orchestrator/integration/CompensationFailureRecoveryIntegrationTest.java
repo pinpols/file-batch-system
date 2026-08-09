@@ -48,7 +48,7 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
         .hasMessageContaining("simulated mid-compensation failure");
 
     Map<String, Object> failed = latestCommand();
-    assertThat(failed.get("command_status")).isEqualTo(CompensationCommandStatus.FAILED.code());
+    assertThat(failed).containsEntry("command_status", CompensationCommandStatus.FAILED.code());
     assertThat(failed.get("error_message").toString())
         .contains("simulated mid-compensation failure");
 
@@ -61,8 +61,8 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
 
     assertThat(recoveredCommandNo).isNotBlank();
     Map<String, Object> recovered = latestCommand();
-    assertThat(recovered.get("command_no")).isEqualTo(recoveredCommandNo);
-    assertThat(recovered.get("command_status")).isEqualTo(CompensationCommandStatus.SUCCESS.code());
+    assertThat(recovered).containsEntry("command_no", recoveredCommandNo);
+    assertThat(recovered).containsEntry("command_status", CompensationCommandStatus.SUCCESS.code());
     assertThat(jdbcTemplate.queryForObject("""
                 select count(*)::int
                 from batch.compensation_command

@@ -22,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorCon
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,7 +65,7 @@ class DefaultLaunchValidationServiceTest {
     return new LaunchRequest(
         "ta",
         "job_ok",
-        LocalDate.of(2026, 5, 20),
+        LocalDate.of(2026, Month.MAY, 20),
         TriggerType.SCHEDULED,
         "req-001",
         "trace-001",

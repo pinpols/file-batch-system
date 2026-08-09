@@ -21,6 +21,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
+import java.time.Month;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -230,7 +231,7 @@ class TaskDispatchOutboxServiceTest {
       "schedulingContext 填 bizDate + 前后工作日 + attemptNo + triggerType,且 outbox payload 可往返反序列化")
   void schedulingContextPopulated() {
     JobInstanceEntity i = instance(100L, 5);
-    i.setBizDate(LocalDate.of(2026, 6, 1)); // 周一
+    i.setBizDate(LocalDate.of(2026, Month.JUNE, 1)); // 周一
     i.setRunAttempt(2);
     i.setTriggerType("SCHEDULED");
     service.writeDispatchEvent(i, task(500L, null), null, "trace", null);
@@ -242,11 +243,11 @@ class TaskDispatchOutboxServiceTest {
         JsonUtils.fromJson(JsonUtils.toJson(cap.getValue().payload()), TaskDispatchMessage.class);
     SchedulingContext ctx = roundTrip.schedulingContext();
     assertThat(ctx).isNotNull();
-    assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
+    assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
     // 周一往前一个工作日 = 上周五 5/29
-    assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, 5, 29));
+    assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 29));
     // 周一往后一个工作日 = 周二 6/2
-    assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, 6, 2));
+    assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 2));
     assertThat(ctx.isHoliday()).isFalse();
     assertThat(ctx.attemptNo()).isEqualTo(2);
     assertThat(ctx.triggerType()).isEqualTo("SCHEDULED");

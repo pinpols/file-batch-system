@@ -43,7 +43,7 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = redis.getJson(key, Map.class);
     assertThat(result).isNotNull();
-    assertThat(result.get("name")).isEqualTo("hello");
+    assertThat(result).containsEntry("name", "hello");
     assertThat(((Number) result.get("count")).intValue()).isEqualTo(42);
   }
 

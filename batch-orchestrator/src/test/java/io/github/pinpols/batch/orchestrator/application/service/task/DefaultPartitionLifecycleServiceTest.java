@@ -270,12 +270,12 @@ class DefaultPartitionLifecycleServiceTest {
     assertThat(cap.getValue()).hasSize(1);
     Map<String, Object> snapshot = (Map<String, Object>)
         JsonUtils.fromJson(cap.getValue().get(0).getInputSnapshot(), Object.class);
-    assertThat(snapshot.get("partitionPlanVersion")).isEqualTo(1);
-    assertThat(snapshot.get("shardIndex")).isEqualTo(0);
-    assertThat(snapshot.get("shardTotal")).isEqualTo(2);
-    assertThat(snapshot.get("rangeStartInclusive")).isEqualTo(0);
-    assertThat(snapshot.get("rangeEndExclusive")).isEqualTo(50);
-    assertThat(snapshot.get("expectedRows")).isEqualTo(50);
+    assertThat(snapshot).containsEntry("partitionPlanVersion", 1);
+    assertThat(snapshot).containsEntry("shardIndex", 0);
+    assertThat(snapshot).containsEntry("shardTotal", 2);
+    assertThat(snapshot).containsEntry("rangeStartInclusive", 0);
+    assertThat(snapshot).containsEntry("rangeEndExclusive", 50);
+    assertThat(snapshot).containsEntry("expectedRows", 50);
   }
 
   // ===== fixtures =====

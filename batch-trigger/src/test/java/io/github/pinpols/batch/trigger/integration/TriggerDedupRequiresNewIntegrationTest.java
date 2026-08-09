@@ -10,6 +10,7 @@ import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,7 +112,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setJobCode(jobCode);
-    request.setBizDate(LocalDate.of(2026, 3, 27));
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of());
     return new TriggerLaunchCommand(request, dedupKey, requestId, "trace-dedup");

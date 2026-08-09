@@ -18,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorCon
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -157,7 +158,7 @@ class DefaultDryRunPlanServiceTest {
     DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
         .tenantId("t1")
         .jobCode("JOB_A")
-        .bizDate(LocalDate.of(2026, 5, 7))
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
         .level(DryRunLevel.SCHEDULE_PLAN)
         .params(Map.of())
         .build());
@@ -181,7 +182,7 @@ class DefaultDryRunPlanServiceTest {
     DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
         .tenantId("t1")
         .jobCode("JOB_A")
-        .bizDate(LocalDate.of(2026, 5, 7))
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
         .level(DryRunLevel.EXECUTION_PLAN)
         .build());
 
@@ -226,7 +227,7 @@ class DefaultDryRunPlanServiceTest {
     return service.plan(DryRunPlanRequest.builder()
         .tenantId("t1")
         .jobCode("JOB_A")
-        .bizDate(LocalDate.of(2026, 5, 7))
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
         .level(DryRunLevel.EXECUTION_PLAN)
         .params(Map.of("sql", sql))
         .build());
@@ -265,7 +266,7 @@ class DefaultDryRunPlanServiceTest {
     return service.plan(DryRunPlanRequest.builder()
         .tenantId("t1")
         .jobCode("JOB_A")
-        .bizDate(LocalDate.of(2026, 5, 7))
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
         .level(DryRunLevel.EXECUTION_PLAN)
         .params(Map.of("callbackUrl", callbackUrl))
         .build());

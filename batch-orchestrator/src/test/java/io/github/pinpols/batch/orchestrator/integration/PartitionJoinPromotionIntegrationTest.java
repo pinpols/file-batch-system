@@ -24,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
   private LaunchService launchService;
@@ -168,7 +169,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, fannedOut.instanceId());
     assertThat(instance.getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
     assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(2);
-    assertThat(failedPartitionCount(fannedOut.instanceId())).isEqualTo(0);
+    assertThat(failedPartitionCount(fannedOut.instanceId())).isZero();
 
     // assert:重放不产生重复的结果版本 —— 每个 job_instance 至多 1 行 result_version(writer 幂等守护)。
     Long resultVersionRows = jdbcTemplate.queryForObject(

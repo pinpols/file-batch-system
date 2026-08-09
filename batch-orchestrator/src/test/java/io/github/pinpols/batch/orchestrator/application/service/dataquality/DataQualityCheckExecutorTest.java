@@ -16,6 +16,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityCheckMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -155,7 +156,7 @@ class DataQualityCheckExecutorTest {
     inst.setTenantId(tenantId);
     inst.setId(id);
     inst.setJobCode("JOB");
-    inst.setBizDate(LocalDate.of(2026, 5, 7));
+    inst.setBizDate(LocalDate.of(2026, Month.MAY, 7));
     inst.setInstanceStatus("SUCCESS");
     return inst;
   }

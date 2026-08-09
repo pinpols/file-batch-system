@@ -90,7 +90,7 @@ class RegisterStepTest {
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).isEqualTo(1L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.FILE_ID, 1L);
     verify(runtimeRepository).bindFileToPipelineInstance(99L, 1L);
     verify(exportDataPlugin).onRegistered(any(), anyLong(), eq(2), anyString());
   }

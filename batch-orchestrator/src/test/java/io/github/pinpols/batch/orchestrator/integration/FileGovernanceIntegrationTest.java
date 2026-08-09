@@ -22,6 +22,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -205,8 +206,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         "select file_status, metadata_json->>'cleanupReason' as cleanup_reason from"
             + " batch.file_record where id = ?",
         fileId);
-    assertThat(fileRecord.get("file_status")).isEqualTo("DELETED");
-    assertThat(fileRecord.get("cleanup_reason")).isEqualTo("ARCHIVE_RETENTION_EXPIRED");
+    assertThat(fileRecord).containsEntry("file_status", "DELETED");
+    assertThat(fileRecord).containsEntry("cleanup_reason", "ARCHIVE_RETENTION_EXPIRED");
 
     Integer auditCount = jdbcTemplate.queryForObject("""
             select count(1)::int
@@ -236,11 +237,11 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             from batch.file_record
             where storage_path = ?
             """, objectName);
-    assertThat(reconciled.get("file_name"))
-        .isEqualTo(objectName.substring(objectName.lastIndexOf('/') + 1));
-    assertThat(reconciled.get("file_status")).isEqualTo("RECEIVED");
-    assertThat(reconciled.get("reconciled_flag")).isEqualTo("true");
-    assertThat(reconciled.get("storage_path")).isEqualTo(objectName);
+    assertThat(reconciled)
+        .containsEntry("file_name", objectName.substring(objectName.lastIndexOf('/') + 1));
+    assertThat(reconciled).containsEntry("file_status", "RECEIVED");
+    assertThat(reconciled).containsEntry("reconciled_flag", "true");
+    assertThat(reconciled).containsEntry("storage_path", objectName);
 
     Integer auditCount = jdbcTemplate.queryForObject("""
             select count(1)::int
@@ -300,8 +301,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             """, TENANT_ID, groupCode);
     assertThat(rows).hasSize(2);
     assertThat(rows).allSatisfy(row -> {
-      assertThat(row.get("arrival_state")).isEqualTo("TRIGGERED");
-      assertThat(row.get("arrival_reason")).isEqualTo("ALL_FILES_ARRIVED");
+      assertThat(row).containsEntry("arrival_state", "TRIGGERED");
+      assertThat(row).containsEntry("arrival_reason", "ALL_FILES_ARRIVED");
     });
 
     var summaries =
@@ -336,7 +337,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         spec.storagePath,
         spec.storageBucket,
         spec.fileStatus,
-        Date.valueOf(LocalDate.of(2026, 3, 27)),
+        Date.valueOf(LocalDate.of(2026, Month.MARCH, 27)),
         "trace-" + suffix(),
         spec.metadataJson,
         Timestamp.from(spec.createdAt),

@@ -74,17 +74,17 @@ class OpenLineageEmitterTest {
     Instant finished = Instant.parse("2026-05-30T02:00:00Z");
     Map<String, Object> ev = emitter.buildRunEvent(run("SUCCESS"), "SUCCESS", finished);
 
-    assertThat(ev.get("eventType")).isEqualTo("COMPLETE");
-    assertThat(ev.get("eventTime")).isEqualTo("2026-05-30T02:00:00Z");
+    assertThat(ev).containsEntry("eventType", "COMPLETE");
+    assertThat(ev).containsEntry("eventTime", "2026-05-30T02:00:00Z");
     assertThat(ev.get("producer")).isNotNull();
     assertThat(ev).containsKey("schemaURL");
 
-    Map<?, ?> job = objectMap(ev.get("job"));
-    assertThat(job.get("namespace")).isEqualTo("file-batch-system");
-    assertThat(job.get("name")).isEqualTo("workflow.t1.def7");
+    Map<String, Object> job = objectMap(ev.get("job"));
+    assertThat(job).containsEntry("namespace", "file-batch-system");
+    assertThat(job).containsEntry("name", "workflow.t1.def7");
 
-    Map<?, ?> runNode = objectMap(ev.get("run"));
-    assertThat(runNode.get("runId")).isEqualTo(OpenLineageEmitter.deterministicRunId(42L));
+    Map<String, Object> runNode = objectMap(ev.get("run"));
+    assertThat(runNode).containsEntry("runId", OpenLineageEmitter.deterministicRunId(42L));
   }
 
   @Test
@@ -102,18 +102,18 @@ class OpenLineageEmitterTest {
     List<?> outputs = (List<?>) ev.get("outputs");
     assertThat(inputs).hasSize(1);
     assertThat(outputs).hasSize(1);
-    Map<?, ?> input = objectMap(inputs.get(0));
-    Map<?, ?> output = objectMap(outputs.get(0));
-    assertThat(input.get("namespace")).isEqualTo("s3://raw");
-    assertThat(input.get("name")).isEqualTo("/in.csv");
-    assertThat(output.get("namespace")).isEqualTo("s3://curated");
-    assertThat(output.get("name")).isEqualTo("/out.csv");
+    Map<String, Object> input = objectMap(inputs.get(0));
+    Map<String, Object> output = objectMap(outputs.get(0));
+    assertThat(input).containsEntry("namespace", "s3://raw");
+    assertThat(input).containsEntry("name", "/in.csv");
+    assertThat(output).containsEntry("namespace", "s3://curated");
+    assertThat(output).containsEntry("name", "/out.csv");
 
-    Map<?, ?> facets = objectMap(output.get("facets"));
-    Map<?, ?> bfsFile = objectMap(facets.get("bfsFile"));
-    assertThat(bfsFile.get("fileId")).isEqualTo(12L);
-    assertThat(bfsFile.get("fileCategory")).isEqualTo("OUTPUT");
-    assertThat(bfsFile.get("fileSizeBytes")).isEqualTo(1024L);
+    Map<String, Object> facets = objectMap(output.get("facets"));
+    Map<String, Object> bfsFile = objectMap(facets.get("bfsFile"));
+    assertThat(bfsFile).containsEntry("fileId", 12L);
+    assertThat(bfsFile).containsEntry("fileCategory", "OUTPUT");
+    assertThat(bfsFile).containsEntry("fileSizeBytes", 1024L);
   }
 
   @Test
@@ -131,9 +131,10 @@ class OpenLineageEmitterTest {
     assertThat((List<?>) ev.get("outputs")).hasSize(1);
   }
 
-  private static Map<?, ?> objectMap(Object value) {
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> objectMap(Object value) {
     assertThat(value).isInstanceOf(Map.class);
-    return (Map<?, ?>) value;
+    return (Map<String, Object>) value;
   }
 
   @Test
@@ -142,7 +143,7 @@ class OpenLineageEmitterTest {
         props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
     Map<String, Object> ev =
         emitter.buildRunEvent(run("FAILED"), "FAILED", Instant.parse("2026-05-30T02:00:00Z"));
-    assertThat(ev.get("eventType")).isEqualTo("FAIL");
+    assertThat(ev).containsEntry("eventType", "FAIL");
   }
 
   @Test

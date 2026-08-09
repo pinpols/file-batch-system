@@ -79,7 +79,7 @@ class DispatchChannelCircuitBreakerTest {
 
     Thread.sleep(50); // wait for cooldown
     assertThat(shortCooldown.allow(CHANNEL)).isTrue();
-    assertThat(shortCooldown.currentOpenCircuits()).isEqualTo(0);
+    assertThat(shortCooldown.currentOpenCircuits()).isZero();
   }
 
   @Test
@@ -92,7 +92,7 @@ class DispatchChannelCircuitBreakerTest {
       disabled.recordFailure(CHANNEL);
     }
     assertThat(disabled.allow(CHANNEL)).isTrue();
-    assertThat(disabled.currentOpenCircuits()).isEqualTo(0);
+    assertThat(disabled.currentOpenCircuits()).isZero();
   }
 
   @Test
@@ -147,7 +147,7 @@ class DispatchChannelCircuitBreakerTest {
       assertThat(cb.allow(CHANNEL)).isTrue();
       cb.recordSuccess(CHANNEL);
     }
-    assertThat(cb.currentOpenCircuits()).isEqualTo(0);
+    assertThat(cb.currentOpenCircuits()).isZero();
     assertThat(cb.allow(CHANNEL)).isTrue(); // 已闭合,正常放行
   }
 
@@ -203,7 +203,7 @@ class DispatchChannelCircuitBreakerTest {
 
     // assert: 192 次失败（< 200 阈值）一次都不能丢，否则会提前熔断；此时仍允许通行
     assertThat(breaker.allow(CHANNEL)).isTrue();
-    assertThat(breaker.currentOpenCircuits()).isEqualTo(0);
+    assertThat(breaker.currentOpenCircuits()).isZero();
 
     // 再补满到阈值，必须恰好熔断
     for (int i = perThread * threads; i < threshold; i++) {
@@ -279,7 +279,7 @@ class DispatchChannelCircuitBreakerTest {
       assertThat(cb.allow(key)).isTrue();
       cb.recordSuccess(key);
     }
-    assertThat(cb.currentOpenCircuits()).isEqualTo(0);
+    assertThat(cb.currentOpenCircuits()).isZero();
 
     assertThat(meterRegistry
             .find("resilience4j.circuitbreaker.state")

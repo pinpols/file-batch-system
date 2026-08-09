@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayOpe
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +36,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ = LocalDate.of(2026, 5, 7);
+  private static final LocalDate BIZ = LocalDate.of(2026, Month.MAY, 7);
 
   @Autowired
   private BatchDayOpenScheduler scheduler;
@@ -71,7 +72,7 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     assertThat(cnRow).isNotNull();
     assertThat(cnRow.get("day_status")).isIn("OPEN", "IN_FLIGHT");
     if (hkRow != null) {
-      assertThat(hkRow.get("day_status")).isNotEqualTo("IN_FLIGHT");
+      assertThat(hkRow).doesNotContainEntry("day_status", "IN_FLIGHT");
     }
 
     // 模拟 CN 进 SETTLED

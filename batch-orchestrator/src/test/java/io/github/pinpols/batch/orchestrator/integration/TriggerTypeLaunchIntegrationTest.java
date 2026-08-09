@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -49,7 +50,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(triggerType)
         .requestId(seed.requestId())
         .traceId("trace-" + seed.requestId())

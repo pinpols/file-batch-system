@@ -58,9 +58,9 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
             + " FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?",
         TENANT,
         name);
-    assertThat(row.get("tenant_id")).isEqualTo(TENANT);
-    assertThat(row.get("task_type")).isEqualTo("sql");
-    assertThat(row.get("name")).isEqualTo(name);
+    assertThat(row).containsEntry("tenant_id", TENANT);
+    assertThat(row).containsEntry("task_type", "sql");
+    assertThat(row).containsEntry("name", name);
     assertThat((String) row.get("parameters")).contains("select 1");
 
     jdbcTemplate.update(

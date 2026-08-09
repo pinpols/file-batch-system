@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.task;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -11,9 +12,9 @@ class SdkTaskContextTest {
   @Test
   void schedulingGettersDelegateToContext() {
     SdkSchedulingContext sc = new SdkSchedulingContext(
-        LocalDate.of(2026, 6, 1),
-        LocalDate.of(2026, 5, 29),
-        LocalDate.of(2026, 6, 2),
+        LocalDate.of(2026, Month.JUNE, 1),
+        LocalDate.of(2026, Month.MAY, 29),
+        LocalDate.of(2026, Month.JUNE, 2),
         false,
         2,
         "SCHEDULED",
@@ -22,9 +23,9 @@ class SdkTaskContextTest {
     SdkTaskContext ctx =
         new SdkTaskContext("t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of(), sc);
 
-    assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
-    assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, 5, 29));
-    assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, 6, 2));
+    assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
+    assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 29));
+    assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 2));
     assertThat(ctx.isHoliday()).isFalse();
     assertThat(ctx.attemptNo()).isEqualTo(2);
     assertThat(ctx.triggerCode()).isNull();

@@ -36,6 +36,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -142,7 +143,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
     j.setId(100L);
     j.setTenantId("ta");
     j.setJobCode("WF_JOB");
-    j.setBizDate(LocalDate.of(2026, 6, 29));
+    j.setBizDate(LocalDate.of(2026, Month.JUNE, 29));
     return j;
   }
 

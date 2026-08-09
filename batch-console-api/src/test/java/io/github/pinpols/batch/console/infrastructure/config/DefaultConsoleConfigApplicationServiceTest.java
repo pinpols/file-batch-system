@@ -268,8 +268,8 @@ class DefaultConsoleConfigApplicationServiceTest {
     verify(secretVersionMapper).deactivateCurrentVersion(anyMap());
     ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
     verify(secretVersionMapper).insertSecretVersion(captor.capture());
-    assertThat(captor.getValue().get("secretStatus")).isEqualTo("PUBLISHED");
-    assertThat(captor.getValue().get("currentVersion")).isEqualTo(true);
+    assertThat(captor.getValue()).containsEntry("secretStatus", "PUBLISHED");
+    assertThat(captor.getValue()).containsEntry("currentVersion", true);
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
   }
 
@@ -293,8 +293,8 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThat(versionNo).isEqualTo(1L);
     ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
     verify(secretVersionMapper).insertSecretVersion(captor.capture());
-    assertThat(captor.getValue().get("secretStatus"))
-        .isEqualTo(ConfigLifecycleStatus.PUBLISHED.code());
+    assertThat(captor.getValue())
+        .containsEntry("secretStatus", ConfigLifecycleStatus.PUBLISHED.code());
   }
 
   // ── configChangeLogs ────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegratio
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +41,7 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest importRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("tr-import")
@@ -60,7 +61,7 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest exportRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.MANUAL)
         .requestId(seed.requestId())
         .traceId("tr-export")
@@ -80,7 +81,7 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
     LaunchRequest dispatchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
         .jobCode(seed.jobCode())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.EVENT)
         .requestId(seed.requestId())
         .traceId("tr-dispatch")

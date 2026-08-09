@@ -361,7 +361,7 @@ class GenerateStepTest {
     ExportStageResult result = generateStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("recordCount")).isEqualTo(3L);
+    assertThat(context.getAttributes()).containsEntry("recordCount", 3L);
     String content = readGeneratedFile(context);
     assertThat(content).contains("\"1\"").contains("\"2\"").contains("\"3\"");
   }

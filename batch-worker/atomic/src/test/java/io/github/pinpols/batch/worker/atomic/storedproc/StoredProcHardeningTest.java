@@ -136,7 +136,7 @@ class StoredProcHardeningTest {
         ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
 
     assertThat(r.success()).isTrue();
-    assertThat(r.output().get("truncated")).isEqualTo(true);
+    assertThat(r.output()).containsEntry("truncated", true);
     @SuppressWarnings("unchecked")
     List<List<Map<String, Object>>> resultSets =
         (List<List<Map<String, Object>>>) r.output().get("resultSets");
@@ -165,7 +165,7 @@ class StoredProcHardeningTest {
         ctx(Map.of("procedureName", "batch.p", "outParams", List.of("REF_CURSOR"))));
 
     assertThat(r.success()).isTrue();
-    assertThat(r.output().get("truncated")).isEqualTo(false);
+    assertThat(r.output()).containsEntry("truncated", false);
     @SuppressWarnings("unchecked")
     List<List<Map<String, Object>>> resultSets =
         (List<List<Map<String, Object>>>) r.output().get("resultSets");

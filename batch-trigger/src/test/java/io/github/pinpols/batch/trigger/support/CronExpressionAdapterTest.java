@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
@@ -38,16 +39,19 @@ class CronExpressionAdapterTest {
 
   @Test
   void nextSimpleHourly() {
-    Instant base = LocalDateTime.of(2026, 4, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
+    Instant base =
+        LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
     Instant next = adapter.next("0 0 * * * ?", SHANGHAI, base);
     assertThat(next)
-        .isEqualTo(LocalDateTime.of(2026, 4, 26, 11, 0, 0).atZone(SHANGHAI).toInstant());
+        .isEqualTo(
+            LocalDateTime.of(2026, Month.APRIL, 26, 11, 0, 0).atZone(SHANGHAI).toInstant());
   }
 
   @Test
   void nextRespectsTimezone() {
-    Instant base =
-        LocalDateTime.of(2026, 4, 26, 0, 0, 0).atZone(ZoneId.of("UTC")).toInstant();
+    Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
+        .atZone(ZoneId.of("UTC"))
+        .toInstant();
     Instant nextShanghai = adapter.next("0 0 9 * * ?", SHANGHAI, base);
     Instant nextUtc = adapter.next("0 0 9 * * ?", ZoneId.of("UTC"), base);
     assertThat(nextShanghai).isNotEqualTo(nextUtc);
@@ -103,7 +107,8 @@ class CronExpressionAdapterTest {
         "0 0 12 ? * 6#1", // 每月第一个周六(# 字符;day-of-month 必须 ?)
       })
   void adapterMatchesQuartzNextFireSeries(String cronExpr) throws ParseException {
-    Instant base = LocalDateTime.of(2026, 4, 26, 0, 0, 0).atZone(SHANGHAI).toInstant();
+    Instant base =
+        LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0).atZone(SHANGHAI).toInstant();
 
     CronExpression quartzExpr = new CronExpression(cronExpr);
     quartzExpr.setTimeZone(TimeZone.getTimeZone(SHANGHAI));
@@ -143,7 +148,7 @@ class CronExpressionAdapterTest {
   void daylightSavingTransitionMatchesQuartz() throws ParseException {
     String cron = "0 0 2 * * ?"; // 每天 02:00 — 春令时这天 02:00 不存在
     ZoneId nyc = ZoneId.of("America/New_York");
-    Instant base = LocalDateTime.of(2026, 3, 7, 0, 0).atZone(nyc).toInstant();
+    Instant base = LocalDateTime.of(2026, Month.MARCH, 7, 0, 0).atZone(nyc).toInstant();
 
     CronExpression quartzExpr = new CronExpression(cron);
     quartzExpr.setTimeZone(TimeZone.getTimeZone(nyc));
@@ -161,7 +166,8 @@ class CronExpressionAdapterTest {
   @Test
   void crossYearMatchesQuartz() throws ParseException {
     String cron = "0 0 0 1 1 ?"; // 每年 1 月 1 日 00:00
-    Instant base = LocalDateTime.of(2026, 12, 31, 23, 0).atZone(SHANGHAI).toInstant();
+    Instant base =
+        LocalDateTime.of(2026, Month.DECEMBER, 31, 23, 0).atZone(SHANGHAI).toInstant();
 
     CronExpression quartzExpr = new CronExpression(cron);
     quartzExpr.setTimeZone(TimeZone.getTimeZone(SHANGHAI));
@@ -171,6 +177,7 @@ class CronExpressionAdapterTest {
 
     assertThat(adapterNext).isEqualTo(quartzNext.toInstant());
     assertThat(adapterNext)
-        .isEqualTo(LocalDateTime.of(2027, 1, 1, 0, 0).atZone(SHANGHAI).toInstant());
+        .isEqualTo(
+            LocalDateTime.of(2027, Month.JANUARY, 1, 0, 0).atZone(SHANGHAI).toInstant());
   }
 }

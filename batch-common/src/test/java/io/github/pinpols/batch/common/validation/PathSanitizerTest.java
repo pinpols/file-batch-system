@@ -15,7 +15,7 @@ class PathSanitizerTest {
   @Test
   void sanitize_normalPath_returnsAbsoluteNormalized() {
     Path result = PathSanitizer.sanitize("/tmp/batch/file.csv");
-    assertThat(result.isAbsolute()).isTrue();
+    assertThat(result).isAbsolute();
     assertThat(result.toString()).doesNotContain("..");
   }
 

@@ -13,6 +13,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
   private LaunchService launchService;
@@ -84,10 +85,10 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
             Map.of("sourceFileId", 1002, "templateCode", "TPL_CUST")));
 
     assertThat(partitions).hasSize(2);
-    assertThat(partitions.get(0).get("source_file_id")).isEqualTo(1001L);
-    assertThat(partitions.get(0).get("template_code")).isEqualTo("TPL_ORDER");
-    assertThat(partitions.get(1).get("source_file_id")).isEqualTo(1002L);
-    assertThat(partitions.get(1).get("template_code")).isEqualTo("TPL_CUST");
+    assertThat(partitions.get(0)).containsEntry("source_file_id", 1001L);
+    assertThat(partitions.get(0)).containsEntry("template_code", "TPL_ORDER");
+    assertThat(partitions.get(1)).containsEntry("source_file_id", 1002L);
+    assertThat(partitions.get(1)).containsEntry("template_code", "TPL_CUST");
   }
 
   @Test
@@ -99,8 +100,8 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
 
     assertThat(partitions).hasSize(2);
     assertThat(partitions.get(0).get("source_file_id")).isNull();
-    assertThat(partitions.get(0).get("template_code")).isEqualTo("EXP_RISK");
-    assertThat(partitions.get(1).get("template_code")).isEqualTo("EXP_TRADE");
+    assertThat(partitions.get(0)).containsEntry("template_code", "EXP_RISK");
+    assertThat(partitions.get(1)).containsEntry("template_code", "EXP_TRADE");
   }
 
   @Test
@@ -113,10 +114,10 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
             Map.of("sourceFileId", 2002, "targetRef", "CH_OSS_B")));
 
     assertThat(partitions).hasSize(2);
-    assertThat(partitions.get(0).get("source_file_id")).isEqualTo(2001L);
-    assertThat(partitions.get(0).get("target_ref")).isEqualTo("CH_SFTP_A");
+    assertThat(partitions.get(0)).containsEntry("source_file_id", 2001L);
+    assertThat(partitions.get(0)).containsEntry("target_ref", "CH_SFTP_A");
     assertThat(partitions.get(0).get("template_code")).isNull();
-    assertThat(partitions.get(1).get("source_file_id")).isEqualTo(2002L);
-    assertThat(partitions.get(1).get("target_ref")).isEqualTo("CH_OSS_B");
+    assertThat(partitions.get(1)).containsEntry("source_file_id", 2002L);
+    assertThat(partitions.get(1)).containsEntry("target_ref", "CH_OSS_B");
   }
 }

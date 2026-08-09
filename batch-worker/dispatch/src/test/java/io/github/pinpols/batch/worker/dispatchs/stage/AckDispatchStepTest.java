@@ -59,7 +59,7 @@ class AckDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("receiptStatus")).isEqualTo("SUCCESS");
+    assertThat(context.getAttributes()).containsEntry("receiptStatus", "SUCCESS");
     verify(runtimeRepository).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
   }
 
@@ -73,8 +73,9 @@ class AckDispatchStepTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_ACK_FAILED");
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.COMPENSATE.name());
+    assertThat(context.getAttributes())
+        .containsEntry(
+            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
   }
 
   @Test
@@ -87,8 +88,8 @@ class AckDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isFalse();
-    assertThat(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE))
-        .isEqualTo(DispatchStage.RETRY.name());
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
   }
 
   @Test
@@ -109,7 +110,7 @@ class AckDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("receiptStatus")).isEqualTo("PENDING");
+    assertThat(context.getAttributes()).containsEntry("receiptStatus", "PENDING");
     verify(fileDispatchRepository, never()).markAcked(any(), any(), any(), any());
   }
 

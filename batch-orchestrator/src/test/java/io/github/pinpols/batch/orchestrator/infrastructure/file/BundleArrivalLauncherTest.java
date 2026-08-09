@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,7 @@ class BundleArrivalLauncherTest {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("id", id);
     m.put("tenant_id", "t1");
-    m.put("biz_date", LocalDate.of(2026, 6, 21));
+    m.put("biz_date", LocalDate.of(2026, Month.JUNE, 21));
     m.put("metadata_json", metadataJson);
     return m;
   }
@@ -62,7 +63,7 @@ class BundleArrivalLauncherTest {
     LaunchRequest req = captor.getValue();
     Assertions.assertThat(req.tenantId()).isEqualTo("t1");
     Assertions.assertThat(req.jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
-    Assertions.assertThat(req.bizDate()).isEqualTo(LocalDate.of(2026, 6, 21));
+    Assertions.assertThat(req.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 21));
     Assertions.assertThat(req.triggerType()).isEqualTo(TriggerType.EVENT);
     // 确定性幂等 requestId(同组同 bizDate → 同 id)
     Assertions.assertThat(req.requestId()).isEqualTo("bundle-arrival-t1-bundle-daily-2026-06-21");

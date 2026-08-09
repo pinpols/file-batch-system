@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.function.Function;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ import org.springframework.web.client.RestClient;
 @DisplayName("上游就绪查询客户端")
 class UpstreamReadinessCheckerTest {
 
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 6, 20);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JUNE, 20);
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   private RestClient orchestratorRestClient;

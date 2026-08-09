@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -48,9 +49,9 @@ class TaskDispatchMessageTest {
     TaskDispatchMessage msg = timeAwareMapper.readValue(json, TaskDispatchMessage.class);
 
     assertThat(msg.schedulingContext()).isNotNull();
-    assertThat(msg.schedulingContext().bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
-    assertThat(msg.schedulingContext().prevBizDate()).isEqualTo(LocalDate.of(2026, 5, 29));
-    assertThat(msg.schedulingContext().nextBizDate()).isEqualTo(LocalDate.of(2026, 6, 2));
+    assertThat(msg.schedulingContext().bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 1));
+    assertThat(msg.schedulingContext().prevBizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 29));
+    assertThat(msg.schedulingContext().nextBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 2));
     assertThat(msg.schedulingContext().isHoliday()).isFalse();
     assertThat(msg.schedulingContext().attemptNo()).isEqualTo(2);
     assertThat(msg.schedulingContext().triggerType()).isEqualTo("SCHEDULED");

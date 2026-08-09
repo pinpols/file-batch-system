@@ -52,7 +52,7 @@ class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("SPI registry 含 shell / sql / http 三类已开启的 executor")
   void registryWiresEnabledExecutors() {
     Map<String, String> dump = registry.dumpRegistry();
-    assertThat(dump.keySet()).contains("shell", "sql", "http");
+    assertThat(dump).containsKeys("shell", "sql", "http");
     assertThat(dump.get("shell")).contains("ShellTaskExecutor");
     assertThat(dump.get("sql")).contains("SqlTaskExecutor");
     assertThat(dump.get("http")).contains("HttpTaskExecutor");

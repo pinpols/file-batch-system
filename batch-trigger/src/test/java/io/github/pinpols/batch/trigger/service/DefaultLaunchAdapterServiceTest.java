@@ -16,6 +16,7 @@ import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class DefaultLaunchAdapterServiceTest {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setJobCode("IMPORT_JOB");
-    request.setBizDate(LocalDate.of(2026, 3, 27));
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "api"));
 
@@ -44,7 +45,7 @@ class DefaultLaunchAdapterServiceTest {
 
     assertThat(launchRequest.tenantId()).isEqualTo("t1");
     assertThat(launchRequest.jobCode()).isEqualTo("IMPORT_JOB");
-    assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, 3, 27));
+    assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.API);
     assertThat(launchRequest.requestId()).isEqualTo("req-001");
     assertThat(launchRequest.traceId()).isEqualTo("trace-001");
@@ -71,7 +72,7 @@ class DefaultLaunchAdapterServiceTest {
             descriptor, fireTime, TriggerType.CATCH_UP, "req-002", "trace-002"),
         calendar);
 
-    assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, 3, 27));
+    assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, Month.MARCH, 27));
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.CATCH_UP);
     assertThat(launchRequest.params())
         .containsEntry("scheduleType", "CRON")
@@ -172,7 +173,7 @@ class DefaultLaunchAdapterServiceTest {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setJobCode("API_JOB");
-    request.setBizDate(LocalDate.of(2026, 3, 27));
+    request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of());
     request.setDataIntervalStart(Instant.parse("2026-03-27T14:30:00Z"));

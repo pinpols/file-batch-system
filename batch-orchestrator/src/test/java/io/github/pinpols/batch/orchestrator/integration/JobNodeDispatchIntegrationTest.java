@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +39,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t-job-node";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 3, 1);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.MARCH, 1);
 
   @Autowired
   private LaunchService launchService;

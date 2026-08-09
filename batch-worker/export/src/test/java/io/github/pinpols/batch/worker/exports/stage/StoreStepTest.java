@@ -84,7 +84,7 @@ class StoreStepTest {
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes().get("exportStoreCommitted")).isEqualTo(Boolean.TRUE);
+    assertThat(ctx.getAttributes()).containsEntry("exportStoreCommitted", Boolean.TRUE);
     assertThat(Files.exists(generated)).isFalse();
     verify(storage).copyObject(eq("tmp.part"), anyString());
     verify(storage).removeObject("tmp.part");

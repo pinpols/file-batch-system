@@ -63,9 +63,9 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.workerConsistency("tenant-a");
 
-    assertThat(result.get("onlineWorkers")).isEqualTo(2L);
-    assertThat(result.get("runningInstances")).isEqualTo(5L);
-    assertThat(result.get("healthy")).isEqualTo(true);
+    assertThat(result).containsEntry("onlineWorkers", 2L);
+    assertThat(result).containsEntry("runningInstances", 5L);
+    assertThat(result).containsEntry("healthy", true);
   }
 
   @Test
@@ -83,9 +83,9 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.workerConsistency("tenant-a");
 
-    assertThat(result.get("onlineWorkers")).isEqualTo(0L);
-    assertThat(result.get("runningInstances")).isEqualTo(3L);
-    assertThat(result.get("healthy")).isEqualTo(false);
+    assertThat(result).containsEntry("onlineWorkers", 0L);
+    assertThat(result).containsEntry("runningInstances", 3L);
+    assertThat(result).containsEntry("healthy", false);
   }
 
   @Test
@@ -97,8 +97,8 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.workerConsistency("tenant-a");
 
-    assertThat(result.get("decommissionedWorkersWithActiveTasks")).isEqualTo(1L);
-    assertThat(result.get("healthy")).isEqualTo(false);
+    assertThat(result).containsEntry("decommissionedWorkersWithActiveTasks", 1L);
+    assertThat(result).containsEntry("healthy", false);
   }
 
   @Test
@@ -110,8 +110,8 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.outboxHealth("tenant-a");
 
-    assertThat(result.get("pendingEvents")).isEqualTo(50L);
-    assertThat(result.get("healthy")).isEqualTo(true);
+    assertThat(result).containsEntry("pendingEvents", 50L);
+    assertThat(result).containsEntry("healthy", true);
   }
 
   @Test
@@ -123,8 +123,8 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.outboxHealth("tenant-a");
 
-    assertThat(result.get("pendingEvents")).isEqualTo(1500L);
-    assertThat(result.get("healthy")).isEqualTo(false);
+    assertThat(result).containsEntry("pendingEvents", 1500L);
+    assertThat(result).containsEntry("healthy", false);
   }
 
   @Test
@@ -137,8 +137,8 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.outboxHealth("tenant-a");
 
-    assertThat(result.get("stalePublishingEvents")).isEqualTo(1L);
-    assertThat(result.get("healthy")).isEqualTo(false);
+    assertThat(result).containsEntry("stalePublishingEvents", 1L);
+    assertThat(result).containsEntry("healthy", false);
   }
 
   @Test
@@ -148,8 +148,8 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.terminalChildrenHealth("tenant-a");
 
-    assertThat(result.get("terminalInstancesWithActiveChildren")).isEqualTo(2L);
-    assertThat(result.get("healthy")).isEqualTo(false);
+    assertThat(result).containsEntry("terminalInstancesWithActiveChildren", 2L);
+    assertThat(result).containsEntry("healthy", false);
   }
 
   @Test
@@ -166,7 +166,7 @@ class ConsoleClusterDiagnosticServiceTest {
 
     Map<String, Object> result = service.instanceDiagnosis("tenant-a", 7L);
 
-    assertThat(result.get("healthy")).isEqualTo(false);
+    assertThat(result).containsEntry("healthy", false);
     List<Map<String, Object>> findings = (List<Map<String, Object>>) result.get("findings");
     assertThat(findings)
         .extracting(row -> row.get("reasonCode"))

@@ -84,15 +84,15 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
 
     // coverage 标记：每一段都来自 ARCHIVE，scope 反映混合冷表来源
     Map<String, Object> coverage = (Map<String, Object>) evidence.get("coverage");
-    assertThat(coverage.get("scope")).isEqualTo("BFS_HOT_AND_ARCHIVE");
-    assertThat(coverage.get("jobInstanceFound")).isEqualTo(Boolean.TRUE);
-    assertThat(coverage.get("payloadFileResolved")).isEqualTo(Boolean.TRUE);
+    assertThat(coverage).containsEntry("scope", "BFS_HOT_AND_ARCHIVE");
+    assertThat(coverage).containsEntry("jobInstanceFound", Boolean.TRUE);
+    assertThat(coverage).containsEntry("payloadFileResolved", Boolean.TRUE);
     Map<String, Object> sources = (Map<String, Object>) coverage.get("sources");
-    assertThat(sources.get("resultVersion")).isEqualTo("HOT");
-    assertThat(sources.get("jobInstance")).isEqualTo("ARCHIVE");
-    assertThat(sources.get("pipelineInstances")).isEqualTo("ARCHIVE");
-    assertThat(sources.get("fileRecords")).isEqualTo("ARCHIVE");
-    assertThat(sources.get("dispatchRecords")).isEqualTo("ARCHIVE");
+    assertThat(sources).containsEntry("resultVersion", "HOT");
+    assertThat(sources).containsEntry("jobInstance", "ARCHIVE");
+    assertThat(sources).containsEntry("pipelineInstances", "ARCHIVE");
+    assertThat(sources).containsEntry("fileRecords", "ARCHIVE");
+    assertThat(sources).containsEntry("dispatchRecords", "ARCHIVE");
   }
 
   @Test
@@ -117,7 +117,7 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
     Map<String, Object> bInstance =
         lineageEvidenceMapper.selectArchivedJobInstance(tenantB, instanceB);
     assertThat(bInstance).isNotNull();
-    assertThat(bInstance.get("tenant_id")).isEqualTo(tenantB);
+    assertThat(bInstance).containsEntry("tenant_id", tenantB);
 
     // pipeline_instance: 用 B 的 jobInstanceId 查 A → 空（无 tenant 过滤则会漏 B 的 pipeline）
     assertThat(lineageEvidenceMapper.selectArchivedPipelineInstances(tenantA, instanceB))
@@ -139,7 +139,7 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
     List<Map<String, Object>> dispatchForB =
         lineageEvidenceMapper.selectArchivedDispatchRecords(tenantB, instanceB, List.of(fileB));
     assertThat(dispatchForB).hasSize(1);
-    assertThat(dispatchForB.get(0).get("tenant_id")).isEqualTo(tenantB);
+    assertThat(dispatchForB.get(0)).containsEntry("tenant_id", tenantB);
   }
 
   // ---- archive.* seed helpers (冷表无 FK，可种孤立行；id 走热表序列默认) ----

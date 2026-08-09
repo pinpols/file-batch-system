@@ -44,8 +44,8 @@ class WorkerStartupRuntimeAuditTest {
 
     Map<String, Object> details = audit.auditCore();
 
-    assertThat(details.get("healthy")).isEqualTo(true);
-    assertThat(details.get("registeredWorkers")).isEqualTo(1);
+    assertThat(details).containsEntry("healthy", true);
+    assertThat(details).containsEntry("registeredWorkers", 1);
     @SuppressWarnings("unchecked")
     Map<String, Object> reportOutbox = (Map<String, Object>) details.get("reportOutbox");
     assertThat(reportOutbox).containsEntry("newCount", 2L).containsEntry("publishingCount", 1L);
@@ -70,7 +70,7 @@ class WorkerStartupRuntimeAuditTest {
 
     Map<String, Object> details = audit.auditCore();
 
-    assertThat(details.get("healthy")).isEqualTo(false);
+    assertThat(details).containsEntry("healthy", false);
     @SuppressWarnings("unchecked")
     List<String> issues = (List<String>) details.get("issues");
     assertThat(issues).contains("execution poolSize < maxConcurrentTasks");

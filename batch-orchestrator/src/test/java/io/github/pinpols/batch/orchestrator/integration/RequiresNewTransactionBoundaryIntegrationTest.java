@@ -23,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 20);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 20);
 
   @Autowired
   private LaunchService launchService;

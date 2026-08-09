@@ -63,7 +63,7 @@ class ParseStepPartitionSliceTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
     assertThat(((Number) context.getAttributes().get("parsedCount")).longValue())
         .isEqualTo(9L);
     assertNdjsonLineCount(context, 9);
@@ -78,7 +78,7 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     // 关闭后 totalCount = parsedCount = 9(完整文件,不切分)
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
     assertNdjsonLineCount(context, 9);
   }
 
@@ -130,7 +130,7 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     // 不再按 lineNo%3 过滤 → 9 行全保留(本片内容由 PREPROCESS 的 range 切分决定,这里输入即全量)
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
     assertNdjsonLineCount(context, 9);
   }
 
@@ -143,7 +143,7 @@ class ParseStepPartitionSliceTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes().get("totalCount")).isEqualTo(5L);
+    assertThat(context.getAttributes()).containsEntry("totalCount", 5L);
     assertNdjsonLineCount(context, 5);
   }
 

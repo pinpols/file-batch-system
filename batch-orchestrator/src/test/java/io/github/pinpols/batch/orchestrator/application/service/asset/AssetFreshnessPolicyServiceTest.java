@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Month;
 import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +49,8 @@ class AssetFreshnessPolicyServiceTest {
   void scanDuePoliciesEmitsMissingAlertWhenExpectedTimePassed() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 30)))
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
 
     int emitted = service.scanDuePolicies(10);
@@ -65,7 +67,8 @@ class AssetFreshnessPolicyServiceTest {
   void scanDuePoliciesEmitsStaleAlertAfterGraceWindow() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 30)))
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
 
     int emitted = service.scanDuePolicies(10);
@@ -93,7 +96,8 @@ class AssetFreshnessPolicyServiceTest {
   void scanDuePoliciesSkipsReadyPartition() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 30)))
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(true);
 
     int emitted = service.scanDuePolicies(10);
@@ -106,9 +110,11 @@ class AssetFreshnessPolicyServiceTest {
   void scanDuePoliciesHonorsLookbackDays() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 60, 2, "Asia/Shanghai", "ERROR");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 30)))
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
-    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 29)))
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 29)))
         .thenReturn(false);
 
     int emitted = service.scanDuePolicies(10);
@@ -121,7 +127,8 @@ class AssetFreshnessPolicyServiceTest {
     // arrange: same stale asset (same tenant/assetCode/bizDate), scan runs twice ~60s apart
     AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
-    when(assetPartitionService.isJobPartitionReady("t1", "JOB_A", LocalDate.of(2026, 6, 30)))
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
 
     // act: re-scan the same still-stale asset (mirrors the ~60s scheduled scan re-firing)

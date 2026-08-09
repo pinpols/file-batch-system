@@ -181,7 +181,7 @@ class RlsStrictModePreflightIntegrationTest {
     });
     assertThat(total)
         .as("strict 模式漏 SET LOCAL 时 USING 谓词 tenant_id = NULL 不匹配,返 0 行")
-        .isEqualTo(0L);
+        .isZero();
   }
 
   @Test

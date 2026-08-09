@@ -93,11 +93,11 @@ class TencentCaptchaVerifierTest {
     Map<String, String> headers = verifier.capturedHeaders.get();
     assertThat(headers.get("Authorization")).startsWith("TC3-HMAC-SHA256 Credential=");
     assertThat(headers.get("Authorization")).contains("SignedHeaders=content-type;host");
-    assertThat(headers.get("X-TC-Action")).isEqualTo("DescribeCaptchaResult");
-    assertThat(headers.get("X-TC-Version")).isEqualTo("2019-07-22");
-    assertThat(headers.get("X-TC-Timestamp")).isEqualTo("1234567890");
+    assertThat(headers).containsEntry("X-TC-Action", "DescribeCaptchaResult");
+    assertThat(headers).containsEntry("X-TC-Version", "2019-07-22");
+    assertThat(headers).containsEntry("X-TC-Timestamp", "1234567890");
     assertThat(headers.get("Content-Type")).isEqualTo("application/json; charset=utf-8");
-    assertThat(headers.get("Host")).isEqualTo("captcha.tencentcloudapi.com");
+    assertThat(headers).containsEntry("Host", "captcha.tencentcloudapi.com");
   }
 
   @Test

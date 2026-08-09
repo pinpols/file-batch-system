@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -71,7 +72,7 @@ class ForensicExportServiceTest {
     instance.setId(1L);
     instance.setTenantId("t1");
     instance.setJobCode("DAILY_PNL");
-    instance.setBizDate(LocalDate.of(2026, 3, 15));
+    instance.setBizDate(LocalDate.of(2026, Month.MARCH, 15));
     instance.setInstanceStatus("SUCCESS");
     when(jobInstanceMapper.selectForensicByBizDateRange(eq("t1"), any(), any(), isNull(), anyInt()))
         .thenReturn(List.of(instance));
@@ -80,8 +81,8 @@ class ForensicExportServiceTest {
 
     ForensicExportResponse response = service.export(ForensicExportRequest.builder()
         .tenantId("t1")
-        .bizDateFrom(LocalDate.of(2026, 3, 15))
-        .bizDateTo(LocalDate.of(2026, 3, 15))
+        .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+        .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
         .requestedBy("ops")
         .build());
 
@@ -116,8 +117,8 @@ class ForensicExportServiceTest {
     properties.setEnabled(false);
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
             .tenantId("t1")
-            .bizDateFrom(LocalDate.of(2026, 3, 15))
-            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+            .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
             .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.disabled");
@@ -127,8 +128,8 @@ class ForensicExportServiceTest {
   void shouldRejectInvalidDateRange() {
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
             .tenantId("t1")
-            .bizDateFrom(LocalDate.of(2026, 3, 16))
-            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .bizDateFrom(LocalDate.of(2026, Month.MARCH, 16))
+            .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
             .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.invalid_date_range");
@@ -139,8 +140,8 @@ class ForensicExportServiceTest {
     properties.setMaxDateRangeDays(2);
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
             .tenantId("t1")
-            .bizDateFrom(LocalDate.of(2026, 3, 15))
-            .bizDateTo(LocalDate.of(2026, 3, 17))
+            .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+            .bizDateTo(LocalDate.of(2026, Month.MARCH, 17))
             .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.date_range_too_large");
@@ -149,8 +150,8 @@ class ForensicExportServiceTest {
   @Test
   void shouldRejectMissingTenantOrDate() {
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
-            .bizDateFrom(LocalDate.of(2026, 3, 15))
-            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+            .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
             .build()))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.forensic.invalid_argument");
@@ -163,8 +164,8 @@ class ForensicExportServiceTest {
 
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
             .tenantId("t1")
-            .bizDateFrom(LocalDate.of(2026, 3, 15))
-            .bizDateTo(LocalDate.of(2026, 3, 15))
+            .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+            .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
             .build()))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("boom");
@@ -183,8 +184,8 @@ class ForensicExportServiceTest {
 
     ForensicExportResponse response = service.export(ForensicExportRequest.builder()
         .tenantId("t1")
-        .bizDateFrom(LocalDate.of(2026, 3, 15))
-        .bizDateTo(LocalDate.of(2026, 3, 15))
+        .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+        .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
         .jobCodes(List.of("DAILY_PNL"))
         .build());
 

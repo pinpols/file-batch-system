@@ -25,6 +25,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,7 +62,7 @@ class BatchDayOperationServiceTest {
   void shouldFreezeOpenBatchDay() {
     BatchDayInstanceEntity current = batchDay("OPEN");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(current);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
@@ -69,7 +70,7 @@ class BatchDayOperationServiceTest {
         service.operate(BatchDayOperateCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
+            .bizDate(LocalDate.of(2026, Month.MAY, 4))
             .action(BatchDayOperationService.BatchDayOperation.FREEZE)
             .operatorId("ops")
             .reason("manual hold")
@@ -96,14 +97,14 @@ class BatchDayOperationServiceTest {
   void shouldSkipNonTerminalBatchDay() {
     BatchDayInstanceEntity current = batchDay("CUTOFF");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(current);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     service.operate(BatchDayOperateCommand.builder()
         .tenantId("t1")
         .calendarCode("CAL")
-        .bizDate(LocalDate.of(2026, 5, 4))
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
         .action(BatchDayOperationService.BatchDayOperation.SKIP)
         .operatorId("ops")
         .reason("no input")
@@ -119,13 +120,13 @@ class BatchDayOperationServiceTest {
   @Test
   void shouldRejectFreezeOnTerminalBatchDay() {
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(batchDay("SETTLED"));
 
     assertThatThrownBy(() -> service.operate(BatchDayOperateCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
+            .bizDate(LocalDate.of(2026, Month.MAY, 4))
             .action(BatchDayOperationService.BatchDayOperation.FREEZE)
             .operatorId("ops")
             .reason("hold")
@@ -139,11 +140,11 @@ class BatchDayOperationServiceTest {
   void shouldReleaseWaitingLaunchesForNextBizDate() {
     BatchDayInstanceEntity current = batchDay("FAILED");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 4)))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
         .thenReturn(current);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
     when(waitingLaunchMapper.selectWaitingByCalendarBizDate(
-            "t1", "CAL", LocalDate.of(2026, 5, 5), 200))
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5), 200))
         .thenReturn(List.of(waitingLaunch()));
     when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-1", "trace-1"));
 
@@ -151,7 +152,7 @@ class BatchDayOperationServiceTest {
         service.operate(BatchDayOperateCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
-            .bizDate(LocalDate.of(2026, 5, 4))
+            .bizDate(LocalDate.of(2026, Month.MAY, 4))
             .action(BatchDayOperationService.BatchDayOperation.RELEASE)
             .operatorId("ops")
             .reason("manual release")
@@ -169,7 +170,7 @@ class BatchDayOperationServiceTest {
         1L,
         "t1",
         "CAL",
-        LocalDate.of(2026, 5, 4),
+        LocalDate.of(2026, Month.MAY, 4),
         status,
         at,
         at,
@@ -202,7 +203,7 @@ class BatchDayOperationServiceTest {
         "t1",
         "CAL",
         "JOB",
-        LocalDate.of(2026, 5, 5),
+        LocalDate.of(2026, Month.MAY, 5),
         "req-1",
         "trace-1",
         "SCHEDULED",
