@@ -20,11 +20,13 @@
 
 ### Changed
 
+- **配置包 Excel 技术债清偿**：`ConfigPackageExcelValidator`（1491 行）拆出 workflow DAG 拓扑校验与行级校验器；`ConfigPackageExcelWorkbookWriter`（1438 行）拆出 11 个 sheet 定义；`DefaultConsoleTenantConfigPackageExcelApplicationService`（1024 行）拆出 apply 写库服务。三个类均减半、公开 API 不变，并为 writer 导出/预览路径补 characterization 测试（此前完全无单测覆盖）。
 - **调度器统一为 Quartz**：移除 HashedWheelTimer 运行路径、Wheel 配置、指标、迁移脚本和测试；当前 trigger 统一使用 Quartz JDBC JobStore。Wheel 评估文档保留为历史记录，见 ADR-033。
 - **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。
 - **安全门禁与依赖治理**：强化 Helm workload 安全检查、生产凭据 fail-close、SQL 解析边界、文件完整性校验和依赖许可证/安全扫描；示例项目与 SDK 依赖同步安全修复。
 - **Worker 与控制面稳定性**：收紧 Pipeline 定义只读访问，修复 orchestrator HA 协调和 retry schedule 状态转换，稳定 Docker Sim、E2E fixture 与多模块构建链路。
 - **代码和文档规范**：统一后端错误/告警消息为英文，收口运行时常量、Java 格式化、FQN 违约和代码规模统计；README、工程计划、Runbook 和架构边界文档同步更新。
+- **CI 提速**：full-ci-gate 的 security-scan job 移除 OWASP dependency-check（NVD 全量下载在 CI 上 5 分钟超时仍只下到 1/5、步骤 continue-on-error 不拦门禁；依赖漏洞已由同 job 的 Trivy fs 覆盖），job 预计从 6:15 降到 ~2:00，full-ci-gate 瓶颈转为 e2e-shard。
 
 ### Fixed
 
