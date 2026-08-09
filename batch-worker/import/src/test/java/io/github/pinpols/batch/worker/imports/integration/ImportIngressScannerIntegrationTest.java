@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -42,7 +43,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.worker.import.scanner.default-biz-date=2026-05-05",
       "batch.worker.import.scanner.batch-manifest-enabled=true"
     })
-@org.junit.jupiter.api.condition.EnabledIf("s3BackendActive")
+@EnabledIf("s3BackendActive")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
   /** fixture 直接写 MinIO（S3Client），filesystem 后端下自动跳过。 */

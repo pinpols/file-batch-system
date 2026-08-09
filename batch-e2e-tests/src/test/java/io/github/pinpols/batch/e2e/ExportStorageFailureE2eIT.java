@@ -19,6 +19,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,7 +56,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
-@org.junit.jupiter.api.condition.EnabledIf("s3BackendActive")
+@EnabledIf("s3BackendActive")
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
 
   /** S3 专属语义（endpoint 故障注入），filesystem 后端下自动跳过。 */

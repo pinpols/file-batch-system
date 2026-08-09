@@ -10,7 +10,7 @@ name: staging-gate
 # 与 pr-gate 关系:
 #   - pr-gate.yml `e2e-smoke` job 只跑 @Tag("smoke") + @Tag("critical")(12 个 E2eIT,
 #     ~15min wall-clock),反馈周期 Round-1 TOP-7 闭环目标。
-#   - 本 workflow 跑全量 26 个 E2eIT,4 shard 并发,~10min wall-clock,串行预算 ~2.5h。
+#   - 本 workflow 跑全量 28 个 E2eIT,4 shard 并发,~10min wall-clock,串行预算 ~2.5h。
 #
 # 与 full-ci-gate 关系:
 #   - full-ci-gate(main push)已并行跑全量 e2e-shard,本 workflow 是 staging branch
@@ -61,6 +61,7 @@ jobs:
               FullChainTenantPropagationE2eIT,
               ImportFailurePipelineE2eIT,
               ExportPipelineE2eIT,
+              FilesystemBackendPipelineE2eIT,
               TriggerAsyncLaunchFullChainE2eIT,
               AtomicTaskPipelineE2eIT
           - id: 3

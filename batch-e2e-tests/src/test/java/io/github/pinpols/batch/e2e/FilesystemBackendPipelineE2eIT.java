@@ -28,6 +28,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -55,9 +56,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
-@org.junit.jupiter.api.condition.EnabledIfSystemProperty(
-    named = "batch.test.storage.backend",
-    matches = "filesystem")
+@EnabledIfSystemProperty(named = "batch.test.storage.backend", matches = "filesystem")
 class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

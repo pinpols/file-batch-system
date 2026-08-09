@@ -6,7 +6,7 @@
 
 ## 背景
 
-`batch-e2e-tests` 共 26 个 `*E2eIT`,串行总耗 ~9h,4 shard 并发后 ~10min wall-clock,
+`batch-e2e-tests` 共 28 个 `*E2eIT`,串行总耗 ~9h,4 shard 并发后 ~10min wall-clock,
 但仍占 pr-gate 时间预算的 60%+。问题:**绝大多数 PR 改 1-2 模块,跑全量 E2E 性价比
 极低**。Round-1 TOP-7 反馈"pr-gate 等不起 25min,实际要 10min 内拿到信号"。
 
@@ -19,7 +19,7 @@ profile `e2e-smoke` 用 JUnit5 tag 表达式 `smoke | critical` 过滤。
 |---|---|---|---|---|
 | `smoke` | 主链 happy path,**绝不能漏** | pr-gate | 4 | ~5min |
 | `critical` | 关键场景(失败/补偿/多租/DLQ) | pr-gate | 8 | ~10min |
-| `regression` | 默认(无显式标),覆盖边界/load/sensor | nightly staging-gate | ~14 | ~10min(并发) |
+| `regression` | 默认(无显式标),覆盖边界/load/sensor | nightly staging-gate | ~15 | ~10min(并发) |
 
 > 所有 e2e 测试已有的 `@Tag("e2e")` 不动(作为「与 unit IT 区分」的总开关)。
 
