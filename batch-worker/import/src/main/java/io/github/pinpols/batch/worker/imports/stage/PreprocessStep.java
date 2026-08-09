@@ -214,49 +214,8 @@ public class PreprocessStep implements ImportStageStep {
           batchSecurityProperties.isBypassMode(),
           payloadProperties);
 
-      String formatType = resolveFileFormatType(importPayload, templateConfig);
-      // 字节级剥离 UTF-8 BOM（Windows Excel "CSV UTF-8" / 部分编辑器自动加 BOM）。只在文本格式做；
-      // EXCEL/BINARY 走字节原文，BOM 属于其二进制结构的一部分，不能动。
-      if (!isBinaryImportFormat(formatType)) {
-        processed = EncodingUtils.stripUtf8Bom(processed);
-      }
-      if (isBinaryImportFormat(formatType)) {
-        attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
-        context.setRawPayload("");
-        attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-      } else {
-        DecodingSpec spec = resolveDecodingSpec(importPayload, templateConfigObject);
-        Charset charset = spec.charset();
-        if (processed.length >= payloadProperties.getPreprocessSpoolBytes()) {
-          spoolLargePayload(processed, charset, context);
-        } else {
-          String normalized = decodeWithGuards(processed, spec, context);
-          context.setRawPayload(normalized);
-          attrs.put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, normalized);
-          attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-        }
-      }
-
-      Map<String, Object> fileMetadata = new LinkedHashMap<>();
-      fileMetadata.put("preprocessed", Boolean.TRUE);
-      fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
-      // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
-      Object charsetSuspect = attrs.get("charsetSuspect");
-      if (charsetSuspect != null) {
-        fileMetadata.put("charsetSuspect", charsetSuspect);
-      }
-      Object replacementMeta = attrs.get("replacementCount");
-      if (replacementMeta != null) {
-        fileMetadata.put("replacementCount", replacementMeta);
-      }
-      // 编码探测回退命中（未配置 charset 时 UTF-8 严格解码失败 → GB18030 成功）的记录
-      Object detectedCharset = attrs.get("detectedCharset");
-      if (detectedCharset != null) {
-        fileMetadata.put("detectedCharset", detectedCharset);
-      }
-      ImportStageSupport.updateFileStatusRecoverAware(
-          runtimeRepository, context, "PARSING", fileMetadata);
-      return ImportStageResult.success(stage());
+      return completePreprocess(
+          context, importPayload, attrs, processed, templateConfig, templateConfigObject);
     } catch (ImportPreprocessException ex) {
       SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ex);
 
@@ -268,6 +227,62 @@ public class PreprocessStep implements ImportStageStep {
           ex.getMessage(),
           ERROR_OBJECT_MAPPER);
     }
+  }
+
+  /**
+   * 预处理管道产物收尾：文本格式字节级剥 UTF-8 BOM → 按格式分支（二进制保留字节 / 文本解码或 spool）→ 写
+   * PARSING 状态与编码守卫 metadata。抽离自 {@link #execute}，控制 NCSS（PMD methodReportLevel=60）。
+   */
+  private ImportStageResult completePreprocess(
+      ImportJobContext context,
+      ImportPayload importPayload,
+      Map<String, Object> attrs,
+      byte[] processed,
+      Map<String, Object> templateConfig,
+      Object templateConfigObject) {
+    String formatType = resolveFileFormatType(importPayload, templateConfig);
+    // 字节级剥离 UTF-8 BOM（Windows Excel "CSV UTF-8" / 部分编辑器自动加 BOM）。只在文本格式做；
+    // EXCEL/BINARY 走字节原文，BOM 属于其二进制结构的一部分，不能动。
+    if (!isBinaryImportFormat(formatType)) {
+      processed = EncodingUtils.stripUtf8Bom(processed);
+    }
+    if (isBinaryImportFormat(formatType)) {
+      attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
+      context.setRawPayload("");
+      attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+    } else {
+      DecodingSpec spec = resolveDecodingSpec(importPayload, templateConfigObject);
+      Charset charset = spec.charset();
+      if (processed.length >= payloadProperties.getPreprocessSpoolBytes()) {
+        spoolLargePayload(processed, charset, context);
+      } else {
+        String normalized = decodeWithGuards(processed, spec, context);
+        context.setRawPayload(normalized);
+        attrs.put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, normalized);
+        attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+      }
+    }
+
+    Map<String, Object> fileMetadata = new LinkedHashMap<>();
+    fileMetadata.put("preprocessed", Boolean.TRUE);
+    fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
+    // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
+    Object charsetSuspect = attrs.get("charsetSuspect");
+    if (charsetSuspect != null) {
+      fileMetadata.put("charsetSuspect", charsetSuspect);
+    }
+    Object replacementMeta = attrs.get("replacementCount");
+    if (replacementMeta != null) {
+      fileMetadata.put("replacementCount", replacementMeta);
+    }
+    // 编码探测回退命中（未配置 charset 时 UTF-8 严格解码失败 → GB18030 成功）的记录
+    Object detectedCharset = attrs.get("detectedCharset");
+    if (detectedCharset != null) {
+      fileMetadata.put("detectedCharset", detectedCharset);
+    }
+    ImportStageSupport.updateFileStatusRecoverAware(
+        runtimeRepository, context, "PARSING", fileMetadata);
+    return ImportStageResult.success(stage());
   }
 
   private static boolean isBinaryImportFormat(String formatType) {
