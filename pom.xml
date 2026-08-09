@@ -437,6 +437,24 @@
                                 <version>2.92.0</version>
                                 <style>GOOGLE</style>
                             </palantirJavaFormat>
+                            <!--
+                              团队约定：方法返回类型带注解（如 @Nullable）时，注解单独占一行，
+                              方法签名整体一行。palantir 会把注解并回签名行，这里在 palantir 之后
+                              重新把注解提到独立行；spotless:check 由此对未遵循的写法报错。
+                            -->
+                            <replaceRegex>
+                                <name>extract-annotated-return-annotations</name>
+                                <searchRegex>(?m)^([ \t]*)((?:public|private|protected)(?: static)?) (@\w+) ([\w&lt;>.?\[\] ,]+) (\w+)(\([^()\r\n]*\)) \{\r?$</searchRegex>
+                                <replacement>$1$3
+$1$2 $4 $5$6 {</replacement>
+                            </replaceRegex>
+                            <!-- 超长签名被 palantir 折行后（参数已多行），只处理"方法名("开头的行，注解同样提到独立行。 -->
+                            <replaceRegex>
+                                <name>extract-annotated-return-annotations-wrapped</name>
+                                <searchRegex>(?m)^([ \t]*)((?:public|private|protected)(?: static)?) (@\w+) ([\w&lt;>.?\[\] ,]+) (\w+)\(\s*$</searchRegex>
+                                <replacement>$1$3
+$1$2 $4 $5(</replacement>
+                            </replaceRegex>
                             <removeUnusedImports/>
                             <trimTrailingWhitespace/>
                             <endWithNewline/>

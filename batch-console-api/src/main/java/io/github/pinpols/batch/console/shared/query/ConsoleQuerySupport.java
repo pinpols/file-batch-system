@@ -217,7 +217,8 @@ public final class ConsoleQuerySupport {
     return Integer.parseInt(String.valueOf(value));
   }
 
-  public static @Nullable Boolean booleanValue(Map<String, Object> row, String key) {
+  @Nullable
+  public static Boolean booleanValue(Map<String, Object> row, String key) {
     Object value = row == null ? null : row.get(key);
     if (value == null) {
       return null;

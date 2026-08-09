@@ -27,7 +27,8 @@ public final class Hashes {
    *
    * <p>SHA-256 算法不可用时(理论不会发生)返回 null,调用方需做 null-safe 处理。
    */
-  public static @Nullable String sha256Short(@Nullable String raw) {
+  @Nullable
+  public static String sha256Short(@Nullable String raw) {
     if (raw == null || raw.isEmpty()) {
       return null;
     }

@@ -215,7 +215,8 @@ final class ExcelSheetWriter {
     }
   }
 
-  private @Nullable Boolean toBoolean(Object value) {
+  @Nullable
+  private Boolean toBoolean(Object value) {
     if (value instanceof Boolean bool) {
       return bool;
     }

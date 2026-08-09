@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 面向预览、日志、坏件载荷的尽力脱敏，不能替代字段级令牌化；避免长数字串、类邮箱片段原样外露。
@@ -34,7 +35,8 @@ public final class ContentMaskingUtils {
   private ContentMaskingUtils() {}
 
   /** 按指定 {@code ruleSetCode} 对 {@code text} 执行脱敏，{@code null} 时仅应用基线数字串和邮箱脱敏。 */
-  public static String maskPlainText(String text, String ruleSetCode) {
+  @Nullable
+  public static String maskPlainText(@Nullable String text, @Nullable String ruleSetCode) {
     if (text == null || text.isEmpty()) {
       return text;
     }
@@ -67,7 +69,8 @@ public final class ContentMaskingUtils {
     return masked;
   }
 
-  public static String maskPlainText(String text) {
+  @Nullable
+  public static String maskPlainText(@Nullable String text) {
     return maskPlainText(text, null);
   }
 }

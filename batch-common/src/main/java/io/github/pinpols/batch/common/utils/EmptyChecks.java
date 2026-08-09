@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import java.util.Collection;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 统一的空值判断工具。
@@ -27,7 +28,7 @@ public final class EmptyChecks {
     return value != null;
   }
 
-  public static boolean isEmpty(CharSequence value) {
+  public static boolean isEmpty(@Nullable CharSequence value) {
     return value == null || value.isEmpty();
   }
 
@@ -43,7 +44,7 @@ public final class EmptyChecks {
     return !isBlank(value);
   }
 
-  public static boolean isEmpty(Collection<?> value) {
+  public static boolean isEmpty(@Nullable Collection<?> value) {
     return value == null || value.isEmpty();
   }
 
@@ -51,7 +52,7 @@ public final class EmptyChecks {
     return !isEmpty(value);
   }
 
-  public static boolean isEmpty(Map<?, ?> value) {
+  public static boolean isEmpty(@Nullable Map<?, ?> value) {
     return value == null || value.isEmpty();
   }
 
@@ -59,7 +60,7 @@ public final class EmptyChecks {
     return !isEmpty(value);
   }
 
-  public static boolean isEmpty(Object[] value) {
+  public static boolean isEmpty(Object @Nullable [] value) {
     return value == null || value.length == 0;
   }
 

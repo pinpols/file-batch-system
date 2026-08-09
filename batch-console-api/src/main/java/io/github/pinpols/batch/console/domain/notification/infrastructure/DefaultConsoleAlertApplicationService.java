@@ -63,7 +63,9 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
     if (nextStatus.equals(currentStatus)) {
       return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
     }
-    if (STATUS_CLOSED.equals(currentStatus) && !STATUS_CLOSED.equals(nextStatus)) {
+    // 走到这里 nextStatus 必不等于 currentStatus（上方已同态早返），
+    // 因此 closed 状态下任何状态迁移都禁止：告警关闭后不可再打开/确认/静默。
+    if (STATUS_CLOSED.equals(currentStatus)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.closed_cannot_reopen");
     }
     int updated = alertEventMapper.updateStatus(tenantId, alertId, nextStatus);

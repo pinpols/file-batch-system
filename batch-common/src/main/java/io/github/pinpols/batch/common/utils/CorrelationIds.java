@@ -23,7 +23,8 @@ public final class CorrelationIds {
     return normalized;
   }
 
-  public static @Nullable String normalize(@Nullable String value) {
+  @Nullable
+  public static String normalize(@Nullable String value) {
     if (value == null || value.isBlank()) {
       return null;
     }

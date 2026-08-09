@@ -263,7 +263,8 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
-  private static @Nullable Boolean toBoolean(Object value) {
+  @Nullable
+  private static Boolean toBoolean(Object value) {
     if (value == null) {
       return null;
     }

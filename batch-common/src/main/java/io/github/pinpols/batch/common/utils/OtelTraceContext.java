@@ -27,7 +27,8 @@ public final class OtelTraceContext {
    *
    * @return 有效 traceId，或 null（无 active span / span context invalid / 全 0）
    */
-  public static @Nullable String currentTraceIdOrNull() {
+  @Nullable
+  public static String currentTraceIdOrNull() {
     Span current = Span.current();
     if (current == null) {
       return null;

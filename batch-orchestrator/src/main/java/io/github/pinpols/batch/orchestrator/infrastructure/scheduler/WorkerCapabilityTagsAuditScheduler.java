@@ -127,7 +127,8 @@ public class WorkerCapabilityTagsAuditScheduler {
     }
     try {
       JsonNode node = JsonUtils.fromJson(raw, JsonNode.class);
-      if (node == null || !node.isArray()) {
+      // JsonUtils.fromJson 失败抛异常、成功必返回 JsonNode（字面量 null 也是 NullNode）
+      if (!node.isArray()) {
         return false;
       }
       for (JsonNode elem : node) {

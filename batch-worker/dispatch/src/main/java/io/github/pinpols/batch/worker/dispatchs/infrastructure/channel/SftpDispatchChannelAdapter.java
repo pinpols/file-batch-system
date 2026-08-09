@@ -83,7 +83,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       return false;
     }
     String[] active = environment.getActiveProfiles();
-    if (active == null || active.length == 0) {
+    // Spring 约定 getActiveProfiles() 永不为 null，无激活 profile 时返回空数组
+    if (active.length == 0) {
       return false;
     }
     return Arrays.stream(active)

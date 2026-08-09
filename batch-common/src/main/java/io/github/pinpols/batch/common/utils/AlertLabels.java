@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@code alert_event} 字段 → Alertmanager label 的映射规则（emit 直连 / silence 桥接共用）。
@@ -34,7 +35,7 @@ public final class AlertLabels {
   private AlertLabels() {}
 
   /** fbs severity 枚举 → AM severity 小写词形。未知值兜底 lowercase（并把 {@code warn} 归一到 {@code warning}）。 */
-  public static String amSeverity(String severity) {
+  public static String amSeverity(@Nullable String severity) {
     if (severity == null || severity.isBlank()) {
       return "warning";
     }
@@ -51,7 +52,7 @@ public final class AlertLabels {
   }
 
   /** alert_type 关键字 → AM alert_group（route 分类主键之一）。 */
-  public static String alertGroup(String alertType) {
+  public static String alertGroup(@Nullable String alertType) {
     if (alertType == null || alertType.isBlank()) {
       return GROUP_DEFAULT;
     }
@@ -98,7 +99,7 @@ public final class AlertLabels {
     return labels;
   }
 
-  private static boolean hasText(String value) {
+  private static boolean hasText(@Nullable String value) {
     return value != null && !value.isBlank();
   }
 

@@ -17,7 +17,8 @@ public final class PostgresqlJsonbTexts {
   /**
    * @return PG json/jsonb 的原始 UTF-8 文本；非 PGobject 时返回 {@code null}
    */
-  public static @Nullable String tryExtract(@Nullable Object raw) {
+  @Nullable
+  public static String tryExtract(@Nullable Object raw) {
     if (raw == null) {
       return null;
     }
