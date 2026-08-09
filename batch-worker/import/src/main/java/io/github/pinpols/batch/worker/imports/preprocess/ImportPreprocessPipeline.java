@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.SignatureException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -379,7 +380,7 @@ public final class ImportPreprocessPipeline {
 
   private static void verifyDigest(
       byte[] input, Map<String, Object> step, ImportPayload payload, Map<String, Object> template)
-      throws Exception {
+      throws NoSuchAlgorithmException {
     String algorithm = normalizeDigestName(
         firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload)));
     if (POLICY_NONE.equalsIgnoreCase(algorithm)) {
@@ -403,7 +404,8 @@ public final class ImportPreprocessPipeline {
   }
 
   private static void verifyImplicitChecksum(
-      byte[] input, ImportPayload payload, Map<String, Object> template) throws Exception {
+      byte[] input, ImportPayload payload, Map<String, Object> template)
+      throws NoSuchAlgorithmException {
     String algorithm = digestAlgorithm(template, payload);
     if (POLICY_NONE.equalsIgnoreCase(algorithm)) {
       return;
@@ -465,7 +467,7 @@ public final class ImportPreprocessPipeline {
   }
 
   private static void verifyRsaSha256(byte[] input, Map<String, Object> step, ImportPayload payload)
-      throws Exception {
+      throws GeneralSecurityException, SignatureException {
     String pem = stringProp(step, "publicKeyPem");
     String signatureB64 = firstNonBlank(
         stringProp(step, "signatureBase64"),

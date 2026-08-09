@@ -315,7 +315,7 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private Path createGeneratedFile(
-      ExportJobContext context, ExportPayload payload, String fileFormatType) throws Exception {
+      ExportJobContext context, ExportPayload payload, String fileFormatType) throws IOException {
     String suffix =
         switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
           case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;
@@ -377,7 +377,7 @@ public class GenerateStep implements ExportStageStep {
    * 重派落到同一文件,崩溃后下次能找到残文件续写。STORE 成功上传后照常删除该文件。
    */
   private Path deterministicGeneratedFile(long pipelineInstanceId, String fileFormatType)
-      throws Exception {
+      throws IOException {
     String suffix =
         switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
           case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;

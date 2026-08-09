@@ -5,6 +5,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -183,7 +184,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     return sql;
   }
 
-  private void assertNotOsCapableRole(Connection conn) throws Exception {
+  private void assertNotOsCapableRole(Connection conn) throws SQLException {
     try (Statement probe = conn.createStatement();
         ResultSet rs = probe.executeQuery(OS_CAPABLE_ROLE_PROBE)) {
       if (rs.next() && rs.getBoolean(1)) {
@@ -192,7 +193,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     }
   }
 
-  private Map<String, Object> readResultSet(ResultSet rs) throws Exception {
+  private Map<String, Object> readResultSet(ResultSet rs) throws SQLException {
     ResultSetMetaData meta = rs.getMetaData();
     int columnCount = meta.getColumnCount();
     List<Map<String, Object>> rows = new ArrayList<>();

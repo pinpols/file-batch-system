@@ -203,7 +203,7 @@ public class AliyunSmsProvider implements SmsProvider {
    */
   private String buildAuthorization(
       SortedMap<String, String> queryParams, String acsDate, String nonce, String endpoint)
-      throws Exception {
+      throws GeneralSecurityException {
     String hashedPayload = sha256Hex("");
 
     // signedHeaders 必须按字典序且与 canonicalHeaders 一致。

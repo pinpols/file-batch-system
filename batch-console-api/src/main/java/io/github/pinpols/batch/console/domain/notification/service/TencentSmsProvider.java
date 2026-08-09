@@ -241,7 +241,7 @@ public class TencentSmsProvider implements SmsProvider {
    * = HMAC(SecretService, "tc3_request") → signature = hex(HMAC(SecretSigning, stringToSign))。
    */
   private String buildAuthorization(String payload, long timestamp, String endpoint)
-      throws Exception {
+      throws GeneralSecurityException {
     String canonicalHeaders = "content-type:" + CONTENT_TYPE + '\n' + "host:" + endpoint + '\n';
     String signedHeaders = "content-type;host";
     String hashedPayload = sha256Hex(payload);
