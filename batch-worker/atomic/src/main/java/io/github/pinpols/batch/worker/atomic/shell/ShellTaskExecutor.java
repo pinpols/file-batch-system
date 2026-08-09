@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -191,7 +192,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object cmdObj = params.get(PARAM_COMMAND);
-    if (!(cmdObj instanceof String commandString) || commandString.isBlank()) {
+    if (!(cmdObj instanceof String commandString) || EmptyChecks.isBlank(commandString)) {
       throw new ShellValidationException("parameters.command required (non-blank string)");
     }
     String command = commandString.trim();

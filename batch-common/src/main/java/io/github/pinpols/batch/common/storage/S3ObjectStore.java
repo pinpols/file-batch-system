@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.storage;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.S3BucketSupport;
 import java.io.InputStream;
 import java.time.Duration;
@@ -247,7 +248,7 @@ public class S3ObjectStore implements BatchObjectStore {
           .signatureDuration(ttl)
           .putObjectRequest(put -> {
             put.bucket(bucket).key(key);
-            if (contentType != null && !contentType.isBlank()) {
+            if (EmptyChecks.isNotBlank(contentType)) {
               put.contentType(contentType);
             }
           })

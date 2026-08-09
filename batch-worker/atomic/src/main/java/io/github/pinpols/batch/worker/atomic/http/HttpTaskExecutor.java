@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -242,7 +243,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object urlObj = params.get(PARAM_URL);
-    if (!(urlObj instanceof String urlString) || urlString.isBlank()) {
+    if (!(urlObj instanceof String urlString) || EmptyChecks.isBlank(urlString)) {
       throw new HttpValidationException("parameters.url required");
     }
     URI uri;
@@ -434,7 +435,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
-    return v instanceof String string && !string.isBlank() ? string.trim() : fallback;
+    return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
   }
 
   private void validateRequestBodySize(String body) {

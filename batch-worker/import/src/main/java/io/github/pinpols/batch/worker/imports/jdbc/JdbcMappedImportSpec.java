@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.ArrayList;
@@ -293,7 +294,7 @@ public record JdbcMappedImportSpec(
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       if (c == '_' || c == '-' || c == ' ') {
-        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '_') {
+        if (EmptyChecks.isNotEmpty(sb) && sb.charAt(sb.length() - 1) != '_') {
           sb.append('_');
         }
         continue;
@@ -302,7 +303,9 @@ public record JdbcMappedImportSpec(
         boolean prevLowerOrDigit =
             i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
         boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
-        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '_' && (prevLowerOrDigit || nextLower)) {
+        if (EmptyChecks.isNotEmpty(sb)
+            && sb.charAt(sb.length() - 1) != '_'
+            && (prevLowerOrDigit || nextLower)) {
           sb.append('_');
         }
       }

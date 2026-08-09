@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
 import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
@@ -603,7 +604,7 @@ public class ImportIngressScanner {
     }
     Map<String, Object> fileRecord = runtimeRepository.loadFileRecordByStoragePath(
         tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
-    if (fileRecord == null || fileRecord.isEmpty()) {
+    if (EmptyChecks.isEmpty(fileRecord)) {
       return;
     }
     Long fileId = runtimeRepository.toLong(fileRecord.get("id"));

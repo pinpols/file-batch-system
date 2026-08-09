@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
@@ -182,7 +183,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object pnObj = params.get(PARAM_PROC);
-    if (!(pnObj instanceof String procedureName) || procedureName.isBlank()) {
+    if (!(pnObj instanceof String procedureName) || EmptyChecks.isBlank(procedureName)) {
       throw new StoredProcValidationException("parameters.procedureName required");
     }
     String procName = procedureName.trim();
@@ -308,7 +309,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
-    return v instanceof String string && !string.isBlank() ? string.trim() : fallback;
+    return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
   }
 
   static int toSqlType(String typeName) {

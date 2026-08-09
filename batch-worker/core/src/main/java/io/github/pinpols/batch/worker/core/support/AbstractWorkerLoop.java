@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
@@ -215,7 +216,7 @@ public abstract class AbstractWorkerLoop {
     }
     StringBuilder sb = new StringBuilder();
     for (Throwable t = ex; t != null && sb.length() < 500; t = t.getCause()) {
-      if (!sb.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(sb)) {
         sb.append(" <- ");
       }
       sb.append(t.getClass().getSimpleName());
@@ -224,7 +225,7 @@ public abstract class AbstractWorkerLoop {
         sb.append(": ").append(m);
       }
     }
-    String core = !sb.isEmpty() ? sb.toString() : ex.getClass().getSimpleName();
+    String core = EmptyChecks.isNotEmpty(sb) ? sb.toString() : ex.getClass().getSimpleName();
     return core + registrationFailureHint(ex);
   }
 
