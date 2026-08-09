@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.StringJoiner;
 import org.springframework.stereotype.Component;
 
 /**
@@ -63,16 +62,13 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       BufferedWriter writer = file.writer();
       // 续跑时残文件已含表头,不可重写。
       if (!resuming) {
-        writeDelimitedHeaderRows(writer, columns, formatConfig);
+        writeDelimitedHeaderRows(writer, columns, formatConfig, ctx);
       }
       long recordCount =
           generatePaged(ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
-            StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
-            for (ColumnLayout column : columns) {
-              joiner.add(csv(resolveDelimitedValue(batch, detail, column.source()), formatConfig));
-            }
-            writer.write(joiner.toString());
-            writer.newLine();
+            writeDelimitedFields(
+                writer, columns, batch, detail, formatConfig, "data-row-" + (rowIndex + 1), ctx);
+            writeNewLine(writer, ctx);
             if (accumulationField != null) {
               BigDecimal value = decimalValue(detail.get(accumulationField));
               if (value != null) {
@@ -84,7 +80,8 @@ public class DelimitedExportFormat extends AbstractExportFormat {
             }
           });
       if (trailerEnabled) {
-        writeDelimitedTrailer(writer, trailerTemplate, recordCount, controlTotal[0], formatConfig);
+        writeDelimitedTrailer(
+            writer, trailerTemplate, recordCount, controlTotal[0], formatConfig, ctx);
       }
       return recordCount;
     }
@@ -95,12 +92,18 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       Map<String, Object> trailerTemplate,
       long recordCount,
       BigDecimal controlTotal,
-      DelimitedFormatConfig formatConfig)
+      DelimitedFormatConfig formatConfig,
+      ExportFormatContext ctx)
       throws IOException {
     List<String> values =
         OutboundTrailerRecord.buildValues(trailerTemplate, recordCount, controlTotal);
-    writer.write(buildDelimitedLine(values, formatConfig));
-    writer.newLine();
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        writer.write(formatConfig.delimiter());
+      }
+      writeText(writer, csv(values.get(i), formatConfig), "trailer", "trailer-" + (i + 1), ctx);
+    }
+    writeNewLine(writer, ctx);
   }
 
   private Object templateValue(ExportFormatContext ctx, String key) {
@@ -121,22 +124,41 @@ public class DelimitedExportFormat extends AbstractExportFormat {
   }
 
   private void writeDelimitedHeaderRows(
-      BufferedWriter writer, List<ColumnLayout> columns, DelimitedFormatConfig formatConfig)
+      BufferedWriter writer,
+      List<ColumnLayout> columns,
+      DelimitedFormatConfig formatConfig,
+      ExportFormatContext ctx)
       throws IOException {
     int headerRows = Math.max(1, formatConfig.headerRows());
-    String headerLine =
-        buildDelimitedLine(columns.stream().map(ColumnLayout::header).toList(), formatConfig);
     for (int i = 0; i < headerRows; i++) {
-      writer.write(headerLine);
-      writer.newLine();
+      String rowLabel = "header-" + (i + 1);
+      for (int j = 0; j < columns.size(); j++) {
+        if (j > 0) {
+          writer.write(formatConfig.delimiter());
+        }
+        ColumnLayout column = columns.get(j);
+        writeText(writer, csv(column.header(), formatConfig), rowLabel, column.source(), ctx);
+      }
+      writeNewLine(writer, ctx);
     }
   }
 
-  private String buildDelimitedLine(List<String> values, DelimitedFormatConfig formatConfig) {
-    StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
-    for (String value : values) {
-      joiner.add(csv(value, formatConfig));
+  private void writeDelimitedFields(
+      BufferedWriter writer,
+      List<ColumnLayout> columns,
+      Map<String, Object> batch,
+      Map<String, Object> detail,
+      DelimitedFormatConfig formatConfig,
+      String rowLabel,
+      ExportFormatContext ctx)
+      throws IOException {
+    for (int i = 0; i < columns.size(); i++) {
+      if (i > 0) {
+        writer.write(formatConfig.delimiter());
+      }
+      ColumnLayout column = columns.get(i);
+      String value = csv(resolveDelimitedValue(batch, detail, column.source()), formatConfig);
+      writeText(writer, value, rowLabel, column.source(), ctx);
     }
-    return joiner.toString();
   }
 }

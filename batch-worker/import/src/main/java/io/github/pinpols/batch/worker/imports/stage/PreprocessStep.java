@@ -215,16 +215,22 @@ public class PreprocessStep implements ImportStageStep {
           payloadProperties);
 
       String formatType = resolveFileFormatType(importPayload, templateConfig);
+      // 字节级剥离 UTF-8 BOM（Windows Excel "CSV UTF-8" / 部分编辑器自动加 BOM）。只在文本格式做；
+      // EXCEL/BINARY 走字节原文，BOM 属于其二进制结构的一部分，不能动。
+      if (!isBinaryImportFormat(formatType)) {
+        processed = EncodingUtils.stripUtf8Bom(processed);
+      }
       if (isBinaryImportFormat(formatType)) {
         attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
         context.setRawPayload("");
         attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
       } else {
-        Charset charset = resolveCharset(importPayload, templateConfigObject);
+        DecodingSpec spec = resolveDecodingSpec(importPayload, templateConfigObject);
+        Charset charset = spec.charset();
         if (processed.length >= payloadProperties.getPreprocessSpoolBytes()) {
           spoolLargePayload(processed, charset, context);
         } else {
-          String normalized = decodeWithGuards(processed, charset, context);
+          String normalized = decodeWithGuards(processed, spec, context);
           context.setRawPayload(normalized);
           attrs.put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, normalized);
           attrs.remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
@@ -242,6 +248,11 @@ public class PreprocessStep implements ImportStageStep {
       Object replacementMeta = attrs.get("replacementCount");
       if (replacementMeta != null) {
         fileMetadata.put("replacementCount", replacementMeta);
+      }
+      // 编码探测回退命中（未配置 charset 时 UTF-8 严格解码失败 → GB18030 成功）的记录
+      Object detectedCharset = attrs.get("detectedCharset");
+      if (detectedCharset != null) {
+        fileMetadata.put("detectedCharset", detectedCharset);
       }
       ImportStageSupport.updateFileStatusRecoverAware(
           runtimeRepository, context, "PARSING", fileMetadata);
@@ -431,7 +442,9 @@ public class PreprocessStep implements ImportStageStep {
       spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-", ".raw");
       long bytes;
       try (InputStream in = objectStore.get(bucket, object)) {
-        bytes = Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
+        // 大文件直载同样在字节层剥 UTF-8 BOM，保证 PARSE 首个字段不混入 \uFEFF。
+        bytes =
+            Files.copy(EncodingUtils.stripUtf8Bom(in), spool, StandardCopyOption.REPLACE_EXISTING);
       }
       Charset charset = resolveCharset(importPayload, templateConfigObject);
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
@@ -574,7 +587,9 @@ public class PreprocessStep implements ImportStageStep {
               StandardOpenOption.CREATE,
               StandardOpenOption.TRUNCATE_EXISTING,
               StandardOpenOption.WRITE)) {
-        keptBytes = copyPartitionRange(in, out, rawEnd - rawStart, partitionNo > 1);
+        // BOM 只属于整份文件开头（partition 1 / rawStart=0）；后续分片位于文件中部，绝不能剥。
+        InputStream source = partitionNo == 1 ? EncodingUtils.stripUtf8Bom(in) : in;
+        keptBytes = copyPartitionRange(source, out, rawEnd - rawStart, partitionNo > 1);
       }
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
@@ -736,6 +751,76 @@ public class PreprocessStep implements ImportStageStep {
     return StandardCharsets.UTF_8;
   }
 
+  /** 内存路径解码规格：charset + 是否显式配置 + 非法字符策略 + 是否开启探测回退。 */
+  private record DecodingSpec(
+      Charset charset,
+      boolean explicitlyConfigured,
+      CodingErrorAction invalidCharAction,
+      boolean charsetDetectionEnabled) {}
+
+  /**
+   * 解析内存路径的解码规格。字符集仍走 {@link #resolveCharset} 的三级降级；探测回退（UTF-8 严格解码失败 → GB18030）
+   * 是<b>保守默认</b>：仅当模板显式 {@code charset_detect=true} 且「未显式配置 charset」时于 {@link #decodeWithGuards}
+   * 内触发；默认保持 fail-fast（GB18030 是超集、接受大量字节序列，盲目回退会把非 GB 系编码静默解成乱码入库）。
+   */
+  private DecodingSpec resolveDecodingSpec(
+      ImportPayload importPayload, Object templateConfigObject) {
+    Charset charset = resolveCharset(importPayload, templateConfigObject);
+    boolean explicit = hasExplicitCharset(importPayload, templateConfigObject);
+    return new DecodingSpec(
+        charset,
+        explicit,
+        resolveInvalidCharAction(templateConfigObject),
+        charsetDetectionEnabled(templateConfigObject));
+  }
+
+  /** 探测回退开关：模板 {@code charset_detect=true} 才允许自动尝试 GB18030。 */
+  private static boolean charsetDetectionEnabled(Object templateConfigObject) {
+    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+      Object raw = templateConfig.get("charset_detect");
+      return raw != null && "true".equalsIgnoreCase(String.valueOf(raw).trim());
+    }
+    return false;
+  }
+
+  private static boolean hasExplicitCharset(
+      ImportPayload importPayload, Object templateConfigObject) {
+    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+      Object targetCharset = templateConfig.get("target_charset");
+      if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+        return true;
+      }
+      Object charset = templateConfig.get("charset");
+      if (charset != null && Texts.hasText(String.valueOf(charset))) {
+        return true;
+      }
+    }
+    return importPayload != null
+        && (Texts.hasText(importPayload.targetCharset()) || Texts.hasText(importPayload.charset()));
+  }
+
+  /**
+   * 非法字符策略：模板 {@code invalid_char_policy} = {@code REPLACE} 时用 U+FFFD 替换（配合
+   * replacementCount 观测），默认 {@code FAIL}（严格 REPORT，解码失败直接 PREPROCESS_FAILED）。
+   */
+  private static CodingErrorAction resolveInvalidCharAction(Object templateConfigObject) {
+    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+      Object policy = templateConfig.get("invalid_char_policy");
+      if (policy != null && Texts.hasText(String.valueOf(policy))) {
+        String raw = String.valueOf(policy).trim();
+        if ("REPLACE".equalsIgnoreCase(raw)) {
+          return CodingErrorAction.REPLACE;
+        }
+        if ("FAIL".equalsIgnoreCase(raw)) {
+          return CodingErrorAction.REPORT;
+        }
+        throw new ImportPreprocessException(
+            "IMPORT_PREPROCESS_INVALID_POLICY", "unsupported invalid_char_policy: " + raw);
+      }
+    }
+    return CodingErrorAction.REPORT;
+  }
+
   /**
    * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
    *
@@ -746,6 +831,9 @@ public class PreprocessStep implements ImportStageStep {
    *       让下游把标记写进 {@code file_record.metadata}
    *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context 写入 {@code
    *       replacementCount}
+   *   <li>D2 — 编码探测回退（保守默认，opt-in）：模板 {@code charset_detect=true} 且未显式配置 charset、UTF-8 严格解码
+   *       失败、字节含非 ASCII 时，尝试 GB18030（GBK 超集）；命中则 context 写入 {@code detectedCharset}，解码继续。
+   *       默认关闭——GB18030 解码接受度远高于 UTF-8，自动回退可能把 Shift-JIS/Latin-1 等静默解成乱码，宁可失败让人工配 charset。
    * </ul>
    */
   /**
@@ -833,8 +921,33 @@ public class PreprocessStep implements ImportStageStep {
         charset);
   }
 
-  private String decodeWithGuards(byte[] processed, Charset charset, ImportJobContext context) {
-    String decoded = decodeStrict(processed, charset);
+  private String decodeWithGuards(byte[] processed, DecodingSpec spec, ImportJobContext context) {
+    Charset charset = spec.charset();
+    String decoded;
+    try {
+      decoded = decodeStrict(processed, charset, spec.invalidCharAction());
+    } catch (ImportPreprocessException ex) {
+      // D2：仅「显式开启探测 + 未显式配置」时回退；显式配置解码失败仍 fail-fast（设计：配置即契约）。
+      if (spec.charsetDetectionEnabled()
+          && !spec.explicitlyConfigured()
+          && StandardCharsets.UTF_8.equals(charset)
+          && hasNonAscii(processed)) {
+        try {
+          decoded = decodeStrict(processed, EncodingUtils.GB18030, CodingErrorAction.REPORT);
+          charset = EncodingUtils.GB18030;
+          log.warn(
+              "[ImportPreprocess] UTF-8 strict decode failed and no explicit charset configured;"
+                  + " detected GB18030 (GBK superset). See file_record.metadata.detectedCharset");
+          context.getAttributes().put("detectedCharset", charset.name());
+        } catch (ImportPreprocessException ignored) {
+          SwallowedExceptionLogger.info(
+              PreprocessStep.class, "catch:ImportPreprocessException", ignored);
+          throw ex;
+        }
+      } else {
+        throw ex;
+      }
+    }
     if (!StandardCharsets.UTF_8.equals(charset)
         && hasNonAscii(processed)
         && looksLikeUtf8(processed)) {
@@ -856,11 +969,9 @@ public class PreprocessStep implements ImportStageStep {
     return normalizeText(decoded);
   }
 
-  private static String decodeStrict(byte[] bytes, Charset charset) {
-    CharsetDecoder decoder = charset
-        .newDecoder()
-        .onMalformedInput(CodingErrorAction.REPORT)
-        .onUnmappableCharacter(CodingErrorAction.REPORT);
+  private static String decodeStrict(byte[] bytes, Charset charset, CodingErrorAction action) {
+    CharsetDecoder decoder =
+        charset.newDecoder().onMalformedInput(action).onUnmappableCharacter(action);
     try {
       return decoder
           .decode(ByteBuffer.wrap(bytes == null ? new byte[0] : bytes))

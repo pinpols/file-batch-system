@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
@@ -119,6 +120,14 @@ public class RegisterStep implements ExportStageStep {
     if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
       metadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
+    // 编码资产登记：最终目标编码（file_record.charset 列）+ 换行符 / BOM 策略（metadata），
+    // 与 GENERATE 实际写出的字节一致（设计 §9.4 编码规则）。
+    if (attrs.get("exportLineSeparator") != null) {
+      metadata.put("exportLineSeparator", String.valueOf(attrs.get("exportLineSeparator")));
+    }
+    if (attrs.get("exportWithBom") != null) {
+      metadata.put("exportWithBom", attrs.get("exportWithBom"));
+    }
     mergeUserMetadata(metadata, exportPayload.metadata());
     Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
         .tenantId(context.getTenantId())
@@ -129,7 +138,7 @@ public class RegisterStep implements ExportStageStep {
         .fileName(fileName)
         .originalFileName(fileName)
         .fileFormatType(fileFormatType)
-        .charset(StandardCharsets.UTF_8.name())
+        .charset(exportCharset(attrs))
         .fileSizeBytes(
             runtimeRepository.toLong(attrs.get("fileSizeBytes")) == null
                 ? 0L
@@ -161,6 +170,12 @@ public class RegisterStep implements ExportStageStep {
     resolvePlugin(context)
         .onRegistered(buildDataContext(context, exportPayload), batchId, exportVersion, traceId);
     return ExportStageResult.success(stage());
+  }
+
+  /** 登记 GENERATE 实际使用的目标编码；未显式下发（旧实例重放等）回退 UTF-8。 */
+  private String exportCharset(Map<String, Object> attrs) {
+    String raw = nullableText(attrs.get("exportCharset"));
+    return raw == null ? StandardCharsets.UTF_8.name() : EncodingUtils.normalize(raw);
   }
 
   private ExportStageResult reuseExistingFileRecord(

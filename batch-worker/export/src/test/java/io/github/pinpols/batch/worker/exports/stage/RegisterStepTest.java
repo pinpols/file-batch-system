@@ -29,6 +29,7 @@ class RegisterStepTest {
   private ExportDataPlugin exportDataPlugin;
   private S3StorageProperties s3StorageProperties;
   private RegisterStep step;
+  private FileRecordParam capturedParam;
 
   @BeforeEach
   void setUp() {
@@ -68,6 +69,37 @@ class RegisterStepTest {
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("EXPORT_REGISTER_CHECKSUM_CONFLICT");
     verify(runtimeRepository, never()).createFileRecord(any(FileRecordParam.class));
+  }
+
+  @Test
+  void execute_registersConfiguredCharsetAndEncodingMetadata() {
+    ExportJobContext ctx = baseContext();
+    ctx.getAttributes().put("objectName", "obj.csv");
+    ctx.getAttributes().put("checksumValue", "abc123");
+    ctx.getAttributes().put("exportCharset", "GBK");
+    ctx.getAttributes().put("exportLineSeparator", "\r\n");
+    ctx.getAttributes().put("exportWithBom", Boolean.FALSE);
+    ctx.getAttributes().put("exportDataRef", "jdbc_mapped_export");
+    when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.csv"))
+        .thenReturn(false);
+    when(exportDataPluginRegistry.require("jdbc_mapped_export")).thenReturn(exportDataPlugin);
+    when(runtimeRepository.createFileRecord(any(FileRecordParam.class))).thenAnswer(invocation -> {
+      capturedParam = invocation.getArgument(0);
+      return 5L;
+    });
+    when(runtimeRepository.loadFileRecord("t1", 5L))
+        .thenReturn(Map.of("id", 5L, "file_generation_no", 1));
+    when(runtimeRepository.toLong(10L)).thenReturn(10L);
+
+    var result = step.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    assertThat(capturedParam).isNotNull();
+    assertThat(capturedParam.getCharset()).isEqualTo("GBK");
+    assertThat(capturedParam.getMetadata()).isInstanceOf(Map.class);
+    assertThat((Map<String, Object>) capturedParam.getMetadata())
+        .containsEntry("exportLineSeparator", "\r\n")
+        .containsEntry("exportWithBom", false);
   }
 
   @Test

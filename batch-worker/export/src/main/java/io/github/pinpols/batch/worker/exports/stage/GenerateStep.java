@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
@@ -30,6 +31,8 @@ import io.github.pinpols.batch.worker.exports.stage.format.GenerateCheckpoint;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
@@ -126,6 +129,11 @@ public class GenerateStep implements ExportStageStep {
       int pageSize = resolvePageSize(context);
       int chunkSize = resolveChunkSize(context);
       String fileFormatType = String.valueOf(attrs.getOrDefault("exportFileFormatType", "JSON"));
+      // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
+      ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
+      attrs.put("exportCharset", encoding.charset().name());
+      attrs.put("exportWithBom", encoding.withBom());
+      attrs.put("exportLineSeparator", encoding.lineSeparator());
 
       // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
       // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
@@ -178,6 +186,9 @@ public class GenerateStep implements ExportStageStep {
           .jobContext(context)
           .dataPlugin(dataPlugin)
           .dataCtx(dataCtx)
+          .charset(encoding.charset())
+          .withBom(encoding.withBom())
+          .lineSeparator(encoding.lineSeparator())
           .checkpoint(checkpoint)
           .build();
       long recordCount = strategy.generate(formatCtx);
@@ -312,6 +323,79 @@ public class GenerateStep implements ExportStageStep {
 
   private int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
     return ExportConfigValueSupport.resolveTemplateInt(context, key, fallback);
+  }
+
+  /** 导出编码选项（charset / BOM / 行分隔符），由模板 target_charset / with_bom / line_separator 解析。 */
+  private record ExportEncodingOptions(Charset charset, Boolean withBom, String lineSeparator) {}
+
+  /** 导出侧允许的目标字符集：UTF-8（默认）/ GBK / GB18030 / ISO-8859-1，与设计文档 §9.4 一致。 */
+  private static final Set<Charset> SUPPORTED_EXPORT_CHARSETS = Set.of(
+      StandardCharsets.UTF_8,
+      StandardCharsets.ISO_8859_1,
+      EncodingUtils.GBK,
+      EncodingUtils.GB18030);
+
+  /**
+   * 解析导出编码选项并透传给格式策略与 REGISTER。
+   *
+   * <p>EXCEL 是二进制 zip 容器（内部恒为 UTF-8），不套用文本编码/换行/BOM 配置，恒回退 UTF-8 + LF + 无 BOM。
+   * 其余文本格式按模板 {@code target_charset}（回退 {@code charset}）解析；不支持的值抛 {@link WorkerConfigException}，
+   * 由 execute 转 EXPORT_GENERATE_CONFIG_INVALID（不重试，走人工修模板）。
+   */
+  private ExportEncodingOptions resolveExportEncodingOptions(
+      ExportJobContext context, String fileFormatType) {
+    if ("EXCEL".equalsIgnoreCase(fileFormatType)) {
+      return new ExportEncodingOptions(StandardCharsets.UTF_8, Boolean.FALSE, "\n");
+    }
+    Map<String, Object> tc = templateConfigMap(context);
+    Object targetRaw = firstConfigured(tc.get("target_charset"), tc.get("charset"));
+    String target = targetRaw == null ? "" : String.valueOf(targetRaw).trim();
+    Charset charset = StandardCharsets.UTF_8;
+    if (Texts.hasText(target)) {
+      try {
+        charset = EncodingUtils.resolve(target);
+      } catch (IllegalArgumentException ex) {
+        throw new WorkerConfigException("unsupported export target_charset: " + target, ex);
+      }
+      if (!SUPPORTED_EXPORT_CHARSETS.contains(charset)) {
+        throw new WorkerConfigException("unsupported export target_charset: "
+            + target
+            + " (allowed: UTF-8, GBK, GB18030, ISO-8859-1)");
+      }
+    }
+    return new ExportEncodingOptions(
+        charset,
+        asBoolean(tc.get("with_bom")),
+        normalizeExportLineSeparator(tc.get("line_separator")));
+  }
+
+  private static Object firstConfigured(Object first, Object second) {
+    return first != null && Texts.hasText(String.valueOf(first)) ? first : second;
+  }
+
+  private static boolean asBoolean(Object value) {
+    if (value instanceof Boolean b) {
+      return b;
+    }
+    return value != null && "true".equalsIgnoreCase(String.valueOf(value).trim());
+  }
+
+  /**
+   * 行分隔符归一：接受真实换行（DB 直存 {@code E'\n'}）、转义串（console 表单的 {@code \n} / {@code \r\n} / {@code \r}）
+   * 与 LF / CRLF 别名。非法值抛 {@link WorkerConfigException} 转配置硬错。
+   */
+  static String normalizeExportLineSeparator(Object raw) {
+    String value = raw == null ? "" : String.valueOf(raw);
+    // 注意：不能用 trim()/isEmpty() 归一——真实 CRLF 会被 trim 掉变成空串，导致 CRLF 配置静默退化成 LF。
+    if (value.length() == 0) {
+      return "\n";
+    }
+    return switch (value) {
+      case "\n", "\\n", "LF" -> "\n";
+      case "\r\n", "\\r\\n", "CRLF" -> "\r\n";
+      case "\r", "\\r" -> "\r";
+      default -> throw new WorkerConfigException("unsupported export line_separator: " + value);
+    };
   }
 
   private Path createGeneratedFile(

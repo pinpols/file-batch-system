@@ -23,6 +23,7 @@ import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyR
 import io.github.pinpols.batch.worker.exports.stage.format.FixedWidthExportFormat;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
 import io.github.pinpols.batch.worker.exports.stage.format.JsonExportFormat;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -153,6 +154,91 @@ class GenerateStepTest {
     assertThat(result.success()).isTrue();
     String content = readGeneratedFile(context);
     assertThat(content).contains("\"line1\nline2\"");
+  }
+
+  @Test
+  void delimited_utf8WithBom_shouldWriteBomPrefix() throws Exception {
+    stubSinglePage(List.of(Map.of("name", "客户", "amount", "100.00")));
+
+    ExportJobContext context =
+        buildContext("DELIMITED", Map.of("export_data_ref", PLUGIN_ID, "with_bom", true));
+
+    ExportStageResult result = generateStep.execute(context);
+
+    assertThat(result.success()).isTrue();
+    byte[] bytes = readGeneratedFileBytes(context);
+    assertThat(bytes).startsWith(new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+    assertThat(new String(bytes, StandardCharsets.UTF_8)).contains("客户");
+    assertThat(context.getAttributes())
+        .containsEntry("exportCharset", "UTF-8")
+        .containsEntry("exportWithBom", true);
+  }
+
+  @Test
+  void delimited_gbkCrlf_shouldWriteConfiguredCharsetAndLineSeparator() throws Exception {
+    stubSinglePage(List.of(Map.of("name", "客户", "amount", "100.00")));
+
+    ExportJobContext context = buildContext(
+        "DELIMITED",
+        Map.of(
+            "export_data_ref", PLUGIN_ID,
+            "target_charset", "GBK",
+            "line_separator", "CRLF"));
+
+    ExportStageResult result = generateStep.execute(context);
+
+    assertThat(result.success()).isTrue();
+    byte[] bytes = readGeneratedFileBytes(context);
+    // 文件头必须是真的 GBK BOM 无关（GBK 无 BOM 约定），内容按 GBK 解码正确
+    String decoded = new String(bytes, io.github.pinpols.batch.common.utils.EncodingUtils.GBK);
+    assertThat(decoded).contains("客户");
+    // CRLF：去掉 \r\n 后不应再残留裸 \n
+    assertThat(decoded).contains("\r\n");
+    assertThat(decoded.replace("\r\n", "")).doesNotContain("\n");
+    assertThat(context.getAttributes())
+        .containsEntry("exportCharset", "GBK")
+        .containsEntry("exportLineSeparator", "\r\n");
+  }
+
+  @Test
+  void delimited_gbkUnmappableCharacter_shouldReportRowAndColumn() throws Exception {
+    stubSinglePage(List.of(Map.of("name", "客户😀", "amount", "100.00")));
+
+    ExportJobContext context =
+        buildContext("DELIMITED", Map.of("export_data_ref", PLUGIN_ID, "target_charset", "GBK"));
+
+    ExportStageResult result = generateStep.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_GENERATE_FAILED");
+    assertThat(result.message()).contains("EXPORT_GENERATE_UNMAPPABLE_CHARACTER");
+    assertThat(result.message()).contains("data-row-1");
+    assertThat(result.message()).contains("column=detail.name");
+    assertThat(result.message()).contains("charset=GBK");
+  }
+
+  @Test
+  void unsupportedTargetCharset_shouldReturnConfigInvalid() throws Exception {
+    stubSinglePage(List.of(Map.of("name", "x")));
+
+    ExportJobContext context =
+        buildContext("DELIMITED", Map.of("export_data_ref", PLUGIN_ID, "target_charset", "UTF-16"));
+
+    ExportStageResult result = generateStep.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_GENERATE_CONFIG_INVALID");
+  }
+
+  @Test
+  void normalizeExportLineSeparator_shouldAcceptEscapesAndAliases() {
+    assertThat(GenerateStep.normalizeExportLineSeparator(null)).isEqualTo("\n");
+    assertThat(GenerateStep.normalizeExportLineSeparator("\\n")).isEqualTo("\n");
+    assertThat(GenerateStep.normalizeExportLineSeparator("LF")).isEqualTo("\n");
+    assertThat(GenerateStep.normalizeExportLineSeparator("\\r\\n")).isEqualTo("\r\n");
+    assertThat(GenerateStep.normalizeExportLineSeparator("CRLF")).isEqualTo("\r\n");
+    assertThat(GenerateStep.normalizeExportLineSeparator("\r\n")).isEqualTo("\r\n");
+    assertThat(GenerateStep.normalizeExportLineSeparator("\r")).isEqualTo("\r");
   }
 
   @Test
@@ -413,5 +499,11 @@ class GenerateStepTest {
     Object path = context.getAttributes().get(PipelineRuntimeKeys.GENERATED_FILE_PATH);
     assertThat(path).isNotNull();
     return Files.readString(Path.of(path.toString()));
+  }
+
+  private byte[] readGeneratedFileBytes(ExportJobContext context) throws Exception {
+    Object path = context.getAttributes().get(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+    assertThat(path).isNotNull();
+    return Files.readAllBytes(Path.of(path.toString()));
   }
 }

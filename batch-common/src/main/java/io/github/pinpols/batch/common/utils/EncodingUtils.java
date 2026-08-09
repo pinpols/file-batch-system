@@ -28,6 +28,15 @@ public final class EncodingUtils {
   /** 系统内部字符集规范名；等价于 {@code StandardCharsets.UTF_8.name()}。 */
   public static final String UTF_8 = StandardCharsets.UTF_8.name();
 
+  /**
+   * GB18030 字符集（GBK 的严格超集），用于导入侧「未显式配置 charset 时的编码探测回退」与导出侧老系统 GBK/GB18030 目标编码。
+   * 不属于 {@link StandardCharsets}，统一收敛到本工具，避免业务代码散落 {@code Charset.forName("GB18030")}。
+   */
+  public static final Charset GB18030 = Charset.forName("GB18030");
+
+  /** GBK 字符集（国标简体中文，GB18030 子集），导出侧老系统兼容目标编码。 */
+  public static final Charset GBK = Charset.forName("GBK");
+
   private EncodingUtils() {}
 
   /**
@@ -86,7 +95,8 @@ public final class EncodingUtils {
    *
    * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加 BOM；系统内部读取这些文件做 parse 时，若不剥 BOM
    * 会让首字段混入 {@code \uFEFF} 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己
-   * 实现过一份剥 BOM 逻辑，此处抽出供其他编码转换点复用。
+   * 早期在字符层（normalizeText）剥过一次；现在统一收口到本工具：PreprocessStep 文本路径与流式直载在字节层剥，
+   * {@code ImportPreprocessPipeline.charsetTranscode} 在 UTF-8→其他编码转码前也剥。
    *
    * <p>要求传入 <b>可 mark/reset 或 {@link PushbackInputStream}</b>——本方法内部用 PushbackInputStream
    * 包装；调用方不需要再关心。返回流的 close 会级联关闭底层。
@@ -110,5 +120,21 @@ public final class EncodingUtils {
       pb.unread(prefix, 0, read);
     }
     return pb;
+  }
+
+  /**
+   * 字节数组形态的 UTF-8 BOM 剥离：前 3 字节是 EF BB BF 则返回去掉 BOM 的新数组，否则原样返回（不复制）。
+   * 供 {@code PreprocessStep} 在 decode / spool 前对整块字节做一次统一剥离。
+   */
+  public static byte[] stripUtf8Bom(byte[] data) {
+    if (data == null || data.length < 3) {
+      return data;
+    }
+    if (data[0] == UTF8_BOM[0] && data[1] == UTF8_BOM[1] && data[2] == UTF8_BOM[2]) {
+      byte[] stripped = new byte[data.length - 3];
+      System.arraycopy(data, 3, stripped, 0, stripped.length);
+      return stripped;
+    }
+    return data;
   }
 }
