@@ -53,7 +53,7 @@ class KafkaTriggerEventPublisherTest {
   private KafkaTriggerEventPublisher publisher;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     TriggerKafkaProperties props = new TriggerKafkaProperties();
     props.setSendTimeoutSeconds(1);
     publisher = new KafkaTriggerEventPublisher(kafkaTemplate, props);

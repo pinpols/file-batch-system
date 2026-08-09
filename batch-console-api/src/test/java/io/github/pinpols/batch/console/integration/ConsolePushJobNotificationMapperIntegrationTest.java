@@ -159,7 +159,7 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
       String operatorId,
       String finishedAgo) {
     String instanceNo = jobCode + "-" + System.nanoTime();
-    Long id = jdbc.queryForObject(
+    return jdbc.queryForObject(
         """
             INSERT INTO batch.job_instance
               (tenant_id, job_definition_id, job_code, instance_no, biz_date,
@@ -181,6 +181,5 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
         "trace-" + instanceNo,
         operatorId,
         finishedAgo);
-    return id;
   }
 }

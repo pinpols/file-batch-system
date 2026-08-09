@@ -179,7 +179,7 @@ class TriggerSchedulerFacadeTest {
   // ─── 跳过非 scheduled 类型 ─────────────────────────────────────────────────────
 
   @Test
-  void shouldSilentlySkipManualAndEventScheduleTypes() throws Exception {
+  void shouldSilentlySkipManualAndEventScheduleTypes() {
     when(triggerDefinitionLoader.loadAll())
         .thenReturn(
             List.of(manualDescriptor("t1", "JOB_MANUAL"), eventDescriptor("t1", "JOB_EVENT")));

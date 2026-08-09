@@ -82,8 +82,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   static final String PARAM_AUTO_COMMIT = "autoCommit";
 
   // 过程名字符规则:schema.proc 或 proc;允许字母数字下划线 + 一个可选 dot
-  private static final Pattern PROC_NAME =
-      Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$");
+  private static final Pattern PROC_NAME = Pattern.compile("^[A-Za-z_]\\w*(\\.[A-Za-z_]\\w*)?$");
 
   private final StoredProcExecutorProperties props;
   private final DataSourceResolver dataSourceResolver;
@@ -183,10 +182,10 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object pnObj = params.get(PARAM_PROC);
-    if (!(pnObj instanceof String) || ((String) pnObj).isBlank()) {
+    if (!(pnObj instanceof String procedureName) || procedureName.isBlank()) {
       throw new StoredProcValidationException("parameters.procedureName required");
     }
-    String procName = ((String) pnObj).trim();
+    String procName = procedureName.trim();
     if (!PROC_NAME.matcher(procName).matches()) {
       throw new StoredProcValidationException(
           "procedureName must match ^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$, got: "
@@ -200,8 +199,8 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
     Object t = params.get(PARAM_TIMEOUT);
-    if (t instanceof Number) {
-      long requested = ((Number) t).longValue();
+    if (t instanceof Number number) {
+      long requested = number.longValue();
       if (requested <= 0) {
         throw new StoredProcValidationException("statementTimeoutSeconds must be positive");
       }
@@ -217,8 +216,8 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
     boolean autoCommit = props.isDefaultAutoCommit();
     Object ac = params.get(PARAM_AUTO_COMMIT);
-    if (ac instanceof Boolean) {
-      autoCommit = (Boolean) ac;
+    if (ac instanceof Boolean booleanValue) {
+      autoCommit = booleanValue;
     }
 
     return new Invocation(procName, inParams, outTypes, ds, timeoutSec, autoCommit);
@@ -309,7 +308,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
-    return v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : fallback;
+    return v instanceof String string && !string.isBlank() ? string.trim() : fallback;
   }
 
   static int toSqlType(String typeName) {
@@ -398,8 +397,8 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         String type = inv.outTypes.get(i);
         if ("REF_CURSOR".equals(type)) {
           Object cursor = cs.getObject(pos);
-          if (cursor instanceof ResultSet) {
-            RefCursorResult rc = readRefCursor((ResultSet) cursor);
+          if (cursor instanceof ResultSet resultSet) {
+            RefCursorResult rc = readRefCursor(resultSet);
             resultSets.add(rc.rows());
             if (rc.truncated()) {
               outValues.put(key, "<REF_CURSOR truncated>");

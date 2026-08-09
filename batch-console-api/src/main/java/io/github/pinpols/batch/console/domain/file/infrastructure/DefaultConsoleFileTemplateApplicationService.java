@@ -48,7 +48,7 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleFileTemplateApplicationService
     implements ConsoleFileTemplateApplicationService {
 
-  private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+  private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_]\\w*");
 
   private final FileTemplateConfigMapper mapper;
   private final TenantIdResolver tenantGuard;
@@ -142,7 +142,7 @@ public class DefaultConsoleFileTemplateApplicationService
         request.getTemplateName(),
         request.getTemplateType(),
         request.getBizType(),
-        request.getEnabled() != null ? request.getEnabled() : true,
+        request.getEnabled() == null || request.getEnabled(),
         version,
         request.getDescription()));
     FileTemplateConfigUpsertParam.FormatOptions format =
@@ -285,7 +285,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   private SecurityOptionsInput buildSecurityInputForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    SecurityOptionsInput securityInput = SecurityOptionsInput.builder()
+    return SecurityOptionsInput.builder()
         .previewMaskingEnabled(
             coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
         .errorLineMaskingEnabled(coalesceBoolean(
@@ -299,7 +299,6 @@ public class DefaultConsoleFileTemplateApplicationService
             req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
         .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
         .build();
-    return securityInput;
   }
 
   private FileTemplateConfigUpsertParam.PluginRefs buildPluginRefsForUpdate(

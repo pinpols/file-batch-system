@@ -96,7 +96,7 @@ public class ConsoleWebhookService {
 
   private String normalizeEventTypes(String eventTypes) {
     Guard.requireText(eventTypes, "eventTypes is required");
-    String normalized = Arrays.stream(eventTypes.split(","))
+    return Arrays.stream(eventTypes.split(","))
         .map(String::trim)
         .filter(value -> !value.isBlank())
         .map(value -> value.toUpperCase(Locale.ROOT))
@@ -104,7 +104,6 @@ public class ConsoleWebhookService {
         .reduce((left, right) -> left + "," + right)
         .orElseThrow(() ->
             BizException.of(ResultCode.INVALID_ARGUMENT, "error.webhook.event_types_required"));
-    return normalized;
   }
 
   @Builder

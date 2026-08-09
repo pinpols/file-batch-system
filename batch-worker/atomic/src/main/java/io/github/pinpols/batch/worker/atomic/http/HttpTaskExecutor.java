@@ -242,12 +242,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object urlObj = params.get(PARAM_URL);
-    if (!(urlObj instanceof String) || ((String) urlObj).isBlank()) {
+    if (!(urlObj instanceof String urlString) || urlString.isBlank()) {
       throw new HttpValidationException("parameters.url required");
     }
     URI uri;
     try {
-      uri = new URI(((String) urlObj).trim());
+      uri = new URI(urlString.trim());
     } catch (URISyntaxException e) {
       throw new HttpValidationException("parameters.url not a valid URI: " + e.getMessage());
     }
@@ -270,8 +270,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
     Duration timeout = props.getDefaultTimeout();
     Object t = params.get(PARAM_TIMEOUT);
-    if (t instanceof Number) {
-      long sec = ((Number) t).longValue();
+    if (t instanceof Number number) {
+      long sec = number.longValue();
       if (sec <= 0) {
         throw new HttpValidationException("timeoutSeconds must be positive");
       }
@@ -374,8 +374,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     if (raw instanceof List<?> list) {
       HashSet<Integer> out = new HashSet<>();
       for (Object o : list) {
-        if (o instanceof Number) {
-          out.add(((Number) o).intValue());
+        if (o instanceof Number number) {
+          out.add(number.intValue());
         } else {
           throw new HttpValidationException("expectStatus list must contain integers");
         }
@@ -434,7 +434,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
-    return v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : fallback;
+    return v instanceof String string && !string.isBlank() ? string.trim() : fallback;
   }
 
   private void validateRequestBodySize(String body) {
@@ -570,13 +570,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
    * 的响应,读到的内容与全量读完全一致。try-with-resources 关闭 {@link Response} 会释放底层连接,未读完的剩余流不会阻塞。
    */
   private static byte[] readBounded(ResponseBody body, int max) throws IOException {
-    long limit = (long) max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
+    long limit = max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
     try (InputStream in = body.byteStream()) {
       ByteArrayOutputStream buf = new ByteArrayOutputStream((int) Math.min(limit, 8192L));
       byte[] chunk = new byte[8192];
       long total = 0;
       while (total < limit) {
-        int toRead = (int) Math.min((long) chunk.length, limit - total);
+        int toRead = (int) Math.min(chunk.length, limit - total);
         int n = in.read(chunk, 0, toRead);
         if (n == -1) {
           break;

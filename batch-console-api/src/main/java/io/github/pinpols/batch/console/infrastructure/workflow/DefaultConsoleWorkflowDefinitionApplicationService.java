@@ -133,7 +133,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     entity.setWorkflowName(request.getWorkflowName());
     entity.setWorkflowType(request.getWorkflowType());
     entity.setVersion(1);
-    entity.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+    entity.setEnabled(request.getEnabled() == null || request.getEnabled());
     definitionMapper.insert(entity);
 
     upsertNodesAndEdges(resolvedTenant, entity.getId(), request);

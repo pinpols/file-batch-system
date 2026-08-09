@@ -191,10 +191,10 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object cmdObj = params.get(PARAM_COMMAND);
-    if (!(cmdObj instanceof String) || ((String) cmdObj).isBlank()) {
+    if (!(cmdObj instanceof String commandString) || commandString.isBlank()) {
       throw new ShellValidationException("parameters.command required (non-blank string)");
     }
-    String command = ((String) cmdObj).trim();
+    String command = commandString.trim();
 
     // 白名单
     if (!props.getCommandWhitelist().isEmpty() && !props.getCommandWhitelist().contains(command)) {
@@ -218,8 +218,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     Duration timeout = props.getDefaultTimeout();
     Object timeoutObj = params.get(PARAM_TIMEOUT_SECONDS);
-    if (timeoutObj instanceof Number) {
-      long sec = ((Number) timeoutObj).longValue();
+    if (timeoutObj instanceof Number number) {
+      long sec = number.longValue();
       if (sec <= 0) {
         throw new ShellValidationException("timeoutSeconds must be positive");
       }

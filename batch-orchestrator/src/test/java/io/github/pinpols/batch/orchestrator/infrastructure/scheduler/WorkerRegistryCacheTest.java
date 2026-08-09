@@ -169,7 +169,7 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void cachedEmptyJsonArrayShouldIgnoreAndReload() throws Exception {
+  void cachedEmptyJsonArrayShouldIgnoreAndReload() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn("[]");
     AtomicInteger calls = new AtomicInteger();

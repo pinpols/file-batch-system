@@ -148,7 +148,7 @@ class AliyunCaptchaVerifierTest {
 
   @Test
   @DisplayName("hexSha256 / hexHmacSha256 输出 64 位小写 hex 且确定")
-  void digestPrimitives_are64HexAndDeterministic() throws Exception {
+  void digestPrimitives_are64HexAndDeterministic() {
     String h1 = CaptchaCrypto.sha256Hex("hello");
     String h2 = CaptchaCrypto.sha256Hex("hello");
     assertThat(h1).isEqualTo(h2).hasSize(64).matches("[0-9a-f]{64}");

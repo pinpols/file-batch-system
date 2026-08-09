@@ -231,7 +231,7 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void envIsScrubbedAndBatchVarsInjected() throws Exception {
+    void envIsScrubbedAndBatchVarsInjected() {
       // /usr/bin/env 打印所有 env vars
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/env")));
       assertThat(r.success()).isTrue();

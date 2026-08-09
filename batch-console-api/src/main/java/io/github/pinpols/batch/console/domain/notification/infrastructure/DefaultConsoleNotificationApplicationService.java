@@ -106,9 +106,8 @@ public class DefaultConsoleNotificationApplicationService
   @Override
   public Map<String, Object> getChannel(String tenantId, String channelCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> channel = Guard.requireFound(
+    return Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
-    return channel;
   }
 
   @Override
@@ -214,9 +213,8 @@ public class DefaultConsoleNotificationApplicationService
   @Override
   public Map<String, Object> getRule(String tenantId, Long ruleId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> rule = Guard.requireFound(
+    return Guard.requireFound(
         ruleMapper.selectById(resolved, ruleId), "subscription rule not found: " + ruleId);
-    return rule;
   }
 
   @Override

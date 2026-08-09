@@ -31,7 +31,7 @@ public final class ResourceQueueExcelRowParser {
   public static QueueRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    QueueRow row = QueueRow.builder()
+    return QueueRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
         .queueCode(requireText(values, "queue_code", 128, issues))
@@ -48,7 +48,6 @@ public final class ResourceQueueExcelRowParser {
         .enabled(optionalBoolean(values, "enabled", true, issues))
         .description(optionalText(values, "description", 512, issues))
         .build();
-    return row;
   }
 
   public static ResourceQueueUpsertParam toUpsertParam(QueueRow row, String operatorId) {

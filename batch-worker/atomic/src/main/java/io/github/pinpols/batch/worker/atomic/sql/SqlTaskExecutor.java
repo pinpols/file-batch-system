@@ -169,10 +169,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> params = ctx.parameters();
 
     Object sqlObj = params.get(PARAM_SQL);
-    if (!(sqlObj instanceof String) || ((String) sqlObj).isBlank()) {
+    if (!(sqlObj instanceof String sqlString) || sqlString.isBlank()) {
       throw new SqlValidationException("parameters.sql required (non-blank string)");
     }
-    String sql = ((String) sqlObj).trim();
+    String sql = sqlString.trim();
 
     List<String> statements = splitStatements(sql);
     if (statements.isEmpty()) {
@@ -197,8 +197,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
     Object t = params.get(PARAM_STMT_TIMEOUT);
-    if (t instanceof Number) {
-      long requested = ((Number) t).longValue();
+    if (t instanceof Number number) {
+      long requested = number.longValue();
       if (requested <= 0) {
         throw new SqlValidationException("statementTimeoutSeconds must be positive");
       }
@@ -209,8 +209,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
     boolean autoCommit = props.isDefaultAutoCommit();
     Object ac = params.get(PARAM_AUTO_COMMIT);
-    if (ac instanceof Boolean) {
-      autoCommit = (Boolean) ac;
+    if (ac instanceof Boolean booleanValue) {
+      autoCommit = booleanValue;
     }
 
     return new SqlInvocation(statements, ds, timeoutSec, autoCommit, allSelect);
@@ -228,7 +228,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   String resolveDataSourceBeanName(Map<String, Object> params) {
     String configured = props.getDataSourceBeanName();
     Object v = params.get(PARAM_DS_BEAN);
-    String paramBean = v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : null;
+    String paramBean = v instanceof String string && !string.isBlank() ? string.trim() : null;
 
     if (paramBean == null || paramBean.equals(configured)) {
       return configured;
@@ -498,7 +498,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
     // 全 SELECT 时强制显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段内生效。
     // 写任务保持原有 autoCommit 语义。
-    boolean effectiveAutoCommit = inv.allSelect ? false : inv.autoCommit;
+    boolean effectiveAutoCommit = !inv.allSelect && inv.autoCommit;
     AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()
         .withAutoCommit(effectiveAutoCommit)
         .withReadOnly(inv.allSelect)

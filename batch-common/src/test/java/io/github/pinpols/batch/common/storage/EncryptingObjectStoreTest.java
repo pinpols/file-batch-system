@@ -177,7 +177,7 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
-  void otherOperationsShouldDelegate(@TempDir Path root) throws Exception {
+  void otherOperationsShouldDelegate(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);
     FilesystemObjectStore raw = newRaw(root);

@@ -60,7 +60,7 @@ public class DefaultConsoleQuotaPolicyApplicationService
             request.getMaxPartitionsPerTenant() != null ? request.getMaxPartitionsPerTenant() : 0)
         .maxQpsPerTenant(request.getMaxQpsPerTenant() != null ? request.getMaxQpsPerTenant() : 0)
         .fairShareWeight(request.getFairShareWeight() != null ? request.getFairShareWeight() : 1)
-        .enabled(request.getEnabled() != null ? request.getEnabled() : true)
+        .enabled(request.getEnabled() == null || request.getEnabled())
         .description(request.getDescription())
         .build();
     quotaPolicyMapper.insert(param);

@@ -76,7 +76,7 @@ public class DefaultConsoleResourceQueueApplicationService
     params.put(
         "fair_share_weight",
         request.getFairShareWeight() != null ? request.getFairShareWeight() : 1);
-    params.put("enabled", request.getEnabled() != null ? request.getEnabled() : true);
+    params.put("enabled", request.getEnabled() == null || request.getEnabled());
     params.put("description", request.getDescription());
     resourceQueueMapper.insert(params);
     Long id = ((Number) params.get("id")).longValue();

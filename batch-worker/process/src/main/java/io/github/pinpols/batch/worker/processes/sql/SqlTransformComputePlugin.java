@@ -50,7 +50,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   public static final String PLUGIN_ID = "sqlTransformCompute";
 
   // 命名参数:`:name`,但排除 PostgreSQL cast 语法 `::type`(双冒号前缀)。
-  private static final Pattern NAMED_PARAMETER = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
+  private static final Pattern NAMED_PARAMETER = Pattern.compile("(?<!:):([a-zA-Z_]\\w*)");
 
   /** 业务参数走 payload.metadata,展开为 :metadata_&lt;key&gt;。前缀公开,避免与内置参数冲突。 */
   private static final String METADATA_PARAM_PREFIX =
@@ -611,10 +611,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   }
 
   private static String targetName(SqlTransformComputeSpec spec) {
-    String target = JdbcMappedSqlValidator.quotePg(spec.targetSchema())
+    return JdbcMappedSqlValidator.quotePg(spec.targetSchema())
         + "."
         + JdbcMappedSqlValidator.quotePg(spec.targetTable());
-    return target;
   }
 
   private static String targetColumnList(SqlTransformComputeSpec spec) {

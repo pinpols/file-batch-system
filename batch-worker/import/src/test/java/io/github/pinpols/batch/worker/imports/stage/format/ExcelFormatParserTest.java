@@ -93,7 +93,7 @@ class ExcelFormatParserTest {
   // ── Item 3: 表头存在性校验,缺列 fail-fast ──────────────────────────────────
 
   @Test
-  void shouldFailFast_whenMappedSourceHeaderMissing() throws Exception {
+  void shouldFailFast_whenMappedSourceHeaderMissing() {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .headers(List.of("订单号", "金额"))
         .row(List.of("O-1", "100"))
@@ -166,7 +166,7 @@ class ExcelFormatParserTest {
   }
 
   @Test
-  void shouldFailFast_whenNamedSheetNotFound() throws Exception {
+  void shouldFailFast_whenNamedSheetNotFound() {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .sheetName("数据页")
         .headers(List.of("订单号"))

@@ -138,7 +138,7 @@ class ParseStepFixtureTest {
   // ── Excel fixture (programmatically built, 3 data rows) ───────────────────
 
   @Test
-  void shouldParseExcelFixture_programmaticallyBuilt() throws Exception {
+  void shouldParseExcelFixture_programmaticallyBuilt() {
     byte[] xlsx = TestExcelFileBuilder.customerImport(List.of(
         Map.of(
             "customerNo",

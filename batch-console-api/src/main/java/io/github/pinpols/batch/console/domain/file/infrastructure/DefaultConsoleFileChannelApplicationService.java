@@ -75,7 +75,7 @@ public class DefaultConsoleFileChannelApplicationService
     param.setReceiptPolicy(
         request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
     param.setTimeoutSeconds(request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 30);
-    param.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+    param.setEnabled(request.getEnabled() == null || request.getEnabled());
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
     // 软删后重建:活跃同 code 已被上面 selectByUniqueKey 预检拒(CONFLICT);此处用 upsert,

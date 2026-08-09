@@ -400,7 +400,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     long max = Math.max(outbox.getRetryMaxDelaySeconds(), base);
     int normalizedAttempt = Math.max(attemptNo, 1);
     // attempt^(N-1) 用 double 防溢出,clamp 到 [base, max]
-    double raw = (double) base * Math.pow(multiplier, (double) normalizedAttempt - 1.0);
+    double raw = base * Math.pow(multiplier, normalizedAttempt - 1.0);
     long bounded = Math.min(Math.max((long) raw, base), max);
     double jitterRatio = Math.max(0.0, Math.min(outbox.getRetryJitterRatio(), 1.0));
     long jittered;

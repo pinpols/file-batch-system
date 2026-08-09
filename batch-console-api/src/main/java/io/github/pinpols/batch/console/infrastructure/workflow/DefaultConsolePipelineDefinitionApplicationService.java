@@ -110,7 +110,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
     params.put(KEY_BIZ_TYPE, request.getBizType());
     params.put(KEY_WORKER_GROUP, request.getWorkerGroup());
     params.put("version", 1);
-    params.put(KEY_ENABLED, request.getEnabled() != null ? request.getEnabled() : true);
+    params.put(KEY_ENABLED, request.getEnabled() == null || request.getEnabled());
     params.put(KEY_DESCRIPTION, request.getDescription());
     validateSteps(request.getPipelineType(), request.getSteps());
     pipelineDefinitionMapper.insert(params);
@@ -204,7 +204,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
           "retry_policy", step.getRetryPolicy() != null ? step.getRetryPolicy() : "NONE");
       stepParams.put(
           "retry_max_count", step.getRetryMaxCount() != null ? step.getRetryMaxCount() : 0);
-      stepParams.put(KEY_ENABLED, step.getEnabled() != null ? step.getEnabled() : true);
+      stepParams.put(KEY_ENABLED, step.getEnabled() == null || step.getEnabled());
       pipelineStepDefinitionMapper.insert(stepParams);
     }
   }

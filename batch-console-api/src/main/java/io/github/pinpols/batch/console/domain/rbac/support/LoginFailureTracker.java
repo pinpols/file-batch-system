@@ -96,7 +96,7 @@ public class LoginFailureTracker {
   }
 
   private long windowMillis() {
-    return (long) properties.getFailWindowMinutes() * 60_000L;
+    return properties.getFailWindowMinutes() * 60_000L;
   }
 
   private static String normalize(String raw) {

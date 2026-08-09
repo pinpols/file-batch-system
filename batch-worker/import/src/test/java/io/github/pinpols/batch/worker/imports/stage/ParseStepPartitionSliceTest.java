@@ -85,7 +85,7 @@ class ParseStepPartitionSliceTest {
   // ── 切分场景 ──────────────────────────────────────────────────────────────
 
   @Test
-  void shouldSliceWithoutOverlapAcrossPartitions() throws Exception {
+  void shouldSliceWithoutOverlapAcrossPartitions() {
     String json = buildJsonArray(9);
 
     // 跑 3 个 partition,各自捕获 NDJSON 行集合

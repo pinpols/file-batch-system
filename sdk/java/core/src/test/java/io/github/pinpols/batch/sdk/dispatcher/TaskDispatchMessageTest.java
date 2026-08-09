@@ -103,7 +103,7 @@ class TaskDispatchMessageTest {
   }
 
   @Test
-  void schemaVersionRejectedWhenMalformedLeadingNonAlnum() throws Exception {
+  void schemaVersionRejectedWhenMalformedLeadingNonAlnum() {
     // P1:首字符非字母数字的畸形 schemaVersion(前导空格 / 标点 / BOM)不能回退 v1 accept。
     // 否则 " v3" 会被本 SDK 按 v1 假设吃掉,违反 fixture 18 sdkMustNot "process v3 under v1"。
     // 用 record 构造直接锁 resolvedMajor(避免 Jackson 对畸形值的 trim 干扰)。

@@ -101,7 +101,7 @@ public class ProcessStagingOrphanCleaner {
    * 分区名白名单:仅允许 {@code process_staging_p<8位日期>}。dropPartition 走 {@code ${}} DDL 拼接,虽然取值来自
    * listExpiredDailyPartitions(pg_class.relname,系统回显),仍在 DROP 前强制校验做纵深防御——防止后续有人改成把外部值喂进来。
    */
-  private static final Pattern PARTITION_NAME = Pattern.compile("^process_staging_p[0-9]{8}$");
+  private static final Pattern PARTITION_NAME = Pattern.compile("^process_staging_p\\d{8}$");
 
   /**
    * 分区维护:确保 {@code [今天, 今天+preCreateDays]} 的天级分区存在,并 DROP 早于 {@code 今天-retentionDays} 的过期日分区。

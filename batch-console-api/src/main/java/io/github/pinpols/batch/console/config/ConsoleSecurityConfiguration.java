@@ -93,7 +93,7 @@ public class ConsoleSecurityConfiguration {
   @Bean
   @SuppressWarnings({"java:S4502", "java:S3330"})
   public SecurityFilterChain consoleSecurityFilterChain(
-      HttpSecurity http, ConsoleSecurityFilterChainComponents components) throws Exception {
+      HttpSecurity http, ConsoleSecurityFilterChainComponents components) {
     ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
     ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
     MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();

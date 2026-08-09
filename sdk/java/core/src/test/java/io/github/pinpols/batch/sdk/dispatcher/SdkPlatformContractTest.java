@@ -87,7 +87,7 @@ class SdkPlatformContractTest {
   // ─── register body 契约 → WorkerHeartbeatDto 字段集 ──────────────────────────
 
   @Test
-  void registerBodyMatchesWorkerHeartbeatDtoSchema() throws IOException {
+  void registerBodyMatchesWorkerHeartbeatDtoSchema() {
     // 直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
     Map<String, Object> simulated = new HashMap<>();
     simulated.put("tenantId", "tx");

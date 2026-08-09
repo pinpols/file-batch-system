@@ -138,7 +138,7 @@ public class DefaultConsoleAlertRoutingApplicationService
     param.setGroupWaitSeconds(defaultInt(request.getGroupWaitSeconds(), 0));
     param.setGroupIntervalSeconds(defaultInt(request.getGroupIntervalSeconds(), 300));
     param.setRepeatIntervalSeconds(defaultInt(request.getRepeatIntervalSeconds(), 3600));
-    param.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+    param.setEnabled(request.getEnabled() == null || request.getEnabled());
     param.setDescription(request.getDescription());
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);

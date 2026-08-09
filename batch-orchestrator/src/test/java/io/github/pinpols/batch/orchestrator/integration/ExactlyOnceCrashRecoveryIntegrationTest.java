@@ -180,13 +180,12 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
         jobCode,
         "INST_" + suffix,
         "DEDUP_" + suffix);
-    Long taskId = jdbcTemplate.queryForObject("""
+    return jdbcTemplate.queryForObject("""
             INSERT INTO batch.job_task (
                 tenant_id, job_instance_id, task_type, task_seq, task_status, version
             ) VALUES (?, ?, 'EXECUTION', 1, 'RUNNING', 0)
             RETURNING id
             """, Long.class, TENANT, jobInstanceId);
-    return taskId;
   }
 
   private String taskStatus(long taskId) {

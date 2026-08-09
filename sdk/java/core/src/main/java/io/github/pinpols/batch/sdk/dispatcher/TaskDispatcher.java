@@ -598,8 +598,7 @@ public class TaskDispatcher {
    * <p>契约见 {@code docs/api/sdk-contract-fixtures/09-report-5xx-retry-backoff.json}:5xx 必须指数退避
    * (200/400/800ms),不能定长、不能无限重试、不能阻塞心跳调度。退避 sleep 被打断时抛出 {@link IOException} 停止重试。
    */
-  void reportWithRetry(Long taskId, String idemKey, Map<String, Object> body)
-      throws IOException, PlatformHttpException {
+  void reportWithRetry(Long taskId, String idemKey, Map<String, Object> body) throws IOException {
     int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
     long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
     int attempt = 0;

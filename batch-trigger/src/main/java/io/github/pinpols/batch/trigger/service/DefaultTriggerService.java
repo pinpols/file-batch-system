@@ -159,7 +159,7 @@ public class DefaultTriggerService implements TriggerService {
     // orchestrator 端消费触发实际 launch；最终一致性由 outbox + (tenant,request_id) 唯一约束保证。
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    LaunchResponse result = tx.execute(ignored -> {
+    return tx.execute(ignored -> {
       TriggerRequestEntity pendingRequest = EmptyChecks.isNotNull(requestFromPending)
           ? triggerRequestMapper.selectById(requestFromPending.getId())
           : triggerRequestMapper.selectByTenantAndRequestId(
@@ -218,7 +218,6 @@ public class DefaultTriggerService implements TriggerService {
       }
       return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
     });
-    return result;
   }
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
