@@ -40,7 +40,7 @@ File Batch System (BFS) is a **self-hosted distributed batch platform** for reli
 - **Graceful worker draining**: ONLINE → DRAINING → DECOMMISSIONED lifecycle
 - **Compensation & retry**: built-in retry policies (FIXED / EXPONENTIAL / NONE) and approval-based compensation
 - **File error tracking**: per-row parsing/validation/load failures, with skip and audit support
-- **Tenant-hosted SDK**: Java / Python and other SDKs let tenants register workers in their own environments (ADR-035)
+- **Tenant-hosted SDK**: SDKs in five languages — Java / Python / Go / TypeScript / Rust — let tenants register workers in their own environments (ADR-035, [see below](#tenant-hosted-sdk-adr-035))
 
 ## Overall architecture
 
@@ -68,6 +68,24 @@ The four file pipelines:
 
 For the detailed state chain and key constraints see [Architecture constraints](#architecture-constraints); for end-to-end flow diagrams see [docs/architecture/system-flow-overview.md](docs/architecture/system-flow-overview.md).
 
+## Tenant-hosted SDK (ADR-035)
+
+Tenants can run their business handlers in **their own process / data center / K8s / VM**, talking to the platform only over **HTTP (`/internal/*`) + Kafka** — no platform database access, no platform code loaded, and **zero data leaves the tenant domain**. The platform is only the scheduling plane: `register → dispatch → claim → execute → report`.
+
+| Language | Coordinates / package | Notes |
+|---|---|---|
+| Java | `io.github.pinpols.batch:batch-worker-sdk` | Zero-Spring core; optional `-spring-boot-starter` adapter (Boot 4.x) |
+| Python | `batch-worker-sdk` (import `batch_worker_sdk`) | 3.12+, async-only, pydantic v2 / httpx / aiokafka |
+| Go / TypeScript / Rust | see [sdk/README.md](sdk/README.md) | Cross-language verified against the same contract fixtures as Java/Python |
+
+Getting started and operations:
+
+- [5-minute quickstart](docs/sdk/quickstart.md)
+- [Onboarding journey from 0 to production](docs/sdk/onboarding-journey.md)
+- [Per-tenant worker onboarding (API key / Kafka SASL / task-type registration)](docs/runbook/per-tenant-worker-onboarding.md)
+- [Wire protocol (authoritative, HTTP + Kafka)](docs/sdk/wire-protocol.md)
+- [SDK testkit](sdk/java/testkit/README.md): `FakeBatchPlatform` + `@BatchWorkerTest` for tenant handler tests
+
 ## Module structure
 
 | Module | Port | Responsibility |
@@ -88,6 +106,7 @@ For the detailed state chain and key constraints see [Architecture constraints](
 | `batch-e2e-tests` | — | End-to-end integration tests (embedded Orchestrator + Worker) |
 | `security-scan` | — | Local/CI security-scan orchestration tooling (standalone, not in the root reactor) |
 | `batch-worker-sdk` (Python) | — | Python SDK (ADR-035 cross-language peer implementation). Python 3.12+, async-only, pydantic v2 / httpx / aiokafka. Standalone toolchain (pip), not in the Maven reactor; cross-SDK contract drift is guarded by the parity lane. See [`sdk/python/README.md`](sdk/python/README.md) |
+| `batch-worker-sdk` (Go / TypeScript / Rust) | — | Cross-language SDKs as standalone toolchains (ADR-035 peers), sharing contract fixtures with Java/Python; language list, install and usage in [sdk/README.md](sdk/README.md) |
 
 > The platform runtime is a fixed set of 10 logical modules, from `batch-common` to `batch-console-api` (including `batch-worker-atomic`). `batch-worker` is an aggregator module with 6 sub-modules: `core` / `import` / `export` / `process` / `dispatch` / `atomic` (the `batch-worker-*` rows above). The root Maven reactor currently has 9 module paths: the runtime modules + `sdk/java/{core,spring,testkit}` + `batch-e2e-tests`; the Go / Python / Rust / TypeScript SDKs, `load-tests`, and `security-scan` are standalone toolchains or separate reactors. See `CLAUDE.md §模块` and [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md) before changing the layout.
 
@@ -305,6 +324,7 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 |---|---|
 | [Design docs index](docs/design/README.md) | Entry point for system design docs: data model, flows, interfaces, and topic designs |
 | [Project structure](docs/architecture/project-structure.md) | Current Maven reactor, platform runtime modules, SDK and docs/scripts boundaries |
+| [SDK home](sdk/README.md) | Tenant-hosted Worker SDK usage guide (language choice / install / run / test / troubleshooting), with the [docs/sdk index](docs/sdk/README.md) |
 | [Architecture docs index](docs/architecture/README.md) | System flows, module communication, extensibility assessments, and ADR decisions (recommended reading order) |
 | [AGENTS.md](AGENTS.md) | Engineering baseline constraints for AI-assisted development |
 | [LICENSE](LICENSE) | Apache-2.0 license |

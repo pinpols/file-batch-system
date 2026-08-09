@@ -40,7 +40,7 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 - **Worker 优雅排空**：ONLINE → DRAINING → DECOMMISSIONED 生命周期管理
 - **补偿与重试**：内置重试策略（FIXED / EXPONENTIAL / NONE）和审批补偿链路
 - **文件错误追踪**：逐行记录解析/校验/加载失败，支持跳过与审计
-- **租户自托管 SDK**：Java / Python 等语言 SDK，租户可在自有环境注册 Worker（ADR-035）
+- **租户自托管 SDK**：Java / Python / Go / TypeScript / Rust 五种语言 SDK，租户可在自有环境注册 Worker（ADR-035，[详见下方](#租户自托管-sdkadr-035)）
 
 ## 整体架构
 
@@ -68,6 +68,24 @@ flowchart LR
 
 更详细的状态主链与关键约束见[架构约束](#架构约束)；端到端流程图见 [docs/architecture/system-flow-overview.md](docs/architecture/system-flow-overview.md)。
 
+## 租户自托管 SDK（ADR-035）
+
+租户可以在**自己的进程 / 机房 / K8s / VM** 里运行业务 handler，只通过 **HTTP（`/internal/*`）+ Kafka** 与平台通信——不连平台数据库、不加载平台代码、**数据 0 出域**。平台只承担调度面：`register → 派单 → claim → execute → report`。
+
+| 语言 | 坐标 / 包名 | 说明 |
+|---|---|---|
+| Java | `io.github.pinpols.batch:batch-worker-sdk` | 零 Spring 依赖的 core；可选 `-spring-boot-starter` 适配层（Boot 4.x） |
+| Python | `batch-worker-sdk`（import `batch_worker_sdk`） | 3.12+，async-only，pydantic v2 / httpx / aiokafka |
+| Go / TypeScript / Rust | 见 [sdk/README.md](sdk/README.md) | 与 Java/Python 共用同一套契约 fixture 跨语言验证 |
+
+接入与运维：
+
+- [5 分钟快速开始](docs/sdk/quickstart.md)
+- [从 0 到生产的接入旅程](docs/sdk/onboarding-journey.md)
+- [租户 worker 上线运维（API key / Kafka SASL / task type 注册）](docs/runbook/per-tenant-worker-onboarding.md)
+- [通信协议权威定义（HTTP + Kafka）](docs/sdk/wire-protocol.md)
+- [SDK 测试套件](sdk/java/testkit/README.md)：`FakeBatchPlatform` + `@BatchWorkerTest`，租户写 handler 测试用
+
 ## 模块结构
 
 | 模块 | 端口 | 职责 |
@@ -88,6 +106,7 @@ flowchart LR
 | `batch-e2e-tests` | — | 端到端集成测试(内嵌 Orchestrator + Worker) |
 | `security-scan` | — | 本地/CI 安全扫描编排工具(独立模块,不进 root reactor) |
 | `batch-worker-sdk`(Python) | — | Python SDK(ADR-035 跨语言对等实现)。Python 3.12+ async-only,pydantic v2 / httpx / aiokafka。**独立工具链**(pip),不进 Maven reactor;跨 SDK contract drift 由 Lane P guard。详见 [`sdk/python/README.md`](sdk/python/README.md) |
+| `batch-worker-sdk`（Go / TypeScript / Rust） | — | 独立工具链的跨语言 SDK（ADR-035 对等实现），与 Java/Python 共享契约 fixture；语言清单、安装与使用见 [sdk/README.md](sdk/README.md) |
 
 > 平台运行时固定 10 个逻辑模块：从 `batch-common` 到 `batch-console-api`（含 `batch-worker-atomic`）。其中 `batch-worker` 是聚合（aggregator）模块，下挂 6 个子模块：`core` / `import` / `export` / `process` / `dispatch` / `atomic`（对应上表 `batch-worker-*`）。根 Maven reactor 当前有 9 个 module path：运行时模块 + `sdk/java/{core,spring,testkit}` + `batch-e2e-tests`；Go / Python / Rust / TypeScript SDK、`load-tests`、`security-scan` 是独立工具链或独立 reactor。调整范围参考 `CLAUDE.md §模块` 与 [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md)。
 
@@ -305,6 +324,7 @@ DB (job_task: READY)
 |------|------|
 | [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
 | [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK 与文档/脚本目录边界 |
+| [SDK 总入口](sdk/README.md) | 租户自托管 Worker SDK 使用说明书（选语言 / 安装 / 跑 / 测 / 排障），配套 [docs/sdk/README.md](docs/sdk/README.md) 文档索引 |
 | [架构文档索引](docs/architecture/README.md) | 系统流程、模块通信、扩展性评估与 ADR 决策索引（含推荐阅读顺序） |
 | [AGENTS.md](AGENTS.md) | 工程基线约束，供 AI 辅助开发时参考 |
 | [LICENSE](LICENSE) | Apache-2.0 许可声明 |
