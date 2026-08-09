@@ -28,9 +28,9 @@ v6 周期（57 项硬化条目）**已实质收敛**。2026-06-15 重新核实�
 | **V6-DBA-P1-1/P1-2** | `job_instance` / `workflow_run` 冗余索引 DROP | 🟡 加新已完成，DROP 待取证 | 需生产 `pg_stat_user_indexes.idx_scan` 数据证明旧索引零命中后，发 V14x `DROP INDEX`。流程见 [`runbook/index-consolidation-2026-05.md`](../runbook/index-consolidation-2026-05.md)（V142/V143 已加新索引 + 回退 UNIQUE，无功能缺口，纯瘦身）|
 | **V6-DBA-P1-4** | `ArchiveSchemaDriftCheck` 列**类型/nullability**比对 | ✅ 完成 | `ArchiveSchemaDriftCheck.checkColumnTypesOnStartup()` 已比对 `data_type`、字符长度、数值精度/scale 和限制性 `is_nullable`；`ArchiveSchemaDriftCheckIntegrationTest` 覆盖类型漂移。|
 | **V6-D-5** | Worker 4 模块单测密度补齐 | 待办（低优先）| 各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 单测；非 blocker，趁改这些类时顺带补 |
-| **V7-TEST-1** | `batch.datasource.business.routing.*` boot 级开关接线测试 | 待办（低优先）| 组件/RLS IT（`BusinessMultiShardRouting*` / `RlsTenantIsolation*`）已有；补 `ApplicationContextRunner` 接线测试（enabled=true/false + placement-source=CONFIG/TABLE）|
-| **V7-TEST-2** | console security rate-limit 阈值 yml 绑定测试 | 待办（低优先）| `ConsoleRateLimitFilterTest` 已有行为覆盖；补 yml 绑定断言（`batch.console.security.rate-limit.*`，同 `RateLimitPropertiesYamlBindingTest` 思路）|
-| **V7-TEST-3** | `batch.shedlock.provider` jdbc 切换测试 | 待办（低优先）| Redis 故障路径已有 `RedisDownToxicIT`；补 jdbc provider 装配/切换用例（全停→切→全起语义）|
+| **V7-TEST-1** | `batch.datasource.business.routing.*` boot 级集成测试 | 待办（低优先）| 组件/RLS IT（`BusinessMultiShardRouting*` / `RlsTenantIsolation*`）已有；补 Testcontainers 起完整 worker 的 enabled=true/false + placement-source=CONFIG/TABLE 开关 IT |
+| **V7-TEST-2** | console security rate-limit 真实 HTTP 限流 IT | 待办（低优先）| `ConsoleRateLimitFilterTest` 已有行为覆盖；补真实 HTTP 请求验证 429（expensive-op / file-op 各一条）|
+| **V7-TEST-3** | `batch.shedlock.provider` jdbc 切换集成测试 | 待办（低优先）| Redis 故障路径已有 `RedisDownToxicIT`；补 jdbc provider 装配/切换 IT（全停→切→全起，验证无重复触发）|
 
 ### ❌ 不做（已论证，仅存档）
 
