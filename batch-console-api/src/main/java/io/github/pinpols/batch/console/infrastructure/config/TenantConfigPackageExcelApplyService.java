@@ -10,6 +10,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
@@ -127,14 +128,14 @@ public class TenantConfigPackageExcelApplyService {
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       QueueRow queue = ResourceQueueExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
-      if (!issues.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(issues)) {
         throw invalidParsedRow(RESOURCE_QUEUE_SHEET, issues);
       }
       Map<String, Object> existing =
           resourceQueueMapper.selectByUniqueKey(ctx.tenantId(), queue.queueCode());
       resourceQueueMapper.upsertResourceQueue(
           ResourceQueueExcelRowParser.toUpsertParam(queue, ctx.operatorId()));
-      if (existing == null || existing.isEmpty()) {
+      if (EmptyChecks.isEmpty(existing)) {
         inserted++;
       } else {
         updated++;
@@ -150,7 +151,7 @@ public class TenantConfigPackageExcelApplyService {
       List<String> issues = new ArrayList<>();
       CalendarRow calendar =
           BusinessCalendarExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
-      if (!issues.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(issues)) {
         throw invalidParsedRow(BUSINESS_CALENDAR_SHEET, issues);
       }
       Map<String, Object> existing = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
@@ -158,7 +159,7 @@ public class TenantConfigPackageExcelApplyService {
       businessCalendarMapper.upsertBusinessCalendar(
           BusinessCalendarExcelRowParser.toUpsertParam(calendar, safeOp(ctx.operatorId())));
       applyCalendarHolidays(ctx.tenantId(), calendar);
-      if (existing == null || existing.isEmpty()) {
+      if (EmptyChecks.isEmpty(existing)) {
         inserted++;
       } else {
         updated++;
@@ -173,13 +174,13 @@ public class TenantConfigPackageExcelApplyService {
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       WindowRow window = BatchWindowExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
-      if (!issues.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(issues)) {
         throw invalidParsedRow(BATCH_WINDOW_SHEET, issues);
       }
       Map<String, Object> existing =
           batchWindowMapper.selectByUniqueKey(ctx.tenantId(), window.windowCode());
       batchWindowMapper.upsertBatchWindow(BatchWindowExcelRowParser.toUpsertParam(window));
-      if (existing == null || existing.isEmpty()) {
+      if (EmptyChecks.isEmpty(existing)) {
         inserted++;
       } else {
         updated++;
@@ -196,7 +197,7 @@ public class TenantConfigPackageExcelApplyService {
     }
     Long calendarId = ((Number) saved.get(KEY_ID)).longValue();
     calendarHolidayMapper.deleteByCalendarId(calendarId);
-    if (calendar.holidays() == null || calendar.holidays().isEmpty()) {
+    if (EmptyChecks.isEmpty(calendar.holidays())) {
       return;
     }
     List<Map<String, Object>> params = new ArrayList<>();
@@ -311,7 +312,7 @@ public class TenantConfigPackageExcelApplyService {
       param.setCreatedBy(safeOp(ctx.operatorId()));
       param.setUpdatedBy(safeOp(ctx.operatorId()));
       fileChannelConfigMapper.upsertFileChannelConfig(param);
-      if (existing == null || existing.isEmpty()) {
+      if (EmptyChecks.isEmpty(existing)) {
         inserted++;
       } else {
         updated++;
@@ -326,7 +327,7 @@ public class TenantConfigPackageExcelApplyService {
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       TemplateRow template = FileTemplateExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
-      if (!issues.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(issues)) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
             "error.common.invalid_argument_detail",
@@ -336,7 +337,7 @@ public class TenantConfigPackageExcelApplyService {
           ctx.tenantId(), template.templateCode(), template.version());
       fileTemplateConfigMapper.upsertFileTemplateConfig(
           FileTemplateExcelRowParser.toUpsertParam(ctx.tenantId(), template, ctx.operatorId()));
-      if (existing == null || existing.isEmpty()) {
+      if (EmptyChecks.isEmpty(existing)) {
         inserted++;
       } else {
         updated++;
@@ -360,7 +361,7 @@ public class TenantConfigPackageExcelApplyService {
       Map<String, Object> existing =
           pipelineDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode, version);
       Long pipelineId;
-      if (existing == null || existing.isEmpty()) {
+      if (EmptyChecks.isEmpty(existing)) {
         Map<String, Object> params = buildPipelineInsertParams(row, ctx);
         pipelineDefinitionMapper.insert(params);
         pipelineId = ((Number) params.get(KEY_ID)).longValue();
@@ -373,7 +374,7 @@ public class TenantConfigPackageExcelApplyService {
       pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(pipelineId);
       List<Map<String, String>> stepsForPipeline =
           stepsByKey.getOrDefault(jobCode + KEY_SEP_COLON + version, List.of());
-      if (!stepsForPipeline.isEmpty()) {
+      if (EmptyChecks.isNotEmpty(stepsForPipeline)) {
         // Excel 导入大批量场景:同一 pipeline 平均 5-10 step,百级 pipeline 导入时
         // 单插循环放大 5-10x;批量插入折成 1 次往返。
         List<Map<String, Object>> batchStepRows = new ArrayList<>(stepsForPipeline.size());
