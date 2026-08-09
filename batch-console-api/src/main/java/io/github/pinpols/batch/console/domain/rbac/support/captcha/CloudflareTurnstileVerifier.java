@@ -62,6 +62,9 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
       JsonNode errorCodes = root.path("error-codes");
       return CaptchaResult.fail("turnstile rejected: " + errorCodes.toString());
     } catch (Exception ex) {
+      if (ex instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       // 净化:只打异常类型/消息,绝不打 token(用户可控)或 secret。
       log.warn(
           "captcha turnstile verify error: {} ip={}",
