@@ -237,3 +237,47 @@ switches:
       - BATCH_SENSOR_ENABLED
     composeRequired: true
     helmRequired: true
+
+  # ── 以下为文档索引补充的公共开关；尚未显式透传 docker-compose / Helm（composeRequired/helmRequired=false），
+  #    直跑 / env 注入即生效。需要容器化一等入口时再同步 compose 与 Helm 并翻 true。──
+  - key: batch.shedlock.provider
+    module: all (@SchedulerLock)
+    env:
+      - BATCH_SHEDLOCK_PROVIDER
+    composeRequired: false
+    helmRequired: false
+
+  - key: batch.security.bypass-mode
+    module: all
+    env:
+      - BATCH_SECURITY_BYPASS_MODE
+    composeRequired: false
+    helmRequired: false
+
+  - key: batch.storage.encryption.decorator-enabled
+    module: all
+    env:
+      - BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED
+    composeRequired: false
+    helmRequired: false
+
+  - key: batch.storage.startup-check.enabled
+    module: all
+    env:
+      - BATCH_STORAGE_STARTUP_CHECK_ENABLED
+    composeRequired: false
+    helmRequired: false
+
+  - key: batch.storage.s3.auto-create-bucket
+    module: all
+    env:
+      - BATCH_S3_AUTO_CREATE_BUCKET
+    composeRequired: false
+    helmRequired: false
+
+  - key: batch.console.captcha.provider
+    module: console-api
+    env:
+      - BATCH_CONSOLE_CAPTCHA_PROVIDER
+    composeRequired: false
+    helmRequired: false
