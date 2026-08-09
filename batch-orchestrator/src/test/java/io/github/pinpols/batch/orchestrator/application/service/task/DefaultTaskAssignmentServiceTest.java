@@ -406,8 +406,7 @@ class DefaultTaskAssignmentServiceTest {
         new TaskAssignmentService.LeaseRenewCommand("ta", null, "w1", "inv"),
         new TaskAssignmentService.LeaseRenewCommand("ta", 4L, "", "inv")));
 
-    assertThat(results).hasSize(4);
-    assertThat(results).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
+    assertThat(results).hasSize(4).allMatch(r -> !r.leaseRenewed() && !r.cancelRequested());
     verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
   }
 

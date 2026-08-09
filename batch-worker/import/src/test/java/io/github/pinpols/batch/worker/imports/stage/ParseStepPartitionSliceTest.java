@@ -99,8 +99,9 @@ class ParseStepPartitionSliceTest {
     assertThat(partition3).hasSize(3);
 
     // 两两不交(零重叠)
-    assertThat(partition1).doesNotContainAnyElementsOf(partition2);
-    assertThat(partition1).doesNotContainAnyElementsOf(partition3);
+    assertThat(partition1)
+        .doesNotContainAnyElementsOf(partition2)
+        .doesNotContainAnyElementsOf(partition3);
     assertThat(partition2).doesNotContainAnyElementsOf(partition3);
 
     // 并集 = 完整原始集(全覆盖)

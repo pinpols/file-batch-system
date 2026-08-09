@@ -48,14 +48,14 @@ class JobMapResponseJacksonTest {
     String json = mapper.writeValueAsString(ConsoleBatchWindowResponse.from(row));
     Map<String, Object> back = mapper.readValue(json, new TypeReference<>() {});
 
-    assertThat(back).containsEntry("window_code", "nightly");
-    assertThat(back).containsEntry("tenant_id", "ta");
-    assertThat(back).containsEntry("start_time", "02:00");
-    assertThat(back).containsEntry("end_strategy", "FINISH_RUNNING");
-    assertThat(back).containsEntry("allow_cross_day", false);
+    assertThat(back)
+        .containsEntry("window_code", "nightly")
+        .containsEntry("tenant_id", "ta")
+        .containsEntry("start_time", "02:00")
+        .containsEntry("end_strategy", "FINISH_RUNNING")
+        .containsEntry("allow_cross_day", false);
     // 绝不能出现 camelCase 变体(FE 历史消费 snake_case)。
-    assertThat(back).doesNotContainKey("windowCode");
-    assertThat(back).doesNotContainKey("tenantId");
+    assertThat(back).doesNotContainKey("windowCode").doesNotContainKey("tenantId");
     // MyBatis map 行省略 null 列 —— row 未含的列(description/out_of_window_action/created_at
     // /updated_at)必须省略键,不能序列化成显式 null(键集漂移)。
     assertThat(back)

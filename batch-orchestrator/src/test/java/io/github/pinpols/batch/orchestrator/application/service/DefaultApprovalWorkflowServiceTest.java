@@ -110,8 +110,7 @@ class DefaultApprovalWorkflowServiceTest {
         .approvalReason("test approval")
         .build());
 
-    assertThat(approvalNo).isNotBlank();
-    assertThat(approvalNo).startsWith("apr");
+    assertThat(approvalNo).isNotBlank().startsWith("apr");
     verify(approvalCommandMapper).insert(any());
   }
 

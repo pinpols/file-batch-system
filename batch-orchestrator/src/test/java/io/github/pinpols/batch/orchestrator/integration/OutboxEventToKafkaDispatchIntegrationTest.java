@@ -94,8 +94,8 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
           .untilAsserted(() -> {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
             boolean found = false;
-            for (ConsumerRecord<String, String> record : records) {
-              if (dispatchKafkaKey.equals(record.key())) {
+            for (ConsumerRecord<String, String> consumerRecord : records) {
+              if (dispatchKafkaKey.equals(consumerRecord.key())) {
                 found = true;
                 break;
               }

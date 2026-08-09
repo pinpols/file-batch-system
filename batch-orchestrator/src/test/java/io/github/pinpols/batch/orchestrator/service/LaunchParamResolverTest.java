@@ -269,8 +269,7 @@ class LaunchParamResolverTest {
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
 
-    assertThat(merged).containsEntry("region", "cn");
-    assertThat(merged).doesNotContainKey("batchSize");
+    assertThat(merged).containsEntry("region", "cn").doesNotContainKey("batchSize");
   }
 
   @Test

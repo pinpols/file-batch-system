@@ -589,12 +589,12 @@ public class ConfigPackageExcelValidator {
     // （防止首次部署没跑 worker 就导致所有上传被拒）
     Map<String, Set<String>> registryByModule = new HashMap<>();
     Set<String> seen = new LinkedHashSet<>();
-    return validateRows(STEP_SHEET, rows, (row, rowNo, ri) -> {
-      validateStepRow(row, pipelineKeys, pipelineKeyToType, registryByModule, seen, ri);
-      // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
-      // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
-      // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
-    });
+    // 业务表/列精确校验的"硬拦截"不放在 Validator：这里仅校验 Excel 格式、枚举与 registry。
+    return validateRows(
+        STEP_SHEET,
+        rows,
+        (row, rowNo, ri) ->
+            validateStepRow(row, pipelineKeys, pipelineKeyToType, registryByModule, seen, ri));
   }
 
   private static Map<String, String> buildPipelineKeyToType(

@@ -80,10 +80,10 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
       this.lastRecordKey = key;
       this.lastTtl = ttlMillis;
-      map.put(key, record);
+      map.put(key, entity);
       placeholders.remove(key);
     }
 
@@ -261,7 +261,7 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
       // no-op: this fake store only exercises acquire failure handling.
     }
 
@@ -287,7 +287,7 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
       throw new IllegalStateException("record backend down");
     }
 

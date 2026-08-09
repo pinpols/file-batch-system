@@ -42,7 +42,7 @@ class KafkaTaskConsumerCommitDecisionTest {
     Consumer<String, byte[]> consumer = mock(Consumer.class);
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      kafka.handleRecordAndMaybeCommit(record(7, message("tx")));
+      kafka.handleRecordAndMaybeCommit(consumerRecord(7, message("tx")));
     }
 
     verify(consumer)
@@ -61,7 +61,7 @@ class KafkaTaskConsumerCommitDecisionTest {
     boolean keepGoing;
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      keepGoing = kafka.handleRecordAndMaybeCommit(record(11, message("tx")));
+      keepGoing = kafka.handleRecordAndMaybeCommit(consumerRecord(11, message("tx")));
     }
 
     TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
@@ -86,9 +86,9 @@ class KafkaTaskConsumerCommitDecisionTest {
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
       kafka.processPolledRecords(List.of(
-          record(deferred.topic(), 5, message("tx")),
-          record(deferred.topic(), 6, message("tx")),
-          record(healthy.topic(), 7, message("tx"))));
+          consumerRecord(deferred.topic(), 5, message("tx")),
+          consumerRecord(deferred.topic(), 6, message("tx")),
+          consumerRecord(healthy.topic(), 7, message("tx"))));
     }
 
     // t0 的 offset 6 被留给 seek(5)后的重投;同一 poll 中的 t1 仍正常处理并提交。
@@ -114,9 +114,9 @@ class KafkaTaskConsumerCommitDecisionTest {
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
       kafka.processPolledRecords(List.of(
-          record(failed.topic(), 5, message("tx")),
-          record(failed.topic(), 6, message("tx")),
-          record(healthy.topic(), 7, message("tx"))));
+          consumerRecord(failed.topic(), 5, message("tx")),
+          consumerRecord(failed.topic(), 6, message("tx")),
+          consumerRecord(healthy.topic(), 7, message("tx"))));
     }
 
     verify(dispatcher, times(2)).onMessage(any());
@@ -161,7 +161,7 @@ class KafkaTaskConsumerCommitDecisionTest {
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
       withholdKeepsGoing = kafka.handleRecordAndMaybeCommit(
           new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
-      laterKeepsGoing = kafka.handleRecordAndMaybeCommit(record(6, message("tx")));
+      laterKeepsGoing = kafka.handleRecordAndMaybeCommit(consumerRecord(6, message("tx")));
     }
 
     TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
@@ -174,12 +174,12 @@ class KafkaTaskConsumerCommitDecisionTest {
     verify(consumer, never()).pause(Set.of(tp));
   }
 
-  private static ConsumerRecord<String, byte[]> record(long offset, TaskDispatchMessage msg)
+  private static ConsumerRecord<String, byte[]> consumerRecord(long offset, TaskDispatchMessage msg)
       throws Exception {
-    return record("batch.task.dispatch.tx.t0", offset, msg);
+    return consumerRecord("batch.task.dispatch.tx.t0", offset, msg);
   }
 
-  private static ConsumerRecord<String, byte[]> record(
+  private static ConsumerRecord<String, byte[]> consumerRecord(
       String topic, long offset, TaskDispatchMessage msg) throws Exception {
     ObjectMapper mapper = new ObjectMapper();
     return new ConsumerRecord<>(topic, 0, offset, "k", mapper.writeValueAsBytes(msg));

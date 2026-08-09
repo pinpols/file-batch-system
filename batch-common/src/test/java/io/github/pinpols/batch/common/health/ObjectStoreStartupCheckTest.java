@@ -150,7 +150,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
-  void shouldNotThrowWhenCleanupFails(@TempDir Path root) {
+  void shouldNotThrowWhenCleanupFails() {
     BatchObjectStore store = mock(BatchObjectStore.class);
     when(store.exists(anyString(), anyString())).thenReturn(true);
     when(store.statSize(anyString(), anyString())).thenReturn(1L);

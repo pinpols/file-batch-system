@@ -416,10 +416,8 @@ public class GenerateStep implements ExportStageStep {
                   PosixFilePermission.OWNER_WRITE,
                   PosixFilePermission.OWNER_EXECUTE)
               : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-    } catch (UnsupportedOperationException ignored) {
+    } catch (UnsupportedOperationException | IOException ignored) {
       // Windows ACLs are managed by the host; the file is still created in the private staging dir.
-    } catch (IOException ignored) {
-      // Permission hardening must not make export unavailable on filesystems without POSIX attrs.
     }
   }
 

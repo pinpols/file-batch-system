@@ -21,7 +21,7 @@ import org.apache.ibatis.annotations.Param;
 public interface ResultVersionMapper {
 
   /** 新增一行 result_version。返回写入行数。 */
-  int insert(ResultVersionEntity record);
+  int insert(ResultVersionEntity entity);
 
   /**
    * 对同一 (tenant_id, business_key) 的版本写入加事务级锁。

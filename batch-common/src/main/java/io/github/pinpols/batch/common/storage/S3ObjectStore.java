@@ -13,12 +13,10 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
-import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
-import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -120,12 +118,11 @@ public class S3ObjectStore implements BatchObjectStore {
       try {
         s3Client.deleteObjects(DeleteObjectsRequest.builder()
             .bucket(bucket)
-            .delete(Delete.builder()
+            .delete(delete -> delete
                 .objects(chunk.stream()
                     .map(k -> ObjectIdentifier.builder().key(k).build())
                     .toList())
-                .quiet(true)
-                .build())
+                .quiet(true))
             .build());
       } catch (S3Exception ex) {
         // 部分 S3 兼容后端(个别 SeaweedFS/RustFS 版本)不实现 DeleteObjects(501/NotImplemented):
@@ -228,10 +225,9 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public String presign(String bucket, String key, Duration ttl) {
     try {
-      GetObjectRequest get = GetObjectRequest.builder().bucket(bucket).key(key).build();
       GetObjectPresignRequest req = GetObjectPresignRequest.builder()
           .signatureDuration(ttl)
-          .getObjectRequest(get)
+          .getObjectRequest(get -> get.bucket(bucket).key(key))
           .build();
       return presigner.presignGetObject(req).url().toString();
     } catch (Exception ex) {
@@ -247,13 +243,14 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public String presignPut(String bucket, String key, Duration ttl, String contentType) {
     try {
-      PutObjectRequest.Builder put = PutObjectRequest.builder().bucket(bucket).key(key);
-      if (contentType != null && !contentType.isBlank()) {
-        put.contentType(contentType);
-      }
       PutObjectPresignRequest req = PutObjectPresignRequest.builder()
           .signatureDuration(ttl)
-          .putObjectRequest(put.build())
+          .putObjectRequest(put -> {
+            put.bucket(bucket).key(key);
+            if (contentType != null && !contentType.isBlank()) {
+              put.contentType(contentType);
+            }
+          })
           .build();
       return presigner.presignPutObject(req).url().toString();
     } catch (Exception ex) {
@@ -308,8 +305,7 @@ public class S3ObjectStore implements BatchObjectStore {
           .bucket(bucket)
           .key(key)
           .uploadId(uploadId)
-          .multipartUpload(
-              CompletedMultipartUpload.builder().parts(completedParts).build())
+          .multipartUpload(upload -> upload.parts(completedParts))
           .build());
     } catch (Exception ex) {
       abortMultipart(bucket, key, uploadId);

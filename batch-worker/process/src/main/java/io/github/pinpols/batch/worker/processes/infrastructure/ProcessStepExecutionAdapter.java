@@ -80,7 +80,7 @@ public class ProcessStepExecutionAdapter
     Object parsed = objectMapper.readValue(rawPayload, Object.class);
     if (parsed instanceof Map<?, ?> payloadMap) {
       Map<String, Object> payloadAttributes = (Map<String, Object>) payloadMap;
-      payloadAttributes.forEach((key, value) -> attributes.putIfAbsent(key, value));
+      payloadAttributes.forEach(attributes::putIfAbsent);
       Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
       if (EmptyChecks.isNotNull(processImplCode)) {
         attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));

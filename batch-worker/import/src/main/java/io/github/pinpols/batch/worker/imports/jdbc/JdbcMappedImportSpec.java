@@ -293,7 +293,7 @@ public record JdbcMappedImportSpec(
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       if (c == '_' || c == '-' || c == ' ') {
-        if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '_') {
+        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '_') {
           sb.append('_');
         }
         continue;
@@ -302,9 +302,7 @@ public record JdbcMappedImportSpec(
         boolean prevLowerOrDigit =
             i > 0 && (Character.isLowerCase(s.charAt(i - 1)) || Character.isDigit(s.charAt(i - 1)));
         boolean nextLower = i + 1 < s.length() && Character.isLowerCase(s.charAt(i + 1));
-        if (sb.length() > 0
-            && sb.charAt(sb.length() - 1) != '_'
-            && (prevLowerOrDigit || nextLower)) {
+        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '_' && (prevLowerOrDigit || nextLower)) {
           sb.append('_');
         }
       }

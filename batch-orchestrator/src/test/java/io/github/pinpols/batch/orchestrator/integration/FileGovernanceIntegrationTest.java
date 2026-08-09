@@ -206,8 +206,9 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         "select file_status, metadata_json->>'cleanupReason' as cleanup_reason from"
             + " batch.file_record where id = ?",
         fileId);
-    assertThat(fileRecord).containsEntry("file_status", "DELETED");
-    assertThat(fileRecord).containsEntry("cleanup_reason", "ARCHIVE_RETENTION_EXPIRED");
+    assertThat(fileRecord)
+        .containsEntry("file_status", "DELETED")
+        .containsEntry("cleanup_reason", "ARCHIVE_RETENTION_EXPIRED");
 
     Integer auditCount = jdbcTemplate.queryForObject("""
             select count(1)::int
@@ -239,9 +240,10 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             """, objectName);
     assertThat(reconciled)
         .containsEntry("file_name", objectName.substring(objectName.lastIndexOf('/') + 1));
-    assertThat(reconciled).containsEntry("file_status", "RECEIVED");
-    assertThat(reconciled).containsEntry("reconciled_flag", "true");
-    assertThat(reconciled).containsEntry("storage_path", objectName);
+    assertThat(reconciled)
+        .containsEntry("file_status", "RECEIVED")
+        .containsEntry("reconciled_flag", "true")
+        .containsEntry("storage_path", objectName);
 
     Integer auditCount = jdbcTemplate.queryForObject("""
             select count(1)::int
@@ -301,8 +303,9 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             """, TENANT_ID, groupCode);
     assertThat(rows).hasSize(2);
     assertThat(rows).allSatisfy(row -> {
-      assertThat(row).containsEntry("arrival_state", "TRIGGERED");
-      assertThat(row).containsEntry("arrival_reason", "ALL_FILES_ARRIVED");
+      assertThat(row)
+          .containsEntry("arrival_state", "TRIGGERED")
+          .containsEntry("arrival_reason", "ALL_FILES_ARRIVED");
     });
 
     var summaries =

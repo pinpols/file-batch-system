@@ -50,7 +50,7 @@ public class ConsoleResponseFactory {
       return success(null);
     }
     Object successFlag = resp.get("success");
-    if (successFlag instanceof Boolean b && !b) {
+    if (Boolean.FALSE.equals(successFlag)) {
       Object code = resp.get("code");
       Object message = resp.get("message");
       throw BizException.of(

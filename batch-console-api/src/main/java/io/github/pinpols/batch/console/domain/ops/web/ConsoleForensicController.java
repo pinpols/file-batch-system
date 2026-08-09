@@ -8,7 +8,6 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.io.IOException;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -62,13 +61,8 @@ public class ConsoleForensicController {
       @PathVariable String exportId, @RequestParam("tenantId") String tenantId) {
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
-    StreamingResponseBody body = outputStream -> {
-      try {
+    StreamingResponseBody body = outputStream ->
         orchestratorProxyService.downloadForensicExport(tenantId, exportId, outputStream);
-      } catch (IOException exception) {
-        throw exception;
-      }
-    };
     return ResponseEntity.ok()
         .headers(headers)
         .contentType(MediaType.APPLICATION_OCTET_STREAM)

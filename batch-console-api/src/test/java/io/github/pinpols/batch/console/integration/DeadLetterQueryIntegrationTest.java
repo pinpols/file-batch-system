@@ -61,8 +61,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     List<DeadLetterTaskEntity> partitionDlq = deadLetterTaskMapper.selectByQuery(
         DeadLetterTaskQuery.ofSourceType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
-    assertThat(partitionDlq).hasSize(2);
-    assertThat(partitionDlq).allMatch(d -> "JOB_PARTITION".equals(d.getSourceType()));
+    assertThat(partitionDlq).hasSize(2).allMatch(d -> "JOB_PARTITION".equals(d.getSourceType()));
   }
 
   @Test

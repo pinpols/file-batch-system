@@ -449,7 +449,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private ApplyStats applyResourceQueues(List<Map<String, String>> rows, ApplyContext ctx) {
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       QueueRow queue = ResourceQueueExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
@@ -470,7 +471,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private ApplyStats applyBusinessCalendars(List<Map<String, String>> rows, ApplyContext ctx) {
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       CalendarRow calendar =
@@ -493,7 +495,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private ApplyStats applyBatchWindows(List<Map<String, String>> rows, ApplyContext ctx) {
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       WindowRow window = BatchWindowExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
@@ -545,7 +548,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private ApplyStats applyJobs(List<Map<String, String>> rows, ApplyContext ctx) {
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : rows) {
       String jobCode = normalize(row.get(COL_JOB_CODE));
       JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
@@ -614,7 +618,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private ApplyStats applyChannels(List<Map<String, String>> rows, ApplyContext ctx) {
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : rows) {
       String code = normalize(row.get(COL_CHANNEL_CODE));
       Map<String, Object> existing =
@@ -643,7 +648,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private ApplyStats applyFileTemplates(List<Map<String, String>> rows, ApplyContext ctx) {
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : rows) {
       List<String> issues = new ArrayList<>();
       TemplateRow template = FileTemplateExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
@@ -673,7 +679,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     Map<String, List<Map<String, String>>> stepsByKey = stepRows.stream()
         .collect(Collectors.groupingBy(
             r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION))));
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : pipelineRows) {
       String jobCode = normalize(row.get(COL_JOB_CODE));
       int version = Integer.parseInt(normalize(row.get(COL_VERSION)));
@@ -719,7 +726,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         .collect(Collectors.groupingBy(r -> normalize(r.get(COL_WORKFLOW_CODE))
             + KEY_SEP_COLON
             + normalize(r.get(COL_WORKFLOW_VERSION))));
-    int inserted = 0, updated = 0;
+    int inserted = 0;
+    int updated = 0;
     for (Map<String, String> row : defRows) {
       String wfCode = normalize(row.get(COL_WORKFLOW_CODE));
       int version = Integer.parseInt(normalize(row.get(COL_VERSION)));

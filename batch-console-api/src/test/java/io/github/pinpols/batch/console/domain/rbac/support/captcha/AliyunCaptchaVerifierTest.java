@@ -129,8 +129,9 @@ class AliyunCaptchaVerifierTest {
             "x-acs-signature-nonce",
             "x-acs-content-sha256",
             "host");
-    assertThat(headers).containsEntry("x-acs-action", "VerifyIntelligentCaptcha");
-    assertThat(headers).containsEntry("x-acs-version", "2023-03-05");
+    assertThat(headers)
+        .containsEntry("x-acs-action", "VerifyIntelligentCaptcha")
+        .containsEntry("x-acs-version", "2023-03-05");
     assertThat(verifier.sentBody.get()).contains("scene-123").contains("tok-abc");
   }
 

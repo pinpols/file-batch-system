@@ -93,9 +93,10 @@ class TencentCaptchaVerifierTest {
     Map<String, String> headers = verifier.capturedHeaders.get();
     assertThat(headers.get("Authorization")).startsWith("TC3-HMAC-SHA256 Credential=");
     assertThat(headers.get("Authorization")).contains("SignedHeaders=content-type;host");
-    assertThat(headers).containsEntry("X-TC-Action", "DescribeCaptchaResult");
-    assertThat(headers).containsEntry("X-TC-Version", "2019-07-22");
-    assertThat(headers).containsEntry("X-TC-Timestamp", "1234567890");
+    assertThat(headers)
+        .containsEntry("X-TC-Action", "DescribeCaptchaResult")
+        .containsEntry("X-TC-Version", "2019-07-22")
+        .containsEntry("X-TC-Timestamp", "1234567890");
     assertThat(headers.get("Content-Type")).isEqualTo("application/json; charset=utf-8");
     assertThat(headers).containsEntry("Host", "captcha.tencentcloudapi.com");
   }
@@ -188,8 +189,7 @@ class TencentCaptchaVerifierTest {
     String sig1 = TencentCaptchaVerifier.sign("2009-02-13", sts, "secretKeyExample");
     String sig2 = TencentCaptchaVerifier.sign("2009-02-13", sts, "secretKeyExample");
 
-    assertThat(sig1).matches("[0-9a-f]{64}");
-    assertThat(sig1).isEqualTo(sig2);
+    assertThat(sig1).matches("[0-9a-f]{64}").isEqualTo(sig2);
     // 不同密钥 → 不同签名
     assertThat(TencentCaptchaVerifier.sign("2009-02-13", sts, "otherKey")).isNotEqualTo(sig1);
   }

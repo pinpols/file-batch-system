@@ -81,7 +81,6 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
             join batch.job_instance ji on ji.id = jp.job_instance_id
             where ji.tenant_id = ? and ji.dedup_key = ? and jp.partition_status = 'WAITING'
             """, Integer.class, TENANT, seed.dedupKey());
-    assertThat(waiting).isNotNull();
-    assertThat(waiting).isGreaterThanOrEqualTo(1);
+    assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
   }
 }

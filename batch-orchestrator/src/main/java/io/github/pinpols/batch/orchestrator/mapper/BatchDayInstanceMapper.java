@@ -27,14 +27,14 @@ public interface BatchDayInstanceMapper {
    *
    * @return 实际写入行数（0 表示并发已被另一节点抢先创建）
    */
-  int insert(BatchDayInstanceEntity record);
+  int insert(BatchDayInstanceEntity entity);
 
   /**
    * CAS 更新：必须 id + version 都匹配才生效。{@code SET version = version + 1}。
    *
    * @return 影响行数；0 表示 version 冲突 → 调用方抛 {@code OptimisticLockingFailureException}
    */
-  int updateWithCas(BatchDayInstanceEntity record);
+  int updateWithCas(BatchDayInstanceEntity entity);
 
   /** 按租户 + 日历 + 业务日（unique constraint 三元组）查询当前行。 */
   BatchDayInstanceEntity selectByTenantCalendarBizDate(

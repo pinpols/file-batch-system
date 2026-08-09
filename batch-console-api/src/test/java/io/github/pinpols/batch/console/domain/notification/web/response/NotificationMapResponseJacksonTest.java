@@ -191,12 +191,12 @@ class NotificationMapResponseJacksonTest {
   @Test
   void eventCatalogRecordsKeepFixedKeys() throws Exception {
     Map<String, Object> type = roundTrip(new ConsoleEventTypeResponse("JOB_FAILED", "作业失败"));
-    assertThat(type).containsOnlyKeys("code", "description");
-    assertThat(type).containsEntry("code", "JOB_FAILED");
+    assertThat(type).containsOnlyKeys("code", "description").containsEntry("code", "JOB_FAILED");
 
     Map<String, Object> topic =
         roundTrip(new ConsoleEventTopicResponse("batch.task.result", "任务结果"));
-    assertThat(topic).containsOnlyKeys("name", "description");
-    assertThat(topic).containsEntry("name", "batch.task.result");
+    assertThat(topic)
+        .containsOnlyKeys("name", "description")
+        .containsEntry("name", "batch.task.result");
   }
 }

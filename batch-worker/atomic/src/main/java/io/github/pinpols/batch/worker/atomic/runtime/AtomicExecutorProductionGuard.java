@@ -72,8 +72,8 @@ public class AtomicExecutorProductionGuard {
 
   /** 是否在强制拦截范围:prod profile / 配置的 enforce-profiles / always-enforce。 */
   private boolean isEnforcedProfile(String[] activeProfiles) {
-    if (environment.getProperty(
-        "batch.worker.executors.guard.always-enforce", Boolean.class, false)) {
+    if (Boolean.TRUE.equals(environment.getProperty(
+        "batch.worker.executors.guard.always-enforce", Boolean.class, false))) {
       return true;
     }
     if (BatchProfileSupport.isProductionProfile(environment)) {

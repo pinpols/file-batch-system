@@ -124,10 +124,11 @@ class TaskDispatcherP0HardeningTest {
 
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
     Map<String, String> mdc = seenMdc.get();
-    assertThat(mdc).isNotNull();
-    assertThat(mdc).containsEntry("traceId", "tr-abc");
-    assertThat(mdc).containsEntry("tenantId", "tx");
-    assertThat(mdc).containsEntry("taskId", "42");
+    assertThat(mdc)
+        .isNotNull()
+        .containsEntry("traceId", "tr-abc")
+        .containsEntry("tenantId", "tx")
+        .containsEntry("taskId", "42");
   }
 
   @Test
@@ -175,8 +176,7 @@ class TaskDispatcherP0HardeningTest {
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
     Map<String, String> mdc = seenMdc.get();
     assertThat(mdc).doesNotContainKey("traceId"); // 不在则不 put
-    assertThat(mdc).containsEntry("tenantId", "tx");
-    assertThat(mdc).containsEntry("taskId", "42");
+    assertThat(mdc).containsEntry("tenantId", "tx").containsEntry("taskId", "42");
   }
 
   // ─── P0: 容量 permit backpressure(提交前占容量,满则 RETRY_LATER 不提交 offset)──────────

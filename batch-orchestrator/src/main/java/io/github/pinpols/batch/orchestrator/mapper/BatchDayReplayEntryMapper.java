@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Param;
 @SuppressWarnings("PMD.ExcessiveParameterList")
 public interface BatchDayReplayEntryMapper {
 
-  int insert(BatchDayReplayEntryEntity record);
+  int insert(BatchDayReplayEntryEntity entity);
 
   /** 批量插入；MyBatis foreach 拼 INSERT 多 VALUES。 */
   int insertBatch(@Param("records") List<BatchDayReplayEntryEntity> records);

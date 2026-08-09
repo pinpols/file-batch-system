@@ -215,7 +215,7 @@ public abstract class AbstractWorkerLoop {
     }
     StringBuilder sb = new StringBuilder();
     for (Throwable t = ex; t != null && sb.length() < 500; t = t.getCause()) {
-      if (sb.length() > 0) {
+      if (!sb.isEmpty()) {
         sb.append(" <- ");
       }
       sb.append(t.getClass().getSimpleName());
@@ -224,7 +224,7 @@ public abstract class AbstractWorkerLoop {
         sb.append(": ").append(m);
       }
     }
-    String core = sb.length() > 0 ? sb.toString() : ex.getClass().getSimpleName();
+    String core = !sb.isEmpty() ? sb.toString() : ex.getClass().getSimpleName();
     return core + registrationFailureHint(ex);
   }
 

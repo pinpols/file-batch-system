@@ -35,9 +35,10 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
         "select * from batch.file_error_record where tenant_id = ? and file_id = ?", "t1", fileId);
 
     assertThat(rows).hasSize(1);
-    assertThat(rows.get(0)).containsEntry("error_code", "PARSE_ERROR");
-    assertThat(rows.get(0)).containsEntry("error_stage", "PARSE");
-    assertThat(rows.get(0)).containsEntry("is_skipped", Boolean.FALSE);
+    assertThat(rows.get(0))
+        .containsEntry("error_code", "PARSE_ERROR")
+        .containsEntry("error_stage", "PARSE")
+        .containsEntry("is_skipped", Boolean.FALSE);
   }
 
   @Test
@@ -87,8 +88,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
         "t1",
         fileId);
 
-    assertThat(storedRaw).isNotBlank();
-    assertThat(storedRaw).contains("C-001");
+    assertThat(storedRaw).isNotBlank().contains("C-001");
   }
 
   @Test

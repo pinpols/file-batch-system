@@ -178,8 +178,9 @@ class OrchestratorApprovalClientTest {
     ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
     verify(bodySpec).body(captor.capture());
     String json = JsonUtils.toJson(captor.getValue());
-    assertThat(json).contains("\"requesterId\":\"ops-user\"");
-    assertThat(json).contains("\"approvalReason\":\"reasonwith-ctrl\"");
+    assertThat(json)
+        .contains("\"requesterId\":\"ops-user\"")
+        .contains("\"approvalReason\":\"reasonwith-ctrl\"");
   }
 
   @Test
@@ -190,8 +191,9 @@ class OrchestratorApprovalClientTest {
     ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
     verify(bodySpec).body(captor.capture());
     String json = JsonUtils.toJson(captor.getValue());
-    assertThat(json).contains("\"requesterId\":\"op-1\"");
-    assertThat(json).contains("\"sourceTraceId\":\"trace-1\"");
-    assertThat(json).contains("\"sourceIdempotencyKey\":\"idem-3\"");
+    assertThat(json)
+        .contains("\"requesterId\":\"op-1\"")
+        .contains("\"sourceTraceId\":\"trace-1\"")
+        .contains("\"sourceIdempotencyKey\":\"idem-3\"");
   }
 }

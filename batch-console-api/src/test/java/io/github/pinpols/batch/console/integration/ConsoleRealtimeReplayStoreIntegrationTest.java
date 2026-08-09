@@ -90,8 +90,7 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
     ReplayBatch batch = replayStore.replay(tenantId, stream, "NONEXISTENT", "NODE_STATUS");
 
     List<ConsoleRealtimeStreamEnvelope> nodeEvents = batch.events();
-    assertThat(nodeEvents).hasSize(2);
-    assertThat(nodeEvents).allMatch(e -> "NODE_STATUS".equals(e.eventType()));
+    assertThat(nodeEvents).hasSize(2).allMatch(e -> "NODE_STATUS".equals(e.eventType()));
   }
 
   @Test

@@ -15,7 +15,7 @@ import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
  */
 public class BusinessRoutingDataSource extends AbstractRoutingDataSource {
 
-  private final transient BusinessPlacementResolver resolver;
+  private final BusinessPlacementResolver resolver;
 
   public BusinessRoutingDataSource(BusinessPlacementResolver resolver) {
     this.resolver = resolver;

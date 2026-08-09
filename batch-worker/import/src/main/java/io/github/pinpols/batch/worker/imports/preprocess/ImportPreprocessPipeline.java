@@ -129,7 +129,7 @@ public final class ImportPreprocessPipeline {
       byte[] current = input;
       boolean hasExplicitDigestStep = steps.stream()
           .map(step -> stringProp(step, KEY_TYPE))
-          .anyMatch(type -> "VERIFY_DIGEST".equalsIgnoreCase(type));
+          .anyMatch("VERIFY_DIGEST"::equalsIgnoreCase);
       if (!bypassMode && !hasExplicitDigestStep) {
         // 隐式 checksum 来自 file_record/.chk，语义固定为“入站原始对象字节”完整性校验。
         // 若业务需要在解压/解密/转码之后校验，请在 preprocess_pipeline 中显式放置 VERIFY_DIGEST。

@@ -276,7 +276,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             objectMapper);
       }
       Object pass = row.get("pass");
-      if (!(pass instanceof Boolean booleanPass) || !booleanPass) {
+      if (!Boolean.TRUE.equals(pass)) {
         Object message = row.get("message");
         metrics.incrementValidationFailed(context.getTenantId(), rule.name());
         return ProcessStageResult.failure(

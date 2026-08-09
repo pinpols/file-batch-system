@@ -243,13 +243,13 @@ public class BatchDaySettleScheduler {
   }
 
   /** 替换原 {@code repository.save}：CAS 失败抛 OLF，被外层循环 catch 跳过本条候选下 tick 重扫。 */
-  private void casUpdate(BatchDayInstanceEntity record) {
-    int rows = batchDayInstanceMapper.updateWithCas(record);
+  private void casUpdate(BatchDayInstanceEntity batchDay) {
+    int rows = batchDayInstanceMapper.updateWithCas(batchDay);
     if (rows == 0) {
       throw new OptimisticLockingFailureException("batch_day_instance version mismatch: id="
-          + record.id()
+          + batchDay.id()
           + ", version="
-          + record.version());
+          + batchDay.version());
     }
   }
 

@@ -18,15 +18,15 @@ import java.util.stream.Stream;
  * A.2 — typed Process 模板:tenant → tenant(transform 写回),把强类型入参与 ADR-036 Process 行流模板合流。
  *
  * <p>模板序:{@code selectInput → transform(逐行,返 null = skip) → 按 batch 累积 → upsert → 汇总}。 租户拿强类型入参
- * {@code P}(任务参数,如过滤条件 / 目标表),再走输入行 {@code IN} → 输出行 {@code OUT} 的转换。 复用 {@link SdkTypedParameters}
+ * {@code P}(任务参数,如过滤条件 / 目标表),再走输入行 {@code I} → 输出行 {@code R} 的转换。 复用 {@link SdkTypedParameters}
  * 解析入参(组合)。
  *
  * @param <P> 强类型任务入参(从 parameters 反序列化)
- * @param <IN> 输入行类型
- * @param <OUT> 输出行类型
+ * @param <I> 输入行类型
+ * @param <R> 输出行类型
  * @param <O> 业务结果(序列化进 output;返 null 则走计数器 output)
  */
-public abstract class SdkAbstractTypedProcessHandler<P, IN, OUT, O> extends SdkAbstractTaskHandler {
+public abstract class SdkAbstractTypedProcessHandler<P, I, R, O> extends SdkAbstractTaskHandler {
 
   private final SdkTypedParameters<P> params;
 
@@ -40,13 +40,13 @@ public abstract class SdkAbstractTypedProcessHandler<P, IN, OUT, O> extends SdkA
   }
 
   /** 读输入行(从租户表 select)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放。 */
-  protected abstract Stream<IN> selectInput(P input, SdkTaskContext ctx) throws Exception;
+  protected abstract Stream<I> selectInput(P input, SdkTaskContext ctx) throws Exception;
 
-  /** 单行转换 IN→OUT;返回 null 表示该行 skip(不写)。 */
-  protected abstract OUT transform(P input, SdkTaskContext ctx, IN row) throws Exception;
+  /** 单行转换 I→R;返回 null 表示该行 skip(不写)。 */
+  protected abstract R transform(P input, SdkTaskContext ctx, I row) throws Exception;
 
   /** 批量 upsert 输出行到租户表。 */
-  protected abstract void upsert(P input, SdkTaskContext ctx, List<OUT> batch) throws Exception;
+  protected abstract void upsert(P input, SdkTaskContext ctx, List<R> batch) throws Exception;
 
   /** 批大小,默认 500,可覆盖。 */
   protected int batchSize() {
@@ -57,7 +57,7 @@ public abstract class SdkAbstractTypedProcessHandler<P, IN, OUT, O> extends SdkA
    * ADR-037 决策一 — 计算本批<b>断点坐标</b>。默认返回空 Map(不续跑,仅有上报 / 取消语义)。要断点续跑的租户应 override:返回本批最后一行的业务主键, 与
    * {@link #selectInput} 的 {@code WHERE key > :breakPosition} 同坐标系。
    */
-  protected Map<String, Object> breakPosition(P input, List<OUT> batch) {
+  protected Map<String, Object> breakPosition(P input, List<R> batch) {
     return Map.of();
   }
 
@@ -84,11 +84,11 @@ public abstract class SdkAbstractTypedProcessHandler<P, IN, OUT, O> extends SdkA
     SdkRowResult counts = new SdkRowResult();
     resumed.ifPresent(s -> ctx.commitCoordinator().restoreCounts(s.succeedCount(), s.failCount()));
     try {
-      List<OUT> buf = new ArrayList<>(batchSize());
-      try (Stream<IN> rows = selectInput(input, ctx)) {
-        Iterator<IN> it = rows.iterator();
+      List<R> buf = new ArrayList<>(batchSize());
+      try (Stream<I> rows = selectInput(input, ctx)) {
+        Iterator<I> it = rows.iterator();
         while (it.hasNext()) {
-          OUT out = transform(input, ctx, it.next());
+          R out = transform(input, ctx, it.next());
           if (out != null) {
             buf.add(out);
             counts.incSuccess();
@@ -112,7 +112,7 @@ public abstract class SdkAbstractTypedProcessHandler<P, IN, OUT, O> extends SdkA
     }
   }
 
-  private void flush(P input, SdkTaskContext ctx, List<OUT> buf) throws Exception {
+  private void flush(P input, SdkTaskContext ctx, List<R> buf) throws Exception {
     upsert(input, ctx, buf);
     // ADR-037 决策二 + 三:业务写 + 断点保存 + 限流上报三合一;提交后命中取消则在安全点抛停止。
     ctx.commitCoordinator().recordBatch(buf.size(), 0);

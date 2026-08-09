@@ -171,8 +171,9 @@ class ShellTaskExecutorTest {
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/false")));
       assertThat(r.success()).isFalse();
       // K3:失败路径只填 error_code(无其它 output),保持 message 携带 exit/stderr 摘要
-      assertThat(r.output()).containsOnlyKeys("error_code");
-      assertThat(r.output()).containsEntry("error_code", "EXECUTION_FAILED");
+      assertThat(r.output())
+          .containsOnlyKeys("error_code")
+          .containsEntry("error_code", "EXECUTION_FAILED");
       assertThat(r.message()).startsWith("exit=1");
     }
 
@@ -237,9 +238,10 @@ class ShellTaskExecutorTest {
       assertThat(r.success()).isTrue();
       String stdout = (String) r.output().get("stdout");
       // 必须包含框架注入的 vars
-      assertThat(stdout).contains("BATCH_TENANT_ID=t1");
-      assertThat(stdout).contains("BATCH_JOB_CODE=job-1");
-      assertThat(stdout).contains("BATCH_WORKER_ID=w-1");
+      assertThat(stdout)
+          .contains("BATCH_TENANT_ID=t1")
+          .contains("BATCH_JOB_CODE=job-1")
+          .contains("BATCH_WORKER_ID=w-1");
       // 不该有外部 env 泄露(检测一个父进程肯定有的,如 PATH)
       assertThat(stdout).doesNotContain("PATH=");
     }

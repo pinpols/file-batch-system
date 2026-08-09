@@ -105,10 +105,7 @@ public final class DnsResolveGuard {
       return true;
     }
     // 169.254.0.0/16 link-local
-    if (octets[0] == 169 && octets[1] == 254) {
-      return true;
-    }
-    return false;
+    return octets[0] == 169 && octets[1] == 254;
   }
 
   private static boolean isIpv4MappedIpv6(byte[] bytes) {

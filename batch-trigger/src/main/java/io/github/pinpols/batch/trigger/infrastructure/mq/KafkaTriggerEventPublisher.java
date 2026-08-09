@@ -56,27 +56,28 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           ex);
       return PublishResult.fail("serialize envelope: " + ex.getMessage());
     }
-    ProducerRecord<String, String> record = new ProducerRecord<>(topic, messageKey, payload);
+    ProducerRecord<String, String> producerRecord =
+        new ProducerRecord<>(topic, messageKey, payload);
     if (EmptyChecks.isNotBlank(traceId)) {
-      record
+      producerRecord
           .headers()
           .add(new RecordHeader(HEADER_TRACE_ID, traceId.getBytes(StandardCharsets.UTF_8)));
     }
     if (EmptyChecks.isNotNull(envelope.launchRequest().tenantId())) {
-      record
+      producerRecord
           .headers()
           .add(new RecordHeader(
               HEADER_TENANT_ID,
               envelope.launchRequest().tenantId().getBytes(StandardCharsets.UTF_8)));
     }
-    record
+    producerRecord
         .headers()
         .add(new RecordHeader(
             HEADER_ENVELOPE_VERSION,
             String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
     try {
       SendResult<String, String> result = triggerKafkaTemplate
-          .send(record)
+          .send(producerRecord)
           .get(kafkaProperties.getSendTimeoutSeconds(), TimeUnit.SECONDS);
       log.debug(
           "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",

@@ -272,8 +272,7 @@ class DefaultProcessStageExecutorTest {
 
     List<ProcessStageResult> results = executor.execute(context);
 
-    assertThat(results).hasSize(5);
-    assertThat(results).allMatch(ProcessStageResult::success);
+    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
     assertThat(context.getResolvedPlugin()).isNull();
     assertThat(context.getAttributes()).containsEntry("processedCount", 0);
   }

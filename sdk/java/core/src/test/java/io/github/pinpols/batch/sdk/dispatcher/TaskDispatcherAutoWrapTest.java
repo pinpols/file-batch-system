@@ -248,9 +248,9 @@ class TaskDispatcherAutoWrapTest {
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
       recordCalls.incrementAndGet();
-      map.put(key, record);
+      map.put(key, entity);
       placeholders.remove(key);
     }
 

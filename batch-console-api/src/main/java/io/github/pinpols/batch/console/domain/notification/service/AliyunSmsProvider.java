@@ -220,7 +220,7 @@ public class AliyunSmsProvider implements SmsProvider {
           .append(':')
           .append(e.getValue().trim())
           .append('\n');
-      if (signedHeadersStr.length() > 0) {
+      if (!signedHeadersStr.isEmpty()) {
         signedHeadersStr.append(';');
       }
       signedHeadersStr.append(e.getKey());
@@ -255,7 +255,7 @@ public class AliyunSmsProvider implements SmsProvider {
   private static String canonicalQueryString(SortedMap<String, String> params) {
     StringBuilder sb = new StringBuilder();
     for (Map.Entry<String, String> e : params.entrySet()) {
-      if (sb.length() > 0) {
+      if (!sb.isEmpty()) {
         sb.append('&');
       }
       sb.append(percentEncode(e.getKey())).append('=').append(percentEncode(e.getValue()));

@@ -93,13 +93,13 @@ public class OrchestratorApprovalClient {
         .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
         .retrieve()
         .body(ApprovalRecordResponse.class);
-    ApprovalRecord record = Guard.requireFound(
+    ApprovalRecord approvalRecord = Guard.requireFound(
         response == null ? null : response.record(), "approval request not found");
-    String status = record.approvalStatus();
+    String status = approvalRecord.approvalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
     }
-    if (!binding.matches(record)) {
+    if (!binding.matches(approvalRecord)) {
       throw BizException.of(ResultCode.FORBIDDEN, binding.mismatchMessageKey());
     }
   }

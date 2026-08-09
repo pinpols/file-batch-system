@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 /** ADR-023 disaster_day_override MyBatis 映射。 */
 public interface DisasterDayOverrideMapper {
 
-  int insert(DisasterDayOverrideEntity record);
+  int insert(DisasterDayOverrideEntity entity);
 
   /**
    * 查 (tenant, calendar, biz_date) 当前 active override；effective_at ≤ now ≤ ttl_until 才算激活。 同

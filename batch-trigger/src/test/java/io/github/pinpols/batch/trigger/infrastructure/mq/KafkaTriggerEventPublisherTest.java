@@ -133,8 +133,8 @@ class KafkaTriggerEventPublisherTest {
         new ProducerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, "key", "value"), metadata);
   }
 
-  private static String headerValue(ProducerRecord<String, String> record, String name) {
-    Header header = record.headers().lastHeader(name);
+  private static String headerValue(ProducerRecord<String, String> producerRecord, String name) {
+    Header header = producerRecord.headers().lastHeader(name);
     return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
   }
 }

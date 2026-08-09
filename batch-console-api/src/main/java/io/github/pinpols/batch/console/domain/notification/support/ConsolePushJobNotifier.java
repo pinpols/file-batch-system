@@ -113,10 +113,10 @@ public class ConsolePushJobNotifier {
       if (stopping.get()) {
         return;
       }
-      ConsolePushJobNotificationEntity record = new ConsolePushJobNotificationEntity();
-      record.setTenantId(p.getTenantId());
-      record.setJobInstanceId(p.getJobInstanceId());
-      int inserted = notificationMapper.insertIgnore(record);
+      ConsolePushJobNotificationEntity notification = new ConsolePushJobNotificationEntity();
+      notification.setTenantId(p.getTenantId());
+      notification.setJobInstanceId(p.getJobInstanceId());
+      int inserted = notificationMapper.insertIgnore(notification);
       if (inserted == 0) {
         continue; // 其它 replica 已处理
       }

@@ -129,8 +129,7 @@ class SdkPlatformContractTest {
     // 严禁错名:旧版用过 "output"(单数),平台读不到 → 必须是 "outputs"
     assertThat(body).doesNotContainKey("output");
     // 错名 errorClass / errorMessage 已废,平台读 errorCode / resultSummary
-    assertThat(body).doesNotContainKey("errorClass");
-    assertThat(body).doesNotContainKey("errorMessage");
+    assertThat(body).doesNotContainKey("errorClass").doesNotContainKey("errorMessage");
   }
 
   @Test

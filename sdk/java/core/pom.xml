@@ -42,7 +42,7 @@
         <developer>
             <id>pinpols</id>
             <name>pinpols</name>
-            <!-- TODO(owner):首发前换成真实公开联系邮箱(Central 不强制 email) -->
+            <!-- 发布前说明(owner):首发前换成真实公开联系邮箱(Central 不强制 email) -->
             <email>noreply@github.com</email>
         </developer>
     </developers>

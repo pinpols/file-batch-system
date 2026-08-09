@@ -601,16 +601,16 @@ public class ImportIngressScanner {
     if (matched == null) {
       return;
     }
-    Map<String, Object> record = runtimeRepository.loadFileRecordByStoragePath(
+    Map<String, Object> fileRecord = runtimeRepository.loadFileRecordByStoragePath(
         tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
-    if (record == null || record.isEmpty()) {
+    if (fileRecord == null || fileRecord.isEmpty()) {
       return;
     }
-    Long fileId = runtimeRepository.toLong(record.get("id"));
+    Long fileId = runtimeRepository.toLong(fileRecord.get("id"));
     if (fileId == null) {
       return;
     }
-    Map<String, Object> existingMetadata = parseRecordMetadata(record);
+    Map<String, Object> existingMetadata = parseRecordMetadata(fileRecord);
     Map<String, Object> metadata = new LinkedHashMap<>();
     if (!hasRequiredFileSet(existingMetadata)) {
       putArrivalMetadata(
@@ -687,8 +687,8 @@ public class ImportIngressScanner {
     return value != null && Texts.hasText(String.valueOf(value));
   }
 
-  private Map<String, Object> parseRecordMetadata(Map<String, Object> record) {
-    Object metadataJson = record.get("metadata_json");
+  private Map<String, Object> parseRecordMetadata(Map<String, Object> fileRecord) {
+    Object metadataJson = fileRecord.get("metadata_json");
     if (metadataJson == null) {
       return Map.of();
     }

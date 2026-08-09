@@ -102,7 +102,7 @@ public class AuditAspect {
 
     try {
       Object result = pjp.proceed();
-      record(ann, aggregateId, targetTenantId, paramsJson, null, null);
+      recordAudit(ann, aggregateId, targetTenantId, paramsJson, null, null);
       return result;
     } catch (Throwable ex) {
       // 业务事务回滚会带走同事务 audit。用 REQUIRES_NEW 新事务写 FAILED 留痕,保证合规取证可见。
@@ -127,7 +127,7 @@ public class AuditAspect {
       String errorMsg) {
     try {
       requiresNewTemplate.executeWithoutResult(
-          status -> record(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg));
+          status -> recordAudit(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg));
     } catch (Exception writeFail) {
       log.warn(
           "[audit] FAILED audit write also failed action={} aggregateId={}",
@@ -145,7 +145,7 @@ public class AuditAspect {
     return ex.getClass().getSimpleName();
   }
 
-  private void record(
+  private void recordAudit(
       AuditAction ann,
       String aggregateId,
       String targetTenantId,

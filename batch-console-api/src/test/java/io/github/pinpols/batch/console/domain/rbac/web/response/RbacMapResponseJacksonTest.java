@@ -31,8 +31,7 @@ class RbacMapResponseJacksonTest {
   @Test
   void streamTicketKeepsSingleKey() throws Exception {
     Map<String, Object> back = roundTrip(new ConsoleStreamTicketResponse("tkt"));
-    assertThat(back).containsOnlyKeys("ticket");
-    assertThat(back).containsEntry("ticket", "tkt");
+    assertThat(back).containsOnlyKeys("ticket").containsEntry("ticket", "tkt");
   }
 
   @Test
@@ -56,8 +55,7 @@ class RbacMapResponseJacksonTest {
   void tenantUsageOmitsAbsentParametersButKeepsPresentOnes() throws Exception {
     // 历史 wire：系统参数缺失时对应键不出现（NON_NULL）。此处只有 runningJobs 命中。
     Map<String, Object> back = roundTrip(new ConsoleTenantUsageSummaryResponse("3", null, null));
-    assertThat(back).containsOnlyKeys("runningJobs");
-    assertThat(back).containsEntry("runningJobs", "3");
+    assertThat(back).containsOnlyKeys("runningJobs").containsEntry("runningJobs", "3");
 
     Map<String, Object> all = roundTrip(new ConsoleTenantUsageSummaryResponse("3", "10", "42"));
     assertThat(all).containsOnlyKeys("runningJobs", "dailyTriggers", "fileCount");

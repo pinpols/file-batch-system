@@ -57,8 +57,8 @@ public class LoginFailureTracker {
 
   /** 记一次失败(账号 + IP 各 +1),返回两维度中较大的窗口内计数(供阈值判定)。 */
   public long recordFailure(String username, String clientIp) {
-    long accountCount = record(ACCOUNT_KEY_PREFIX + normalize(username));
-    long ipCount = record(IP_KEY_PREFIX + normalize(clientIp));
+    long accountCount = recordFailureAttempt(ACCOUNT_KEY_PREFIX + normalize(username));
+    long ipCount = recordFailureAttempt(IP_KEY_PREFIX + normalize(clientIp));
     return Math.max(accountCount, ipCount);
   }
 
@@ -74,7 +74,7 @@ public class LoginFailureTracker {
     redisTemplate.delete(ACCOUNT_KEY_PREFIX + normalize(username));
   }
 
-  private long record(String key) {
+  private long recordFailureAttempt(String key) {
     long now = dateTimeSupport.currentEpochMillis();
     long windowStart = now - windowMillis();
     long ttlSeconds = (windowMillis() / 1000) + 1;
