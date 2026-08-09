@@ -1,56 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_AUTH_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_BIZ_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONDITION_EXPR;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONFIG_JSON;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEFAULT_PARAMS;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DESCRIPTION;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EDGE_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_ENABLED;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EXECUTION_HANDLER;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EXECUTION_MODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_FROM_NODE_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_JOB_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_JOB_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_JOB_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_ORDER;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_PARAMS;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PARAM_SCHEMA;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PIPELINE_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PIPELINE_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_QUEUE_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RECEIPT_POLICY;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_JOB_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_PIPELINE_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_MAX_COUNT;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_POLICY;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SHARD_STRATEGY;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STAGE_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TENANT_ID;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEOUT_SECONDS;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TO_NODE_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_VERSION;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WATERMARK_FIELD;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WINDOW_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKER_GROUP;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_TYPE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
-
+import io.github.pinpols.batch.common.persistence.BatchColumnNames;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +9,59 @@ import java.util.Map;
 public final class ConfigPackageExcelSchema {
 
   private ConfigPackageExcelSchema() {}
+
+  public static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
+  public static final String COL_ENABLED = "enabled";
+  public static final String COL_DESCRIPTION = "description";
+  public static final String COL_VERSION = "version";
+  public static final String COL_BIZ_TYPE = "biz_type";
+  public static final String COL_WORKER_GROUP = "worker_group";
+  public static final String COL_WINDOW_CODE = "window_code";
+  public static final String COL_RETRY_POLICY = "retry_policy";
+  public static final String COL_RETRY_MAX_COUNT = "retry_max_count";
+  public static final String COL_TIMEOUT_SECONDS = "timeout_seconds";
+  public static final String COL_SHARD_STRATEGY = "shard_strategy";
+  public static final String COL_EXECUTION_MODE = "execution_mode";
+  public static final String COL_WATERMARK_FIELD = "watermark_field";
+  public static final String COL_JOB_CODE = "job_code";
+  public static final String COL_JOB_NAME = "job_name";
+  public static final String COL_JOB_TYPE = "job_type";
+  public static final String COL_SCHEDULE_TYPE = "schedule_type";
+  public static final String COL_SCHEDULE_EXPR = "schedule_expr";
+  public static final String COL_DEPENDS_ON_JOB_CODE = "depends_on_job_code";
+  public static final String COL_CALENDAR_CODE = "calendar_code";
+  public static final String COL_QUEUE_CODE = "queue_code";
+  public static final String COL_PARAM_SCHEMA = "param_schema";
+  public static final String COL_CHANNEL_TYPE = "channel_type";
+  public static final String COL_AUTH_TYPE = "auth_type";
+  public static final String COL_RECEIPT_POLICY = "receipt_policy";
+  public static final String COL_SEVERITY = "severity";
+  public static final String COL_PIPELINE_TYPE = "pipeline_type";
+  public static final String COL_STAGE_CODE = "stage_code";
+  public static final String COL_WORKFLOW_CODE = "workflow_code";
+  public static final String COL_WORKFLOW_NAME = "workflow_name";
+  public static final String COL_WORKFLOW_TYPE = "workflow_type";
+  public static final String COL_WORKFLOW_VERSION = "workflow_version";
+  public static final String COL_NODE_CODE = "node_code";
+  public static final String COL_NODE_NAME = "node_name";
+  public static final String COL_NODE_TYPE = "node_type";
+  public static final String COL_RELATED_JOB_CODE = "related_job_code";
+  public static final String COL_RELATED_PIPELINE_CODE = "related_pipeline_code";
+  public static final String COL_NODE_PARAMS = "node_params";
+  public static final String COL_EDGE_TYPE = "edge_type";
+  public static final String COL_FROM_NODE_CODE = "from_node_code";
+  public static final String COL_TO_NODE_CODE = "to_node_code";
+  public static final String COL_EXECUTION_HANDLER = "execution_handler";
+  public static final String COL_DEFAULT_PARAMS = "default_params";
+  public static final String COL_CHANNEL_CODE = "channel_code";
+  public static final String COL_CHANNEL_NAME = "channel_name";
+  public static final String COL_CONFIG_JSON = "config_json";
+  public static final String COL_PIPELINE_NAME = "pipeline_name";
+  public static final String COL_STEP_CODE = "step_code";
+  public static final String COL_STEP_NAME = "step_name";
+  public static final String COL_IMPL_CODE = "impl_code";
+  public static final String COL_NODE_ORDER = "node_order";
+  public static final String COL_CONDITION_EXPR = "condition_expr";
 
   public static final class ResourceQueue {
     public static final String COL_QUEUE_NAME = "queue_name";
@@ -90,7 +93,7 @@ public final class ConfigPackageExcelSchema {
 
   public static final class BusinessCalendar {
     public static final String SHEET_NAME = "business_calendar";
-    public static final String COL_CALENDAR_CODE = ConfigPackageExcelValidator.COL_CALENDAR_CODE;
+    public static final String COL_CALENDAR_CODE = ConfigPackageExcelSchema.COL_CALENDAR_CODE;
     public static final String COL_CALENDAR_NAME = "calendar_name";
     public static final String COL_TIMEZONE = "timezone";
     public static final String COL_HOLIDAY_ROLL_RULE = "holiday_roll_rule";
