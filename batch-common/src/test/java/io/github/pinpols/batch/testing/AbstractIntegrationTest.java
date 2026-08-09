@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.testing;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Statement;
 import javax.sql.DataSource;
@@ -9,6 +13,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
  * 集成测试基类：需要真实 PostgreSQL、Kafka、MinIO、Redis 的模块继承本类。
@@ -132,8 +137,69 @@ public abstract class AbstractIntegrationTest {
     return MINIO.getDefaultBucket();
   }
 
+  /** 当前测试对象存储后端（s3 | filesystem），由系统属性 {@code batch.test.storage.backend} 决定。 */
+  protected static String storageBackend() {
+    return IntegrationTestInfrastructure.storageBackend();
+  }
+
+  /** filesystem 后端测试根目录；S3 模式下返回的目录不会写入。 */
+  public static Path filesystemRoot() {
+    return IntegrationTestInfrastructure.filesystemRoot();
+  }
+
+  /** 按当前测试后端读取对象内容（S3 走 MinIO 容器，filesystem 走临时根目录）。 */
+  public static byte[] readObject(String bucket, String key) {
+    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+      Path path = filesystemRoot().resolve(bucket).resolve(key);
+      try {
+        return Files.readAllBytes(path);
+      } catch (IOException ex) {
+        throw new UncheckedIOException("filesystem test read failed: " + path, ex);
+      }
+    }
+    return MINIO
+        .client()
+        .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key).build())
+        .asByteArray();
+  }
+
+  /** 按当前测试后端写入对象内容（测试 fixture 用）。 */
+  protected static void putObject(String bucket, String key, byte[] content) {
+    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+      try {
+        Path path = filesystemRoot().resolve(bucket).resolve(key);
+        Files.createDirectories(path.getParent());
+        Files.write(path, content);
+      } catch (IOException ex) {
+        throw new UncheckedIOException("filesystem test write failed", ex);
+      }
+      return;
+    }
+    MINIO
+        .client()
+        .putObject(
+            software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build(),
+            software.amazon.awssdk.core.sync.RequestBody.fromBytes(content));
+  }
+
+  /** 确保 bucket（S3 桶 / FS 目录）存在。 */
+  protected static void ensureBucket(String bucket) {
+    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+      try {
+        Files.createDirectories(filesystemRoot().resolve(bucket));
+      } catch (IOException ex) {
+        throw new UncheckedIOException(ex);
+      }
+      return;
+    }
+    MINIO.ensureBucketExists(bucket);
+  }
+
   protected static void ensureS3Bucket(String bucketName) {
-    MINIO.ensureBucketExists(bucketName);
+    ensureBucket(bucketName);
   }
 
   protected static String redisHost() {

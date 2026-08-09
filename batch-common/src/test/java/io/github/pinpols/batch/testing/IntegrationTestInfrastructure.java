@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.testing;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.UUID;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.kafka.KafkaContainer;
@@ -11,6 +16,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * <p>将容器相关的配置细节与子测试类隔离。
  */
 final class IntegrationTestInfrastructure {
+
+  /** 测试对象存储后端选择：{@code -Dbatch.test.storage.backend=s3|filesystem}，默认 s3。 */
+  static final String BACKEND_PROPERTY = "batch.test.storage.backend";
+
+  static final String BACKEND_S3 = "s3";
+  static final String BACKEND_FILESYSTEM = "filesystem";
+
+  private static final String FS_PRESIGN_SECRET = "test-fs-presign-secret-0123456789abcdef";
+  private static final String FS_DOWNLOAD_BASE_URL =
+      "http://localhost/api/console/files/fs-download";
+  private static final Path FS_ROOT = createTempRoot();
 
   private static final String DEFAULT_KMS_KEY_REF = "DEFAULT_TEST";
   private static final String DEFAULT_KMS_KEY_MATERIAL = "AAAAAAAAAAAAAAAAAAAAAA==";
@@ -59,11 +75,23 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerObjectStoreProperties(
-      DynamicPropertyRegistry registry, ObjectStoreContainer objectStore) {
-    registry.add("batch.storage.s3.endpoint", objectStore::getEndpoint);
-    registry.add("batch.storage.s3.access-key", objectStore::getAccessKey);
-    registry.add("batch.storage.s3.secret-key", objectStore::getSecretKey);
-    registry.add("batch.storage.s3.bucket", objectStore::getDefaultBucket);
+      DynamicPropertyRegistry registry, ObjectStoreContainer minio) {
+    if (isFilesystemBackend()) {
+      // bucket 名仍由 S3 配置提供：guard 与 S3ExportStorage 用它做对象命名空间
+      registry.add("batch.storage.backend", () -> BACKEND_FILESYSTEM);
+      registry.add("batch.storage.filesystem.root", () -> FS_ROOT.toString());
+      registry.add("batch.storage.filesystem.download-base-url", () -> FS_DOWNLOAD_BASE_URL);
+      registry.add("batch.storage.filesystem.presign-secret", () -> FS_PRESIGN_SECRET);
+      registry.add("batch.storage.s3.bucket", minio::getDefaultBucket);
+      // 共享 JVM 内从既有 S3 基线切换需要一次性 cutover-id；全新 DB 首启仅记 baseline，忽略该值
+      registry.add("batch.storage.backend-guard.cutover-id", () -> "test-fs-" + UUID.randomUUID());
+      return;
+    }
+    registry.add("batch.storage.backend", () -> BACKEND_S3);
+    registry.add("batch.storage.s3.endpoint", minio::getEndpoint);
+    registry.add("batch.storage.s3.access-key", minio::getAccessKey);
+    registry.add("batch.storage.s3.secret-key", minio::getSecretKey);
+    registry.add("batch.storage.s3.bucket", minio::getDefaultBucket);
   }
 
   static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {
@@ -78,5 +106,29 @@ final class IntegrationTestInfrastructure {
     // 单 JVM 长耗时 IT：覆盖 application-test.yml merge 漂移，禁用会与 claim / launch 并发竞态的后台 Bean
     registry.add("batch.worker.drain.heartbeat-timeout-scheduler-enabled", () -> "false");
     registry.add("batch.partition-lease.reclaim-scheduler-enabled", () -> "false");
+  }
+
+  static String storageBackend() {
+    return System.getProperty(BACKEND_PROPERTY, BACKEND_S3).trim().toLowerCase();
+  }
+
+  static boolean isFilesystemBackend() {
+    return BACKEND_FILESYSTEM.equals(storageBackend());
+  }
+
+  static Path filesystemRoot() {
+    return FS_ROOT;
+  }
+
+  static String filesystemPresignSecret() {
+    return FS_PRESIGN_SECRET;
+  }
+
+  private static Path createTempRoot() {
+    try {
+      return Files.createTempDirectory("batch-test-fs-root-");
+    } catch (IOException ex) {
+      throw new UncheckedIOException(ex);
+    }
   }
 }

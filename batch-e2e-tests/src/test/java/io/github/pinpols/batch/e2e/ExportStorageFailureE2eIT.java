@@ -55,7 +55,13 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
+@org.junit.jupiter.api.condition.EnabledIf("s3BackendActive")
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
+
+  /** S3 专属语义（endpoint 故障注入），filesystem 后端下自动跳过。 */
+  static boolean s3BackendActive() {
+    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
+  }
 
   private static final String TENANT = "t1";
   private static final String BATCH_NO = "E2E-EXPORT-MINIO-FAIL-1";

@@ -42,7 +42,13 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.worker.import.scanner.default-biz-date=2026-05-05",
       "batch.worker.import.scanner.batch-manifest-enabled=true"
     })
+@org.junit.jupiter.api.condition.EnabledIf("s3BackendActive")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
+
+  /** fixture 直接写 MinIO（S3Client），filesystem 后端下自动跳过。 */
+  static boolean s3BackendActive() {
+    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
+  }
 
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
