@@ -39,9 +39,9 @@ public class JsonExportFormat extends AbstractExportFormat {
         snapshot = Map.of();
       }
       writer.write("{\"snapshot\":");
-      writeJsonValue(writer, snapshot);
+      writeJsonValue(writer, snapshot, ctx);
       writer.write(",\"batch\":");
-      writeJsonValue(writer, ctx.batch());
+      writeJsonValue(writer, ctx.batch(), ctx);
       writer.write(",\"details\":[");
     }
     long recordCount = generatePaged(ctx, null, file::flushAndSync, (batch, detail, rowIndex) -> {
@@ -49,7 +49,7 @@ public class JsonExportFormat extends AbstractExportFormat {
       if (rowIndex > 0) {
         writer.write(",");
       }
-      writeJsonValue(writer, detail);
+      writeJsonValue(writer, detail, ctx);
       if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
         writer.flush();
       }
@@ -59,10 +59,19 @@ public class JsonExportFormat extends AbstractExportFormat {
     return recordCount;
   }
 
-  private void writeJsonValue(Writer writer, Object value) throws IOException {
+  private void writeJsonValue(Writer writer, Object value, ExportFormatContext ctx)
+      throws IOException {
     try (JsonGenerator generator = objectMapper.getFactory().createGenerator(writer)) {
       generator.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
       objectMapper.writeValue(generator, value);
+    } catch (IOException ex) {
+      if (isEncodingFailure(ex)) {
+        throw new IllegalStateException(
+            "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: row=json-value, charset="
+                + exportCharset(ctx).name(),
+            ex);
+      }
+      throw ex;
     }
   }
 }

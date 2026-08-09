@@ -18,6 +18,7 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -514,6 +515,11 @@ public final class ImportPreprocessPipeline {
     String to = firstNonBlank(stringProp(step, "toCharset"), EncodingUtils.UTF_8);
     Charset fromCs = EncodingUtils.resolve(from);
     Charset toCs = EncodingUtils.resolve(to);
+    // UTF-8 源常带 BOM（Windows Excel "CSV UTF-8"）；BOM 是文件格式标记而非业务内容，
+    // 转码前统一剥掉，避免它被当字段内容转进目标编码（例如 UTF-8 BOM → GBK 变成三个乱码字符）。
+    if (StandardCharsets.UTF_8.equals(fromCs)) {
+      input = EncodingUtils.stripUtf8Bom(input);
+    }
     long computedCap = Math.max(input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);
     long cap = parseLong(stringProp(step, "outputSizeCap"), computedCap);
     // ⚠3 (2026-05-03): 之前 new String(input, fromCs) 把整个文件物化为 UTF-16 String, 100 MB 输入 = 200 MB

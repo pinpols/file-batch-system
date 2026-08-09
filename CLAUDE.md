@@ -92,7 +92,7 @@
 ## 时区 / 编码
 
 - **时区**:全系统默认 `batch.timezone.default-zone`(默认 `Asia/Shanghai`),业务代码**禁** `ZoneId.systemDefault()`,统一注入 `BatchTimezoneProvider`。详见 [`docs/coding-conventions.md`](docs/coding-conventions.md) §时区
-- **编码**:全系统 UTF-8;Import (`PreprocessStep`) 是唯一允许读非 UTF-8 源文件的边界。代码用 `StandardCharsets.UTF_8`,**禁** `Charset.forName("UTF-8")` / 字面量。容器 locale 走 `BATCH_LOCALE` env。详见 [`docs/coding-conventions.md`](docs/coding-conventions.md) §字符编码
+- **编码**:系统内部全 UTF-8;仅 Import (`PreprocessStep`) 读入与 Export (GENERATE) 写出两个文件边界允许非 UTF-8(GBK/GB18030 等,导入立即转 UTF-8 内部表示,导出默认 UTF-8、模板 `target_charset` 可配)。代码用 `StandardCharsets.UTF_8` / `EncodingUtils.GBK` / `EncodingUtils.GB18030`,**禁** `Charset.forName("UTF-8")` / 字面量。容器 locale 走 `BATCH_LOCALE` env。详见 [`docs/coding-conventions.md`](docs/coding-conventions.md) §字符编码
 
 ## 字典 / i18n / 配置开关
 

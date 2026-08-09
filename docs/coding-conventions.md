@@ -1161,7 +1161,10 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 ### 20.2 字符编码
 
-**契约：全系统 UTF-8**。系统内部持有、传输、存储、落盘的字符串一律 UTF-8；仅"读取外部推过来的非 UTF-8 源文件"这一个导入边界允许 GBK / ISO-8859-1 等，读入时立即转为 UTF-8 内部表示。
+**契约：系统内部全 UTF-8**。系统内部持有、传输、存储的字符串一律 UTF-8；仅两个对外文件边界允许非 UTF-8：
+
+- **导入边界**（外部→系统）：允许 GBK / GB18030 / ISO-8859-1 等，读入时立即转为 UTF-8 内部表示；编码探测是**保守默认**——仅当模板显式 `charset_detect=true` 且未配置 charset 时才尝试「UTF-8 严格解码失败 → GB18030 探测回退」，默认保持 fail-fast（GB18030 是超集，盲目回退会把非 GB 系编码静默解成乱码）。
+- **导出边界**（系统→外部）：默认 UTF-8；模板 `target_charset` 可显式配置 UTF-8 / GBK / GB18030 / ISO-8859-1，配合 `with_bom`（仅 UTF-8/UTF-16 有 BOM 约定）与 `line_separator`（`\n` / `\r\n` / `\r`）落地，对接老系统允许 GBK/GB18030 + CRLF。
 
 ### 20.3 落地层次
 
@@ -1171,8 +1174,8 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | 项目源码 / 构建    | 根 pom `project.build.sourceEncoding=UTF-8` + `maven-compiler-plugin` 显式 `<encoding>UTF-8</encoding>`                                                                                                                      | `pom.xml`                                                                               |
 | 运行时容器 locale | `BATCH_LOCALE=C.UTF-8`，并由部署模板 / 镜像派生 `LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 21 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`）                                                                                     | `docker/Dockerfile.app`、`docker/compose/app.yml`、Helm ConfigMap                         |
 | HTTP / i18n  | `server.servlet.encoding.charset=UTF-8` + `force=true`；`spring.messages.encoding=UTF-8`                                                                                                                                   | `batch-common/.../batch-defaults.yml`                                                   |
-| 导出（系统→外部）    | 硬编码 `StandardCharsets.UTF_8`，`file_template_config.target_charset` 仅接受 `UTF-8`，其他拒绝                                                                                                                                       | `batch-worker-export/.../format/*ExportFormat.java`、`MinioExportStorage`、`RegisterStep` |
-| 导入（外部→系统）    | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级，解析后全流转均为 UTF-8                                                                                                                | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep`    |
+| 导出（系统→外部）    | 默认 UTF-8；`target_charset` 可配 UTF-8/GBK/GB18030/ISO-8859-1（非法值拒收为 `EXPORT_GENERATE_CONFIG_INVALID`），`with_bom` + `line_separator` 由 GENERATE 落地并在 REGISTER 登记到 file_record.charset / metadata；目标字符集无法表达的字符（如 GBK 遇 emoji）以 `EXPORT_GENERATE_UNMAPPABLE_CHARACTER` 报错并带行号/字段/值                                                                                                                | `batch-worker-export/.../stage/GenerateStep.java`、`format/*ExportFormat.java`、`RegisterStep` |
+| 导入（外部→系统）    | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级；文本格式统一字节级剥 UTF-8 BOM；仅 `charset_detect=true` 且未配置 charset 时 UTF-8 解码失败才回退 GB18030（写 `detectedCharset`），默认 fail-fast；`invalid_char_policy=FAIL/REPLACE` 控制非法字符处理，解析后全流转均为 UTF-8                                                                                                                | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep`    |
 | 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）派生 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker/compose/test.yml`                                          |
 
 
@@ -1182,6 +1185,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 - 需要 `Charset` 对象 → `StandardCharsets.UTF_8`
 - 需要字符集名（写入 `file_record.charset` 等字段） → `EncodingUtils.UTF_8`
 - 需要归一外部输入 → `EncodingUtils.normalize(raw)` / `EncodingUtils.resolve(raw)`
+- 需要 GBK / GB18030 的 `Charset` 对象 → `EncodingUtils.GBK` / `EncodingUtils.GB18030`（禁止业务代码散落 `Charset.forName(...)`）
 - 导出路径强制断言 → `EncodingUtils.requireUtf8(raw)`
 - **禁止** 业务代码自行调用 `Charset.forName(...)`——别名差异（`utf8` / `UTF8` / `utf-8`）和非法值交给 `EncodingUtils` 处理
 

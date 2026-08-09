@@ -265,6 +265,28 @@ class ImportPreprocessPipelineTest {
     assertThat(new String(out, StandardCharsets.UTF_16BE)).isEqualTo("hello");
   }
 
+  @Test
+  void charsetTranscode_shouldStripUtf8BomBeforeTranscoding() {
+    // UTF-8 BOM + 内容，转码到 UTF-16BE 后 BOM 不应出现在业务内容里
+    byte[] bom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+    byte[] raw = concat(bom, "客户".getBytes(StandardCharsets.UTF_8));
+    String pipeline = """
+        [{"type":"CHARSET_TRANSCODE","fromCharset":"UTF-8","toCharset":"UTF-16BE"}]
+        """;
+    Map<String, Object> template = Map.of("preprocess_pipeline", pipeline);
+
+    byte[] out = ImportPreprocessPipeline.run(raw, null, template, true);
+
+    assertThat(new String(out, StandardCharsets.UTF_16BE)).isEqualTo("客户");
+  }
+
+  private static byte[] concat(byte[] first, byte[] second) {
+    byte[] result = new byte[first.length + second.length];
+    System.arraycopy(first, 0, result, 0, first.length);
+    System.arraycopy(second, 0, result, first.length, second.length);
+    return result;
+  }
+
   private static byte[] gzip(byte[] payload) throws Exception {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     try (GZIPOutputStream gos = new GZIPOutputStream(bos)) {

@@ -43,7 +43,7 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
       BufferedWriter writer = file.writer();
       // 续跑时残文件已含表头,不可重写。
       if (!isResuming(ctx)) {
-        writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows);
+        writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows, ctx);
       }
       return generatePaged(ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
         StringBuilder line = new StringBuilder();
@@ -53,8 +53,8 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
         if (recordLength > 0) {
           line = new StringBuilder(padRight(line.toString(), recordLength));
         }
-        writer.write(line.toString());
-        writer.newLine();
+        writeText(writer, line.toString(), "data-row-" + (rowIndex + 1), null, ctx);
+        writeNewLine(writer, ctx);
         if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
           writer.flush();
         }
@@ -63,13 +63,17 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
   }
 
   private void writeFixedWidthHeaderRows(
-      BufferedWriter writer, List<ColumnLayout> columns, int recordLength, int headerRows)
+      BufferedWriter writer,
+      List<ColumnLayout> columns,
+      int recordLength,
+      int headerRows,
+      ExportFormatContext ctx)
       throws IOException {
     int effectiveHeaderRows = Math.max(1, headerRows);
     String header = fixedWidthLine(columns, recordLength, ColumnLayout::header);
     for (int i = 0; i < effectiveHeaderRows; i++) {
-      writer.write(header);
-      writer.newLine();
+      writeText(writer, header, "header-" + (i + 1), null, ctx);
+      writeNewLine(writer, ctx);
     }
   }
 }

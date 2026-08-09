@@ -10,12 +10,20 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -159,9 +167,111 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       try (FileChannel ch = FileChannel.open(ctx.generatedFile(), StandardOpenOption.WRITE)) {
         ch.truncate(ctx.checkpoint().resumeByteOffset());
       }
-      return ResumableExportFile.append(ctx.generatedFile());
+      return ResumableExportFile.append(ctx.generatedFile(), exportCharset(ctx));
     }
-    return ResumableExportFile.truncate(ctx.generatedFile());
+    return ResumableExportFile.truncate(ctx.generatedFile(), exportCharset(ctx), withBom(ctx));
+  }
+
+  /** 导出目标字符集（GenerateStep 恒注入；防御 null 回退 UTF-8）。 */
+  protected Charset exportCharset(ExportFormatContext ctx) {
+    return ctx == null || ctx.charset() == null ? StandardCharsets.UTF_8 : ctx.charset();
+  }
+
+  /** 是否写 BOM 前缀（仅对存在 BOM 约定的字符集生效）。 */
+  protected boolean withBom(ExportFormatContext ctx) {
+    return ctx != null && Boolean.TRUE.equals(ctx.withBom());
+  }
+
+  /** 行分隔符（GenerateStep 恒注入；防御 null 回退 LF）。 */
+  protected String exportLineSeparator(ExportFormatContext ctx) {
+    // 不能用 Texts.hasText 判空：真实 "\r\n" 会被 hasText 判定为空白（trim 后为空），导致 CRLF 退化成 LF。
+    return ctx == null || ctx.lineSeparator() == null ? "\n" : ctx.lineSeparator();
+  }
+
+  /** 按模板声明的行分隔符写一行结束符，替代 {@link BufferedWriter#newLine()} 的平台默认值。 */
+  protected void writeNewLine(BufferedWriter writer, ExportFormatContext ctx) throws IOException {
+    writer.write(exportLineSeparator(ctx));
+  }
+
+  /**
+   * 写一段文本并把「目标字符集无法表达该字符」（如 GBK 遇到 emoji / 生僻字）转成带行号、字段的明确错误。
+   * 真正的 IO 故障（磁盘满等）原样抛回，不误包装。
+   *
+   * <p>必须在 {@code write} 前预校验：BufferedWriter 会把实际编码推迟到 flush/close，若等异常从那里冒出来，
+   * 行号/字段上下文已经丢失，只能得到 "Input length = 2" 这类无意义信息。
+   */
+  protected void writeText(
+      BufferedWriter writer, String text, String rowLabel, String column, ExportFormatContext ctx)
+      throws IOException {
+    if (EmptyChecks.isNotEmpty(text)) {
+      CharsetEncoder encoder = strictEncoder(exportCharset(ctx));
+      try {
+        encoder.encode(CharBuffer.wrap(text));
+      } catch (CharacterCodingException ex) {
+        throw new IllegalStateException(
+            "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: "
+                + (rowLabel == null ? "row=?" : rowLabel)
+                + (column == null ? "" : ", column=" + column)
+                + ", charset="
+                + exportCharset(ctx).name()
+                + ", value="
+                + previewValue(text),
+            ex);
+      }
+    }
+    try {
+      writer.write(text);
+    } catch (IOException ex) {
+      if (isEncodingFailure(ex)) {
+        throw new IllegalStateException(
+            "EXPORT_GENERATE_UNMAPPABLE_CHARACTER: "
+                + (rowLabel == null ? "row=?" : rowLabel)
+                + (column == null ? "" : ", column=" + column)
+                + ", charset="
+                + exportCharset(ctx).name()
+                + ", value="
+                + previewValue(text),
+            ex);
+      }
+      throw ex;
+    }
+  }
+
+  /** 异常链是否命中字符不可映射 / 畸形输入（{@code StreamEncoder} 把 CharacterCodingException 包成 IOException cause）。 */
+  protected static boolean isEncodingFailure(Throwable throwable) {
+    for (Throwable current = throwable; current != null; current = current.getCause()) {
+      if (current instanceof CharacterCodingException) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** 线程级缓存的严格编码器（REPORT 而非默认 REPLACE），复用避免每字段 newEncoder。 */
+  private static final ThreadLocal<Map<String, CharsetEncoder>> STRICT_ENCODERS =
+      ThreadLocal.withInitial(HashMap::new);
+
+  private static CharsetEncoder strictEncoder(Charset charset) {
+    Map<String, CharsetEncoder> cache = STRICT_ENCODERS.get();
+    CharsetEncoder encoder = cache.get(charset.name());
+    if (encoder == null) {
+      encoder = charset
+          .newEncoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT);
+      cache.put(charset.name(), encoder);
+    }
+    return encoder.reset();
+  }
+
+  private static String previewValue(String value) {
+    if (value == null) {
+      return "null";
+    }
+    String collapsed = value.replace("\r", "\\r").replace("\n", "\\n");
+    return collapsed.length() <= 120
+        ? "\"" + collapsed + "\""
+        : "\"" + collapsed.substring(0, 120) + "...\"";
   }
 
   /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
