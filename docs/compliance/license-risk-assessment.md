@@ -1,7 +1,7 @@
 # 许可证风险评估（License Risk Assessment）
 
-> 评估时间：2026-04-26  
-> 数据源：`docs/compliance/sbom.json`（CycloneDX 1.6，`mvn -P compliance cyclonedx:makeAggregateBom` 产出，266 个 runtime + transitive 组件）  
+> 评估时间：2026-08-09  
+> 数据源：`docs/compliance/sbom.json`（CycloneDX 1.6，`mvn -P compliance cyclonedx:makeAggregateBom` 产出，391 个 runtime + transitive 组件）  
 > 项目自身许可：**Apache License 2.0**（见 `LICENSE`，`Copyright 2026 Dengchao`）
 
 本文档**只评估 license 兼容性 / 分发义务 / copyleft 传染风险**，不涉及业务运行时的服务条款（OpenAI ToS、云服务 EULA 等）。
@@ -26,13 +26,13 @@
 
 | License 家族 | 代表组件 | 风险等级 | 说明 |
 |---|---|---|---|
-| **Apache-2.0** | Spring 全家桶 / Flyway / MyBatis / MinIO / OkHttp / POI / Quartz / Netty / Jackson / Micrometer / OpenTelemetry / ShedLock | 🟢 无 | 完全兼容 Apache-2.0 项目自身 |
+| **Apache-2.0** | Spring 全家桶 / Flyway / MyBatis / AWS SDK for Java v2 / OkHttp / POI / Quartz / Netty / Jackson / Micrometer / OpenTelemetry / ShedLock / Resilience4j / Bucket4j | 🟢 无 | 完全兼容 Apache-2.0 项目自身 |
 | **MIT** | Lombok / SLF4J / Mockito / 部分 transitive | 🟢 无 | 完全宽松 |
 | **BSD-2-Clause** | PostgreSQL JDBC | 🟢 无 | 仅需保留 copyright |
-| **BSD-3-Clause / EDL-1.0** | JSch (mwiede fork) / ANTLR ST4 / Angus Activation Registries | 🟢 无（admin 缺口） | 严格要求保留 3 条款原文，详见 §3.3。EDL-1.0 = Eclipse Distribution License，与 BSD-3 等价 |
-| **EPL-2.0 + LGPL（双许可）** | Logback Classic / Core 1.5.32 | 🟢 无 | 双许可可选 EPL-2.0 路径；动态链接库使用无义务，详见 §2.1 |
+| **ISC / BSD-3-Clause / EDL-1.0** | JSch (mwiede fork，pom 声明 ISC + Revised BSD) / ANTLR ST4 / Angus Activation Registries | 🟢 无（admin 缺口） | 严格要求保留许可证原文，详见 §3.3。EDL-1.0 = Eclipse Distribution License，与 BSD-3 等价 |
+| **EPL-2.0 + LGPL（双许可）** | Logback Classic / Core 1.5.34 | 🟢 无 | 双许可可选 EPL-2.0 路径；动态链接库使用无义务，详见 §2.1 |
 | **EPL-2.0 + GPL-2 w/ Classpath Exception** | Angus Mail / Jakarta Annotations API / Jakarta Mail API | 🟢 无 | Classpath Exception **明确允许**链接到非 GPL 代码，无传染，详见 §2.2 |
-| **LGPL-2.1 OR Apache-2.0（双许可）** | JSqlParser 4.5 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 LGPL，详见 §2.3 |
+| **LGPL-2.1 OR Apache-2.0（双许可）** | JSqlParser 5.3 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 LGPL，详见 §2.3 |
 | **Apache-2.0 OR GPL-2.0（双许可）** | RocksDB JNI 10.1.3 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 GPL，详见 §2.4 |
 | **CDDL / MPL / 纯 GPL（无 CPE）/ AGPL / CC-BY-NC** | — | — | **未发现**（grep 0 命中） |
 | **Unknown / undeclared** | — | — | **未发现**（generated 报告无 `unknown`） |
@@ -41,7 +41,7 @@
 
 ## 2. 主动管理项（看似有风险，实际 0 义务）
 
-### 2.1 Logback Classic / Core 1.5.32 — EPL-2.0 OR LGPL
+### 2.1 Logback Classic / Core 1.5.34 — EPL-2.0 OR LGPL
 
 **实际 license 文本**（来自 generated 报告）：  
 `(Eclipse Public License - v 2.0) (GNU Lesser General Public License) Logback Classic Module`
@@ -65,7 +65,7 @@
 
 **触发风险的姿势**：fork 这些库的源码并删除 CPE 声明再分发 → 不可能误操作。
 
-### 2.3 JSqlParser 4.5 — LGPL-2.1 OR Apache-2.0
+### 2.3 JSqlParser 5.3 — LGPL-2.1 OR Apache-2.0
 
 **实际 license 文本**：  
 `(GNU Library or Lesser General Public License (LGPL) V2.1) (The Apache Software License, Version 2.0) JSQLParser library`
@@ -106,7 +106,7 @@
 
 ### 3.2 BSD-3-Clause attribution 文字未原文嵌入
 
-**涉及**：JSch (`com.github.mwiede:jsch:0.2.23`)、ANTLR ST4
+**涉及**：JSch (`com.github.mwiede:jsch:0.2.26`)、ANTLR ST4
 
 **BSD-3-Clause §1-3 严格要求**：分发二进制时必须包含 copyright notice + 三条款条文原文 + disclaimer 全文。
 
@@ -116,7 +116,7 @@
 
 ### 3.3 EPL-2.0 / LGPL secondary license 文本
 
-**涉及**：Logback Classic / Core 1.5.32
+**涉及**：Logback Classic / Core 1.5.34
 
 **EPL-2.0 §3.1 要求**：分发 EPL-licensed material 时必须把 EPL-2.0 全文随附。
 
@@ -145,7 +145,7 @@
 mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
 
 # 入库的权威产物：
-#   docs/compliance/sbom.json           ← CycloneDX 1.6 完整 SBOM（266 个 component）
+#   docs/compliance/sbom.json           ← CycloneDX 1.6 完整 SBOM（391 个 component）
 # 仅开发期临时产物（不入库）：
 #   target/bom.json + target/bom.xml
 #   target/generated-sources/license/THIRD-PARTY.txt
@@ -168,7 +168,7 @@ jq -r '.components[] | "\(.licenses[0].license.id // .licenses[0].license.name /
   | grep -v -iE "GPL-[23]\.0-with-classpath-exception"
 ```
 
-**今天（2026-04-26）实跑结果**：0 命中 ✅
+**今天（2026-08-09）实跑结果**：0 命中 ✅（CI `check-dependency-licenses.sh` 门禁同步通过）
 
 ### 5.3 SBOM 可视化 / 上传到 Dependency-Track
 
@@ -204,6 +204,6 @@ jq -r '.components[] | "\(.licenses[0].license.id // .licenses[0].license.name /
 
 - `LICENSE` — 项目自身 Apache-2.0 全文
 - `NOTICE` — 项目自身 attribution（待按 §3.1 升级）
-- `docs/compliance/sbom.json` — **权威依赖清单**，CycloneDX 1.6 SBOM（266 个 component，机器可读，jq 友好）
+- `docs/compliance/sbom.json` — **权威依赖清单**，CycloneDX 1.6 SBOM（391 个 component，机器可读，jq 友好）
 - `docs/compliance/THIRD-PARTY-LICENSES.md` — 人工 curated 摘要表（按 runtime/test 分类，附 "Used By" 业务上下文）
 - `pom.xml` `<profile id="compliance">` — 生成器配置（cyclonedx → 入库；license-maven-plugin → 临时 target/，不入库）

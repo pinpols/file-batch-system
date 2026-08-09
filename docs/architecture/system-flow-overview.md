@@ -101,38 +101,34 @@ flowchart LR
   WD ==>|"deliver (cp / scp / POST)"| FS
 
   %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
-  %%   0,1,2  前台 MANUAL 入口（灰细虚 = 辅助路径，少数场景）：USER→CONSOLE / CONSOLE→TR / CONSOLE→WS
-  linkStyle 0,1,2 stroke:#9e9e9e,stroke-width:1.5px,stroke-dasharray:5 4
-  %%   3      Quartz cron fire → TR（蓝粗虚 = 回退路径，2026-04-26 不再是默认）
-  linkStyle 3 stroke:#1565c0,stroke-width:2px,stroke-dasharray:6 4
-  %%   4      Quartz fire → TR（蓝粗实 = 默认主入口，生产 95%+ 触发量）
-  linkStyle 4 stroke:#1565c0,stroke-width:2.5px
-  %%   5      feature flag 控制（虚线灰）
-  linkStyle 5 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   6,7,8  trigger → TKAFKA → orchestrator（橙 = Kafka 异步，ADR-010 固化路径，MANUAL 与 SCHEDULED 在此汇合）
-  linkStyle 6,7,8 stroke:#ef6c00,stroke-width:2.5px
-  %%   9     LS → PDB 写（绿）
-  linkStyle 9 stroke:#2e7d32,stroke-width:2.5px
-  %%   10..12 PA/SEL/OUT 读 PDB（紫虚）
-  linkStyle 10,11,12 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   13    SCH ↔ Redis（黄虚）
-  linkStyle 13 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   14..18 Kafka 链(橙) — OUT→K + 4 条 K→worker(import/export/process/dispatch)
-  linkStyle 14,15,16,17,18 stroke:#ef6c00,stroke-width:2.5px
-  %%   19..22 worker → LS 上报(HTTP 蓝虚 = 控制信号,4 条 worker)
-  linkStyle 19,20,21,22 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   23    LS → PDB 状态机更新(绿)
-  linkStyle 23 stroke:#2e7d32,stroke-width:2.5px
-  %%   24    worker-import → biz 写(绿)
-  linkStyle 24 stroke:#2e7d32,stroke-width:2.5px
-  %%   25    worker-export 读 biz(紫虚)
+  %%   0,1   前台 MANUAL 入口（灰细虚 = 辅助路径，少数场景）：USER→CONSOLE / CONSOLE→TR
+  linkStyle 0,1 stroke:#9e9e9e,stroke-width:1.5px,stroke-dasharray:5 4
+  %%   2     Quartz fire → TR（蓝粗实 = 默认主入口，生产 95%+ 触发量）
+  linkStyle 2 stroke:#1565c0,stroke-width:2.5px
+  %%   3,4   trigger → trigger_kafka → orchestrator（橙 = Kafka 异步，ADR-010 固化路径，MANUAL 与 SCHEDULED 在此汇合）
+  linkStyle 3,4 stroke:#ef6c00,stroke-width:2.5px
+  %%   5     LS → PDB 写（绿）
+  linkStyle 5 stroke:#2e7d32,stroke-width:2.5px
+  %%   6,7,8 PA/SEL/OUT 读 PDB（紫虚）
+  linkStyle 6,7,8 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   9     SCH ↔ Redis（黄虚）
+  linkStyle 9 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   10..15 Kafka 链(橙) — OUT→K + 5 条 K→worker(import/export/process/dispatch/atomic)
+  linkStyle 10,11,12,13,14,15 stroke:#ef6c00,stroke-width:2.5px
+  %%   16..20 worker → LS 上报(HTTP 蓝虚 = 控制信号,5 条 worker)
+  linkStyle 16,17,18,19,20 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   21    LS → PDB 状态机更新(绿)
+  linkStyle 21 stroke:#2e7d32,stroke-width:2.5px
+  %%   22    worker-import → biz 写(绿)
+  linkStyle 22 stroke:#2e7d32,stroke-width:2.5px
+  %%   23    worker-export 读 biz(紫虚)
+  linkStyle 23 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   24    worker-export → MinIO(外部红)
+  linkStyle 24 stroke:#c62828,stroke-width:2.5px
+  %%   25    worker-dispatch 读 MinIO(紫虚)
   linkStyle 25 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   26    worker-export → MinIO(外部红)
+  %%   26    worker-dispatch → 外部 target(红)
   linkStyle 26 stroke:#c62828,stroke-width:2.5px
-  %%   27    worker-dispatch 读 MinIO(紫虚)
-  linkStyle 27 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   28    worker-dispatch → 外部 target(红)
-  linkStyle 28 stroke:#c62828,stroke-width:2.5px
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;

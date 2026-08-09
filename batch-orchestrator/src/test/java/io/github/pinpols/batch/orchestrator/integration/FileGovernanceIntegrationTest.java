@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -63,7 +64,13 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.file-governance.reconcile.batch-size=10",
       "batch.startup-self-check.enabled=false"
     })
+@EnabledIf("s3BackendActive")
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
+
+  /** fixture 直接写 MinIO（S3Client），filesystem 后端下自动跳过。 */
+  static boolean s3BackendActive() {
+    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
+  }
 
   private static final class FileRecordSpec {
     private final String tenantId;

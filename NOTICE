@@ -47,9 +47,9 @@ Hibernate Validator
   Copyright (c) Red Hat, Inc. and Hibernate Authors
   Apache License, Version 2.0 — https://hibernate.org/validator
 
-MinIO Java SDK
-  Copyright (c) 2015-2026 MinIO, Inc.
-  Apache License, Version 2.0 — https://github.com/minio/minio-java
+AWS SDK for Java v2 (S3)
+  Copyright (c) 2013-2026 Amazon.com, Inc. or its affiliates
+  Apache License, Version 2.0 — https://github.com/aws/aws-sdk-java-v2
 
 OkHttp
   Copyright (c) 2019 Square, Inc.
@@ -64,6 +64,14 @@ ShedLock
   Copyright (c) 2018-2026 Lukas Krecan
   Apache License, Version 2.0 — https://github.com/lukas-krecan/ShedLock
 
+Resilience4j
+  Copyright (c) Resilience4j Authors
+  Apache License, Version 2.0 — https://resilience4j.readme.io
+
+Bucket4j
+  Copyright (c) 2017-2026 Vladimir Bukhtoyarov
+  Apache License, Version 2.0 — https://github.com/bucket4j/bucket4j
+
 Micrometer
   Copyright (c) Pivotal Software, Inc. / VMware, Inc.
   Apache License, Version 2.0 — https://micrometer.io
@@ -72,8 +80,8 @@ OpenTelemetry Java
   Copyright (c) The OpenTelemetry Authors
   Apache License, Version 2.0 — https://opentelemetry.io
 
-Testcontainers / WireMock / GreenMail
-  Copyright (c) Testcontainers / Tom Akehurst / Marcel May
+Testcontainers / GreenMail
+  Copyright (c) Testcontainers / Marcel May
   Apache License, Version 2.0
 
 PostgreSQL JDBC Driver (pgjdbc)
@@ -83,7 +91,7 @@ PostgreSQL JDBC Driver (pgjdbc)
 JSch (mwiede fork)
   Copyright (c) 2002-2015 Atsuhiko Yamanaka, JCraft, Inc.
   Copyright (c) 2018-2026 Matthias Wiedemann
-  BSD 3-Clause License — https://github.com/mwiede/jsch
+  ISC License / BSD 3-Clause (Revised BSD) — https://github.com/mwiede/jsch
 
 Logback
   Copyright (c) QOS.ch
@@ -114,8 +122,8 @@ Notes
 
 1. The list above covers the major direct and transitive dependencies that
    ship with their own NOTICE / attribution requirements. The exhaustive list
-   (curated snapshot as of 2026-06-03; last machine-regenerated 2026-04-26
-   with 266 transitive components) lives in
+   (curated snapshot as of 2026-08-09; last machine-regenerated 2026-08-09
+   with 391 transitive components) lives in
    docs/compliance/THIRD-PARTY-LICENSES.md.
 
 2. The Python SDK (batch-worker-sdk-python/) ships independently via PyPI

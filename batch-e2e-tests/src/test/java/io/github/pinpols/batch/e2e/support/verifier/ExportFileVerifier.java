@@ -2,22 +2,17 @@ package io.github.pinpols.batch.e2e.support.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
  * Content-level verifier for Export pipeline E2E tests.
@@ -28,12 +23,12 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
  *   <li><b>File record</b>: {@code file_record} row has {@code storage_path} set and {@code
  *       file_status = 'GENERATED'} (or 'COMPLETED')
  *   <li><b>Amount rollup</b>: {@code settlement_batch.total_amount} meets the expected minimum
- *   <li><b>MinIO content</b> (best-effort): downloaded file is non-empty and contains expected
- *       content snippets
+ *   <li><b>Object content</b> (best-effort): file read through the active test backend
+ *       (MinIO/S3 or filesystem root) is non-empty and contains expected content snippets
  * </ol>
  *
- * <p>Unused assertions are omitted by not setting the corresponding builder fields. The MinIO
- * content check is silently skipped for LOCAL-type storage paths.
+ * <p>Unused assertions are omitted by not setting the corresponding builder fields. The content
+ * check is silently skipped for LOCAL-type storage paths (e.g. {@code /...} or {@code file://...}).
  */
 public final class ExportFileVerifier implements E2eVerifier {
 
@@ -94,7 +89,7 @@ public final class ExportFileVerifier implements E2eVerifier {
 
     if (!expectedContentSnippets.isEmpty()) {
       String storagePath = String.valueOf(fileRecord.get("storage_path"));
-      tryAssertMinioContent(storagePath);
+      tryAssertObjectContent(storagePath);
     }
   }
 
@@ -117,36 +112,27 @@ public final class ExportFileVerifier implements E2eVerifier {
   }
 
   /** Best-effort: silently skips if MinIO is unreachable or path is LOCAL. */
-  private void tryAssertMinioContent(String storagePath) {
+  private void tryAssertObjectContent(String storagePath) {
     if (storagePath == null
         || storagePath.startsWith("/")
         || storagePath.startsWith("file://")
-        || s3Endpoint == null) {
+        || s3Bucket == null) {
       return;
     }
-    try (S3Client client = S3Client.builder()
-        .endpointOverride(URI.create(s3Endpoint))
-        .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create("minioadmin", "minioadmin")))
-        .forcePathStyle(true)
-        .region(Region.US_EAST_1)
-        .build()) {
-      String bucket = s3Bucket != null ? s3Bucket : "batch-dev";
+    try {
+      String bucket = s3Bucket;
       String objectKey = storagePath.startsWith(bucket + "/")
           ? storagePath.substring(bucket.length() + 1)
           : storagePath;
 
-      byte[] objectBytes = client
-          .getObjectAsBytes(
-              GetObjectRequest.builder().bucket(bucket).key(objectKey).build())
-          .asByteArray();
+      byte[] objectBytes = AbstractIntegrationTest.readObject(bucket, objectKey);
       try (var stream = new ByteArrayInputStream(objectBytes);
           BufferedReader reader =
               new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
 
         List<String> lines = reader.lines().filter(l -> !l.isBlank()).collect(Collectors.toList());
 
-        assertThat(lines).as("export: MinIO file must be non-empty").isNotEmpty();
+        assertThat(lines).as("export: object file must be non-empty").isNotEmpty();
 
         if (expectedMinFileRows > 0) {
           assertThat(lines.size())
@@ -166,7 +152,7 @@ public final class ExportFileVerifier implements E2eVerifier {
     } catch (AssertionError ae) {
       throw ae; // re-throw assertion failures
     } catch (Exception ex) {
-      // MinIO unavailable or file not in expected bucket — skip content check
+      // Backend unavailable or file not present — skip content check (best-effort)
     }
   }
 

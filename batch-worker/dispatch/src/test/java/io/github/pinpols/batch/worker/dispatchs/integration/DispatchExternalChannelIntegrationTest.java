@@ -26,6 +26,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -47,7 +48,13 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @SpringBootTest(
     classes = BatchWorkerDispatchApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@EnabledIf("s3BackendActive")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
+
+  /** fixture 直接写 MinIO（S3Client），filesystem 后端下自动跳过。 */
+  static boolean s3BackendActive() {
+    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
+  }
 
   private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("atmoz/sftp:alpine");
   private static final String SFTP_USER = "batch";

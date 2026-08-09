@@ -31,6 +31,9 @@ paths = [
     '''batch-common/src/test/java/io/github/pinpols/batch/common/storage/FilesystemObjectStoreTest\.java''',
     '''batch-common/src/test/java/io/github/pinpols/batch/common/storage/EncryptingObjectStoreTest\.java''',
     '''batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFilesystemPresignDownloadControllerTest\.java''',
+    # 测试代码:对象存储后端切换的 FS presign HMAC fixture
+    # ("test-fs-presign-secret-0123456789abcdef",非真实凭据,generic-api-key 误判)
+    '''batch-common/src/test/java/io/github/pinpols/batch/testing/IntegrationTestInfrastructure\.java''',
     # 同一测试 fixture 的历史包名路径(gitleaks 全历史扫描会命中旧提交)
     '''batch-common/src/test/java/com/example/batch/common/storage/FilesystemObjectStoreTest\.java''',
     '''batch-common/src/test/java/com/example/batch/common/storage/EncryptingObjectStoreTest\.java''',

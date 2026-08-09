@@ -7,7 +7,6 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -16,13 +15,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
-/** Integration test: S3ExportStorage read/write/copy/remove against real MinIO container. */
+/**
+ * Integration test: S3ExportStorage read/write/copy/remove against the active test storage backend
+ * (MinIO/S3 by default, filesystem via {@code -Dbatch.test.storage.backend=filesystem}).
+ */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -110,25 +107,14 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void shouldRoundTripWrittenJsonThroughMinio() throws Exception {
+  void shouldRoundTripWrittenJsonThroughActiveBackend() throws Exception {
     String objectName = "export/it-test-roundtrip.json";
     String content = "{\"roundTrip\":true,\"n\":7}";
 
     storage.writeJson(objectName, content);
 
-    try (S3Client client = S3Client.builder()
-        .endpointOverride(URI.create(s3Endpoint()))
-        .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
-        .forcePathStyle(true)
-        .region(Region.US_EAST_1)
-        .build()) {
-      byte[] bytes = client
-          .getObjectAsBytes(
-              GetObjectRequest.builder().bucket(s3Bucket()).key(objectName).build())
-          .asByteArray();
-      String read = new String(bytes, StandardCharsets.UTF_8);
-      assertThat(read).isEqualTo(content);
-    }
+    byte[] bytes = readObject(s3Bucket(), objectName);
+    String read = new String(bytes, StandardCharsets.UTF_8);
+    assertThat(read).isEqualTo(content);
   }
 }
