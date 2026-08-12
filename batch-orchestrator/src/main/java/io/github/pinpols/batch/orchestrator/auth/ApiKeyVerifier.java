@@ -17,10 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
@@ -62,7 +59,6 @@ import org.springframework.stereotype.Component;
  * <p><b>scope 过滤</b>({@link #verifyWithScope}/{@link #verifyWithAnyScope})在缓存<b>之后</b>做——它们是对
  * {@link #verify} 结果的纯函数过滤,天然与缓存兼容。
  */
-@Slf4j
 @Component
 public class ApiKeyVerifier {
 
@@ -106,17 +102,10 @@ public class ApiKeyVerifier {
    */
   private final MeterRegistry meterRegistry;
 
+  private final ApiKeyAsyncMaintenance asyncMaintenance;
+
   /** keyId → 上次真实写 last_used_at 的 ticker 纳秒时刻;用于 60s 写节流。key 数量 ~= 活跃 key 数,极小。 */
   private final ConcurrentHashMap<Long, Long> lastTouchNanos = new ConcurrentHashMap<>();
-
-  /**
-   * 自注入(CLAUDE.md §Java #3 豁免①):{@code touchAsync} / {@code upgradeLegacyHashAsync} 标了
-   * {@code @Async}, 必须经 Spring 代理调用才异步。原先 {@code this.touchAsync()} 是同类自调用,绕过代理 → @Async 失效 → DB 写
-   * + PBKDF2(50-200ms CPU)在请求线程同步执行,峰值流量会耗尽 Tomcat 线程池。改走 {@code self.xxx()}。
-   */
-  @Lazy
-  @Autowired
-  private ApiKeyVerifier self;
 
   /**
    * 生产构造器(Spring):系统时钟。
@@ -126,8 +115,11 @@ public class ApiKeyVerifier {
    * ApiKeyVerifierTest.springCanInstantiateBeanDespiteMultipleConstructors}。
    */
   @Autowired
-  public ApiKeyVerifier(ApiKeyAuthMapper mapper, MeterRegistry meterRegistry) {
-    this(mapper, Ticker.systemTicker(), InstantSource.system(), meterRegistry);
+  public ApiKeyVerifier(
+      ApiKeyAuthMapper mapper,
+      MeterRegistry meterRegistry,
+      ApiKeyAsyncMaintenance asyncMaintenance) {
+    this(mapper, Ticker.systemTicker(), InstantSource.system(), meterRegistry, asyncMaintenance);
   }
 
   /**
@@ -135,7 +127,7 @@ public class ApiKeyVerifier {
    * meterRegistry 为 null:不绑 micrometer(纯逻辑单测无需指标)。
    */
   ApiKeyVerifier(ApiKeyAuthMapper mapper, Ticker ticker, InstantSource instantSource) {
-    this(mapper, ticker, instantSource, null);
+    this(mapper, ticker, instantSource, null, new ApiKeyAsyncMaintenance(mapper));
   }
 
   ApiKeyVerifier(
@@ -143,10 +135,20 @@ public class ApiKeyVerifier {
       Ticker ticker,
       InstantSource instantSource,
       MeterRegistry meterRegistry) {
+    this(mapper, ticker, instantSource, meterRegistry, new ApiKeyAsyncMaintenance(mapper));
+  }
+
+  ApiKeyVerifier(
+      ApiKeyAuthMapper mapper,
+      Ticker ticker,
+      InstantSource instantSource,
+      MeterRegistry meterRegistry,
+      ApiKeyAsyncMaintenance asyncMaintenance) {
     this.mapper = mapper;
     this.ticker = ticker;
     this.instantSource = instantSource;
     this.meterRegistry = meterRegistry;
+    this.asyncMaintenance = asyncMaintenance;
     this.verifyCache = Caffeine.newBuilder()
         .ticker(ticker)
         .expireAfterWrite(Duration.ofMinutes(VERIFY_CACHE_TTL_MINUTES))
@@ -206,7 +208,7 @@ public class ApiKeyVerifier {
         verifyCache.put(cacheKey, rec);
         maybeTouch(rec.id());
         if (ApiKeyHasher.ALGO_SHA256_LEGACY.equals(algo)) {
-          self.upgradeLegacyHashAsync(rec.id(), rec.keyHash(), rawKey);
+          asyncMaintenance.upgradeLegacyHash(rec.id(), rec.keyHash(), rawKey);
         }
         return Optional.of(rec);
       }
@@ -240,7 +242,7 @@ public class ApiKeyVerifier {
       return now;
     });
     if (doWrite[0]) {
-      self.touchAsync(id);
+      asyncMaintenance.touch(id);
     }
   }
 
@@ -284,33 +286,5 @@ public class ApiKeyVerifier {
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toSet());
     return scopes.contains(SCOPE_WILDCARD) || scopes.contains(requiredScope);
-  }
-
-  @Async
-  public void touchAsync(Long id) {
-    try {
-      mapper.touchLastUsedAt(id);
-    } catch (Exception ex) {
-      log.debug("touch last_used_at failed for keyId={}: {}", id, ex.getMessage());
-    }
-  }
-
-  /**
-   * P1-1:legacy sha256 行命中后,best-effort 升级为 PBKDF2 + salt。
-   *
-   * <p>WHERE 守护 {@code algo='sha256' AND key_hash=oldHash} 防并发改写覆盖 — 同时被 console-api revoke 或被另一
-   * worker 并发升级的场景下,落败方无副作用退出。
-   */
-  @Async
-  public void upgradeLegacyHashAsync(Long id, String oldHash, String rawKey) {
-    try {
-      ApiKeyHasher.SaltedHash upgraded = ApiKeyHasher.hashWithSaltKdf(rawKey);
-      int rows = mapper.upgradeHashIfLegacy(id, oldHash, upgraded.hash(), upgraded.salt());
-      if (rows > 0) {
-        log.info("api_key keyId={} upgraded sha256 → pbkdf2", id);
-      }
-    } catch (Exception ex) {
-      log.debug("api_key keyId={} kdf upgrade swallowed: {}", id, ex.getMessage());
-    }
   }
 }

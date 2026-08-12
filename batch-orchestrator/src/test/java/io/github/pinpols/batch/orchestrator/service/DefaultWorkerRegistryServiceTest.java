@@ -19,7 +19,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.SystemParameterMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -66,17 +65,13 @@ class DefaultWorkerRegistryServiceTest {
   private DefaultWorkerRegistryService service;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     service = new DefaultWorkerRegistryService(
         mapper,
         customTaskTypeRegistryMapper,
         progressCache,
         systemParameterMapper,
         workerRegistryProperties);
-    // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
-    Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");
-    self.setAccessible(true);
-    self.set(service, service);
   }
 
   private WorkerHeartbeatDto dto(String status) {

@@ -20,7 +20,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * P2: TaskDispatchOutboxService 业务行为补强,补 TaskDispatchOutboxServiceMandatoryTest 之外的:
@@ -48,7 +47,6 @@ class TaskDispatchOutboxServiceBehaviorTest {
   void setUp() {
     service =
         new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
-    ReflectionTestUtils.setField(service, "self", service);
   }
 
   private JobInstanceEntity instance(int priority) {

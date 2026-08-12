@@ -20,8 +20,6 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,10 +43,6 @@ public class TaskDispatchOutboxService {
   private final JobTaskMapper jobTaskMapper;
   private final BizDateArithmetic bizDateArithmetic;
 
-  @Lazy
-  @Autowired
-  private TaskDispatchOutboxService self;
-
   /**
    * 写入一条“任务派发事件”到 outbox。
    *
@@ -68,7 +62,7 @@ public class TaskDispatchOutboxService {
       JobPartitionEntity partition,
       String traceId,
       String eventKey) {
-    self.writeDispatchEvent(jobInstance, task, partition, traceId, eventKey, null);
+    writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, null);
   }
 
   /**
@@ -77,6 +71,17 @@ public class TaskDispatchOutboxService {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void writeDispatchEvent(
+      JobInstanceEntity jobInstance,
+      JobTaskEntity task,
+      JobPartitionEntity partition,
+      String traceId,
+      String eventKey,
+      RunMode runModeOverride) {
+    writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, runModeOverride);
+  }
+
+  /** 两个公开入口都由 {@link Propagation#MANDATORY} 守住事务；共享实现不再依赖同类代理跳转。 */
+  private void writeDispatchEventInternal(
       JobInstanceEntity jobInstance,
       JobTaskEntity task,
       JobPartitionEntity partition,

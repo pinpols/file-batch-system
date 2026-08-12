@@ -7,20 +7,15 @@ import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSta
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ADR-028 S3：周期扫到期 WAIT 节点 → 调 {@link SensorStateMachine}。
@@ -38,20 +33,12 @@ public class SensorPollScheduler {
 
   private static final int MAX_PER_TICK = 50;
 
-  private final WorkflowNodeRunMapper nodeRunMapper;
-  private final SensorStateMachine stateMachine;
+  private final SensorProbeTransactionExecutor transactionExecutor;
   private final SensorProperties props;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   // RLS Phase B：workflow_node_run 实体没 tenantId，先通过 workflow_run（selectByIdAnyTenant
   // RLS-bypass）解出 tenant，再绑定 holder 跑 probeOne。
   private final WorkflowRunMapper workflowRunMapper;
-
-  // CLAUDE.md §Java编码细则 #3 豁免①: self-invocation AOP workaround。fetchDue / probeOne 的
-  // @Transactional(REQUIRES_NEW) 只有经 Spring 代理调用才生效;同类内直接调用不走 AOP,
-  // SELECT ... FOR UPDATE SKIP LOCKED 的行锁事务边界会形同虚设(锁随即释放,失去单节点隔离)。
-  @Lazy
-  @Autowired
-  private SensorPollScheduler self;
 
   @Scheduled(fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
   @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
@@ -65,7 +52,7 @@ public class SensorPollScheduler {
       return;
     }
     Instant now = BatchDateTimeSupport.utcNow();
-    List<WorkflowNodeRunEntity> due = self.fetchDue(now);
+    List<WorkflowNodeRunEntity> due = transactionExecutor.fetchDue(now, MAX_PER_TICK);
     if (due.isEmpty()) {
       return;
     }
@@ -79,9 +66,10 @@ public class SensorPollScheduler {
         String tenantId = resolveTenantId(nodeRun);
         if (tenantId == null || tenantId.isBlank()) {
           // 拿不到 tenant 退回原行为，避免 nodeRun 残留长期停滞整 tick。
-          self.probeOne(nodeRun, now);
+          transactionExecutor.probeOne(nodeRun, now);
         } else {
-          RlsTenantContextHolder.runWithTenant(tenantId, () -> self.probeOne(nodeRun, now));
+          RlsTenantContextHolder.runWithTenant(
+              tenantId, () -> transactionExecutor.probeOne(nodeRun, now));
         }
       } catch (Exception e) {
         // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷
@@ -99,16 +87,5 @@ public class SensorPollScheduler {
     }
     WorkflowRunEntity wfRun = workflowRunMapper.selectByIdAnyTenant(nodeRun.getWorkflowRunId());
     return wfRun == null ? null : wfRun.getTenantId();
-  }
-
-  /** REQUIRES_NEW: 单节点失败不影响后续节点；FOR UPDATE 行锁在事务结束才释放。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public List<WorkflowNodeRunEntity> fetchDue(Instant now) {
-    return nodeRunMapper.selectDueWaitNodes(now, MAX_PER_TICK);
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void probeOne(WorkflowNodeRunEntity nodeRun, Instant now) {
-    stateMachine.probeAndAdvance(nodeRun, now);
   }
 }

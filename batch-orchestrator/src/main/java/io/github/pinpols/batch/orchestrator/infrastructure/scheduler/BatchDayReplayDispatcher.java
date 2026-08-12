@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -11,17 +10,12 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionE
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
-import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ADR-020 §决策 §实施分阶段 Stage 4 — RUNNING session 派发器。
@@ -54,24 +48,12 @@ public class BatchDayReplayDispatcher {
 
   private static final String STATUS_RUNNING = "RUNNING";
   private static final String ENTRY_PENDING = "PENDING";
-  private static final String ENTRY_RUNNING = "RUNNING";
-  private static final String ENTRY_FAILED = "FAILED";
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
-  private final CompensationService compensationService;
+  private final BatchDayReplayEntryExecutor entryExecutor;
   private final BatchDayReplayDispatchProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final BatchDateTimeSupport dateTimeSupport;
-
-  /**
-   * P1-5 修复(AOP 自调用失效): {@link #dispatchEntry} 标了 {@code @Transactional(REQUIRES_NEW)}, 但 {@link
-   * #dispatchSession} 直接 {@code dispatchEntry(...)} 同类调用,Spring AOP 不织入,REQUIRES_NEW 退化。 注入
-   * {@code @Lazy self} 走代理,真正激活独立短事务,避免单条失败回滚整批。 见 CLAUDE.md Java 编码细则 #3 豁免清单。
-   */
-  @Lazy
-  @Autowired
-  private BatchDayReplayDispatcher self;
 
   @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
   @SchedulerLock(
@@ -129,9 +111,7 @@ public class BatchDayReplayDispatcher {
         continue;
       }
       try {
-        // P1-5: 走 @Lazy self 代理调用,确保 dispatchEntry 的 REQUIRES_NEW 生效。
-        // 测试场景 self 可能未注入(纯单测),退化到 this 调用,语义不变(原行为)。
-        (self != null ? self : this).dispatchEntry(session, entry);
+        entryExecutor.dispatch(session, entry);
       } catch (Exception entryFailure) {
         log.warn(
             "batch_day_replay dispatch entry error: sessionId={}, entryId={}, jobCode={}, msg={}",
@@ -141,53 +121,5 @@ public class BatchDayReplayDispatcher {
             entryFailure.getMessage());
       }
     }
-  }
-
-  /** 单 entry 派发：成功 → entry RUNNING；失败 → entry FAILED + 失败原因。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void dispatchEntry(BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry) {
-    Instant now = dateTimeSupport.nowInstant();
-    CompensationSubmitCommand command = CompensationSubmitCommand.builder()
-        .tenantId(session.tenantId())
-        .compensationType("JOB")
-        .targetId(entry.sourceInstanceId())
-        .jobCode(entry.jobCode())
-        .bizDate(session.bizDate())
-        .reason("BATCH_DAY_REPLAY:" + session.reason())
-        .operatorId(session.requestedBy())
-        .resultPolicy(session.resultPolicy())
-        .configVersionPolicy(session.configVersionPolicy())
-        .configVersion(session.configVersion())
-        .replaySessionId(session.id())
-        .traceId(session.traceId())
-        .build();
-    try {
-      compensationService.submit(command);
-      entryMapper.updateStatus(entry.id(), ENTRY_RUNNING, null, null, null, now, null, now);
-    } catch (RuntimeException submitFailure) {
-      entryMapper.updateStatus(
-          entry.id(),
-          ENTRY_FAILED,
-          null,
-          null,
-          truncate(submitFailure.getMessage(), 1024),
-          now,
-          now,
-          now);
-      log.warn(
-          "batch_day_replay compensation submit failed: sessionId={}, entryId={}, jobCode={},"
-              + " msg={}",
-          session.id(),
-          entry.id(),
-          entry.jobCode(),
-          submitFailure.getMessage());
-    }
-  }
-
-  private static String truncate(String text, int max) {
-    if (text == null) {
-      return null;
-    }
-    return text.length() <= max ? text : text.substring(0, max);
   }
 }

@@ -11,12 +11,14 @@ import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulS
 import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
+import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@code batch.quota.snapshot.enabled} 开/关态守卫(此前零测试)。
@@ -46,8 +48,7 @@ class QuotaRuntimeStateSnapshotSchedulerTest {
     QuotaProperties quotaProperties = new QuotaProperties();
     quotaProperties.getSnapshot().setEnabled(snapshotEnabled);
     return new QuotaRuntimeStateSnapshotScheduler(
-        quotaRuntimeStateService,
-        quotaRuntimeStateMapper,
+        new QuotaRuntimeStateSnapshotWriter(quotaRuntimeStateService, quotaRuntimeStateMapper),
         tenantQuotaPolicyMapper,
         resourceQueueMapper,
         quotaProperties,
@@ -74,5 +75,15 @@ class QuotaRuntimeStateSnapshotSchedulerTest {
     scheduler(true).snapshot();
 
     verify(tenantQuotaPolicyMapper).selectDistinctEnabledTenantIds();
+  }
+
+  @Test
+  @DisplayName("单条快照写入保留独立 Spring 事务边界")
+  void writerRetainsTransactionalBoundary() throws Exception {
+    Method write = QuotaRuntimeStateSnapshotWriter.class.getDeclaredMethod(
+        "writeIfActive", String.class, String.class, String.class, String.class, int.class);
+
+    org.assertj.core.api.Assertions.assertThat(write.getAnnotation(Transactional.class))
+        .isNotNull();
   }
 }
