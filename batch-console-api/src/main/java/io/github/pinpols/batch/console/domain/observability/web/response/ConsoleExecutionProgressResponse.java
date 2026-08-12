@@ -5,6 +5,7 @@ import static io.github.pinpols.batch.console.domain.observability.web.response.
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.longValue;
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
 
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 import java.time.Instant;
 import java.util.Map;
 
@@ -26,6 +27,24 @@ public record ConsoleExecutionProgressResponse(
     Long progressPercent,
     Instant startedAt,
     Instant finishedAt) {
+
+  public static ConsoleExecutionProgressResponse from(ExecutionProgressView row) {
+    if (row == null) {
+      return null;
+    }
+    return new ConsoleExecutionProgressResponse(
+        row.id(),
+        row.jobCode(),
+        row.instanceNo(),
+        row.instanceStatus(),
+        row.expectedPartitions(),
+        row.successPartitions(),
+        row.failedPartitions(),
+        row.completedPartitions(),
+        row.progressPercent(),
+        row.startedAt(),
+        row.finishedAt());
+  }
 
   public static ConsoleExecutionProgressResponse from(Map<String, Object> row) {
     if (row == null) {

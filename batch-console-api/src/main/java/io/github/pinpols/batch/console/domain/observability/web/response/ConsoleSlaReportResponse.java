@@ -6,6 +6,8 @@ import static io.github.pinpols.batch.console.domain.observability.web.response.
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.mapList;
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
 
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJobReportView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,30 @@ public record ConsoleSlaReportResponse(
           bigDecimalValue(row, "maxDurationSeconds"),
           longValue(row, "totalPartitions"));
     }
+
+    static SlaJobEntry from(SlaJobReportView row) {
+      return new SlaJobEntry(
+          row.jobCode(),
+          row.jobName(),
+          row.totalInstances() == null ? 0L : row.totalInstances(),
+          row.successCount() == null ? 0L : row.successCount(),
+          row.failedCount() == null ? 0L : row.failedCount(),
+          row.slaBreached() == null ? 0L : row.slaBreached(),
+          row.slaOnTime() == null ? 0L : row.slaOnTime(),
+          row.avgDurationSeconds(),
+          row.maxDurationSeconds(),
+          row.totalPartitions() == null ? 0L : row.totalPartitions());
+    }
+  }
+
+  public static ConsoleSlaReportResponse from(SlaReportView view) {
+    if (view == null) {
+      return null;
+    }
+    return new ConsoleSlaReportResponse(
+        view.tenantId(),
+        view.periodDays(),
+        view.jobs().stream().map(SlaJobEntry::from).toList());
   }
 
   public static ConsoleSlaReportResponse from(Map<String, Object> row) {

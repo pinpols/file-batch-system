@@ -5,6 +5,8 @@ import static io.github.pinpols.batch.console.domain.observability.web.response.
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.mapList;
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
 
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayStatusCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.JobStatsView;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,23 @@ public record ConsoleJobStatsResponse(
       return new DailyTrendEntry(
           stringValue(row, "day"), stringValue(row, "status"), longValue(row, "count"));
     }
+
+    static DailyTrendEntry from(DayStatusCountView row) {
+      return new DailyTrendEntry(
+          row.day() == null ? "UNKNOWN" : row.day().toString(),
+          row.status() == null ? "UNKNOWN" : row.status(),
+          row.count() == null ? 0L : row.count());
+    }
+  }
+
+  public static ConsoleJobStatsResponse from(JobStatsView view) {
+    if (view == null) {
+      return null;
+    }
+    return new ConsoleJobStatsResponse(
+        view.byStatus(),
+        view.total(),
+        view.dailyTrend().stream().map(DailyTrendEntry::from).toList());
   }
 
   public static ConsoleJobStatsResponse from(Map<String, Object> row) {

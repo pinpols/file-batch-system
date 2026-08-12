@@ -4,6 +4,7 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApplicat
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
+import io.github.pinpols.batch.console.domain.job.view.DryRunTriggerResult;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayCatchUpRequest;
 import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
@@ -16,7 +17,6 @@ import io.github.pinpols.batch.console.shared.command.RerunRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
 import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -39,7 +39,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
   }
 
   @Override
-  public Map<String, Object> dryRunTrigger(TriggerRequest request) {
+  public DryRunTriggerResult dryRunTrigger(TriggerRequest request) {
     return triggerService.dryRunTrigger(request);
   }
 

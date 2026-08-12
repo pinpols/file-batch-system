@@ -4,6 +4,9 @@ import static io.github.pinpols.batch.console.domain.observability.web.response.
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.mapList;
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
 
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.AlertTrendView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DaySeverityCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SeverityCountView;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +18,12 @@ public record ConsoleAlertTrendResponse(
     static SeverityCountEntry from(Map<String, Object> row) {
       return new SeverityCountEntry(stringValue(row, "severity"), longValue(row, "count"));
     }
+
+    static SeverityCountEntry from(SeverityCountView row) {
+      return new SeverityCountEntry(
+          row.severity() == null ? "UNKNOWN" : row.severity(),
+          row.count() == null ? 0L : row.count());
+    }
   }
 
   public record DaySeverityCountEntry(String day, String severity, Long count) {
@@ -22,6 +31,22 @@ public record ConsoleAlertTrendResponse(
       return new DaySeverityCountEntry(
           stringValue(row, "day"), stringValue(row, "severity"), longValue(row, "count"));
     }
+
+    static DaySeverityCountEntry from(DaySeverityCountView row) {
+      return new DaySeverityCountEntry(
+          row.day() == null ? "UNKNOWN" : row.day().toString(),
+          row.severity() == null ? "UNKNOWN" : row.severity(),
+          row.count() == null ? 0L : row.count());
+    }
+  }
+
+  public static ConsoleAlertTrendResponse from(AlertTrendView view) {
+    if (view == null) {
+      return null;
+    }
+    return new ConsoleAlertTrendResponse(
+        view.bySeverity().stream().map(SeverityCountEntry::from).toList(),
+        view.dailyTrend().stream().map(DaySeverityCountEntry::from).toList());
   }
 
   public static ConsoleAlertTrendResponse from(Map<String, Object> row) {

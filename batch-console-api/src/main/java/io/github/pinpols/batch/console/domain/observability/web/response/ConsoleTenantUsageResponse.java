@@ -4,6 +4,7 @@ import static io.github.pinpols.batch.console.domain.observability.web.response.
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.longValue;
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
 
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.TenantUsageView;
 import java.util.Map;
 
 /** dashboard tenant-usage 响应：配置数量 + 近期实例 / 文件处理量（固定字段）。 */
@@ -16,6 +17,21 @@ public record ConsoleTenantUsageResponse(
     Long recentJobInstances,
     Long recentFiles,
     Integer periodDays) {
+
+  public static ConsoleTenantUsageResponse from(TenantUsageView view) {
+    if (view == null) {
+      return null;
+    }
+    return new ConsoleTenantUsageResponse(
+        view.tenantId(),
+        view.jobDefinitions(),
+        view.workflowDefinitions(),
+        view.fileChannels(),
+        view.fileTemplates(),
+        view.recentJobInstances(),
+        view.recentFiles(),
+        view.periodDays());
+  }
 
   public static ConsoleTenantUsageResponse from(Map<String, Object> row) {
     if (row == null) {
