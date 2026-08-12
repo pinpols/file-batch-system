@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.exports.region;
 
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.utils.Texts;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,14 +100,12 @@ public final class ExportRegionResolver {
 
   private static List<String> stringList(Object primary, Object alias) {
     Object raw = primary != null ? primary : alias;
-    List<String> out = new ArrayList<>();
-    if (raw instanceof List<?> list) {
-      for (Object o : list) {
-        if (o != null && Texts.hasText(String.valueOf(o))) {
-          out.add(String.valueOf(o).trim());
-        }
-      }
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
     }
-    return out;
+    return list.stream()
+        .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+        .map(o -> String.valueOf(o).trim())
+        .toList();
   }
 }

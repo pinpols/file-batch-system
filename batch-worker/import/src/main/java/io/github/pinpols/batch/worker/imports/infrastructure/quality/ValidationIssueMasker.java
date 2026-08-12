@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -58,18 +59,12 @@ public class ValidationIssueMasker {
     if (!mask || issues == null || issues.isEmpty()) {
       return new LinkedHashMap<>(issues == null ? Map.of() : issues);
     }
-    Map<Long, ValidationIssue> masked = new LinkedHashMap<>();
-    for (Map.Entry<Long, ValidationIssue> entry : issues.entrySet()) {
-      ValidationIssue issue = entry.getValue();
-      masked.put(
-          entry.getKey(),
-          new ValidationIssue(
-              issue.recordNo(),
-              issue.errorCode(),
-              ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
-              maskIssueRaw(issue.rawRecord(), ruleSet)));
-    }
-    return masked;
+    return issues.entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> maskedIssue(entry.getValue(), ruleSet),
+            (previous, next) -> next,
+            LinkedHashMap::new));
   }
 
   private List<ValidationIssue> maskDatasetIssues(
@@ -77,15 +72,15 @@ public class ValidationIssueMasker {
     if (!mask || issues == null || issues.isEmpty()) {
       return new ArrayList<>(issues == null ? List.of() : issues);
     }
-    List<ValidationIssue> masked = new ArrayList<>();
-    for (ValidationIssue issue : issues) {
-      masked.add(new ValidationIssue(
-          issue.recordNo(),
-          issue.errorCode(),
-          ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
-          maskIssueRaw(issue.rawRecord(), ruleSet)));
-    }
-    return masked;
+    return issues.stream().map(issue -> maskedIssue(issue, ruleSet)).toList();
+  }
+
+  private ValidationIssue maskedIssue(ValidationIssue issue, String ruleSet) {
+    return new ValidationIssue(
+        issue.recordNo(),
+        issue.errorCode(),
+        ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
+        maskIssueRaw(issue.rawRecord(), ruleSet));
   }
 
   private Object maskIssueRaw(Object raw, String ruleSet) {

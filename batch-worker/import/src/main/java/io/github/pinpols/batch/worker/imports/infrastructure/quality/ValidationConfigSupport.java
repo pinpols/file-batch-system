@@ -3,7 +3,9 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.domain.CustomerImportPayload;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -18,11 +20,11 @@ public class ValidationConfigSupport {
 
   public Map<String, Object> toMap(Object value) {
     if (value instanceof Map<?, ?> map) {
-      Map<String, Object> converted = new LinkedHashMap<>();
-      for (Map.Entry<?, ?> entry : map.entrySet()) {
-        converted.put(String.valueOf(entry.getKey()), entry.getValue());
-      }
-      return converted;
+      return map.entrySet().stream()
+          .collect(
+              LinkedHashMap::new,
+              (out, entry) -> out.put(String.valueOf(entry.getKey()), entry.getValue()),
+              Map::putAll);
     }
     if (value == null) {
       return Map.of();
@@ -37,13 +39,11 @@ public class ValidationConfigSupport {
   }
 
   public Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
-    for (String key : keys) {
-      Map<String, Object> rule = toMap(container.get(key));
-      if (!rule.isEmpty()) {
-        return rule;
-      }
-    }
-    return Map.of();
+    return Arrays.stream(keys)
+        .map(key -> toMap(container.get(key)))
+        .filter(EmptyChecks::isNotEmpty)
+        .findFirst()
+        .orElseGet(Map::of);
   }
 
   public Map<String, Object> payloadToMap(CustomerImportPayload payload) {

@@ -6,10 +6,11 @@ import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** 不依赖 Spring/Jackson 的纯函数小工具，从 ImportDataQualityService 抽出。 */
 final class ValidationCoercions {
@@ -96,14 +97,10 @@ final class ValidationCoercions {
 
   static List<String> stringList(Object value) {
     if (value instanceof Collection<?> collection) {
-      List<String> items = new ArrayList<>();
-      for (Object item : collection) {
-        String text = stringValue(item);
-        if (Texts.hasText(text)) {
-          items.add(text);
-        }
-      }
-      return items;
+      return collection.stream()
+          .map(ValidationCoercions::stringValue)
+          .filter(Texts::hasText)
+          .toList();
     }
     if (value == null) {
       return List.of();
@@ -112,31 +109,20 @@ final class ValidationCoercions {
     if (!Texts.hasText(text)) {
       return List.of();
     }
-    List<String> items = new ArrayList<>();
-    for (String item : text.split(",")) {
-      if (Texts.hasText(item)) {
-        items.add(item.trim());
-      }
-    }
-    return items;
+    return Arrays.stream(text.split(","))
+        .filter(Texts::hasText)
+        .map(String::trim)
+        .toList();
   }
 
   static boolean containsIgnoreCase(List<String> candidates, String value) {
-    for (String candidate : candidates) {
-      if (candidate != null && candidate.equalsIgnoreCase(value)) {
-        return true;
-      }
-    }
-    return false;
+    return candidates.stream()
+        .filter(Objects::nonNull)
+        .anyMatch(candidate -> candidate.equalsIgnoreCase(value));
   }
 
   static Object firstNonNull(Object... values) {
-    for (Object value : values) {
-      if (value != null) {
-        return value;
-      }
-    }
-    return null;
+    return Arrays.stream(values).filter(Objects::nonNull).findFirst().orElse(null);
   }
 
   static String defaultErrorCode(String field, Map<String, Object> rule) {
