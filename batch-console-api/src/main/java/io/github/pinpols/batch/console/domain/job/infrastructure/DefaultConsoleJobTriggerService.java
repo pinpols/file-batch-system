@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
@@ -115,8 +116,8 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
         tenantId,
         request.getJobCode(),
         request.getBizDate(),
-        errors.isEmpty(),
-        errors.isEmpty() ? null : errors);
+        EmptyChecks.isEmpty(errors),
+        EmptyChecks.isEmpty(errors) ? null : errors);
   }
 
   @Override
