@@ -47,6 +47,10 @@ import org.springframework.stereotype.Component;
  * PREPROCESS（设计说明书 §9.3）：拉取模板、解码正文，执行 {@link ImportPreprocessPipeline} （{@code preprocess_pipeline}
  * 或隐式 {@code compress_type}/{@code encrypt_type}：UNZIP、GUNZIP、AES-GCM、摘要、RSA 验签、字符集转码），
  * 再归一化文本或保留二进制供 EXCEL 等格式在 PARSE 消费。
+ *
+ * <p>这里故意把“对象归属校验、变换、字符集处理和大文件落盘”放在解析前统一完成：后续 PARSE 只面对一种已经确认来源和编码的输入，
+ * 不需要在每种文件格式实现里重复处理安全边界。无变换且满足换行/字符集条件时才使用 range 或流式路径；压缩、加密和不安全的字节切片会回退到完整输入，
+ * 这是用可预测的正确性换取吞吐优化，避免把多字节字符或密文边界误当成记录边界。
  */
 @Slf4j
 @Component

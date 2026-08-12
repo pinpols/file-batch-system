@@ -82,6 +82,10 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>只接受 RUNNING 状态的 task 回报，避免重复 report 导致状态回跳。
  *   <li>并发冲突靠 DB 乐观锁/条件更新回退（更新行数为 0 → STATE_CONFLICT）。
  * </ul>
+ *
+ * <p>该类是唯一的 report 状态推进入口，原因是一次 worker 回报必须在同一事务内完成 task 终态、重试决定、分区/实例聚合和 DAG 推进。
+ * 如果这些动作分散到多个异步消费者，父级可能在子任务终态写入前被错误判定完成，或在重复回报时重复派发下一节点。因此这里保留状态机的集中决策，
+ * 用租户条件、状态 CAS 和 instance 级 advisory lock 把 at-least-once 回报收敛为一次有效状态转移。
  */
 @Service
 @Slf4j

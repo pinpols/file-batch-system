@@ -49,6 +49,10 @@ import org.slf4j.MDC;
  *   <li>找不到 handler 的 taskType → report failure "no handler for taskType=X" + log ERROR(诊断用)
  *   <li>graceful shutdown:`stop()` 不接新消息,等当前 in-flight 任务完成(timeout 30s)再关线程池
  * </ul>
+ *
+ * <p>容量信号覆盖 queued、claiming 和 running 三个阶段，而不是只统计已经 claim 的任务：平台或网络变慢时，线程可能全部堵在 claim，
+ * 此时如果仍持续提交 Kafka 消息，offset 会先于实际执行被提交，进程重启后平台也无法通过 lease 找回这些任务。因而容量不足必须返回 retry，
+ * 让 consumer 保留 offset；只有完成 report 或明确放弃后才释放 permit。
  */
 @Slf4j
 public class TaskDispatcher {
