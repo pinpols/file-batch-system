@@ -227,10 +227,12 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     int tenantActivePartitions = resolveTenantActivePartitions(request);
     int queueActiveJobs = resolveQueueActiveJobs(request, queue);
     int queueActivePartitions = resolveQueueActivePartitions(request, queue);
-    long fairnessScore = resolveFairnessScore(new FairnessScoreContext(
-        new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight),
-        new FairnessLoad(
-            tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions)));
+    FairnessWeights fairnessWeights =
+        new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight);
+    FairnessLoad fairnessLoad = new FairnessLoad(
+        tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
+    FairnessScoreContext fairnessContext = new FairnessScoreContext(fairnessWeights, fairnessLoad);
+    long fairnessScore = resolveFairnessScore(fairnessContext);
     fairnessScore += resolveAgingBonus(request);
     decision.setTenantWeight(tenantWeight);
     decision.setQueueWeight(queueWeight);

@@ -54,13 +54,14 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
     if (jobDef.getEnabled() != null && !jobDef.getEnabled()) {
       throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
     }
-    String result = ops.delegateLaunch(new ConsoleLaunchCommand(
+    ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
         tenantId,
         jobCode,
         request.getBizDate(),
         ops.resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
         ops.parsePayload(request.getPayload()),
-        idempotencyKey));
+        idempotencyKey);
+    String result = ops.delegateLaunch(launchCommand);
     ops.publishRefresh(tenantId);
     return result;
   }

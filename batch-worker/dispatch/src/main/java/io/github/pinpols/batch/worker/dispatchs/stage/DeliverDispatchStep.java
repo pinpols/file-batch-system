@@ -190,12 +190,13 @@ public class DeliverDispatchStep implements DispatchStageStep {
       return null;
     }
     Object traceId = context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID);
-    OptionalLong actual = dispatchChannelGateway.readbackSize(new DispatchCommand(
+    DispatchCommand dispatchCommand = new DispatchCommand(
         context.getTenantId(),
         traceId == null ? null : String.valueOf(traceId),
         fileRecord,
         channelConfig,
-        dispatchPayload));
+        dispatchPayload);
+    OptionalLong actual = dispatchChannelGateway.readbackSize(dispatchCommand);
     if (actual.isEmpty()) {
       log.warn(
           "readback verify enabled but channel does not support readback (skipped): "

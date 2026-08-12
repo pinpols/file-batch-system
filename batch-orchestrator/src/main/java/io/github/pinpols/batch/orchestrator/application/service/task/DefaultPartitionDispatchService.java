@@ -140,8 +140,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       Map<String, Object> effectiveParams,
       String traceId,
       JobInstanceEntity jobInstance) {
-    SchedulePlan plan = schedulePlanBuilder.build(new SchedulePlanCommand(
-        request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams));
+    SchedulePlanCommand planCommand = new SchedulePlanCommand(
+        request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams);
+    SchedulePlan plan = schedulePlanBuilder.build(planCommand);
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     ResourceSchedulingDecision decision =
         resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan));
@@ -155,9 +156,11 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     SchedulePlanSupport.applySchedulingDecision(plan, decision);
     List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
         plan, jobInstance.getId(), decision.getPartitionStatus());
-    createTasksAndMaybeOutboxEvents(new TaskCreationContext(
-        new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
-        new TaskSchedulingContext(plan, partitions, decision)));
+    TaskExecutionContext executionContext =
+        new TaskExecutionContext(request, effectiveParams, traceId, jobInstance);
+    TaskSchedulingContext schedulingContext = new TaskSchedulingContext(plan, partitions, decision);
+    TaskCreationContext taskContext = new TaskCreationContext(executionContext, schedulingContext);
+    createTasksAndMaybeOutboxEvents(taskContext);
     return new DispatchOutcome(partitions.size(), decision.isDispatchable());
   }
 

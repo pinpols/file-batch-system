@@ -130,15 +130,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       auditDetail.put("approvalId", command.approvalId());
       auditDetail.put("contentEncryptionEnabled", true);
       auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
-      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          command.tenantId(),
-          command.fileId(),
-          "PRESIGN_DOWNLOAD",
-          STATUS_SUCCESS,
-          new FileGovernanceRepository.FileAuditActor(
-              resolveOperatorType(command.operatorId()), command.operatorId()),
-          command.traceId(),
-          auditDetail));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              command.tenantId(),
+              command.fileId(),
+              "PRESIGN_DOWNLOAD",
+              STATUS_SUCCESS,
+              new FileGovernanceRepository.FileAuditActor(
+                  resolveOperatorType(command.operatorId()), command.operatorId()),
+              command.traceId(),
+              auditDetail);
+      fileGovernanceRepository.appendAudit(auditCommand);
       return consolePath;
     }
     String storagePath = stringValue(fileRecord.get("storage_path"));
@@ -164,15 +166,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           "previewMaskingNote",
           "template enables preview masking; avoid exposing raw object bytes in UI");
     }
-    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-        command.tenantId(),
-        command.fileId(),
-        "PRESIGN_DOWNLOAD",
-        STATUS_SUCCESS,
-        new FileGovernanceRepository.FileAuditActor(
-            resolveOperatorType(command.operatorId()), command.operatorId()),
-        command.traceId(),
-        auditDetail));
+    FileGovernanceRepository.FileAuditCommand auditCommand =
+        new FileGovernanceRepository.FileAuditCommand(
+            command.tenantId(),
+            command.fileId(),
+            "PRESIGN_DOWNLOAD",
+            STATUS_SUCCESS,
+            new FileGovernanceRepository.FileAuditActor(
+                resolveOperatorType(command.operatorId()), command.operatorId()),
+            command.traceId(),
+            auditDetail);
+    fileGovernanceRepository.appendAudit(auditCommand);
     return presignedUrl;
   }
 
@@ -198,31 +202,31 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     metadata.put("storageBackend", "BatchObjectStore");
     metadata.put("uploadSessionCreatedAt", now.toString());
     metadata.put("uploadSessionOperatorId", command.operatorId());
-    Long fileId = fileGovernanceRepository.createReconciledFileRecord(
+    FileGovernanceRepository.FileIdentity fileIdentity = new FileGovernanceRepository.FileIdentity(
+        command.tenantId(), "INPUT", fileName, fileFormatType(fileName));
+    FileGovernanceRepository.FileStorage fileStorage =
+        new FileGovernanceRepository.FileStorage("S3", storagePath, storageBucket);
+    FileGovernanceRepository.ReconciledFileRecordCommand recordCommand =
         new FileGovernanceRepository.ReconciledFileRecordCommand(
-            new FileGovernanceRepository.FileIdentity(
-                command.tenantId(), "INPUT", fileName, fileFormatType(fileName)),
-            0L,
-            new FileGovernanceRepository.FileStorage("S3", storagePath, storageBucket),
-            "UPLOAD",
-            "RECEIVED",
-            command.traceId(),
-            metadata));
+            fileIdentity, 0L, fileStorage, "UPLOAD", "RECEIVED", command.traceId(), metadata);
+    Long fileId = fileGovernanceRepository.createReconciledFileRecord(recordCommand);
     if (EmptyChecks.isNull(fileId)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
           "upload storage path already exists");
     }
-    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-        command.tenantId(),
-        fileId,
-        "UPLOAD_SESSION_CREATED",
-        STATUS_SUCCESS,
-        new FileGovernanceRepository.FileAuditActor(
-            resolveOperatorType(command.operatorId()), command.operatorId()),
-        command.traceId(),
-        metadata));
+    FileGovernanceRepository.FileAuditCommand auditCommand =
+        new FileGovernanceRepository.FileAuditCommand(
+            command.tenantId(),
+            fileId,
+            "UPLOAD_SESSION_CREATED",
+            STATUS_SUCCESS,
+            new FileGovernanceRepository.FileAuditActor(
+                resolveOperatorType(command.operatorId()), command.operatorId()),
+            command.traceId(),
+            metadata);
+    fileGovernanceRepository.appendAudit(auditCommand);
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("fileId", fileId);
     response.put("status", "RECEIVED");
@@ -266,15 +270,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     metadata.put("uploadedSizeBytes", fileSizeBytes);
     fileGovernanceRepository.markFileArrivalConfirmed(
         command.tenantId(), command.fileId(), fileSizeBytes, metadata);
-    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-        command.tenantId(),
-        command.fileId(),
-        "CONFIRM_ARRIVAL",
-        STATUS_SUCCESS,
-        new FileGovernanceRepository.FileAuditActor(
-            resolveOperatorType(command.operatorId()), command.operatorId()),
-        command.traceId(),
-        metadata));
+    FileGovernanceRepository.FileAuditCommand auditCommand =
+        new FileGovernanceRepository.FileAuditCommand(
+            command.tenantId(),
+            command.fileId(),
+            "CONFIRM_ARRIVAL",
+            STATUS_SUCCESS,
+            new FileGovernanceRepository.FileAuditActor(
+                resolveOperatorType(command.operatorId()), command.operatorId()),
+            command.traceId(),
+            metadata);
+    fileGovernanceRepository.appendAudit(auditCommand);
     return "ARRIVAL_CONFIRMED";
   }
 
@@ -327,15 +333,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         command.traceId(),
         OutboxEventKeyGenerator.forFileRedispatch(command.tenantId(), task.getId()),
         RunMode.COMPENSATE);
-    fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-        command.tenantId(),
-        command.fileId(),
-        "REDISPATCH",
-        STATUS_SUCCESS,
-        new FileGovernanceRepository.FileAuditActor(
-            resolveOperatorType(command.operatorId()), command.operatorId()),
-        command.traceId(),
-        buildRedispatchDetail(dispatchRecord, task, partition, command)));
+    FileGovernanceRepository.FileAuditCommand auditCommand =
+        new FileGovernanceRepository.FileAuditCommand(
+            command.tenantId(),
+            command.fileId(),
+            "REDISPATCH",
+            STATUS_SUCCESS,
+            new FileGovernanceRepository.FileAuditActor(
+                resolveOperatorType(command.operatorId()), command.operatorId()),
+            command.traceId(),
+            buildRedispatchDetail(dispatchRecord, task, partition, command));
+    fileGovernanceRepository.appendAudit(auditCommand);
     return "REDISPATCH_ACCEPTED";
   }
 
@@ -410,15 +418,17 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         metadata.put("arrivalTimedOutAt", now.toString());
       }
       fileGovernanceRepository.updateFileMetadata(command.tenantId(), fileId, metadata);
-      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          command.tenantId(),
-          fileId,
-          "ARRIVAL_MANUAL_" + action,
-          STATUS_SUCCESS,
-          new FileGovernanceRepository.FileAuditActor(
-              resolveOperatorType(command.operatorId()), command.operatorId()),
-          command.traceId(),
-          metadata));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              command.tenantId(),
+              fileId,
+              "ARRIVAL_MANUAL_" + action,
+              STATUS_SUCCESS,
+              new FileGovernanceRepository.FileAuditActor(
+                  resolveOperatorType(command.operatorId()), command.operatorId()),
+              command.traceId(),
+              metadata);
+      fileGovernanceRepository.appendAudit(auditCommand);
     }
     return nextState;
   }
@@ -498,36 +508,40 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             "error.common.state_conflict_detail",
             "file status changed concurrently, expected " + currentStatus);
       }
-      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          command.tenantId(),
-          command.fileId(),
-          operationType,
-          STATUS_SUCCESS,
-          new FileGovernanceRepository.FileAuditActor(
-              resolveOperatorType(command.operatorId()), command.operatorId()),
-          command.traceId(),
-          fileGovernanceRepository.operationDetail(
-              currentStatus, nextStatus, command.operatorId(), command.reason())));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              command.tenantId(),
+              command.fileId(),
+              operationType,
+              STATUS_SUCCESS,
+              new FileGovernanceRepository.FileAuditActor(
+                  resolveOperatorType(command.operatorId()), command.operatorId()),
+              command.traceId(),
+              fileGovernanceRepository.operationDetail(
+                  currentStatus, nextStatus, command.operatorId(), command.reason()));
+      fileGovernanceRepository.appendAudit(auditCommand);
       return nextStatus;
     } catch (RuntimeException exception) {
-      fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          command.tenantId(),
-          command.fileId(),
-          operationType,
-          "FAILED",
-          new FileGovernanceRepository.FileAuditActor(
-              resolveOperatorType(command.operatorId()), command.operatorId()),
-          command.traceId(),
-          Map.of(
-              "currentStatus",
-              Objects.requireNonNullElse(currentStatus, ""),
-              "nextStatus",
-              Objects.requireNonNullElse(nextStatus, ""),
-              "reason",
-              Objects.requireNonNullElse(command.reason(), ""),
-              "errorMessage",
-              Objects.requireNonNullElse(
-                  exception.getMessage(), exception.getClass().getSimpleName()))));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              command.tenantId(),
+              command.fileId(),
+              operationType,
+              "FAILED",
+              new FileGovernanceRepository.FileAuditActor(
+                  resolveOperatorType(command.operatorId()), command.operatorId()),
+              command.traceId(),
+              Map.of(
+                  "currentStatus",
+                  Objects.requireNonNullElse(currentStatus, ""),
+                  "nextStatus",
+                  Objects.requireNonNullElse(nextStatus, ""),
+                  "reason",
+                  Objects.requireNonNullElse(command.reason(), ""),
+                  "errorMessage",
+                  Objects.requireNonNullElse(
+                      exception.getMessage(), exception.getClass().getSimpleName())));
+      fileGovernanceRepository.appendAudit(auditCommand);
       throw exception;
     }
   }

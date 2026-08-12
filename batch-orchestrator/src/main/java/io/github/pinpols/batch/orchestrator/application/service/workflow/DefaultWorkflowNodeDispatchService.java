@@ -266,11 +266,12 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             || workflowNode.getRelatedJobCode().isBlank()
         ? jobInstance.getJobCode()
         : workflowNode.getRelatedJobCode();
-    SchedulePlan plan = schedulePlanBuilder.build(new SchedulePlanCommand(
+    SchedulePlanCommand planCommand = new SchedulePlanCommand(
         jobInstance.getTenantId(),
         targetJobCode,
         jobInstance.getBizDate().toString(),
-        WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload)));
+        WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload));
+    SchedulePlan plan = schedulePlanBuilder.build(planCommand);
     if (plan == null || plan.getPartitions() == null || plan.getPartitions().isEmpty()) {
       return 0;
     }

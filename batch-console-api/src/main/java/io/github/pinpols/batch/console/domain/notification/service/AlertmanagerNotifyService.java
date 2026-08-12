@@ -143,16 +143,18 @@ public class AlertmanagerNotifyService {
       String configJson,
       WebhookEventPayload payload,
       String payloadJson) {
-    return WebhookDeliverySupport.deliver(new WebhookDeliverySupport.DeliveryContext(
-        tenantId,
-        channelCode,
-        channelType,
-        configJson,
-        payload,
-        payloadJson,
-        senderRegistry,
-        webhookDispatcher,
-        AlertmanagerNotifyService.class));
+    WebhookDeliverySupport.DeliveryContext deliveryContext =
+        new WebhookDeliverySupport.DeliveryContext(
+            tenantId,
+            channelCode,
+            channelType,
+            configJson,
+            payload,
+            payloadJson,
+            senderRegistry,
+            webhookDispatcher,
+            AlertmanagerNotifyService.class);
+    return WebhookDeliverySupport.deliver(deliveryContext);
   }
 
   private void writeDeliveryLog(

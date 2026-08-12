@@ -98,18 +98,19 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     // X-Internal-Secret,生产 bypass=false 后 trigger 侧 401。换走
     // TriggerInternalRestClient 统一注入 secret + 超时。
     RestClient restClient = triggerInternalRestClient.build();
+    TriggerLaunchPayload launchPayload = new TriggerLaunchPayload(
+        command.tenantId(),
+        ConsoleTextSanitizer.safeInput(command.jobCode(), 128),
+        parseBizDate(command.bizDate()),
+        command.triggerType(),
+        command.params() == null ? Map.of() : command.params());
     CommonResponse<LaunchResponse> response = restClient
         .post()
         .uri("/api/triggers/launch")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(new TriggerLaunchPayload(
-            command.tenantId(),
-            ConsoleTextSanitizer.safeInput(command.jobCode(), 128),
-            parseBizDate(command.bizDate()),
-            command.triggerType(),
-            command.params() == null ? Map.of() : command.params()))
+        .body(launchPayload)
         .retrieve()
         .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
     if (response == null || response.data() == null) {

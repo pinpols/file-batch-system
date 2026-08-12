@@ -370,16 +370,18 @@ public class DefaultConsoleNotificationApplicationService
       String configJson,
       WebhookEventPayload payload,
       String payloadJson) {
-    return WebhookDeliverySupport.deliver(new WebhookDeliverySupport.DeliveryContext(
-        tenantId,
-        channelCode,
-        channelType,
-        configJson,
-        payload,
-        payloadJson,
-        senderRegistry,
-        webhookDispatcher,
-        DefaultConsoleNotificationApplicationService.class));
+    WebhookDeliverySupport.DeliveryContext deliveryContext =
+        new WebhookDeliverySupport.DeliveryContext(
+            tenantId,
+            channelCode,
+            channelType,
+            configJson,
+            payload,
+            payloadJson,
+            senderRegistry,
+            webhookDispatcher,
+            DefaultConsoleNotificationApplicationService.class);
+    return WebhookDeliverySupport.deliver(deliveryContext);
   }
 
   private static Map<String, Object> mapOf(Object... pairs) {

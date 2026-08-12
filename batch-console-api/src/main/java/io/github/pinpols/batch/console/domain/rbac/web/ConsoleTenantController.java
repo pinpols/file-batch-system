@@ -88,15 +88,16 @@ public class ConsoleTenantController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<ProvisionTenantResponse> create(
       @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
-    return responseFactory.success(tenantService.provisionTenant(
-        new CreateTenantCommand(
-            request.getTenantId(),
-            request.getTenantName(),
-            request.getDescription(),
-            request.getUsername(),
-            request.getPassword(),
-            resolveOperator(authentication)),
-        new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode())));
+    CreateTenantCommand createCommand = new CreateTenantCommand(
+        request.getTenantId(),
+        request.getTenantName(),
+        request.getDescription(),
+        request.getUsername(),
+        request.getPassword(),
+        resolveOperator(authentication));
+    ConfigInitOption initOption =
+        new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode());
+    return responseFactory.success(tenantService.provisionTenant(createCommand, initOption));
   }
 
   @PostMapping("/batch")
@@ -108,10 +109,11 @@ public class ConsoleTenantController {
     List<TenantSpec> specs = request.getTenants().stream()
         .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
         .toList();
-    return responseFactory.success(tenantService.batchCreateTenants(
-        new BatchCreateTenantCommand(
-            specs, request.getUsernamePrefix(), request.getPassword(), operator),
-        new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode())));
+    BatchCreateTenantCommand batchCommand = new BatchCreateTenantCommand(
+        specs, request.getUsernamePrefix(), request.getPassword(), operator);
+    ConfigInitOption initOption =
+        new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode());
+    return responseFactory.success(tenantService.batchCreateTenants(batchCommand, initOption));
   }
 
   @PutMapping("/{tenantId}")
