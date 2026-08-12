@@ -25,8 +25,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::decide::{decide_register, plan_stop, Decision};
 use crate::client::transport::{classify_response, Transport, TransportOutcome};
+use crate::decide::{decide_register, plan_stop, Decision};
 
 /// The 4 worker runtime states (§1.5). Order/spelling match
 /// [`crate::constants::WORKER_RUNTIME_STATES`].
@@ -157,7 +157,11 @@ impl<T: Transport> Worker<T> {
     /// Returns the [`decide_register`] decision (schedulers to start, kafka
     /// subscribe). On a non-2xx register the worker fails fast and stays
     /// un-started.
-    pub fn start(&mut self, register_body: &str, idempotent: bool) -> Result<Decision, TransportOutcome> {
+    pub fn start(
+        &mut self,
+        register_body: &str,
+        idempotent: bool,
+    ) -> Result<Decision, TransportOutcome> {
         let resp = self.transport.register(&self.worker_code, register_body);
         match classify_response(&resp, 0) {
             TransportOutcome::Success | TransportOutcome::IdempotentSuccess => {
@@ -186,11 +190,15 @@ impl<T: Transport> Worker<T> {
 
         // 3. drain in-flight (40% budget).
         let drain_budget = ((timeout_ms as f64) * 0.4) as i64;
-        steps.push(StopStep::DrainInFlight { budget_ms: drain_budget });
+        steps.push(StopStep::DrainInFlight {
+            budget_ms: drain_budget,
+        });
 
         // 4. shut executor (60% budget).
         let exec_budget = ((timeout_ms as f64) * 0.6) as i64;
-        steps.push(StopStep::ShutdownExecutor { budget_ms: exec_budget });
+        steps.push(StopStep::ShutdownExecutor {
+            budget_ms: exec_budget,
+        });
 
         // 5. deactivate (say goodbye).
         let resp = self.transport.deactivate(&self.worker_code);

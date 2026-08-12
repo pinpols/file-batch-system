@@ -43,7 +43,10 @@ fn transport_retry_fatal_idempotent() {
     assert_eq!(classify_response(&r2, 0), TransportOutcome::FailFast);
 
     let r3 = t.report("task", "{}");
-    assert_eq!(classify_response(&r3, 0), TransportOutcome::IdempotentSuccess);
+    assert_eq!(
+        classify_response(&r3, 0),
+        TransportOutcome::IdempotentSuccess
+    );
 }
 
 // ---------------------------------------------------------------------------

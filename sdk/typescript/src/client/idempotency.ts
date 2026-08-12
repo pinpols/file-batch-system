@@ -1,10 +1,5 @@
 import { ErrorCode } from "../protocol.ts";
-import {
-  taskFailure,
-  type TaskContext,
-  type TaskHandler,
-  type TaskResult,
-} from "./handler.ts";
+import { taskFailure, type TaskContext, type TaskHandler, type TaskResult } from "./handler.ts";
 
 export const IDEMPOTENT_IN_FLIGHT = "IDEMPOTENT_IN_FLIGHT";
 
@@ -52,7 +47,10 @@ export function withIdempotency(
       try {
         acquired = await store.tryAcquire(key, options.ttlMs);
       } catch (error) {
-        return taskFailure(ErrorCode.EXECUTION_FAILED, `idempotency acquire failed: ${messageOf(error)}`);
+        return taskFailure(
+          ErrorCode.EXECUTION_FAILED,
+          `idempotency acquire failed: ${messageOf(error)}`,
+        );
       }
 
       if (!acquired) {
@@ -61,7 +59,10 @@ export function withIdempotency(
           if (cached) return cached.result;
           return taskFailure(IDEMPOTENT_IN_FLIGHT, "idempotent execution is already in flight");
         } catch (error) {
-          return taskFailure(ErrorCode.EXECUTION_FAILED, `idempotency lookup failed: ${messageOf(error)}`);
+          return taskFailure(
+            ErrorCode.EXECUTION_FAILED,
+            `idempotency lookup failed: ${messageOf(error)}`,
+          );
         }
       }
 
@@ -74,7 +75,10 @@ export function withIdempotency(
         try {
           await store.record(key, { result }, options.ttlMs);
         } catch (error) {
-          return taskFailure(ErrorCode.EXECUTION_FAILED, `idempotency record failed: ${messageOf(error)}`);
+          return taskFailure(
+            ErrorCode.EXECUTION_FAILED,
+            `idempotency record failed: ${messageOf(error)}`,
+          );
         }
         return result;
       } catch (error) {

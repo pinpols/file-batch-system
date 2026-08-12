@@ -13,8 +13,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::decide::{apply_heartbeat_directive, apply_renew, Decision};
 use crate::client::transport::{classify_response, Transport, TransportOutcome};
+use crate::decide::{apply_heartbeat_directive, apply_renew, Decision};
 use crate::protocol::{HeartbeatResponse, RenewResponse};
 
 /// Default heartbeat interval (§1.3): 30s.
@@ -83,17 +83,18 @@ impl<T: Transport> HeartbeatScheduler<T> {
     /// any `nextHeartbeatHint`.
     pub fn tick(&mut self, body: &str) -> HttpTickRaw {
         let resp = self.transport.heartbeat(&self.worker_code, body);
-        HttpTickRaw { status: resp.status, body: resp.body }
+        HttpTickRaw {
+            status: resp.status,
+            body: resp.body,
+        }
     }
 
     /// Apply a parsed heartbeat response (separating IO from decision keeps this
     /// std-only-testable: the real adapter parses `tick()`'s raw body into
     /// `HeartbeatResponse`, then calls this).
     pub fn apply(&mut self, status: i64, parsed: &HeartbeatResponse) -> HeartbeatTick {
-        let transport = classify_response(
-            &crate::client::transport::HttpResponse::new(status, ""),
-            0,
-        );
+        let transport =
+            classify_response(&crate::client::transport::HttpResponse::new(status, ""), 0);
         if let TransportOutcome::Success = transport {
             let decision = apply_heartbeat_directive(parsed);
             if let Some(ms) = decision.heartbeat_next_interval_ms {
@@ -168,10 +169,8 @@ impl<T: Transport> LeaseRenewalScheduler<T> {
     /// Renew a single in-flight task. The adapter parses the renew body into a
     /// [`RenewResponse`]; tests pass it directly with the status.
     pub fn renew_one(&self, task_id: &str, status: i64, parsed: &RenewResponse) -> RenewTick {
-        let transport = classify_response(
-            &crate::client::transport::HttpResponse::new(status, ""),
-            0,
-        );
+        let transport =
+            classify_response(&crate::client::transport::HttpResponse::new(status, ""), 0);
         match transport {
             TransportOutcome::Success => {
                 let decision = apply_renew(parsed);
@@ -202,7 +201,10 @@ impl<T: Transport> LeaseRenewalScheduler<T> {
     /// Perform the raw renew IO for a task (status + body for the adapter).
     pub fn tick(&self, task_id: &str, body: &str) -> HttpTickRaw {
         let resp = self.transport.renew(task_id, body);
-        HttpTickRaw { status: resp.status, body: resp.body }
+        HttpTickRaw {
+            status: resp.status,
+            body: resp.body,
+        }
     }
 }
 

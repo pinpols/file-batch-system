@@ -16,6 +16,30 @@ make spotless-fix   # 自动修复
 格式化变更必须与业务逻辑分开提交。IDE 只负责调用项目 formatter 或导入兼容的 Palantir
 Java Format 插件，不能自行改用 IntelliJ/Eclipse 格式化后提交。
 
+### 0.1 多语言 SDK 与脚本格式化
+
+各语言使用官方或事实标准 formatter，不能把 Java 的 120 列规则直接套到其他语言：
+
+| 范围 | 工具与约定 | CI 门禁 |
+| --- | --- | --- |
+| Go SDK | `gofmt`，使用 Go 默认 tab 缩进 | `sdk-contract-parity` 的 Go contract job |
+| Rust SDK | `rustfmt`，使用 Cargo 默认配置 | `sdk-contract-parity` 的 Rust contract job |
+| Python SDK | Ruff formatter，100 列、4 空格 | `sdk-python` 的 `ruff format --check` |
+| TypeScript SDK | Prettier 3.6.2，100 列、2 空格、LF、分号 | `sdk-contract-parity` 的 TypeScript contract job |
+| Shell / Workflow | ShellCheck + actionlint；脚本保留 `set -euo pipefail` | `workflow-lint` 与脚本安全门禁 |
+| SQL / YAML / XML | 由 EditorConfig 约束编码、换行、缩进；迁移和 fixture 不使用会重排语义的全量 formatter | 结构、安全及边界检查 |
+
+格式化命令：
+
+```bash
+gofmt -w sdk/go
+cargo fmt --manifest-path sdk/rust/Cargo.toml --all
+(cd sdk/python && ruff format src tests)
+(cd sdk/typescript && npm run format)
+```
+
+提交前使用对应的 `--check` / `format:check` 命令；纯格式化变更必须与业务逻辑分开提交。
+
 ---
 
 ## 1. 方法参数约束

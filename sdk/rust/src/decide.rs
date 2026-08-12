@@ -81,7 +81,12 @@ pub fn exponential_backoff(base_ms: i64, attempts: i64) -> Vec<i64> {
 ///   call increments it; fail-fast once it reaches the threshold)
 /// * `base_ms` / `attempts` — tune the 5xx/transport backoff; pass `<= 0` to use
 ///   defaults.
-pub fn classify_http(status: i64, client_error_count: i64, base_ms: i64, attempts: i64) -> Decision {
+pub fn classify_http(
+    status: i64,
+    client_error_count: i64,
+    base_ms: i64,
+    attempts: i64,
+) -> Decision {
     let base_ms = if base_ms <= 0 {
         DEFAULT_RETRY_BASE_MS
     } else {
@@ -378,7 +383,11 @@ pub fn apply_renew(resp: &RenewResponse) -> Decision {
 /// - `in_flight >= max_concurrent`             -> backpressure / pause (idempotent if already paused)
 /// - `currently_paused && in_flight < max/2`   -> backpressure / resume
 /// - otherwise                                 -> none (stay paused in the `[max/2, max)` band)
-pub fn decide_backpressure(in_flight: i64, max_concurrent: i64, currently_paused: bool) -> Decision {
+pub fn decide_backpressure(
+    in_flight: i64,
+    max_concurrent: i64,
+    currently_paused: bool,
+) -> Decision {
     if in_flight >= max_concurrent {
         let mut d = Decision::with_action("backpressure");
         d.kafka = Some("pause".to_string());
@@ -666,7 +675,11 @@ mod tests {
             let d = classify_http(status, 0, 0, 0);
             assert_eq!(d.action, "retry-then-drop", "status {status}");
             assert_eq!(d.retry, Some(true), "status {status}");
-            assert_eq!(d.retry_backoff_ms, Some(vec![200, 400, 800]), "status {status}");
+            assert_eq!(
+                d.retry_backoff_ms,
+                Some(vec![200, 400, 800]),
+                "status {status}"
+            );
             assert_eq!(d.max_attempts, Some(3), "status {status}");
         }
     }
@@ -682,7 +695,11 @@ mod tests {
             ("banana", "reject"),
         ];
         for (input, want) in cases {
-            assert_eq!(classify_schema_version(Some(input)), want, "input {input:?}");
+            assert_eq!(
+                classify_schema_version(Some(input)),
+                want,
+                "input {input:?}"
+            );
         }
         // null/absent -> accept
         assert_eq!(classify_schema_version(None), "accept");
@@ -702,7 +719,11 @@ mod tests {
             ("PT1H", 3600000),
         ];
         for (input, want) in cases {
-            assert_eq!(parse_iso8601_duration_ms(input).unwrap(), want, "input {input}");
+            assert_eq!(
+                parse_iso8601_duration_ms(input).unwrap(),
+                want,
+                "input {input}"
+            );
         }
         assert!(parse_iso8601_duration_ms("garbage").is_err());
     }

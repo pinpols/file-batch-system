@@ -4,17 +4,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  SimpleCancellationSignal,
-  taskSuccess,
-  taskFailure,
-} from "../src/client/handler.ts";
+import { SimpleCancellationSignal, taskSuccess, taskFailure } from "../src/client/handler.ts";
 import { ErrorCode } from "../src/protocol.ts";
 
 test("handler: cancellation signal flips and fires onCancel once", () => {
   const sig = new SimpleCancellationSignal();
   let fired = 0;
-  sig.onCancel(() => { fired += 1; });
+  sig.onCancel(() => {
+    fired += 1;
+  });
   assert.equal(sig.isCancellationRequested, false);
 
   sig.markCancelled();
@@ -27,7 +25,9 @@ test("handler: cancellation signal flips and fires onCancel once", () => {
 
   // onCancel registered after cancellation fires immediately
   let late = 0;
-  sig.onCancel(() => { late += 1; });
+  sig.onCancel(() => {
+    late += 1;
+  });
   assert.equal(late, 1);
 });
 

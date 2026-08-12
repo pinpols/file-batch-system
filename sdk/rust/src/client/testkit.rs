@@ -39,7 +39,8 @@ impl FakePlatform {
 
     /// Queue a register response (default 200 if never called).
     pub fn given_register(&self, status: i64) -> &Self {
-        self.transport.queue_register(HttpResponse::new(status, "{}"));
+        self.transport
+            .queue_register(HttpResponse::new(status, "{}"));
         self
     }
 
@@ -57,7 +58,8 @@ impl FakePlatform {
 
     /// Queue a deactivate response (default 200).
     pub fn given_deactivate(&self, status: i64) -> &Self {
-        self.transport.queue_deactivate(HttpResponse::new(status, ""));
+        self.transport
+            .queue_deactivate(HttpResponse::new(status, ""));
         self
     }
 
@@ -80,10 +82,7 @@ impl FakePlatform {
                 // CLAIM before execute (§1.1): the worker must take the lease
                 // before running the handler. The claim body carries the
                 // partitionInvocationId threaded from the dispatch record.
-                let claim_body = record
-                    .partition_invocation_id
-                    .clone()
-                    .unwrap_or_default();
+                let claim_body = record.partition_invocation_id.clone().unwrap_or_default();
                 let _ = self.transport.claim(&record.task_id, &claim_body);
                 let ctx = TaskContext::new(&record.task_id, &record.tenant_id, &record.task_type)
                     .with_partition_invocation_id(record.partition_invocation_id.clone());
@@ -169,8 +168,7 @@ mod tests {
     fn fake_platform_end_to_end_happy_path() {
         let platform = FakePlatform::new("tenant-a", 4);
         let record = TaskRecord::new("t1", "tenant-a", "echo", Some("v1"));
-        let (state, result, report) =
-            run_happy_path(&platform, "w1", &EchoHandler, &record);
+        let (state, result, report) = run_happy_path(&platform, "w1", &EchoHandler, &record);
 
         assert_eq!(state, WorkerState::Draining);
         assert_eq!(result.unwrap().result_summary, "echoed");
@@ -184,7 +182,10 @@ mod tests {
                 "deactivate".to_string()
             ]
         );
-        assert_eq!(report.deactivate_outcome, crate::client::transport::TransportOutcome::Success);
+        assert_eq!(
+            report.deactivate_outcome,
+            crate::client::transport::TransportOutcome::Success
+        );
     }
 
     /// ADR-037 决策三: a stoppable handler that commits then gets cancelled
@@ -200,7 +201,10 @@ mod tests {
         ) -> Result<TaskResult, crate::client::checkpoint::SdkTaskStopped> {
             let mut bp = crate::client::checkpoint::BreakPosition::new();
             for i in 1..=100i64 {
-                bp.insert("id".to_string(), crate::client::checkpoint::JsonValue::Int(i));
+                bp.insert(
+                    "id".to_string(),
+                    crate::client::checkpoint::JsonValue::Int(i),
+                );
                 ctx.commit(i, 0, bp.clone())?; // propagates SdkTaskStopped up
             }
             Ok(TaskResult::success("all rows imported"))
@@ -223,7 +227,10 @@ mod tests {
             .expect("ran");
         assert_eq!(result.error_code, "CANCELLED");
         // claim -> report (terminal=CANCELLED), no failure path.
-        assert_eq!(platform.call_log(), vec!["claim".to_string(), "report".to_string()]);
+        assert_eq!(
+            platform.call_log(),
+            vec!["claim".to_string(), "report".to_string()]
+        );
     }
 
     #[test]

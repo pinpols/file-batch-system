@@ -414,10 +414,7 @@ impl RecordingProgressReporter {
 
     /// The recorded `(percent, message)` calls in order.
     pub fn calls(&self) -> Vec<(u8, String)> {
-        self.calls
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default()
+        self.calls.lock().map(|g| g.clone()).unwrap_or_default()
     }
 
     /// How many times `report_progress` was called.
@@ -534,7 +531,10 @@ mod tests {
         let loaded = ctx.checkpoint().load("t1").expect("load").expect("present");
         assert_eq!(loaded.succeed_count, 500);
         assert_eq!(loaded.fail_count, 3);
-        assert_eq!(loaded.break_position.get("id").and_then(JsonValue::as_i64), Some(500));
+        assert_eq!(
+            loaded.break_position.get("id").and_then(JsonValue::as_i64),
+            Some(500)
+        );
         assert!(!loaded.completed);
     }
 
@@ -545,13 +545,21 @@ mod tests {
         store
             .save(
                 "done-task",
-                &SdkCheckpointState { completed: true, succeed_count: 1000, ..Default::default() },
+                &SdkCheckpointState {
+                    completed: true,
+                    succeed_count: 1000,
+                    ..Default::default()
+                },
             )
             .expect("seed");
         let ctx = TaskContext::new("done-task", "tenant-a", "import").with_checkpoint(store);
 
         // The resume preamble a handler runs: load → if completed, skip.
-        let state = ctx.checkpoint().load("done-task").expect("load").expect("present");
+        let state = ctx
+            .checkpoint()
+            .load("done-task")
+            .expect("load")
+            .expect("present");
         let result = if state.completed {
             TaskResult::success("already completed; skipped")
         } else {
@@ -572,7 +580,10 @@ mod tests {
         ctx.commit(10, 0, bp("id", 10)).expect("commit");
         let s = store.load("t1").expect("load").expect("present");
         assert_eq!(s.succeed_count, 10);
-        assert_eq!(s.break_position.get("id").and_then(JsonValue::as_i64), Some(10));
+        assert_eq!(
+            s.break_position.get("id").and_then(JsonValue::as_i64),
+            Some(10)
+        );
         assert!(!s.completed);
     }
 
@@ -590,7 +601,10 @@ mod tests {
         assert_eq!(recorder.count(), 3);
         // The message of the last report reflects the latest counters.
         let calls = recorder.calls();
-        assert_eq!(calls.last().map(|(_, m)| m.as_str()), Some("succeed=9 fail=0"));
+        assert_eq!(
+            calls.last().map(|(_, m)| m.as_str()),
+            Some("succeed=9 fail=0")
+        );
     }
 
     #[test]
@@ -617,7 +631,10 @@ mod tests {
         // Cancellation requested → next commit stops at the committed safe-point.
         ctx.cancellation.cancel();
         let err = ctx.commit(20, 0, bp("id", 20)).expect_err("should stop");
-        assert_eq!(err.break_position.get("id").and_then(JsonValue::as_i64), Some(20));
+        assert_eq!(
+            err.break_position.get("id").and_then(JsonValue::as_i64),
+            Some(20)
+        );
     }
 
     #[test]

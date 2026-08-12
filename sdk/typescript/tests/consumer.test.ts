@@ -5,11 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  MessagePipeline,
-  type Assignment,
-  type DispatchMessage,
-} from "../src/client/consumer.ts";
+import { MessagePipeline, type Assignment, type DispatchMessage } from "../src/client/consumer.ts";
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
@@ -59,7 +55,11 @@ test("consumer: rejects schemaVersion v3 (unknown major), no commit", async () =
 
 test("consumer: accepts known schemaVersion v2", async () => {
   let accepted: string | undefined;
-  const p = pipeline({ onAccepted: async (m) => { accepted = m.taskId; } });
+  const p = pipeline({
+    onAccepted: async (m) => {
+      accepted = m.taskId;
+    },
+  });
   const out = await p.onMessage({
     value: JSON.stringify({ taskId: "t2", tenantId: "tenant-A", schemaVersion: "v2" }),
   });
@@ -72,7 +72,9 @@ test("consumer: drops foreign tenantId (§1.9), no commit", async () => {
   let accepted = false;
   const p = pipeline({
     tenantId: "tenant-A",
-    onAccepted: async () => { accepted = true; },
+    onAccepted: async () => {
+      accepted = true;
+    },
   });
   const out = await p.onMessage({
     value: JSON.stringify({ taskId: "t3", tenantId: "tenant-B" }),
@@ -86,7 +88,9 @@ test("consumer: drops message whose workerType is not served, no commit", async 
   let accepted = false;
   const p = pipeline({
     workerTypes: ["IMPORT"],
-    onAccepted: async () => { accepted = true; },
+    onAccepted: async () => {
+      accepted = true;
+    },
   });
   const out = await p.onMessage({
     value: JSON.stringify({ taskId: "t6", tenantId: "tenant-A", workerType: "EXPORT" }),
@@ -100,7 +104,9 @@ test("consumer: accepts message whose workerType is served", async () => {
   let accepted = false;
   const p = pipeline({
     workerTypes: ["IMPORT", "EXPORT"],
-    onAccepted: async () => { accepted = true; },
+    onAccepted: async () => {
+      accepted = true;
+    },
   });
   const out = await p.onMessage({
     value: JSON.stringify({ taskId: "t7", tenantId: "tenant-A", workerType: "EXPORT" }),
@@ -145,7 +151,12 @@ test("consumer: v1 taskType JSON aliases to workerType (backward compat) and rou
   });
   const out = await p.onMessage({
     // v1 字段名 taskType,无 workerType
-    value: JSON.stringify({ taskId: "t10", tenantId: "tenant-A", schemaVersion: "v1", taskType: "echo" }),
+    value: JSON.stringify({
+      taskId: "t10",
+      tenantId: "tenant-A",
+      schemaVersion: "v1",
+      taskType: "echo",
+    }),
   });
   assert.equal(out.kind, "accepted");
   assert.equal(seen, "echo");

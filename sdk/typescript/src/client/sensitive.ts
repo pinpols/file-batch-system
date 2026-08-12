@@ -43,9 +43,7 @@ export class SensitiveDataValidator {
 
   /** @param extraKeywords tenant deny-list extension (§1.8 hook). */
   constructor(extraKeywords: readonly string[] = []) {
-    this.#keywords = new Set(
-      [...SENSITIVE_KEYWORDS, ...extraKeywords].map(normalizeKey),
-    );
+    this.#keywords = new Set([...SENSITIVE_KEYWORDS, ...extraKeywords].map(normalizeKey));
   }
 
   /** Extend the deny-list at runtime (returns this for chaining). */
@@ -64,9 +62,7 @@ export class SensitiveDataValidator {
     if (obj == null || typeof obj !== "object") return leaked;
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       const norm = normalizeKey(key);
-      const matched = [...this.#keywords].some(
-        (kw) => norm === kw || norm.includes(kw),
-      );
+      const matched = [...this.#keywords].some((kw) => norm === kw || norm.includes(kw));
       if (!matched) continue;
       if (typeof value === "string" && value.length > 0) {
         leaked.push(key);

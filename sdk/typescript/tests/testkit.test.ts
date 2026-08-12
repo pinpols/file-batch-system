@@ -9,11 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  FakePlatform,
-  reportFor,
-  withFakePlatform,
-} from "../src/client/testkit.ts";
+import { FakePlatform, reportFor, withFakePlatform } from "../src/client/testkit.ts";
 
 test("reportFor returns the last recorded report body for a taskId", async () => {
   const platform = new FakePlatform();

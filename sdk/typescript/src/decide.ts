@@ -129,9 +129,7 @@ export function classifyHeartbeatRenewError(): HttpDecision {
  * null/undefined → treated as v1 (accept); known major in SUPPORTED → accept;
  * unknown major (v3+) → reject (do not commit offset).
  */
-export function classifySchemaVersion(
-  version: string | null | undefined,
-): "accept" | "reject" {
+export function classifySchemaVersion(version: string | null | undefined): "accept" | "reject" {
   if (version == null || version === "") {
     return "accept"; // legacy orchestrator without the field → v1
   }
@@ -156,9 +154,7 @@ export interface HeartbeatDecision {
 
 /** Parse an ISO-8601 duration ("PT15S", "PT1M30S", "PT30S") to milliseconds. */
 export function parseIso8601DurationMs(iso: string): number {
-  const m = /^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(
-    iso,
-  );
+  const m = /^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(iso);
   if (!m || (m[1] == null && m[2] == null && m[3] == null)) {
     throw new Error(`invalid ISO-8601 duration: ${iso}`);
   }
@@ -180,9 +176,7 @@ function hintToMs(hint: string | number): number {
  * Precedence: shouldDrain/DRAINING > PAUSED > NORMAL. nextHeartbeatHint is
  * orthogonal and applied whenever present.
  */
-export function applyHeartbeatDirective(
-  resp: HeartbeatResponse,
-): HeartbeatDecision {
+export function applyHeartbeatDirective(resp: HeartbeatResponse): HeartbeatDecision {
   const result: HeartbeatDecision = { action: "apply-directive" };
 
   if (resp.shouldDrain === true || resp.platformStatus === "DRAINING") {
@@ -426,10 +420,7 @@ function baseHeaders(config: RequestBuildConfig): Record<string, string> {
  * call. Field names and NON_NULL omission mirror the platform wire DTOs; apiKey
  * lives only in the header, never the body.
  */
-export function buildRequest(
-  spec: RequestSpec,
-  config: RequestBuildConfig,
-): OutgoingRequest {
+export function buildRequest(spec: RequestSpec, config: RequestBuildConfig): OutgoingRequest {
   const headers = baseHeaders(config);
   switch (spec.kind) {
     case "register": {
@@ -449,8 +440,7 @@ export function buildRequest(
         partitionInvocationId: spec.partitionInvocationId,
       });
       // write op → per-call idempotency key header
-      headers["Idempotency-Key"] =
-        spec.idempotencyKey ?? `ts-${randomUuid()}`;
+      headers["Idempotency-Key"] = spec.idempotencyKey ?? `ts-${randomUuid()}`;
       return { body, headers };
     }
     case "report": {
@@ -466,8 +456,7 @@ export function buildRequest(
         failureClass: r.failureClass,
         partitionInvocationId: spec.partitionInvocationId,
       });
-      headers["Idempotency-Key"] =
-        spec.idempotencyKey ?? `ts-${randomUuid()}`;
+      headers["Idempotency-Key"] = spec.idempotencyKey ?? `ts-${randomUuid()}`;
       return { body, headers };
     }
     default:
@@ -488,8 +477,6 @@ export function newIdempotencyKey(): string {
 /** Minimal RFC-4122-ish v4 uuid (no deps); only the shape matters here. */
 function randomUuid(): string {
   const hex = (n: number) =>
-    Array.from({ length: n }, () =>
-      Math.floor(Math.random() * 16).toString(16),
-    ).join("");
+    Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
   return `${hex(8)}-${hex(4)}-4${hex(3)}-${hex(4)}-${hex(12)}`;
 }

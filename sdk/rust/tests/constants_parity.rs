@@ -99,8 +99,7 @@ fn parse_simple_yaml_lists(text: &str) -> BTreeMap<String, Vec<String>> {
 
 fn load_yaml_lists() -> BTreeMap<String, Vec<String>> {
     let path = yaml_path();
-    let data = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let data = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     parse_simple_yaml_lists(&data)
 }
 

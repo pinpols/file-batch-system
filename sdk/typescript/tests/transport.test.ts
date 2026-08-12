@@ -19,8 +19,7 @@ function startServer(
       const port = typeof addr === "object" && addr ? addr.port : 0;
       resolve({
         url: `http://127.0.0.1:${port}`,
-        close: () =>
-          new Promise((r) => server.close(() => r(undefined))),
+        close: () => new Promise((r) => server.close(() => r(undefined))),
       });
     });
   });
@@ -77,8 +76,7 @@ test("transport: 401 → FatalTransportError, no retry", async () => {
 
   await assert.rejects(
     () => transport.claim("t1", "idem-1"),
-    (e: unknown) =>
-      e instanceof FatalTransportError && (e as FatalTransportError).status === 401,
+    (e: unknown) => e instanceof FatalTransportError && (e as FatalTransportError).status === 401,
   );
   assert.equal(hits, 1, "401 must not retry");
 
@@ -92,7 +90,12 @@ test("transport: 409 → idempotent success (register idempotent=true)", async (
     res.end("already");
   });
 
-  const transport = new HttpTransport({ baseUrl: srv.url, tenantId: "tenant-A", workerCode: "w1", sleep: async () => {} });
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+    sleep: async () => {},
+  });
   const ack = await transport.register({ workerCode: "w1" });
   assert.equal(ack.idempotent, true);
 

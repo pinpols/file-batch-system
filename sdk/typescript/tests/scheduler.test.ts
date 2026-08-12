@@ -4,15 +4,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  HeartbeatScheduler,
-  LeaseRenewalScheduler,
-} from "../src/client/scheduler.ts";
+import { HeartbeatScheduler, LeaseRenewalScheduler } from "../src/client/scheduler.ts";
 import { FakeTransport } from "../src/client/testkit.ts";
-import {
-  NotFoundTransportError,
-  RevokedTransportError,
-} from "../src/client/transport.ts";
+import { NotFoundTransportError, RevokedTransportError } from "../src/client/transport.ts";
 import { SimpleCancellationSignal } from "../src/client/handler.ts";
 import type { FsmState, KafkaAction } from "../src/protocol.ts";
 
@@ -81,10 +75,9 @@ test("heartbeat: nextHeartbeatHint PT15S → next interval = 15000", async () =>
 test("heartbeat: failed tick is swallowed and keeps current interval", async () => {
   const transport = new FakeTransport();
   // make heartbeat throw
-  (transport as unknown as { heartbeat: () => Promise<never> }).heartbeat =
-    async () => {
-      throw new Error("boom");
-    };
+  (transport as unknown as { heartbeat: () => Promise<never> }).heartbeat = async () => {
+    throw new Error("boom");
+  };
 
   const hb = new HeartbeatScheduler(
     transport,

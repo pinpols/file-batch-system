@@ -4,10 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  SensitiveDataValidator,
-  SensitiveDataError,
-} from "../src/client/sensitive.ts";
+import { SensitiveDataValidator, SensitiveDataError } from "../src/client/sensitive.ts";
 import { ErrorCode } from "../src/protocol.ts";
 
 test("sensitive: register body with {password:'x'} throws", () => {
@@ -20,9 +17,7 @@ test("sensitive: register body with {password:'x'} throws", () => {
 
 test("sensitive: register body with {password:''} is allowed (placeholder)", () => {
   const v = new SensitiveDataValidator();
-  assert.doesNotThrow(() =>
-    v.assertRegisterBody({ password: "", workerCode: "w1" }),
-  );
+  assert.doesNotThrow(() => v.assertRegisterBody({ password: "", workerCode: "w1" }));
 });
 
 test("sensitive: task params with token → SECURITY_REJECTED, not throw", () => {

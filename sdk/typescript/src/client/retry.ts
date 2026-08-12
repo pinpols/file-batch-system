@@ -11,18 +11,18 @@ export interface RetryPolicy {
 }
 
 export function defaultShouldRetryResult(result: TaskResult): boolean {
-  return !result.success && (
-    result.errorCode === ErrorCode.EXECUTION_FAILED ||
-    result.errorCode === ErrorCode.TIMEOUT ||
-    result.errorCode === ErrorCode.RESOURCE_EXHAUSTED
+  return (
+    !result.success &&
+    (result.errorCode === ErrorCode.EXECUTION_FAILED ||
+      result.errorCode === ErrorCode.TIMEOUT ||
+      result.errorCode === ErrorCode.RESOURCE_EXHAUSTED)
   );
 }
 
 export function withRetry(handler: TaskHandler, policy: RetryPolicy = {}): TaskHandler {
   const maxAttempts = Math.max(1, policy.maxAttempts ?? 3);
-  const backoffMultiplier = policy.backoffMultiplier && policy.backoffMultiplier > 0
-    ? policy.backoffMultiplier
-    : 1;
+  const backoffMultiplier =
+    policy.backoffMultiplier && policy.backoffMultiplier > 0 ? policy.backoffMultiplier : 1;
   const shouldRetryResult = policy.shouldRetryResult ?? defaultShouldRetryResult;
   const shouldRetryError = policy.shouldRetryError ?? (() => true);
   const sleep = policy.sleep ?? defaultSleep;

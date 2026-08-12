@@ -288,7 +288,10 @@ mod tests {
 
         let loaded = cp.load("t1").expect("load").expect("present");
         assert_eq!(loaded, state);
-        assert_eq!(loaded.break_position.get("id").and_then(JsonValue::as_i64), Some(42));
+        assert_eq!(
+            loaded.break_position.get("id").and_then(JsonValue::as_i64),
+            Some(42)
+        );
         // Distinct task id still empty.
         assert_eq!(cp.load("other").expect("load"), None);
     }
@@ -296,10 +299,23 @@ mod tests {
     #[test]
     fn save_overwrites_previous_state() {
         let cp = InMemoryCheckpoint::new();
-        cp.save("t1", &SdkCheckpointState { succeed_count: 1, ..Default::default() })
-            .expect("save");
-        cp.save("t1", &SdkCheckpointState { succeed_count: 5, completed: true, ..Default::default() })
-            .expect("save");
+        cp.save(
+            "t1",
+            &SdkCheckpointState {
+                succeed_count: 1,
+                ..Default::default()
+            },
+        )
+        .expect("save");
+        cp.save(
+            "t1",
+            &SdkCheckpointState {
+                succeed_count: 5,
+                completed: true,
+                ..Default::default()
+            },
+        )
+        .expect("save");
         let loaded = cp.load("t1").expect("load").expect("present");
         assert_eq!(loaded.succeed_count, 5);
         assert!(loaded.completed);

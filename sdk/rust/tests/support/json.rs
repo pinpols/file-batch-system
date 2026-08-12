@@ -110,7 +110,10 @@ impl Parser {
             Some('t') | Some('f') => self.parse_bool(),
             Some('n') => self.parse_null(),
             Some(c) if c == '-' || c.is_ascii_digit() => self.parse_number(),
-            other => Err(format!("unexpected token {other:?} at position {}", self.pos)),
+            other => Err(format!(
+                "unexpected token {other:?} at position {}",
+                self.pos
+            )),
         }
     }
 
@@ -198,9 +201,7 @@ impl Parser {
                                     return Err("invalid low surrogate".to_string());
                                 }
                                 let c = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
-                                s.push(
-                                    char::from_u32(c).ok_or("invalid surrogate pair")?,
-                                );
+                                s.push(char::from_u32(c).ok_or("invalid surrogate pair")?);
                             } else {
                                 s.push(char::from_u32(cp).ok_or("invalid unicode escape")?);
                             }
@@ -281,10 +282,8 @@ mod tests {
 
     #[test]
     fn parses_nested_structure() {
-        let v = parse(
-            r#"{ "a": 1, "b": [true, null, "x\n"], "c": {"d": -2.5e1}, "e": false }"#,
-        )
-        .unwrap();
+        let v = parse(r#"{ "a": 1, "b": [true, null, "x\n"], "c": {"d": -2.5e1}, "e": false }"#)
+            .unwrap();
         assert_eq!(v.get("a").and_then(Json::as_num), Some(1.0));
         assert_eq!(v.get("e").and_then(Json::as_bool), Some(false));
         let b = v.get("b").and_then(Json::as_array).unwrap();

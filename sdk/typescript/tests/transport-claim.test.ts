@@ -26,11 +26,7 @@ function startServer(
   });
 }
 
-function captureBody(
-  onBody: (b: string) => void,
-  status = 200,
-  payload = "{}",
-) {
+function captureBody(onBody: (b: string) => void, status = 200, payload = "{}") {
   return (req: http.IncomingMessage, res: http.ServerResponse) => {
     const chunks: Buffer[] = [];
     req.on("data", (c: Buffer) => chunks.push(c));
@@ -45,7 +41,12 @@ function captureBody(
 test("claim: carries partitionInvocationId in the body when provided", async () => {
   let body = "";
   const srv = await startServer(captureBody((b) => (body = b)));
-  const t = new HttpTransport({ baseUrl: srv.url, tenantId: "t", workerCode: "w", sleep: async () => {} });
+  const t = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "t",
+    workerCode: "w",
+    sleep: async () => {},
+  });
 
   await t.claim("task-9", "k", "inv-77");
   assert.deepEqual(JSON.parse(body), {
@@ -62,7 +63,12 @@ test("claim: OMITS partitionInvocationId (NON_NULL) when absent or empty", async
   for (const inv of [undefined, null, ""] as const) {
     let body = "";
     const srv = await startServer(captureBody((b) => (body = b)));
-    const t = new HttpTransport({ baseUrl: srv.url, tenantId: "t", workerCode: "w", sleep: async () => {} });
+    const t = new HttpTransport({
+      baseUrl: srv.url,
+      tenantId: "t",
+      workerCode: "w",
+      sleep: async () => {},
+    });
     await t.claim("task-9", "k", inv);
     assert.deepEqual(JSON.parse(body), { tenantId: "t", workerId: "w" }, `inv=${String(inv)}`);
     (t as unknown as { close(): void }).close();
@@ -75,7 +81,12 @@ test("claim: 409 → ClaimResponse.idempotent = true (caller must skip execution
     res.statusCode = 409;
     res.end("already claimed");
   });
-  const t = new HttpTransport({ baseUrl: srv.url, tenantId: "t", workerCode: "w", sleep: async () => {} });
+  const t = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "t",
+    workerCode: "w",
+    sleep: async () => {},
+  });
 
   const claim = await t.claim("task-9", "k", "inv-1");
   assert.equal(claim.idempotent, true);
@@ -89,7 +100,12 @@ test("claim: 200 → idempotent is falsy (normal claim proceeds)", async () => {
     res.statusCode = 200;
     res.end(JSON.stringify({ effectiveConfig: { a: 1 } }));
   });
-  const t = new HttpTransport({ baseUrl: srv.url, tenantId: "t", workerCode: "w", sleep: async () => {} });
+  const t = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "t",
+    workerCode: "w",
+    sleep: async () => {},
+  });
 
   const claim = await t.claim("task-9", "k");
   assert.ok(!claim.idempotent, "200 claim is not idempotent-already-claimed");

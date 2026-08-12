@@ -27,7 +27,9 @@ export const SIGNATURE_HEADERS = {
 
 /** hex(sha256(body)) — empty body still hashes (sha256 of zero bytes). */
 export function bodySha256Hex(body: string | Uint8Array): string {
-  return createHash("sha256").update(body ?? "").digest("hex");
+  return createHash("sha256")
+    .update(body ?? "")
+    .digest("hex");
 }
 
 /** The canonical string the HMAC is computed over. */

@@ -30,9 +30,7 @@ class CapturingConsumer implements Consumer {
   constructor(records: ConsumerRecord[]) {
     this.#records = records;
   }
-  async start(
-    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
-  ): Promise<void> {
+  async start(onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>): Promise<void> {
     for (const r of this.#records) {
       this.dispositions.push(await onMessage(r));
     }

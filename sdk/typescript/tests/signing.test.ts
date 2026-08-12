@@ -11,12 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import {
-  bodySha256Hex,
-  sign,
-  signatureHeaders,
-  SIGNATURE_HEADERS,
-} from "../src/client/signing.ts";
+import { bodySha256Hex, sign, signatureHeaders, SIGNATURE_HEADERS } from "../src/client/signing.ts";
 import { HttpTransport } from "../src/client/transport.ts";
 
 // --- golden vectors (byte-for-byte contract) --------------------------------
@@ -39,14 +34,7 @@ test("signing golden: bodySha256Hex(body) matches the contract vector", () => {
 
 test("signing golden: sign(...) matches the contract vector", () => {
   assert.equal(
-    sign(
-      GOLDEN.apiKey,
-      GOLDEN.method,
-      GOLDEN.path,
-      GOLDEN.timestamp,
-      GOLDEN.nonce,
-      GOLDEN.body,
-    ),
+    sign(GOLDEN.apiKey, GOLDEN.method, GOLDEN.path, GOLDEN.timestamp, GOLDEN.nonce, GOLDEN.body),
     "287108832407aec1bc689c97ac22037b7114b2702671dfb20d1aacc6edeb0898",
   );
 });

@@ -24,10 +24,7 @@ import {
   DEFAULT_RETRY_MAX_ATTEMPTS,
   type HttpDecision,
 } from "../decide.ts";
-import type {
-  HeartbeatResponse,
-  RenewResponse,
-} from "../protocol.ts";
+import type { HeartbeatResponse, RenewResponse } from "../protocol.ts";
 import { signatureHeaders } from "./signing.ts";
 
 /** HTTP methods that carry a request body and are signed when signing is opt-in. */
@@ -151,8 +148,7 @@ interface RawResponse {
   body: string;
 }
 
-const realSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class HttpTransport implements Transport {
   #baseUrl: URL;
@@ -194,11 +190,9 @@ export class HttpTransport implements Transport {
     this.#transport = this.#secure ? https : http;
     if (!this.#secure) {
       const host = this.#baseUrl.hostname;
-      const loopback =
-        host === "localhost" || host === "127.0.0.1" || host === "::1";
+      const loopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
       if (!loopback) {
-        const warn =
-          opts.warn ?? ((m: string) => console.warn(m));
+        const warn = opts.warn ?? ((m: string) => console.warn(m));
         warn(
           `HttpTransport: base_url uses http:// over non-loopback host "${host}" — ` +
             "api_key + payloads travel in CLEARTEXT. Use https:// in production.",
@@ -233,11 +227,7 @@ export class HttpTransport implements Transport {
    * Signs the exact bytes sent (UTF-8 of the JSON payload, empty string for an
    * empty body) over the request path actually placed on the wire.
    */
-  #authHeaders(
-    method: string,
-    path: string,
-    payload: string,
-  ): Record<string, string> {
+  #authHeaders(method: string, path: string, payload: string): Record<string, string> {
     if (this.#apiKey == null || this.#apiKey === "") {
       return {};
     }
@@ -331,9 +321,7 @@ export class HttpTransport implements Transport {
   ): Promise<RawResponse> {
     let lastDecision: HttpDecision | undefined;
     // attempts = 1 (initial) + backoff slots for retryable ops
-    const backoff = retryable
-      ? this.#retryBaseMsSeq()
-      : [];
+    const backoff = retryable ? this.#retryBaseMsSeq() : [];
     let attempt = 0;
     // total tries = 1 + backoff.length
     for (;;) {
@@ -362,18 +350,12 @@ export class HttpTransport implements Transport {
           }
           return res;
         case "fail-fast":
-          throw new FatalTransportError(
-            `${op} failed fatally (status=${res.status})`,
-            res.status,
-          );
+          throw new FatalTransportError(`${op} failed fatally (status=${res.status})`, res.status);
         case "not-found":
           throw new NotFoundTransportError(`${op} not found (404)`);
         case "client-error":
           this.#clientErrorCount += 1;
-          throw new FatalTransportError(
-            `${op} client error (status=${res.status})`,
-            res.status,
-          );
+          throw new FatalTransportError(`${op} client error (status=${res.status})`, res.status);
         case "retry-then-drop": {
           if (attempt >= backoff.length) {
             throw new FatalTransportError(
@@ -411,21 +393,12 @@ export class HttpTransport implements Transport {
   // --- the 8 operations ---------------------------------------------------
 
   async register(body: Record<string, unknown>): Promise<RegisterAck> {
-    const raw = await this.#call(
-      "register",
-      "/internal/workers/register",
-      body,
-      {},
-      true,
-    );
+    const raw = await this.#call("register", "/internal/workers/register", body, {}, true);
     // 409 → idempotent reuse of an existing (tenant, workerCode)
     return { idempotent: raw.status === 409 };
   }
 
-  async heartbeat(
-    workerCode: string,
-    body: Record<string, unknown>,
-  ): Promise<HeartbeatResponse> {
+  async heartbeat(workerCode: string, body: Record<string, unknown>): Promise<HeartbeatResponse> {
     const raw = await this.#call(
       "heartbeat",
       `/internal/workers/${encodeURIComponent(workerCode)}/heartbeat`,
@@ -483,11 +456,7 @@ export class HttpTransport implements Transport {
     return parsed;
   }
 
-  async report(
-    taskId: string,
-    body: ReportBody,
-    idempotencyKey: string,
-  ): Promise<void> {
+  async report(taskId: string, body: ReportBody, idempotencyKey: string): Promise<void> {
     // TaskExecutionReportDto requires [taskId, tenantId, workerId, success].
     // result_summary is a platform JSONB column (`#{resultSummary}::jsonb`): it must be
     // VALID JSON, not a bare human string (else "invalid input syntax for type json" →
@@ -509,10 +478,7 @@ export class HttpTransport implements Transport {
     );
   }
 
-  async renew(
-    taskId: string,
-    body: Record<string, unknown>,
-  ): Promise<RenewResponse> {
+  async renew(taskId: string, body: Record<string, unknown>): Promise<RenewResponse> {
     const raw = await this.#call(
       "renew",
       `/internal/tasks/${encodeURIComponent(taskId)}/renew`,

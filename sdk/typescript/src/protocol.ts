@@ -10,13 +10,7 @@ export type PlatformStatus = "NORMAL" | "DEGRADED" | "PAUSED" | "DRAINING";
 export type FsmState = "NORMAL" | "DEGRADED" | "PAUSED" | "DRAINING";
 
 /** Kafka consumer actions the decision core can request. */
-export type KafkaAction =
-  | "none"
-  | "subscribe"
-  | "pause"
-  | "resume"
-  | "wakeup"
-  | "drop-message";
+export type KafkaAction = "none" | "subscribe" | "pause" | "resume" | "wakeup" | "drop-message";
 
 /** Primary decision actions (closed set, mirrors fixture `then.expect.action`). */
 export type DecisionAction =

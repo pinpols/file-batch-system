@@ -37,11 +37,7 @@ const BOOTSTRAP = process.env.KAFKA_BOOTSTRAP;
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
 /** Wait until `predicate()` is true or time runs out. */
-async function waitFor(
-  predicate: () => boolean,
-  timeoutMs = 20_000,
-  stepMs = 100,
-): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 20_000, stepMs = 100): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (predicate()) return;
@@ -189,10 +185,7 @@ test(
         "no foreign-tenant message may reach the handler",
       );
 
-      await Promise.race([
-        running,
-        adapter.wakeup().then(() => running),
-      ]);
+      await Promise.race([running, adapter.wakeup().then(() => running)]);
     } finally {
       await adapter.disconnect().catch(() => {});
       await producer.disconnect().catch(() => {});

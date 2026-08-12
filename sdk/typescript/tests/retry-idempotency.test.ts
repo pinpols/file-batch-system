@@ -68,12 +68,15 @@ test("withRetry stops on non-retryable TaskResult", async () => {
 test("withIdempotency caches successful result", async () => {
   const store = new InMemoryIdempotencyStore();
   let calls = 0;
-  const handler = withIdempotency({
-    async execute() {
-      calls += 1;
-      return taskSuccess({ calls }, "done");
+  const handler = withIdempotency(
+    {
+      async execute() {
+        calls += 1;
+        return taskSuccess({ calls }, "done");
+      },
     },
-  }, store);
+    store,
+  );
 
   const first = await handler.execute(ctx("same"));
   const second = await handler.execute(ctx("same"));
@@ -87,14 +90,17 @@ test("withIdempotency caches successful result", async () => {
 test("withIdempotency releases key after failed result", async () => {
   const store = new InMemoryIdempotencyStore();
   let calls = 0;
-  const handler = withIdempotency({
-    async execute() {
-      calls += 1;
-      return calls === 1
-        ? taskFailure(ErrorCode.EXECUTION_FAILED, "temporary")
-        : taskSuccess(undefined, "ok");
+  const handler = withIdempotency(
+    {
+      async execute() {
+        calls += 1;
+        return calls === 1
+          ? taskFailure(ErrorCode.EXECUTION_FAILED, "temporary")
+          : taskSuccess(undefined, "ok");
+      },
     },
-  }, store);
+    store,
+  );
 
   assert.equal((await handler.execute(ctx("retry"))).success, false);
   assert.equal((await handler.execute(ctx("retry"))).success, true);
@@ -104,11 +110,15 @@ test("withIdempotency releases key after failed result", async () => {
 test("withIdempotency reports in-flight when no cached entity exists", async () => {
   const store = new InMemoryIdempotencyStore();
   assert.equal(await store.tryAcquire("busy"), true);
-  const handler = withIdempotency({
-    async execute() {
-      throw new Error("should not run");
+  const handler = withIdempotency(
+    {
+      async execute() {
+        throw new Error("should not run");
+      },
     },
-  }, store, { keyResolver: () => "busy" });
+    store,
+    { keyResolver: () => "busy" },
+  );
 
   const result = await handler.execute(ctx());
 
@@ -137,11 +147,14 @@ class FailingRecordStore implements SdkIdempotencyStore {
 }
 
 test("withIdempotency maps record failure to EXECUTION_FAILED", async () => {
-  const result = await withIdempotency({
-    async execute() {
-      return taskSuccess(undefined, "ok");
+  const result = await withIdempotency(
+    {
+      async execute() {
+        return taskSuccess(undefined, "ok");
+      },
     },
-  }, new FailingRecordStore()).execute(ctx());
+    new FailingRecordStore(),
+  ).execute(ctx());
 
   assert.equal(result.success, false);
   assert.equal(result.errorCode, ErrorCode.EXECUTION_FAILED);
