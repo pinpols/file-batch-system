@@ -134,3 +134,17 @@ bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-r
 ```bash
 python3 scripts/ci/check-java-readability.py
 ```
+
+## `report-java-readability-inventory.py`
+
+生成 Java 可读性治理候选快照，覆盖 CGLIB 自注入、大类、public Map 契约、
+`@SuppressWarnings`、配置类和宽参数显式例外。该脚本只报告候选，不自动改写源码，
+也不把数量本身判定为缺陷。
+
+```bash
+python3 scripts/ci/report-java-readability-inventory.py
+python3 scripts/ci/report-java-readability-inventory.py \
+  --output docs/analysis/java-readability-inventory-2026-08-12.md
+python3 scripts/ci/report-java-readability-inventory.py \
+  --check docs/analysis/java-readability-inventory-2026-08-12.md
+```

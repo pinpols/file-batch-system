@@ -14,6 +14,7 @@
 | 06 | [todo-master.md](./todo-master.md) | 全仓待办整合：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
 | 07 | [frontend-backend-contract-cleanup-2026-05-19.md](./frontend-backend-contract-cleanup-2026-05-19.md) | 前后端契约与文档整理记录：OpenAPI 路径漂移、Job Bundle 事务语义、前端导入闭环 | 修 Console API / Job Bundle / 前端联调前 |
 | 08 | [dba-schema-review-2026-05-20.md](./dba-schema-review-2026-05-20.md) | DBA 审查报告：Schema / 索引 / 分区归档 / 约束四维 Top 10 问题 + Quick wins + 多日重构 | 评估 DB 健康度、排期 partition / 索引整合 / 生命周期补齐 |
+| 09 | [java-readability-phase-0-classification-2026-08-12.md](./java-readability-phase-0-classification-2026-08-12.md) | Java 可读性治理分类总账；机器快照见 [inventory](./java-readability-inventory-2026-08-12.md) | 实施可读性路线图阶段 0～3、复核保留例外 |
 
 ## 工作循环
 
