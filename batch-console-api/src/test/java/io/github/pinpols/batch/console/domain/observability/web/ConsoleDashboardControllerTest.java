@@ -10,9 +10,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleDashboardQueryService;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.ActivePartitionView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayStatusCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.JobStatsView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.StatusCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.TenantUsageView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.TriggerStatsView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.TypeCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerGroupStatusCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerLoadView;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,12 +55,11 @@ class ConsoleDashboardControllerTest {
 
   @Test
   void jobStatsShouldUseDefaultDays7() throws Exception {
-    // 键与真实 ConsoleDashboardQueryService.loadJobStats 输出一致：byStatus(动态维度键)/total/dailyTrend。
     when(service.jobStats("ta", 7))
-        .thenReturn(Map.of(
-            "byStatus", Map.of("SUCCESS", 8L, "FAILED", 2L),
-            "total", 10L,
-            "dailyTrend", List.of(Map.of("day", "2026-05-20", "status", "SUCCESS", "count", 8L))));
+        .thenReturn(new JobStatsView(
+            Map.of("SUCCESS", 8L, "FAILED", 2L),
+            10L,
+            List.of(new DayStatusCountView(LocalDate.of(2026, 5, 20), "SUCCESS", 8L))));
     mockMvc
         .perform(get("/api/console/dashboard/job-stats").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -61,9 +72,9 @@ class ConsoleDashboardControllerTest {
   @Test
   void triggerStatsShouldUseCustomDays() throws Exception {
     when(service.triggerStats("ta", 30))
-        .thenReturn(Map.of(
-            "byTriggerType", List.of(Map.of("type", "CRON", "count", 100L)),
-            "dailyTrend", List.of(Map.of("day", "2026-05-20", "count", 100L))));
+        .thenReturn(new TriggerStatsView(
+            List.of(new TypeCountView("CRON", 100L)),
+            List.of(new DayCountView(LocalDate.of(2026, 5, 20), 100L))));
     mockMvc
         .perform(
             get("/api/console/dashboard/trigger-stats").param("tenantId", "ta").param("days", "30"))
@@ -76,11 +87,10 @@ class ConsoleDashboardControllerTest {
   @Test
   void workerLoadShouldDelegate() throws Exception {
     when(service.workerLoad("ta"))
-        .thenReturn(Map.of(
-            "byStatus", List.of(Map.of("status", "ONLINE", "count", 3L)),
-            "byWorkerGroup", List.of(),
-            "activePartitionsByWorker",
-                List.of(Map.of("workerCode", "w-1", "activePartitions", 5L))));
+        .thenReturn(new WorkerLoadView(
+            List.of(new StatusCountView("ONLINE", 3L)),
+            List.of(new WorkerGroupStatusCountView("default", "ONLINE", 3L)),
+            List.of(new ActivePartitionView("w-1", 5L))));
     mockMvc
         .perform(get("/api/console/dashboard/worker-load").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -91,25 +101,8 @@ class ConsoleDashboardControllerTest {
   @Test
   void executionProgressShouldRequireJobCodeAndBizDate() throws Exception {
     when(service.executionProgress("ta", "JOB_A", "2026-05-20"))
-        .thenReturn(List.of(Map.of(
-            "id",
-            9L,
-            "jobCode",
-            "JOB_A",
-            "instanceNo",
-            "INS-9",
-            "instanceStatus",
-            "RUNNING",
-            "expectedPartitions",
-            4,
-            "successPartitions",
-            2,
-            "failedPartitions",
-            0,
-            "completedPartitions",
-            2,
-            "progressPercent",
-            50L)));
+        .thenReturn(List.of(new ExecutionProgressView(
+            9L, "JOB_A", "INS-9", "RUNNING", 4, 2, 0, null, null, 2, 50L)));
     mockMvc
         .perform(get("/api/console/dashboard/execution-progress")
             .param("tenantId", "ta")
@@ -124,7 +117,7 @@ class ConsoleDashboardControllerTest {
   @Test
   void tenantUsageShouldDefaultTo30Days() throws Exception {
     when(service.tenantUsage("ta", 30))
-        .thenReturn(Map.of("tenantId", "ta", "jobDefinitions", 12L, "periodDays", 30));
+        .thenReturn(new TenantUsageView("ta", 12L, 0L, 0L, 0L, 0L, 0L, 30));
     mockMvc
         .perform(get("/api/console/dashboard/tenant-usage").param("tenantId", "ta"))
         .andExpect(status().isOk())

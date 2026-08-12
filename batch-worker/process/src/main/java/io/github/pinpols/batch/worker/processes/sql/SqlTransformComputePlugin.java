@@ -42,6 +42,10 @@ import org.springframework.transaction.annotation.Transactional;
  *       SELECT} 直接写目标表
  *   <li>FEEDBACK:JSONB 模式清理 staging、推进水位;DIRECT 模式只推进水位
  * </ul>
+ *
+ * <p>采用 WAP（write-validate-publish）而不是直接写目标表，核心原因是批量加工必须先让校验失败可见，再把结果原子地发布；staging 还承担断点恢复和审计依据。
+ * DIRECT 只作为已明确选择的性能路径，并仍要求 SQL 白名单、冲突键和水位约束，避免“优化模式”绕过安全和幂等边界。所有写入都生成冲突处理子句，
+ * 因为 worker 可能在 commit 成功、report 丢失后被重新派发，重复执行必须变成无害的重放而不是重复数据。
  */
 @Slf4j
 @Component

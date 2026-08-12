@@ -232,8 +232,11 @@ public class TaskController {
       return new TaskClaimBatchCommand(null);
     }
     return new TaskClaimBatchCommand(request.items().stream()
-        .map(item -> new TaskClaimItemCommand(
-            item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()))
+        .map(item -> {
+          TaskClaimItemCommand command = new TaskClaimItemCommand(
+              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+          return command;
+        })
         .toList());
   }
 
@@ -290,8 +293,11 @@ public class TaskController {
       return new TaskLeaseRenewBatchCommand(null);
     }
     return new TaskLeaseRenewBatchCommand(request.items().stream()
-        .map(item -> new TaskLeaseRenewItemCommand(
-            item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()))
+        .map(item -> {
+          TaskLeaseRenewItemCommand command = new TaskLeaseRenewItemCommand(
+              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+          return command;
+        })
         .toList());
   }
 

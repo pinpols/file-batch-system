@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.CompensationPayload;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
@@ -54,6 +55,9 @@ import org.springframework.web.client.RestClient;
  *   <li><b>审批二次校验</b>：{@link #requireApprovedApproval} 同时接受 {@code APPROVED} 与 {@code EXECUTED}
  *       状态——已执行视为审批通过（幂等），调用方重放同一 approval 不被拒绝。
  * </ul>
+ *
+ * <p>这个类只负责 Console 到内部服务的边界适配，不直接访问控制面数据库。这样 Console 的重试、审批和事件刷新都经过同一组租户、幂等键、
+ * trace 和内部鉴权规则，避免某个运维入口为了“方便”绕过审批或在重试时产生重复操作；具体业务状态仍由 orchestrator/trigger 的单一写入方决定。
  */
 @Component
 @RequiredArgsConstructor
@@ -88,30 +92,25 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
   }
 
   @Override
-  public String delegateLaunch(
-      String tenantId,
-      String jobCode,
-      String bizDate,
-      TriggerType triggerType,
-      Map<String, Object> params,
-      String idempotencyKey) {
+  public String delegateLaunch(ConsoleLaunchCommand command) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     // P0-1(2026-05-16):此前直接 restClientBuilder.baseUrl(...).build() 漏装
     // X-Internal-Secret,生产 bypass=false 后 trigger 侧 401。换走
     // TriggerInternalRestClient 统一注入 secret + 超时。
     RestClient restClient = triggerInternalRestClient.build();
+    TriggerLaunchPayload launchPayload = new TriggerLaunchPayload(
+        command.tenantId(),
+        ConsoleTextSanitizer.safeInput(command.jobCode(), 128),
+        parseBizDate(command.bizDate()),
+        command.triggerType(),
+        command.params() == null ? Map.of() : command.params());
     CommonResponse<LaunchResponse> response = restClient
         .post()
         .uri("/api/triggers/launch")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(new TriggerLaunchPayload(
-            tenantId,
-            ConsoleTextSanitizer.safeInput(jobCode, 128),
-            parseBizDate(bizDate),
-            triggerType,
-            params == null ? Map.of() : params))
+        .body(launchPayload)
         .retrieve()
         .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
     if (response == null || response.data() == null) {

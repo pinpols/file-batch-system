@@ -298,8 +298,9 @@ public class TaskControllerApplicationService {
         results.add(new TaskLeaseRenewItemResult(null, false, false));
         continue;
       }
-      commands.add(new TaskAssignmentService.LeaseRenewCommand(
-          item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId()));
+      TaskAssignmentService.LeaseRenewCommand command = new TaskAssignmentService.LeaseRenewCommand(
+          item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+      commands.add(command);
       results.add(null);
     }
     List<TaskAssignmentService.TaskHeartbeatResult> outcomes =

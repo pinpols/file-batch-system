@@ -5,17 +5,18 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.DryRunTriggerResult;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleDryRunResultResponse;
+import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -53,21 +54,20 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
     if (jobDef.getEnabled() != null && !jobDef.getEnabled()) {
       throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
     }
-    String result = ops.delegateLaunch(
+    ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
         tenantId,
         jobCode,
         request.getBizDate(),
         ops.resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
         ops.parsePayload(request.getPayload()),
         idempotencyKey);
+    String result = ops.delegateLaunch(launchCommand);
     ops.publishRefresh(tenantId);
     return result;
   }
 
   @Override
-  public Map<String, Object> dryRunTrigger(TriggerRequest request) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("dryRun", true);
+  public DryRunTriggerResult dryRunTrigger(TriggerRequest request) {
     List<String> errors = new ArrayList<>();
     String tenantId;
     try {
@@ -76,13 +76,9 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
       SwallowedExceptionLogger.warn(DefaultConsoleJobTriggerService.class, "catch:Exception", e);
 
       errors.add("tenantId invalid: " + e.getMessage());
-      result.put("valid", false);
-      result.put("errors", errors);
-      return result;
+      return new DryRunTriggerResult(
+          true, null, request.getJobCode(), request.getBizDate(), false, errors);
     }
-    result.put("tenantId", tenantId);
-    result.put("jobCode", request.getJobCode());
-    result.put("bizDate", request.getBizDate());
 
     if (request.getJobCode() == null || request.getJobCode().isBlank()) {
       errors.add("jobCode is required");
@@ -116,11 +112,13 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
         errors.add("job definition is disabled: " + request.getJobCode());
       }
     }
-    result.put("valid", errors.isEmpty());
-    if (!errors.isEmpty()) {
-      result.put("errors", errors);
-    }
-    return result;
+    return new DryRunTriggerResult(
+        true,
+        tenantId,
+        request.getJobCode(),
+        request.getBizDate(),
+        EmptyChecks.isEmpty(errors),
+        EmptyChecks.isEmpty(errors) ? null : errors);
   }
 
   @Override
@@ -136,9 +134,9 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
       String error = null;
       try {
         if (item.isDryRun()) {
-          Map<String, Object> dryRun = dryRunTrigger(item);
+          DryRunTriggerResult dryRun = dryRunTrigger(item);
           dryRunFlag = true;
-          status = Boolean.TRUE.equals(dryRun.get("valid")) ? "DRY_RUN_OK" : "DRY_RUN_FAILED";
+          status = Boolean.TRUE.equals(dryRun.valid()) ? "DRY_RUN_OK" : "DRY_RUN_FAILED";
           result = ConsoleDryRunResultResponse.from(dryRun);
         } else {
           String itemKey = idempotencyKey + ":" + i;

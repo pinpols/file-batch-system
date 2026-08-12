@@ -47,8 +47,9 @@ public class TriggerController {
     String finalRequestId =
         EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
     String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    return CommonResponse.success(triggerService.launch(
-        new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId)));
+    TriggerLaunchCommand launchCommand =
+        new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId);
+    return CommonResponse.success(triggerService.launch(launchCommand));
   }
 
   @PostMapping("/catch-up/approve")

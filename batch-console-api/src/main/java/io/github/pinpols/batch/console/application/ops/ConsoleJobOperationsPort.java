@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.application.ops;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationPayload;
+import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -15,13 +16,7 @@ public interface ConsoleJobOperationsPort {
 
   void publishRefresh(String tenantId);
 
-  String delegateLaunch(
-      String tenantId,
-      String jobCode,
-      String bizDate,
-      TriggerType triggerType,
-      Map<String, Object> params,
-      String idempotencyKey);
+  String delegateLaunch(ConsoleLaunchCommand command);
 
   String submitCompensation(CompensationPayload payload, String idempotencyKey);
 

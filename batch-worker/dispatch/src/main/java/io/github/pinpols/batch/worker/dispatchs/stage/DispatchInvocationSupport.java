@@ -42,12 +42,13 @@ final class DispatchInvocationSupport {
       Map<String, Object> fileRecord,
       Map<String, Object> channelConfig,
       DispatchPayload dispatchPayload) {
-    DispatchResult dispatchResult = gateway.dispatch(new DispatchCommand(
+    DispatchCommand dispatchCommand = new DispatchCommand(
         context.getTenantId(),
         String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
         fileRecord,
         channelConfig,
-        dispatchPayload));
+        dispatchPayload);
+    DispatchResult dispatchResult = gateway.dispatch(dispatchCommand);
     propagateIdentifiers(context, dispatchResult);
     return dispatchResult;
   }

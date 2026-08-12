@@ -158,7 +158,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
         "updatedBy",
         ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
-    logChange(new ChangeLogCommand(
+    ChangeLogCommand changeLogCommand = new ChangeLogCommand(
         new ChangeLogContext(
             tenantId, request.getOperatorId(), request.getTraceId(), request.getReason()),
         new ChangeLogTarget(request.getConfigType(), request.getConfigKey(), nextVersionNo),
@@ -167,7 +167,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             "SUCCESS",
             Map.of(
                 "configName", ConsoleTextSanitizer.safeInput(request.getConfigName(), 256),
-                "configStatus", ConfigLifecycleStatus.DRAFT.code()))));
+                "configStatus", ConfigLifecycleStatus.DRAFT.code())));
+    logChange(changeLogCommand);
     return Long.valueOf(nextVersionNo);
   }
 
@@ -257,7 +258,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
         "updatedBy",
         ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
-    logChange(new ChangeLogCommand(
+    ChangeLogCommand changeLogCommand = new ChangeLogCommand(
         new ChangeLogContext(
             tenantId, request.getOperatorId(), request.getTraceId(), request.getReason()),
         new ChangeLogTarget("SECRET", request.getSecretRef(), nextVersionNo),
@@ -268,7 +269,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 "secretName",
                 ConsoleTextSanitizer.safeInput(request.getSecretName(), 256),
                 "secretStatus",
-                nextStatus))));
+                nextStatus)));
+    logChange(changeLogCommand);
     return Long.valueOf(nextVersionNo);
   }
 
@@ -318,12 +320,13 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
           KEY_RELEASE_ID, releaseId,
           KEY_GRAY_SCOPE_JSON, request.getGrayScopeJson()));
     }
-    logChange(new ChangeLogCommand(
+    ChangeLogCommand changeLogCommand = new ChangeLogCommand(
         new ChangeLogContext(
             tenantId, request.getOperatorId(), request.getTraceId(), request.getReason()),
         new ChangeLogTarget(
             release.getConfigType(), release.getConfigKey(), release.getVersionNo()),
-        new ChangeLogChange(changeAction, "SUCCESS", Map.of("nextStatus", nextStatus))));
+        new ChangeLogChange(changeAction, "SUCCESS", Map.of("nextStatus", nextStatus)));
+    logChange(changeLogCommand);
     return nextStatus;
   }
 

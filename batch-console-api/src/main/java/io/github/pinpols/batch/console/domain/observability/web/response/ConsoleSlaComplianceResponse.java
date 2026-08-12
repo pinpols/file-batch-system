@@ -5,6 +5,8 @@ import static io.github.pinpols.batch.console.domain.observability.web.response.
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.mapList;
 import static io.github.pinpols.batch.console.domain.observability.web.response.ObservabilityResponseFieldReader.stringValue;
 
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaComplianceView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaDayView;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,25 @@ public record ConsoleSlaComplianceResponse(
       return new SlaDayEntry(
           stringValue(row, "day"), longValue(row, "breached"), longValue(row, "onTime"));
     }
+
+    static SlaDayEntry from(SlaDayView row) {
+      return new SlaDayEntry(
+          row.day() == null ? "UNKNOWN" : row.day().toString(),
+          row.breached() == null ? 0L : row.breached(),
+          row.onTime() == null ? 0L : row.onTime());
+    }
+  }
+
+  public static ConsoleSlaComplianceResponse from(SlaComplianceView view) {
+    if (view == null) {
+      return null;
+    }
+    return new ConsoleSlaComplianceResponse(
+        view.breached(),
+        view.onTime(),
+        view.totalWithSla(),
+        view.avgDurationSeconds(),
+        view.dailyTrend().stream().map(SlaDayEntry::from).toList());
   }
 
   public static ConsoleSlaComplianceResponse from(Map<String, Object> row) {

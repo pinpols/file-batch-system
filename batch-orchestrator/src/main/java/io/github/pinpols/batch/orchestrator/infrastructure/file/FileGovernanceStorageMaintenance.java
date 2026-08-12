@@ -105,26 +105,30 @@ final class FileGovernanceStorageMaintenance {
       Map<String, Object> auditDetail = new LinkedHashMap<>();
       auditDetail.put("storagePath", storagePath);
       auditDetail.put("storageType", storageType);
-      repository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          tenantId,
-          fileId,
-          "CLEANUP",
-          "SUCCESS",
-          new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-          "cleanup-" + fileId,
-          auditDetail));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              tenantId,
+              fileId,
+              "CLEANUP",
+              "SUCCESS",
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              "cleanup-" + fileId,
+              auditDetail);
+      repository.appendAudit(auditCommand);
     } catch (Exception exception) {
       Map<String, Object> auditDetail = new LinkedHashMap<>();
       auditDetail.put("storagePath", storagePath);
       auditDetail.put("errorMessage", exception.getMessage());
-      repository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          tenantId,
-          fileId,
-          "CLEANUP",
-          "FAILED",
-          new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-          "cleanup-" + fileId,
-          auditDetail));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              tenantId,
+              fileId,
+              "CLEANUP",
+              "FAILED",
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              "cleanup-" + fileId,
+              auditDetail);
+      repository.appendAudit(auditCommand);
       log.warn(
           "archived file cleanup failed: fileId={}, error={}",
           fileId,
@@ -170,27 +174,31 @@ final class FileGovernanceStorageMaintenance {
       auditDetail.put("storageBucket", storageBucket);
       auditDetail.put("storagePath", storagePath);
       auditDetail.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
-      repository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          tenantId,
-          fileId,
-          "CLEANUP",
-          "SUCCESS",
-          new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-          "orphan-upload-" + fileId,
-          auditDetail));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              tenantId,
+              fileId,
+              "CLEANUP",
+              "SUCCESS",
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              "orphan-upload-" + fileId,
+              auditDetail);
+      repository.appendAudit(auditCommand);
       return true;
     } catch (Exception exception) {
       Map<String, Object> auditDetail = new LinkedHashMap<>();
       auditDetail.put("storagePath", storagePath);
       auditDetail.put("errorMessage", exception.getMessage());
-      repository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-          tenantId,
-          fileId,
-          "CLEANUP",
-          "FAILED",
-          new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-          "orphan-upload-" + fileId,
-          auditDetail));
+      FileGovernanceRepository.FileAuditCommand auditCommand =
+          new FileGovernanceRepository.FileAuditCommand(
+              tenantId,
+              fileId,
+              "CLEANUP",
+              "FAILED",
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              "orphan-upload-" + fileId,
+              auditDetail);
+      repository.appendAudit(auditCommand);
       log.warn(
           "orphan upload session cleanup failed: tenantId={}, fileId={}, error={}",
           tenantId,
@@ -215,24 +223,30 @@ final class FileGovernanceStorageMaintenance {
     String fileCategory = resolveFileCategory(object.objectName());
     String fileStatus = resolveFileStatus(fileCategory);
     String traceId = "reconcile-" + sanitizeTrace(fileName);
-    Long fileId = repository.createReconciledFileRecord(
+    FileGovernanceRepository.FileIdentity fileIdentity = new FileGovernanceRepository.FileIdentity(
+        tenantId, fileCategory, fileName, resolveFileFormatType(fileName));
+    FileGovernanceRepository.FileStorage fileStorage =
+        new FileGovernanceRepository.FileStorage("S3", object.objectName(), object.bucket());
+    FileGovernanceRepository.ReconciledFileRecordCommand recordCommand =
         new FileGovernanceRepository.ReconciledFileRecordCommand(
-            new FileGovernanceRepository.FileIdentity(
-                tenantId, fileCategory, fileName, resolveFileFormatType(fileName)),
+            fileIdentity,
             object.size(),
-            new FileGovernanceRepository.FileStorage("S3", object.objectName(), object.bucket()),
+            fileStorage,
             ACTOR_SYSTEM,
             fileStatus,
             traceId,
-            buildReconcileMetadata(object)));
-    repository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-        tenantId,
-        fileId,
-        "RECONCILE_REGISTER",
-        "SUCCESS",
-        new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
-        traceId,
-        Map.of("bucket", object.bucket(), "storagePath", object.objectName())));
+            buildReconcileMetadata(object));
+    Long fileId = repository.createReconciledFileRecord(recordCommand);
+    FileGovernanceRepository.FileAuditCommand auditCommand =
+        new FileGovernanceRepository.FileAuditCommand(
+            tenantId,
+            fileId,
+            "RECONCILE_REGISTER",
+            "SUCCESS",
+            new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+            traceId,
+            Map.of("bucket", object.bucket(), "storagePath", object.objectName()));
+    repository.appendAudit(auditCommand);
   }
 
   private Object buildReconcileMetadata(StorageObjectView object) {

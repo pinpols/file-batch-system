@@ -186,8 +186,9 @@ public class DefaultCompensationService implements CompensationService {
         .errorMessage(null)
         .finishedAt(BatchDateTimeSupport.utcNow())
         .build());
-    appendCompensationLog(new CompensationLogContext(
-        command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null));
+    CompensationLogContext logContext = new CompensationLogContext(
+        command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null);
+    appendCompensationLog(logContext);
   }
 
   /**
@@ -211,8 +212,9 @@ public class DefaultCompensationService implements CompensationService {
         .errorMessage(exception.getMessage())
         .finishedAt(BatchDateTimeSupport.utcNow())
         .build());
-    appendCompensationLog(new CompensationLogContext(
-        command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception));
+    CompensationLogContext logContext = new CompensationLogContext(
+        command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception);
+    appendCompensationLog(logContext);
   }
 
   /**

@@ -93,24 +93,26 @@ public class QuartzLaunchJob implements Job {
     boolean readinessRetry = jobDataMap.containsKey(READINESS_ORIGINAL_FIRE_TIME);
     if (!readinessRetry && requiresManualApproval(descriptor, scheduledFireTime, actualFireTime)) {
       misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
-      triggerService.createPendingCatchUp(new ScheduledTriggerCommand(
+      ScheduledTriggerCommand catchUpCommand = new ScheduledTriggerCommand(
           descriptor,
           scheduledFireTime,
           TriggerType.CATCH_UP,
           IdGenerator.newBusinessNo("quartz"),
-          IdGenerator.newTraceId()));
+          IdGenerator.newTraceId());
+      triggerService.createPendingCatchUp(catchUpCommand);
       return;
     }
     TriggerType triggerType = readinessRetry
         ? TriggerType.valueOf(jobDataMap.getString(READINESS_TRIGGER_TYPE))
         : resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
     try {
-      triggerService.launchScheduled(new ScheduledTriggerCommand(
+      ScheduledTriggerCommand scheduledCommand = new ScheduledTriggerCommand(
           descriptor,
           scheduledFireTime,
           triggerType,
           IdGenerator.newBusinessNo("quartz"),
-          IdGenerator.newTraceId()));
+          IdGenerator.newTraceId());
+      triggerService.launchScheduled(scheduledCommand);
     } catch (BizException e) {
       // R-arch-audit-2026-05-23 P1: 用 ResultCode 枚举比较替代 e.getMessage().contains(...) 字符串匹配。
       // i18n 错误信息文本变动不再让此分支静默失效。

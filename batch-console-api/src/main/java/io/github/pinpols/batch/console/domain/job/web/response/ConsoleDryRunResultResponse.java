@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.pinpols.batch.console.domain.job.view.DryRunTriggerResult;
 import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,25 @@ import java.util.Map;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleDryRunResultResponse(
-    String tenantId, String jobCode, String bizDate, Boolean valid, List<String> errors) {
+    Boolean dryRun,
+    String tenantId,
+    String jobCode,
+    String bizDate,
+    Boolean valid,
+    List<String> errors) {
+
+  public static ConsoleDryRunResultResponse from(DryRunTriggerResult result) {
+    if (result == null) {
+      return null;
+    }
+    return new ConsoleDryRunResultResponse(
+        result.dryRun(),
+        result.tenantId(),
+        result.jobCode(),
+        result.bizDate(),
+        result.valid(),
+        result.errors());
+  }
 
   @SuppressWarnings("unchecked")
   public static ConsoleDryRunResultResponse from(Map<String, Object> row) {
@@ -19,6 +38,7 @@ public record ConsoleDryRunResultResponse(
     }
     Object errors = ConsoleResponseFieldReader.value(row, "errors");
     return new ConsoleDryRunResultResponse(
+        ConsoleResponseFieldReader.booleanValue(row, "dryRun"),
         ConsoleResponseFieldReader.stringValue(row, "tenantId"),
         ConsoleResponseFieldReader.stringValue(row, "jobCode"),
         ConsoleResponseFieldReader.stringValue(row, "bizDate"),

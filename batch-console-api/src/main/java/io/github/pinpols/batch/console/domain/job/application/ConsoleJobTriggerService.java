@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
+import io.github.pinpols.batch.console.domain.job.view.DryRunTriggerResult;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import java.util.List;
-import java.util.Map;
 
 /** 控制台作业触发服务：手工触发、API 触发、批量触发、dry-run 校验。 */
 public interface ConsoleJobTriggerService {
@@ -12,7 +12,7 @@ public interface ConsoleJobTriggerService {
   String trigger(TriggerRequest request, String idempotencyKey);
 
   /** dryRun 校验：检查 job 是否可触发，不真正执行。 */
-  Map<String, Object> dryRunTrigger(TriggerRequest request);
+  DryRunTriggerResult dryRunTrigger(TriggerRequest request);
 
   /** 批量触发：同时触发多个 job。 */
   List<ConsoleBatchTriggerEntryResponse> batchTrigger(

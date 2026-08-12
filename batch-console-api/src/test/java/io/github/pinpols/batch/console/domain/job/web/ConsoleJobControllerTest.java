@@ -17,12 +17,12 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
+import io.github.pinpols.batch.console.domain.job.view.DryRunTriggerResult;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -87,7 +87,8 @@ class ConsoleJobControllerTest {
 
   @Test
   void shouldAllowDryRunWithoutIdempotencyHeader() throws Exception {
-    when(triggerService.dryRunTrigger(any())).thenReturn(Map.of("dryRun", true, "valid", true));
+    when(triggerService.dryRunTrigger(any()))
+        .thenReturn(new DryRunTriggerResult(true, "ta", "JOB_A", "2026-05-20", true, null));
 
     mockMvc
         .perform(post("/api/console/jobs/trigger").contentType(APPLICATION_JSON).content("""

@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCa
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
+import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
@@ -75,13 +76,14 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     params.put("catchUpApproved", true);
     params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
     params.put("scheduledAt", request.getScheduledAt());
-    String result = ops.delegateLaunch(
+    ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
         tenantId,
         ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
         request.getBizDate(),
         TriggerType.CATCH_UP,
         params,
         idempotencyKey);
+    String result = ops.delegateLaunch(launchCommand);
     ops.publishRefresh(tenantId);
     return result;
   }
@@ -114,8 +116,9 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         params.put("jobCode", jobCode);
         params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         params.put("catchUpPolicy", catchUpPolicy);
-        String instanceNo = ops.delegateLaunch(
+        ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
             tenantId, jobCode, bizDate, TriggerType.CATCH_UP, params, itemIdempotencyKey);
+        String instanceNo = ops.delegateLaunch(launchCommand);
         items.add(new ConsoleBatchDayCatchUpItemResponse(
             jobCode, "LAUNCHED", instanceNo, TriggerType.CATCH_UP.code(), "LAUNCHED"));
       } else {

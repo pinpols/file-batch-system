@@ -255,13 +255,14 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     if (jobDef == null) {
       return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
     }
+    SchedulePlanCommand planCommand = new SchedulePlanCommand(
+        request.tenantId(),
+        request.jobCode(),
+        request.bizDate().toString(),
+        request.params() == null ? Map.of() : request.params());
     SchedulePlan plan;
     try {
-      plan = schedulePlanBuilder.build(new SchedulePlanCommand(
-          request.tenantId(),
-          request.jobCode(),
-          request.bizDate().toString(),
-          request.params() == null ? Map.of() : request.params()));
+      plan = schedulePlanBuilder.build(planCommand);
     } catch (RuntimeException ex) {
       findings.add(DryRunFinding.error(
           "SCHEDULE_PLAN_FAILED", "schedule", "plan build failed: " + ex.getMessage(), null));

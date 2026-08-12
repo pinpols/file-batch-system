@@ -75,18 +75,20 @@ public class AssetPartitionService {
           instance.getId());
       return;
     }
-    assetPartitionMapper.upsertEffectiveJobPartition(new AssetPartitionMaterializationCommand(
-        tenantId,
-        assetId,
-        jobCode,
-        toPartitionKey(instance.getBizDate()),
-        instance.getBizDate(),
-        version.id(),
-        version.businessKey(),
-        version.jobInstanceId(),
-        version.effectiveAt(),
-        version.payloadStorage(),
-        version.payloadRef()));
+    AssetPartitionMaterializationCommand materializationCommand =
+        new AssetPartitionMaterializationCommand(
+            tenantId,
+            assetId,
+            jobCode,
+            toPartitionKey(instance.getBizDate()),
+            instance.getBizDate(),
+            version.id(),
+            version.businessKey(),
+            version.jobInstanceId(),
+            version.effectiveAt(),
+            version.payloadStorage(),
+            version.payloadRef());
+    assetPartitionMapper.upsertEffectiveJobPartition(materializationCommand);
   }
 
   private boolean isMaterializable(JobInstanceEntity instance, ResultVersionEntity version) {

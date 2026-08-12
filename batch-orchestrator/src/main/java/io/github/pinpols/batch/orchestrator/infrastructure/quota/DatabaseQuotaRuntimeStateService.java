@@ -82,8 +82,9 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     QuotaResetPolicy policy = precheck.policy();
 
     Instant now = BatchDateTimeSupport.utcNow();
-    QuotaRuntimeStateEntity state = loadOrCreate(new StateContext(
-        request.owner(), policy.name(), now, request.policy().slidingWindowHours()));
+    StateContext stateContext = new StateContext(
+        request.owner(), policy.name(), now, request.policy().slidingWindowHours());
+    QuotaRuntimeStateEntity state = loadOrCreate(stateContext);
     state = refreshState(state, policy, now, request.policy().slidingWindowHours());
     if (state == null) {
       return ResourceCheck.allow();
