@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.infrastructure;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +24,11 @@ import org.springframework.stereotype.Component;
 public class TriggerDrainState {
 
   private final AtomicBoolean draining = new AtomicBoolean(false);
+
+  @Getter
   private volatile Instant drainingSince;
+
+  @Getter
   private volatile String reason;
 
   /**
@@ -57,13 +62,5 @@ public class TriggerDrainState {
 
   public boolean isDraining() {
     return draining.get();
-  }
-
-  public Instant getDrainingSince() {
-    return drainingSince;
-  }
-
-  public String getReason() {
-    return reason;
   }
 }

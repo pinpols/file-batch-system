@@ -10,6 +10,8 @@ spring:
     # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-orchestrator
   config:
+    # noinspection SpringBootApplicationYaml
+    # 资源来自 batch-common 依赖；Qodana 的单模块索引无法解析依赖 JAR 的 classpath 资源。
     # 强制导入共享默认配置（与其他模块一致，缺失即启动失败 — ADR-029 baseline）
     import: "classpath:batch-defaults.yml"
   # 注：DataRedisRepositoriesAutoConfiguration 已在 BatchOrchestratorApplication 主类 @SpringBootApplication(exclude=...) 排除

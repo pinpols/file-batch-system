@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 /** 导出任务 Kafka 消费者，监听导出任务 topic 并驱动任务执行。 */
 @Service
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class ExportTaskConsumer extends AbstractTaskConsumer {
 
   private final ExportWorkerLoop workerLoop;

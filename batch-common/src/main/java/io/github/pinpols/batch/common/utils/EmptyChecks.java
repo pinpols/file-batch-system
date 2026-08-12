@@ -21,12 +21,12 @@ public final class EmptyChecks {
 
   private EmptyChecks() {}
 
-  @Contract("null -> true")
+  @Contract("null -> true; !null -> false")
   public static boolean isNull(@Nullable Object value) {
     return value == null;
   }
 
-  @Contract("null -> false")
+  @Contract("null -> false; !null -> true")
   public static boolean isNotNull(@Nullable Object value) {
     return value != null;
   }

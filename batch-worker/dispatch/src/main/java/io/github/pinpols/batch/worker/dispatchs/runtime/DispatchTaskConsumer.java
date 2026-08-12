@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 /** 分发任务 Kafka 消费者，接收并处理分发类型的任务消息。 */
 @Service
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class DispatchTaskConsumer extends AbstractTaskConsumer {
 
   private final DispatchWorkerLoop workerLoop;

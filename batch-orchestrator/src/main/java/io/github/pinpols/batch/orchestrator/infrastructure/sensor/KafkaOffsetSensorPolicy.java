@@ -45,6 +45,8 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "batch.sensor.kafka-offset", name = "enabled", havingValue = "true")
 @ConditionalOnBean(KafkaAdmin.class)
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // 条件成立后才创建，KafkaAdmin 由 Kafka 自动配置提供。
 public class KafkaOffsetSensorPolicy implements SensorPolicy {
 
   private final KafkaAdmin kafkaAdmin;

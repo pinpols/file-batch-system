@@ -13,6 +13,8 @@ spring:
   flyway:
     enabled: false
   config:
+    # noinspection SpringBootApplicationYaml
+    # 资源来自 batch-common 依赖；Qodana 的单模块索引无法解析依赖 JAR 的 classpath 资源。
     import: "classpath:batch-defaults.yml"
   autoconfigure:
     # worker-atomic 只跑原子任务(sql/shell/stored-proc/http),不使用对象存储。

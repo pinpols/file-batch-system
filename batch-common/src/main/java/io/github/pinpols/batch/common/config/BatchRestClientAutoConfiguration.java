@@ -41,6 +41,6 @@ public class BatchRestClientAutoConfiguration {
   public RestClient.Builder restClientBuilder(JsonMapper jsonMapper) {
     return RestClient.builder()
         .configureMessageConverters(b -> b.configureMessageConvertersList(
-            converters -> converters.add(0, new JacksonJsonHttpMessageConverter(jsonMapper))));
+            converters -> converters.addFirst(new JacksonJsonHttpMessageConverter(jsonMapper))));
   }
 }

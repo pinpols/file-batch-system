@@ -1,9 +1,13 @@
 package io.github.pinpols.batch.orchestrator.health;
 
 import jakarta.validation.constraints.Min;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+@Getter
+@Setter
 @ConfigurationProperties(prefix = "batch.orchestrator.health.outbox")
 @Validated
 public class OutboxLagHealthProperties {
@@ -17,28 +21,4 @@ public class OutboxLagHealthProperties {
   private long stalePublishingSeconds = 300;
 
   private boolean enabled = true;
-
-  public long getBacklogThreshold() {
-    return backlogThreshold;
-  }
-
-  public void setBacklogThreshold(long backlogThreshold) {
-    this.backlogThreshold = backlogThreshold;
-  }
-
-  public long getStalePublishingSeconds() {
-    return stalePublishingSeconds;
-  }
-
-  public void setStalePublishingSeconds(long stalePublishingSeconds) {
-    this.stalePublishingSeconds = stalePublishingSeconds;
-  }
-
-  public boolean isEnabled() {
-    return enabled;
-  }
-
-  public void setEnabled(boolean enabled) {
-    this.enabled = enabled;
-  }
 }

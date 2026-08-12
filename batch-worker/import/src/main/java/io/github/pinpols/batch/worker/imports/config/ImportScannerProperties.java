@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.config;
 
 import lombok.Data;
+import lombok.Getter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
@@ -54,6 +55,7 @@ public class ImportScannerProperties {
 
   private final EventArrival eventArrival = new EventArrival();
 
+  @Getter
   public enum DoneFileFormat {
     MARKER(false),
     MANIFEST(true),
@@ -63,10 +65,6 @@ public class ImportScannerProperties {
 
     DoneFileFormat(boolean manifest) {
       this.manifest = manifest;
-    }
-
-    public boolean isManifest() {
-      return manifest;
     }
   }
 

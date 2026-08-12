@@ -50,6 +50,8 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在各 Worker 启动类注册 Registry。
 public class GracefulKafkaShutdown
     implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 

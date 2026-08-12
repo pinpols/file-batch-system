@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.sdk.task;
 
+import lombok.Getter;
+
 /**
  * 单个 task 的取消信号 — SDK Phase 4 / SDK-P4-1。
  *
@@ -11,13 +13,10 @@ package io.github.pinpols.batch.sdk.task;
  */
 public final class CancellationSignal {
 
+  @Getter
   private volatile boolean cancelled;
 
   public void cancel() {
     this.cancelled = true;
-  }
-
-  public boolean isCancelled() {
-    return cancelled;
   }
 }

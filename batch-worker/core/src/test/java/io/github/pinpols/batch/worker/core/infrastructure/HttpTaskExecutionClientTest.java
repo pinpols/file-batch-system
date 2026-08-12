@@ -365,7 +365,7 @@ class HttpTaskExecutionClientTest {
   private static RestClient.Builder jsonRestClientBuilder() {
     return RestClient.builder()
         .configureMessageConverters(b -> b.configureMessageConvertersList(
-            converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
+            converters -> converters.addFirst(new JacksonJsonHttpMessageConverter())));
   }
 
   private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {

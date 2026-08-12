@@ -243,11 +243,24 @@ if [ -n "$TASK_URL" ]; then
   TASK_ID="${TASK_URL##*id=}"
   info "         Waiting for server-side analysis (task: ${TASK_ID})..."
   WAIT=0
-  until curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
-    "${SONAR_URL}/api/ce/task?id=${TASK_ID}" \
-    | python3 -c "import json,sys; d=json.load(sys.stdin); exit(0 if d['task']['status']=='SUCCESS' else 1)" 2>/dev/null; do
+  while true; do
+    TASK_STATUS="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+      "${SONAR_URL}/api/ce/task?id=${TASK_ID}" \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['task']['status'])" 2>/dev/null || true)"
+    case "$TASK_STATUS" in
+      SUCCESS)
+        break
+        ;;
+      FAILED|CANCELED)
+        error "Server-side analysis ${TASK_STATUS}; reports were not exported."
+        exit 1
+        ;;
+    esac
     sleep 3; WAIT=$((WAIT+3))
-    if [ $WAIT -ge 120 ]; then warn "Timed out waiting for task; report may be incomplete."; break; fi
+    if [ $WAIT -ge 120 ]; then
+      error "Timed out waiting for server-side analysis; reports were not exported."
+      exit 1
+    fi
   done
 fi
 ok "Analysis complete."

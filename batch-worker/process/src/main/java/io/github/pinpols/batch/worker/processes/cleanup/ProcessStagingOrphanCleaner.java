@@ -50,6 +50,8 @@ import org.springframework.stereotype.Component;
     name = "batch.worker.process.staging-cleanup.enabled",
     havingValue = "true",
     matchIfMissing = true)
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // Mapper 由应用启动类的业务库 @MapperScan 注册。
 public class ProcessStagingOrphanCleaner {
 
   private final ProcessStagingMapper processStagingMapper;

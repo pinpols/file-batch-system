@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 /** PROCESS worker 启动时输出 staging 孤儿风险快照。 */
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // Mapper 由应用启动类的业务库 @MapperScan 注册。
 public class ProcessStagingStartupAuditContributor implements WorkerStartupAuditContributor {
 
   private final ProcessStagingMapper processStagingMapper;

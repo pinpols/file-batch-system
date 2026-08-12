@@ -51,9 +51,6 @@ public class BatchObjectCryptoAutoConfiguration {
     } catch (IllegalArgumentException ex) {
       return true; // 非法 base64 当弱密钥拒绝
     }
-    if (decoded.length == 0) {
-      return true;
-    }
     for (byte b : decoded) {
       if (b != 0) {
         return false;

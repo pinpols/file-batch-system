@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 /** 专用原子任务 worker 的 Kafka 消费者:消费 batch.task.dispatch.atomic,执行 shell/sql/stored-proc/http 原子任务。 */
 @Service
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class AtomicTaskConsumer extends AbstractTaskConsumer {
 
   private final AtomicWorkerLoop workerLoop;

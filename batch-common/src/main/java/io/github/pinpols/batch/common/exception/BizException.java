@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.exception;
 
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import lombok.Getter;
 
 /**
  * 业务异常。两种构造形式:
@@ -13,10 +14,15 @@ import io.github.pinpols.batch.common.enums.ResultCode;
  *       messageKey 为 null 则原样透出。新代码不要再用,逐步迁移到 i18n。
  * </ol>
  */
+@Getter
 public class BizException extends RuntimeException {
 
   private final ResultCode code;
+
+  /** i18n message key;null 表示走历史 literal 路径(message 已是字面量)。 */
   private final String messageKey;
+
+  /** i18n 占位符参数;message key 为 null 时也为 null。 */
   private final transient Object[] messageArgs;
 
   /** ADR-012 失败分类。null 时由 orchestrator 端 FailureClassifier 回退；显式声明优先级最高。 */
@@ -82,24 +88,5 @@ public class BizException extends RuntimeException {
       Throwable cause,
       Object... args) {
     return new BizException(code, messageKey, args, cause, failureClass);
-  }
-
-  public ResultCode getCode() {
-    return code;
-  }
-
-  /** i18n message key;null 表示走历史 literal 路径(message 已是字面量)。 */
-  public String getMessageKey() {
-    return messageKey;
-  }
-
-  /** i18n 占位符参数;message key 为 null 时也为 null。 */
-  public Object[] getMessageArgs() {
-    return messageArgs;
-  }
-
-  /** ADR-012 显式失败分类;null = 由 FailureClassifier 回退推断。 */
-  public FailureClass getFailureClass() {
-    return failureClass;
   }
 }

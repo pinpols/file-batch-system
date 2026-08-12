@@ -251,6 +251,17 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   private static final ThreadLocal<Map<String, CharsetEncoder>> STRICT_ENCODERS =
       ThreadLocal.withInitial(HashMap::new);
 
+  /**
+   * 严格编码器缓存只服务于一次导出生成。worker 使用长寿命线程池，任务结束时必须清理线程本地缓存，避免配置过的字符集随线程生命周期滞留。
+   */
+  protected AutoCloseable strictEncoderScope() {
+    return this::clearStrictEncoderCache;
+  }
+
+  private void clearStrictEncoderCache() {
+    STRICT_ENCODERS.remove();
+  }
+
   private static CharsetEncoder strictEncoder(Charset charset) {
     Map<String, CharsetEncoder> cache = STRICT_ENCODERS.get();
     CharsetEncoder encoder = cache.get(charset.name());
