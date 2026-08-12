@@ -66,9 +66,8 @@ public class BatchStartupSelfCheck {
     long startedNanos = System.nanoTime();
     List<String> problems = new ArrayList<>();
     ApplicationStartup startup = applicationContext.getApplicationStartup();
-    StartupStep step = startup.start("batch.startup.self-check");
-    step.tag("context", properties::getContextName);
-    try {
+    try (StartupStep step = startup.start("batch.startup.self-check")) {
+      step.tag("context", properties::getContextName);
       Flyway fw = flyway.getIfAvailable();
 
       runFlywayValidate(fw, problems);
@@ -82,7 +81,6 @@ public class BatchStartupSelfCheck {
       step.tag("status", problems.isEmpty() ? "passed" : "failed");
       step.tag("problemCount", Integer.toString(problems.size()));
     } finally {
-      step.end();
       recordDuration(startedNanos, problems);
     }
   }

@@ -28,6 +28,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.atomic")
+@SuppressWarnings("ConfigurationProperties") // 与 AtomicWorkerConfiguration 共享前缀，子键互不重叠。
 public class BatchWorkerAtomicProperties {
 
   /**

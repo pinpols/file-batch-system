@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
  * "import-task-consumer"}，与 ShedLock / 指标标签一致。
  */
 @Service
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class ImportTaskConsumer extends AbstractTaskConsumer {
 
   private final ImportWorkerLoop workerLoop;

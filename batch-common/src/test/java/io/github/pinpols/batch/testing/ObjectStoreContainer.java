@@ -5,6 +5,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
+import lombok.Getter;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -23,8 +24,13 @@ public final class ObjectStoreContainer extends GenericContainer<ObjectStoreCont
   private static final int MINIO_CONSOLE_PORT = 9001;
   private static final DockerImageName IMAGE = DockerImageName.parse(TestContainerImages.MINIO);
 
+  @Getter
   private final String accessKey;
+
+  @Getter
   private final String secretKey;
+
+  @Getter
   private final String defaultBucket;
 
   public ObjectStoreContainer() {
@@ -51,18 +57,6 @@ public final class ObjectStoreContainer extends GenericContainer<ObjectStoreCont
 
   public String getEndpoint() {
     return "http://" + getHost() + ":" + getMappedPort(MINIO_API_PORT);
-  }
-
-  public String getAccessKey() {
-    return accessKey;
-  }
-
-  public String getSecretKey() {
-    return secretKey;
-  }
-
-  public String getDefaultBucket() {
-    return defaultBucket;
   }
 
   public S3Client client() {

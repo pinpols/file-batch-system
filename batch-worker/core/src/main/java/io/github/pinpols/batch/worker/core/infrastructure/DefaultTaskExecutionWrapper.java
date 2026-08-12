@@ -62,6 +62,8 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // 各独立 Worker classpath 仅含一个 @Primary Adapter。
 public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   static final String TIMEOUT_ERROR_CODE = "WORKER_EXECUTION_TIMEOUT";

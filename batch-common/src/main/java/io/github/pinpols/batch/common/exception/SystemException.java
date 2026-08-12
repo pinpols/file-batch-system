@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.common.exception;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
+import lombok.Getter;
 
+@Getter
 public class SystemException extends RuntimeException {
 
   private final ResultCode code;
@@ -24,9 +26,5 @@ public class SystemException extends RuntimeException {
   public SystemException(ResultCode code, String message, Throwable cause) {
     super(message, cause);
     this.code = code;
-  }
-
-  public ResultCode getCode() {
-    return code;
   }
 }

@@ -14,6 +14,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // Spring 按 bean name 自动聚合全部 Step 为 Map。
 public class DefaultStepRegistry implements StepRegistry {
 
   private final Map<String, Step> steps;

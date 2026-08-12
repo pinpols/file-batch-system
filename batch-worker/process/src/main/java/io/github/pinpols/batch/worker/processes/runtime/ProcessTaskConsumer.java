@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 /** 加工任务 Kafka 消费者。 */
 @Service
+@SuppressWarnings(
+    "SpringJavaInjectionPointsAutowiringInspection") // @EnableKafka 在应用启动类注册 Registry。
 public class ProcessTaskConsumer extends AbstractTaskConsumer {
 
   private final ProcessWorkerLoop workerLoop;

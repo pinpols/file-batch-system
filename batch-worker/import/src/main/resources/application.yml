@@ -10,6 +10,8 @@ spring:
     # 平台库迁移由 orchestrator 执行；继承 AbstractIntegrationTest 的用例由 DynamicPropertySource 开启
     enabled: false
   config:
+    # noinspection SpringBootApplicationYaml
+    # 资源来自 batch-common 依赖；Qodana 的单模块索引无法解析依赖 JAR 的 classpath 资源。
     # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"
   kafka:

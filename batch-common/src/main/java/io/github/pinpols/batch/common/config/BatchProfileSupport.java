@@ -51,9 +51,6 @@ public final class BatchProfileSupport {
     }
     boolean anyExplicitNonProd = false;
     for (String profile : environment.getActiveProfiles()) {
-      if (profile == null) {
-        continue;
-      }
       String normalized = profile.toLowerCase(Locale.ROOT);
       if (PROD_LIKE_PROFILES.contains(normalized)) {
         return true;

@@ -10,6 +10,7 @@ import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -153,47 +154,70 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     try {
       List<TriggerStatusInfo> result = new ArrayList<>();
       for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
-        JobDetail detail = scheduler.getJobDetail(jobKey);
-        if (EmptyChecks.isNull(detail)) {
-          continue;
-        }
-        JobDataMap data = detail.getJobDataMap();
-        String identity = jobKey.getName();
-        String[] parts = identity.split(":", 2);
-        String tid = parts.length > 0 ? parts[0] : "";
-        String jc = parts.length > 1 ? parts[1] : identity;
-
-        List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
-        String status = "UNKNOWN";
-        Instant prevFire = null;
-        Instant nextFire = null;
-        if (EmptyChecks.isNotEmpty(triggers)) {
-          Trigger t = triggers.get(0);
-          Trigger.TriggerState state = scheduler.getTriggerState(t.getKey());
-          status = state.name();
-          if (EmptyChecks.isNotNull(t.getPreviousFireTime())) {
-            prevFire = t.getPreviousFireTime().toInstant();
-          }
-          if (EmptyChecks.isNotNull(t.getNextFireTime())) {
-            nextFire = t.getNextFireTime().toInstant();
-          }
-        }
-        TriggerStatusInfo statusInfo = TriggerStatusInfo.builder()
-            .tenantId(tid)
-            .jobCode(jc)
-            .scheduleType(data.getString(QuartzLaunchJob.SCHEDULE_TYPE))
-            .scheduleExpression(data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION))
-            .timezone(data.getString(QuartzLaunchJob.TIMEZONE))
-            .triggerMode(data.getString(QuartzLaunchJob.TRIGGER_MODE))
-            .status(status)
-            .previousFireTime(prevFire)
-            .nextFireTime(nextFire)
-            .build();
-        result.add(statusInfo);
+        appendTriggerStatus(result, jobKey);
       }
       return result;
     } catch (SchedulerException e) {
       throw new IllegalStateException("failed to list triggers", e);
+    }
+  }
+
+  private void appendTriggerStatus(List<TriggerStatusInfo> result, JobKey jobKey)
+      throws SchedulerException {
+    JobDetail detail = scheduler.getJobDetail(jobKey);
+    if (EmptyChecks.isNotNull(detail)) {
+      result.add(toTriggerStatusInfo(jobKey, detail));
+    }
+  }
+
+  private TriggerStatusInfo toTriggerStatusInfo(JobKey jobKey, JobDetail detail)
+      throws SchedulerException {
+    JobDataMap data = detail.getJobDataMap();
+    JobIdentity identity = parseJobIdentity(jobKey);
+    TriggerFireState fireState = firstTriggerFireState(jobKey);
+    return TriggerStatusInfo.builder()
+        .tenantId(identity.tenantId())
+        .jobCode(identity.jobCode())
+        .scheduleType(data.getString(QuartzLaunchJob.SCHEDULE_TYPE))
+        .scheduleExpression(data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION))
+        .timezone(data.getString(QuartzLaunchJob.TIMEZONE))
+        .triggerMode(data.getString(QuartzLaunchJob.TRIGGER_MODE))
+        .status(fireState.status())
+        .previousFireTime(fireState.previousFireTime())
+        .nextFireTime(fireState.nextFireTime())
+        .build();
+  }
+
+  private static JobIdentity parseJobIdentity(JobKey jobKey) {
+    String identity = jobKey.getName();
+    String[] parts = identity.split(":", 2);
+    return new JobIdentity(
+        parts.length > 0 ? parts[0] : "", parts.length > 1 ? parts[1] : identity);
+  }
+
+  private TriggerFireState firstTriggerFireState(JobKey jobKey) throws SchedulerException {
+    List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
+    if (EmptyChecks.isEmpty(triggers)) {
+      return TriggerFireState.unknown();
+    }
+    Trigger trigger = triggers.get(0);
+    Trigger.TriggerState state = scheduler.getTriggerState(trigger.getKey());
+    return new TriggerFireState(
+        state.name(),
+        toInstant(trigger.getPreviousFireTime()),
+        toInstant(trigger.getNextFireTime()));
+  }
+
+  private static Instant toInstant(Date fireTime) {
+    return EmptyChecks.isNull(fireTime) ? null : fireTime.toInstant();
+  }
+
+  private record JobIdentity(String tenantId, String jobCode) {}
+
+  private record TriggerFireState(String status, Instant previousFireTime, Instant nextFireTime) {
+
+    private static TriggerFireState unknown() {
+      return new TriggerFireState("UNKNOWN", null, null);
     }
   }
 

@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "batch.worker.import")
+@SuppressWarnings("ConfigurationProperties") // 与 WorkerImportPayloadProperties 共享前缀，子键互不重叠。
 public record ImportWorkerConfiguration(
     String workerCode,
     String workerType,

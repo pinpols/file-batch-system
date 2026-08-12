@@ -2,9 +2,13 @@ package io.github.pinpols.batch.common.health;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+@Getter
+@Setter
 @ConfigurationProperties(prefix = "batch.health.hikari")
 @Validated
 public class HikariSaturationProperties {
@@ -16,20 +20,4 @@ public class HikariSaturationProperties {
 
   /** 整个探针开关;false 时 AutoConfiguration 不注册 bean。 */
   private boolean enabled = true;
-
-  public double getThreshold() {
-    return threshold;
-  }
-
-  public void setThreshold(double threshold) {
-    this.threshold = threshold;
-  }
-
-  public boolean isEnabled() {
-    return enabled;
-  }
-
-  public void setEnabled(boolean enabled) {
-    this.enabled = enabled;
-  }
 }

@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.import")
+@SuppressWarnings("ConfigurationProperties") // 与 ImportWorkerConfiguration 共享前缀，子键互不重叠。
 public class WorkerImportPayloadProperties {
 
   /** 单条 import payload 最大 MB(硬上限)。默认 100。 */
