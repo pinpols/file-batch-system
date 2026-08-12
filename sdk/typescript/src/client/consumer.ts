@@ -82,9 +82,7 @@ export interface Consumer {
    * callback returns the {@link MessageDisposition} the adapter applies to the
    * record's offset (commit / withhold ceiling / backpressure+pause).
    */
-  start(
-    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
-  ): Promise<void>;
+  start(onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>): Promise<void>;
   /** Interrupt poll (maps to kafkajs `consumer.stop()` / wakeup). */
   wakeup(): Promise<void>;
   pause(): void;
@@ -149,9 +147,7 @@ export class MessagePipeline {
     this.#logger = deps.logger ?? consoleLogger;
     // undefined / empty → no routing filter (serve every workerType).
     this.#workerTypes =
-      deps.workerTypes && deps.workerTypes.length > 0
-        ? new Set(deps.workerTypes)
-        : undefined;
+      deps.workerTypes && deps.workerTypes.length > 0 ? new Set(deps.workerTypes) : undefined;
   }
 
   async onMessage(record: ConsumerRecord): Promise<PipelineOutcome> {
@@ -246,9 +242,7 @@ export class FakeConsumer implements Consumer {
     this.#records.push(...records);
   }
 
-  async start(
-    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
-  ): Promise<void> {
+  async start(onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>): Promise<void> {
     this.#handler = onMessage;
     // drain the scripted queue immediately (cooperative, awaited)
     await this.drain();

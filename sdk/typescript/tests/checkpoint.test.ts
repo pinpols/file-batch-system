@@ -95,7 +95,11 @@ test("commit: reports only on the configured interval (counter % reportInterval)
 
 test("commit: selfReport disables the auto progress report", async () => {
   let reported = 0;
-  const progress: ProgressReporter = { report: () => { reported += 1; } };
+  const progress: ProgressReporter = {
+    report: () => {
+      reported += 1;
+    },
+  };
   const resume = new ResumeSupport({
     taskId: "task-self",
     checkpoint: new InMemorySdkCheckpoint(),

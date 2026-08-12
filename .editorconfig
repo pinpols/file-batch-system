@@ -9,3 +9,26 @@ trim_trailing_whitespace = true
 [*.java]
 max_line_length = 120
 ij_java_right_margin = 120
+
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+[*.go]
+indent_style = tab
+indent_size = tab
+
+[*.rs]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+[*.{ts,tsx,js,jsx}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+[*.{json,yml,yaml,xml,sql,sh}]
+indent_style = space
+indent_size = 2

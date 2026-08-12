@@ -16,12 +16,12 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -224,22 +224,17 @@ public class DatasetRuleEvaluator {
       return;
     }
     appliedChecks.add("schema_check");
-    Set<String> actualFields = new LinkedHashSet<>();
-    for (String schemaField : schemaFields) {
-      if (Texts.hasText(schemaField)) {
-        actualFields.add(schemaField);
-      }
-    }
+    Set<String> actualFields = schemaFields.stream()
+        .filter(Texts::hasText)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     List<String> requiredFields =
         stringList(firstNonNull(rule.get("requiredFields"), rule.get("required_fields")));
     List<String> allowedFields =
         stringList(firstNonNull(rule.get("allowedFields"), rule.get("allowed_fields")));
-    List<String> missingFields = new ArrayList<>();
-    for (String requiredField : requiredFields) {
-      if (Texts.hasText(requiredField) && !actualFields.contains(requiredField)) {
-        missingFields.add(requiredField);
-      }
-    }
+    List<String> missingFields = requiredFields.stream()
+        .filter(Texts::hasText)
+        .filter(requiredField -> !actualFields.contains(requiredField))
+        .toList();
     if (!missingFields.isEmpty()) {
       datasetIssues.add(new ValidationIssue(
           null,
@@ -250,12 +245,9 @@ public class DatasetRuleEvaluator {
     }
     if (!allowedFields.isEmpty()) {
       Set<String> allowedFieldSet = new LinkedHashSet<>(allowedFields);
-      List<String> unexpectedFields = new ArrayList<>();
-      for (String actualField : actualFields) {
-        if (!allowedFieldSet.contains(actualField)) {
-          unexpectedFields.add(actualField);
-        }
-      }
+      List<String> unexpectedFields = actualFields.stream()
+          .filter(actualField -> !allowedFieldSet.contains(actualField))
+          .toList();
       if (!unexpectedFields.isEmpty()) {
         datasetIssues.add(new ValidationIssue(
             null,

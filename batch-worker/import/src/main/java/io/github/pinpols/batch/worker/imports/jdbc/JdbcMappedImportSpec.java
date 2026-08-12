@@ -13,7 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -163,18 +165,23 @@ public record JdbcMappedImportSpec(
     if (!(raw instanceof List<?> list)) {
       return List.of();
     }
-    List<ColumnMapping> out = new ArrayList<>();
-    for (Object item : list) {
-      if (item instanceof Map<?, ?> m) {
-        Object from = m.get("from");
-        Object to = m.get("to");
-        if (from != null && to != null) {
-          out.add(
-              new ColumnMapping(String.valueOf(from).trim(), String.valueOf(to).trim()));
-        }
-      }
+    return list.stream()
+        .map(JdbcMappedImportSpec::parseMapping)
+        .flatMap(Optional::stream)
+        .toList();
+  }
+
+  private static Optional<ColumnMapping> parseMapping(Object item) {
+    if (!(item instanceof Map<?, ?> m)) {
+      return Optional.empty();
     }
-    return out;
+    Object from = m.get("from");
+    Object to = m.get("to");
+    if (from == null || to == null) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new ColumnMapping(String.valueOf(from).trim(), String.valueOf(to).trim()));
   }
 
   /**
@@ -214,16 +221,12 @@ public record JdbcMappedImportSpec(
     if (explicit.isEmpty()) {
       return inferred;
     }
-    Set<String> explicitFroms = new LinkedHashSet<>();
-    for (ColumnMapping e : explicit) {
-      explicitFroms.add(e.from());
-    }
-    List<ColumnMapping> out = new ArrayList<>();
-    for (ColumnMapping inf : inferred) {
-      if (!explicitFroms.contains(inf.from())) {
-        out.add(inf);
-      }
-    }
+    Set<String> explicitFroms = explicit.stream()
+        .map(ColumnMapping::from)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    List<ColumnMapping> out = inferred.stream()
+        .filter(inf -> !explicitFroms.contains(inf.from()))
+        .collect(Collectors.toCollection(ArrayList::new));
     out.addAll(explicit);
     return out;
   }
@@ -317,13 +320,10 @@ public record JdbcMappedImportSpec(
 
   private static List<String> parseStringList(Object raw) {
     if (raw instanceof List<?> list) {
-      List<String> out = new ArrayList<>();
-      for (Object o : list) {
-        if (o != null && Texts.hasText(String.valueOf(o))) {
-          out.add(String.valueOf(o).trim());
-        }
-      }
-      return out;
+      return list.stream()
+          .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+          .map(o -> String.valueOf(o).trim())
+          .toList();
     }
     return List.of();
   }

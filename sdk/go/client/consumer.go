@@ -186,9 +186,9 @@ func (p *MessagePipeline) OnMessage(rec Record) (TaskDispatchMessage, MessageDis
 // the consume loop is still polling — mirroring a real Kafka client's
 // thread-safe wakeup contract.
 type FakeConsumer struct {
-	mu      sync.Mutex
-	records [][]Record
-	idx     int
+	mu        sync.Mutex
+	records   [][]Record
+	idx       int
 	paused    bool
 	woken     bool
 	Commits   int

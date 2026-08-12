@@ -15,10 +15,7 @@ import {
   TASK_STATUSES,
 } from "../src/constants.ts";
 
-const YAML_PATH = new URL(
-  "../../../docs/api/sdk-shared-constants.yaml",
-  import.meta.url,
-);
+const YAML_PATH = new URL("../../../docs/api/sdk-shared-constants.yaml", import.meta.url);
 
 /**
  * Parse only top-level `key:` blocks whose value is a YAML block list of scalars:
@@ -52,7 +49,7 @@ function parseSimpleYamlLists(text: string): Map<string, string[]> {
     if (topKey) {
       const key = topKey[1];
       const inlineValue = topKey[2].trim();
-      if (inlineValue === "" ) {
+      if (inlineValue === "") {
         // block — list items (if any) follow on subsequent lines
         currentKey = key;
         result.set(key, []);
@@ -75,10 +72,7 @@ function parseSimpleYamlLists(text: string): Map<string, string[]> {
 }
 
 function unquote(s: string): string {
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     return s.slice(1, -1);
   }
   return s;
@@ -88,17 +82,11 @@ const yamlText = readFileSync(YAML_PATH, "utf8");
 const lists = parseSimpleYamlLists(yamlText);
 
 test("schema_versions_supported parity", () => {
-  assert.deepEqual(
-    [...SUPPORTED_SCHEMA_VERSIONS],
-    lists.get("schema_versions_supported"),
-  );
+  assert.deepEqual([...SUPPORTED_SCHEMA_VERSIONS], lists.get("schema_versions_supported"));
 });
 
 test("worker_runtime_states parity", () => {
-  assert.deepEqual(
-    [...WORKER_RUNTIME_STATES],
-    lists.get("worker_runtime_states"),
-  );
+  assert.deepEqual([...WORKER_RUNTIME_STATES], lists.get("worker_runtime_states"));
 });
 
 test("sensitive_keywords parity", () => {

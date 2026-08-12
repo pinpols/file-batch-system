@@ -70,11 +70,7 @@ export class InMemorySdkCheckpoint implements SdkCheckpoint {
   load(taskId: string): Promise<SdkCheckpointState | null> {
     const state = this.#store.get(taskId);
     // hand back a copy so callers can't mutate our stored snapshot in place
-    return Promise.resolve(
-      state
-        ? { ...state, breakPosition: { ...state.breakPosition } }
-        : null,
-    );
+    return Promise.resolve(state ? { ...state, breakPosition: { ...state.breakPosition } } : null);
   }
 
   save(taskId: string, state: SdkCheckpointState): Promise<void> {
@@ -189,10 +185,7 @@ export class ResumeSupport {
     });
 
     this.#commitCounter += 1;
-    if (
-      !this.#selfReport &&
-      this.#commitCounter % this.#reportInterval === 0
-    ) {
+    if (!this.#selfReport && this.#commitCounter % this.#reportInterval === 0) {
       const processed = this.#succeedCount + this.#failCount;
       this.#progress.report(
         processed,

@@ -33,7 +33,12 @@ pub struct TaskRecord {
 }
 
 impl TaskRecord {
-    pub fn new(task_id: &str, tenant_id: &str, task_type: &str, schema_version: Option<&str>) -> Self {
+    pub fn new(
+        task_id: &str,
+        tenant_id: &str,
+        task_type: &str,
+        schema_version: Option<&str>,
+    ) -> Self {
         Self {
             task_id: task_id.to_string(),
             tenant_id: tenant_id.to_string(),
@@ -129,7 +134,12 @@ impl FakeConsumer {
 
     /// Convenience wrapper binding this fake's tenant + capacity.
     pub fn handle(&self, record: &TaskRecord, in_flight: i64) -> MessageOutcome {
-        self.on_message(record, in_flight, self.max_concurrent, &self.config_tenant_id)
+        self.on_message(
+            record,
+            in_flight,
+            self.max_concurrent,
+            &self.config_tenant_id,
+        )
     }
 }
 
@@ -171,7 +181,10 @@ mod tests {
         let rec = TaskRecord::new("t1", "tenant-b", "import", Some("v1"));
         let out = c.handle(&rec, 0);
         assert_eq!(out, MessageOutcome::DropForeignTenant);
-        assert!(!out.should_commit_offset(), "must not commit on foreign drop");
+        assert!(
+            !out.should_commit_offset(),
+            "must not commit on foreign drop"
+        );
     }
 
     #[test]

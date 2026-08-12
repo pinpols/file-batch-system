@@ -373,10 +373,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (EmptyChecks.isEmpty(firstRow)) {
       return List.of();
     }
-    List<ColumnLayout> inferred = new ArrayList<>();
-    for (String key : firstRow.keySet()) {
-      inferred.add(spec.inferredColumnFactory().apply(key));
-    }
+    List<ColumnLayout> inferred =
+        firstRow.keySet().stream().map(spec.inferredColumnFactory()).toList();
     return enforceMaxColumns(inferred, maxColumns, spec.labelTag() + "-inferred");
   }
 

@@ -273,15 +273,13 @@ public class ParseSupport {
   public List<String> positionalHeaders(Object templateConfigObject) {
     Object fieldMappings = templateFieldMappings(templateConfigObject);
     if (fieldMappings instanceof List<?> list) {
-      List<String> names = new ArrayList<>();
-      for (Object item : list) {
-        if (item instanceof Map<?, ?> m) {
-          Object name = m.get("name");
-          if (name != null && Texts.hasText(String.valueOf(name))) {
-            names.add(String.valueOf(name).trim());
-          }
-        }
-      }
+      List<String> names = list.stream()
+          .filter(Map.class::isInstance)
+          .map(Map.class::cast)
+          .map(mapping -> mapping.get("name"))
+          .filter(name -> name != null && Texts.hasText(String.valueOf(name)))
+          .map(name -> String.valueOf(name).trim())
+          .toList();
       if (!names.isEmpty()) {
         return names;
       }

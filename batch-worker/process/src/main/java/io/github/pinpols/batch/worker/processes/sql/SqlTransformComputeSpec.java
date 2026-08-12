@@ -7,12 +7,13 @@ import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /** 从 {@code pipeline_step_definition.step_params} 解析出的配置驱动 SQL 加工规格。 */
@@ -164,17 +165,21 @@ public record SqlTransformComputeSpec(
     if (!(raw instanceof List<?> list)) {
       return List.of();
     }
-    List<ValidationRule> out = new ArrayList<>();
-    for (Object item : list) {
-      if (item instanceof Map<?, ?> m) {
-        String name = text(m.get("name"));
-        String checkSql = text(firstNonNull(m.get("checkSql"), m.get("check_sql")));
-        if (Texts.hasText(name) && Texts.hasText(checkSql)) {
-          out.add(new ValidationRule(name, checkSql));
-        }
-      }
+    return list.stream()
+        .map(SqlTransformComputeSpec::parseValidationRule)
+        .flatMap(Optional::stream)
+        .toList();
+  }
+
+  private static Optional<ValidationRule> parseValidationRule(Object item) {
+    if (!(item instanceof Map<?, ?> m)) {
+      return Optional.empty();
     }
-    return List.copyOf(out);
+    String name = text(m.get("name"));
+    String checkSql = text(firstNonNull(m.get("checkSql"), m.get("check_sql")));
+    return Texts.hasText(name) && Texts.hasText(checkSql)
+        ? Optional.of(new ValidationRule(name, checkSql))
+        : Optional.empty();
   }
 
   public void validateIdentifiers() {
@@ -301,34 +306,35 @@ public record SqlTransformComputeSpec(
     if (!(raw instanceof List<?> list)) {
       return List.of();
     }
-    List<ColumnMapping> out = new ArrayList<>();
-    for (Object item : list) {
-      if (item instanceof String name && Texts.hasText(name)) {
-        String column = name.trim();
-        out.add(new ColumnMapping(column, column));
-      } else if (item instanceof Map<?, ?> m) {
-        String source = text(firstNonNull(m.get("source"), m.get("from")));
-        String target = text(firstNonNull(m.get("target"), m.get("to")));
-        if (Texts.hasText(source) && Texts.hasText(target)) {
-          out.add(new ColumnMapping(source, target));
-        }
-      }
+    return list.stream()
+        .map(SqlTransformComputeSpec::parseColumnMapping)
+        .flatMap(Optional::stream)
+        .toList();
+  }
+
+  private static Optional<ColumnMapping> parseColumnMapping(Object item) {
+    if (item instanceof String name && Texts.hasText(name)) {
+      String column = name.trim();
+      return Optional.of(new ColumnMapping(column, column));
     }
-    return List.copyOf(out);
+    if (item instanceof Map<?, ?> m) {
+      String source = text(firstNonNull(m.get("source"), m.get("from")));
+      String target = text(firstNonNull(m.get("target"), m.get("to")));
+      return Texts.hasText(source) && Texts.hasText(target)
+          ? Optional.of(new ColumnMapping(source, target))
+          : Optional.empty();
+    }
+    return Optional.empty();
   }
 
   private static List<String> parseStringList(Object raw) {
     if (!(raw instanceof List<?> list)) {
       return List.of();
     }
-    List<String> out = new ArrayList<>();
-    for (Object item : list) {
-      String value = text(item);
-      if (Texts.hasText(value)) {
-        out.add(value);
-      }
-    }
-    return List.copyOf(out);
+    return list.stream()
+        .map(SqlTransformComputeSpec::text)
+        .filter(Texts::hasText)
+        .toList();
   }
 
   private static Map<String, Object> parseMap(Object raw) {
@@ -353,20 +359,11 @@ public record SqlTransformComputeSpec(
   }
 
   private static Object[] values(Map<String, Object> root, String[] keys) {
-    Object[] values = new Object[keys.length];
-    for (int i = 0; i < keys.length; i++) {
-      values[i] = root.get(keys[i]);
-    }
-    return values;
+    return Arrays.stream(keys).map(root::get).toArray();
   }
 
   private static Object firstNonNull(Object... values) {
-    for (Object value : values) {
-      if (EmptyChecks.isNotNull(value)) {
-        return value;
-      }
-    }
-    return null;
+    return Arrays.stream(values).filter(EmptyChecks::isNotNull).findFirst().orElse(null);
   }
 
   private static String text(Object value) {

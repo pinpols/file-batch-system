@@ -6,11 +6,13 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -52,22 +54,18 @@ public class ValidationRuleSetMerger {
     if (!(raw instanceof List<?> list)) {
       return Map.of();
     }
-    Map<String, Object> derived = new LinkedHashMap<>();
-    for (Object item : list) {
-      Map<String, Object> mapping = configSupport.toMap(item);
-      if (!mapping.isEmpty()) {
-        String name = stringValue(mapping.get("name"));
-        if (Texts.hasText(name)
-            && booleanValue(
-                firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false)) {
-          derived.put(
-              name,
-              Map.of(
-                  KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()));
-        }
-      }
-    }
-    return derived;
+    return list.stream()
+        .map(configSupport::toMap)
+        .filter(EmptyChecks::isNotEmpty)
+        .filter(mapping -> Texts.hasText(stringValue(mapping.get("name"))))
+        .filter(mapping ->
+            booleanValue(firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false))
+        .collect(Collectors.toMap(
+            mapping -> stringValue(mapping.get("name")),
+            mapping -> Map.of(
+                KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
+            (previous, next) -> next,
+            LinkedHashMap::new));
   }
 
   @SuppressWarnings("unchecked")

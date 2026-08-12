@@ -79,7 +79,10 @@ fn heartbeat_response(body: &Json) -> HeartbeatResponse {
 fn renew_response(body: &Json) -> RenewResponse {
     let mut resp = RenewResponse::default();
     if let Some(obj) = body.as_object() {
-        resp.lease_until = obj.get("leaseUntil").and_then(Json::as_str).map(str::to_string);
+        resp.lease_until = obj
+            .get("leaseUntil")
+            .and_then(Json::as_str)
+            .map(str::to_string);
         resp.cancel_requested = obj.get("cancelRequested").and_then(Json::as_bool);
     }
     resp
@@ -124,8 +127,7 @@ fn compute(fx: &Json) -> Decision {
             return decide_paused_task_type(task_type, &paused_types);
         }
         let in_flight = num_from(state.and_then(|s| s.get("inFlight")), 0);
-        let max_concurrent =
-            num_from(config.and_then(|c| c.get("maxConcurrentTasks")), i64::MAX);
+        let max_concurrent = num_from(config.and_then(|c| c.get("maxConcurrentTasks")), i64::MAX);
         let currently_paused = state
             .and_then(|s| s.get("currentlyPaused"))
             .and_then(Json::as_bool)
@@ -261,7 +263,10 @@ fn request_spec_from(state: Option<&Json>) -> RequestSpec {
             let mut payload = ReportPayload::default();
             if let Some(r) = req.get("report") {
                 payload.success = r.get("success").and_then(Json::as_bool);
-                payload.error_code = r.get("errorCode").and_then(Json::as_str).map(str::to_string);
+                payload.error_code = r
+                    .get("errorCode")
+                    .and_then(Json::as_str)
+                    .map(str::to_string);
                 payload.result_summary = r
                     .get("resultSummary")
                     .and_then(Json::as_str)
@@ -354,9 +359,7 @@ fn class_of(spec: &str) -> Box<dyn Fn(char) -> bool> {
         // (e.g. Python `sdk-py-`), so the leading run tolerates `-`.
         "a-z-" => Box::new(|c: char| c.is_ascii_lowercase() || c == '-'),
         "0-9a-f" => Box::new(|c: char| c.is_ascii_digit() || ('a'..='f').contains(&c)),
-        "0-9a-f-" => {
-            Box::new(|c: char| c.is_ascii_digit() || ('a'..='f').contains(&c) || c == '-')
-        }
+        "0-9a-f-" => Box::new(|c: char| c.is_ascii_digit() || ('a'..='f').contains(&c) || c == '-'),
         other => {
             let owned = other.to_string();
             Box::new(move |c: char| owned.contains(c))
@@ -508,7 +511,12 @@ fn fixture_files() -> Vec<PathBuf> {
                 && p.extension().map(|x| x == "json").unwrap_or(false)
                 && p.file_name()
                     .and_then(|n| n.to_str())
-                    .map(|n| n.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))
+                    .map(|n| {
+                        n.chars()
+                            .next()
+                            .map(|c| c.is_ascii_digit())
+                            .unwrap_or(false)
+                    })
                     .unwrap_or(false)
         })
         .collect();
@@ -553,7 +561,9 @@ fn conformance_all_fixtures() {
 
         // Request-side assertions (body includes/excludes, header regexes) are
         // driven by the request builder, not the response→reaction decision core.
-        let has_request_side = expect.keys().any(|k| REQUEST_SIDE_KEYS.contains(&k.as_str()));
+        let has_request_side = expect
+            .keys()
+            .any(|k| REQUEST_SIDE_KEYS.contains(&k.as_str()));
         if has_request_side {
             assert_request_side(&fx, &name);
         }

@@ -21,10 +21,13 @@
   ],
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "prettier": "3.6.2",
     "typescript": "^5.7.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "format": "prettier --write src tests kafka",
+    "format:check": "prettier --check src tests kafka",
     "prepack": "tsc -p tsconfig.json",
     "test": "node --test --experimental-strip-types 'tests/**/*.test.ts'"
   },

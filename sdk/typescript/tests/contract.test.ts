@@ -27,10 +27,7 @@ import {
   type RequestSpec,
 } from "../src/decide.ts";
 
-const FIXTURES_DIR = new URL(
-  "../../../docs/api/sdk-contract-fixtures/",
-  import.meta.url,
-);
+const FIXTURES_DIR = new URL("../../../docs/api/sdk-contract-fixtures/", import.meta.url);
 
 interface Fixture {
   scenario: string;
@@ -47,11 +44,7 @@ interface Fixture {
 }
 
 /** Request-side expect keys handled by buildRequest, not by the decision core. */
-const REQUEST_SIDE_KEYS = new Set([
-  "requestBodyIncludes",
-  "requestBodyExcludes",
-  "requestHeaders",
-]);
+const REQUEST_SIDE_KEYS = new Set(["requestBodyIncludes", "requestBodyExcludes", "requestHeaders"]);
 
 /** All the field names the runner can emit, matching the closed expect vocab. */
 type ComputedResult = Record<string, unknown>;
@@ -78,9 +71,7 @@ function compute(fx: Fixture): ComputedResult {
     // pausedTaskTypes drop: message whose taskType is paused → drop-message.
     const paused = given.state?.pausedTaskTypes as string[] | undefined;
     if (paused != null) {
-      const taskType = String(
-        when.body?.workerType ?? when.body?.taskType ?? "",
-      );
+      const taskType = String(when.body?.workerType ?? when.body?.taskType ?? "");
       return decidePausedTaskType(taskType, paused);
     }
     const inFlight = Number(given.state?.inFlight ?? 0);
@@ -113,9 +104,7 @@ function compute(fx: Fixture): ComputedResult {
   // deactivate → graceful stop. stop timeout: prefer config, else fixture withinMs
   // is the contractual bound; default 30s SIGTERM grace.
   if (path.includes("/deactivate")) {
-    const timeoutMs =
-      Number(given.config?.stopTimeoutMs) ||
-      30000;
+    const timeoutMs = Number(given.config?.stopTimeoutMs) || 30000;
     return planStop(timeoutMs);
   }
 
@@ -134,12 +123,7 @@ function compute(fx: Fixture): ComputedResult {
     const baseMs = Number(given.config?.retryBaseDelayMs) || undefined;
     const maxAttempts = Number(given.config?.retryMaxAttempts) || undefined;
     const clientErrorCount = Number(given.state?.clientErrorCount ?? 0);
-    return classifyHttp(
-      status,
-      clientErrorCount,
-      baseMs as number,
-      maxAttempts as number,
-    );
+    return classifyHttp(status, clientErrorCount, baseMs as number, maxAttempts as number);
   }
 
   throw new Error(`no decision route for fixture ${fx.scenario} (path=${path})`);
@@ -149,9 +133,7 @@ function compute(fx: Fixture): ComputedResult {
 function computeRequest(fx: Fixture) {
   const spec = fx.given.state?.request as RequestSpec | undefined;
   if (spec == null) {
-    throw new Error(
-      `${fx.scenario}: request-side fixture missing given.state.request`,
-    );
+    throw new Error(`${fx.scenario}: request-side fixture missing given.state.request`);
   }
   return buildRequest(spec, {
     tenantId: fx.given.config?.tenantId,
@@ -190,14 +172,9 @@ function assertRequestSide(fx: Fixture, ctx: string) {
       `${ctx}: outgoing body must NOT contain key '${key}' (got ${JSON.stringify(body)})`,
     );
   }
-  for (const [name, pattern] of Object.entries(
-    expect.requestHeaders ?? {},
-  )) {
+  for (const [name, pattern] of Object.entries(expect.requestHeaders ?? {})) {
     const value = headers[name];
-    assert.ok(
-      value !== undefined,
-      `${ctx}: outgoing headers missing '${name}'`,
-    );
+    assert.ok(value !== undefined, `${ctx}: outgoing headers missing '${name}'`);
     assert.ok(
       new RegExp(pattern as string).test(value),
       `${ctx}: header '${name}'='${value}' does not match /${pattern}/`,
@@ -220,32 +197,23 @@ test(`all ${EXPECTED_FIXTURE_COUNT} contract fixtures are present`, () => {
 });
 
 for (const file of fixtureFiles) {
-  const fx: Fixture = JSON.parse(
-    readFileSync(new URL(file, FIXTURES_DIR), "utf8"),
-  );
+  const fx: Fixture = JSON.parse(readFileSync(new URL(file, FIXTURES_DIR), "utf8"));
 
   test(`conformance: ${file} (${fx.scenario})`, () => {
     const expect = fx.then.expect;
     const ctx = `${file} [${fx.scenario}]`;
 
-    assert.ok(
-      Object.keys(expect).length > 0,
-      `${file}: then.expect is empty`,
-    );
+    assert.ok(Object.keys(expect).length > 0, `${file}: then.expect is empty`);
 
     // Request-side assertions (body includes/excludes, header regexes) are
     // driven by the request builder, not the response→reaction decision core.
-    const hasRequestSide = Object.keys(expect).some((k) =>
-      REQUEST_SIDE_KEYS.has(k),
-    );
+    const hasRequestSide = Object.keys(expect).some((k) => REQUEST_SIDE_KEYS.has(k));
     if (hasRequestSide) {
       assertRequestSide(fx, ctx);
     }
 
     // Response-side / schemaAccept fields are produced by compute().
-    const decisionFields = Object.keys(expect).filter(
-      (k) => !REQUEST_SIDE_KEYS.has(k),
-    );
+    const decisionFields = Object.keys(expect).filter((k) => !REQUEST_SIDE_KEYS.has(k));
     if (decisionFields.length === 0) {
       return;
     }

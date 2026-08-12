@@ -54,6 +54,8 @@ pub use handler::{
     RecordingProgressReporter, StoppableTaskHandler, TaskContext, TaskHandler, TaskResult,
 };
 pub use lifecycle::{StopReport, StopStep, Worker, WorkerState};
+#[cfg(feature = "http")]
+pub use reqwest_transport::{ReqwestConfig, ReqwestTransport, TransportBuildError};
 pub use resilience::{
     default_should_retry, task_id_idempotency_key, with_idempotency, with_retry, IdempotencyEntity,
     IdempotencyHandler, InMemoryIdempotencyStore, NoopIdempotencyStore, RetryHandler, RetryPolicy,
@@ -71,5 +73,3 @@ pub use transport::{
     classify_response, outcome_from_decision, FakeTransport, HttpResponse, HttpTransport,
     Transport, TransportOutcome,
 };
-#[cfg(feature = "http")]
-pub use reqwest_transport::{ReqwestConfig, ReqwestTransport, TransportBuildError};

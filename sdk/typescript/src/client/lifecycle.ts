@@ -12,19 +12,10 @@
  *   - SIGTERM → stop(30000) (K8s terminationGracePeriodSeconds default).
  */
 
-import {
-  decideBackpressure,
-  decideRegister,
-  newIdempotencyKey,
-  planStop,
-} from "../decide.ts";
+import { decideBackpressure, decideRegister, newIdempotencyKey, planStop } from "../decide.ts";
 import type { FsmState, KafkaAction } from "../protocol.ts";
 import { FatalTransportError, type ReportBody, type Transport } from "./transport.ts";
-import {
-  HeartbeatScheduler,
-  LeaseRenewalScheduler,
-  type InFlightTask,
-} from "./scheduler.ts";
+import { HeartbeatScheduler, LeaseRenewalScheduler, type InFlightTask } from "./scheduler.ts";
 import {
   MessagePipeline,
   assignmentOf,
@@ -134,8 +125,7 @@ export class WorkerLifecycle {
     this.#handler = deps.handler;
     this.#logger = deps.logger ?? consoleLogger;
     this.#validator = deps.validator ?? new SensitiveDataValidator();
-    this.#checkpointFactory =
-      deps.checkpointFactory ?? (() => new InMemorySdkCheckpoint());
+    this.#checkpointFactory = deps.checkpointFactory ?? (() => new InMemorySdkCheckpoint());
     this.#resumeOptions = deps.resumeOptions;
 
     this.#heartbeat = new HeartbeatScheduler(
@@ -174,8 +164,7 @@ export class WorkerLifecycle {
           ((taskId) => ({
             tenantId: this.#cfg.tenantId,
             workerId: this.#cfg.workerCode,
-            partitionInvocationId:
-              this.#inFlight.get(taskId)?.partitionInvocationId ?? null,
+            partitionInvocationId: this.#inFlight.get(taskId)?.partitionInvocationId ?? null,
           })),
         dropTask: (taskId) => this.#inFlight.delete(taskId),
         logger: this.#logger,
@@ -254,8 +243,7 @@ export class WorkerLifecycle {
       heartbeatAt: new Date().toISOString(),
       // #536 register-time protocol-version gate: advertise the SDK's current
       // major (last of SUPPORTED_SCHEMA_VERSIONS). Register only — heartbeat null.
-      protocolVersion:
-        SUPPORTED_SCHEMA_VERSIONS[SUPPORTED_SCHEMA_VERSIONS.length - 1],
+      protocolVersion: SUPPORTED_SCHEMA_VERSIONS[SUPPORTED_SCHEMA_VERSIONS.length - 1],
     };
     this.#validator.assertRegisterBody(regBody);
 
@@ -268,9 +256,7 @@ export class WorkerLifecycle {
     this.#leaseRenewal.start();
 
     // subscribe last so no message arrives before schedulers are live
-    await this.#consumer.start((r: ConsumerRecord) =>
-      this.#onRecord(r),
-    );
+    await this.#consumer.start((r: ConsumerRecord) => this.#onRecord(r));
   }
 
   async #onRecord(record: ConsumerRecord): Promise<MessageDisposition> {
@@ -311,29 +297,22 @@ export class WorkerLifecycle {
         // The claim response may also echo it; prefer the message value, fall back
         // to the response.
         const msgInvocationId =
-          (msg.runtimeAttributes?.partitionInvocationId as string | undefined) ??
-          null;
+          (msg.runtimeAttributes?.partitionInvocationId as string | undefined) ?? null;
 
-        const claim = await this.#transport.claim(
-          msg.taskId,
-          idemKey,
-          msgInvocationId,
-        );
+        const claim = await this.#transport.claim(msg.taskId, idemKey, msgInvocationId);
         if (claim.idempotent) {
           // claim 409 = already claimed (redelivery, or another worker won the
           // race): NOT ours to execute. Skip the handler + report so we never
           // double-run (aligned with Go `if claim.Idempotent { return }`).
-          this.#logger.info(
-            "claim idempotent (already claimed); skipping execution",
-            { taskId: msg.taskId },
-          );
+          this.#logger.info("claim idempotent (already claimed); skipping execution", {
+            taskId: msg.taskId,
+          });
           return;
         }
         // record the ADR-014 invocation token so renew/report can echo it
         const tracked = this.#inFlight.get(msg.taskId);
         if (tracked) {
-          tracked.partitionInvocationId =
-            msgInvocationId ?? claim.partitionInvocationId ?? null;
+          tracked.partitionInvocationId = msgInvocationId ?? claim.partitionInvocationId ?? null;
         }
         const progress = new NoopProgressReporter();
         const resume = new ResumeSupport({
@@ -346,10 +325,7 @@ export class WorkerLifecycle {
         const ctx: TaskContext = {
           taskId: msg.taskId,
           effectiveConfig: claim.effectiveConfig ?? {},
-          traceId:
-            claim.traceId ??
-            (msg.runtimeAttributes?.traceId as string | undefined) ??
-            "",
+          traceId: claim.traceId ?? (msg.runtimeAttributes?.traceId as string | undefined) ?? "",
           cancellation,
           progress,
           checkpoint: () => resume.checkpoint(),
@@ -396,8 +372,7 @@ export class WorkerLifecycle {
           errorCode: result.errorCode,
           outputs: result.outputs,
           resultSummary: result.resultSummary,
-          partitionInvocationId:
-            this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
+          partitionInvocationId: this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
         });
       } catch (e) {
         // claim/report fatal — log, then fail-fast on auth errors (§ openapi:
@@ -420,11 +395,7 @@ export class WorkerLifecycle {
         // the [max/2, max) band, resume only once it drops below max/2. This
         // avoids pause/resume thrash at the capacity boundary.
         if (this.#consumer.isPaused() && !this.#draining) {
-          const bp = decideBackpressure(
-            this.#inFlight.size,
-            this.#cfg.maxConcurrent,
-            true,
-          );
+          const bp = decideBackpressure(this.#inFlight.size, this.#cfg.maxConcurrent, true);
           if (bp.action === "backpressure" && bp.kafka === "resume") {
             this.#consumer.resume();
           }

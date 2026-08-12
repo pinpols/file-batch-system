@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.CustomerImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -120,16 +121,10 @@ public class ImportDataQualityService {
         ? null
         : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS);
     if (value instanceof List<?> list) {
-      List<String> items = new ArrayList<>();
-      for (Object item : list) {
-        if (item != null) {
-          String text = String.valueOf(item);
-          if (!text.isBlank()) {
-            items.add(text);
-          }
-        }
-      }
-      return items;
+      return list.stream()
+          .filter(item -> EmptyChecks.isNotNull(item) && !String.valueOf(item).isBlank())
+          .map(String::valueOf)
+          .toList();
     }
     return List.of();
   }

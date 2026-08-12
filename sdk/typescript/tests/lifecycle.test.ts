@@ -8,11 +8,7 @@ import assert from "node:assert/strict";
 import { WorkerLifecycle } from "../src/client/lifecycle.ts";
 import { FakePlatform, fatalClaimTransport } from "../src/client/testkit.ts";
 import { FakeConsumer } from "../src/client/consumer.ts";
-import {
-  taskSuccess,
-  type TaskContext,
-  type TaskHandler,
-} from "../src/client/handler.ts";
+import { taskSuccess, type TaskContext, type TaskHandler } from "../src/client/handler.ts";
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
@@ -23,9 +19,7 @@ const baseConfig = {
 };
 
 test("lifecycle: start registers, starts schedulers, then runs claim→execute→report", async () => {
-  const platform = new FakePlatform(
-    { claim: { effectiveConfig: { k: "v" }, traceId: "trace-1" } },
-  );
+  const platform = new FakePlatform({ claim: { effectiveConfig: { k: "v" }, traceId: "trace-1" } });
   platform.feedMessages({ taskId: "task-1", tenantId: "tenant-A", schemaVersion: "v1" });
 
   let seenCtx: TaskContext | undefined;
@@ -81,11 +75,12 @@ test("lifecycle: claim + report mint fresh ts-<uuid> keys (never fixed claim-/re
   await lc.start();
   await new Promise((r) => setTimeout(r, 10));
 
-  const claimKey = platform.transport.calls.find((c) => c.op === "claim")!
-    .args[1] as string;
-  const reportKey = platform.transport.calls.find((c) => c.op === "report")!
-    .args[2] as string;
-  for (const [name, key] of [["claim", claimKey], ["report", reportKey]] as const) {
+  const claimKey = platform.transport.calls.find((c) => c.op === "claim")!.args[1] as string;
+  const reportKey = platform.transport.calls.find((c) => c.op === "report")!.args[2] as string;
+  for (const [name, key] of [
+    ["claim", claimKey],
+    ["report", reportKey],
+  ] as const) {
     assert.ok(key.startsWith("ts-"), `${name} key must be minted ts-<uuid>, got ${key}`);
     assert.notEqual(key, `${name}-task-1`, `${name} must not use a fixed key`);
   }
@@ -95,9 +90,9 @@ test("lifecycle: claim + report mint fresh ts-<uuid> keys (never fixed claim-/re
 });
 
 test("lifecycle: threads partitionInvocationId from claim into report (+ default bodies carry required ids)", async () => {
-  const platform = new FakePlatform(
-    { claim: { effectiveConfig: {}, partitionInvocationId: "inv-42" } },
-  );
+  const platform = new FakePlatform({
+    claim: { effectiveConfig: {}, partitionInvocationId: "inv-42" },
+  });
   platform.feedMessages({ taskId: "task-pi", tenantId: "tenant-A", workerType: "IMPORT" });
 
   const handler: TaskHandler = { execute: async () => taskSuccess() };
@@ -185,10 +180,7 @@ test("lifecycle: stop drains in-flight then deactivates (order)", async () => {
 
   const ops = platform.transport.calls.map((c) => c.op);
   // report (task finished) must precede deactivate
-  assert.ok(
-    ops.indexOf("report") < ops.lastIndexOf("deactivate"),
-    "report before deactivate",
-  );
+  assert.ok(ops.indexOf("report") < ops.lastIndexOf("deactivate"), "report before deactivate");
   assert.ok(ops.includes("deactivate"), "deactivated");
   assert.equal(lc.inFlightCount, 0, "drained");
 });

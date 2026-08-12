@@ -6,10 +6,10 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** 从模板配置的 {@code query_param_schema.jdbcMappedExport} 或 {@code jdbc_mapped_export} 解析而来的导出规格。 */
 public record JdbcMappedExportSpec(
@@ -124,13 +124,10 @@ public record JdbcMappedExportSpec(
     if (!(raw instanceof List<?> list)) {
       return List.of();
     }
-    List<String> out = new ArrayList<>();
-    for (Object o : list) {
-      if (o != null && Texts.hasText(String.valueOf(o))) {
-        out.add(String.valueOf(o).trim());
-      }
-    }
-    return out;
+    return list.stream()
+        .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+        .map(o -> String.valueOf(o).trim())
+        .toList();
   }
 
   /** 从模板顶层 {@code field_mappings[*].sourceColumn} 去重保序推断导出明细列。 */
@@ -158,15 +155,14 @@ public record JdbcMappedExportSpec(
         return List.of();
       }
     }
-    LinkedHashSet<String> out = new LinkedHashSet<>();
-    for (Object item : list) {
-      if (item instanceof Map<?, ?> m) {
-        Object src = m.get("sourceColumn");
-        if (src != null && Texts.hasText(String.valueOf(src))) {
-          out.add(String.valueOf(src).trim());
-        }
-      }
-    }
-    return new ArrayList<>(out);
+    return list.stream()
+        .filter(Map.class::isInstance)
+        .map(Map.class::cast)
+        .map(mapping -> mapping.get("sourceColumn"))
+        .filter(src -> src != null && Texts.hasText(String.valueOf(src)))
+        .map(src -> String.valueOf(src).trim())
+        .collect(Collectors.toCollection(LinkedHashSet::new))
+        .stream()
+        .toList();
   }
 }

@@ -102,10 +102,7 @@ export interface TaskResult {
 }
 
 /** Build a success result. */
-export function taskSuccess(
-  outputs?: Record<string, unknown>,
-  resultSummary?: string,
-): TaskResult {
+export function taskSuccess(outputs?: Record<string, unknown>, resultSummary?: string): TaskResult {
   const r: TaskResult = { success: true };
   if (outputs !== undefined) r.outputs = outputs;
   if (resultSummary !== undefined) r.resultSummary = resultSummary;

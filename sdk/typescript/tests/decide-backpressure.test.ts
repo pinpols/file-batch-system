@@ -18,24 +18,78 @@ const cases: Array<{
   kafka?: string;
 }> = [
   // pause edge: at or over capacity always pauses (fixture 11 contract).
-  { name: "at-capacity pauses", inFlight: 4, max: 4, paused: false, action: "backpressure", kafka: "pause" },
-  { name: "over-capacity pauses", inFlight: 5, max: 4, paused: false, action: "backpressure", kafka: "pause" },
+  {
+    name: "at-capacity pauses",
+    inFlight: 4,
+    max: 4,
+    paused: false,
+    action: "backpressure",
+    kafka: "pause",
+  },
+  {
+    name: "over-capacity pauses",
+    inFlight: 5,
+    max: 4,
+    paused: false,
+    action: "backpressure",
+    kafka: "pause",
+  },
   // already paused, at capacity -> still pause (idempotent), never resume.
-  { name: "paused at capacity stays pause", inFlight: 4, max: 4, paused: true, action: "backpressure", kafka: "pause" },
+  {
+    name: "paused at capacity stays pause",
+    inFlight: 4,
+    max: 4,
+    paused: true,
+    action: "backpressure",
+    kafka: "pause",
+  },
   // max-1 just below cap while paused: must NOT resume (in hysteresis band).
   { name: "paused max-1 no resume", inFlight: 3, max: 4, paused: true, action: "none" },
   // in the [max/2, max) band while paused: hold paused, no flapping.
-  { name: "paused at max/2 holds (=2, not < 2)", inFlight: 2, max: 4, paused: true, action: "none" },
+  {
+    name: "paused at max/2 holds (=2, not < 2)",
+    inFlight: 2,
+    max: 4,
+    paused: true,
+    action: "none",
+  },
   // drop below max/2 while paused -> resume.
-  { name: "paused below max/2 resumes", inFlight: 1, max: 4, paused: true, action: "backpressure", kafka: "resume" },
+  {
+    name: "paused below max/2 resumes",
+    inFlight: 1,
+    max: 4,
+    paused: true,
+    action: "backpressure",
+    kafka: "resume",
+  },
   // not paused and below cap -> nothing to do.
   { name: "not paused below cap none", inFlight: 1, max: 4, paused: false, action: "none" },
   // max=10 ladder mirrors the Java hysteresis test: 6 holds, 5 holds, 4 resumes.
   { name: "max10 inflight6 holds", inFlight: 6, max: 10, paused: true, action: "none" },
-  { name: "max10 inflight5 holds (=5 not < 5)", inFlight: 5, max: 10, paused: true, action: "none" },
-  { name: "max10 inflight4 resumes", inFlight: 4, max: 10, paused: true, action: "backpressure", kafka: "resume" },
+  {
+    name: "max10 inflight5 holds (=5 not < 5)",
+    inFlight: 5,
+    max: 10,
+    paused: true,
+    action: "none",
+  },
+  {
+    name: "max10 inflight4 resumes",
+    inFlight: 4,
+    max: 10,
+    paused: true,
+    action: "backpressure",
+    kafka: "resume",
+  },
   // max=1 floors resume threshold at 1: inflight 0 resumes.
-  { name: "max1 inflight0 resumes", inFlight: 0, max: 1, paused: true, action: "backpressure", kafka: "resume" },
+  {
+    name: "max1 inflight0 resumes",
+    inFlight: 0,
+    max: 1,
+    paused: true,
+    action: "backpressure",
+    kafka: "resume",
+  },
 ];
 
 for (const c of cases) {

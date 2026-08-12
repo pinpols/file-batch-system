@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
@@ -171,32 +172,24 @@ public final class SelectSqlAstValidator {
    */
   public static String findForbiddenFunctionCall(Statement statement, List<String> forbidden) {
     Set<String> called = collectFunctionNames(statement);
-    Set<String> forbiddenLower = new HashSet<>();
-    for (String fn : forbidden) {
-      forbiddenLower.add(fn.toLowerCase(Locale.ROOT));
-    }
-    for (String name : called) {
-      // 既比对裸名，也比对 schema 限定名的尾段（pg_catalog.pg_read_server_files → pg_read_server_files）。
-      String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
-      if (matchesForbiddenFamily(name, forbiddenLower)
-          || matchesForbiddenFamily(bare, forbiddenLower)) {
-        return name;
-      }
-    }
-    return null;
+    Set<String> forbiddenLower = forbidden.stream()
+        .map(fn -> fn.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toCollection(HashSet::new));
+    return called.stream()
+        .filter(name -> {
+          // 既比对裸名，也比对 schema 限定名的尾段（pg_catalog.pg_read_server_files → pg_read_server_files）。
+          String bare = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : name;
+          return matchesForbiddenFamily(name, forbiddenLower)
+              || matchesForbiddenFamily(bare, forbiddenLower);
+        })
+        .findFirst()
+        .orElse(null);
   }
 
   /** 精确名或「禁用项_ 起头」的家族成员均视为命中。 */
   private static boolean matchesForbiddenFamily(String candidate, Set<String> forbiddenLower) {
-    if (forbiddenLower.contains(candidate)) {
-      return true;
-    }
-    for (String f : forbiddenLower) {
-      if (candidate.startsWith(f + "_")) {
-        return true;
-      }
-    }
-    return false;
+    return forbiddenLower.contains(candidate)
+        || forbiddenLower.stream().anyMatch(f -> candidate.startsWith(f + "_"));
   }
 
   /**

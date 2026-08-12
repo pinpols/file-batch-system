@@ -4,12 +4,7 @@
  * HTTP server.
  */
 
-import type {
-  ClaimResponse,
-  RegisterAck,
-  ReportBody,
-  Transport,
-} from "./transport.ts";
+import type { ClaimResponse, RegisterAck, ReportBody, Transport } from "./transport.ts";
 import { FatalTransportError, NotFoundTransportError } from "./transport.ts";
 import type { HeartbeatResponse, RenewResponse } from "../protocol.ts";
 import { FakeConsumer, type ConsumerRecord } from "./consumer.ts";
@@ -67,10 +62,7 @@ export class FakeTransport implements Transport {
     return resolveResponder(this.#script.register ?? { idempotent: false });
   }
 
-  async heartbeat(
-    workerCode: string,
-    body: Record<string, unknown>,
-  ): Promise<HeartbeatResponse> {
+  async heartbeat(workerCode: string, body: Record<string, unknown>): Promise<HeartbeatResponse> {
     this.#record("heartbeat", workerCode, body);
     const s = this.#script.heartbeat;
     if (Array.isArray(s)) {
@@ -92,24 +84,15 @@ export class FakeTransport implements Transport {
     partitionInvocationId?: string | null,
   ): Promise<ClaimResponse> {
     this.#record("claim", taskId, idempotencyKey, partitionInvocationId ?? null);
-    return resolveResponder(
-      this.#script.claim ?? { effectiveConfig: {}, leaseUntil: null },
-    );
+    return resolveResponder(this.#script.claim ?? { effectiveConfig: {}, leaseUntil: null });
   }
 
-  async report(
-    taskId: string,
-    body: ReportBody,
-    idempotencyKey: string,
-  ): Promise<void> {
+  async report(taskId: string, body: ReportBody, idempotencyKey: string): Promise<void> {
     this.#record("report", taskId, body, idempotencyKey);
     await resolveResponder(this.#script.report ?? undefined);
   }
 
-  async renew(
-    taskId: string,
-    body: Record<string, unknown>,
-  ): Promise<RenewResponse> {
+  async renew(taskId: string, body: Record<string, unknown>): Promise<RenewResponse> {
     this.#record("renew", taskId, body);
     const s = this.#script.renew;
     if (Array.isArray(s)) {
@@ -144,19 +127,14 @@ export class FakePlatform {
   readonly transport: FakeTransport;
   readonly consumer: FakeConsumer;
 
-  constructor(
-    script: FakeTransportScript = {},
-    records: ConsumerRecord[] = [],
-  ) {
+  constructor(script: FakeTransportScript = {}, records: ConsumerRecord[] = []) {
     this.transport = new FakeTransport(script);
     this.consumer = new FakeConsumer(records);
   }
 
   /** Feed JSON dispatch messages (serialized) to the consumer. */
   feedMessages(...messages: unknown[]): void {
-    this.consumer.feed(
-      ...messages.map((m) => ({ value: JSON.stringify(m) })),
-    );
+    this.consumer.feed(...messages.map((m) => ({ value: JSON.stringify(m) })));
   }
 }
 
@@ -168,10 +146,7 @@ export class FakePlatform {
  * Mirrors the Go `ReportFor` / Java `awaitReport` assertion sugar: instead of
  * scanning `transport.calls` by hand in every test, ask for the report directly.
  */
-export function reportFor(
-  transport: FakeTransport,
-  taskId: string,
-): ReportBody | undefined {
+export function reportFor(transport: FakeTransport, taskId: string): ReportBody | undefined {
   let found: ReportBody | undefined;
   for (const call of transport.calls) {
     if (call.op === "report" && call.args[0] === taskId) {

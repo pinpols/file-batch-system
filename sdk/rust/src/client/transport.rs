@@ -50,7 +50,10 @@ pub enum TransportOutcome {
     /// 409 — treat as success (already claimed / lease reclaimed).
     IdempotentSuccess,
     /// 5xx / transport error — retry using the backoff schedule (ms per attempt).
-    Retry { backoff_ms: Vec<i64>, max_attempts: i64 },
+    Retry {
+        backoff_ms: Vec<i64>,
+        max_attempts: i64,
+    },
     /// 401/403 or cumulative-4xx threshold — stop, do not retry.
     FailFast,
     /// 404 — give up this request without failing the worker.
@@ -299,7 +302,10 @@ mod tests {
         t.queue_report(HttpResponse::new(503, ""));
         let resp = t.report("task-1", "{}");
         match classify_response(&resp, 0) {
-            TransportOutcome::Retry { backoff_ms, max_attempts } => {
+            TransportOutcome::Retry {
+                backoff_ms,
+                max_attempts,
+            } => {
                 assert_eq!(backoff_ms, vec![200, 400, 800]);
                 assert_eq!(max_attempts, 3);
             }
@@ -358,6 +364,9 @@ mod tests {
         let t = FakeTransport::new();
         t.report("t", "{}");
         t.deactivate("w");
-        assert_eq!(t.call_log(), vec!["report".to_string(), "deactivate".to_string()]);
+        assert_eq!(
+            t.call_log(),
+            vec!["report".to_string(), "deactivate".to_string()]
+        );
     }
 }

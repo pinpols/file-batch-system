@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Parses fixed-width text files into NDJSON records. */
 public class FixedWidthFormatParser implements FormatParser {
@@ -115,21 +116,26 @@ public class FixedWidthFormatParser implements FormatParser {
     if (!(fieldMappings instanceof List<?> list)) {
       return List.of();
     }
-    List<FixedWidthField> out = new ArrayList<>();
-    for (Object item : list) {
-      if (item instanceof Map<?, ?> map) {
-        Object target = map.get("target");
-        Object start = map.get("start");
-        Object length = map.get("length");
-        if (target != null
-            && start instanceof Number startNumber
-            && length instanceof Number lengthNumber) {
-          out.add(new FixedWidthField(
-              String.valueOf(target), startNumber.intValue(), lengthNumber.intValue()));
-        }
-      }
+    return list.stream()
+        .map(FixedWidthFormatParser::fixedWidthField)
+        .flatMap(Optional::stream)
+        .toList();
+  }
+
+  private static Optional<FixedWidthField> fixedWidthField(Object item) {
+    if (!(item instanceof Map<?, ?> map)) {
+      return Optional.empty();
     }
-    return out;
+    Object target = map.get("target");
+    Object start = map.get("start");
+    Object length = map.get("length");
+    if (target == null
+        || !(start instanceof Number startNumber)
+        || !(length instanceof Number lengthNumber)) {
+      return Optional.empty();
+    }
+    return Optional.of(new FixedWidthField(
+        String.valueOf(target), startNumber.intValue(), lengthNumber.intValue()));
   }
 
   private record FixedWidthField(String target, int start, int length) {}

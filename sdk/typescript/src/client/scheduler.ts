@@ -14,10 +14,7 @@
 import { applyHeartbeatDirective, applyRenew } from "../decide.ts";
 import type { FsmState, KafkaAction } from "../protocol.ts";
 import type { Transport } from "./transport.ts";
-import {
-  NotFoundTransportError,
-  RevokedTransportError,
-} from "./transport.ts";
+import { NotFoundTransportError, RevokedTransportError } from "./transport.ts";
 import type { CancellationSignal } from "./handler.ts";
 import type { Logger } from "./consumer.ts";
 import { consoleLogger } from "./consumer.ts";
@@ -52,11 +49,7 @@ export class HeartbeatScheduler {
   #timer: NodeJS.Timeout | undefined;
   #running = false;
 
-  constructor(
-    transport: Transport,
-    hooks: HeartbeatHooks,
-    intervalMs = 30_000,
-  ) {
+  constructor(transport: Transport, hooks: HeartbeatHooks, intervalMs = 30_000) {
     this.#transport = transport;
     this.#hooks = hooks;
     this.#intervalMs = intervalMs;
@@ -75,10 +68,7 @@ export class HeartbeatScheduler {
    */
   async tick(): Promise<number> {
     try {
-      const resp = await this.#transport.heartbeat(
-        this.#hooks.workerCode,
-        this.#hooks.buildBody(),
-      );
+      const resp = await this.#transport.heartbeat(this.#hooks.workerCode, this.#hooks.buildBody());
       const decision = applyHeartbeatDirective(resp);
 
       if (decision.fsmTransition) {
@@ -90,10 +80,7 @@ export class HeartbeatScheduler {
       if (decision.drainThenDeactivate) {
         this.#hooks.onDrain();
       }
-      if (
-        resp.desiredMaxConcurrent != null &&
-        this.#hooks.setMaxConcurrent
-      ) {
+      if (resp.desiredMaxConcurrent != null && this.#hooks.setMaxConcurrent) {
         this.#hooks.setMaxConcurrent(resp.desiredMaxConcurrent);
       }
       // dynamic speed control — the Java short板 fix
@@ -161,11 +148,7 @@ export class LeaseRenewalScheduler {
   #timer: NodeJS.Timeout | undefined;
   #running = false;
 
-  constructor(
-    transport: Transport,
-    hooks: LeaseRenewalHooks,
-    intervalMs = 60_000,
-  ) {
+  constructor(transport: Transport, hooks: LeaseRenewalHooks, intervalMs = 60_000) {
     this.#transport = transport;
     this.#hooks = hooks;
     this.#intervalMs = intervalMs;
@@ -181,10 +164,7 @@ export class LeaseRenewalScheduler {
     const tasks = this.#hooks.inFlight();
     for (const task of tasks) {
       try {
-        const resp = await this.#transport.renew(
-          task.taskId,
-          this.#hooks.buildBody(task.taskId),
-        );
+        const resp = await this.#transport.renew(task.taskId, this.#hooks.buildBody(task.taskId));
         const decision = applyRenew(resp);
         if (decision.action === "cancel") {
           task.cancellation.markCancelled();
@@ -197,10 +177,7 @@ export class LeaseRenewalScheduler {
         // task + cancels the handler. A transient error (5xx / network / auth)
         // must NOT drop — that would stop renewing a still-running task, let the
         // lease expire, and cause a double-run. Keep it and retry next tick.
-        if (
-          e instanceof NotFoundTransportError ||
-          e instanceof RevokedTransportError
-        ) {
+        if (e instanceof NotFoundTransportError || e instanceof RevokedTransportError) {
           this.#logger.warn("renew: lease gone; cancelling handler + dropping", {
             taskId: task.taskId,
             error: String(e),

@@ -125,8 +125,7 @@ export class KafkaConsumerAdapter implements Consumer {
     this.#config = config;
     this.#logger = logger;
     this.#topicRegex = config.topicRegex ?? dispatchTopicRegex(config.workerCode);
-    this.#groupId =
-      config.groupId ?? consumerGroupId(config.tenantId, config.workerCode);
+    this.#groupId = config.groupId ?? consumerGroupId(config.tenantId, config.workerCode);
 
     const sasl: SASLOptions | undefined = config.sasl
       ? {
@@ -138,8 +137,7 @@ export class KafkaConsumerAdapter implements Consumer {
       : undefined;
 
     this.#kafka = new Kafka({
-      clientId:
-        config.clientId ?? `sdk-${config.tenantId}-${config.workerCode}`,
+      clientId: config.clientId ?? `sdk-${config.tenantId}-${config.workerCode}`,
       brokers: config.brokers,
       // ssl + sasl → SASL_SSL; sasl only → SASL_PLAINTEXT; neither → PLAINTEXT
       ssl: config.ssl ?? false,
@@ -182,9 +180,7 @@ export class KafkaConsumerAdapter implements Consumer {
    * This replaces the old `start()` that only forwarded records and never
    * committed (offset never advanced → every restart replayed the partition).
    */
-  async start(
-    onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>,
-  ): Promise<void> {
+  async start(onMessage: (r: ConsumerRecord) => Promise<MessageDisposition>): Promise<void> {
     await this.#runLoop(onMessage);
   }
 
@@ -194,15 +190,11 @@ export class KafkaConsumerAdapter implements Consumer {
    * the offset disposition via the shared {@link dispositionOf}.
    */
   async runPipeline(pipeline: MessagePipeline): Promise<void> {
-    await this.#runLoop(async (record) =>
-      dispositionOf(await pipeline.onMessage(record)),
-    );
+    await this.#runLoop(async (record) => dispositionOf(await pipeline.onMessage(record)));
   }
 
   /** Shared connect → subscribe → run-with-policy loop for start()/runPipeline(). */
-  async #runLoop(
-    onEach: (r: ConsumerRecord) => Promise<MessageDisposition>,
-  ): Promise<void> {
+  async #runLoop(onEach: (r: ConsumerRecord) => Promise<MessageDisposition>): Promise<void> {
     await this.#consumer.connect();
     await this.#consumer.subscribe({
       topic: this.#topicRegex,
@@ -281,9 +273,7 @@ export class KafkaConsumerAdapter implements Consumer {
           partition: action.partition,
           offset: action.offset,
         });
-        this.#consumer.pause([
-          { topic: action.topic, partitions: [action.partition] },
-        ]);
+        this.#consumer.pause([{ topic: action.topic, partitions: [action.partition] }]);
         this.#paused = true;
         this.#logger.warn("seek-back + pause partition (backpressure)", {
           topic: action.topic,
