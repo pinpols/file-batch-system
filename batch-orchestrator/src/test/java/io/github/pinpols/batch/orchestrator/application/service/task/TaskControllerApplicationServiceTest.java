@@ -43,7 +43,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 守护 worker → orchestrator HTTP 入口的边界处理:
@@ -69,9 +68,11 @@ class TaskControllerApplicationServiceTest {
   @BeforeEach
   void setUp() {
     service = new TaskControllerApplicationService(
-        taskExecutionService, new ObjectMapper(), batchClaimProperties, meterRegistry);
-    // reportBatch 经 self 代理逐项调 report;单测里无 Spring 代理,自引用指回本实例即可触发真逻辑
-    ReflectionTestUtils.setField(service, "self", service);
+        taskExecutionService,
+        new ObjectMapper(),
+        batchClaimProperties,
+        meterRegistry,
+        new TaskReportRetryExecutor(taskExecutionService));
   }
 
   // ===== claim =====

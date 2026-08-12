@@ -26,7 +26,6 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
-import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -34,12 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.dao.CannotAcquireLockException;
-import org.springframework.dao.TransientDataAccessException;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -61,15 +54,7 @@ public class TaskControllerApplicationService {
   private final ObjectMapper objectMapper;
   private final BundleBatchClaimProperties batchClaimProperties;
   private final MeterRegistry meterRegistry;
-
-  /**
-   * 自引用(AOP self-invocation 豁免①):reportBatch 逐项调用 {@link #report} 需经代理才能触发其
-   * {@code @Retryable}(死锁退避)；{@code report} 再委托 {@code applyTaskOutcome}，由目标服务的
-   * {@code @Transactional} 保证逐项独立事务。直接 this.report() 会绕过代理。
-   */
-  @Lazy
-  @Autowired
-  private TaskControllerApplicationService self;
+  private final TaskReportRetryExecutor reportRetryExecutor;
 
   @Timed(
       value = "batch.task.claim.duration",
@@ -145,46 +130,20 @@ public class TaskControllerApplicationService {
     return new TaskClaimBatchResult(results);
   }
 
-  @Retryable(
-      retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
-      maxAttempts = 5,
-      // Citus 上同 instance 的并发 report 会撞分布式死锁(FOR UPDATE 锁多分区行,加锁顺序非确定)。
-      // 原 3 次/50ms→100ms 窗口太窄,等长退避还会让两个 report 同步重投再撞。改 5 次 + random jitter
-      // (delay~maxDelay 间随机)打散并发重试,吸收瞬时死锁,避免落到 SYSTEM 死信。
-      backoff = @Backoff(delay = 50, maxDelay = 1000, multiplier = 2.0, random = true))
   public void report(Long taskId, TaskExecutionReportCommand request) {
-    String errorCode = resolveFailureField(request.errorCode(), request.code(), request.success());
-    String errorMessage =
-        resolveFailureField(request.errorMessage(), request.message(), request.success());
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId(request.tenantId())
-        .taskId(taskId)
-        .workerId(request.workerId())
-        .success(request.success())
-        .resultSummary(request.resultSummary())
-        .errorCode(errorCode)
-        .errorMessage(errorMessage)
-        .errorKey(request.errorKey())
-        .errorArgs(request.errorArgs())
-        .highWaterMarkOut(request.highWaterMarkOut())
-        .outputs(request.outputs())
-        .partitionInvocationId(request.partitionInvocationId())
-        .failureClass(request.success() ? null : request.failureClass())
-        .verifierFailures(request.success() ? request.verifierFailures() : null)
-        .build();
-    taskExecutionService.applyTaskOutcome(command);
+    reportRetryExecutor.report(taskId, request);
   }
 
   /**
    * ADR-046 P2 切片 2.2:批量上报 —— 一次 HTTP 往返上报 K 个**独立** partition 的结果, 把控制面往返从 O(N) 降到 O(N/K)。
    *
-   * <p>**逐项独立事务 + 逐项结果**:每项经 {@code self.report}（代理触发 {@code @Retryable}，再由
+   * <p>**逐项独立事务 + 逐项结果**:每项经 {@link TaskReportRetryExecutor}（代理触发 {@code @Retryable}，再由
    * {@code applyTaskOutcome} 的目标服务开启独立 {@code @Transactional}）推进；**某项失败（版本 CAS 冲突 /
    * 校验 / 其它）只标记该项，不影响其余项也不回滚整批** —— 这正是 ADR-046 要求的「批内部分失败 =
    * 失败项独立、不退整束」。worker 据逐项结果只重报 ok=false 的项。
    *
    * <p>设计取舍:不在单事务里做 savepoint 批量推进 —— {@code applyTaskOutcome} 自身 {@code @Transactional} + 父汇总
-   * self-invocation + 死锁 {@code @Retryable},逐项独立事务隔离最强、复用已验证路径,风险最低; 真正的 churn 收益在「一次 HTTP 报 K
+   * 父汇总 + 死锁 {@code @Retryable},逐项独立事务隔离最强、复用已验证路径,风险最低; 真正的 churn 收益在「一次 HTTP 报 K
    * 个」。outbox 单 INSERT 批写是更高风险的次要微优,后置(见计划 §2.2)。
    *
    * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
@@ -210,7 +169,7 @@ public class TaskControllerApplicationService {
       }
       Long taskId = item.taskId();
       try {
-        self.report(taskId, item);
+        reportRetryExecutor.report(taskId, item);
         results.add(new TaskReportItemResult(taskId, true, null));
         ok++;
       } catch (RuntimeException e) {
@@ -332,18 +291,5 @@ public class TaskControllerApplicationService {
         && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
         && EmptyChecks.isNotNull(workerId)
         && workerId.equals(task.getAssignedWorkerCode());
-  }
-
-  private String resolveFailureField(String primary, String fallback, boolean success) {
-    if (success) {
-      return null;
-    }
-    if (EmptyChecks.isNotBlank(primary)) {
-      return primary;
-    }
-    if (EmptyChecks.isNotBlank(fallback)) {
-      return fallback;
-    }
-    return "UNKNOWN";
   }
 }
