@@ -33,6 +33,7 @@ import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitR
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,10 +41,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
@@ -54,6 +55,14 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
  */
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleTenantConfigInitApplicationServiceTest {
+
+  @Test
+  void tenantExecutorRetainsPerTenantTransactionBoundary() throws Exception {
+    Method execute = TenantConfigInitTenantExecutor.class.getDeclaredMethod(
+        "execute", String.class, TenantConfigBatchInitRequest.class, String.class, boolean.class);
+
+    assertThat(execute.getAnnotation(Transactional.class)).isNotNull();
+  }
 
   @Mock
   private JobDefinitionMapper jobDefinitionMapper;
@@ -133,9 +142,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             calendarHolidayMapper,
             tenantQuotaPolicyMapper,
             alertRoutingConfigMapper));
-    ReflectionTestUtils.setField(handlers, "self", handlers);
-    service = new DefaultConsoleTenantConfigInitApplicationService(handlers);
-    ReflectionTestUtils.setField(service, "self", service);
+    service = new DefaultConsoleTenantConfigInitApplicationService(
+        new TenantConfigInitTenantExecutor(handlers));
   }
 
   // ------------------------------------------------------------------ job definitions

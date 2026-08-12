@@ -1,21 +1,14 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
-import io.github.pinpols.batch.console.infrastructure.config.TenantConfigInitApplyHandlers.ApplyContext;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 跨租户批量配置初始化入口，被 {@link DefaultConsoleConfigSyncApplicationService#importBundle} 和 直接 HTTP 入口两条路调用。
@@ -42,11 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleTenantConfigInitApplicationService
     implements ConsoleTenantConfigInitApplicationService {
 
-  private final TenantConfigInitApplyHandlers applyHandlers;
-
-  @Lazy
-  @Autowired
-  private DefaultConsoleTenantConfigInitApplicationService self;
+  private final TenantConfigInitTenantExecutor tenantExecutor;
 
   @Override
   public TenantConfigBatchInitResponse batchInit(
@@ -58,7 +47,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
     for (String tenantId : request.getTargetTenantIds()) {
       try {
-        TenantInitResult result = self.initForTenant(tenantId, request, operator, dryRun);
+        TenantInitResult result = tenantExecutor.execute(tenantId, request, operator, dryRun);
         results.add(result);
         if (result.success()) {
           successCount++;
@@ -92,70 +81,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
         failureCount,
         dryRun,
         results);
-  }
-
-  @Transactional
-  protected TenantInitResult initForTenant(
-      String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
-    InitMode mode = Nullables.coalesce(request.getMode(), InitMode.SKIP_EXISTING);
-    ApplyContext ctx = new ApplyContext(tenantId, mode, operator, dryRun);
-    ItemStats jobStats;
-    ItemStats workflowStats;
-    ItemStats pipelineStats;
-    ItemStats channelStats;
-    ItemStats templateStats;
-    ItemStats queueStats;
-    ItemStats windowStats;
-    ItemStats calendarStats;
-    ItemStats quotaStats;
-    ItemStats alertStats;
-    try {
-      jobStats = applyHandlers.applyJobDefinitions(request.getJobDefinitions(), ctx);
-      workflowStats = applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
-      pipelineStats = applyHandlers.applyPipelineDefinitions(request.getPipelineDefinitions(), ctx);
-      channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
-      templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
-      queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
-      windowStats = applyHandlers.applyBatchWindows(request.getBatchWindows(), ctx);
-      calendarStats = applyHandlers.applyBusinessCalendars(request.getBusinessCalendars(), ctx);
-      quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
-      alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
-    } catch (Exception ex) {
-      log.warn("[TenantConfigBatchInit] failed for tenant={}: {}", tenantId, ex.getMessage());
-      return TenantInitResult.failed(tenantId, ex.getMessage());
-    }
-    // strict=true (Job Bundle 跨环境导入)：任一 spec failed 即抛出 StrictBundleAbortedException,
-    // 由 @Transactional 触发整体回滚 → all-or-nothing。SKIP_EXISTING 跳过 / UPSERT 覆盖不算 failed。
-    if (request.isStrict()) {
-      int totalFailed = jobStats.failed()
-          + workflowStats.failed()
-          + pipelineStats.failed()
-          + channelStats.failed()
-          + templateStats.failed()
-          + queueStats.failed()
-          + windowStats.failed()
-          + calendarStats.failed()
-          + quotaStats.failed()
-          + alertStats.failed();
-      if (totalFailed > 0) {
-        throw new StrictBundleAbortedException(
-            "strict bundle aborted: " + totalFailed + " spec(s) failed for tenant=" + tenantId);
-      }
-    }
-    return new TenantInitResult(
-        tenantId,
-        true,
-        null,
-        jobStats,
-        workflowStats,
-        pipelineStats,
-        channelStats,
-        templateStats,
-        queueStats,
-        windowStats,
-        calendarStats,
-        quotaStats,
-        alertStats);
   }
 
   /** strict 模式下任一 spec failed 触发,@Transactional 自动回滚后由 batchInit 转成 failed result。 */
