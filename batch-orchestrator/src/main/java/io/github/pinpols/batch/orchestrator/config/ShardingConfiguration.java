@@ -22,7 +22,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * EnableScheduling}（但项目其他位置已经启用了，不会重复）。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableScheduling
 public class ShardingConfiguration {
 

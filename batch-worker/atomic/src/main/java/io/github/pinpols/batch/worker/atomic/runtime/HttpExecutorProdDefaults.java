@@ -28,7 +28,7 @@ import org.springframework.core.env.Environment;
  * 的状态。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor
 public class HttpExecutorProdDefaults {
 

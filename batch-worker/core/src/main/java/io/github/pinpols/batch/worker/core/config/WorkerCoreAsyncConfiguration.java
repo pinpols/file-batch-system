@@ -15,7 +15,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * <p>注意: 这里**不复用** {@code batch-common} 的 {@code taskScheduler} bean (架构硬约束: 禁覆盖 batch-common 基础设施
  * bean), 而是注册一个专用的 {@code workerWatchdogScheduler} 供 watchdog 使用。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class WorkerCoreAsyncConfiguration {
 
   public static final String WATCHDOG_SCHEDULER = "workerWatchdogScheduler";

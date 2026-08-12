@@ -31,7 +31,7 @@ import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
  * <p>未启用时本类完全不创建 bean，回退到 Spring Boot 默认主 DataSource 自动配置，行为同历史。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "batch.console.read-replica.enabled", havingValue = "true")
 @EnableConfigurationProperties(ReadReplicaProperties.class)
 @RequiredArgsConstructor

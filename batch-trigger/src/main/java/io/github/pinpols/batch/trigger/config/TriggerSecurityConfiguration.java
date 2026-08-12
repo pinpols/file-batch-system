@@ -32,7 +32,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p>所有端点都必须通过 {@code X-Internal-Secret} header 校验。 当 {@code batch.security.bypass-mode=true}
  * 时跳过校验，保持本地联调体验不变。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class TriggerSecurityConfiguration {

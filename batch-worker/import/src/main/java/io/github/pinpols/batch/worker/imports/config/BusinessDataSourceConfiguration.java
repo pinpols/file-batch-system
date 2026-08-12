@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 /** 业务数据源配置，装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。 */
-@Configuration("importWorkerBusinessDataSourceConfiguration")
+@Configuration(value = "importWorkerBusinessDataSourceConfiguration", proxyBeanMethods = false)
 @EnableConfigurationProperties({
   BusinessDataSourceProperties.class,
   BusinessRoutingProperties.class,

@@ -116,10 +116,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.springframework.context.MessageSource;
 
 /**
- * 租户配置包 11 个 sheet 的静态定义：列 schema、字段说明（guide）与下拉校验。 从 {@link
- * ConfigPackageExcelWorkbookWriter} 拆出，writer 只负责按这些定义渲染工作簿。
- */
-/**
  * 11 个配置包 sheet 的字段、顺序和业务约束的集中声明。
  *
  * <p>该类看起来行数较多是刻意的：它是配置包协议的“单一事实源”，不是把多个业务流程塞进一个服务。导入校验、模板生成和错误定位都从这里读取规则，

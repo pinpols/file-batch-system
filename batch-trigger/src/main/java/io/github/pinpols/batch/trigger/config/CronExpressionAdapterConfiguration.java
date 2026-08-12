@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /** Quartz 注册和业务日期推导共用的 Cron 解析适配器。 */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class CronExpressionAdapterConfiguration {
 
   @Bean

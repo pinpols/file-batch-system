@@ -42,7 +42,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
  * key，又让阈值配置变更在桶过期后自然生效。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class Bucket4jRateLimitConfig {
 
   /** 每分钟配额语义：桶容量与 refill 均以 1 分钟为周期。 */

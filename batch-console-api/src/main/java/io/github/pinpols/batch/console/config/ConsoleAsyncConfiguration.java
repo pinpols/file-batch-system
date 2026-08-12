@@ -18,7 +18,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * 拒绝策略让发起线程承担背压、避免任务静默丢失。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableAsync
 public class ConsoleAsyncConfiguration {
 

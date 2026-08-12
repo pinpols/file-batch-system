@@ -15,7 +15,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * <p>注意: 不复用 {@code batch-common} 的 {@code taskScheduler} bean (架构硬约束: 禁覆盖 batch-common 基础设施 bean),
  * 专用 {@code outboxPollScheduler} 与其他领域调度隔离, 防止 outbox 投递热路径被其他 @Scheduled 任务挤占线程。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class OrchestratorAsyncConfiguration {
 
   // 2026-05-24:常量值从 "outboxPollScheduler" 改为 "outboxPollTaskScheduler",

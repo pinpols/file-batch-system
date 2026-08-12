@@ -27,7 +27,7 @@ import org.springframework.context.annotation.Configuration;
  * <p>Counter / Timer 指标由 {@link QuartzMetricsListener} 在事件回调中递增。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     name = "batch.trigger.quartz-metrics.enabled",
     havingValue = "true",

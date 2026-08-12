@@ -20,7 +20,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * <p>{@code allowCredentials=true} 让浏览器带上 HttpOnly cookie；W3C 规范禁止配 {@code *} origin + credentials
  * 同 时存在,因此本配置只接受具体 origin 列表。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor
 public class ConsoleCorsConfiguration {
 

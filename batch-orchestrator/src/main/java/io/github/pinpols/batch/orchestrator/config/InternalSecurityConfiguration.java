@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /** 注册 {@link InternalAuthFilter} 到 {@code /internal/**} URL 模式。 */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableAsync
 public class InternalSecurityConfiguration {
 

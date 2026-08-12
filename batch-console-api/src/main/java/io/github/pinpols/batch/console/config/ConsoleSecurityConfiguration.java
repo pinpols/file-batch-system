@@ -35,7 +35,7 @@ import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class ConsoleSecurityConfiguration {
