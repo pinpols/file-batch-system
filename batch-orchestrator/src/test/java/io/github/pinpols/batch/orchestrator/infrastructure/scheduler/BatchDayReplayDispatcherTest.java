@@ -24,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionE
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
+import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
@@ -31,6 +32,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 class BatchDayReplayDispatcherTest {
 
@@ -57,10 +60,9 @@ class BatchDayReplayDispatcherTest {
     dispatcher = new BatchDayReplayDispatcher(
         sessionMapper,
         entryMapper,
-        compensationService,
+        new BatchDayReplayEntryExecutor(entryMapper, compensationService, dateTimeSupport),
         properties,
-        gracefulShutdown,
-        dateTimeSupport);
+        gracefulShutdown);
   }
 
   @Test
@@ -153,6 +155,15 @@ class BatchDayReplayDispatcherTest {
 
     verify(entryMapper)
         .updateStatus(eq(1L), eq("FAILED"), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void eachEntryUsesRequiresNewTransaction() throws Exception {
+    Method dispatch = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
+        "dispatch", BatchDayReplaySessionEntity.class, BatchDayReplayEntryEntity.class);
+
+    assertThat(dispatch.getAnnotation(Transactional.class).propagation())
+        .isEqualTo(Propagation.REQUIRES_NEW);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

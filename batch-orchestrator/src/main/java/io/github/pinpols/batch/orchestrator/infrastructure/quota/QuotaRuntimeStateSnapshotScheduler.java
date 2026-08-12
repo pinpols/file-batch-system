@@ -1,28 +1,20 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
-import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Redis 模式下的 quota 状态周期 snapshot：把 Redis Hash 里的活跃配额状态批量回写到 PG {@code quota_runtime_state}，让
@@ -42,16 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class QuotaRuntimeStateSnapshotScheduler {
 
-  private final QuotaRuntimeStateService quotaRuntimeStateService;
-  private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
+  private final QuotaRuntimeStateSnapshotWriter snapshotWriter;
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final ResourceQueueMapper resourceQueueMapper;
   private final QuotaProperties quotaProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-
-  @Lazy
-  @Autowired
-  private QuotaRuntimeStateSnapshotScheduler self;
 
   @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
   @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
@@ -93,13 +80,13 @@ public class QuotaRuntimeStateSnapshotScheduler {
     int written = 0;
     for (TenantQuotaPolicyEntity p :
         tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
-      written += self.writeIfActive(
+      written += snapshotWriter.writeIfActive(
           tenantId,
           "TENANT_JOBS",
           tenantId,
           p.quotaResetPolicy(),
           p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
-      written += self.writeIfActive(
+      written += snapshotWriter.writeIfActive(
           tenantId,
           "TENANT_PARTITIONS",
           tenantId,
@@ -108,70 +95,12 @@ public class QuotaRuntimeStateSnapshotScheduler {
     }
     for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
-      written +=
-          self.writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
+      written += snapshotWriter.writeIfActive(
+          tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
-      written += self.writeIfActive(
+      written += snapshotWriter.writeIfActive(
           tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
     }
     return written;
-  }
-
-  /** 读 Redis 当前快照，若窗口活跃且 peak > 0，则 upsert 一条 PG 记录。窗口已过期 / peak=0 的不写， 避免每轮在 PG 里产出大量空快照行。 */
-  @Transactional
-  protected int writeIfActive(
-      String tenantId, String scope, String ownerCode, String policy, int burstLimit) {
-    if (burstLimit <= 0) {
-      return 0;
-    }
-    QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
-        quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
-            new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode),
-            policy,
-            burstLimit,
-            24));
-    if (snap == null
-        || snap.peakBorrowedCount() == null
-        || snap.peakBorrowedCount() == 0
-        || snap.windowExpiresAt() == null) {
-      return 0;
-    }
-    Instant now = BatchDateTimeSupport.utcNow();
-    QuotaRuntimeStateEntity existing =
-        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
-    if (existing == null) {
-      QuotaRuntimeStateEntity toInsert = new QuotaRuntimeStateEntity(
-          null,
-          tenantId,
-          scope,
-          ownerCode,
-          snap.quotaResetPolicy(),
-          snap.windowStartedAt(),
-          snap.windowExpiresAt(),
-          snap.peakBorrowedCount(),
-          snap.lastResetAt(),
-          now,
-          now,
-          null);
-      quotaRuntimeStateMapper.insert(toInsert);
-      return 1;
-    }
-    QuotaRuntimeStateEntity toUpdate = existing.withRefresh(
-        snap.quotaResetPolicy(),
-        snap.windowStartedAt(),
-        snap.windowExpiresAt(),
-        snap.peakBorrowedCount(),
-        snap.lastResetAt());
-    int rows = quotaRuntimeStateMapper.updateWithCas(toUpdate);
-    if (rows == 0) {
-      // 并发节点抢先 update 把 version 推走了；下一轮 snapshot 自然会读到新 version 重试
-      log.debug(
-          "quota snapshot CAS conflict, skipping: tenantId={}, scope={}, owner={}",
-          tenantId,
-          scope,
-          ownerCode);
-      return 0;
-    }
-    return 1;
   }
 }

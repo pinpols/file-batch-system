@@ -19,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +37,6 @@ class TaskDispatchOutboxServiceMandatoryTest {
   void setUp() {
     service =
         new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
-    ReflectionTestUtils.setField(service, "self", service);
   }
 
   @Test

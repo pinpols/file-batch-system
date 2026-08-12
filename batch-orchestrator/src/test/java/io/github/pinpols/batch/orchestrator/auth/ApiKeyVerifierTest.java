@@ -27,7 +27,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ApiKeyVerifierTest {
@@ -49,8 +48,6 @@ class ApiKeyVerifierTest {
   void setup() {
     // 单测用假 ticker/墙钟构造器,避免依赖 Spring 容器;需要真实时钟的默认路径由单参构造器覆盖。
     verifier = new ApiKeyVerifier(mapper, fakeTicker, fakeClock);
-    // @Lazy self 自注入在单测无 Spring 容器时为 null;指向自身,@Async 方法在测试里同步执行。
-    ReflectionTestUtils.setField(verifier, "self", verifier);
   }
 
   private void advance(Duration d) {
@@ -348,7 +345,7 @@ class ApiKeyVerifierTest {
   void touchAsyncSwallowsExceptions() {
     when(mapper.touchLastUsedAt(anyLong())).thenThrow(new RuntimeException("DB down"));
 
-    verifier.touchAsync(7L);
+    new ApiKeyAsyncMaintenance(mapper).touch(7L);
 
     verify(mapper).touchLastUsedAt(7L);
   }
@@ -364,6 +361,7 @@ class ApiKeyVerifierTest {
     try (AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext()) {
       ctx.registerBean(ApiKeyAuthMapper.class, () -> mapper);
       ctx.registerBean(MeterRegistry.class, SimpleMeterRegistry::new);
+      ctx.registerBean(ApiKeyAsyncMaintenance.class, () -> new ApiKeyAsyncMaintenance(mapper));
       ctx.register(ApiKeyVerifier.class);
       ctx.refresh();
       assertThat(ctx.getBean(ApiKeyVerifier.class)).isNotNull();
@@ -376,7 +374,6 @@ class ApiKeyVerifierTest {
   void cacheMetricsBoundToMicrometer_recordHitsAndMisses() {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     ApiKeyVerifier metered = new ApiKeyVerifier(mapper, fakeTicker, fakeClock, registry);
-    ReflectionTestUtils.setField(metered, "self", metered);
     metered.bindCacheMetrics();
 
     ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);

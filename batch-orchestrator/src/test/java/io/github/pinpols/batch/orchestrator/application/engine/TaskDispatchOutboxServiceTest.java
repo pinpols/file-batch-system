@@ -19,7 +19,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.Month;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,13 +53,9 @@ class TaskDispatchOutboxServiceTest {
   private TaskDispatchOutboxService service;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     service =
         new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
-    // @Lazy self 单测注入指向自己,绕过 Spring 代理
-    Field selfField = TaskDispatchOutboxService.class.getDeclaredField("self");
-    selfField.setAccessible(true);
-    selfField.set(service, service);
   }
 
   // ===== eventKey 回退 =====
