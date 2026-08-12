@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.view.dashboard;
 import java.time.Instant;
 
 /** dashboard 单 job + bizDate 的执行进度投影 (job_instance 行级状态 + partition 计数)。 */
+@SuppressWarnings("PMD.ExcessiveParameterList") // MyBatis 投影与响应派生字段必须保持同一 typed view
 public record ExecutionProgressView(
     Long id,
     String jobCode,
