@@ -20,6 +20,8 @@ SOURCE_PREFIXES = (
     "security-scan/",
 )
 VAR_TOKEN = re.compile(r"\bvar\b")
+CONFIGURATION = re.compile(r"@Configuration\b(?:\s*\((?P<arguments>[^)]*)\))?")
+LITE_CONFIGURATION = re.compile(r"\bproxyBeanMethods\s*=\s*false\b")
 
 
 def tracked_main_sources() -> list[Path]:
@@ -115,6 +117,13 @@ def main() -> int:
         for match in VAR_TOKEN.finditer(stripped):
             line_number = stripped.count("\n", 0, match.start()) + 1
             errors.append(f"{relative}:{line_number}: use an explicit type instead of var")
+        for match in CONFIGURATION.finditer(stripped):
+            arguments = match.group("arguments") or ""
+            if not LITE_CONFIGURATION.search(arguments):
+                line_number = stripped.count("\n", 0, match.start()) + 1
+                errors.append(
+                    f"{relative}:{line_number}: declare @Configuration(proxyBeanMethods = false)"
+                )
 
     if errors:
         print("❌ Java readability check failed:")

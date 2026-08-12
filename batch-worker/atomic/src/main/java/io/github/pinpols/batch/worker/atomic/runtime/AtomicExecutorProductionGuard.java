@@ -35,7 +35,7 @@ import org.springframework.core.env.Environment;
  * <p>失败信息明确指向应配置的 yaml key,运维一眼能改。
  */
 @Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor
 public class AtomicExecutorProductionGuard {
 

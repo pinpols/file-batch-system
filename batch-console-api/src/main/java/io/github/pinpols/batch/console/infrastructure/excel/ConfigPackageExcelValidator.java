@@ -38,7 +38,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 校验从租户配置包 Excel 工作簿解析出的行。从 DefaultConsoleTenantConfigPackageExcelApplicationService 抽出以缩减类体积。 */
+/**
+ * 租户配置包的跨 sheet 业务校验器。
+ *
+ * <p>行解析器只判断单元格能否转换为目标类型；本类集中判断 job、workflow、pipeline、渠道和模板之间的引用是否闭合。必须在任何 upsert
+ * 发生前完成这一步，否则配置包后半段失败时，前半段已经写入的对象会在非 strict 模式下形成可见但不可运行的半套配置。校验结果保留 sheet、行号和字段，
+ * 让 Console 能把错误定位回原工作簿，而不是只返回数据库约束异常。
+ */
 @SuppressWarnings("java:S2583")
 public class ConfigPackageExcelValidator {
 

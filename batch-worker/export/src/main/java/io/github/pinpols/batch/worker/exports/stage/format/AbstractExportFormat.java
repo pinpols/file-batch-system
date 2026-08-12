@@ -28,8 +28,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-// S112 抑制：导出格式 SPI 刻意声明宽泛 throws Exception（第三方格式库抛各种受检异常）。
 
+/**
+ * 文本类导出格式的共享执行骨架，统一处理字符集、BOM、换行、字段编码、分片文件和 checkpoint。
+ *
+ * <p>格式实现只负责把一行数据编码成目标格式，不能各自决定临时文件、续写位置或不可映射字符策略。这样约束是为了保证 worker 在
+ * “文件已经写入但 report 丢失”后重跑时仍能从同一字节边界继续，并让 CSV、DELIMITED、FIXED_WIDTH 等格式对编码失败给出一致终态，
+ * 避免某个格式静默替换字符后仍被下游当作成功文件。
+ */
+// S112 抑制：导出格式 SPI 刻意声明宽泛 throws Exception（第三方格式库抛各种受检异常）。
 @SuppressWarnings("java:S112")
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 

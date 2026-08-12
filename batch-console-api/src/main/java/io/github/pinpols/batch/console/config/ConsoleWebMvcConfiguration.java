@@ -7,7 +7,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /** 注册 {@link ConsoleIdempotencyInterceptor} 到 Console API 路径；拦截器内部只处理写方法。 */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor
 public class ConsoleWebMvcConfiguration implements WebMvcConfigurer {
 

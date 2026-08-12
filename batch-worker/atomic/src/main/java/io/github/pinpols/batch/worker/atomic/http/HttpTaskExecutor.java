@@ -666,7 +666,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  @Configuration
+  @Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties(HttpExecutorProperties.class)
   static class PropertiesConfig {}
 }

@@ -60,6 +60,10 @@ import org.springframework.web.client.ResourceAccessException;
  *   <li>启动保障（确保 worker 已注册）
  *   <li>MDC 注入（tenantId/traceId/taskId/workerId 等）以保证日志可关联
  * </ul>
+ *
+ * <p>Kafka listener 刻意保持很薄：offset 是否可提交必须由 claim、执行和 report 的组合结果决定，而不能由各 worker 的 listener
+ * 自行判断。统一放在这里可以保证五类 worker 在容量耗尽、平台短暂不可达和重复消息下使用同一 backpressure/withhold 语义，避免某一类 worker
+ * 提前提交 offset 后只能依赖人工重放。
  */
 @Slf4j
 @SuppressWarnings("java:S2259")

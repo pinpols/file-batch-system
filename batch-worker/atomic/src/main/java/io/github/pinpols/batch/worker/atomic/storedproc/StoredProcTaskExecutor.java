@@ -652,7 +652,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  @Configuration
+  @Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties(StoredProcExecutorProperties.class)
   static class PropertiesConfig {}
 }

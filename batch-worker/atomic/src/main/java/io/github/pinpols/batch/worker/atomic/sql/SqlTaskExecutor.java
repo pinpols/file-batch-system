@@ -616,7 +616,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  @Configuration
+  @Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties(SqlExecutorProperties.class)
   static class PropertiesConfig {}
 }

@@ -20,7 +20,7 @@ import org.springframework.core.env.Environment;
  * 平台数据源配置，提供导出 Worker 所需的平台库 MyBatis SqlSession（Primary）。装配逻辑委托 {@link WorkerDataSourceSupport}（三个
  * worker 模块共用）。
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(DataSourceProperties.class)
 @RequiredArgsConstructor
 public class PlatformDataSourceConfiguration {

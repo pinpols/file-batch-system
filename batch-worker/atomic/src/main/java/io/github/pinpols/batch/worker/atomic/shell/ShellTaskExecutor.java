@@ -507,7 +507,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   }
 
   /** 让 properties 自动配置在引入 ShellTaskExecutor 时生效。 */
-  @Configuration
+  @Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties(ShellExecutorProperties.class)
   static class PropertiesConfig {}
 }
