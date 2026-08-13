@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.web.response;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
@@ -115,7 +116,7 @@ public final class ConsoleFileProjectionMapper {
     if (value instanceof OffsetDateTime dateTime) {
       return dateTime.toInstant();
     }
-    if (value instanceof java.time.LocalDateTime dateTime) {
+    if (value instanceof LocalDateTime dateTime) {
       return dateTime.toInstant(ZoneOffset.UTC);
     }
     return value == null ? null : Instant.parse(value.toString());
