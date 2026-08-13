@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.ArrayList;
@@ -119,7 +120,7 @@ public class ConsoleKafkaLagQueryService {
         groupId,
         totalLag,
         committedOffsets.size(),
-        partitionLags.isEmpty() ? null : partitionLags,
+        EmptyChecks.isEmpty(partitionLags) ? null : partitionLags,
         null);
   }
 

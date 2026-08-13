@@ -114,7 +114,7 @@ public class PlatformHttpClient {
     }
 
     if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
-      if (responseType == Void.class || resp.body() == null || resp.body().length == 0) {
+      if (responseType == Void.class || EmptyChecks.isEmpty(resp.body())) {
         return null;
       }
       return objectMapper.readValue(resp.body(), responseType);

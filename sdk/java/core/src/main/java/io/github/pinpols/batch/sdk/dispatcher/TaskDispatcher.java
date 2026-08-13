@@ -6,6 +6,7 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotentHandler;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
@@ -356,7 +357,7 @@ public class TaskDispatcher {
     }
     if (partitionInvocationId == null) {
       String claimedInvocation = claimResult.response().partitionInvocationId();
-      if (claimedInvocation != null && !claimedInvocation.isBlank()) {
+      if (!EmptyChecks.isBlank(claimedInvocation)) {
         partitionInvocationId = claimedInvocation;
       }
     }

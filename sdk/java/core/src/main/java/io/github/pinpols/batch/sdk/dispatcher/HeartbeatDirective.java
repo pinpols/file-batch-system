@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public record HeartbeatDirective(
 
   /** 仅供同包契约测试构造旧平台回包；生产 transport 直接反序列化为本 record。 */
   static HeartbeatDirective fromResponse(Map<String, Object> response) {
-    if (response == null || response.isEmpty()) {
+    if (EmptyChecks.isEmpty(response)) {
       return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);
     }
     Object paused = response.get("pausedTaskTypes");
