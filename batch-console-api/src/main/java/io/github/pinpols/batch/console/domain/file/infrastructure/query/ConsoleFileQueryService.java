@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.entity.FileArrivalGroupEntity;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
 import io.github.pinpols.batch.console.domain.file.entity.FileRecordEntity;
+import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.query.FileArrivalGroupQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileDispatchRecordQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
@@ -328,7 +329,8 @@ public class ConsoleFileQueryService {
 
   public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    var fileRecord = fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
+    FileRecordStorageView fileRecord =
+        fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
     if (EmptyChecks.isNull(fileRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", fileId);
     }

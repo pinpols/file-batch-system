@@ -229,7 +229,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     }
     String contentType = file.getContentType();
     if (!Texts.hasText(contentType)) {
-      contentType = stringValue(fileRecord.get("mime_type"));
+      contentType = fileRecord.mimeType();
     }
     if (!Texts.hasText(contentType)) {
       contentType = "application/octet-stream";
