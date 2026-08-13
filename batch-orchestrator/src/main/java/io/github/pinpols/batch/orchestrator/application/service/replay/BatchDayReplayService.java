@@ -20,6 +20,8 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
+import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -489,18 +491,18 @@ public class BatchDayReplayService {
     if (businessKeys.isEmpty()) {
       return List.of();
     }
-    List<Map<String, Object>> rows =
+    List<BatchDayReplayAssetPartitionImpactView> rows =
         entryMapper.selectAssetPartitionImpacts(tenantId, businessKeys);
     if (rows == null || rows.isEmpty()) {
       return List.of();
     }
     return rows.stream()
         .map(row -> new BatchDayReplayPreviewResponse.AssetPartitionImpact(
-            text(row.get("business_key")),
-            text(row.get("asset_code")),
-            text(row.get("partition_key")),
-            longValue(row.get("current_result_version_id")),
-            text(row.get("freshness_status"))))
+            row.businessKey(),
+            row.assetCode(),
+            row.partitionKey(),
+            row.currentResultVersionId(),
+            row.freshnessStatus()))
         .toList();
   }
 
@@ -514,17 +516,18 @@ public class BatchDayReplayService {
     if (sourceInstanceIds.isEmpty()) {
       return List.of();
     }
-    List<Map<String, Object>> rows = entryMapper.selectDispatchImpacts(tenantId, sourceInstanceIds);
+    List<BatchDayReplayDispatchImpactView> rows =
+        entryMapper.selectDispatchImpacts(tenantId, sourceInstanceIds);
     if (rows == null || rows.isEmpty()) {
       return List.of();
     }
     return rows.stream()
         .map(row -> new BatchDayReplayPreviewResponse.DispatchImpact(
-            longValue(row.get("source_instance_id")),
-            longValueOrZero(row.get("record_count")),
-            longValueOrZero(row.get("sent_count")),
-            longValueOrZero(row.get("failed_count")),
-            longValueOrZero(row.get("pending_receipt_count"))))
+            row.sourceInstanceId(),
+            row.recordCount(),
+            row.sentCount(),
+            row.failedCount(),
+            row.pendingReceiptCount()))
         .toList();
   }
 

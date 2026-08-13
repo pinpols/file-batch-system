@@ -96,7 +96,29 @@
         where session_id = #{sessionId} and status = #{status}
     </select>
 
-    <select id="selectAssetPartitionImpacts" resultType="map">
+    <resultMap id="AssetPartitionImpactViewResultMap"
+               type="io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView">
+        <constructor>
+            <arg column="business_key" javaType="java.lang.String"/>
+            <arg column="asset_code" javaType="java.lang.String"/>
+            <arg column="partition_key" javaType="java.lang.String"/>
+            <arg column="current_result_version_id" javaType="java.lang.Long"/>
+            <arg column="freshness_status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="DispatchImpactViewResultMap"
+               type="io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView">
+        <constructor>
+            <arg column="source_instance_id" javaType="java.lang.Long"/>
+            <arg column="record_count" javaType="java.lang.Long"/>
+            <arg column="sent_count" javaType="java.lang.Long"/>
+            <arg column="failed_count" javaType="java.lang.Long"/>
+            <arg column="pending_receipt_count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectAssetPartitionImpacts" resultMap="AssetPartitionImpactViewResultMap">
         select business_key,
                asset_code,
                partition_key,
@@ -111,7 +133,7 @@
         order by business_key asc, asset_code asc, partition_key asc
     </select>
 
-    <select id="selectDispatchImpacts" resultType="map">
+    <select id="selectDispatchImpacts" resultMap="DispatchImpactViewResultMap">
         select source_instance_id,
                count(1)::bigint as record_count,
                count(1) filter (where dispatch_status in ('SENT', 'ACKED'))::bigint as sent_count,
