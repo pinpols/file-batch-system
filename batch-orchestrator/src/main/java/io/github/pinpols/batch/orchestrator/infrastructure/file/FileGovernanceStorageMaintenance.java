@@ -32,10 +32,11 @@ final class FileGovernanceStorageMaintenance {
     }
     Instant cutoff = BatchDateTimeSupport.utcNow()
         .minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
-    List<Map<String, Object>> files = repository.selectArchivedFilesForCleanup(
-        cutoff, properties.getArchive().getCleanupBatchSize());
-    for (Map<String, Object> fileRecord : files) {
-      cleanupArchivedFile(fileRecord);
+    List<FileGovernanceMaintenanceViews.ArchivedFileCleanupView> files =
+        repository.selectArchivedFilesForCleanup(
+            cutoff, properties.getArchive().getCleanupBatchSize());
+    for (FileGovernanceMaintenanceViews.ArchivedFileCleanupView file : files) {
+      cleanupArchivedFile(file);
     }
   }
 
@@ -43,15 +44,16 @@ final class FileGovernanceStorageMaintenance {
     if (!properties.getUploadSession().isCleanupEnabled()) {
       return;
     }
-    List<Map<String, Object>> sessions = repository.selectOrphanUploadSessions(
-        properties.getUploadSession().getOrphanTtlSeconds(),
-        properties.getUploadSession().getCleanupBatchSize());
+    List<FileGovernanceMaintenanceViews.OrphanUploadSessionView> sessions =
+        repository.selectOrphanUploadSessions(
+            properties.getUploadSession().getOrphanTtlSeconds(),
+            properties.getUploadSession().getCleanupBatchSize());
     if (sessions.isEmpty()) {
       return;
     }
     long cleaned = 0L;
     long skipped = 0L;
-    for (Map<String, Object> session : sessions) {
+    for (FileGovernanceMaintenanceViews.OrphanUploadSessionView session : sessions) {
       if (cleanupOrphanUploadSession(session)) {
         cleaned++;
       } else {
@@ -80,11 +82,11 @@ final class FileGovernanceStorageMaintenance {
     }
   }
 
-  private void cleanupArchivedFile(Map<String, Object> fileRecord) {
-    Long fileId = toLong(fileRecord.get("id"));
-    String tenantId = text(fileRecord.get("tenant_id"));
-    String storagePath = text(fileRecord.get("storage_path"));
-    String storageType = text(fileRecord.get("storage_type"));
+  private void cleanupArchivedFile(FileGovernanceMaintenanceViews.ArchivedFileCleanupView file) {
+    Long fileId = file.fileId();
+    String tenantId = file.tenantId();
+    String storagePath = file.storagePath();
+    String storageType = file.storageType();
     try {
       if (fileId == null || tenantId == null) {
         return;
@@ -99,7 +101,7 @@ final class FileGovernanceStorageMaintenance {
       Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
       cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
       cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
-      String currentStatus = text(fileRecord.get("file_status"));
+      String currentStatus = file.fileStatus();
       FileStateMachine.assertTransition(currentStatus, "DELETED");
       repository.updateFileStatus(tenantId, fileId, currentStatus, "DELETED", cleanupMetadata);
       Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -137,11 +139,12 @@ final class FileGovernanceStorageMaintenance {
     }
   }
 
-  private boolean cleanupOrphanUploadSession(Map<String, Object> fileRecord) {
-    Long fileId = toLong(fileRecord.get("id"));
-    String tenantId = text(fileRecord.get("tenant_id"));
-    String storageBucket = text(fileRecord.get("storage_bucket"));
-    String storagePath = text(fileRecord.get("storage_path"));
+  private boolean cleanupOrphanUploadSession(
+      FileGovernanceMaintenanceViews.OrphanUploadSessionView session) {
+    Long fileId = session.fileId();
+    String tenantId = session.tenantId();
+    String storageBucket = session.storageBucket();
+    String storagePath = session.storagePath();
     if (fileId == null || tenantId == null || storagePath == null) {
       return false;
     }
@@ -294,20 +297,5 @@ final class FileGovernanceStorageMaintenance {
 
   private String sanitizeTrace(String fileName) {
     return fileName == null ? "object" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-  }
-
-  private Long toLong(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (value == null) {
-      return null;
-    }
-    String stringValue = String.valueOf(value);
-    return stringValue.isBlank() ? null : Long.valueOf(stringValue);
-  }
-
-  private String text(Object value) {
-    return value == null ? null : String.valueOf(value);
   }
 }
