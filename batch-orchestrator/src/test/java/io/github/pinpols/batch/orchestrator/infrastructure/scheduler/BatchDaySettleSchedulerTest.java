@@ -37,7 +37,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 class BatchDaySettleSchedulerTest {
 
@@ -59,8 +60,8 @@ class BatchDaySettleSchedulerTest {
     configCacheService = mock(OrchestratorConfigCacheService.class);
     launchService = mock(LaunchService.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<BatchDaySettleScheduler> selfProvider = mock(ObjectProvider.class);
+    PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
     scheduler = new BatchDaySettleScheduler(
         batchDayInstanceMapper,
         jobInstanceMapper,
@@ -69,11 +70,9 @@ class BatchDaySettleSchedulerTest {
         configCacheService,
         launchService,
         gracefulShutdown,
-        selfProvider,
         new BatchDateTimeSupport(
-            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
-    // self-proxy 在单测里直接指向 scheduler 自身，绕开 Spring AOP；REQUIRES_NEW 事务语义在单测里不跑也没事
-    when(selfProvider.getObject()).thenReturn(scheduler);
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())),
+        transactionManager);
   }
 
   @Test
