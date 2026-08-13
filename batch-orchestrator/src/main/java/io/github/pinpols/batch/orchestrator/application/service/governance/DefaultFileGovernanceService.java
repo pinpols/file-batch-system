@@ -107,29 +107,28 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   @Transactional
   public String presignFileDownload(FileGovernanceCommand command) {
     validateCommand(command);
-    Map<String, Object> fileRecord =
-        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (EmptyChecks.isEmpty(fileRecord)) {
+    FileGovernanceViews.FileRecordView fileRecord = FileGovernanceViews.fileRecord(
+        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId()));
+    if (!fileRecord.present()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    Map<String, Object> security =
-        fileGovernanceRepository.loadTemplateSecurityForFile(command.tenantId(), command.fileId());
+    FileGovernanceViews.TemplateSecurityView security = FileGovernanceViews.templateSecurity(
+        fileGovernanceRepository.loadTemplateSecurityForFile(command.tenantId(), command.fileId()));
     if (requiresDownloadApproval(security) && !Texts.hasText(command.approvalId())) {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
     }
-    if (truthy(security.get("content_encryption_enabled"))
-        && !batchSecurityProperties.isBypassMode()) {
+    if (security.contentEncryptionEnabled() && !batchSecurityProperties.isBypassMode()) {
       String consolePath =
           "/api/console/files/" + command.fileId() + "/download?tenantId=" + command.tenantId();
       if (Texts.hasText(command.approvalId())) {
         consolePath += "&approvalId=" + command.approvalId();
       }
       Map<String, Object> auditDetail = new LinkedHashMap<>();
-      auditDetail.put("storageBucket", fileRecord.get("storage_bucket"));
-      auditDetail.put("storagePath", fileRecord.get("storage_path"));
+      auditDetail.put("storageBucket", fileRecord.storageBucket());
+      auditDetail.put("storagePath", fileRecord.storagePath());
       auditDetail.put("approvalId", command.approvalId());
       auditDetail.put("contentEncryptionEnabled", true);
-      auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
+      auditDetail.put("encryptionKeyRef", security.encryptionKeyRef());
       FileGovernanceRepository.FileAuditCommand auditCommand =
           new FileGovernanceRepository.FileAuditCommand(
               command.tenantId(),
@@ -143,8 +142,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       fileGovernanceRepository.appendAudit(auditCommand);
       return consolePath;
     }
-    String storagePath = stringValue(fileRecord.get("storage_path"));
-    String storageBucket = stringValue(fileRecord.get("storage_bucket"));
+    String storagePath = fileRecord.storagePath();
+    String storageBucket = fileRecord.storageBucket();
     if (EmptyChecks.isBlank(storagePath)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
@@ -157,11 +156,11 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     auditDetail.put("storagePath", storagePath);
     auditDetail.put("expirySeconds", expirySeconds);
     auditDetail.put("approvalId", command.approvalId());
-    auditDetail.put("downloadRequiresApproval", truthy(security.get("download_requires_approval")));
-    auditDetail.put("contentEncryptionEnabled", truthy(security.get("content_encryption_enabled")));
-    auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
-    auditDetail.put("maskingRuleSet", security.get("masking_rule_set"));
-    if (truthy(security.get("preview_masking_enabled"))) {
+    auditDetail.put("downloadRequiresApproval", security.downloadRequiresApproval());
+    auditDetail.put("contentEncryptionEnabled", security.contentEncryptionEnabled());
+    auditDetail.put("encryptionKeyRef", security.encryptionKeyRef());
+    auditDetail.put("maskingRuleSet", security.maskingRuleSet());
+    if (security.previewMaskingEnabled()) {
       auditDetail.put(
           "previewMaskingNote",
           "template enables preview masking; avoid exposing raw object bytes in UI");
@@ -243,16 +242,16 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   @Transactional
   public String confirmFileArrival(FileGovernanceCommand command) {
     validateCommand(command);
-    Map<String, Object> fileRecord =
-        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (EmptyChecks.isEmpty(fileRecord)) {
+    FileGovernanceViews.FileRecordView fileRecord = FileGovernanceViews.fileRecord(
+        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId()));
+    if (!fileRecord.present()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    String storagePath = stringValue(fileRecord.get("storage_path"));
+    String storagePath = fileRecord.storagePath();
     if (!Texts.hasText(storagePath)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
-    String storageBucket = stringValue(fileRecord.get("storage_bucket"));
+    String storageBucket = fileRecord.storageBucket();
     long fileSizeBytes;
     try {
       fileSizeBytes = s3GovernanceStorage.objectSize(storageBucket, storagePath);
@@ -290,17 +289,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   @Transactional
   public String redispatchFile(FileGovernanceCommand command) {
     validateCommand(command);
-    Map<String, Object> fileRecord =
-        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (EmptyChecks.isEmpty(fileRecord)) {
+    FileGovernanceViews.FileRecordView fileRecord = FileGovernanceViews.fileRecord(
+        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId()));
+    if (!fileRecord.present()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    Map<String, Object> dispatchRecord = fileGovernanceRepository.loadLatestDispatchRecord(
-        command.tenantId(), command.fileId(), command.channelCode());
-    if (EmptyChecks.isEmpty(dispatchRecord)) {
+    FileGovernanceViews.DispatchRecordView dispatchRecord =
+        FileGovernanceViews.dispatchRecord(fileGovernanceRepository.loadLatestDispatchRecord(
+            command.tenantId(), command.fileId(), command.channelCode()));
+    if (!dispatchRecord.present()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.dispatch.record_not_found");
     }
-    Long pipelineInstanceId = toLong(dispatchRecord.get("pipeline_instance_id"));
+    Long pipelineInstanceId = dispatchRecord.pipelineInstanceId();
     Long relatedJobInstanceId =
         fileGovernanceRepository.loadRelatedJobInstanceId(pipelineInstanceId);
     if (EmptyChecks.isNull(relatedJobInstanceId)) {
@@ -315,7 +315,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         "dispatch partition not found");
 
     fileGovernanceRepository.resetDispatchRecordForRedispatch(
-        command.tenantId(), toLong(dispatchRecord.get("id")));
+        command.tenantId(), dispatchRecord.id());
     jobPartitionMapper.resetForDispatch(
         command.tenantId(),
         partition.getId(),
@@ -455,37 +455,23 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
-  private boolean truthy(Object value) {
-    if (value instanceof Boolean bool) {
-      return bool;
-    }
-    if (EmptyChecks.isNull(value)) {
-      return false;
-    }
-    return "true".equalsIgnoreCase(String.valueOf(value));
-  }
-
-  private boolean requiresDownloadApproval(Map<String, Object> security) {
+  private boolean requiresDownloadApproval(FileGovernanceViews.TemplateSecurityView security) {
     if (batchSecurityProperties.isBypassMode()) {
       return false;
     }
-    if (EmptyChecks.isEmpty(security)) {
-      return false;
-    }
-    return truthy(security.get("download_requires_approval"))
-        || truthy(security.get("content_encryption_enabled"));
+    return security.downloadRequiresApproval() || security.contentEncryptionEnabled();
   }
 
   /** 文件治理只允许在运行态安静时改状态，避免和 pipeline/dispatch 并发写冲突。 */
   private String changeFileStatus(
       FileGovernanceCommand command, String nextStatus, String operationType) {
     validateCommand(command);
-    Map<String, Object> fileRecord =
-        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
-    if (EmptyChecks.isEmpty(fileRecord)) {
+    FileGovernanceViews.FileRecordView fileRecord = FileGovernanceViews.fileRecord(
+        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId()));
+    if (!fileRecord.present()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    String currentStatus = stringValue(fileRecord.get("file_status"));
+    String currentStatus = fileRecord.fileStatus();
     try {
       assertNoActiveRuntime(command);
       // 状态机校验：业务规则属于应用层职责（已从 Repository 上移）
@@ -555,13 +541,13 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private Map<String, Object> buildRedispatchDetail(
-      Map<String, Object> dispatchRecord,
+      FileGovernanceViews.DispatchRecordView dispatchRecord,
       JobTaskEntity task,
       JobPartitionEntity partition,
       FileGovernanceCommand command) {
     Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("dispatchRecordId", dispatchRecord.get("id"));
-    detail.put("channelCode", dispatchRecord.get("channel_code"));
+    detail.put("dispatchRecordId", dispatchRecord.id());
+    detail.put("channelCode", dispatchRecord.channelCode());
     detail.put("taskId", task.getId());
     detail.put("partitionId", partition.getId());
     detail.put("reason", command.reason());
