@@ -45,11 +45,12 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 失败重试与死信治理（Orchestrator 侧）。
@@ -72,14 +73,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
-
-  /**
-   * 自动重放调度必须经代理调用 {@link #replayDeadLetter}，否则同类自调用会跳过 {@code REQUIRES_NEW}， Outbox 写入（{@code
-   * MANDATORY}）无事务。纯单测无容器时可为 null，退化为 {@code this}.
-   */
-  @Lazy
-  @Autowired
-  private DefaultRetryGovernanceService replayTransactionalSelf;
 
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff
@@ -117,6 +110,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final BatchOrchestratorGovernanceProperties governance;
   private final JobExecutionLogMapper jobExecutionLogMapper;
+  private final PlatformTransactionManager transactionManager;
 
   @Override
   @Transactional
@@ -214,7 +208,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         governance.retry().getBatchSize()));
     for (RetryScheduleEntity retrySchedule : dueRetries) {
       try {
-        replayTransactionalShell().requeueOneRetry(retrySchedule);
+        inNewTransaction(() -> requeueOneRetry(retrySchedule));
       } catch (TransientConflictException conflict) {
         log.warn(
             "retry dispatch version conflict, will retry later: retryId={}, error={}",
@@ -238,7 +232,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 .nextRetryAt(BatchDateTimeSupport.utcNow())
                 .build();
         try {
-          replayTransactionalShell().markRetryFailed(markFailedParam);
+          inNewTransaction(() -> markRetryFailed(markFailedParam));
         } catch (RuntimeException markFailedEx) {
           log.error(
               "markFailed itself failed for retryId={}, manual intervention required",
@@ -252,11 +246,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   /**
    * R2-P0-2：单条 retry 的独立事务（REQUIRES_NEW）。
    *
-   * <p>必须通过 {@link #replayTransactionalShell()} 自代理调用以激活 AOP；类内自调用会跳过 REQUIRES_NEW。 markRunning +
-   * requeuePartition + markSuccess 同事务，任一失败整体回滚。
+   * <p>由调用方以独立事务执行。markRunning + requeuePartition + markSuccess 同事务，任一失败整体回滚。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void requeueOneRetry(RetryScheduleEntity retrySchedule) {
+  private void requeueOneRetry(RetryScheduleEntity retrySchedule) {
     if (retryScheduleMapper.markRunning(
             retrySchedule.getTenantId(),
             retrySchedule.getId(),
@@ -274,15 +266,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   /** R2-P0-2：非 transient 失败的独立事务标记，避免与外层扫描状态混合。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markRetryFailed(RetryScheduleMapper.MarkFailedParam param) {
+  private void markRetryFailed(RetryScheduleMapper.MarkFailedParam param) {
     retryScheduleMapper.markFailed(param);
   }
 
   @Override
   public void autoRetryDueDeadLetters() {
-    // 不挂 @Transactional：每条死信独立事务。必须通过 replayTransactionalShell() 走代理，
-    // 否则同类自调用会跳过 replayDeadLetter 的 REQUIRES_NEW，Outbox MANDATORY 会失败。
+    // 不挂 @Transactional：每条死信独立事务，避免单条失败回滚整批。
     List<DeadLetterTaskEntity> dueRecords =
         deadLetterTaskMapper.selectDueAutoRetries(governance.retry().getBatchSize());
     for (DeadLetterTaskEntity deadLetter : dueRecords) {
@@ -305,7 +295,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         continue;
       }
       try {
-        replayTransactionalShell().replayDeadLetter(tenantId, deadLetterId);
+        replayDeadLetterInNewTransaction(tenantId, deadLetterId);
         log.info(
             "dead letter auto-retry succeeded: tenantId={}, deadLetterId={}," + " attempt={}",
             tenantId,
@@ -393,9 +383,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   @Override
-  @Transactional(
-      propagation = Propagation.REQUIRES_NEW,
-      noRollbackFor = DeadLetterOrphanSourceException.class)
   public void replayDeadLetter(
       String tenantId,
       Long deadLetterTaskId,
@@ -403,17 +390,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       String reason,
       String idempotencyKey) {
     // P1-1: 人工触发的死信重放,先写 audit 再走主流程。
-    // 注:本方法是 REQUIRES_NEW,与 replayDeadLetter(tenantId, id) 共用事务边界;
-    // 走 self-proxy 调用以激活 AOP(否则同类自调用退化为 REQUIRED)。
-    DefaultRetryGovernanceService proxy = replayTransactionalShell();
-    proxy.appendDeadLetterReplayAudit(
-        tenantId, deadLetterTaskId, operatorId, reason, idempotencyKey);
-    proxy.replayDeadLetter(tenantId, deadLetterTaskId);
+    // 审计和实际重放分别独立提交：审计必须在重放失败时保留，重放仍需满足 outbox 的事务要求。
+    inNewTransaction(() -> appendDeadLetterReplayAudit(
+        tenantId, deadLetterTaskId, operatorId, reason, idempotencyKey));
+    replayDeadLetterInNewTransaction(tenantId, deadLetterTaskId);
   }
 
   /** 写一条 DEAD_LETTER_REPLAY 审计日志。 独立 REQUIRES_NEW 短事务,保证即使 replayDeadLetter 自身失败,audit 仍留痕。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void appendDeadLetterReplayAudit(
+  private void appendDeadLetterReplayAudit(
       String tenantId,
       Long deadLetterTaskId,
       String operatorId,
@@ -447,10 +431,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   @Override
-  @Transactional(
-      propagation = Propagation.REQUIRES_NEW,
-      noRollbackFor = DeadLetterOrphanSourceException.class)
-  public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
+  private void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
     DeadLetterTaskEntity deadLetterTask =
         deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
     if (deadLetterTask == null) {
@@ -769,8 +750,29 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     return message.substring(0, maxLength - 1) + "…";
   }
 
-  private DefaultRetryGovernanceService replayTransactionalShell() {
-    return replayTransactionalSelf != null ? replayTransactionalSelf : this;
+  private void replayDeadLetterInNewTransaction(String tenantId, Long deadLetterTaskId) {
+    DeadLetterOrphanSourceException[] orphanSource = new DeadLetterOrphanSourceException[1];
+    newTransaction().executeWithoutResult(status -> {
+      try {
+        replayDeadLetter(tenantId, deadLetterTaskId);
+      } catch (DeadLetterOrphanSourceException exception) {
+        // 保留原 noRollbackFor 语义：GIVE_UP 必须提交，再由事务外重抛供 scheduler 记录。
+        orphanSource[0] = exception;
+      }
+    });
+    if (orphanSource[0] != null) {
+      throw orphanSource[0];
+    }
+  }
+
+  private void inNewTransaction(Runnable action) {
+    newTransaction().executeWithoutResult(status -> action.run());
+  }
+
+  private TransactionTemplate newTransaction() {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return transaction;
   }
 
   private static String truncateReplayResultSummary(Throwable exception) {

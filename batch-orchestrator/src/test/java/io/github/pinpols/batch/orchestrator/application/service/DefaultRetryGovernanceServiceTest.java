@@ -37,6 +37,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 class DefaultRetryGovernanceServiceTest {
 
@@ -69,6 +71,8 @@ class DefaultRetryGovernanceServiceTest {
     properties.setDefaultMaxRetryCount(3);
     governance = mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.retry()).thenReturn(properties);
+    PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
 
     service = new DefaultRetryGovernanceService(
         retryScheduleMapper,
@@ -80,7 +84,8 @@ class DefaultRetryGovernanceServiceTest {
         jobStepInstanceMapper,
         taskDispatchOutboxService,
         governance,
-        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
+        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */,
+        transactionManager);
   }
 
   // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
