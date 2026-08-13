@@ -88,7 +88,11 @@
     </update>
 
     <select id="selectArchivedFilesForCleanup" resultType="map">
-        select *
+        select id,
+               tenant_id,
+               storage_path,
+               storage_type,
+               file_status
         from batch.file_record
         where file_status = #{archivedStatus}
           and updated_at &lt; #{cutoff}

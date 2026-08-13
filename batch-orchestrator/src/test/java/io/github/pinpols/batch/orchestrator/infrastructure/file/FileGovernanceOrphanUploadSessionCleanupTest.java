@@ -15,9 +15,7 @@ import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -143,14 +141,11 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  private static Map<String, Object> orphanSession(long id) {
-    Map<String, Object> session = new LinkedHashMap<>();
-    session.put("id", id);
-    session.put("tenant_id", "default-tenant");
-    session.put("file_name", "upload-" + id + ".csv");
-    session.put("file_status", "RECEIVED");
-    session.put("storage_bucket", "batch-files");
-    session.put("storage_path", "uploads/default-tenant/2026/06/" + id + "-upload.csv");
-    return session;
+  private static FileGovernanceMaintenanceViews.OrphanUploadSessionView orphanSession(long id) {
+    return new FileGovernanceMaintenanceViews.OrphanUploadSessionView(
+        id,
+        "default-tenant",
+        "batch-files",
+        "uploads/default-tenant/2026/06/" + id + "-upload.csv");
   }
 }

@@ -152,32 +152,42 @@ public class FileGovernanceRepository {
         FileDispatchStatus.CREATED.name()));
   }
 
-  public List<Map<String, Object>> selectArchivedFilesForCleanup(Instant cutoff, int limit) {
-    return fileGovernanceMapper.selectArchivedFilesForCleanup(params(
-        "cutoff",
-        cutoff,
-        KEY_LIMIT,
-        limit,
-        "archivedStatus",
-        FileDispatchRunStatus.ARCHIVED.code()));
+  List<FileGovernanceMaintenanceViews.ArchivedFileCleanupView> selectArchivedFilesForCleanup(
+      Instant cutoff, int limit) {
+    return fileGovernanceMapper
+        .selectArchivedFilesForCleanup(params(
+            "cutoff",
+            cutoff,
+            KEY_LIMIT,
+            limit,
+            "archivedStatus",
+            FileDispatchRunStatus.ARCHIVED.code()))
+        .stream()
+        .map(FileGovernanceMaintenanceViews::archivedFile)
+        .toList();
   }
 
   /** 托管上传会话孤儿候选:超过 TTL 仍停留在 RECEIVED + APP_MANAGED + WAITING_ARRIVAL 且从未确认到达的占位行。 */
-  public List<Map<String, Object>> selectOrphanUploadSessions(long ttlSeconds, int limit) {
+  List<FileGovernanceMaintenanceViews.OrphanUploadSessionView> selectOrphanUploadSessions(
+      long ttlSeconds, int limit) {
     if (ttlSeconds <= 0 || limit <= 0) {
       return List.of();
     }
-    return fileGovernanceMapper.selectOrphanUploadSessions(params(
-        "receivedStatus",
-        FileStatus.RECEIVED.code(),
-        "uploadMode",
-        "APP_MANAGED",
-        "waitingArrivalState",
-        "WAITING_ARRIVAL",
-        "ttlSeconds",
-        ttlSeconds,
-        KEY_LIMIT,
-        limit));
+    return fileGovernanceMapper
+        .selectOrphanUploadSessions(params(
+            "receivedStatus",
+            FileStatus.RECEIVED.code(),
+            "uploadMode",
+            "APP_MANAGED",
+            "waitingArrivalState",
+            "WAITING_ARRIVAL",
+            "ttlSeconds",
+            ttlSeconds,
+            KEY_LIMIT,
+            limit))
+        .stream()
+        .map(FileGovernanceMaintenanceViews::orphanUploadSession)
+        .toList();
   }
 
   public List<Map<String, Object>> selectArrivalGovernanceCandidates(int limit) {
