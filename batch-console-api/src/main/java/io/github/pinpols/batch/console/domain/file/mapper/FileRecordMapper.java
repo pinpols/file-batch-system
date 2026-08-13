@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.file.mapper;
 
 import io.github.pinpols.batch.console.domain.file.entity.FileRecordEntity;
-import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;

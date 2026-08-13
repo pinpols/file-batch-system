@@ -16,7 +16,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;

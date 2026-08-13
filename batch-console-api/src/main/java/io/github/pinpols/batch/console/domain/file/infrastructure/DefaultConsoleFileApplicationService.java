@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
-import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.web.request.ArchiveFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.DeleteFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupActionRequest;

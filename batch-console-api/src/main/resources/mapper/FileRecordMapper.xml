@@ -79,7 +79,7 @@
     </select>
 
     <resultMap id="FileRecordStorageViewResultMap"
-               type="io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView">
+               type="io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView">
         <constructor>
             <arg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>

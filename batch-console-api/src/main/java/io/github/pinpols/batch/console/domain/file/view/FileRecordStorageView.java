@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.file.mapper.view;
+package io.github.pinpols.batch.console.domain.file.view;
 
 /**
  * 文件内容上传、下载和详情查询共用的固定存储投影。

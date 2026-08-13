@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.file.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 
 /** 文件详情的固定存储投影；{@code metadataJson} 保留原始 JSONB 扩展数据。 */
 @JsonInclude(JsonInclude.Include.NON_NULL)
