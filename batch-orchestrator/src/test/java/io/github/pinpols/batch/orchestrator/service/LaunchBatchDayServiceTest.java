@@ -31,7 +31,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * 守护 LaunchBatchDayService 的 doUpsertBatchDayInstance 早退分支与判定逻辑:
@@ -78,13 +78,13 @@ class LaunchBatchDayServiceTest {
   private BatchDayTimePolicyResolver timePolicyResolver;
 
   @Mock
-  private ObjectProvider<LaunchBatchDayService> selfProvider;
-
-  @Mock
   private BatchDateTimeSupport dateTimeSupport;
 
   @Mock
   private AlertEventService alertEventService;
+
+  @Mock
+  private PlatformTransactionManager transactionManager;
 
   private LaunchBatchDayService service;
 
@@ -104,9 +104,9 @@ class LaunchBatchDayServiceTest {
         jobMappers,
         timezoneProvider,
         timePolicyResolver,
-        selfProvider,
         dateTimeSupport,
-        alertEventService);
+        alertEventService,
+        transactionManager);
     when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-05-20T10:00:00Z"));
   }
 
