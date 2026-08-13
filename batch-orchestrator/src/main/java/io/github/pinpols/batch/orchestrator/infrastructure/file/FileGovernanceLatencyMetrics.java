@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +20,7 @@ public record FileGovernanceLatencyMetrics(
     List<Map<String, Object>> processingDelaySamples) {
 
   public static FileGovernanceLatencyMetrics from(Map<String, Object> values) {
-    if (values == null || values.isEmpty()) {
+    if (EmptyChecks.isEmpty(values)) {
       return empty(null);
     }
     return new FileGovernanceLatencyMetrics(
