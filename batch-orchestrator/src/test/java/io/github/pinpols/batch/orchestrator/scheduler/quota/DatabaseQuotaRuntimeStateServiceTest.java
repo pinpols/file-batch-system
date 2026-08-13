@@ -21,6 +21,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 class DatabaseQuotaRuntimeStateServiceTest {
 
@@ -98,18 +100,14 @@ class DatabaseQuotaRuntimeStateServiceTest {
   private DatabaseQuotaRuntimeStateService service;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     quotaRuntimeStateMapper = mock(QuotaRuntimeStateMapper.class);
-    // C-2.8：selfProvider 在单测里直通（不走 REQUIRES_NEW 子事务），
-    // 等 reconcileOne 的事务语义由集成测试覆盖
-    org.springframework.beans.factory.ObjectProvider<DatabaseQuotaRuntimeStateService>
-        selfProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
+    PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
     service = new DatabaseQuotaRuntimeStateService(
         quotaRuntimeStateMapper,
         new BatchTimezoneProvider(new BatchTimezoneProperties()),
-        selfProvider);
-    when(selfProvider.getObject()).thenReturn(service);
+        transactionManager);
   }
 
   // ── evaluateAndReserve — guard conditions ─────────────────────────────────

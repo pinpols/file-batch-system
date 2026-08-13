@@ -14,12 +14,13 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * PG @Version 乐观锁实现的 quota 状态服务。属于遗留实现，{@code batch.quota.runtime-store=database} 时启用；新部署默认走 {@link
@@ -32,17 +33,17 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
 
   private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
   private final BatchTimezoneProvider timezoneProvider;
-  // C-2.8：自引用，供 reconcileExpiredStates 内触发 REQUIRES_NEW 子事务。
-  // 通过 ObjectProvider 打破 bean 循环依赖，并拿到 Spring 代理后的实例。
-  private final ObjectProvider<DatabaseQuotaRuntimeStateService> selfProvider;
+  private final TransactionTemplate reconciliationTransaction;
 
   public DatabaseQuotaRuntimeStateService(
       QuotaRuntimeStateMapper quotaRuntimeStateMapper,
       BatchTimezoneProvider timezoneProvider,
-      ObjectProvider<DatabaseQuotaRuntimeStateService> selfProvider) {
+      PlatformTransactionManager transactionManager) {
     this.quotaRuntimeStateMapper = quotaRuntimeStateMapper;
     this.timezoneProvider = timezoneProvider;
-    this.selfProvider = selfProvider;
+    reconciliationTransaction = new TransactionTemplate(transactionManager);
+    reconciliationTransaction.setPropagationBehavior(
+        TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
 
   /**
@@ -157,17 +158,16 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   }
 
   /**
-   * C-2.8：外层方法不包事务，逐条过期状态走 REQUIRES_NEW 子事务（{@link #reconcileOne}）， 单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批
-   * reconcile。
+   * C-2.8：外层方法不包事务，逐条过期状态通过显式 REQUIRES_NEW 子事务重置。单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批 reconcile。
    */
   @Override
   public void reconcileExpiredStates(int slidingWindowHours) {
     Instant now = BatchDateTimeSupport.utcNow();
     List<QuotaRuntimeStateEntity> expired = quotaRuntimeStateMapper.selectExpired(now);
-    DatabaseQuotaRuntimeStateService self = selfProvider.getObject();
     for (QuotaRuntimeStateEntity state : expired) {
       try {
-        self.reconcileOne(state, now, slidingWindowHours);
+        reconciliationTransaction.executeWithoutResult(
+            transactionStatus -> reconcileOne(state, now, slidingWindowHours));
       } catch (OptimisticLockingFailureException conflict) {
         // 另一个节点刚抢先重置了该状态，下一 tick 扫不到即自愈，无需重试
         log.debug(
@@ -190,8 +190,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     }
   }
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void reconcileOne(QuotaRuntimeStateEntity state, Instant now, int slidingWindowHours) {
+  private void reconcileOne(QuotaRuntimeStateEntity state, Instant now, int slidingWindowHours) {
     QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
     refreshState(state, policy, now, slidingWindowHours, true);
   }
