@@ -24,6 +24,8 @@ import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * V90 验证：autoRetryDueDeadLetters 调度行为。
@@ -58,6 +60,8 @@ class DeadLetterAutoRetryTest {
     BatchOrchestratorGovernanceProperties governance =
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.retry()).thenReturn(properties);
+    PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
 
     service = new DefaultRetryGovernanceService(
         retryScheduleMapper,
@@ -69,7 +73,8 @@ class DeadLetterAutoRetryTest {
         jobStepInstanceMapper,
         taskDispatchOutboxService,
         governance,
-        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
+        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */,
+        transactionManager);
   }
 
   /**
