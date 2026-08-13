@@ -11,6 +11,10 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanc
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleShedLockStatusResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTerminalChildrenHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerConsistencyResponse;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.ai.tool.annotation.Tool;
@@ -102,10 +106,10 @@ public class ConsoleAiTools {
     if (diagnostics == null) {
       return "集群诊断当前无数据(可能诊断服务未就绪或该租户无相关记录)。";
     }
-    var shedLock = diagnostics.shedLock();
-    var workers = diagnostics.workers();
-    var outbox = diagnostics.outbox();
-    var terminal = diagnostics.terminalChildren();
+    ConsoleShedLockStatusResponse shedLock = diagnostics.shedLock();
+    ConsoleWorkerConsistencyResponse workers = diagnostics.workers();
+    ConsoleOutboxHealthResponse outbox = diagnostics.outbox();
+    ConsoleTerminalChildrenHealthResponse terminal = diagnostics.terminalChildren();
     return "[集群诊断] 当前租户只读快照(固定阈值,超阈即判不健康)\n"
         + "ShedLock 定时任务租约: totalLocks="
         + value(shedLock.totalLocks())
