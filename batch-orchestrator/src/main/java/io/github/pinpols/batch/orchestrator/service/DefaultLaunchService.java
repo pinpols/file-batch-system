@@ -41,12 +41,12 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 批任务启动（Launch）的核心入口：把一次触发请求落地为可调度的运行态，并驱动后续分片/任务派发。
@@ -60,7 +60,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       T2 短事务里触碰，避免长事务持锁。
  * </ul>
  *
- * <p>注意：{@link #prepareJobInstance} 必须通过 self-proxy 调用，才能让 Spring AOP 的 {@code @Transactional} 生效。
+ * <p>事务边界通过显式 {@link TransactionTemplate} 表达，避免核心启动链依赖自身代理。
  */
 @Slf4j
 @Service
@@ -76,7 +76,7 @@ public class DefaultLaunchService implements LaunchService {
   private final BatchDayGateService batchDayGateService;
   private final LaunchParamResolver launchParamResolver;
   private final JobExecutionLogMapper jobExecutionLogMapper;
-  private final ObjectProvider<DefaultLaunchService> selfProvider;
+  private final PlatformTransactionManager transactionManager;
 
   @Override
   @Observed(name = "orch.launch", contextualName = "orch.launch")
@@ -100,9 +100,7 @@ public class DefaultLaunchService implements LaunchService {
     // T1：先把 instance/workflow 写入数据库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;
     try {
-      prepared = selfProvider
-          .getObject()
-          .prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
+      prepared = prepareJobInstanceInTransaction(routedRequest, loaded, effectiveParams, traceId);
     } catch (DataIntegrityViolationException exception) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:DataIntegrityViolationException", exception);
@@ -197,9 +195,8 @@ public class DefaultLaunchService implements LaunchService {
       return;
     }
     try {
-      selfProvider
-          .getObject()
-          .markJobInstanceFailedDueToDispatch(request, jobInstance, dispatchFailure);
+      inNewTransaction(
+          () -> markJobInstanceFailedDueToDispatch(request, jobInstance, dispatchFailure));
     } catch (RuntimeException reverseEx) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:finalizeJobInstanceOnDispatchFailure", reverseEx);
@@ -219,7 +216,6 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /** T2 fail-fast 后把 job_instance CREATED → FAILED,避免长期停留在无 task 的不可执行状态。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markJobInstanceFailedDueToDispatch(
       LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
     Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
@@ -293,15 +289,15 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /**
-   * A1-B fix:dispatch 拒收后把 workflow_run CREATED → FAILED,清掉 current_node_code 残留。 走 self-invocation
-   * 让 @Transactional 生效,独立事务不被父事务回滚波及。
+   * A1-B fix:dispatch 拒收后把 workflow_run CREATED → FAILED,清掉 current_node_code 残留。
+   * 独立事务不被 T2 失败回滚波及。
    */
   private void finalizeWorkflowRunOnDispatchFailure(WorkflowRunEntity workflowRun) {
     if (workflowRun == null || workflowRun.getId() == null) {
       return;
     }
     try {
-      selfProvider.getObject().markWorkflowRunFailedDueToDispatch(workflowRun);
+      inNewTransaction(() -> markWorkflowRunFailedDueToDispatch(workflowRun));
     } catch (RuntimeException reverseEx) {
       // 反向 finalize 失败,静默捕获并抑制(不掩盖原始 dispatch 异常 cause;reverseEx 仅 oncall 视角看一眼)
       SwallowedExceptionLogger.info(
@@ -310,7 +306,6 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /** A1-B fix:独立事务把 workflow_run CREATED → FAILED(CAS 守护防覆盖正常 outcome 回报)。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markWorkflowRunFailedDueToDispatch(WorkflowRunEntity workflowRun) {
     workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
         .tenantId(workflowRun.getTenantId())
@@ -327,7 +322,6 @@ public class DefaultLaunchService implements LaunchService {
    *
    * <p>该事务只做"准备态写入数据库"，不触碰高竞争的 task/partition/outbox 表，从而缩短锁持有时间。
    */
-  @Transactional
   public PreparedLaunch prepareJobInstance(
       LaunchRequest request,
       LaunchLoadResult loaded,
@@ -355,6 +349,26 @@ public class DefaultLaunchService implements LaunchService {
           request, loaded, effectiveParams, traceId, jobInstance, startedAt);
     }
     return new PreparedLaunch(jobInstance, null, List.of(), startedAt);
+  }
+
+  private PreparedLaunch prepareJobInstanceInTransaction(
+      LaunchRequest request,
+      LaunchLoadResult loaded,
+      Map<String, Object> effectiveParams,
+      String traceId) {
+    return newTransaction(TransactionDefinition.PROPAGATION_REQUIRED)
+        .execute(status -> prepareJobInstance(request, loaded, effectiveParams, traceId));
+  }
+
+  private void inNewTransaction(Runnable action) {
+    newTransaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW)
+        .executeWithoutResult(status -> action.run());
+  }
+
+  private TransactionTemplate newTransaction(int propagationBehavior) {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.setPropagationBehavior(propagationBehavior);
+    return transaction;
   }
 
   private JobInstanceEntity buildJobInstanceEntity(

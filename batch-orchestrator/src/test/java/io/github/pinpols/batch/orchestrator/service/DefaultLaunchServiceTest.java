@@ -58,7 +58,6 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -79,8 +78,6 @@ class DefaultLaunchServiceTest {
   private BatchDayGateService batchDayGateService;
   private LaunchBatchDayService launchBatchDayService;
   private LaunchParamResolver launchParamResolver;
-
-  private ObjectProvider<DefaultLaunchService> selfProvider;
 
   private DefaultLaunchService service;
 
@@ -109,7 +106,6 @@ class DefaultLaunchServiceTest {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     batchDayGateService = mock(BatchDayGateService.class);
-    selfProvider = mock(ObjectProvider.class);
     PlatformTransactionManager batchDayTransactionManager = mock(PlatformTransactionManager.class);
     when(batchDayTransactionManager.getTransaction(any()))
         .thenReturn(mock(TransactionStatus.class));
@@ -143,8 +139,7 @@ class DefaultLaunchServiceTest {
         batchDayGateService,
         launchParamResolver,
         jobExecutionLogMapper,
-        selfProvider);
-    when(selfProvider.getObject()).thenReturn(service);
+        batchDayTransactionManager);
     when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
         .thenReturn(
             new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
