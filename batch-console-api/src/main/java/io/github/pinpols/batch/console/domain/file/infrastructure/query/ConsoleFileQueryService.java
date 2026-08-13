@@ -328,9 +328,11 @@ public class ConsoleFileQueryService {
 
   public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    return ConsoleFileRecordDetailResponse.from(requireRow(
-        fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId),
-        "file record not found: " + fileId));
+    var fileRecord = fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
+    if (EmptyChecks.isNull(fileRecord)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", fileId);
+    }
+    return ConsoleFileRecordDetailResponse.from(fileRecord);
   }
 
   public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {

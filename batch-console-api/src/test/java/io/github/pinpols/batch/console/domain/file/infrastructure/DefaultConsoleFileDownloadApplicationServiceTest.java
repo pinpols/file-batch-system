@@ -17,6 +17,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalRecord;
@@ -87,15 +88,15 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
 
   private void stubEncryptedFile(long fileId) {
     when(fileRecordMapper.selectFileRecordById("t1", fileId))
-        .thenReturn(Map.of(
-            "storage_bucket",
-            "bucket-a",
-            "storage_path",
-            "uploads/t1/" + fileId + ".bin",
-            "file_name",
+        .thenReturn(new FileRecordStorageView(
+            fileId,
+            "t1",
             "f" + fileId + ".csv",
-            "mime_type",
-            "application/octet-stream"));
+            "application/octet-stream",
+            "S3",
+            "uploads/t1/" + fileId + ".bin",
+            "bucket-a",
+            null));
     when(fileRecordMapper.selectTemplateCodeByFileId("t1", fileId)).thenReturn("TPL");
     when(fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode("t1", "TPL"))
         .thenReturn(Map.of("content_encryption_enabled", Boolean.TRUE));

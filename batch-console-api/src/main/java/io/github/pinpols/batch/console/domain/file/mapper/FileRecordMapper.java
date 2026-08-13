@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.mapper;
 
 import io.github.pinpols.batch.console.domain.file.entity.FileRecordEntity;
+import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +16,7 @@ public interface FileRecordMapper {
   String selectTemplateCodeByFileId(
       @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  Map<String, Object> selectFileRecordById(
+  FileRecordStorageView selectFileRecordById(
       @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
   Map<String, Object> selectSummary(@Param("tenantId") String tenantId);

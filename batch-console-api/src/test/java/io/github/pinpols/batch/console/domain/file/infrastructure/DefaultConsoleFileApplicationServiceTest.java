@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -28,7 +29,6 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -143,11 +143,8 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   void shouldWriteUploadedContentToObjectStore() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(Map.of(
-            "storage_type", "S3",
-            "storage_bucket", "bucket-a",
-            "storage_path", "uploads/t1/a.csv",
-            "mime_type", "text/csv"));
+        .thenReturn(new FileRecordStorageView(
+            1L, "t1", "a.csv", "text/csv", "S3", "uploads/t1/a.csv", "bucket-a", null));
     MockMultipartFile file =
         new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
 
@@ -166,10 +163,8 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   void shouldCloseUploadInputStreamAfterStorePut() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(Map.of(
-            "storage_type", "S3",
-            "storage_bucket", "bucket-a",
-            "storage_path", "uploads/t1/a.csv"));
+        .thenReturn(new FileRecordStorageView(
+            1L, "t1", "a.csv", null, "S3", "uploads/t1/a.csv", "bucket-a", null));
     CloseTrackingInputStream inputStream =
         new CloseTrackingInputStream("id,name\n1,A\n".getBytes());
     MultipartFile file = new CloseTrackingMultipartFile(inputStream, 12L, "text/csv");
@@ -182,7 +177,8 @@ class DefaultConsoleFileApplicationServiceTest {
   @Test
   void shouldRejectLocalPathFileRecordForUploadContent() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
-        .thenReturn(Map.of("storage_type", "LOCAL", "storage_path", "/tmp/a.csv"));
+        .thenReturn(
+            new FileRecordStorageView(1L, "t1", "a.csv", null, "LOCAL", "/tmp/a.csv", null, null));
     MockMultipartFile file =
         new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
 

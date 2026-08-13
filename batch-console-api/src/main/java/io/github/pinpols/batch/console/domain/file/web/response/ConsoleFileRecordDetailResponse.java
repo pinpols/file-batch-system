@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.file.web.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Map;
+import io.github.pinpols.batch.console.domain.file.mapper.view.FileRecordStorageView;
 
 /** 文件详情的固定存储投影；{@code metadataJson} 保留原始 JSONB 扩展数据。 */
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -16,15 +16,15 @@ public record ConsoleFileRecordDetailResponse(
     @JsonProperty("storage_bucket") String storageBucket,
     @JsonProperty("metadata_json") Object metadataJson) {
 
-  public static ConsoleFileRecordDetailResponse from(Map<String, Object> row) {
+  public static ConsoleFileRecordDetailResponse from(FileRecordStorageView row) {
     return new ConsoleFileRecordDetailResponse(
-        FileMapResponseFieldReader.longValue(row, "id"),
-        FileMapResponseFieldReader.stringValue(row, "tenant_id"),
-        FileMapResponseFieldReader.stringValue(row, "file_name"),
-        FileMapResponseFieldReader.stringValue(row, "mime_type"),
-        FileMapResponseFieldReader.stringValue(row, "storage_type"),
-        FileMapResponseFieldReader.stringValue(row, "storage_path"),
-        FileMapResponseFieldReader.stringValue(row, "storage_bucket"),
-        row.get("metadata_json"));
+        row.id(),
+        row.tenantId(),
+        row.fileName(),
+        row.mimeType(),
+        row.storageType(),
+        row.storagePath(),
+        row.storageBucket(),
+        row.metadataJson());
   }
 }
