@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -34,7 +33,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
@@ -46,7 +44,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,7 +53,6 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,6 +95,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
   private final DefaultTaskOutcomeCollaborators collaborators;
+  private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -134,6 +131,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
     this.collaborators = collaborators;
+    this.nodeRunRecorder = new TaskOutcomeNodeRunRecorder(workflowMappers);
     this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
         .register(collaborators.meterRegistry());
@@ -164,85 +162,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   @Transactional
   public WorkflowNodeRunEntity recordNodeRunReady(
       Long workflowRunId, String nodeCode, String nodeType) {
-    WorkflowNodeRunEntity entity = new WorkflowNodeRunEntity();
-    entity.setWorkflowRunId(workflowRunId);
-    entity.setNodeCode(nodeCode);
-    entity.setNodeType(nodeType);
-    entity.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
-    entity.setNodeStatus(WorkflowNodeRunStatus.READY.code());
-    entity.setRetryCount(0);
-    entity.setDurationMs(0L);
-    // #3-2: 并发安全——唯一约束冲突时返回已有记录而非报错
-    try {
-      workflowMappers.workflowNodeRunMapper.insert(entity);
-    } catch (DuplicateKeyException ignored) {
-      SwallowedExceptionLogger.info(
-          DefaultTaskOutcomeService.class, "catch:DuplicateKeyException", ignored);
-
-      return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-          workflowRunId, nodeCode);
-    }
-    return entity;
+    return nodeRunRecorder.recordReady(workflowRunId, nodeCode, nodeType);
   }
 
   @Override
   @Transactional
   public WorkflowNodeRunEntity recordNodeRunStart(
       Long workflowRunId, String nodeCode, String nodeType, Instant startedAt) {
-    WorkflowNodeRunEntity entity = new WorkflowNodeRunEntity();
-    entity.setWorkflowRunId(workflowRunId);
-    entity.setNodeCode(nodeCode);
-    entity.setNodeType(nodeType);
-    entity.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
-    entity.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
-    entity.setRetryCount(0);
-    entity.setStartedAt(startedAt);
-    entity.setDurationMs(0L);
-    // #3-2: 并发安全——唯一约束冲突时返回已有记录而非报错
-    try {
-      workflowMappers.workflowNodeRunMapper.insert(entity);
-    } catch (DuplicateKeyException ignored) {
-      SwallowedExceptionLogger.info(
-          DefaultTaskOutcomeService.class, "catch:DuplicateKeyException", ignored);
-
-      return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-          workflowRunId, nodeCode);
-    }
-    return entity;
+    return nodeRunRecorder.recordStart(workflowRunId, nodeCode, nodeType, startedAt);
   }
 
   @Override
   @Transactional
   public WorkflowNodeRunEntity recordNodeRunFinish(NodeRunFinishCommand command) {
-    // C-1: 行锁防止并发 recordNodeRunFinish 对同一 (workflowRunId, nodeCode) 创建重复 node_run 记录
-    WorkflowNodeRunEntity current = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
-        command.workflowRunId(), command.nodeCode());
-    if (EmptyChecks.isNull(current)) {
-      current = recordNodeRunStart(
-          command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
-    }
-    long duration =
-        EmptyChecks.isNull(command.startedAt()) || EmptyChecks.isNull(command.finishedAt())
-            ? 0L
-            : Duration.between(command.startedAt(), command.finishedAt()).toMillis();
-    workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
-        .id(current.getId())
-        .nodeStatus(
-            command.success()
-                ? WorkflowNodeRunStatus.SUCCESS.code()
-                : WorkflowNodeRunStatus.FAILED.code())
-        .errorCode(command.errorCode())
-        .errorMessage(command.errorMessage())
-        .errorKey(command.errorKey())
-        .errorArgs(command.errorArgs())
-        .durationMs(duration)
-        .finishedAt(command.finishedAt())
-        // ADR-009 Stage 1.2: success 路径写 worker 上报的 outputs JSON,失败路径保持 null。
-        .output(command.success() ? command.outputJson() : null)
-        .build());
-    WorkflowNodeRunEntity finished =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            command.workflowRunId(), command.nodeCode());
+    WorkflowNodeRunEntity finished = nodeRunRecorder.recordFinish(command);
     // ADR-041 Phase1.3b:本节点产出已写入数据库,同事务核跨阶段 count 连续性(仅告警,不翻转状态)。
     if (command.success()) {
       collaborators
@@ -684,7 +617,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .errorMessage(ctx.command().errorMessage())
         .errorKey(ctx.command().errorKey())
         .errorArgs(ctx.command().errorArgs())
-        .startedAt(resolveNodeStartedAt(
+        .startedAt(nodeRunRecorder.resolveStartedAt(
             ctx.workflowRun().getId(),
             ctx.currentNodeCode(),
             ctx.workflowRun().getStartedAt(),
@@ -875,30 +808,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     return WorkflowNodeRunStatus.READY.code().equals(latestNodeRun.getNodeStatus())
         || WorkflowNodeRunStatus.RUNNING.code().equals(latestNodeRun.getNodeStatus());
-  }
-
-  private Instant resolveNodeStartedAt(
-      Long workflowRunId, String nodeCode, Instant workflowStartedAt, Instant finishedAt) {
-    WorkflowNodeRunEntity latestNodeRun =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    if (EmptyChecks.isNotNull(latestNodeRun)
-        && EmptyChecks.isNotNull(latestNodeRun.getStartedAt())) {
-      return latestNodeRun.getStartedAt();
-    }
-    if (EmptyChecks.isNotNull(workflowStartedAt)) {
-      return workflowStartedAt;
-    }
-    return finishedAt;
-  }
-
-  private int nextRunSeq(Long workflowRunId, String nodeCode) {
-    WorkflowNodeRunEntity current =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    return EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getRunSeq())
-        ? 1
-        : current.getRunSeq() + 1;
   }
 
   @Builder
