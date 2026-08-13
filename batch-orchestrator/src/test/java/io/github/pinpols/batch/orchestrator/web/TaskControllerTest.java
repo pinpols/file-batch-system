@@ -22,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRa
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskReportRetryExecutor;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
@@ -58,7 +59,8 @@ class TaskControllerTest {
             taskExecutionService,
             new ObjectMapper(),
             new BundleBatchClaimProperties(),
-            new SimpleMeterRegistry());
+            new SimpleMeterRegistry(),
+            new TaskReportRetryExecutor(taskExecutionService));
     mockMvc = MockMvcBuilders.standaloneSetup(
             new TaskController(taskControllerApplicationService, tenantActionRateLimiter))
         .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())

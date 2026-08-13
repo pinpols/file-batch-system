@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationTransactionExecutor;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultCompensationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
@@ -31,7 +32,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /** 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。 */
 @SuppressWarnings("unchecked")
@@ -67,9 +71,20 @@ class DefaultCompensationServiceTest {
         retryGovernanceService,
         fileGovernanceService,
         launchServiceProvider,
-        taskExecutionService);
+        taskExecutionService,
+        new CompensationTransactionExecutor(new PlatformTransactionManager() {
+          @Override
+          public TransactionStatus getTransaction(TransactionDefinition definition) {
+            return new SimpleTransactionStatus();
+          }
+
+          @Override
+          public void commit(TransactionStatus status) {}
+
+          @Override
+          public void rollback(TransactionStatus status) {}
+        }));
     when(launchServiceProvider.getObject()).thenReturn(launchService);
-    ReflectionTestUtils.setField(service, "self", service);
   }
 
   // ── validate() ────────────────────────────────────────────────────────────

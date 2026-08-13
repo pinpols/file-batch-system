@@ -41,8 +41,6 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,10 +80,6 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final ChildJobLaunchSupport childJobLaunchSupport;
   // ADR-018 跨批量日依赖解析；NULL（无依赖）跳过；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → FAILED
   private final CrossDayDependencyResolver crossDayDependencyResolver;
-
-  @Lazy
-  @Autowired
-  private DefaultWorkflowNodeDispatchService self;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
@@ -467,8 +461,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         createTerminalNodeRun(workflowRun.getId(), nextNode, now);
         continue;
       }
-      dispatchedCount += self.dispatchNode(
-          jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
+      dispatchedCount +=
+          dispatchNode(jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
     }
     return dispatchedCount;
   }

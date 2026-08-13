@@ -34,12 +34,8 @@ import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 补偿指令统一入口：按 {@code compensationType} 路由到 6 种处理器（JOB / STEP / PARTITION / FILE / BATCH / DLQ），
@@ -69,10 +65,7 @@ public class DefaultCompensationService implements CompensationService {
   private final FileGovernanceService fileGovernanceService;
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final TaskExecutionService taskExecutionService;
-
-  @Lazy
-  @Autowired
-  private DefaultCompensationService self;
+  private final CompensationTransactionExecutor transactionExecutor;
 
   /** 路由表：compensationType → handler。构造时一次性构建；O(1) 查找。 */
   private final Map<String, CompensationHandler> handlersByType = Map.of(
@@ -111,14 +104,14 @@ public class DefaultCompensationService implements CompensationService {
    *
    * <ul>
    *   <li>本 submit() 方法**不再有外层 @Transactional**(纯调度方法)
-   *   <li>INSERT 命令行走 {@link #insertCommandInNewTx} REQUIRES_NEW,独立提交 — handler 失败也留住命令行
-   *   <li>handler 执行 + SUCCESS 状态/日志走 {@link #executeAndMarkSuccessInOwnTx} 默认 @Transactional —
+   *   <li>INSERT 命令行走显式 REQUIRES_NEW 模板独立提交 — handler 失败也留住命令行
+   *   <li>handler 执行 + SUCCESS 状态/日志走默认 REQUIRED 模板 —
    *       handler 抛错就**回滚业务写入**,不留下无效记录
-   *   <li>FAILED 状态/日志走 {@link #markFailedAndLogInNewTx} REQUIRES_NEW — 即使外层业务事务回滚也独立留痕, 且能 unblock
+   *   <li>FAILED 状态/日志走 REQUIRES_NEW 模板 — 即使外层业务事务回滚也独立留痕, 且能 unblock
    *       后续补偿提交(避免命令卡 RUNNING)
    * </ul>
    *
-   * <p>权衡:理论上 INSERT 后 / executeAndMarkSuccessInOwnTx 成功提交前 JVM 崩溃,命令会卡 RUNNING。这通过 ops backlog 的
+   * <p>权衡:理论上 INSERT 后 / 业务事务成功提交前 JVM 崩溃,命令会卡 RUNNING。这通过 ops backlog 的
    * stale-RUNNING reconciler 回退(范围外,不在本方法处理)。
    */
   @Override
@@ -137,37 +130,37 @@ public class DefaultCompensationService implements CompensationService {
           : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
       assertNoRunningConflict(command);
     } catch (RuntimeException pre) {
-      self.appendPreInsertFailureLog(command, traceId, commandNo, pre);
+      appendPreInsertFailureLogInNewTx(command, traceId, commandNo, pre);
       throw pre;
     }
     CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
+    String resolvedCommandNo = commandNo;
+    String resolvedTraceId = traceId;
     try {
-      self.insertCommandInNewTx(entity);
+      transactionExecutor.requiresNew(() -> compensationCommandMapper.insert(entity));
     } catch (DataIntegrityViolationException ex) {
       BizException wrapped =
           BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
-      self.appendPreInsertFailureLog(command, traceId, commandNo, wrapped);
+      appendPreInsertFailureLogInNewTx(command, traceId, commandNo, wrapped);
       throw wrapped;
     }
     try {
-      self.executeAndMarkSuccessInOwnTx(command, commandNo, traceId, entity);
-      return commandNo;
+      transactionExecutor.required(() -> {
+        executeAndMarkSuccess(command, resolvedCommandNo, resolvedTraceId, entity);
+        return null;
+      });
+      return resolvedCommandNo;
     } catch (Exception exception) {
       // 业务事务已正常回滚 handler 的副作用(任务/分片/重放状态);此处独立 NEW tx 写 FAILED + 日志
-      self.markFailedAndLogInNewTx(command, traceId, entity, exception);
+      transactionExecutor.requiresNew(
+          () -> markFailedAndLog(command, resolvedTraceId, entity, exception));
       throw exception;
     }
   }
 
   /** INSERT command row in REQUIRES_NEW 独立提交;handler 失败也留住命令行(审计 + unblock 后续提交)。 */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void insertCommandInNewTx(CompensationCommandEntity entity) {
-    compensationCommandMapper.insert(entity);
-  }
-
   /** Handler 业务写 + SUCCESS 状态/日志,默认 @Transactional:handler 抛错回滚业务写入。 */
-  @Transactional
-  public void executeAndMarkSuccessInOwnTx(
+  private void executeAndMarkSuccess(
       CompensationSubmitCommand command,
       String commandNo,
       String traceId,
@@ -192,11 +185,10 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   /**
-   * 业务事务失败后独立 NEW tx 写 FAILED + 日志。外层业务回滚不影响命令行(走 insertCommandInNewTx 已独立提交); 这里只是把命令状态从 RUNNING
+   * 业务事务失败后独立 NEW tx 写 FAILED + 日志。外层业务回滚不影响已独立提交的命令行；这里只是把命令状态从 RUNNING
    * 推进到 FAILED + 记录失败日志。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markFailedAndLogInNewTx(
+  private void markFailedAndLog(
       CompensationSubmitCommand command,
       String traceId,
       CompensationCommandEntity entity,
@@ -551,8 +543,13 @@ public class DefaultCompensationService implements CompensationService {
    *
    * <p>使用 {@code Propagation.REQUIRES_NEW}:外层 {@code @Transactional} 因业务异常即将回滚,审计行必须独立提交才能留下。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  void appendPreInsertFailureLog(
+  private void appendPreInsertFailureLogInNewTx(
+      CompensationSubmitCommand command, String traceId, String commandNo, Exception exception) {
+    transactionExecutor.requiresNew(
+        () -> appendPreInsertFailureLog(command, traceId, commandNo, exception));
+  }
+
+  private void appendPreInsertFailureLog(
       CompensationSubmitCommand command, String traceId, String commandNo, Exception exception) {
     try {
       JobExecutionLogEntity entry = new JobExecutionLogEntity();
