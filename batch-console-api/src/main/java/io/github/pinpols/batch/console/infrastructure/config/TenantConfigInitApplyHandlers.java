@@ -34,12 +34,9 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -55,10 +52,6 @@ public class TenantConfigInitApplyHandlers {
 
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_ID = "id";
-
-  @Lazy
-  @Autowired
-  private TenantConfigInitApplyHandlers self;
 
   private final TenantDefinitionConfigMappers definitionMappers;
   private final PlatformTransactionManager transactionManager;
@@ -303,13 +296,12 @@ public class TenantConfigInitApplyHandlers {
             WorkflowDefinitionSpec::getWorkflowCode,
             (tid, s) -> Optional.ofNullable(definitionMappers.workflowDefinition.selectByUniqueKey(
                 tid, s.getWorkflowCode(), 1)),
-            (c, s) -> self.upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
+            (c, s) -> upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
             (c, s, existing) ->
-                self.upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
+                upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
   }
 
-  @Transactional
-  protected void upsertWorkflowDefinition(
+  private void upsertWorkflowDefinition(
       String tenantId, Long existingId, WorkflowDefinitionSpec spec, String operator) {
     WorkflowDefinitionUpsertParam param = new WorkflowDefinitionUpsertParam();
     param.setTenantId(tenantId);
@@ -381,13 +373,12 @@ public class TenantConfigInitApplyHandlers {
                   tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
               return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
             },
-            (c, s) -> self.insertPipelineDefinition(c.tenantId(), s),
-            (c, s, existing) -> self.updatePipelineDefinition(
+            (c, s) -> insertPipelineDefinition(c.tenantId(), s),
+            (c, s, existing) -> updatePipelineDefinition(
                 c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
   }
 
-  @Transactional
-  protected void insertPipelineDefinition(String tenantId, PipelineDefinitionSpec spec) {
+  private void insertPipelineDefinition(String tenantId, PipelineDefinitionSpec spec) {
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put("job_code", spec.getJobCode());
@@ -403,8 +394,7 @@ public class TenantConfigInitApplyHandlers {
     insertPipelineSteps(defId, spec.getSteps());
   }
 
-  @Transactional
-  protected void updatePipelineDefinition(
+  private void updatePipelineDefinition(
       String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
