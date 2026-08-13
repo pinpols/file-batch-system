@@ -14,6 +14,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -69,8 +70,9 @@ public class DefaultConsoleFileDownloadApplicationService
   public ResponseEntity<InputStreamResource> download(
       String tenantId, Long fileId, String approvalId) {
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> fileRecord = fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
-    if (fileRecord == null || fileRecord.isEmpty()) {
+    FileRecordStorageView fileRecord =
+        fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
+    if (fileRecord == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
@@ -83,16 +85,16 @@ public class DefaultConsoleFileDownloadApplicationService
       approvalClient.requireApprovedApproval(
           effectiveTenant, approvalId, ApprovalTargetBinding.file(fileId));
     }
-    String bucket = stringValue(fileRecord.get("storage_bucket"));
+    String bucket = fileRecord.storageBucket();
     if (!Texts.hasText(bucket)) {
       bucket = s3StorageProperties.getBucket();
     }
-    String objectName = stringValue(fileRecord.get("storage_path"));
+    String objectName = fileRecord.storagePath();
     if (!Texts.hasText(objectName)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
-    String fileName = stringValue(fileRecord.get("file_name"));
-    String contentType = stringValue(fileRecord.get("mime_type"));
+    String fileName = fileRecord.fileName();
+    String contentType = fileRecord.mimeType();
     if (!Texts.hasText(contentType)) {
       contentType = "application/octet-stream";
     }

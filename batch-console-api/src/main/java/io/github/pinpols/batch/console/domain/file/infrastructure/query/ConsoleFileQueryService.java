@@ -22,6 +22,7 @@ import io.github.pinpols.batch.console.domain.file.query.FilePipelineQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.web.query.FileArrivalGroupQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.query.FileDispatchRecordQueryRequest;
@@ -328,9 +329,12 @@ public class ConsoleFileQueryService {
 
   public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    return ConsoleFileRecordDetailResponse.from(requireRow(
-        fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId),
-        "file record not found: " + fileId));
+    FileRecordStorageView fileRecord =
+        fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
+    if (EmptyChecks.isNull(fileRecord)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found", fileId);
+    }
+    return ConsoleFileRecordDetailResponse.from(fileRecord);
   }
 
   public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {

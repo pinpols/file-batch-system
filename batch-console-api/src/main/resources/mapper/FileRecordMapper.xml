@@ -78,7 +78,21 @@
           and id = #{fileId}
     </select>
 
-    <select id="selectFileRecordById" resultType="map">
+    <resultMap id="FileRecordStorageViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView">
+        <constructor>
+            <arg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="mime_type" javaType="java.lang.String"/>
+            <arg column="storage_type" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="metadata_json" javaType="java.lang.Object"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectFileRecordById" resultMap="FileRecordStorageViewResultMap">
         select id,
                tenant_id,
                file_name,

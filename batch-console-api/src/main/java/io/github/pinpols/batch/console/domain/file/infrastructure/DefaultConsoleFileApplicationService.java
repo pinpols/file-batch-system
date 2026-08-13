@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.web.request.ArchiveFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.DeleteFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupActionRequest;
@@ -27,7 +28,6 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -207,29 +207,29 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     if (file == null || file.isEmpty()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.content_required");
     }
-    Map<String, Object> fileRecord =
+    FileRecordStorageView fileRecord =
         fileRecordMapper.selectFileRecordById(resolvedTenantId, fileId);
-    if (fileRecord == null || fileRecord.isEmpty()) {
+    if (fileRecord == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    String storageType = stringValue(fileRecord.get("storage_type"));
+    String storageType = fileRecord.storageType();
     if ("LOCAL".equalsIgnoreCase(storageType)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
           "content upload requires object-store backed file record");
     }
-    String storagePath = stringValue(fileRecord.get("storage_path"));
+    String storagePath = fileRecord.storagePath();
     if (!Texts.hasText(storagePath)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
-    String bucket = stringValue(fileRecord.get("storage_bucket"));
+    String bucket = fileRecord.storageBucket();
     if (!Texts.hasText(bucket)) {
       bucket = s3StorageProperties.getBucket();
     }
     String contentType = file.getContentType();
     if (!Texts.hasText(contentType)) {
-      contentType = stringValue(fileRecord.get("mime_type"));
+      contentType = fileRecord.mimeType();
     }
     if (!Texts.hasText(contentType)) {
       contentType = "application/octet-stream";
