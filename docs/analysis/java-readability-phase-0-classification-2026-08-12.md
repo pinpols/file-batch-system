@@ -58,7 +58,7 @@
 | Console 运维代理 | `DefaultConsoleOrchestratorProxyService` | 代理契约测试、orchestrator internal OpenAPI |
 | Orchestrator 操作接口 | `InstanceManagementApplicationService`、`WorkflowRunManagementApplicationService` 及对应 Controller | Controller/应用服务测试、内部 OpenAPI、worker/console 调用方 |
 | Orchestrator 状态接口 | `OrchestratorDrainController`、`OrchestratorGracefulShutdown`、`TriggerGracefulShutdown`、`AtomicRuntimeStatus` | Actuator/Controller 测试、容器健康检查 |
-| 文件治理与 lineage | `DefaultFileGovernanceService`、`LineageEvidenceService`、`FileGovernanceController`、`FileGovernanceScheduler`、`FileGovernanceMetricsCacheService` | 文件治理 IT、对象存储 sim、内部 OpenAPI |
+| 文件治理与 lineage | `DefaultFileGovernanceService`、`LineageEvidenceService`、`FileGovernanceController`、`FileGovernanceScheduler`、`FileGovernanceMetricsCacheService` | 文件治理 IT、对象存储 sim、内部 OpenAPI；延迟指标已由 `FileGovernanceLatencyMetrics` 固定输出 |
 | 固定数据库投影 | `FileGovernanceRepository`、`PlatformFileRuntimeRepository`、`FileDispatchRepository`、`DispatchChannelHealthRepository` | mapper/真 PG IT、import/export/dispatch E2E |
 | Java SDK 固定 transport | `PlatformHttpClient` 的 register/heartbeat/deactivate/claim/report/renew 响应 | SDK contract、live transport、Java testkit |
 
@@ -80,11 +80,17 @@
 |---|---|---|
 | `DefaultFileGovernanceService.createUploadSession` | 返回字段固定，随文件治理批次类型化 | 先确认 Console 与 worker 两个调用方 wire 是否相同 |
 | `FileGovernanceRepository` | 多数查询列固定，应拆 typed projection；`operationDetail` 可能含动态 evidence | 固定列类型化，动态 evidence 留在具名字段 Map 内 |
-| `FileGovernanceMetricsCacheService` | 外层 latency 指标固定、缓存载荷当前为 JSON Map | 对外 typed，缓存序列化边界可保留 Map 或改专用 snapshot |
+| `FileGovernanceMetricsCacheService` | 外层 latency 指标固定、缓存载荷当前为 JSON Map | Controller/调度器使用 `FileGovernanceLatencyMetrics`；缓存序列化边界保留 Map 以兼容历史 Redis 数据 |
 | `PlatformFileRuntimeRepository` | 当前兼容 facade 聚合多个 repository | typed view 应在实际子 repository 定义，facade 只保留必要兼容重载 |
 | `FileDispatchRepository` | 文件/渠道/dispatch/receipt poll 都是固定投影 | 按四个 view 分拆，不建立一个万能 DTO |
 
-## 5. 大类裁定
+## 5. 阶段 1/3 收口记录
+
+- 阶段 1：请求路径参数与 body 的命令拼装已提取为命名转换方法；后续只在触及模块时治理局部表达，不做机械全仓改写。
+- 阶段 3：固定的文件治理延迟指标已从 Controller 返回 Map 改为 record；样本行、JSONB、metadata、插件参数、动态聚合和兼容解析仍保留 Map，并由本清单登记原因。
+- 文件治理 Repository、worker runtime facade 和 dispatch facade 中仍存在的 Map 是内部兼容/动态载荷边界；在没有稳定字段集合或需要保持历史 `SELECT *` 兼容时，不继续强行 DTO 化。
+
+## 6. 大类裁定
 
 | 裁定 | 类 |
 |---|---|

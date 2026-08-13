@@ -5,8 +5,8 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.FileU
 import io.github.pinpols.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -77,22 +77,13 @@ public class FileGovernanceController {
   @PostMapping("/arrival-groups/{fileGroupCode}/actions")
   public FileOperationResponse operateArrivalGroup(
       @PathVariable String fileGroupCode, @RequestBody ArrivalGroupOperationRequest request) {
-    ArrivalGroupGovernanceCommand command = ArrivalGroupGovernanceCommand.builder()
-        .tenantId(request.tenantId())
-        .fileGroupCode(fileGroupCode)
-        .bizDate(request.bizDate())
-        .action(request.action())
-        .operatorId(request.operatorId())
-        .traceId(request.traceId())
-        .reason(request.reason())
-        .extendWaitSeconds(request.extendWaitSeconds())
-        .build();
+    ArrivalGroupGovernanceCommand command = toArrivalGroupCommand(fileGroupCode, request);
     String result = fileGovernanceService.operateArrivalGroup(command);
     return new FileOperationResponse(result);
   }
 
   @GetMapping("/governance/latency-metrics")
-  public Map<String, Object> latencyMetrics(@RequestParam String tenantId) {
+  public FileGovernanceLatencyMetrics latencyMetrics(@RequestParam String tenantId) {
     return fileGovernanceScheduler.loadLatencyMetrics(tenantId);
   }
 
@@ -105,6 +96,26 @@ public class FileGovernanceController {
         request.traceId(),
         request.reason(),
         request.approvalId());
+  }
+
+  /**
+   * 将 HTTP 请求转换为业务命令，集中保留路径参数与请求体字段的合并规则。
+   *
+   * <p>文件组编码来自 URL，其他字段来自请求体；单独命名这个边界转换可以让 Controller 方法只保留“接收、调用、返回”的主流程，
+   * 也避免后续新增字段时把参数拼装逻辑和业务调用混在一起。
+   */
+  private ArrivalGroupGovernanceCommand toArrivalGroupCommand(
+      String fileGroupCode, ArrivalGroupOperationRequest request) {
+    return ArrivalGroupGovernanceCommand.builder()
+        .tenantId(request.tenantId())
+        .fileGroupCode(fileGroupCode)
+        .bizDate(request.bizDate())
+        .action(request.action())
+        .operatorId(request.operatorId())
+        .traceId(request.traceId())
+        .reason(request.reason())
+        .extendWaitSeconds(request.extendWaitSeconds())
+        .build();
   }
 
   public record FileOperationRequest(

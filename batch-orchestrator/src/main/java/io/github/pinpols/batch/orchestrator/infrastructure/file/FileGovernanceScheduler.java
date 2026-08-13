@@ -92,26 +92,25 @@ public class FileGovernanceScheduler {
     }
     String tenantId = properties.getReconcile().getDefaultTenantId();
     sweepStaleRunningPipelines(tenantId);
-    Map<String, Object> metrics = metricsCacheService.compute(
+    Map<String, Object> rawMetrics = metricsCacheService.compute(
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayMaxAgeSeconds(),
         properties.getLatency().getSampleSize());
-    long arrivalCount = asLong(metrics.get("arrivalDelayViolations"));
-    long arrivalMax = asLong(metrics.get("maxArrivalDelaySeconds"));
-    long processingCount = asLong(metrics.get("processingDelayViolations"));
-    long processingMax = asLong(metrics.get("maxProcessingDelaySeconds"));
+    FileGovernanceLatencyMetrics metrics = FileGovernanceLatencyMetrics.from(rawMetrics);
+    long arrivalCount = metrics.arrivalDelayViolations();
+    long arrivalMax = metrics.maxArrivalDelaySeconds();
+    long processingCount = metrics.processingDelayViolations();
+    long processingMax = metrics.maxProcessingDelaySeconds();
     arrivalDelayViolations.set(arrivalCount);
     arrivalDelayMaxSeconds.set(arrivalMax);
     processingDelayViolations.set(processingCount);
     processingDelayMaxSeconds.set(processingMax);
-    metricsCacheService.write(tenantId, metrics);
+    metricsCacheService.write(tenantId, rawMetrics);
 
     if (arrivalCount > 0) {
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> samples =
-          (List<Map<String, Object>>) metrics.getOrDefault("arrivalDelaySamples", List.of());
+      List<Map<String, Object>> samples = metrics.arrivalDelaySamples();
       log.warn(
           "file arrival delay violations detected: count={}, maxDelaySeconds={}," + " samples={}",
           arrivalCount,
@@ -119,9 +118,7 @@ public class FileGovernanceScheduler {
           samples);
     }
     if (processingCount > 0) {
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> samples =
-          (List<Map<String, Object>>) metrics.getOrDefault("processingDelaySamples", List.of());
+      List<Map<String, Object>> samples = metrics.processingDelaySamples();
       log.warn(
           "pipeline processing delay violations detected: count={}, maxDelaySeconds={},"
               + " samples={}",
@@ -161,23 +158,13 @@ public class FileGovernanceScheduler {
     }
   }
 
-  public Map<String, Object> loadLatencyMetrics(String tenantId) {
-    return metricsCacheService.load(
+  public FileGovernanceLatencyMetrics loadLatencyMetrics(String tenantId) {
+    return FileGovernanceLatencyMetrics.from(metricsCacheService.load(
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayMaxAgeSeconds(),
-        properties.getLatency().getSampleSize());
-  }
-
-  private long asLong(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (EmptyChecks.isNull(value)) {
-      return 0L;
-    }
-    return Long.parseLong(String.valueOf(value));
+        properties.getLatency().getSampleSize()));
   }
 
   public void manageFileArrivalGroups() {
