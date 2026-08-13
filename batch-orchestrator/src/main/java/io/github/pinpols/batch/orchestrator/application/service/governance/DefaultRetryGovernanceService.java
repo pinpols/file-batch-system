@@ -431,7 +431,11 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   @Override
-  private void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
+  public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
+    replayDeadLetterInNewTransaction(tenantId, deadLetterTaskId);
+  }
+
+  private void replayDeadLetterWithinTransaction(String tenantId, Long deadLetterTaskId) {
     DeadLetterTaskEntity deadLetterTask =
         deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
     if (deadLetterTask == null) {
@@ -754,7 +758,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     DeadLetterOrphanSourceException[] orphanSource = new DeadLetterOrphanSourceException[1];
     newTransaction().executeWithoutResult(status -> {
       try {
-        replayDeadLetter(tenantId, deadLetterTaskId);
+        replayDeadLetterWithinTransaction(tenantId, deadLetterTaskId);
       } catch (DeadLetterOrphanSourceException exception) {
         // 保留原 noRollbackFor 语义：GIVE_UP 必须提交，再由事务外重抛供 scheduler 记录。
         orphanSource[0] = exception;
