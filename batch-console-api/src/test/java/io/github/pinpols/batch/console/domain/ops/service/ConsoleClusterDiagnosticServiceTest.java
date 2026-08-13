@@ -61,11 +61,11 @@ class ConsoleClusterDiagnosticServiceTest {
             "tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
         .thenReturn(5L);
 
-    Map<String, Object> result = service.workerConsistency("tenant-a");
+    var result = service.workerConsistency("tenant-a");
 
-    assertThat(result).containsEntry("onlineWorkers", 2L);
-    assertThat(result).containsEntry("runningInstances", 5L);
-    assertThat(result).containsEntry("healthy", true);
+    assertThat(result.onlineWorkers()).isEqualTo(2L);
+    assertThat(result.runningInstances()).isEqualTo(5L);
+    assertThat(result.healthy()).isTrue();
   }
 
   @Test
@@ -81,11 +81,11 @@ class ConsoleClusterDiagnosticServiceTest {
             "tenant-a", List.of(JobInstanceStatus.RUNNING.code())))
         .thenReturn(3L);
 
-    Map<String, Object> result = service.workerConsistency("tenant-a");
+    var result = service.workerConsistency("tenant-a");
 
-    assertThat(result).containsEntry("onlineWorkers", 0L);
-    assertThat(result).containsEntry("runningInstances", 3L);
-    assertThat(result).containsEntry("healthy", false);
+    assertThat(result.onlineWorkers()).isZero();
+    assertThat(result.runningInstances()).isEqualTo(3L);
+    assertThat(result.healthy()).isFalse();
   }
 
   @Test
@@ -95,10 +95,10 @@ class ConsoleClusterDiagnosticServiceTest {
         .thenReturn(2L);
     when(diagnosticMapper.countDecommissionedWorkersWithActiveTasks("tenant-a")).thenReturn(1L);
 
-    Map<String, Object> result = service.workerConsistency("tenant-a");
+    var result = service.workerConsistency("tenant-a");
 
-    assertThat(result).containsEntry("decommissionedWorkersWithActiveTasks", 1L);
-    assertThat(result).containsEntry("healthy", false);
+    assertThat(result.decommissionedWorkersWithActiveTasks()).isEqualTo(1L);
+    assertThat(result.healthy()).isFalse();
   }
 
   @Test
@@ -108,10 +108,10 @@ class ConsoleClusterDiagnosticServiceTest {
     when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
     when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(50L);
 
-    Map<String, Object> result = service.outboxHealth("tenant-a");
+    var result = service.outboxHealth("tenant-a");
 
-    assertThat(result).containsEntry("pendingEvents", 50L);
-    assertThat(result).containsEntry("healthy", true);
+    assertThat(result.pendingEvents()).isEqualTo(50L);
+    assertThat(result.healthy()).isTrue();
   }
 
   @Test
@@ -121,10 +121,10 @@ class ConsoleClusterDiagnosticServiceTest {
     when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
     when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(1500L);
 
-    Map<String, Object> result = service.outboxHealth("tenant-a");
+    var result = service.outboxHealth("tenant-a");
 
-    assertThat(result).containsEntry("pendingEvents", 1500L);
-    assertThat(result).containsEntry("healthy", false);
+    assertThat(result.pendingEvents()).isEqualTo(1500L);
+    assertThat(result.healthy()).isFalse();
   }
 
   @Test
@@ -135,10 +135,10 @@ class ConsoleClusterDiagnosticServiceTest {
             "tenant-a", OutboxPublishStatus.PUBLISHING.code(), 120L))
         .thenReturn(1L);
 
-    Map<String, Object> result = service.outboxHealth("tenant-a");
+    var result = service.outboxHealth("tenant-a");
 
-    assertThat(result).containsEntry("stalePublishingEvents", 1L);
-    assertThat(result).containsEntry("healthy", false);
+    assertThat(result.stalePublishingEvents()).isEqualTo(1L);
+    assertThat(result.healthy()).isFalse();
   }
 
   @Test
@@ -146,10 +146,10 @@ class ConsoleClusterDiagnosticServiceTest {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(diagnosticMapper.countTerminalInstancesWithActiveChildren("tenant-a")).thenReturn(2L);
 
-    Map<String, Object> result = service.terminalChildrenHealth("tenant-a");
+    var result = service.terminalChildrenHealth("tenant-a");
 
-    assertThat(result).containsEntry("terminalInstancesWithActiveChildren", 2L);
-    assertThat(result).containsEntry("healthy", false);
+    assertThat(result.terminalInstancesWithActiveChildren()).isEqualTo(2L);
+    assertThat(result.healthy()).isFalse();
   }
 
   @Test
@@ -164,12 +164,11 @@ class ConsoleClusterDiagnosticServiceTest {
     when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 7L, 120L)).thenReturn(List.of());
     when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(1L);
 
-    Map<String, Object> result = service.instanceDiagnosis("tenant-a", 7L);
+    var result = service.instanceDiagnosis("tenant-a", 7L);
 
-    assertThat(result).containsEntry("healthy", false);
-    List<Map<String, Object>> findings = (List<Map<String, Object>>) result.get("findings");
-    assertThat(findings)
-        .extracting(row -> row.get("reasonCode"))
+    assertThat(result.healthy()).isFalse();
+    assertThat(result.findings())
+        .extracting(finding -> finding.reasonCode())
         .contains("INSTANCE_HAS_NO_CHILDREN");
   }
 
@@ -191,11 +190,10 @@ class ConsoleClusterDiagnosticServiceTest {
             "reasonCode", "RUNNING_TASK_HEARTBEAT_STALE",
             "assignedWorkerCode", "w1")));
 
-    Map<String, Object> result = service.instanceDiagnosis("tenant-a", 8L);
+    var result = service.instanceDiagnosis("tenant-a", 8L);
 
-    List<Map<String, Object>> findings = (List<Map<String, Object>>) result.get("findings");
-    assertThat(findings)
-        .extracting(row -> row.get("reasonCode"))
+    assertThat(result.findings())
+        .extracting(finding -> finding.reasonCode())
         .contains("OUTBOX_EVENTS_NOT_TERMINAL", "RUNNING_TASK_HEARTBEAT_STALE");
   }
 

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -27,7 +28,7 @@ public class DefaultConsoleAlertRoutingApplicationService
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @Override
-  public PageResponse<Map<String, Object>> list(
+  public PageResponse<ConsoleAlertRoutingResponse> list(
       String tenantId,
       String routeCode,
       String team,
@@ -41,11 +42,15 @@ public class DefaultConsoleAlertRoutingApplicationService
         alertRoutingConfigMapper.countByQuery(resolved, routeCode, team, severity, enabled);
     List<Map<String, Object>> items = alertRoutingConfigMapper.selectByQuery(
         resolved, routeCode, team, severity, enabled, pageRequest);
-    return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
+    return new PageResponse<>(
+        total,
+        pageRequest.pageNo(),
+        pageRequest.pageSize(),
+        items.stream().map(ConsoleAlertRoutingResponse::from).toList());
   }
 
   @Override
-  public Map<String, Object> create(AlertRoutingSaveRequest request) {
+  public ConsoleAlertRoutingResponse create(AlertRoutingSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
@@ -57,11 +62,12 @@ public class DefaultConsoleAlertRoutingApplicationService
     }
     AlertRoutingConfigUpsertParam param = toParam(null, tenantId, request);
     alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
-    return alertRoutingConfigMapper.selectByUniqueKey(tenantId, param.getRouteCode());
+    return ConsoleAlertRoutingResponse.from(
+        alertRoutingConfigMapper.selectByUniqueKey(tenantId, param.getRouteCode()));
   }
 
   @Override
-  public Map<String, Object> update(Long id, AlertRoutingSaveRequest request) {
+  public ConsoleAlertRoutingResponse update(Long id, AlertRoutingSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing = Guard.requireFound(
         alertRoutingConfigMapper.selectById(tenantId, id), "alert routing not found");
@@ -80,7 +86,7 @@ public class DefaultConsoleAlertRoutingApplicationService
     // PATCH 语义:request 没传的字段保留 existing 值,避免 NOT NULL 违反 (BE-ISSUE-6)
     mergeWithExisting(param, request, existing);
     alertRoutingConfigMapper.updateById(param);
-    return alertRoutingConfigMapper.selectById(tenantId, id);
+    return ConsoleAlertRoutingResponse.from(alertRoutingConfigMapper.selectById(tenantId, id));
   }
 
   private static void mergeWithExisting(

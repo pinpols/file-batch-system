@@ -2,12 +2,11 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.domain.job.web.request.BatchDayOperateRequest;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -37,13 +36,12 @@ public class ConsoleBatchDayController {
   @PostMapping("/operate")
   public CommonResponse<ConsoleBatchDayOperateResponse> operate(
       @Valid @RequestBody BatchDayOperateRequest request) {
-    Map<String, Object> result = orchestratorProxyService.batchDayOperate(
+    return responseFactory.success(orchestratorProxyService.batchDayOperate(
         request.getTenantId(),
         request.getCalendarCode(),
         request.getBizDate(),
         request.getAction(),
         request.getOperatorId(),
-        request.getReason());
-    return responseFactory.success(ConsoleBatchDayOperateResponse.from(result));
+        request.getReason()));
   }
 }

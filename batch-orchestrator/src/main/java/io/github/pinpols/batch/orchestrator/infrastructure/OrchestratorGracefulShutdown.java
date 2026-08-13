@@ -2,8 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
@@ -37,6 +35,9 @@ public class OrchestratorGracefulShutdown
   // 容器内 Spring 调 setApplicationEventPublisher 注入;单测 new 该类时不调用 → 保持 null,
   // 下方所有用法均已 null 守护。
   private ApplicationEventPublisher eventPublisher;
+
+  /** 对外稳定的 drain 状态契约。 */
+  public record DrainStatus(boolean draining, Instant drainingSince, String reason) {}
 
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
@@ -88,11 +89,7 @@ public class OrchestratorGracefulShutdown
     return draining.get();
   }
 
-  public Map<String, Object> status() {
-    Map<String, Object> status = new LinkedHashMap<>();
-    status.put("draining", draining.get());
-    status.put("drainingSince", drainingSince);
-    status.put("reason", reason);
-    return status;
+  public DrainStatus status() {
+    return new DrainStatus(draining.get(), drainingSince, reason);
   }
 }

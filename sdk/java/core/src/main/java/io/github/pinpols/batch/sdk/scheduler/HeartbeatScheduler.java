@@ -7,6 +7,7 @@ import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -120,9 +121,11 @@ public class HeartbeatScheduler implements AutoCloseable {
           body.put("capabilityTags", identity.capabilityTags());
         }
       }
-      Map<String, Object> resp = httpClient.heartbeat(config.getWorkerCode(), body);
+      HeartbeatDirective resp = httpClient.heartbeat(config.getWorkerCode(), body);
       // Phase 2 §2.4:回包是 platform directive,据此驱动 dispatcher 4 态状态机
-      directive = HeartbeatDirective.fromResponse(resp);
+      directive = resp == null
+          ? new HeartbeatDirective(HeartbeatDirective.STATUS_NORMAL, null, false, List.of(), null)
+          : resp;
       dispatcher.applyPlatformDirective(directive);
     } catch (Exception t) {
       // 不能让心跳异常杀掉 scheduler — fixed-rate 一旦抛会停

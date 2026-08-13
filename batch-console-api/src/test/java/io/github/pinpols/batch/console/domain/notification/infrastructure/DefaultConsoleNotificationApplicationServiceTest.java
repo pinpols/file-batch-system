@@ -23,6 +23,9 @@ import io.github.pinpols.batch.console.domain.notification.service.WebhookEventP
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationChannelResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationDeliveryLogResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationTestResultResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
@@ -79,22 +82,22 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   void shouldListChannels() {
     when(channelMapper.selectByTenant("tenant-a"))
-        .thenReturn(List.of(Map.of("channelCode", "email-1")));
+        .thenReturn(List.of(Map.of("channel_code", "email-1")));
 
-    List<Map<String, Object>> result = service.listChannels("tenant-a");
+    List<ConsoleNotificationChannelResponse> result = service.listChannels("tenant-a");
 
     assertThat(result).hasSize(1);
-    assertThat(result.get(0)).containsEntry("channelCode", "email-1");
+    assertThat(result.get(0).channelCode()).isEqualTo("email-1");
   }
 
   @Test
   void shouldGetChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channelCode", "email-1"));
+        .thenReturn(Map.of("channel_code", "email-1"));
 
-    Map<String, Object> result = service.getChannel("tenant-a", "email-1");
+    ConsoleNotificationChannelResponse result = service.getChannel("tenant-a", "email-1");
 
-    assertThat(result).containsEntry("channelCode", "email-1");
+    assertThat(result.channelCode()).isEqualTo("email-1");
   }
 
   @Test
@@ -333,7 +336,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldReturnLogsAndCapLimit() {
     when(deliveryLogMapper.selectByTenant("tenant-a", 500)).thenReturn(List.of(Map.of("id", 1L)));
 
-    List<Map<String, Object>> logs = service.deliveryLogs("tenant-a", 999);
+    List<ConsoleNotificationDeliveryLogResponse> logs = service.deliveryLogs("tenant-a", 999);
 
     assertThat(logs).hasSize(1);
     verify(deliveryLogMapper).selectByTenant("tenant-a", 500);
@@ -353,7 +356,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any(NotificationMessage.class))).thenReturn(WebhookDeliveryResult.ok());
 
-    Map<String, Object> result = service.testChannel("tenant-a", "wecom-1");
+    ConsoleNotificationTestResultResponse result = service.testChannel("tenant-a", "wecom-1");
 
     // 真调了 sender(不再是假成功)
     ArgumentCaptor<NotificationMessage> msgCaptor = ArgumentCaptor.captor();
@@ -361,11 +364,10 @@ class DefaultConsoleNotificationApplicationServiceTest {
     assertThat(msgCaptor.getValue().channelType()).isEqualTo("WECOM");
     assertThat(msgCaptor.getValue().payload().eventType()).isEqualTo("TEST");
 
-    assertThat(result)
-        .containsEntry("channelCode", "wecom-1")
-        .containsEntry("channelType", "WECOM")
-        .containsEntry("success", true)
-        .containsEntry("status", "OK");
+    assertThat(result.channelCode()).isEqualTo("wecom-1");
+    assertThat(result.channelType()).isEqualTo("WECOM");
+    assertThat(result.success()).isTrue();
+    assertThat(result.status()).isEqualTo("OK");
 
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(captor.capture());
@@ -393,13 +395,12 @@ class DefaultConsoleNotificationApplicationServiceTest {
     when(sender.send(any(NotificationMessage.class)))
         .thenReturn(WebhookDeliveryResult.failure(200, "wecom errcode=93000"));
 
-    Map<String, Object> result = service.testChannel("tenant-a", "wecom-1");
+    ConsoleNotificationTestResultResponse result = service.testChannel("tenant-a", "wecom-1");
 
-    assertThat(result)
-        .containsEntry("success", false)
-        .containsEntry("status", "FAILED")
-        .containsEntry("errorSummary", "wecom errcode=93000");
-    assertThat(result.get("message").toString()).contains("wecom errcode=93000");
+    assertThat(result.success()).isFalse();
+    assertThat(result.status()).isEqualTo("FAILED");
+    assertThat(result.errorSummary()).isEqualTo("wecom errcode=93000");
+    assertThat(result.message()).contains("wecom errcode=93000");
 
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(captor.capture());
@@ -424,7 +425,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
             any(String.class)))
         .thenReturn(WebhookDeliveryResult.ok());
 
-    Map<String, Object> result = service.testChannel("tenant-a", "hook-1");
+    ConsoleNotificationTestResultResponse result = service.testChannel("tenant-a", "hook-1");
 
     ArgumentCaptor<WebhookSubscriptionEntity> subCaptor = ArgumentCaptor.captor();
     verify(webhookDispatcher)
@@ -433,7 +434,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
     assertThat(subCaptor.getValue().getSecret()).isEqualTo("s3cr3t");
     // WEBHOOK 不经 sender 注册表
     verify(senderRegistry, never()).resolve(any());
-    assertThat(result).containsEntry("success", true).containsEntry("status", "OK");
+    assertThat(result.success()).isTrue();
+    assertThat(result.status()).isEqualTo("OK");
   }
 
   @Test

@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileError
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordDetailResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
@@ -46,6 +47,7 @@ import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQue
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowRunQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowTopologyQueryRequest;
+import io.github.pinpols.batch.console.domain.workflow.web.response.CodeNameOption;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowDefinitionResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
@@ -67,7 +69,6 @@ import io.github.pinpols.batch.console.web.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.RetryScheduleQueryRequest;
 import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
 import java.util.List;
-import java.util.Map;
 
 /** 控制台只读查询应用服务：将 Web 查询条件转换为领域查询并返回列表或视图数据。 */
 public interface ConsoleQueryApplicationService {
@@ -111,10 +112,10 @@ public interface ConsoleQueryApplicationService {
   PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request);
 
   /** 查询 ACTIVE 作业定义下拉。 */
-  List<Map<String, Object>> jobDefinitionCodes(String tenantId);
+  List<CodeNameOption> jobDefinitionCodes(String tenantId);
 
   /** 查询 ACTIVE 文件流水线定义下拉。 */
-  List<Map<String, Object>> pipelineDefinitionCodes(String tenantId);
+  List<CodeNameOption> pipelineDefinitionCodes(String tenantId);
 
   /** 查询 Outbox 重试日志。 */
   PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
@@ -207,11 +208,12 @@ public interface ConsoleQueryApplicationService {
   /** 查询批量日窗口状态。 */
   ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request);
 
-  Map<String, Object> fileChannelDetail(String tenantId, String channelCode);
+  ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode);
 
-  Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version);
+  ConsoleFileTemplateResponse fileTemplateDetail(
+      String tenantId, String templateCode, Integer version);
 
-  Map<String, Object> fileRecordDetail(String tenantId, Long fileId);
+  ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId);
 
   ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id);
 }

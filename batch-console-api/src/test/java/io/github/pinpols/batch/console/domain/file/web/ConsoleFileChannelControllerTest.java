@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileProjectionMapper;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -57,7 +58,7 @@ class ConsoleFileChannelControllerTest {
   @Test
   void shouldReturn200WhenGetChannelById() throws Exception {
     when(applicationService.get(anyLong(), anyString()))
-        .thenReturn(Map.of("id", 1L, "tenantId", "t1"));
+        .thenReturn(ConsoleFileProjectionMapper.channel(Map.of("id", 1L, "tenant_id", "t1")));
 
     mockMvc
         .perform(get("/api/console/file-channels/1").param("tenantId", "t1"))
@@ -102,7 +103,7 @@ class ConsoleFileChannelControllerTest {
   @Test
   void shouldReturn200WhenUpdateChannel() throws Exception {
     when(applicationService.update(anyLong(), any()))
-        .thenReturn(Map.of("id", 1L, "tenantId", "t1"));
+        .thenReturn(ConsoleFileProjectionMapper.channel(Map.of("id", 1L, "tenant_id", "t1")));
 
     mockMvc
         .perform(put("/api/console/file-channels/1")

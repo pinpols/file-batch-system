@@ -3,7 +3,14 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
@@ -42,7 +49,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   private final ConsoleQueryCacheService cacheService;
 
   @Override
-  public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
+  public ConsoleInstanceActionResponse instanceAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -52,11 +59,11 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             .post()
             .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsoleInstanceActionResponse.class));
   }
 
   @Override
-  public Map<String, Object> partitionAction(Long id, String tenantId, String action) {
+  public ConsolePartitionActionResponse partitionAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -70,11 +77,12 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 action,
                 resolved)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsolePartitionActionResponse.class));
   }
 
   @Override
-  public Map<String, Object> retryFailedPartitions(Long instanceId, String tenantId) {
+  public ConsoleRetryFailedPartitionsResponse retryFailedPartitions(
+      Long instanceId, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(
         SVC,
@@ -87,13 +95,14 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 instanceId,
                 resolved)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsoleRetryFailedPartitionsResponse.class));
   }
 
   @Override
-  public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
+  public ConsoleWorkflowRunActionResponse workflowRunAction(
+      Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> response = downstreamFallback.callOrThrow(
+    ConsoleWorkflowRunActionResponse response = downstreamFallback.callOrThrow(
         SVC,
         "workflow-run-action",
         () -> orchestratorInternalRestClient
@@ -101,15 +110,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             .post()
             .uri("/internal/workflow-runs/{id}/{action}?tenantId={tenantId}", id, action, resolved)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsoleWorkflowRunActionResponse.class));
     publishRefresh(resolved);
     return response;
   }
 
   @Override
-  public Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode) {
+  public ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(
+      Long id, String tenantId, String nodeCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> response = downstreamFallback.callOrThrow(
+    ConsoleWorkflowRunSkipNodeResponse response = downstreamFallback.callOrThrow(
         SVC,
         "workflow-run-skip-node",
         () -> orchestratorInternalRestClient
@@ -121,7 +131,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 resolved,
                 nodeCode)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsoleWorkflowRunSkipNodeResponse.class));
     publishRefresh(resolved);
     return response;
   }
@@ -252,7 +262,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public Map<String, Object> batchDayOperate(
+  public ConsoleBatchDayOperateResponse batchDayOperate(
       String tenantId,
       String calendarCode,
       LocalDate bizDate,
@@ -267,7 +277,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     body.put("action", action);
     body.put("operatorId", operatorId);
     body.put("reason", reason);
-    Map<String, Object> response = downstreamFallback.callOrThrow(
+    ConsoleBatchDayOperateResponse response = downstreamFallback.callOrThrow(
         SVC,
         "batch-day-operate",
         () -> orchestratorInternalRestClient
@@ -276,13 +286,13 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             .uri("/internal/batch-days/operate")
             .body(body)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsoleBatchDayOperateResponse.class));
     publishRefresh(resolved);
     return response;
   }
 
   @Override
-  public Map<String, Object> requestForensicExport(
+  public ConsoleForensicExportResponse requestForensicExport(
       String tenantId,
       LocalDate bizDateFrom,
       LocalDate bizDateTo,
@@ -306,7 +316,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             .uri("/internal/forensic/export")
             .body(body)
             .retrieve()
-            .body(new ParameterizedTypeReference<Map<String, Object>>() {}));
+            .body(ConsoleForensicExportResponse.class));
   }
 
   @Override

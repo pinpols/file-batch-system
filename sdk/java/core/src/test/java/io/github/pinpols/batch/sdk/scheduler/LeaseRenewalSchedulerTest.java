@@ -102,7 +102,7 @@ class LeaseRenewalSchedulerTest {
   @Test
   void cancelRequestedResponseSignalsCancellation() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.renew(eq(10L), any())).thenReturn(Map.of("cancelRequested", true));
+    when(http.renew(eq(10L), any())).thenReturn(new PlatformHttpClient.TaskRenewResponse(true));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
     try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {
@@ -115,7 +115,7 @@ class LeaseRenewalSchedulerTest {
   @Test
   void cancelNotRequestedDoesNotSignal() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.renew(eq(10L), any())).thenReturn(Map.of("cancelRequested", false));
+    when(http.renew(eq(10L), any())).thenReturn(new PlatformHttpClient.TaskRenewResponse(false));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
     try (LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher)) {

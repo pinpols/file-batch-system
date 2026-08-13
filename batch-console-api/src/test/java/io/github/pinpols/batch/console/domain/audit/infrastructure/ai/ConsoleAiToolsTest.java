@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecuti
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -159,7 +160,8 @@ class ConsoleAiToolsTest {
     diagnostics.put("workers", workers);
     diagnostics.put("outbox", outbox);
     diagnostics.put("terminalChildren", terminalChildren);
-    when(diagnosticService.diagnose(TENANT)).thenReturn(diagnostics);
+    when(diagnosticService.diagnose(TENANT))
+        .thenReturn(ConsoleClusterDiagnosticResponse.from(diagnostics));
 
     String out = tools().getClusterDiagnostics();
 
@@ -177,7 +179,7 @@ class ConsoleAiToolsTest {
 
   @Test
   void getClusterDiagnosticsHandlesEmptyResult() {
-    when(diagnosticService.diagnose(TENANT)).thenReturn(Map.of());
+    when(diagnosticService.diagnose(TENANT)).thenReturn(null);
     assertThat(tools().getClusterDiagnostics()).isNotBlank();
   }
 

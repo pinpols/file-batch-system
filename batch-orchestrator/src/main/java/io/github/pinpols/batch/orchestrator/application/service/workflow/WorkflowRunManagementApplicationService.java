@@ -12,6 +12,8 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.NodeAction;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.RunAction;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -69,7 +71,7 @@ public class WorkflowRunManagementApplicationService {
   private final ObjectProvider<AlertEventService> alertEventServiceProvider;
 
   @Transactional
-  public Map<String, Object> cancel(String tenantId, Long id) {
+  public RunAction cancel(String tenantId, Long id) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!CANCELLABLE.contains(run.getRunStatus())) {
       throw BizException.of(
@@ -79,7 +81,7 @@ public class WorkflowRunManagementApplicationService {
   }
 
   @Transactional
-  public Map<String, Object> terminate(String tenantId, Long id) {
+  public RunAction terminate(String tenantId, Long id) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!TERMINABLE.contains(run.getRunStatus())) {
       throw BizException.of(
@@ -92,13 +94,13 @@ public class WorkflowRunManagementApplicationService {
 
   /** ADR-044 暂停 RUNNING → PAUSED:停止推进下游 DAG 节点,在途节点自然终结。 */
   @Transactional
-  public Map<String, Object> pause(String tenantId, Long id) {
+  public RunAction pause(String tenantId, Long id) {
     return lifecycleFlip(tenantId, id, PAUSABLE, STATUS_PAUSED);
   }
 
   /** ADR-044 恢复 PAUSED → RUNNING:重新推进 DAG。 */
   @Transactional
-  public Map<String, Object> resume(String tenantId, Long id) {
+  public RunAction resume(String tenantId, Long id) {
     return lifecycleFlip(tenantId, id, RESUMABLE, STATUS_RUNNING);
   }
 
@@ -107,7 +109,7 @@ public class WorkflowRunManagementApplicationService {
    *
    * <p>复用 expectedStatuses 守护做 CAS;不动 finished_at、不发 outbox(非终态)。
    */
-  private Map<String, Object> lifecycleFlip(
+  private RunAction lifecycleFlip(
       String tenantId, Long id, Set<String> expectedFrom, String targetStatus) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!expectedFrom.contains(run.getRunStatus())) {
@@ -126,22 +128,22 @@ public class WorkflowRunManagementApplicationService {
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
-    return Map.of("id", id, "status", targetStatus);
+    return new RunAction(id, targetStatus);
   }
 
   /** 老入口,backward-compat;新代码请传 operatorId / reason。 */
   @Transactional
-  public Map<String, Object> skipNode(String tenantId, Long id, String nodeCode) {
+  public NodeAction skipNode(String tenantId, Long id, String nodeCode) {
     return skipNodeInternal(tenantId, id, nodeCode, null, null);
   }
 
   @Transactional
-  public Map<String, Object> skipNode(
+  public NodeAction skipNode(
       String tenantId, Long id, String nodeCode, String operatorId, String reason) {
     return skipNodeInternal(tenantId, id, nodeCode, operatorId, reason);
   }
 
-  private Map<String, Object> skipNodeInternal(
+  private NodeAction skipNodeInternal(
       String tenantId, Long id, String nodeCode, String operatorId, String reason) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!"RUNNING".equals(run.getRunStatus()) && !"FAILED".equals(run.getRunStatus())) {
@@ -168,7 +170,7 @@ public class WorkflowRunManagementApplicationService {
     // P1-2: 写 audit 行 + 发 WARN alert,补齐"运维介入"事后追溯。
     appendSkipNodeAudit(run, nodeCode, nodeRun.getId(), operatorId, reason);
     emitSkipNodeAlert(run, nodeCode, operatorId);
-    return Map.of("id", id, "nodeCode", nodeCode, "nodeStatus", "SKIPPED");
+    return new NodeAction(id, nodeCode, "SKIPPED");
   }
 
   private void appendSkipNodeAudit(
@@ -228,7 +230,7 @@ public class WorkflowRunManagementApplicationService {
   }
 
   /** 把 run 切到 TERMINATED：SQL 期望前态守护 + 同事务发 outbox 终态事件。 */
-  private Map<String, Object> flipToTerminated(WorkflowRunEntity run, Set<String> expectedFrom) {
+  private RunAction flipToTerminated(WorkflowRunEntity run, Set<String> expectedFrom) {
     Instant finishedAt = BatchDateTimeSupport.utcNow();
     int updated = workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
         .tenantId(run.getTenantId())
@@ -246,7 +248,7 @@ public class WorkflowRunManagementApplicationService {
           "<concurrent transition>");
     }
     workflowTerminalOutboxService.writeTerminalEvent(run, STATUS_TERMINATED, finishedAt);
-    return Map.of("id", run.getId(), "status", STATUS_TERMINATED);
+    return new RunAction(run.getId(), STATUS_TERMINATED);
   }
 
   /**

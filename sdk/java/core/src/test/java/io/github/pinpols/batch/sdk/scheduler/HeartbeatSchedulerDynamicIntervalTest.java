@@ -12,11 +12,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -42,13 +42,8 @@ class HeartbeatSchedulerDynamicIntervalTest {
         .build();
   }
 
-  private static Map<String, Object> respWithHint(Integer hintSeconds) {
-    Map<String, Object> r = new HashMap<>();
-    r.put("platformStatus", "NORMAL");
-    if (hintSeconds != null) {
-      r.put("nextHeartbeatHint", hintSeconds);
-    }
-    return r;
+  private static HeartbeatDirective respWithHint(Integer hintSeconds) {
+    return new HeartbeatDirective("NORMAL", null, false, List.of(), hintSeconds);
   }
 
   @Test

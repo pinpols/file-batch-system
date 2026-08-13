@@ -18,6 +18,8 @@ import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery
 import io.github.pinpols.batch.console.domain.file.web.query.FileTemplateQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileProjectionMapper;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -56,7 +58,7 @@ public class DefaultConsoleFileTemplateApplicationService
   private final ObjectMapper objectMapper;
 
   @Override
-  public PageResponse<Map<String, Object>> list(FileTemplateQueryRequest request) {
+  public PageResponse<ConsoleFileTemplateResponse> list(FileTemplateQueryRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     FileTemplateConfigQuery query = new FileTemplateConfigQuery(
@@ -70,17 +72,22 @@ public class DefaultConsoleFileTemplateApplicationService
         pageRequest);
     long total = mapper.countByQuery(query);
     List<Map<String, Object>> items = mapper.selectByQuery(query);
-    return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
+    return new PageResponse<>(
+        total,
+        pageRequest.pageNo(),
+        pageRequest.pageSize(),
+        items.stream().map(ConsoleFileProjectionMapper::template).toList());
   }
 
   @Override
-  public Map<String, Object> get(Long id, String tenantId) {
+  public ConsoleFileTemplateResponse get(Long id, String tenantId) {
     String resolved = resolveTenant(tenantId);
-    return Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
+    return ConsoleFileProjectionMapper.template(
+        Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id));
   }
 
   @Override
-  public Map<String, Object> create(FileTemplateCreateRequest request) {
+  public ConsoleFileTemplateResponse create(FileTemplateCreateRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
     int version = request.getVersion() != null ? request.getVersion() : 1;
     Map<String, Object> existing =
@@ -93,11 +100,12 @@ public class DefaultConsoleFileTemplateApplicationService
     }
     String operator = requestMetadataResolver.current().operatorId();
     mapper.upsertFileTemplateConfig(buildCreateParam(tenantId, version, operator, request));
-    return mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version);
+    return ConsoleFileProjectionMapper.template(
+        mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version));
   }
 
   @Override
-  public Map<String, Object> update(Long id, FileTemplateUpdateRequest request) {
+  public ConsoleFileTemplateResponse update(Long id, FileTemplateUpdateRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
@@ -110,7 +118,7 @@ public class DefaultConsoleFileTemplateApplicationService
         existing.get("version") != null ? ((Number) existing.get("version")).intValue() : 1;
     mapper.upsertFileTemplateConfig(
         buildUpdateParam(tenantId, templateCode, version, operator, request, existing));
-    return mapper.selectById(tenantId, id);
+    return ConsoleFileProjectionMapper.template(mapper.selectById(tenantId, id));
   }
 
   @Override

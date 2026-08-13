@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -174,10 +174,12 @@ class SdkPlatformContractTest {
   private List<Map<String, Object>> captureReports(SdkTaskResult result) throws IOException {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     List<Map<String, Object>> reports = new ArrayList<>();
-    when(http.report(anyLong(), anyString(), any())).thenAnswer((InvocationOnMock inv) -> {
-      reports.add(inv.getArgument(2));
-      return Map.of();
-    });
+    doAnswer((InvocationOnMock inv) -> {
+          reports.add(inv.getArgument(2));
+          return null;
+        })
+        .when(http)
+        .report(anyLong(), anyString(), any());
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {

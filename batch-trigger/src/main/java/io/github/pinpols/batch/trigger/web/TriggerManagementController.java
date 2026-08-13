@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown.TriggerDrainStatus;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -96,18 +97,18 @@ public class TriggerManagementController {
   }
 
   @GetMapping("/drain/status")
-  public CommonResponse<Map<String, Object>> drainStatus() throws SchedulerException {
+  public CommonResponse<TriggerDrainStatus> drainStatus() throws SchedulerException {
     return CommonResponse.success(gracefulShutdown.status());
   }
 
   @PostMapping("/drain/enable")
-  public CommonResponse<Map<String, Object>> enableDrain() throws SchedulerException {
+  public CommonResponse<TriggerDrainStatus> enableDrain() throws SchedulerException {
     gracefulShutdown.startDraining("manual-enable");
     return CommonResponse.success(gracefulShutdown.status());
   }
 
   @PostMapping("/drain/disable")
-  public CommonResponse<Map<String, Object>> disableDrain() throws SchedulerException {
+  public CommonResponse<TriggerDrainStatus> disableDrain() throws SchedulerException {
     gracefulShutdown.stopDraining("manual-disable");
     return CommonResponse.success(gracefulShutdown.status());
   }

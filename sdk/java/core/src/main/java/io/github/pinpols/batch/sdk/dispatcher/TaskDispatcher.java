@@ -6,6 +6,7 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotentHandler;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
@@ -355,9 +356,9 @@ public class TaskDispatcher {
       return;
     }
     if (partitionInvocationId == null) {
-      Object claimedInvocation = claimResult.response().get("partitionInvocationId");
-      if (claimedInvocation != null && !claimedInvocation.toString().isBlank()) {
-        partitionInvocationId = claimedInvocation.toString();
+      String claimedInvocation = claimResult.response().partitionInvocationId();
+      if (!EmptyChecks.isBlank(claimedInvocation)) {
+        partitionInvocationId = claimedInvocation;
       }
     }
     if (partitionInvocationId != null) {
@@ -503,9 +504,11 @@ public class TaskDispatcher {
     int attempt = 0;
     while (true) {
       try {
-        Map<String, Object> response = httpClient.claim(msg.taskId(), idemKey, body);
+        PlatformHttpClient.TaskClaimResponse response =
+            httpClient.claim(msg.taskId(), idemKey, body);
         resetClientErrorStreak();
-        return new ClaimResult(true, response == null ? Map.of() : response);
+        return new ClaimResult(
+            true, response == null ? new PlatformHttpClient.TaskClaimResponse(null) : response);
       } catch (PlatformHttpException httpEx) {
         if (httpEx.isAuthError()) {
           // 鉴权失败:apiKey 配错 / 已 revoke → 重试无益,fail-fast 让运维介入(K8s liveness probe 拉起)
@@ -581,9 +584,9 @@ public class TaskDispatcher {
     }
   }
 
-  record ClaimResult(boolean claimed, Map<String, Object> response) {
+  record ClaimResult(boolean claimed, PlatformHttpClient.TaskClaimResponse response) {
     static ClaimResult notClaimed() {
-      return new ClaimResult(false, Map.of());
+      return new ClaimResult(false, new PlatformHttpClient.TaskClaimResponse(null));
     }
   }
 

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleConfigApprovalDetailResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
@@ -73,9 +74,9 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     request.setOperatorId("approver");
     request.setReason("approved");
 
-    Map<String, Object> result = service.approve(9L, request);
+    ConsoleConfigApprovalDetailResponse result = service.approve(9L, request);
 
-    assertThat(result).containsEntry("configStatus", ConfigLifecycleStatus.PENDING_APPROVAL.code());
+    assertThat(result.configStatus()).isEqualTo(ConfigLifecycleStatus.PENDING_APPROVAL.code());
     verify(configApprovalMapper).approve(anyMap());
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());

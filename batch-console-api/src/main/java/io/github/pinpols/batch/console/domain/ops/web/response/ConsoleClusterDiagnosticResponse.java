@@ -6,8 +6,8 @@ import java.util.Map;
 
 /**
  * 集群诊断聚合响应（{@code GET /cluster-diagnostic}）：shedLock / workers / outbox / terminalChildren 四块，
- * 与各自单端点同构。同时是 {@code ConsoleAiTools.getClusterDiagnostics} 的读取源；本 record 仅在 controller
- * 边界转换，service {@code diagnose()} 仍返回 Map，AI 工具读取路径不变。
+ * 与各自单端点同构。同时是 {@code ConsoleAiTools.getClusterDiagnostics} 的读取源，避免 service、controller
+ * 和 AI 工具重复维护字段名字符串。
  */
 public record ConsoleClusterDiagnosticResponse(
     ConsoleShedLockStatusResponse shedLock,

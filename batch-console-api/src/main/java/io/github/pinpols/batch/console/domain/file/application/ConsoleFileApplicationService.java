@@ -6,8 +6,8 @@ import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupA
 import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePresignUploadResponse;
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
-import java.util.Map;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。 */
@@ -31,7 +31,7 @@ public interface ConsoleFileApplicationService {
       FileArrivalGroupActionRequest request, String idempotencyKey);
 
   /** 生成对象存储预签名上传 URL（租户主动上传文件）。 */
-  Map<String, Object> presignUpload(
+  ConsoleFilePresignUploadResponse presignUpload(
       String tenantId, String channelCode, String fileName, String idempotencyKey);
 
   /** 上传文件内容到统一对象存储。 */

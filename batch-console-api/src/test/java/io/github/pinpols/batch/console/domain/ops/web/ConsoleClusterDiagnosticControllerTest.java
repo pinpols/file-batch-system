@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleInstanceDiagnosisResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -52,12 +54,12 @@ class ConsoleClusterDiagnosticControllerTest {
     // 键与真实 ConsoleClusterDiagnosticService.loadDiagnose
     // 输出一致：shedLock/workers/outbox/terminalChildren。
     when(diagnosticService.diagnose("t1"))
-        .thenReturn(Map.of(
+        .thenReturn(ConsoleClusterDiagnosticResponse.from(Map.of(
             "shedLock", Map.of("totalLocks", 2, "activeLocks", 1L, "locks", List.of()),
             "workers", Map.of("onlineWorkers", 3L, "healthy", true, "workerGroups", List.of()),
             "outbox", Map.of("pendingEvents", 0L, "healthy", true, "deliveryStats", List.of()),
             "terminalChildren",
-                Map.of("terminalInstancesWithActiveChildren", 0L, "healthy", true)));
+                Map.of("terminalInstancesWithActiveChildren", 0L, "healthy", true))));
 
     mockMvc
         .perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
@@ -73,7 +75,8 @@ class ConsoleClusterDiagnosticControllerTest {
   @Test
   void shouldReturnInstanceDiagnosis() throws Exception {
     when(diagnosticService.instanceDiagnosis("t1", 7L))
-        .thenReturn(Map.of("healthy", false, "jobInstanceId", 7L));
+        .thenReturn(
+            ConsoleInstanceDiagnosisResponse.from(Map.of("healthy", false, "jobInstanceId", 7L)));
 
     mockMvc
         .perform(get("/api/console/ops/cluster-diagnostic/instances/7").param("tenantId", "t1"))

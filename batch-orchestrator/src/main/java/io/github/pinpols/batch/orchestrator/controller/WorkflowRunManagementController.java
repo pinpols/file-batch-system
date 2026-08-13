@@ -1,7 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.NodeAction;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.RunAction;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunManagementApplicationService;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,31 +19,27 @@ public class WorkflowRunManagementController {
   private final WorkflowRunManagementApplicationService workflowRunManagementApplicationService;
 
   @PostMapping("/{id}/cancel")
-  public Map<String, Object> cancel(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public RunAction cancel(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return workflowRunManagementApplicationService.cancel(tenantId, id);
   }
 
   @PostMapping("/{id}/terminate")
-  public Map<String, Object> terminate(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public RunAction terminate(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return workflowRunManagementApplicationService.terminate(tenantId, id);
   }
 
   @PostMapping("/{id}/pause")
-  public Map<String, Object> pause(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public RunAction pause(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return workflowRunManagementApplicationService.pause(tenantId, id);
   }
 
   @PostMapping("/{id}/resume")
-  public Map<String, Object> resume(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public RunAction resume(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return workflowRunManagementApplicationService.resume(tenantId, id);
   }
 
   @PostMapping("/{id}/skip-node")
-  public Map<String, Object> skipNode(
+  public NodeAction skipNode(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("nodeCode") String nodeCode,

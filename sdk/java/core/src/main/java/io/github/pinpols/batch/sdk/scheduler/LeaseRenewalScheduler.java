@@ -97,8 +97,8 @@ public class LeaseRenewalScheduler implements AutoCloseable {
       if (details != null) {
         body.put("details", details); // SDK-P4-2:handler reportProgress 快照,落 job_task
       }
-      Map<String, Object> resp = httpClient.renew(taskId, body);
-      if (resp != null && Boolean.TRUE.equals(resp.get("cancelRequested"))) {
+      PlatformHttpClient.TaskRenewResponse resp = httpClient.renew(taskId, body);
+      if (resp != null && resp.cancelRequested()) {
         dispatcher.markCancelled(taskId, "platform-cancel");
       }
     } catch (PlatformHttpException httpEx) {

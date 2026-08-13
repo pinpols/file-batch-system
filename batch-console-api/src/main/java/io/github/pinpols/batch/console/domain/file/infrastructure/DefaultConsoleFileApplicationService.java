@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupA
 import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePresignUploadResponse;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
@@ -26,11 +27,9 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
@@ -173,17 +172,17 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   }
 
   @Override
-  public Map<String, Object> presignUpload(
+  public ConsoleFilePresignUploadResponse presignUpload(
       String tenantId, String channelCode, String fileName, String idempotencyKey) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("tenantId", resolvedTenantId);
-    body.put("channelCode", ConsoleTextSanitizer.safeInput(channelCode, 128));
-    body.put("fileName", ConsoleTextSanitizer.safeInput(fileName, 255));
-    body.put("operatorId", ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64));
-    body.put("traceId", requestMetadata.traceId());
+    PresignUploadRequest body = new PresignUploadRequest(
+        resolvedTenantId,
+        ConsoleTextSanitizer.safeInput(channelCode, 128),
+        ConsoleTextSanitizer.safeInput(fileName, 255),
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
+        requestMetadata.traceId());
     return restClient
         .post()
         .uri("/internal/files/presign-upload")
@@ -192,8 +191,11 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
         .body(body)
         .retrieve()
-        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        .body(ConsoleFilePresignUploadResponse.class);
   }
+
+  private record PresignUploadRequest(
+      String tenantId, String channelCode, String fileName, String operatorId, String traceId) {}
 
   @Override
   public ConsoleFileOperationResponse uploadContent(

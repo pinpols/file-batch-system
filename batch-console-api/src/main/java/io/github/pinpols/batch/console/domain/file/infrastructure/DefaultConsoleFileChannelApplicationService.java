@@ -14,6 +14,8 @@ import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsert
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileProjectionMapper;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
@@ -32,7 +34,7 @@ public class DefaultConsoleFileChannelApplicationService
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @Override
-  public PageResponse<Map<String, Object>> list(FileChannelQueryRequest request) {
+  public PageResponse<ConsoleFileChannelResponse> list(FileChannelQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     long total = mapper.countByQuery(
@@ -43,17 +45,22 @@ public class DefaultConsoleFileChannelApplicationService
         request.getChannelType(),
         request.getEnabled(),
         pageRequest);
-    return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
+    return new PageResponse<>(
+        total,
+        pageRequest.pageNo(),
+        pageRequest.pageSize(),
+        items.stream().map(ConsoleFileProjectionMapper::channel).toList());
   }
 
   @Override
-  public Map<String, Object> get(Long id, String tenantId) {
+  public ConsoleFileChannelResponse get(Long id, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return Guard.requireFound(mapper.selectById(resolved, id), "file channel not found: " + id);
+    return ConsoleFileProjectionMapper.channel(
+        Guard.requireFound(mapper.selectById(resolved, id), "file channel not found: " + id));
   }
 
   @Override
-  public Map<String, Object> create(FileChannelCreateRequest request) {
+  public ConsoleFileChannelResponse create(FileChannelCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing = mapper.selectByUniqueKey(tenantId, request.getChannelCode());
     if (existing != null) {
@@ -82,11 +89,12 @@ public class DefaultConsoleFileChannelApplicationService
     // 命中软删残留行(is_deleted=true)时 on conflict do update 复活,避免纯 INSERT 撞 UNIQUE → 500。
     // 与 notification/webhook/alert 三张兄弟表的软删复活约定一致。
     mapper.upsertFileChannelConfig(param);
-    return mapper.selectByUniqueKey(tenantId, request.getChannelCode());
+    return ConsoleFileProjectionMapper.channel(
+        mapper.selectByUniqueKey(tenantId, request.getChannelCode()));
   }
 
   @Override
-  public Map<String, Object> update(Long id, FileChannelUpdateRequest request) {
+  public ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
@@ -124,7 +132,7 @@ public class DefaultConsoleFileChannelApplicationService
         request.getEnabled() != null ? request.getEnabled() : (Boolean) existing.get("enabled"));
     param.setUpdatedBy(operator);
     mapper.updateFileChannelConfig(param);
-    return mapper.selectById(tenantId, id);
+    return ConsoleFileProjectionMapper.channel(mapper.selectById(tenantId, id));
   }
 
   private static String normalizeChannelType(String channelType) {

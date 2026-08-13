@@ -22,6 +22,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileError
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordDetailResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
@@ -54,6 +55,7 @@ import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeQue
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowRunQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.query.WorkflowTopologyQueryRequest;
+import io.github.pinpols.batch.console.domain.workflow.web.response.CodeNameOption;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowDefinitionResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
@@ -81,7 +83,6 @@ import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -503,18 +504,18 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   }
 
   @Override
-  public Map<String, Object> fileChannelDetail(String tenantId, String channelCode) {
+  public ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode) {
     return fileQueryService.fileChannelDetail(tenantId, channelCode);
   }
 
   @Override
-  public Map<String, Object> fileTemplateDetail(
+  public ConsoleFileTemplateResponse fileTemplateDetail(
       String tenantId, String templateCode, Integer version) {
     return fileQueryService.fileTemplateDetail(tenantId, templateCode, version);
   }
 
   @Override
-  public Map<String, Object> fileRecordDetail(String tenantId, Long fileId) {
+  public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
     return fileQueryService.fileRecordDetail(tenantId, fileId);
   }
 
@@ -530,15 +531,23 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   }
 
   @Override
-  public List<Map<String, Object>> jobDefinitionCodes(String tenantId) {
+  public List<CodeNameOption> jobDefinitionCodes(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return jobDefinitionMapper.selectActiveCodeNames(resolved);
+    return jobDefinitionMapper.selectActiveCodeNames(resolved).stream()
+        .map(row -> new CodeNameOption(text(row.get("code")), text(row.get("name"))))
+        .toList();
   }
 
   @Override
-  public List<Map<String, Object>> pipelineDefinitionCodes(String tenantId) {
+  public List<CodeNameOption> pipelineDefinitionCodes(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return pipelineDefinitionMapper.selectActiveCodeNames(resolved);
+    return pipelineDefinitionMapper.selectActiveCodeNames(resolved).stream()
+        .map(row -> new CodeNameOption(text(row.get("code")), text(row.get("name"))))
+        .toList();
+  }
+
+  private static String text(Object value) {
+    return value == null ? null : String.valueOf(value);
   }
 
   @Override

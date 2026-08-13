@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import java.util.List;
 import java.util.Map;
 
@@ -27,25 +28,26 @@ public record HeartbeatDirective(
   public static final String STATUS_PAUSED = "PAUSED";
   public static final String STATUS_DRAINING = "DRAINING";
 
-  /**
-   * 从心跳响应 JSON(已被 {@code PlatformHttpClient} 反序列化为 Map)解析指令。 老平台回包为空 Map / 缺字段时一律降级为
-   * NORMAL、不暂停(向后兼容)。
-   */
-  public static HeartbeatDirective fromResponse(Map<String, Object> resp) {
-    if (resp == null || resp.isEmpty()) {
+  /** 仅供同包契约测试构造旧平台回包；生产 transport 直接反序列化为本 record。 */
+  static HeartbeatDirective fromResponse(Map<String, Object> response) {
+    if (EmptyChecks.isEmpty(response)) {
       return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);
     }
-    String status = asString(resp.get("platformStatus"));
-    boolean drain = Boolean.TRUE.equals(resp.get("shouldDrain"));
-    List<String> paused = resp.get("pausedTaskTypes") instanceof List<?> l
-        ? l.stream().map(String::valueOf).toList()
-        : List.of();
+    Object paused = response.get("pausedTaskTypes");
     return new HeartbeatDirective(
-        status == null ? STATUS_NORMAL : status,
-        asInteger(resp.get("desiredMaxConcurrent")),
-        drain,
-        paused,
-        asInteger(resp.get("nextHeartbeatHint")));
+        response.get("platformStatus") == null
+            ? STATUS_NORMAL
+            : response.get("platformStatus").toString(),
+        integerValue(response.get("desiredMaxConcurrent")),
+        Boolean.TRUE.equals(response.get("shouldDrain")),
+        paused instanceof List<?> values
+            ? values.stream().map(String::valueOf).toList()
+            : List.of(),
+        integerValue(response.get("nextHeartbeatHint")));
+  }
+
+  private static Integer integerValue(Object value) {
+    return value instanceof Number number ? number.intValue() : null;
   }
 
   /**
@@ -63,13 +65,5 @@ public record HeartbeatDirective(
       return WorkerRuntimeState.DEGRADED;
     }
     return WorkerRuntimeState.NORMAL;
-  }
-
-  private static String asString(Object v) {
-    return v == null ? null : String.valueOf(v);
-  }
-
-  private static Integer asInteger(Object v) {
-    return v instanceof Number n ? n.intValue() : null;
   }
 }

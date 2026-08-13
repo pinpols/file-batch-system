@@ -8,7 +8,6 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -46,14 +45,13 @@ public class ConsoleForensicController {
   @PostMapping("/export")
   public CommonResponse<ConsoleForensicExportResponse> requestExport(
       @Valid @RequestBody ForensicExportRequest request) {
-    Map<String, Object> result = orchestratorProxyService.requestForensicExport(
+    return responseFactory.success(orchestratorProxyService.requestForensicExport(
         request.getTenantId(),
         request.getBizDateFrom(),
         request.getBizDateTo(),
         request.getJobCodes(),
         request.getExportFormat() == null ? "BUNDLE" : request.getExportFormat(),
-        requestMetadataResolver.current().operatorId());
-    return responseFactory.success(ConsoleForensicExportResponse.from(result));
+        requestMetadataResolver.current().operatorId()));
   }
 
   @GetMapping("/export/{exportId}/download")

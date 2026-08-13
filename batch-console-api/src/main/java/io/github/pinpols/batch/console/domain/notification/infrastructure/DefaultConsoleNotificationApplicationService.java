@@ -19,6 +19,10 @@ import io.github.pinpols.batch.console.domain.notification.service.WebhookEventP
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationChannelResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationDeliveryLogResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationTestResultResponse;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleSubscriptionRuleResponse;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
@@ -99,15 +103,17 @@ public class DefaultConsoleNotificationApplicationService
   private static final int TEST_CHANNEL_LIMIT_PER_MINUTE = 10;
 
   @Override
-  public List<Map<String, Object>> listChannels(String tenantId) {
-    return channelMapper.selectByTenant(tenantGuard.resolveTenant(tenantId));
+  public List<ConsoleNotificationChannelResponse> listChannels(String tenantId) {
+    return channelMapper.selectByTenant(tenantGuard.resolveTenant(tenantId)).stream()
+        .map(ConsoleNotificationChannelResponse::from)
+        .toList();
   }
 
   @Override
-  public Map<String, Object> getChannel(String tenantId, String channelCode) {
+  public ConsoleNotificationChannelResponse getChannel(String tenantId, String channelCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return Guard.requireFound(
-        channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
+    return ConsoleNotificationChannelResponse.from(Guard.requireFound(
+        channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode));
   }
 
   @Override
@@ -206,15 +212,17 @@ public class DefaultConsoleNotificationApplicationService
   }
 
   @Override
-  public List<Map<String, Object>> listRules(String tenantId) {
-    return ruleMapper.selectByTenant(tenantGuard.resolveTenant(tenantId));
+  public List<ConsoleSubscriptionRuleResponse> listRules(String tenantId) {
+    return ruleMapper.selectByTenant(tenantGuard.resolveTenant(tenantId)).stream()
+        .map(ConsoleSubscriptionRuleResponse::from)
+        .toList();
   }
 
   @Override
-  public Map<String, Object> getRule(String tenantId, Long ruleId) {
+  public ConsoleSubscriptionRuleResponse getRule(String tenantId, Long ruleId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return Guard.requireFound(
-        ruleMapper.selectById(resolved, ruleId), "subscription rule not found: " + ruleId);
+    return ConsoleSubscriptionRuleResponse.from(Guard.requireFound(
+        ruleMapper.selectById(resolved, ruleId), "subscription rule not found: " + ruleId));
   }
 
   @Override
@@ -288,9 +296,12 @@ public class DefaultConsoleNotificationApplicationService
   }
 
   @Override
-  public List<Map<String, Object>> deliveryLogs(String tenantId, int limit) {
-    return deliveryLogMapper.selectByTenant(
-        tenantGuard.resolveTenant(tenantId), Math.min(limit, 500));
+  public List<ConsoleNotificationDeliveryLogResponse> deliveryLogs(String tenantId, int limit) {
+    return deliveryLogMapper
+        .selectByTenant(tenantGuard.resolveTenant(tenantId), Math.min(limit, 500))
+        .stream()
+        .map(ConsoleNotificationDeliveryLogResponse::from)
+        .toList();
   }
 
   /**
@@ -302,7 +313,7 @@ public class DefaultConsoleNotificationApplicationService
    * 的错误摘要透传给前端,便于运维排查配置。
    */
   @Override
-  public Map<String, Object> testChannel(String tenantId, String channelCode) {
+  public ConsoleNotificationTestResultResponse testChannel(String tenantId, String channelCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     // SSRF 收窄:deliverTest 可反复触发,是 rebinding 竞态的放大点;超频拦在建连之前。
     if (!testChannelRateLimiter.tryAcquire(
@@ -360,7 +371,7 @@ public class DefaultConsoleNotificationApplicationService
             : "test notification failed: " + result.errorSummary());
     response.put("httpStatus", result.httpStatus());
     response.put("errorSummary", result.errorSummary());
-    return response;
+    return ConsoleNotificationTestResultResponse.from(response);
   }
 
   private WebhookDeliveryResult deliverTest(

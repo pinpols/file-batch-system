@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -41,41 +42,42 @@ public class PlatformHttpClient {
   }
 
   /** POST /internal/workers/register — body schema = WorkerHeartbeatDto。 */
-  public Map<String, Object> register(Map<String, Object> body) throws IOException {
-    return postJson("/internal/workers/register", body, null);
+  public WorkerRegistrationResponse register(Map<String, Object> body) throws IOException {
+    return postJson("/internal/workers/register", body, null, WorkerRegistrationResponse.class);
   }
 
   /** POST /internal/workers/{workerCode}/heartbeat — body schema = WorkerHeartbeatDto。 */
-  public Map<String, Object> heartbeat(String workerCode, Map<String, Object> body)
+  public HeartbeatDirective heartbeat(String workerCode, Map<String, Object> body)
       throws IOException {
-    return postJson("/internal/workers/" + workerCode + "/heartbeat", body, null);
+    return postJson(
+        "/internal/workers/" + workerCode + "/heartbeat", body, null, HeartbeatDirective.class);
   }
 
   /** POST /internal/workers/{workerCode}/deactivate — SDK stop 时优雅下线。 */
-  public Map<String, Object> deactivate(String workerCode, Map<String, Object> body)
-      throws IOException {
-    return postJson("/internal/workers/" + workerCode + "/deactivate", body, null);
+  public void deactivate(String workerCode, Map<String, Object> body) throws IOException {
+    postJson("/internal/workers/" + workerCode + "/deactivate", body, null, Void.class);
   }
 
   /** POST /internal/tasks/{taskId}/claim — body=TaskClaimRequest,返回 EffectiveTaskConfig JSON。 */
-  public Map<String, Object> claim(Long taskId, String idempotencyKey, Map<String, Object> body)
+  public TaskClaimResponse claim(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
-    return postJson("/internal/tasks/" + taskId + "/claim", body, idempotencyKey);
+    return postJson(
+        "/internal/tasks/" + taskId + "/claim", body, idempotencyKey, TaskClaimResponse.class);
   }
 
   /** POST /internal/tasks/{taskId}/report — body schema = TaskExecutionReportDto。 */
-  public Map<String, Object> report(Long taskId, String idempotencyKey, Map<String, Object> body)
+  public void report(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
-    return postJson("/internal/tasks/" + taskId + "/report", body, idempotencyKey);
+    postJson("/internal/tasks/" + taskId + "/report", body, idempotencyKey, Void.class);
   }
 
   /** POST /internal/tasks/{taskId}/renew — body=TaskClaimRequest(同 claim 字段集)。 */
-  public Map<String, Object> renew(Long taskId, Map<String, Object> body) throws IOException {
-    return postJson("/internal/tasks/" + taskId + "/renew", body, null);
+  public TaskRenewResponse renew(Long taskId, Map<String, Object> body) throws IOException {
+    return postJson("/internal/tasks/" + taskId + "/renew", body, null, TaskRenewResponse.class);
   }
 
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> postJson(String path, Map<String, Object> body, String idempotencyKey)
+  private <T> T postJson(
+      String path, Map<String, Object> body, String idempotencyKey, Class<T> responseType)
       throws IOException {
     String url = config.getBaseUrl() + path;
     byte[] payload = objectMapper.writeValueAsBytes(body == null ? Map.of() : body);
@@ -112,10 +114,10 @@ public class PlatformHttpClient {
     }
 
     if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
-      if (resp.body() == null || resp.body().length == 0) {
-        return Map.of();
+      if (responseType == Void.class || EmptyChecks.isEmpty(resp.body())) {
+        return null;
       }
-      return objectMapper.readValue(resp.body(), Map.class);
+      return objectMapper.readValue(resp.body(), responseType);
     }
     // errBody 不进 exception message — 避免错误链一路打 INFO/WARN 时把平台错误 payload 写满日志,
     // 也防止 token / 敏感字段泄露。完整 body 仅 DEBUG 级输出,排障开 DEBUG 看。见 #SDK-P1-3。
@@ -134,4 +136,14 @@ public class PlatformHttpClient {
   private static String truncate(String s, int max) {
     return s.length() <= max ? s : s.substring(0, max) + "...";
   }
+
+  /** register 回包中 SDK 实际消费和记录的稳定字段；平台新增字段由 Jackson 向后兼容忽略。 */
+  public record WorkerRegistrationResponse(
+      Long id, String tenantId, String workerCode, String status) {}
+
+  /** claim 回包中 SDK 执行栅栏需要的稳定字段。 */
+  public record TaskClaimResponse(String partitionInvocationId) {}
+
+  /** renew 回包中的取消指令。 */
+  public record TaskRenewResponse(boolean cancelRequested) {}
 }

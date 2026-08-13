@@ -37,6 +37,8 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipel
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepProgressResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileProjectionMapper;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordDetailResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
@@ -308,27 +310,27 @@ public class ConsoleFileQueryService {
     return page(pageRequest, total, rows, this::toFileErrorRecordResponse);
   }
 
-  public Map<String, Object> fileChannelDetail(String tenantId, String channelCode) {
+  public ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    return requireRow(
+    return ConsoleFileProjectionMapper.channel(requireRow(
         fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode),
-        "file channel not found: " + channelCode);
+        "file channel not found: " + channelCode));
   }
 
-  public Map<String, Object> fileTemplateDetail(
+  public ConsoleFileTemplateResponse fileTemplateDetail(
       String tenantId, String templateCode, Integer version) {
     String resolved = resolveTenant(tenantGuard, tenantId);
     Integer ver = EmptyChecks.isNotNull(version) ? version : 1;
-    return requireRow(
+    return ConsoleFileProjectionMapper.template(requireRow(
         fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver),
-        "file template not found: " + templateCode);
+        "file template not found: " + templateCode));
   }
 
-  public Map<String, Object> fileRecordDetail(String tenantId, Long fileId) {
+  public ConsoleFileRecordDetailResponse fileRecordDetail(String tenantId, Long fileId) {
     String resolved = resolveTenant(tenantGuard, tenantId);
-    return requireRow(
+    return ConsoleFileRecordDetailResponse.from(requireRow(
         fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId),
-        "file record not found: " + fileId);
+        "file record not found: " + fileId));
   }
 
   public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
@@ -486,70 +488,11 @@ public class ConsoleFileQueryService {
   }
 
   private ConsoleFileChannelResponse toFileChannelResponse(Map<String, Object> row) {
-    return new ConsoleFileChannelResponse(
-        longValue(row, KEY_ID),
-        stringValue(row, KEY_TENANT_ID),
-        stringValue(row, "channel_code"),
-        stringValue(row, "channel_name"),
-        stringValue(row, "channel_type"),
-        stringValue(row, "target_endpoint"),
-        stringValue(row, "auth_type"),
-        stringValue(row, "config_json"),
-        stringValue(row, "receipt_policy"),
-        intValue(row, "timeout_seconds"),
-        booleanValue(row, "enabled"),
-        instantValue(row, KEY_CREATED_AT),
-        instantValue(row, KEY_UPDATED_AT));
+    return ConsoleFileProjectionMapper.channel(row);
   }
 
   private ConsoleFileTemplateResponse toFileTemplateResponse(Map<String, Object> row) {
-    return new ConsoleFileTemplateResponse(
-        longValue(row, KEY_ID),
-        stringValue(row, KEY_TENANT_ID),
-        stringValue(row, "template_code"),
-        stringValue(row, "template_name"),
-        stringValue(row, "template_type"),
-        stringValue(row, "biz_type"),
-        stringValue(row, "file_format_type"),
-        stringValue(row, "charset"),
-        stringValue(row, "target_charset"),
-        booleanValue(row, "with_bom"),
-        stringValue(row, "line_separator"),
-        stringValue(row, "delimiter"),
-        stringValue(row, "quote_char"),
-        stringValue(row, "escape_char"),
-        intValue(row, "record_length"),
-        intValue(row, "header_rows"),
-        intValue(row, "footer_rows"),
-        stringValue(row, "header_template"),
-        stringValue(row, "trailer_template"),
-        stringValue(row, "checksum_type"),
-        stringValue(row, "compress_type"),
-        stringValue(row, "encrypt_type"),
-        stringValue(row, "naming_rule"),
-        stringValue(row, "field_mappings"),
-        stringValue(row, "validation_rule_set"),
-        stringValue(row, "default_query_code"),
-        stringValue(row, "default_query_sql"),
-        stringValue(row, "query_param_schema"),
-        booleanValue(row, "streaming_enabled"),
-        intValue(row, "page_size"),
-        intValue(row, "fetch_size"),
-        intValue(row, "chunk_size"),
-        booleanValue(row, "preview_masking_enabled"),
-        booleanValue(row, "error_line_masking_enabled"),
-        booleanValue(row, "log_masking_enabled"),
-        booleanValue(row, "content_encryption_enabled"),
-        stringValue(row, "encryption_key_ref"),
-        booleanValue(row, "download_requires_approval"),
-        stringValue(row, "masking_rule_set"),
-        booleanValue(row, "enabled"),
-        intValue(row, "version"),
-        stringValue(row, "description"),
-        stringValue(row, "created_by"),
-        stringValue(row, "updated_by"),
-        instantValue(row, KEY_CREATED_AT),
-        instantValue(row, KEY_UPDATED_AT));
+    return ConsoleFileProjectionMapper.template(row);
   }
 
   private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(

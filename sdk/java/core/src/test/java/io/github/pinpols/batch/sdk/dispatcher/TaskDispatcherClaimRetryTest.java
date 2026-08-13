@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -167,7 +168,7 @@ class TaskDispatcherClaimRetryTest {
       if (calls.incrementAndGet() <= 2) {
         throw new PlatformHttpException(502, "Bad Gateway");
       }
-      return Map.of();
+      return new PlatformHttpClient.TaskClaimResponse("ti-9");
     });
     AtomicBoolean executed = new AtomicBoolean();
     dispatcher = new TaskDispatcher(config, Map.of("tt", trackedHandler(executed)), http);
@@ -224,7 +225,7 @@ class TaskDispatcherClaimRetryTest {
       if (calls.incrementAndGet() <= 2) {
         throw new PlatformHttpException(404, "task gone");
       }
-      return Map.of();
+      return new PlatformHttpClient.TaskClaimResponse("ti-9");
     });
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
@@ -259,9 +260,11 @@ class TaskDispatcherClaimRetryTest {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of()); // CLAIM 成功
-    when(http.report(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(422, "unprocessable")); // REPORT 422
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null)); // CLAIM 成功
+    doThrow(new PlatformHttpException(422, "unprocessable"))
+        .when(http)
+        .report(anyLong(), anyString(), any()); // REPORT 422
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
     dispatcher.processInWorkerThread(msg());
@@ -275,9 +278,11 @@ class TaskDispatcherClaimRetryTest {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of());
-    when(http.report(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(401, "unauthorized")); // 鉴权类不计入此计数器
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null));
+    doThrow(new PlatformHttpException(401, "unauthorized"))
+        .when(http)
+        .report(anyLong(), anyString(), any()); // 鉴权类不计入此计数器
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
     dispatcher.processInWorkerThread(msg());
@@ -293,9 +298,11 @@ class TaskDispatcherClaimRetryTest {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of());
-    when(http.report(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(409, "already reported")); // 409 不计入
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null));
+    doThrow(new PlatformHttpException(409, "already reported"))
+        .when(http)
+        .report(anyLong(), anyString(), any()); // 409 不计入
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
     dispatcher.processInWorkerThread(msg());
@@ -310,9 +317,11 @@ class TaskDispatcherClaimRetryTest {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of());
-    when(http.report(anyLong(), anyString(), any()))
-        .thenThrow(new PlatformHttpException(400, "bad report body"));
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse(null));
+    doThrow(new PlatformHttpException(400, "bad report body"))
+        .when(http)
+        .report(anyLong(), anyString(), any());
     dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
 
     // 契约:每轮 CLAIM 成功先归零,REPORT 400 再 +1 → 净每轮维持 1,REPORT-only 4xx 不会累积触发 fatal
@@ -343,7 +352,7 @@ class TaskDispatcherClaimRetryTest {
     AtomicInteger calls = new AtomicInteger();
     when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {
       if (calls.incrementAndGet() == 1) throw new IOException("read timeout");
-      return Map.of();
+      return new PlatformHttpClient.TaskClaimResponse("ti-9");
     });
     AtomicBoolean executed = new AtomicBoolean();
     dispatcher = new TaskDispatcher(config, Map.of("tt", trackedHandler(executed)), http);

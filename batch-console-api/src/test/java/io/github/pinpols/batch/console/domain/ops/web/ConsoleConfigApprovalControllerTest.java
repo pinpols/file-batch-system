@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApprovalApplicationService;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleConfigApprovalDetailResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -58,7 +59,7 @@ class ConsoleConfigApprovalControllerTest {
   void submitApprovalShouldPassReleaseIdAndForwardBody() throws Exception {
     // 键与真实 detail() 输出一致：releaseId/tenantId/configType/configKey/configStatus/approval。
     when(service.submit(eq(7L), any(ConfigReleaseApprovalSubmitRequest.class)))
-        .thenReturn(Map.of(
+        .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
             7L,
             "tenantId",
@@ -66,7 +67,7 @@ class ConsoleConfigApprovalControllerTest {
             "configStatus",
             ConfigLifecycleStatus.PENDING_APPROVAL.code(),
             "approval",
-            Map.of("id", 100L, "approvalStatus", "PENDING")));
+            Map.of("id", 100L, "approvalStatus", "PENDING"))));
     mockMvc
         .perform(post("/api/console/config/releases/7/submit-approval")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
@@ -83,7 +84,7 @@ class ConsoleConfigApprovalControllerTest {
   @Test
   void approvalDetailShouldPassReleaseIdAndTenant() throws Exception {
     when(service.detail("ta", 7L))
-        .thenReturn(Map.of(
+        .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
             7L,
             "tenantId",
@@ -91,7 +92,7 @@ class ConsoleConfigApprovalControllerTest {
             "configStatus",
             ConfigLifecycleStatus.PENDING_APPROVAL.code(),
             "approval",
-            Map.of("id", 100L, "approvalStatus", "PENDING")));
+            Map.of("id", 100L, "approvalStatus", "PENDING"))));
     mockMvc
         .perform(get("/api/console/config/releases/7/approval").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -104,13 +105,13 @@ class ConsoleConfigApprovalControllerTest {
   @Test
   void approveShouldPassApprovalIdAndBody() throws Exception {
     when(service.approve(eq(100L), any(ConfigApprovalActionRequest.class)))
-        .thenReturn(Map.of(
+        .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
             7L,
             "configStatus",
             "PUBLISHED",
             "approval",
-            Map.of("id", 100L, "approvalStatus", "APPROVED")));
+            Map.of("id", 100L, "approvalStatus", "APPROVED"))));
     mockMvc
         .perform(post("/api/console/config/approvals/100/approve")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
@@ -125,13 +126,13 @@ class ConsoleConfigApprovalControllerTest {
   @Test
   void rejectShouldPassApprovalIdAndBody() throws Exception {
     when(service.reject(eq(100L), any(ConfigApprovalActionRequest.class)))
-        .thenReturn(Map.of(
+        .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
             7L,
             "configStatus",
             "DRAFT",
             "approval",
-            Map.of("id", 100L, "approvalStatus", "REJECTED")));
+            Map.of("id", 100L, "approvalStatus", "REJECTED"))));
     mockMvc
         .perform(post("/api/console/config/approvals/100/reject")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")

@@ -98,8 +98,8 @@ public class ConsoleFileController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam("channelCode") String channelCode,
       @RequestParam("fileName") String fileName) {
-    return responseFactory.success(ConsoleFilePresignUploadResponse.from(
-        applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey)));
+    return responseFactory.success(
+        applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey));
   }
 
   /** 上传文件内容。S3 与本地文件系统都经 BatchObjectStore 写入，不暴露真实存储路径。 */

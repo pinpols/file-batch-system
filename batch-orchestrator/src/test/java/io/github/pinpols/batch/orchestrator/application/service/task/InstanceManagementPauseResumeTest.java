@@ -15,7 +15,6 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,7 +60,7 @@ class InstanceManagementPauseResumeTest {
     when(jobInstanceMapper.selectById("t1", 1L)).thenReturn(instance("RUNNING"));
     when(jobInstanceMapper.updateLifecycleStatus("t1", 1L, "PAUSED", 3L)).thenReturn(1);
 
-    assertThat(service.pause("t1", 1L)).containsEntry("status", "PAUSED");
+    assertThat(service.pause("t1", 1L).status()).isEqualTo("PAUSED");
     verify(jobInstanceMapper).updateLifecycleStatus("t1", 1L, "PAUSED", 3L);
   }
 
@@ -80,7 +79,7 @@ class InstanceManagementPauseResumeTest {
     when(jobInstanceMapper.selectById("t1", 1L)).thenReturn(instance("PAUSED"));
     when(jobInstanceMapper.updateLifecycleStatus("t1", 1L, "RUNNING", 3L)).thenReturn(1);
 
-    assertThat(service.resume("t1", 1L)).containsEntry("status", "RUNNING");
+    assertThat(service.resume("t1", 1L).status()).isEqualTo("RUNNING");
   }
 
   @Test
@@ -109,13 +108,13 @@ class InstanceManagementPauseResumeTest {
     when(jobPartitionMapper.selectByQuery(new JobPartitionQuery("t1", 1L, "FAILED", null)))
         .thenReturn(List.of(p1, p2));
 
-    Map<String, Object> result = service.retryFailedPartitions("t1", 1L);
+    InstanceManagementResults.RetryFailedPartitions result =
+        service.retryFailedPartitions("t1", 1L);
 
-    assertThat(result)
-        .containsEntry("requested", 2)
-        .containsEntry("retried", 2)
-        .containsEntry("conflicts", 0);
-    assertThat(result).containsEntry("partitionIds", List.of(10L, 11L));
+    assertThat(result.requested()).isEqualTo(2);
+    assertThat(result.retried()).isEqualTo(2);
+    assertThat(result.conflicts()).isZero();
+    assertThat(result.partitionIds()).containsExactly(10L, 11L);
     verify(retryGovernanceService).retryPartition("t1", 10L, "t1:manual-partition-retry:10:1");
     verify(retryGovernanceService).retryPartition("t1", 11L, "t1:manual-partition-retry:11:3");
   }

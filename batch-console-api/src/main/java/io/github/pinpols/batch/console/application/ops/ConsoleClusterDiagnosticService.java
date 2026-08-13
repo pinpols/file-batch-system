@@ -7,6 +7,12 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleInstanceDiagnosisResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleShedLockStatusResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTerminalChildrenHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerConsistencyResponse;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.time.Instant;
@@ -44,34 +50,33 @@ public class ConsoleClusterDiagnosticService {
   private final WorkerRegistryMapper workerRegistryMapper;
   private final ConsoleQueryCacheService cacheService;
 
-  public Map<String, Object> diagnose(String tenantId) {
+  public ConsoleClusterDiagnosticResponse diagnose(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
         "diagnostic:" + cacheTenant(resolved) + ":all",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        new TypeReference<Map<String, Object>>() {},
+        new TypeReference<ConsoleClusterDiagnosticResponse>() {},
         () -> loadDiagnose(resolved));
   }
 
-  private Map<String, Object> loadDiagnose(String resolved) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("shedLock", loadShedLockStatus(resolved));
-    result.put("workers", loadWorkerConsistency(resolved));
-    result.put("outbox", loadOutboxHealth(resolved));
-    result.put("terminalChildren", loadTerminalChildrenHealth(resolved));
-    return result;
+  private ConsoleClusterDiagnosticResponse loadDiagnose(String resolved) {
+    return new ConsoleClusterDiagnosticResponse(
+        loadShedLockStatus(resolved),
+        loadWorkerConsistency(resolved),
+        loadOutboxHealth(resolved),
+        loadTerminalChildrenHealth(resolved));
   }
 
-  public Map<String, Object> shedLockStatus(String tenantId) {
+  public ConsoleShedLockStatusResponse shedLockStatus(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
         "diagnostic:" + cacheTenant(resolved) + ":shedlock",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        new TypeReference<Map<String, Object>>() {},
+        new TypeReference<ConsoleShedLockStatusResponse>() {},
         () -> loadShedLockStatus(resolved));
   }
 
-  private Map<String, Object> loadShedLockStatus(String resolved) {
+  private ConsoleShedLockStatusResponse loadShedLockStatus(String resolved) {
     List<Map<String, Object>> locks = diagnosticMapper.shedlockAll().stream()
         .map(v -> {
           Map<String, Object> row = new LinkedHashMap<>();
@@ -88,19 +93,19 @@ public class ConsoleClusterDiagnosticService {
     result.put("totalLocks", locks.size());
     result.put("activeLocks", activeLocks);
     result.put("locks", locks);
-    return result;
+    return ConsoleShedLockStatusResponse.from(result);
   }
 
-  public Map<String, Object> workerConsistency(String tenantId) {
+  public ConsoleWorkerConsistencyResponse workerConsistency(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
         "diagnostic:" + cacheTenant(resolved) + ":workers",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        new TypeReference<Map<String, Object>>() {},
+        new TypeReference<ConsoleWorkerConsistencyResponse>() {},
         () -> loadWorkerConsistency(resolved));
   }
 
-  private Map<String, Object> loadWorkerConsistency(String resolved) {
+  private ConsoleWorkerConsistencyResponse loadWorkerConsistency(String resolved) {
     long online = workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.ONLINE.code());
     long draining =
         workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.DRAINING.code());
@@ -131,19 +136,19 @@ public class ConsoleClusterDiagnosticService {
             && drainingOverdue == 0
             && decommissionedActive == 0
             && invalidCapabilityTags == 0);
-    return result;
+    return ConsoleWorkerConsistencyResponse.from(result);
   }
 
-  public Map<String, Object> outboxHealth(String tenantId) {
+  public ConsoleOutboxHealthResponse outboxHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
         "diagnostic:" + cacheTenant(resolved) + ":outbox",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        new TypeReference<Map<String, Object>>() {},
+        new TypeReference<ConsoleOutboxHealthResponse>() {},
         () -> loadOutboxHealth(resolved));
   }
 
-  private Map<String, Object> loadOutboxHealth(String resolved) {
+  private ConsoleOutboxHealthResponse loadOutboxHealth(String resolved) {
     List<Map<String, Object>> stats = diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
         .map(v -> {
           Map<String, Object> row = new LinkedHashMap<>();
@@ -167,28 +172,28 @@ public class ConsoleClusterDiagnosticService {
     result.put("stalePublishingEvents", stalePublishing);
     result.put("deliveryStats", stats);
     result.put("healthy", pendingCount < 1000 && stalePublishing == 0);
-    return result;
+    return ConsoleOutboxHealthResponse.from(result);
   }
 
-  public Map<String, Object> terminalChildrenHealth(String tenantId) {
+  public ConsoleTerminalChildrenHealthResponse terminalChildrenHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
         "diagnostic:" + cacheTenant(resolved) + ":terminal-children",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
-        new TypeReference<Map<String, Object>>() {},
+        new TypeReference<ConsoleTerminalChildrenHealthResponse>() {},
         () -> loadTerminalChildrenHealth(resolved));
   }
 
-  private Map<String, Object> loadTerminalChildrenHealth(String resolved) {
+  private ConsoleTerminalChildrenHealthResponse loadTerminalChildrenHealth(String resolved) {
     long terminalInstancesWithActiveChildren =
         valueOrZero(diagnosticMapper.countTerminalInstancesWithActiveChildren(resolved));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("terminalInstancesWithActiveChildren", terminalInstancesWithActiveChildren);
     result.put("healthy", terminalInstancesWithActiveChildren == 0);
-    return result;
+    return ConsoleTerminalChildrenHealthResponse.from(result);
   }
 
-  public Map<String, Object> instanceDiagnosis(String tenantId, Long instanceId) {
+  public ConsoleInstanceDiagnosisResponse instanceDiagnosis(String tenantId, Long instanceId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> instance = Guard.requireFound(
         diagnosticMapper.selectJobInstanceSummary(resolved, instanceId), "job instance not found");
@@ -268,7 +273,7 @@ public class ConsoleClusterDiagnosticService {
         summary(
             partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup));
     result.put("findings", findings);
-    return result;
+    return ConsoleInstanceDiagnosisResponse.from(result);
   }
 
   private static long valueOrZero(Long value) {

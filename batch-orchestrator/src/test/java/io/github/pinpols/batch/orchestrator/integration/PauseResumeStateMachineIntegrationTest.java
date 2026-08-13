@@ -36,10 +36,10 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   void jobInstancePauseResumeUsesRealDbCasAndDoesNotReviveTerminalState() {
     Long runningId = insertJobInstance("RUNNING");
 
-    assertThat(instanceService.pause(TENANT, runningId)).containsEntry("status", "PAUSED");
+    assertThat(instanceService.pause(TENANT, runningId).status()).isEqualTo("PAUSED");
     assertThat(statusOfJobInstance(runningId)).isEqualTo("PAUSED");
 
-    assertThat(instanceService.resume(TENANT, runningId)).containsEntry("status", "RUNNING");
+    assertThat(instanceService.resume(TENANT, runningId).status()).isEqualTo("RUNNING");
     assertThat(statusOfJobInstance(runningId)).isEqualTo("RUNNING");
 
     Long terminalId = insertJobInstance("SUCCESS");
@@ -52,10 +52,10 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   void workflowRunPauseResumeUsesRealDbCasAndDoesNotReviveTerminalState() {
     Long runningId = insertWorkflowRun("RUNNING");
 
-    assertThat(workflowRunService.pause(TENANT, runningId)).containsEntry("status", "PAUSED");
+    assertThat(workflowRunService.pause(TENANT, runningId).status()).isEqualTo("PAUSED");
     assertThat(statusOfWorkflowRun(runningId)).isEqualTo("PAUSED");
 
-    assertThat(workflowRunService.resume(TENANT, runningId)).containsEntry("status", "RUNNING");
+    assertThat(workflowRunService.resume(TENANT, runningId).status()).isEqualTo("RUNNING");
     assertThat(statusOfWorkflowRun(runningId)).isEqualTo("RUNNING");
 
     Long terminalId = insertWorkflowRun("SUCCESS");

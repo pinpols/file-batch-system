@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementApplicationService;
-import java.util.Map;
+import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.InstanceAction;
+import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.PartitionAction;
+import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementResults.RetryFailedPartitions;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,43 +20,40 @@ public class InstanceManagementController {
   private final InstanceManagementApplicationService instanceManagementApplicationService;
 
   @PostMapping("/{id}/cancel")
-  public Map<String, Object> cancel(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public InstanceAction cancel(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.cancel(tenantId, id);
   }
 
   @PostMapping("/{id}/terminate")
-  public Map<String, Object> terminate(
+  public InstanceAction terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.terminate(tenantId, id);
   }
 
   @PostMapping("/{id}/pause")
-  public Map<String, Object> pause(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public InstanceAction pause(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.pause(tenantId, id);
   }
 
   @PostMapping("/{id}/resume")
-  public Map<String, Object> resume(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+  public InstanceAction resume(@PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.resume(tenantId, id);
   }
 
   @PostMapping("/partitions/{id}/cancel")
-  public Map<String, Object> cancelPartition(
+  public PartitionAction cancelPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.cancelPartition(tenantId, id);
   }
 
   @PostMapping("/partitions/{id}/retry")
-  public Map<String, Object> retryPartition(
+  public PartitionAction retryPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.retryPartition(tenantId, id);
   }
 
   @PostMapping("/{id}/partitions/retry-failed")
-  public Map<String, Object> retryFailedPartitions(
+  public RetryFailedPartitions retryFailedPartitions(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return instanceManagementApplicationService.retryFailedPartitions(tenantId, id);
   }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -142,7 +143,7 @@ class TaskDispatcherTest {
   void partitionInvocationFromClaimResponseIsThreadedToReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(eq(42L), anyString(), any()))
-        .thenReturn(Map.of("partitionInvocationId", "inv-from-claim"));
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-from-claim"));
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
       public String taskType() {
@@ -277,7 +278,7 @@ class TaskDispatcherTest {
     BatchPlatformClientConfig noRetryConfig =
         config.toBuilder().claimMax5xxRetries(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.report(anyLong(), anyString(), any())).thenThrow(new IOException("503 down"));
+    doThrow(new IOException("503 down")).when(http).report(anyLong(), anyString(), any());
     dispatcher = new TaskDispatcher(noRetryConfig, Map.of("tt", noopHandler()), http);
 
     // 不应抛

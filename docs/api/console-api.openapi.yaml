@@ -6287,7 +6287,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleFileChannel'
   /api/console/queries/file-templates/{templateCode}:
     get:
       tags: [Queries]
@@ -6318,7 +6318,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleFileTemplate'
   /api/console/queries/files/{id}:
     get:
       tags: [Queries]
@@ -6344,7 +6344,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleFileRecordDetail'
   /api/console/config/dependencies:
     get:
       tags: [Config]
@@ -11487,6 +11487,24 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseConsoleFileChannel:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleFileChannelResponse' }
+    CommonResponseConsoleFileTemplate:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleFileTemplateResponse' }
+    CommonResponseConsoleFileRecordDetail:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleFileRecordDetailResponse' }
     CommonResponseExcelUpload:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -15202,6 +15220,36 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, templateCode, templateName, templateType, bizType, fileFormatType, charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength, headerRows, footerRows, headerTemplate, trailerTemplate, checksumType, compressType, encryptType, namingRule, fieldMappings, validationRuleSet, defaultQueryCode, defaultQuerySql, queryParamSchema, streamingEnabled, pageSize, fetchSize, chunkSize, previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled, encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description, createdBy, updatedBy, createdAt, updatedAt]
+    ConsoleFileChannelResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        channelCode: { type: string }
+        channelName: { type: string }
+        channelType: { type: string }
+        targetEndpoint: { type: string }
+        authType: { type: string }
+        configJson: { type: string }
+        receiptPolicy: { type: string }
+        timeoutSeconds: { type: integer, format: int32 }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConsoleFileRecordDetailResponse:
+      type: object
+      description: 固定存储投影；metadata_json 为文件处理链路可扩展的原始 JSONB 载荷。
+      properties:
+        id: { type: integer, format: int64 }
+        tenant_id: { type: string, nullable: true }
+        file_name: { type: string, nullable: true }
+        mime_type: { type: string, nullable: true }
+        storage_type: { type: string, nullable: true }
+        storage_path: { type: string, nullable: true }
+        storage_bucket: { type: string, nullable: true }
+        metadata_json:
+          nullable: true
+          description: 原始 JSONB 扩展元数据。
     ConsoleExcelRowIssueResponse:
       $ref: '#/components/schemas/ExcelRowIssue'
     ExcelChangeSummary:

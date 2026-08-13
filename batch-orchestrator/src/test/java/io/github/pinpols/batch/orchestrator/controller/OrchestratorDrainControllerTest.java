@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +32,8 @@ class OrchestratorDrainControllerTest {
 
   @Test
   void shouldReturnDrainStatus() throws Exception {
-    when(gracefulShutdown.status()).thenReturn(Map.of("draining", false, "reason", "none"));
+    when(gracefulShutdown.status())
+        .thenReturn(new OrchestratorGracefulShutdown.DrainStatus(false, null, "none"));
 
     mockMvc
         .perform(get("/internal/orchestrator/drain/status"))
@@ -43,7 +43,8 @@ class OrchestratorDrainControllerTest {
 
   @Test
   void shouldEnableDrain() throws Exception {
-    when(gracefulShutdown.status()).thenReturn(Map.of("draining", true, "reason", "manual-enable"));
+    when(gracefulShutdown.status())
+        .thenReturn(new OrchestratorGracefulShutdown.DrainStatus(true, null, "manual-enable"));
 
     mockMvc
         .perform(post("/internal/orchestrator/drain/enable"))
@@ -56,7 +57,7 @@ class OrchestratorDrainControllerTest {
   @Test
   void shouldDisableDrain() throws Exception {
     when(gracefulShutdown.status())
-        .thenReturn(Map.of("draining", false, "reason", "manual-disable"));
+        .thenReturn(new OrchestratorGracefulShutdown.DrainStatus(false, null, "manual-disable"));
 
     mockMvc
         .perform(post("/internal/orchestrator/drain/disable"))

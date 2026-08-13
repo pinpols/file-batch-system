@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -87,7 +88,7 @@ class ConsoleAlertRoutingControllerBehaviorTest {
     // 生产 AlertRoutingConfigMapper 以 resultType=map 返回 snake_case 列键（route_code），
     // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(service.create(any(AlertRoutingSaveRequest.class)))
-        .thenReturn(Map.of("id", 1L, "route_code", "RT_NEW"));
+        .thenReturn(ConsoleAlertRoutingResponse.from(Map.of("id", 1L, "route_code", "RT_NEW")));
     mockMvc
         .perform(post("/api/console/alert-routings")
             .contentType(APPLICATION_JSON)
@@ -98,7 +99,8 @@ class ConsoleAlertRoutingControllerBehaviorTest {
 
   @Test
   void updateShouldPassPathId() throws Exception {
-    when(service.update(eq(7L), any(AlertRoutingSaveRequest.class))).thenReturn(Map.of("id", 7L));
+    when(service.update(eq(7L), any(AlertRoutingSaveRequest.class)))
+        .thenReturn(ConsoleAlertRoutingResponse.from(Map.of("id", 7L)));
     mockMvc
         .perform(put("/api/console/alert-routings/7")
             .contentType(APPLICATION_JSON)

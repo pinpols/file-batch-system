@@ -53,16 +53,19 @@ class PlatformHttpClientTest {
     server.createContext("/internal/workers/register", ex -> {
       seenAuth.set(ex.getRequestHeaders().getFirst("X-Batch-Api-Key"));
       seenTenant.set(ex.getRequestHeaders().getFirst("X-Batch-Tenant-Id"));
-      byte[] body = "{\"workerId\":\"assigned-123\"}".getBytes(StandardCharsets.UTF_8);
+      byte[] body = "{\"id\":123,\"tenantId\":\"tx\",\"workerCode\":\"w-1\",\"status\":\"ONLINE\"}"
+          .getBytes(StandardCharsets.UTF_8);
       ex.getResponseHeaders().add("Content-Type", "application/json");
       ex.sendResponseHeaders(200, body.length);
       ex.getResponseBody().write(body);
       ex.close();
     });
 
-    Map<String, Object> resp = newClient().register(Map.of("workerCode", "w-1"));
+    PlatformHttpClient.WorkerRegistrationResponse resp =
+        newClient().register(Map.of("workerCode", "w-1"));
 
-    assertThat(resp).containsEntry("workerId", "assigned-123");
+    assertThat(resp.id()).isEqualTo(123L);
+    assertThat(resp.workerCode()).isEqualTo("w-1");
     assertThat(seenAuth.get()).isEqualTo("test-key");
     assertThat(seenTenant.get()).isEqualTo("tx");
   }
@@ -119,7 +122,6 @@ class PlatformHttpClientTest {
       ex.sendResponseHeaders(204, -1);
       ex.close();
     });
-    Map<String, Object> r = newClient().report(99L, "idem", Map.of("success", true));
-    assertThat(r).isEmpty();
+    newClient().report(99L, "idem", Map.of("success", true));
   }
 }

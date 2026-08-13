@@ -40,8 +40,9 @@ class WorkflowRunManagementApplicationServiceTest {
         null,
         null);
 
-    assertThat(service.skipNode("tenant-A", 1L, "NODE")).containsEntry("nodeStatus", "SKIPPED");
+    assertThat(service.skipNode("tenant-A", 1L, "NODE").nodeStatus()).isEqualTo("SKIPPED");
     assertThat(service.skipNode("tenant-A", 1L, "NODE", "operator-1", "manual review"))
-        .containsEntry("nodeStatus", "SKIPPED");
+        .extracting(WorkflowManagementResults.NodeAction::nodeStatus)
+        .isEqualTo("SKIPPED");
   }
 }
