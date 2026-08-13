@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.FileUploadSessionResponse;
 import io.github.pinpols.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
@@ -49,7 +50,7 @@ public class FileGovernanceController {
   }
 
   @PostMapping("/presign-upload")
-  public Map<String, Object> presignUpload(@RequestBody FileUploadRequest request) {
+  public FileUploadSessionResponse presignUpload(@RequestBody FileUploadRequest request) {
     return fileGovernanceService.createUploadSession(FileUploadSessionCommand.builder()
         .tenantId(request.tenantId())
         .channelCode(request.channelCode())

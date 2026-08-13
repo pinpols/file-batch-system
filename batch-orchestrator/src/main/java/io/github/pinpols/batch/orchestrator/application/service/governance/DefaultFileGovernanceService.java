@@ -182,7 +182,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
   @Override
   @Transactional
-  public Map<String, Object> createUploadSession(FileUploadSessionCommand command) {
+  public FileUploadSessionResponse createUploadSession(FileUploadSessionCommand command) {
     validateUploadSessionCommand(command);
     Instant now = BatchDateTimeSupport.utcNow();
     String fileName = safeFileName(command.fileName());
@@ -227,19 +227,16 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             command.traceId(),
             metadata);
     fileGovernanceRepository.appendAudit(auditCommand);
-    Map<String, Object> response = new LinkedHashMap<>();
-    response.put("fileId", fileId);
-    response.put("status", "RECEIVED");
-    response.put("uploadMode", "APP_MANAGED");
-    response.put("uploadMethod", "PUT");
-    response.put("contentField", "file");
-    response.put(
-        "uploadUrl",
-        "/api/console/files/" + fileId + "/content?tenantId=" + safeUrlQuery(command.tenantId()));
-    response.put("storageBucket", storageBucket);
-    response.put("storagePath", storagePath);
-    response.put("fileName", fileName);
-    return response;
+    return new FileUploadSessionResponse(
+        fileId,
+        "RECEIVED",
+        "APP_MANAGED",
+        "PUT",
+        "file",
+        "/api/console/files/" + fileId + "/content?tenantId=" + safeUrlQuery(command.tenantId()),
+        storageBucket,
+        storagePath,
+        fileName);
   }
 
   @Override

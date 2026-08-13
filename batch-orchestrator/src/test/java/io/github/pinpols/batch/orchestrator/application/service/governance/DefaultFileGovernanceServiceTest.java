@@ -668,12 +668,12 @@ class DefaultFileGovernanceServiceTest {
         .traceId("trace")
         .build();
 
-    Map<String, Object> response = service.createUploadSession(command);
+    FileUploadSessionResponse response = service.createUploadSession(command);
 
-    assertThat(response).containsEntry("fileId", 42L);
-    assertThat(response).containsEntry("uploadMode", "APP_MANAGED");
-    assertThat(response).containsEntry("uploadMethod", "PUT");
-    assertThat(response).containsEntry("uploadUrl", "/api/console/files/42/content?tenantId=t1");
+    assertThat(response.fileId()).isEqualTo(42L);
+    assertThat(response.uploadMode()).isEqualTo("APP_MANAGED");
+    assertThat(response.uploadMethod()).isEqualTo("PUT");
+    assertThat(response.uploadUrl()).isEqualTo("/api/console/files/42/content?tenantId=t1");
     ArgumentCaptor<FileGovernanceRepository.ReconciledFileRecordCommand> captor =
         ArgumentCaptor.forClass(FileGovernanceRepository.ReconciledFileRecordCommand.class);
     verify(fileGovernanceRepository).createReconciledFileRecord(captor.capture());

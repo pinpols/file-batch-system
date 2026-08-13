@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.ContextClosedEvent;
@@ -43,18 +42,18 @@ class OrchestratorGracefulShutdownTest {
     shutdown.startDraining("second");
 
     assertThat(shutdown.isDraining()).isTrue();
-    Map<String, Object> status = shutdown.status();
-    assertThat(status).containsEntry("reason", "first");
+    OrchestratorGracefulShutdown.DrainStatus status = shutdown.status();
+    assertThat(status.reason()).isEqualTo("first");
   }
 
   @Test
   void shouldReportStatusCorrectly() {
     shutdown.startDraining("manual");
 
-    Map<String, Object> status = shutdown.status();
-    assertThat(status).containsEntry("draining", true);
-    assertThat(status.get("drainingSince")).isNotNull();
-    assertThat(status).containsEntry("reason", "manual");
+    OrchestratorGracefulShutdown.DrainStatus status = shutdown.status();
+    assertThat(status.draining()).isTrue();
+    assertThat(status.drainingSince()).isNotNull();
+    assertThat(status.reason()).isEqualTo("manual");
   }
 
   @Test
@@ -64,6 +63,6 @@ class OrchestratorGracefulShutdownTest {
     shutdown.onApplicationEvent(event);
 
     assertThat(shutdown.isDraining()).isTrue();
-    assertThat(shutdown.status()).containsEntry("reason", "context-closed");
+    assertThat(shutdown.status().reason()).isEqualTo("context-closed");
   }
 }

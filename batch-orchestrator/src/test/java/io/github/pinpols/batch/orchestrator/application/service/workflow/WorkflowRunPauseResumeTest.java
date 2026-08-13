@@ -79,7 +79,7 @@ class WorkflowRunPauseResumeTest {
     when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
         .thenReturn(1);
 
-    assertThat(service().pause("t1", 7L)).containsEntry("status", "PAUSED");
+    assertThat(service().pause("t1", 7L).status()).isEqualTo("PAUSED");
     verify(workflowRunMapper).updateStatus(any(UpdateWorkflowRunStatusParam.class));
   }
 
@@ -99,7 +99,7 @@ class WorkflowRunPauseResumeTest {
     when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
         .thenReturn(1);
 
-    assertThat(service().resume("t1", 7L)).containsEntry("status", "RUNNING");
+    assertThat(service().resume("t1", 7L).status()).isEqualTo("RUNNING");
   }
 
   @Test
