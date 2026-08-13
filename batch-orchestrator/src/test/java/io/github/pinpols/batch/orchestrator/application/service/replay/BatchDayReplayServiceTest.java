@@ -29,11 +29,12 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
+import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
@@ -124,19 +125,10 @@ class BatchDayReplayServiceTest {
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
     when(entryMapper.selectAssetPartitionImpacts(eq("t1"), any()))
-        .thenReturn(List.of(Map.of(
-            "business_key", "job:JOB_A:2026-05-04",
-            "asset_code", "JOB_A",
-            "partition_key", "2026-05-04",
-            "current_result_version_id", 11L,
-            "freshness_status", "EFFECTIVE")));
+        .thenReturn(List.of(new BatchDayReplayAssetPartitionImpactView(
+            "job:JOB_A:2026-05-04", "JOB_A", "2026-05-04", 11L, "EFFECTIVE")));
     when(entryMapper.selectDispatchImpacts(eq("t1"), any()))
-        .thenReturn(List.of(Map.of(
-            "source_instance_id", 101L,
-            "record_count", 3L,
-            "sent_count", 2L,
-            "failed_count", 1L,
-            "pending_receipt_count", 1L)));
+        .thenReturn(List.of(new BatchDayReplayDispatchImpactView(101L, 3L, 2L, 1L, 1L)));
 
     BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
         .tenantId("t1")
