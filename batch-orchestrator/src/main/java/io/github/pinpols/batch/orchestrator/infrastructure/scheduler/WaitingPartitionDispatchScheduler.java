@@ -1,30 +1,19 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
-import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
-import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -36,11 +25,8 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * WAITING 分片重派定时器：每 {@code waiting-dispatch-interval-millis}（默认 10s）扫一批 WAITING 状态分片，
@@ -66,13 +52,9 @@ public class WaitingPartitionDispatchScheduler {
   private final ResourceScheduler resourceScheduler;
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorJobMappers jobMappers;
-  private final OrchestratorWorkflowMappers workflowMappers;
   private final OrchestratorConfigCacheService configCacheService;
-  private final TaskDispatchOutboxService taskDispatchOutboxService;
-  private final PartitionLifecycleService partitionLifecycleService;
-  private final TenantActionRateLimiter tenantActionRateLimiter;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final ObjectProvider<WaitingPartitionDispatchScheduler> selfProvider;
+  private final WaitingPartitionDispatchTransactionService transactionService;
 
   /** WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。 */
   @Scheduled(
@@ -148,7 +130,7 @@ public class WaitingPartitionDispatchScheduler {
             Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
         .thenComparingLong(WaitingDispatchCandidate::partitionId);
     // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
-    // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；self-proxy 触发 @Transactional AOP。
+    // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；事务协作者开新事务。
     List<WaitingDispatchCandidate> sorted =
         candidates.stream().sorted(comparator).toList();
     for (WaitingDispatchCandidate candidate : sorted) {
@@ -158,18 +140,16 @@ public class WaitingPartitionDispatchScheduler {
         continue;
       }
       try {
-        // RLS Phase B：dispatchWaitingPartition → executeDispatch (REQUIRES_NEW) → 多张 batch 表写入，
-        // 必须在 proxy 调用前绑好 holder，REQUIRES_NEW 事务起点才能读到 app.tenant_id。
+        // RLS Phase B：dispatchWaitingPartition → transactionService (REQUIRES_NEW) → 多张 batch 表写入，
+        // 必须在事务协作者调用前绑好 holder，事务起点才能读到 app.tenant_id。
         // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
         RlsTenantContextHolder.runWithTenant(
             tenantId,
-            () -> selfProvider
-                .getObject()
-                .dispatchWaitingPartition(
-                    candidate.partition(),
-                    candidate.task(),
-                    candidate.jobInstance(),
-                    candidate.decision()));
+            () -> dispatchWaitingPartition(
+                candidate.partition(),
+                candidate.task(),
+                candidate.jobInstance(),
+                candidate.decision()));
       } catch (RuntimeException exception) {
         log.warn(
             "dispatch waiting partition failed, will retry next tick: tenantId={},"
@@ -237,76 +217,11 @@ public class WaitingPartitionDispatchScheduler {
           StructuredLogField.JOB_INSTANCE_ID,
           jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
       try {
-        selfProvider.getObject().executeDispatch(partition, task, jobInstance, decision);
+        transactionService.executeDispatch(partition, task, jobInstance, decision);
       } finally {
         BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
       }
     });
-  }
-
-  /**
-   * 单条 WAITING 分片的派发事务：release partition/task → 写 outbox → 推进 job_instance / workflow_run
-   * 全部在同一事务内提交，满足 CLAUDE.md §架构硬约束 "outbox_event 必须与任务状态写入处于同一事务"。
-   *
-   * <p>必须是 public 且通过 {@code selfProvider} self-proxy 调用才能让 Spring AOP 织入 {@code @Transactional}；
-   * 调用方负责在 MDC 上下文中调用，事务本身不关心日志 MDC。
-   */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void executeDispatch(
-      JobPartitionEntity partition,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      ResourceSchedulingDecision decision) {
-    boolean allowed = tenantActionRateLimiter.tryConsume(
-        jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE);
-    if (!allowed) {
-      return;
-    }
-    if (!partitionLifecycleService.releaseForDispatch(
-        partition, task, PartitionStatus.WAITING.code(), TaskStatus.CREATED.code())) {
-      return;
-    }
-    taskDispatchOutboxService.writeDispatchEvent(
-        jobInstance,
-        task,
-        partition,
-        jobInstance.getTraceId(),
-        OutboxEventKeyGenerator.forDispatch(task.getTenantId(), task.getId()));
-    if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-      int updated = jobMappers.jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
-          .tenantId(jobInstance.getTenantId())
-          .id(jobInstance.getId())
-          .instanceStatus(JobInstanceStatus.RUNNING.code())
-          .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
-          .startedAt(BatchDateTimeSupport.utcNow())
-          .expectedVersion(jobInstance.getVersion())
-          .build());
-      if (updated > 0) {
-        jobInstance.setVersion(
-            (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-      }
-    }
-    WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
-        jobInstance.getTenantId(), jobInstance.getId());
-    if (workflowRun != null
-        && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
-      workflowMappers.workflowRunMapper.markRunning(
-          workflowRun.getTenantId(),
-          workflowRun.getId(),
-          WorkflowRunStatus.RUNNING.code(),
-          workflowRun.getCurrentNodeCode(),
-          BatchDateTimeSupport.utcNow());
-    }
-    log.info(
-        "waiting partition released: tenantId={}, partitionId={},"
-            + " taskId={}, fairnessScore={}, tenantWeight={},"
-            + " queueWeight={}",
-        partition.getTenantId(),
-        partition.getId(),
-        task.getId(),
-        decision.getFairnessScore(),
-        decision.getTenantWeight(),
-        decision.getQueueWeight());
   }
 
   private ResourceSchedulingRequest buildRequest(
