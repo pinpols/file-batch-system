@@ -27,13 +27,13 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 批次日（Batch Day）生命周期管理：upsert、cutoff 判定、late arrival 路由、审计日志。 */
 @Slf4j
@@ -52,9 +52,9 @@ public class LaunchBatchDayService {
   private final OrchestratorJobMappers jobMappers;
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDayTimePolicyResolver timePolicyResolver;
-  private final ObjectProvider<LaunchBatchDayService> selfProvider;
   private final BatchDateTimeSupport dateTimeSupport;
   private final AlertEventService alertEventService;
+  private final PlatformTransactionManager transactionManager;
 
   /**
    * 批次日 upsert 入口：内部以 REQUIRES_NEW 事务逐次尝试；遇到 @Version 乐观锁冲突时 （{@link
@@ -72,10 +72,9 @@ public class LaunchBatchDayService {
     DataAccessException last = null;
     for (int attempt = 1; attempt <= UPSERT_MAX_ATTEMPTS; attempt++) {
       try {
-        selfProvider
-            .getObject()
-            .doUpsertBatchDayInstance(
-                request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt);
+        newBatchDayTransaction()
+            .executeWithoutResult(ignored -> doUpsertBatchDayInstance(
+                request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt));
         return;
       } catch (OptimisticLockingFailureException conflict) {
         SwallowedExceptionLogger.info(
@@ -104,10 +103,9 @@ public class LaunchBatchDayService {
   }
 
   /**
-   * 单次 upsert 尝试：独立 REQUIRES_NEW 事务，保证 CAS 冲突时只回滚本次尝试的写入， 不会污染外层 launch 事务。必须是 {@code public} 并通过
-   * self-proxy 调用以走 Spring AOP 织入。
+   * 单次 upsert 的业务决策。调用方在每个重试轮次外显式打开 {@code REQUIRES_NEW} 事务，保证 CAS
+   * 冲突时只回滚本次尝试的写入，不会污染外层 launch 事务。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void doUpsertBatchDayInstance(
       LaunchRequest request,
       JobDefinitionEntity jobDefinition,
@@ -128,6 +126,12 @@ public class LaunchBatchDayService {
     } else {
       updateExistingBatchDay(request, ctx, existing, batchDaySlaDeadlineAt);
     }
+  }
+
+  private TransactionTemplate newBatchDayTransaction() {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return transaction;
   }
 
   private BatchDayUpsertContext buildUpsertContext(

@@ -59,6 +59,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 class DefaultLaunchServiceTest {
 
@@ -79,8 +81,6 @@ class DefaultLaunchServiceTest {
   private LaunchParamResolver launchParamResolver;
 
   private ObjectProvider<DefaultLaunchService> selfProvider;
-
-  private ObjectProvider<LaunchBatchDayService> batchDaySelfProvider;
 
   private DefaultLaunchService service;
 
@@ -110,7 +110,9 @@ class DefaultLaunchServiceTest {
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     batchDayGateService = mock(BatchDayGateService.class);
     selfProvider = mock(ObjectProvider.class);
-    batchDaySelfProvider = mock(ObjectProvider.class);
+    PlatformTransactionManager batchDayTransactionManager = mock(PlatformTransactionManager.class);
+    when(batchDayTransactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
     launchBatchDayService = new LaunchBatchDayService(
@@ -122,12 +124,11 @@ class DefaultLaunchServiceTest {
         new BatchDayTimePolicyResolver(
             timezoneProvider,
             new io.github.pinpols.batch.orchestrator.service.CutoffScheduleResolver()),
-        batchDaySelfProvider,
         new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
         mock(
             io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService
-                .class));
-    when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
+                .class),
+        batchDayTransactionManager);
     launchParamResolver = new LaunchParamResolver(
         timezoneProvider,
         new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
