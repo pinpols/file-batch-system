@@ -30,14 +30,14 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 批次日结算调度器。
@@ -63,8 +63,8 @@ public class BatchDaySettleScheduler {
   private final OrchestratorConfigCacheService configCacheService;
   private final LaunchService launchService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final ObjectProvider<BatchDaySettleScheduler> selfProvider;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final PlatformTransactionManager transactionManager;
 
   @Scheduled(fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_settle", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
@@ -83,7 +83,6 @@ public class BatchDaySettleScheduler {
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
-    BatchDaySettleScheduler self = selfProvider.getObject();
     for (BatchDayInstanceEntity candidate : candidates) {
       if (candidate == null || candidate.id() == null || Boolean.TRUE.equals(candidate.frozen())) {
         continue;
@@ -93,10 +92,10 @@ public class BatchDaySettleScheduler {
         continue;
       }
       try {
-        // RLS Phase B：settleOne → claimSettling / finalizeSettling 均是 REQUIRES_NEW；holder 必须在
-        // 代理调用前绑好，否则事务起点拿不到 app.tenant_id，下游 mapper 在严格策略下静默失败。
+        // RLS Phase B：settleOne 内 claim/finalize 均是 REQUIRES_NEW；holder 必须在
+        // 显式短事务开始前绑好，否则事务起点拿不到 app.tenant_id，下游 mapper 在严格策略下静默失败。
         // try/catch 必须包在 runWithTenant 外，保证 finally 清 ThreadLocal。
-        RlsTenantContextHolder.runWithTenant(tenantId, () -> self.settleOne(candidate, now));
+        RlsTenantContextHolder.runWithTenant(tenantId, () -> settleOne(candidate, now));
       } catch (OptimisticLockingFailureException conflict) {
         // @Version CAS 冲突：其他路径（reopen / 并发 settle）先写了，本轮跳过，下 tick 重扫。
         log.info(
@@ -116,19 +115,36 @@ public class BatchDaySettleScheduler {
    * <p>每一阶段都是独立 REQUIRES_NEW 短事务：claim（tx1）一旦提交，运维就能看到 SETTLING 状态；finalize（tx2） 即使崩溃，下一轮扫描会重新
    * finalize SETTLING 行（重读 metrics 后决定终态或回 IN_FLIGHT）。
    *
-   * <p>必须是 {@code public}，且通过 self-proxy 调用才能被 Spring AOP 织入事务。
    */
-  public void settleOne(BatchDayInstanceEntity candidate, Instant now) {
-    BatchDaySettleScheduler self = selfProvider.getObject();
+  private void settleOne(BatchDayInstanceEntity candidate, Instant now) {
     if (STATUS_SETTLING.equals(candidate.dayStatus())) {
-      self.finalizeSettling(
+      finalizeInNewTransaction(
           candidate.tenantId(), candidate.calendarCode(), candidate.bizDate(), now);
       return;
     }
-    if (!self.claimSettling(candidate, now)) {
+    if (!claimInNewTransaction(candidate, now)) {
       return;
     }
-    self.finalizeSettling(candidate.tenantId(), candidate.calendarCode(), candidate.bizDate(), now);
+    finalizeInNewTransaction(
+        candidate.tenantId(), candidate.calendarCode(), candidate.bizDate(), now);
+  }
+
+  private boolean claimInNewTransaction(BatchDayInstanceEntity candidate, Instant now) {
+    return Boolean.TRUE.equals(
+        newSettlementTransaction().execute(transactionStatus -> claimSettling(candidate, now)));
+  }
+
+  private void finalizeInNewTransaction(
+      String tenantId, String calendarCode, LocalDate bizDate, Instant now) {
+    newSettlementTransaction()
+        .executeWithoutResult(
+            transactionStatus -> finalizeSettling(tenantId, calendarCode, bizDate, now));
+  }
+
+  private TransactionTemplate newSettlementTransaction() {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return transaction;
   }
 
   /**
@@ -140,8 +156,7 @@ public class BatchDaySettleScheduler {
    *   <li>否则 CAS 到 SETTLING，返回 true 让 finalize 接力。
    * </ul>
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public boolean claimSettling(BatchDayInstanceEntity candidate, Instant now) {
+  private boolean claimSettling(BatchDayInstanceEntity candidate, Instant now) {
     BatchDayInstanceMetrics metrics = jobInstanceMapper.selectBatchDayMetrics(
         candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
     if (metrics == null) {
@@ -170,8 +185,7 @@ public class BatchDaySettleScheduler {
    * tx2：从 SETTLING 落到终态（SETTLED / FAILED）；并发期间 active 又起来则回 IN_FLIGHT。 入口重读 DB 拿到 tx1 之后的 version 与
    * dayStatus，进程在 tx2 之前崩溃时下一轮重做也走同一路径。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void finalizeSettling(
+  private void finalizeSettling(
       String tenantId, String calendarCode, LocalDate bizDate, Instant now) {
     BatchDayInstanceEntity claimed =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
