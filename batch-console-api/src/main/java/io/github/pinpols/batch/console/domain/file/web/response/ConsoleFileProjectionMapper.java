@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /** 将文件配置 mapper 的下划线列投影转换为稳定的 Console API record。 */
@@ -119,6 +120,17 @@ public final class ConsoleFileProjectionMapper {
     if (value instanceof LocalDateTime dateTime) {
       return dateTime.toInstant(ZoneOffset.UTC);
     }
-    return value == null ? null : Instant.parse(value.toString());
+    if (value == null) {
+      return null;
+    }
+    String text = value.toString();
+    try {
+      return Instant.parse(text);
+    } catch (DateTimeParseException ignored) {
+      // MyBatis HTTP proxy in integration tests serializes PostgreSQL timestamps without an offset.
+      // These configuration timestamps are stored and exposed as UTC, so retain the former wire
+      // value.
+      return LocalDateTime.parse(text.replace(' ', 'T')).toInstant(ZoneOffset.UTC);
+    }
   }
 }

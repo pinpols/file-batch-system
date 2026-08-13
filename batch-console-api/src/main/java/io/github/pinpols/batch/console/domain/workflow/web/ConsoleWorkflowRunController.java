@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunActionResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunSkipNodeResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;

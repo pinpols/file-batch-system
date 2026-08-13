@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.job.web.response;
+package io.github.pinpols.batch.console.application.ops.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;

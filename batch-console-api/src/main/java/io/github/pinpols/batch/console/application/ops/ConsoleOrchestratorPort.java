@@ -1,14 +1,14 @@
 package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayOperateResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleInstanceActionResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsolePartitionActionResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryFailedPartitionsResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunActionResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;

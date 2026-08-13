@@ -2,9 +2,9 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleInstanceActionResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsolePartitionActionResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryFailedPartitionsResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
