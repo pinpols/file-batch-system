@@ -51,9 +51,7 @@ public class ConsoleOpsController {
   @GetMapping("/kafka-lag")
   public CommonResponse<List<ConsoleKafkaConsumerLagResponse>> kafkaConsumerLag(
       @RequestParam(value = "groupId", required = false) String groupId) {
-    return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId).stream()
-        .map(ConsoleKafkaConsumerLagResponse::from)
-        .toList());
+    return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));
   }
 
   /** Outbox 积压统计（按 publish_status 分组）。 */

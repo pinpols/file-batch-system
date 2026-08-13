@@ -22,11 +22,11 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.OutputStream;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -80,7 +80,7 @@ class ConsoleForensicControllerTest {
   @Test
   void requestExportShouldPassThroughToProxy() throws Exception {
     when(proxy.requestForensicExport(anyString(), any(), any(), any(), anyString(), anyString()))
-        .thenReturn(Map.of("exportId", "fx-001"));
+        .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
     mockMvc
         .perform(post("/api/console/forensic/export")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")

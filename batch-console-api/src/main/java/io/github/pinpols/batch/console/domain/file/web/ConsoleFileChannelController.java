@@ -6,11 +6,11 @@ import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChanne
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -39,7 +39,7 @@ public class ConsoleFileChannelController {
   /** 分页查询文件通道列表。 */
   @GetMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ConsoleFileChannelResponse>> list(
       @Valid @ModelAttribute FileChannelQueryRequest request) {
     return responseFactory.success(fileChannelApplicationService.list(request));
   }
@@ -47,7 +47,7 @@ public class ConsoleFileChannelController {
   /** 获取文件通道详情。 */
   @GetMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
-  public CommonResponse<Map<String, Object>> get(
+  public CommonResponse<ConsoleFileChannelResponse> get(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(fileChannelApplicationService.get(id, tenantId));
   }
@@ -55,7 +55,7 @@ public class ConsoleFileChannelController {
   /** 新建文件通道。 */
   @PostMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleFileChannelResponse> create(
       @Valid @RequestBody FileChannelCreateRequest request) {
     return responseFactory.success(fileChannelApplicationService.create(request));
   }
@@ -63,7 +63,7 @@ public class ConsoleFileChannelController {
   /** 更新文件通道。 */
   @PutMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<ConsoleFileChannelResponse> update(
       @PathVariable Long id, @Valid @RequestBody FileChannelUpdateRequest request) {
     return responseFactory.success(fileChannelApplicationService.update(id, request));
   }

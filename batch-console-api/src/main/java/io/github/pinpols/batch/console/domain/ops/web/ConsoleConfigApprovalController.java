@@ -37,16 +37,14 @@ public class ConsoleConfigApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long releaseId,
       @Valid @RequestBody ConfigReleaseApprovalSubmitRequest request) {
-    return responseFactory.success(
-        ConsoleConfigApprovalDetailResponse.from(applicationService.submit(releaseId, request)));
+    return responseFactory.success(applicationService.submit(releaseId, request));
   }
 
   @GetMapping("/releases/{releaseId}/approval")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<ConsoleConfigApprovalDetailResponse> approvalDetail(
       @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleConfigApprovalDetailResponse.from(applicationService.detail(tenantId, releaseId)));
+    return responseFactory.success(applicationService.detail(tenantId, releaseId));
   }
 
   @PostMapping("/approvals/{approvalId}/approve")
@@ -55,8 +53,7 @@ public class ConsoleConfigApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long approvalId,
       @Valid @RequestBody ConfigApprovalActionRequest request) {
-    return responseFactory.success(
-        ConsoleConfigApprovalDetailResponse.from(applicationService.approve(approvalId, request)));
+    return responseFactory.success(applicationService.approve(approvalId, request));
   }
 
   @PostMapping("/approvals/{approvalId}/reject")
@@ -65,7 +62,6 @@ public class ConsoleConfigApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long approvalId,
       @Valid @RequestBody ConfigApprovalActionRequest request) {
-    return responseFactory.success(
-        ConsoleConfigApprovalDetailResponse.from(applicationService.reject(approvalId, request)));
+    return responseFactory.success(applicationService.reject(approvalId, request));
   }
 }

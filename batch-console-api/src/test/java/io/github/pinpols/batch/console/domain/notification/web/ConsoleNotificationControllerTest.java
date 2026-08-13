@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleNo
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
 import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationChannelResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -68,7 +69,8 @@ class ConsoleNotificationControllerTest {
     // 生产 NotificationChannelMapper 以 resultType=map 返回 snake_case 列键（channel_code），
     // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(applicationService.listChannels("t1"))
-        .thenReturn(List.of(Map.of("channel_code", "mail-1", "channel_type", "EMAIL")));
+        .thenReturn(List.of(ConsoleNotificationChannelResponse.from(
+            Map.of("channel_code", "mail-1", "channel_type", "EMAIL"))));
 
     mockMvc
         .perform(get("/api/console/notifications/channels").param("tenantId", "t1"))

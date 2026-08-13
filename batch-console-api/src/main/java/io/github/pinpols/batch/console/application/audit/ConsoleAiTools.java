@@ -10,8 +10,8 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecuti
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -98,49 +98,49 @@ public class ConsoleAiTools {
     if (diagnosticService == null) {
       return "集群诊断服务当前不可用(诊断能力未装配)。";
     }
-    Map<String, Object> diagnostics = diagnosticService.diagnose(tenantId);
-    if (diagnostics == null || diagnostics.isEmpty()) {
+    ConsoleClusterDiagnosticResponse diagnostics = diagnosticService.diagnose(tenantId);
+    if (diagnostics == null) {
       return "集群诊断当前无数据(可能诊断服务未就绪或该租户无相关记录)。";
     }
-    Map<String, Object> shedLock = subMap(diagnostics.get("shedLock"));
-    Map<String, Object> workers = subMap(diagnostics.get("workers"));
-    Map<String, Object> outbox = subMap(diagnostics.get("outbox"));
-    Map<String, Object> terminal = subMap(diagnostics.get("terminalChildren"));
+    var shedLock = diagnostics.shedLock();
+    var workers = diagnostics.workers();
+    var outbox = diagnostics.outbox();
+    var terminal = diagnostics.terminalChildren();
     return "[集群诊断] 当前租户只读快照(固定阈值,超阈即判不健康)\n"
         + "ShedLock 定时任务租约: totalLocks="
-        + field(shedLock, "totalLocks")
+        + value(shedLock.totalLocks())
         + " activeLocks="
-        + field(shedLock, "activeLocks")
+        + value(shedLock.activeLocks())
         + "\nWorker 一致性: healthy="
-        + field(workers, "healthy")
+        + value(workers.healthy())
         + " onlineWorkers="
-        + field(workers, "onlineWorkers")
+        + value(workers.onlineWorkers())
         + " drainingWorkers="
-        + field(workers, "drainingWorkers")
+        + value(workers.drainingWorkers())
         + " offlineWorkers="
-        + field(workers, "offlineWorkers")
+        + value(workers.offlineWorkers())
         + " staleOnlineWorkers="
-        + field(workers, "staleOnlineWorkers")
+        + value(workers.staleOnlineWorkers())
         + " drainingPastDeadlineWorkers="
-        + field(workers, "drainingPastDeadlineWorkers")
+        + value(workers.drainingPastDeadlineWorkers())
         + " decommissionedWorkersWithActiveTasks="
-        + field(workers, "decommissionedWorkersWithActiveTasks")
+        + value(workers.decommissionedWorkersWithActiveTasks())
         + " invalidCapabilityTags="
-        + field(workers, "invalidCapabilityTags")
+        + value(workers.invalidCapabilityTags())
         + " runningInstances="
-        + field(workers, "runningInstances")
+        + value(workers.runningInstances())
         + "\nOutbox 投递: healthy="
-        + field(outbox, "healthy")
+        + value(outbox.healthy())
         + " pendingEvents="
-        + field(outbox, "pendingEvents")
+        + value(outbox.pendingEvents())
         + " activeEvents="
-        + field(outbox, "activeEvents")
+        + value(outbox.activeEvents())
         + " stalePublishingEvents="
-        + field(outbox, "stalePublishingEvents")
+        + value(outbox.stalePublishingEvents())
         + "\n终态子项 (terminalChildren): healthy="
-        + field(terminal, "healthy")
+        + value(terminal.healthy())
         + " terminalInstancesWithActiveChildren="
-        + field(terminal, "terminalInstancesWithActiveChildren");
+        + value(terminal.terminalInstancesWithActiveChildren());
   }
 
   @Tool(
@@ -196,13 +196,7 @@ public class ConsoleAiTools {
         + truncate(alert.title(), 200);
   }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> subMap(Object value) {
-    return value instanceof Map ? (Map<String, Object>) value : Map.of();
-  }
-
-  private static String field(Map<String, Object> map, String key) {
-    Object value = map.get(key);
+  private static String value(Object value) {
     return value == null ? "-" : value.toString();
   }
 

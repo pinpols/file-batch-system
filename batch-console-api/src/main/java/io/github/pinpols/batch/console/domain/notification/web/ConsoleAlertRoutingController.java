@@ -9,7 +9,6 @@ import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.AlertRoutingSaveRequest;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -35,15 +34,9 @@ public class ConsoleAlertRoutingController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    PageResponse<Map<String, Object>> page = alertRoutingApplicationService.list(
+    PageResponse<ConsoleAlertRoutingResponse> page = alertRoutingApplicationService.list(
         tenantId, routeCode, team, severity, enabled, pageNo, pageSize);
-    return responseFactory.success(new PageResponse<>(
-        page.total(),
-        page.pageNo(),
-        page.pageSize(),
-        page.items().stream().map(ConsoleAlertRoutingResponse::from).toList(),
-        page.nextCursor(),
-        page.hasMore()));
+    return responseFactory.success(page);
   }
 
   @PostMapping
@@ -53,8 +46,7 @@ public class ConsoleAlertRoutingController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleAlertRoutingResponse> create(
       @Valid @RequestBody AlertRoutingSaveRequest request) {
-    return responseFactory.success(
-        ConsoleAlertRoutingResponse.from(alertRoutingApplicationService.create(request)));
+    return responseFactory.success(alertRoutingApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
@@ -65,8 +57,7 @@ public class ConsoleAlertRoutingController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleAlertRoutingResponse> update(
       @PathVariable Long id, @Valid @RequestBody AlertRoutingSaveRequest request) {
-    return responseFactory.success(
-        ConsoleAlertRoutingResponse.from(alertRoutingApplicationService.update(id, request)));
+    return responseFactory.success(alertRoutingApplicationService.update(id, request));
   }
 
   @PostMapping("/{id}/toggle")

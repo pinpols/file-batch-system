@@ -13,11 +13,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,7 +57,7 @@ class ConsoleBatchDayControllerTest {
             eq("FREEZE"),
             eq("admin"),
             eq("safety")))
-        .thenReturn(Map.of("batchDayId", 1, "dayStatus", "FROZEN"));
+        .thenReturn(new ConsoleBatchDayOperateResponse(1L, "FROZEN", true, 0));
     mockMvc
         .perform(post("/api/console/batch-days/operate")
             .contentType(APPLICATION_JSON)
@@ -94,7 +94,8 @@ class ConsoleBatchDayControllerTest {
 
   @Test
   void operateShouldAcceptAllFiveValidActions() throws Exception {
-    when(proxy.batchDayOperate(any(), any(), any(), any(), any(), any())).thenReturn(Map.of());
+    when(proxy.batchDayOperate(any(), any(), any(), any(), any(), any()))
+        .thenReturn(new ConsoleBatchDayOperateResponse(null, null, null, null));
     for (String act : new String[] {"FREEZE", "RELEASE", "SKIP", "REOPEN", "CLOSE"}) {
       mockMvc
           .perform(post("/api/console/batch-days/operate")

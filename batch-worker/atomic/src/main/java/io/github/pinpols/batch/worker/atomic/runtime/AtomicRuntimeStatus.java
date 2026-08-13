@@ -1,7 +1,5 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
-import java.util.Map;
-
 /**
  * Atomic worker 四类 executor 的"在跑 effective 配置"快照 — 提供给 Console / 运维仪表盘可视化。
  *
@@ -39,15 +37,4 @@ public record AtomicRuntimeStatus(
 
   /** Stored Proc executor 状态:开关 + 允许 schema 数量。 */
   public record StoredProcStatus(boolean enabled, int allowedSchemasSize) {}
-
-  /** 转 LinkedHashMap 方便 Console 上的 ParameterizedTypeReference 解析 / JSON 序列化稳定字段顺序。 */
-  public Map<String, Object> asMap() {
-    return Map.of(
-        "workerCode", workerCode == null ? "" : workerCode,
-        "workerType", workerType == null ? "" : workerType,
-        "shell", shell,
-        "sql", sql,
-        "http", http,
-        "storedProc", storedProc);
-  }
 }

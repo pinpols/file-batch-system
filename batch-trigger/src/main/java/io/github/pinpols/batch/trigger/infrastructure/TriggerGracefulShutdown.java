@@ -2,9 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +38,10 @@ public class TriggerGracefulShutdown
   private final TriggerDrainState drainState;
   private final AtomicBoolean lifecycleRunning = new AtomicBoolean(true);
   private ApplicationEventPublisher eventPublisher;
+
+  /** 对外稳定的 Trigger 排水与调度器状态契约。 */
+  public record TriggerDrainStatus(
+      boolean draining, Instant drainingSince, String reason, String schedulerStatus) {}
 
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
@@ -131,19 +133,14 @@ public class TriggerGracefulShutdown
     return drainState.isDraining();
   }
 
-  public Map<String, Object> status() throws SchedulerException {
-    Map<String, Object> status = new LinkedHashMap<>();
-    status.put("draining", drainState.isDraining());
-    status.put("drainingSince", drainState.getDrainingSince());
-    status.put("reason", drainState.getReason());
-    status.put(
-        "schedulerStatus",
-        scheduler.isShutdown()
-            ? "SHUTDOWN"
-            : scheduler.isInStandbyMode()
-                ? "STANDBY"
-                : scheduler.isStarted() ? "STARTED" : "STOPPED");
-    // R-arch-audit-2026-05-23 P2: 返回不可变包装，防调用方修改 map 影响只读视图语义。
-    return Collections.unmodifiableMap(status);
+  public TriggerDrainStatus status() throws SchedulerException {
+    String schedulerStatus = scheduler.isShutdown()
+        ? "SHUTDOWN"
+        : scheduler.isInStandbyMode() ? "STANDBY" : scheduler.isStarted() ? "STARTED" : "STOPPED";
+    return new TriggerDrainStatus(
+        drainState.isDraining(),
+        drainState.getDrainingSince(),
+        drainState.getReason(),
+        schedulerStatus);
   }
 }

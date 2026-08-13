@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,16 +36,17 @@ public class ConsoleKafkaLagQueryService {
   private static final String KEY_ERROR = "error";
 
   /** 列出所有 batch 相关 consumer group 的积压情况。 */
-  public List<Map<String, Object>> consumerGroupLags(String groupIdFilter) {
+  public List<ConsoleKafkaConsumerLagResponse> consumerGroupLags(String groupIdFilter) {
     return cacheService.getOrLoad(
         "kafka-lag:" + cacheSegment(groupIdFilter),
         ConsoleQueryCacheService.KAFKA_LAG_TTL,
-        new TypeReference<List<Map<String, Object>>>() {},
+        new com.fasterxml.jackson.core.type.TypeReference<
+            List<ConsoleKafkaConsumerLagResponse>>() {},
         () -> loadConsumerGroupLags(groupIdFilter));
   }
 
-  private List<Map<String, Object>> loadConsumerGroupLags(String groupIdFilter) {
-    List<Map<String, Object>> result = new ArrayList<>();
+  private List<ConsoleKafkaConsumerLagResponse> loadConsumerGroupLags(String groupIdFilter) {
+    List<ConsoleKafkaConsumerLagResponse> result = new ArrayList<>();
     try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
       Collection<GroupListing> groups =
           admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -62,30 +63,20 @@ public class ConsoleKafkaLagQueryService {
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
           log.warn("Kafka lag query interrupted for group {}: {}", groupId, e.getMessage());
-          Map<String, Object> errorEntry = new LinkedHashMap<>();
-          errorEntry.put(KEY_GROUP_ID, groupId);
-          errorEntry.put(KEY_ERROR, "Kafka admin query interrupted: " + e.getMessage());
-          result.add(errorEntry);
+          result.add(error(groupId, "Kafka admin query interrupted: " + e.getMessage()));
           break;
         } catch (Exception e) {
           log.warn("Failed to query lag for group {}: {}", groupId, e.getMessage());
-          Map<String, Object> errorEntry = new LinkedHashMap<>();
-          errorEntry.put(KEY_GROUP_ID, groupId);
-          errorEntry.put(KEY_ERROR, e.getMessage());
-          result.add(errorEntry);
+          result.add(error(groupId, e.getMessage()));
         }
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       log.error("Kafka consumer group query was interrupted", e);
-      Map<String, Object> errorEntry = new LinkedHashMap<>();
-      errorEntry.put(KEY_ERROR, "Kafka admin query interrupted: " + e.getMessage());
-      result.add(errorEntry);
+      result.add(error(null, "Kafka admin query interrupted: " + e.getMessage()));
     } catch (ExecutionException | TimeoutException e) {
       log.error("Failed to query Kafka consumer group list (Kafka may be unreachable)", e);
-      Map<String, Object> errorEntry = new LinkedHashMap<>();
-      errorEntry.put(KEY_ERROR, "Failed to list consumer groups: " + e.getMessage());
-      result.add(errorEntry);
+      result.add(error(null, "Failed to list consumer groups: " + e.getMessage()));
     }
     return result;
   }
@@ -94,7 +85,7 @@ public class ConsoleKafkaLagQueryService {
     return value == null || value.isBlank() ? "all" : ConsoleQueryCacheService.keySegment(value);
   }
 
-  private Map<String, Object> queryGroupLag(AdminClient admin, String groupId)
+  private ConsoleKafkaConsumerLagResponse queryGroupLag(AdminClient admin, String groupId)
       throws InterruptedException, ExecutionException, TimeoutException {
     ListConsumerGroupOffsetsResult offsetsResult = admin.listConsumerGroupOffsets(groupId);
     Map<TopicPartition, OffsetAndMetadata> committedOffsets =
@@ -108,7 +99,7 @@ public class ConsoleKafkaLagQueryService {
     ListOffsetsResult endOffsetsResult = admin.listOffsets(endOffsetRequests);
 
     long totalLag = 0;
-    List<Map<String, Object>> partitionLags = new ArrayList<>();
+    List<ConsoleKafkaConsumerLagResponse.PartitionLag> partitionLags = new ArrayList<>();
     for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
       TopicPartition tp = entry.getKey();
       long committed = entry.getValue().offset();
@@ -119,23 +110,20 @@ public class ConsoleKafkaLagQueryService {
       long lag = Math.max(0, endOffset - committed);
       totalLag += lag;
       if (lag > 0) {
-        Map<String, Object> partitionInfo = new LinkedHashMap<>();
-        partitionInfo.put("topic", tp.topic());
-        partitionInfo.put("partition", tp.partition());
-        partitionInfo.put("committedOffset", committed);
-        partitionInfo.put("endOffset", endOffset);
-        partitionInfo.put("lag", lag);
-        partitionLags.add(partitionInfo);
+        partitionLags.add(new ConsoleKafkaConsumerLagResponse.PartitionLag(
+            tp.topic(), tp.partition(), committed, endOffset, lag));
       }
     }
 
-    Map<String, Object> groupInfo = new LinkedHashMap<>();
-    groupInfo.put(KEY_GROUP_ID, groupId);
-    groupInfo.put("totalLag", totalLag);
-    groupInfo.put("partitionCount", committedOffsets.size());
-    if (!partitionLags.isEmpty()) {
-      groupInfo.put("partitionsWithLag", partitionLags);
-    }
-    return groupInfo;
+    return new ConsoleKafkaConsumerLagResponse(
+        groupId,
+        totalLag,
+        committedOffsets.size(),
+        partitionLags.isEmpty() ? null : partitionLags,
+        null);
+  }
+
+  private static ConsoleKafkaConsumerLagResponse error(String groupId, String message) {
+    return new ConsoleKafkaConsumerLagResponse(groupId, null, null, null, message);
   }
 }

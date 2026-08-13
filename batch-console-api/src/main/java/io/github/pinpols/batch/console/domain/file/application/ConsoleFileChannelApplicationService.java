@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileChannelUpdateRequest;
-import java.util.Map;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 
 /**
  * 文件通道应用服务：管理文件通道配置的 CRUD 及启停操作。
@@ -14,13 +14,13 @@ import java.util.Map;
  */
 public interface ConsoleFileChannelApplicationService {
 
-  PageResponse<Map<String, Object>> list(FileChannelQueryRequest request);
+  PageResponse<ConsoleFileChannelResponse> list(FileChannelQueryRequest request);
 
-  Map<String, Object> get(Long id, String tenantId);
+  ConsoleFileChannelResponse get(Long id, String tenantId);
 
-  Map<String, Object> create(FileChannelCreateRequest request);
+  ConsoleFileChannelResponse create(FileChannelCreateRequest request);
 
-  Map<String, Object> update(Long id, FileChannelUpdateRequest request);
+  ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request);
 
   void toggle(Long id, String tenantId, Boolean enabled);
 }

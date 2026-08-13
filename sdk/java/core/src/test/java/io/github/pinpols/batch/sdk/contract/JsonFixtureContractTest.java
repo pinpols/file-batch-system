@@ -279,13 +279,15 @@ class JsonFixtureContractTest {
     return null;
   }
 
-  /** 驱动 {@link HeartbeatDirective#fromResponse} → {@link HeartbeatDirective#toRuntimeState()}。 */
+  /** 驱动强类型心跳响应 → {@link HeartbeatDirective#toRuntimeState()}。 */
   private static Map<String, Object> computeHeartbeatDirective(JsonNode when) {
-    @SuppressWarnings("unchecked")
-    Map<String, Object> resp = JSON.convertValue(when.path("responseBody"), Map.class) == null
-        ? Map.of()
-        : JSON.convertValue(when.path("responseBody"), Map.class);
-    HeartbeatDirective directive = HeartbeatDirective.fromResponse(resp);
+    HeartbeatDirective raw = JSON.convertValue(when.path("responseBody"), HeartbeatDirective.class);
+    HeartbeatDirective directive = new HeartbeatDirective(
+        raw.platformStatus() == null ? HeartbeatDirective.STATUS_NORMAL : raw.platformStatus(),
+        raw.desiredMaxConcurrent(),
+        raw.shouldDrain(),
+        raw.pausedTaskTypes() == null ? List.of() : raw.pausedTaskTypes(),
+        raw.nextHeartbeatHint());
     WorkerRuntimeState fsm = directive.toRuntimeState();
 
     Map<String, Object> out = new LinkedHashMap<>();

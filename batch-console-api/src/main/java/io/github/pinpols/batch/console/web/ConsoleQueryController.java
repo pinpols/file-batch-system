@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileError
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordDetailResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
@@ -77,7 +78,6 @@ import io.github.pinpols.batch.console.web.query.RetryScheduleQueryRequest;
 import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -217,8 +217,7 @@ public class ConsoleQueryController {
   @GetMapping("/job-definitions/codes")
   public CommonResponse<List<CodeNameOption>> jobDefinitionCodes(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        toCodeNameOptions(applicationService.jobDefinitionCodes(tenantId)));
+    return responseFactory.success(applicationService.jobDefinitionCodes(tenantId));
   }
 
   /**
@@ -230,18 +229,7 @@ public class ConsoleQueryController {
   @GetMapping("/pipeline-definitions/codes")
   public CommonResponse<List<CodeNameOption>> pipelineDefinitionCodes(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        toCodeNameOptions(applicationService.pipelineDefinitionCodes(tenantId)));
-  }
-
-  private List<CodeNameOption> toCodeNameOptions(List<Map<String, Object>> rows) {
-    return rows.stream()
-        .map(row -> new CodeNameOption(text(row.get("code")), text(row.get("name"))))
-        .toList();
-  }
-
-  private String text(Object value) {
-    return value == null ? null : String.valueOf(value);
+    return responseFactory.success(applicationService.pipelineDefinitionCodes(tenantId));
   }
 
   /** GET /outbox-retries — Outbox 重试日志。 */
@@ -463,13 +451,13 @@ public class ConsoleQueryController {
   }
 
   @GetMapping("/file-channels/{channelCode}")
-  public CommonResponse<Map<String, Object>> fileChannelDetail(
+  public CommonResponse<ConsoleFileChannelResponse> fileChannelDetail(
       @PathVariable String channelCode, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.fileChannelDetail(tenantId, channelCode));
   }
 
   @GetMapping("/file-templates/{templateCode}")
-  public CommonResponse<Map<String, Object>> fileTemplateDetail(
+  public CommonResponse<ConsoleFileTemplateResponse> fileTemplateDetail(
       @PathVariable String templateCode,
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "version", required = false) Integer version) {
@@ -478,7 +466,7 @@ public class ConsoleQueryController {
   }
 
   @GetMapping("/files/{id}")
-  public CommonResponse<Map<String, Object>> fileRecordDetail(
+  public CommonResponse<ConsoleFileRecordDetailResponse> fileRecordDetail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.fileRecordDetail(tenantId, id));
   }

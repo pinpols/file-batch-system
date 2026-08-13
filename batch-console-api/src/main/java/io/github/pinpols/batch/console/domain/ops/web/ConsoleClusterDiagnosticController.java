@@ -30,42 +30,36 @@ public class ConsoleClusterDiagnosticController {
   @GetMapping
   public CommonResponse<ConsoleClusterDiagnosticResponse> diagnose(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleClusterDiagnosticResponse.from(diagnosticService.diagnose(tenantId)));
+    return responseFactory.success(diagnosticService.diagnose(tenantId));
   }
 
   @GetMapping("/shedlock")
   public CommonResponse<ConsoleShedLockStatusResponse> shedLockStatus(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleShedLockStatusResponse.from(diagnosticService.shedLockStatus(tenantId)));
+    return responseFactory.success(diagnosticService.shedLockStatus(tenantId));
   }
 
   @GetMapping("/workers")
   public CommonResponse<ConsoleWorkerConsistencyResponse> workerConsistency(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleWorkerConsistencyResponse.from(diagnosticService.workerConsistency(tenantId)));
+    return responseFactory.success(diagnosticService.workerConsistency(tenantId));
   }
 
   @GetMapping("/outbox")
   public CommonResponse<ConsoleOutboxHealthResponse> outboxHealth(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleOutboxHealthResponse.from(diagnosticService.outboxHealth(tenantId)));
+    return responseFactory.success(diagnosticService.outboxHealth(tenantId));
   }
 
   @GetMapping("/terminal-children")
   public CommonResponse<ConsoleTerminalChildrenHealthResponse> terminalChildrenHealth(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsoleTerminalChildrenHealthResponse.from(
-        diagnosticService.terminalChildrenHealth(tenantId)));
+    return responseFactory.success(diagnosticService.terminalChildrenHealth(tenantId));
   }
 
   @GetMapping("/instances/{id}")
   public CommonResponse<ConsoleInstanceDiagnosisResponse> instanceDiagnosis(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        ConsoleInstanceDiagnosisResponse.from(diagnosticService.instanceDiagnosis(tenantId, id)));
+    return responseFactory.success(diagnosticService.instanceDiagnosis(tenantId, id));
   }
 }

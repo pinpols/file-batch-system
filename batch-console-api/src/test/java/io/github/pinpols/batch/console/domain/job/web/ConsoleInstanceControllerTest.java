@@ -9,10 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,7 +43,8 @@ class ConsoleInstanceControllerTest {
 
   @Test
   void cancelShouldUseCancelAction() throws Exception {
-    when(proxy.instanceAction(3L, "ta", "cancel")).thenReturn(Map.of("status", "cancelled"));
+    when(proxy.instanceAction(3L, "ta", "cancel"))
+        .thenReturn(new ConsoleInstanceActionResponse(3L, null, "cancelled", null));
     mockMvc
         .perform(post("/api/console/instances/3/cancel").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -49,7 +53,8 @@ class ConsoleInstanceControllerTest {
 
   @Test
   void terminateShouldUseTerminateAction() throws Exception {
-    when(proxy.instanceAction(3L, "ta", "terminate")).thenReturn(Map.of("status", "terminated"));
+    when(proxy.instanceAction(3L, "ta", "terminate"))
+        .thenReturn(new ConsoleInstanceActionResponse(3L, null, "terminated", null));
     mockMvc
         .perform(post("/api/console/instances/3/terminate").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -58,7 +63,8 @@ class ConsoleInstanceControllerTest {
 
   @Test
   void pauseShouldUsePauseAction() throws Exception {
-    when(proxy.instanceAction(3L, "ta", "pause")).thenReturn(Map.of("status", "PAUSED"));
+    when(proxy.instanceAction(3L, "ta", "pause"))
+        .thenReturn(new ConsoleInstanceActionResponse(3L, null, "PAUSED", null));
     mockMvc
         .perform(post("/api/console/instances/3/pause").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -67,7 +73,8 @@ class ConsoleInstanceControllerTest {
 
   @Test
   void resumeShouldUseResumeAction() throws Exception {
-    when(proxy.instanceAction(3L, "ta", "resume")).thenReturn(Map.of("status", "RUNNING"));
+    when(proxy.instanceAction(3L, "ta", "resume"))
+        .thenReturn(new ConsoleInstanceActionResponse(3L, null, "RUNNING", null));
     mockMvc
         .perform(post("/api/console/instances/3/resume").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -76,8 +83,10 @@ class ConsoleInstanceControllerTest {
 
   @Test
   void cancelPartitionAndRetryPartitionShouldRouteToPartitionAction() throws Exception {
-    when(proxy.partitionAction(5L, "ta", "cancel")).thenReturn(Map.of("status", "ok"));
-    when(proxy.partitionAction(5L, "ta", "retry")).thenReturn(Map.of("status", "ok"));
+    when(proxy.partitionAction(5L, "ta", "cancel"))
+        .thenReturn(new ConsolePartitionActionResponse(5L, "ok"));
+    when(proxy.partitionAction(5L, "ta", "retry"))
+        .thenReturn(new ConsolePartitionActionResponse(5L, "ok"));
     mockMvc
         .perform(post("/api/console/instances/partitions/5/cancel").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -90,7 +99,8 @@ class ConsoleInstanceControllerTest {
 
   @Test
   void retryFailedPartitionsShouldRouteToInstanceBatchAction() throws Exception {
-    when(proxy.retryFailedPartitions(3L, "ta")).thenReturn(Map.of("requested", 2, "retried", 2));
+    when(proxy.retryFailedPartitions(3L, "ta"))
+        .thenReturn(new ConsoleRetryFailedPartitionsResponse(3L, null, 2, 2, 0, List.of()));
 
     mockMvc
         .perform(post("/api/console/instances/3/partitions/retry-failed").param("tenantId", "ta"))

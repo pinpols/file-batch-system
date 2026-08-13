@@ -1,7 +1,14 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayOperateResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleInstanceActionResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsolePartitionActionResponse;
+import io.github.pinpols.batch.console.domain.job.web.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
+import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunActionResponse;
+import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
@@ -30,15 +37,15 @@ import java.util.Map;
  */
 public interface ConsoleOrchestratorPort {
 
-  Map<String, Object> instanceAction(Long id, String tenantId, String action);
+  ConsoleInstanceActionResponse instanceAction(Long id, String tenantId, String action);
 
-  Map<String, Object> partitionAction(Long id, String tenantId, String action);
+  ConsolePartitionActionResponse partitionAction(Long id, String tenantId, String action);
 
-  Map<String, Object> retryFailedPartitions(Long instanceId, String tenantId);
+  ConsoleRetryFailedPartitionsResponse retryFailedPartitions(Long instanceId, String tenantId);
 
-  Map<String, Object> workflowRunAction(Long id, String tenantId, String action);
+  ConsoleWorkflowRunActionResponse workflowRunAction(Long id, String tenantId, String action);
 
-  Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode);
+  ConsoleWorkflowRunSkipNodeResponse workflowRunSkipNode(Long id, String tenantId, String nodeCode);
 
   ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId);
 
@@ -71,7 +78,7 @@ public interface ConsoleOrchestratorPort {
    *
    * @return key=batchDayId / dayStatus / frozen / releasedLaunchCount
    */
-  Map<String, Object> batchDayOperate(
+  ConsoleBatchDayOperateResponse batchDayOperate(
       String tenantId,
       String calendarCode,
       LocalDate bizDate,
@@ -84,7 +91,7 @@ public interface ConsoleOrchestratorPort {
    *
    * @return key=exportId / status / storagePath / fileSizeBytes / sha256
    */
-  Map<String, Object> requestForensicExport(
+  ConsoleForensicExportResponse requestForensicExport(
       String tenantId,
       LocalDate bizDateFrom,
       LocalDate bizDateTo,

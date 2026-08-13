@@ -7,12 +7,12 @@ import io.github.pinpols.batch.console.domain.file.web.query.FileTemplateQueryRe
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateCreateRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateMappingDraftRequest;
 import io.github.pinpols.batch.console.domain.file.web.request.FileTemplateUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.file.web.response.FileTemplateMappingDraftResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -41,7 +41,7 @@ public class ConsoleFileTemplateController {
   /** 分页查询文件模板列表。 */
   @GetMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
-  public CommonResponse<PageResponse<Map<String, Object>>> list(
+  public CommonResponse<PageResponse<ConsoleFileTemplateResponse>> list(
       @Valid @ModelAttribute FileTemplateQueryRequest request) {
     return responseFactory.success(fileTemplateApplicationService.list(request));
   }
@@ -49,7 +49,7 @@ public class ConsoleFileTemplateController {
   /** 获取文件模板详情。 */
   @GetMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
-  public CommonResponse<Map<String, Object>> get(
+  public CommonResponse<ConsoleFileTemplateResponse> get(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(fileTemplateApplicationService.get(id, tenantId));
   }
@@ -57,7 +57,7 @@ public class ConsoleFileTemplateController {
   /** 新建文件模板。 */
   @PostMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> create(
+  public CommonResponse<ConsoleFileTemplateResponse> create(
       @Valid @RequestBody FileTemplateCreateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.create(request));
   }
@@ -74,7 +74,7 @@ public class ConsoleFileTemplateController {
   /** 更新文件模板。 */
   @PutMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<Map<String, Object>> update(
+  public CommonResponse<ConsoleFileTemplateResponse> update(
       @PathVariable Long id, @Valid @RequestBody FileTemplateUpdateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.update(id, request));
   }

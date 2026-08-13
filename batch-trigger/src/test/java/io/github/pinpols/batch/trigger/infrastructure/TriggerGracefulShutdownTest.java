@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
@@ -56,10 +55,10 @@ class TriggerGracefulShutdownTest {
     when(scheduler.isInStandbyMode()).thenReturn(true);
     when(scheduler.isStarted()).thenReturn(false);
 
-    Map<String, Object> status = shutdown.status();
+    TriggerGracefulShutdown.TriggerDrainStatus status = shutdown.status();
 
-    assertThat(status).containsEntry("draining", false);
-    assertThat(status).containsEntry("schedulerStatus", "STANDBY");
+    assertThat(status.draining()).isFalse();
+    assertThat(status.schedulerStatus()).isEqualTo("STANDBY");
   }
 
   @Test

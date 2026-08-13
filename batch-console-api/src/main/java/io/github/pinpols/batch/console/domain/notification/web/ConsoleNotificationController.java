@@ -45,9 +45,7 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<ConsoleNotificationChannelResponse>> listChannels(
       @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(service.listChannels(tenantId).stream()
-        .map(ConsoleNotificationChannelResponse::from)
-        .toList());
+    return responseFactory.success(service.listChannels(tenantId));
   }
 
   @GetMapping("/channels/{channelCode}")
@@ -55,8 +53,7 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<ConsoleNotificationChannelResponse> getChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    return responseFactory.success(
-        ConsoleNotificationChannelResponse.from(service.getChannel(tenantId, channelCode)));
+    return responseFactory.success(service.getChannel(tenantId, channelCode));
   }
 
   @PostMapping("/channels")
@@ -90,8 +87,7 @@ public class ConsoleNotificationController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<ConsoleNotificationTestResultResponse> testChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
-    return responseFactory.success(
-        ConsoleNotificationTestResultResponse.from(service.testChannel(tenantId, channelCode)));
+    return responseFactory.success(service.testChannel(tenantId, channelCode));
   }
 
   @GetMapping("/rules")
@@ -99,9 +95,7 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<ConsoleSubscriptionRuleResponse>> listRules(
       @RequestParam @NotBlank String tenantId) {
-    return responseFactory.success(service.listRules(tenantId).stream()
-        .map(ConsoleSubscriptionRuleResponse::from)
-        .toList());
+    return responseFactory.success(service.listRules(tenantId));
   }
 
   @GetMapping("/rules/{ruleId}")
@@ -109,8 +103,7 @@ public class ConsoleNotificationController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<ConsoleSubscriptionRuleResponse> getRule(
       @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
-    return responseFactory.success(
-        ConsoleSubscriptionRuleResponse.from(service.getRule(tenantId, ruleId)));
+    return responseFactory.success(service.getRule(tenantId, ruleId));
   }
 
   @PostMapping("/rules")
@@ -146,8 +139,6 @@ public class ConsoleNotificationController {
   public CommonResponse<List<ConsoleNotificationDeliveryLogResponse>> deliveryLogs(
       @RequestParam @NotBlank String tenantId,
       @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {
-    return responseFactory.success(service.deliveryLogs(tenantId, limit).stream()
-        .map(ConsoleNotificationDeliveryLogResponse::from)
-        .toList());
+    return responseFactory.success(service.deliveryLogs(tenantId, limit));
   }
 }

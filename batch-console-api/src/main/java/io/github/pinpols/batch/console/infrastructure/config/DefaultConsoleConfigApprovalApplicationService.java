@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
+import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleConfigApprovalDetailResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
@@ -65,7 +66,8 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   @Override
   @Transactional
-  public Map<String, Object> submit(Long releaseId, ConfigReleaseApprovalSubmitRequest request) {
+  public ConsoleConfigApprovalDetailResponse submit(
+      Long releaseId, ConfigReleaseApprovalSubmitRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
     if (!ConfigLifecycleStatus.DRAFT.code().equals(release.getConfigStatus())) {
@@ -115,7 +117,7 @@ public class DefaultConsoleConfigApprovalApplicationService
   }
 
   @Override
-  public Map<String, Object> detail(String tenantId, Long releaseId) {
+  public ConsoleConfigApprovalDetailResponse detail(String tenantId, Long releaseId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConfigReleaseEntity release = loadRelease(resolved, releaseId);
     Map<String, Object> approval = configApprovalMapper.selectLatestByRelease(resolved, releaseId);
@@ -126,12 +128,13 @@ public class DefaultConsoleConfigApprovalApplicationService
     result.put("configKey", release.getConfigKey());
     result.put("configStatus", release.getConfigStatus());
     result.put("approval", approval);
-    return result;
+    return ConsoleConfigApprovalDetailResponse.from(result);
   }
 
   @Override
   @Transactional
-  public Map<String, Object> approve(Long approvalId, ConfigApprovalActionRequest request) {
+  public ConsoleConfigApprovalDetailResponse approve(
+      Long approvalId, ConfigApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
     if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
@@ -176,7 +179,8 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   @Override
   @Transactional
-  public Map<String, Object> reject(Long approvalId, ConfigApprovalActionRequest request) {
+  public ConsoleConfigApprovalDetailResponse reject(
+      Long approvalId, ConfigApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
     if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {

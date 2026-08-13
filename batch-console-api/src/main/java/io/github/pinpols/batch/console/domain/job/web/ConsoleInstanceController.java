@@ -36,8 +36,7 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleInstanceActionResponse> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsoleInstanceActionResponse.from(
-        orchestratorProxyService.instanceAction(id, tenantId, "cancel")));
+    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "cancel"));
   }
 
   @PostMapping("/{id}/terminate")
@@ -48,8 +47,8 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleInstanceActionResponse> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsoleInstanceActionResponse.from(
-        orchestratorProxyService.instanceAction(id, tenantId, "terminate")));
+    return responseFactory.success(
+        orchestratorProxyService.instanceAction(id, tenantId, "terminate"));
   }
 
   @PostMapping("/{id}/pause")
@@ -60,8 +59,7 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleInstanceActionResponse> pause(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsoleInstanceActionResponse.from(
-        orchestratorProxyService.instanceAction(id, tenantId, "pause")));
+    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "pause"));
   }
 
   @PostMapping("/{id}/resume")
@@ -72,8 +70,7 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleInstanceActionResponse> resume(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsoleInstanceActionResponse.from(
-        orchestratorProxyService.instanceAction(id, tenantId, "resume")));
+    return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "resume"));
   }
 
   @PostMapping("/partitions/{id}/cancel")
@@ -84,8 +81,8 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsolePartitionActionResponse> cancelPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsolePartitionActionResponse.from(
-        orchestratorProxyService.partitionAction(id, tenantId, "cancel")));
+    return responseFactory.success(
+        orchestratorProxyService.partitionAction(id, tenantId, "cancel"));
   }
 
   @PostMapping("/partitions/{id}/retry")
@@ -96,8 +93,7 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsolePartitionActionResponse> retryPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsolePartitionActionResponse.from(
-        orchestratorProxyService.partitionAction(id, tenantId, "retry")));
+    return responseFactory.success(orchestratorProxyService.partitionAction(id, tenantId, "retry"));
   }
 
   @PostMapping("/{id}/partitions/retry-failed")
@@ -108,7 +104,6 @@ public class ConsoleInstanceController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleRetryFailedPartitionsResponse> retryFailedPartitions(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(ConsoleRetryFailedPartitionsResponse.from(
-        orchestratorProxyService.retryFailedPartitions(id, tenantId)));
+    return responseFactory.success(orchestratorProxyService.retryFailedPartitions(id, tenantId));
   }
 }

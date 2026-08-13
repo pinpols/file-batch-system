@@ -120,7 +120,7 @@ public class BatchPlatformClient {
       body.put("taskTypes", descriptors);
     }
     try {
-      Map<String, Object> resp = httpClient.register(body);
+      PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(body);
       log.info("BatchPlatformClient registered: response={}", resp);
     } catch (IOException e) {
       throw new BatchSdkClientException(
