@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import lombok.RequiredArgsConstructor;
@@ -47,10 +48,10 @@ public class TaskReportRetryExecutor {
     if (success) {
       return null;
     }
-    if (modern != null && !modern.isBlank()) {
+    if (EmptyChecks.isNotBlank(modern)) {
       return modern;
     }
-    if (legacy != null && !legacy.isBlank()) {
+    if (EmptyChecks.isNotBlank(legacy)) {
       return legacy;
     }
     return "UNKNOWN";
