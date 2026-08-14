@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -31,7 +30,6 @@ import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
@@ -81,13 +79,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
-  /**
-   * workflow_run.updateStatus 期望前态白名单：仅 CREATED / RUNNING 才允许 outcome 推动状态机； cancel/terminate 已把
-   * run 切到 TERMINATED 后再来 outcome 应当被守护拦掉。
-   */
-  private static final List<String> WORKFLOW_RUN_LIVE_STATUSES =
-      List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
-
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
   private final DefaultTaskOutcomeCollaborators collaborators;
@@ -95,6 +86,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final TaskOutcomeTerminalFinalizer terminalFinalizer;
   private final TaskOutcomeDagProgressor dagProgressor;
   private final TaskOutcomeParentTaskSignaler parentTaskSignaler;
+  private final TaskOutcomeWorkflowFinalizer workflowFinalizer;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -123,22 +115,28 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // ADR-041 Phase1.3b:节点产出写入数据库后跨阶段 count 连续性核对(仅告警)。
       CountContinuityOutboxService countContinuityOutboxService) {}
 
+  @Component
+  public record TaskOutcomeAuxiliaryCollaborators(
+      TaskOutcomeNodeRunRecorder nodeRunRecorder,
+      TaskOutcomeTerminalFinalizer terminalFinalizer,
+      TaskOutcomeDagProgressor dagProgressor,
+      TaskOutcomeParentTaskSignaler parentTaskSignaler,
+      TaskOutcomeWorkflowFinalizer workflowFinalizer) {}
+
   @Autowired
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
       OrchestratorWorkflowMappers workflowMappers,
       DefaultTaskOutcomeCollaborators collaborators,
-      TaskOutcomeNodeRunRecorder nodeRunRecorder,
-      TaskOutcomeTerminalFinalizer terminalFinalizer,
-      TaskOutcomeDagProgressor dagProgressor,
-      TaskOutcomeParentTaskSignaler parentTaskSignaler) {
+      TaskOutcomeAuxiliaryCollaborators auxiliaryCollaborators) {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
     this.collaborators = collaborators;
-    this.nodeRunRecorder = nodeRunRecorder;
-    this.terminalFinalizer = terminalFinalizer;
-    this.dagProgressor = dagProgressor;
-    this.parentTaskSignaler = parentTaskSignaler;
+    this.nodeRunRecorder = auxiliaryCollaborators.nodeRunRecorder();
+    this.terminalFinalizer = auxiliaryCollaborators.terminalFinalizer();
+    this.dagProgressor = auxiliaryCollaborators.dagProgressor();
+    this.parentTaskSignaler = auxiliaryCollaborators.parentTaskSignaler();
+    this.workflowFinalizer = auxiliaryCollaborators.workflowFinalizer();
     this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
         .register(collaborators.meterRegistry());
@@ -162,7 +160,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         jobMappers,
         workflowMappers,
         collaborators,
-        new TaskOutcomeNodeRunRecorder(workflowMappers),
+        compatibilityAuxiliaryCollaborators(workflowMappers, collaborators));
+  }
+
+  private static TaskOutcomeAuxiliaryCollaborators compatibilityAuxiliaryCollaborators(
+      OrchestratorWorkflowMappers workflowMappers, DefaultTaskOutcomeCollaborators collaborators) {
+    TaskOutcomeNodeRunRecorder nodeRunRecorder = new TaskOutcomeNodeRunRecorder(workflowMappers);
+    return new TaskOutcomeAuxiliaryCollaborators(
+        nodeRunRecorder,
         new TaskOutcomeTerminalFinalizer(
             collaborators.jobLifecycleMetricsRecorder(),
             collaborators.meterRegistry(),
@@ -173,9 +178,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             workflowMappers,
             collaborators.workflowDagService(),
             collaborators.workflowNodeDispatchServiceProvider(),
-            new TaskOutcomeNodeRunRecorder(workflowMappers),
+            nodeRunRecorder,
             collaborators.countContinuityOutboxService()),
-        new TaskOutcomeParentTaskSignaler());
+        new TaskOutcomeParentTaskSignaler(),
+        new TaskOutcomeWorkflowFinalizer(
+            workflowMappers,
+            collaborators.stateMachine(),
+            collaborators.workflowTerminalOutboxService()));
   }
 
   // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
@@ -574,36 +583,17 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           .ifPresent(this::applyTaskOutcome);
     }
     if (EmptyChecks.isNotNull(workflowRun)) {
-      String workflowEvent = TaskOutcomeStatePolicy.resolveWorkflowEvent(
-          failedCount,
-          allPartitionsFinished,
-          dagContinues,
-          Boolean.TRUE.equals(workflowRun.getDryRun()));
-      String workflowStatus =
-          collaborators.stateMachine().transition(workflowRun, workflowEvent).toState();
-      Instant workflowFinishedAt = jobFullyComplete ? finishedAt : null;
-      // C-2.3: SQL 守护期望前态 {CREATED, RUNNING}，避免与运维 cancel/terminate 抢占造成 TERMINATED 覆写
-      int updated =
-          workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
-              .tenantId(command.tenantId())
-              .id(workflowRun.getId())
-              .runStatus(workflowStatus)
-              .currentNodeCode(TaskOutcomeStatePolicy.resolveWorkflowCurrentNode(
-                  activeNodes, workflowStatus, currentNodeCode))
-              .finishedAt(workflowFinishedAt)
-              .expectedStatuses(WORKFLOW_RUN_LIVE_STATUSES)
-              .build());
-      if (updated <= 0) {
-        log.warn(
-            "workflow_run {} already in terminal state when outcome arrived; skip transition to"
-                + " {} (likely cancel/terminate raced ahead)",
-            workflowRun.getId(),
-            workflowStatus);
-      } else if (WorkflowTerminalOutboxService.isTerminal(workflowStatus)) {
-        collaborators
-            .workflowTerminalOutboxService()
-            .writeTerminalEvent(workflowRun, workflowStatus, workflowFinishedAt);
-      }
+      workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
+          .command(command)
+          .workflowRun(workflowRun)
+          .failedPartitionCount(failedCount)
+          .allPartitionsFinished(allPartitionsFinished)
+          .dagContinues(dagContinues)
+          .jobFullyComplete(jobFullyComplete)
+          .activeNodes(activeNodes)
+          .currentNodeCode(currentNodeCode)
+          .finishedAt(finishedAt)
+          .build());
     }
   }
 
