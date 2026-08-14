@@ -5,8 +5,6 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
-import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
-import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -50,7 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,6 +95,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final DefaultTaskOutcomeCollaborators collaborators;
   private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
   private final TaskOutcomeTerminalFinalizer terminalFinalizer;
+  private final TaskOutcomeDagProgressor dagProgressor;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -132,12 +130,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       OrchestratorWorkflowMappers workflowMappers,
       DefaultTaskOutcomeCollaborators collaborators,
       TaskOutcomeNodeRunRecorder nodeRunRecorder,
-      TaskOutcomeTerminalFinalizer terminalFinalizer) {
+      TaskOutcomeTerminalFinalizer terminalFinalizer,
+      TaskOutcomeDagProgressor dagProgressor) {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
     this.collaborators = collaborators;
     this.nodeRunRecorder = nodeRunRecorder;
     this.terminalFinalizer = terminalFinalizer;
+    this.dagProgressor = dagProgressor;
     this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
         .register(collaborators.meterRegistry());
@@ -167,7 +167,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             collaborators.meterRegistry(),
             collaborators.jobInstanceTerminalChildStateReconciler(),
             collaborators.resultVersionWriter(),
-            collaborators.batchDayReplayTerminalReconciler()));
+            collaborators.batchDayReplayTerminalReconciler()),
+        new TaskOutcomeDagProgressor(
+            workflowMappers,
+            collaborators.workflowDagService(),
+            collaborators.workflowNodeDispatchServiceProvider(),
+            new TaskOutcomeNodeRunRecorder(workflowMappers),
+            collaborators.countContinuityOutboxService()));
   }
 
   // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
@@ -449,7 +455,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (nodeProgress.allFinished() && EmptyChecks.isNotNull(workflowRun)) {
       // perf(#5): 节点完成时才需要 output_summary 做产出聚合,此处按需全量读(节点完成远少于每 REPORT)。
       List<JobPartitionEntity> nodeCompletionPartitions = loadPartitions(command, task);
-      DagAdvanceContext advanceCtx = DagAdvanceContext.builder()
+      TaskOutcomeDagProgressor.Context advanceCtx = TaskOutcomeDagProgressor.Context.builder()
           .command(command)
           .task(task)
           .jobInstance(jobInstance)
@@ -463,7 +469,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           .activeNodes(activeNodes)
           .finishedAt(finishedAt)
           .build();
-      advanceDagNodes(advanceCtx);
+      dagProgressor.advance(advanceCtx);
       // current_node_code 是派发期缓存，fan-out gateway 会递归创建分支但可能仍残留已完成的 FORK。
       // 节点完成后以 workflow_node_run 的最新状态重建活跃集合，避免 END 已成功却永久 RUNNING。
       activeNodes.clear();
@@ -597,94 +603,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
   }
 
-  /** DAG 工作流节点推进：完成当前节点运行记录，解析并派发后继节点。 */
-  private void advanceDagNodes(DagAdvanceContext ctx) {
-    ctx.activeNodes().remove(ctx.currentNodeCode());
-    NodeRunOutcome currentOutcome = NodeRunOutcome.builder()
-        .success(ctx.nodeProgress().failedCount() == 0)
-        .errorCode(ctx.command().errorCode())
-        .errorMessage(ctx.command().errorMessage())
-        .errorKey(ctx.command().errorKey())
-        .errorArgs(ctx.command().errorArgs())
-        .startedAt(nodeRunRecorder.resolveStartedAt(
-            ctx.workflowRun().getId(),
-            ctx.currentNodeCode(),
-            ctx.workflowRun().getStartedAt(),
-            ctx.finishedAt()))
-        .finishedAt(ctx.finishedAt())
-        .outputJson(TaskOutcomeSummaryBuilder.serializeOutputs(ctx.nodeOutputs()))
-        .build();
-    NodeRunKey currentKey = new NodeRunKey(
-        ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
-    recordNodeRunFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
-    List<WorkflowDagService.DagNodeResolution> nextNodes = collaborators
-        .workflowDagService()
-        .resolveNextNodes(
-            ctx.workflowRun().getWorkflowDefinitionId(),
-            ctx.currentNodeCode(),
-            ctx.nodeProgress().failedCount() == 0,
-            ctx.task().getTaskPayload());
-    for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
-      if (EmptyChecks.isNull(nextNode)) {
-        continue;
-      }
-      if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
-        if (collaborators
-            .workflowDagService()
-            .isNodeReadyForDispatch(
-                ctx.workflowRun().getId(),
-                ctx.workflowRun().getWorkflowDefinitionId(),
-                nextNode.nodeCode(),
-                ctx.task().getTaskPayload())) {
-          recordNodeRunStart(
-              ctx.workflowRun().getId(),
-              nextNode.nodeCode(),
-              nextNode.nodeType(),
-              ctx.finishedAt());
-          // END 节点没有 worker 上报，output 永远 null
-          NodeRunOutcome endOutcome = NodeRunOutcome.builder()
-              .success(ctx.nodeProgress().failedCount() == 0)
-              .errorCode(ctx.command().errorCode())
-              .errorMessage(ctx.command().errorMessage())
-              .errorKey(ctx.command().errorKey())
-              .errorArgs(ctx.command().errorArgs())
-              .startedAt(ctx.finishedAt())
-              .finishedAt(ctx.finishedAt())
-              .build();
-          NodeRunKey endKey =
-              new NodeRunKey(ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType());
-          recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
-        }
-        continue;
-      }
-      int dispatched = collaborators
-          .workflowNodeDispatchServiceProvider()
-          .getObject()
-          .dispatchNode(
-              ctx.jobInstance(),
-              ctx.workflowRun(),
-              nextNode,
-              ctx.task().getTaskPayload(),
-              ctx.jobInstance().getTraceId());
-      // P2-6：只在真正派发产生分区时把下游加入 activeNodes；否则 workflow_run.current_node_code 会写入
-      // 残留节点（dispatchNode 因 readiness/已激活/cross-day 等返回 0 但 isActiveNode 偶尔仍命中并发线程
-      // 刚插入的 RUNNING 行），导致 workflow 永远到不了终态。
-      if (dispatched > 0 && isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
-        ctx.activeNodes().add(nextNode.nodeCode());
-      }
-    }
-    // 当前节点 FAILED 时级联将永远无法触发的 SUCCESS-edge 下游写为 SKIPPED；防止 ALL-mode join 因
-    // 缺失上游 node_run 行陷入永久死锁（terminalCount/matchedCount 永远到不了 size）。
-    if (ctx.nodeProgress().failedCount() > 0) {
-      collaborators
-          .workflowDagService()
-          .cascadeSkipDownstream(
-              ctx.workflowRun().getId(),
-              ctx.workflowRun().getWorkflowDefinitionId(),
-              ctx.currentNodeCode());
-    }
-  }
-
   private void updateStepInstanceProgress(
       TaskOutcomeCommand command, JobTaskEntity task, boolean retryScheduled, Instant finishedAt) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
@@ -769,12 +687,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return WorkflowNodeCode.START.code();
   }
 
-  private String resolveCurrentNodeType(JobTaskEntity task) {
-    String nodeType = TaskOutcomePayloadSupport.payloadStringValue(
-        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeType");
-    return EmptyChecks.isBlank(nodeType) ? WorkflowNodeType.TASK.code() : nodeType;
-  }
-
   /**
    * perf(#5): 按需全量读取该 instance 的 {@code job_partition}(含 {@code output_summary} 大列),只用于「节点完成 /
    * 实例终态」的产出聚合。与常规 REPORT 计数路径(轻量投影)隔离,避免每次 REPORT 都拉全量。
@@ -787,27 +699,4 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
     return TaskOutcomeStatePolicy.resolveActiveNodeCodes(nodeRuns);
   }
-
-  private boolean isActiveNode(Long workflowRunId, String nodeCode) {
-    WorkflowNodeRunEntity latestNodeRun =
-        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-            workflowRunId, nodeCode);
-    if (EmptyChecks.isNull(latestNodeRun)) {
-      return false;
-    }
-    return WorkflowNodeRunStatus.READY.code().equals(latestNodeRun.getNodeStatus())
-        || WorkflowNodeRunStatus.RUNNING.code().equals(latestNodeRun.getNodeStatus());
-  }
-
-  @Builder
-  private record DagAdvanceContext(
-      TaskOutcomeCommand command,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      WorkflowRunEntity workflowRun,
-      String currentNodeCode,
-      NodePartitionProgressCalculator.Result nodeProgress,
-      Map<String, Object> nodeOutputs,
-      Set<String> activeNodes,
-      Instant finishedAt) {}
 }

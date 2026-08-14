@@ -14,7 +14,7 @@
 | 1 表达一致性 | 已完成 | #921：安全的 Spring 配置轻量化；本批将文件组请求转换提取为命名边界方法，并补充中文业务原因说明 | 后续新增代码继续遵守同一规则，不再对全仓做机械格式改写 |
 | 2 自注入迁移 | 已完成 | #918：低风险自注入；#922：Console 租户初始化事务协作者；#926～#932：Orchestrator 事务边界迁移；#935：retry/dead-letter 显式新事务 | 生产源码自注入复扫为 0；后续新增代理调用须直接使用窄事务协作者或 `TransactionTemplate` |
 | 3 固定 Map 契约 | 已完成 | #924：Console/内部 API/Java SDK 首批固定响应 DTO；#933：文件维护投影；#936：batch-day replay 影响投影；本批将文件治理延迟指标固定为 record | 剩余机器候选均已登记为动态 JSON/metadata/插件载荷、通用工具或兼容转换边界；新增固定契约不得回退为 Map |
-| 4 复杂类拆分 | 进行中 | #923：Task Outcome 状态策略提取；#940：`TaskOutcomeNodeRunRecorder`；本批提取 `TaskOutcomeTerminalFinalizer`，集中实例终态后的指标、子状态、结果版本和 replay 收口 | 继续按一个职责一个 PR 提取 `DefaultTaskOutcomeService` 的 DAG 推进、终态收口等职责；不改变事务入口 |
+| 4 复杂类拆分 | 进行中 | #923：Task Outcome 状态策略提取；#940：`TaskOutcomeNodeRunRecorder`；#942：`TaskOutcomeTerminalFinalizer`；本批提取 `TaskOutcomeDagProgressor`，集中节点完成后的 DAG 解析、END 收口、后继派发和失败级联跳过 | 继续按一个职责一个 PR 提取 `DefaultTaskOutcomeService` 的父子任务回写、Workflow 终态更新等职责；不改变事务入口 |
 | 5 测试风格 | 未开始 | — | 在相应生产类拆分后就近治理 fixture 与命名 |
 | 6 例外治理 | 未开始 | — | 审计 suppression、白名单与长期理由 |
 | 7 最终验收 | 未开始 | — | 前述阶段结束后跑 Full Gate、关键 sim 与容器启动验收 |
