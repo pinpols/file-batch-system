@@ -10,7 +10,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
@@ -45,7 +44,6 @@ import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -96,6 +94,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
   private final TaskOutcomeTerminalFinalizer terminalFinalizer;
   private final TaskOutcomeDagProgressor dagProgressor;
+  private final TaskOutcomeParentTaskSignaler parentTaskSignaler;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -131,13 +130,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       DefaultTaskOutcomeCollaborators collaborators,
       TaskOutcomeNodeRunRecorder nodeRunRecorder,
       TaskOutcomeTerminalFinalizer terminalFinalizer,
-      TaskOutcomeDagProgressor dagProgressor) {
+      TaskOutcomeDagProgressor dagProgressor,
+      TaskOutcomeParentTaskSignaler parentTaskSignaler) {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
     this.collaborators = collaborators;
     this.nodeRunRecorder = nodeRunRecorder;
     this.terminalFinalizer = terminalFinalizer;
     this.dagProgressor = dagProgressor;
+    this.parentTaskSignaler = parentTaskSignaler;
     this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
         .register(collaborators.meterRegistry());
@@ -173,7 +174,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             collaborators.workflowDagService(),
             collaborators.workflowNodeDispatchServiceProvider(),
             new TaskOutcomeNodeRunRecorder(workflowMappers),
-            collaborators.countContinuityOutboxService()));
+            collaborators.countContinuityOutboxService()),
+        new TaskOutcomeParentTaskSignaler());
   }
 
   // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
@@ -567,7 +569,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
     if (jobFullyComplete && TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
-      signalParentVirtualTask(jobInstance, instanceStatus, command);
+      parentTaskSignaler
+          .buildParentOutcome(jobInstance, instanceStatus, command)
+          .ifPresent(this::applyTaskOutcome);
     }
     if (EmptyChecks.isNotNull(workflowRun)) {
       String workflowEvent = TaskOutcomeStatePolicy.resolveWorkflowEvent(
@@ -635,34 +639,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_progress_conflict");
     }
-  }
-
-  /** 当 JOB 节点启动的子 Job 到达终态时，将结果应用到父 Job 中的虚拟任务， 由标准的基于分区的 DAG 推进逻辑接管后续流转。 */
-  private void signalParentVirtualTask(
-      JobInstanceEntity childJobInstance,
-      String childInstanceStatus,
-      TaskOutcomeCommand childCommand) {
-    Long parentVirtualTaskId =
-        ParentVirtualTaskIdResolver.resolve(childJobInstance.getParamsSnapshot());
-    if (EmptyChecks.isNull(parentVirtualTaskId)) {
-      return;
-    }
-    boolean nodeSuccess = JobInstanceStatus.SUCCESS.code().equals(childInstanceStatus);
-    // 父虚拟任务不直接推父水位：子作业自己的 outcome 已经写过对应实例的 high_water_mark_out；
-    // 父侧不与子作业共享水位。ADR-009: JOB 节点把子作业的 outputs 透传到父 workflow 节点（供下游 DSL 引用）。
-    TaskOutcomeCommand parentCommand = TaskOutcomeCommand.builder()
-        .tenantId(childJobInstance.getTenantId())
-        .taskId(parentVirtualTaskId)
-        .success(nodeSuccess)
-        .resultSummary(JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)))
-        .errorCode(nodeSuccess ? null : childCommand.errorCode())
-        .errorMessage(nodeSuccess ? null : childCommand.errorMessage())
-        .errorKey(nodeSuccess ? null : childCommand.errorKey())
-        .errorArgs(nodeSuccess ? null : childCommand.errorArgs())
-        .failureClass(nodeSuccess ? null : childCommand.failureClass())
-        .outputs(nodeSuccess ? childCommand.outputs() : null)
-        .build();
-    applyTaskOutcome(parentCommand);
   }
 
   private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
