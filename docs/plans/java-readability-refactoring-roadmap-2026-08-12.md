@@ -14,7 +14,7 @@
 | 1 表达一致性 | 已完成 | #921：安全的 Spring 配置轻量化；本批将文件组请求转换提取为命名边界方法，并补充中文业务原因说明 | 后续新增代码继续遵守同一规则，不再对全仓做机械格式改写 |
 | 2 自注入迁移 | 已完成 | #918：低风险自注入；#922：Console 租户初始化事务协作者；#926～#932：Orchestrator 事务边界迁移；#935：retry/dead-letter 显式新事务 | 生产源码自注入复扫为 0；后续新增代理调用须直接使用窄事务协作者或 `TransactionTemplate` |
 | 3 固定 Map 契约 | 已完成 | #924：Console/内部 API/Java SDK 首批固定响应 DTO；#933：文件维护投影；#936：batch-day replay 影响投影；本批将文件治理延迟指标固定为 record | 剩余机器候选均已登记为动态 JSON/metadata/插件载荷、通用工具或兼容转换边界；新增固定契约不得回退为 Map |
-| 4 复杂类拆分 | 进行中 | #923：Task Outcome 状态策略提取；本批提取 `TaskOutcomeNodeRunRecorder`，集中 node_run 生命周期写入与并发兜底 | 继续按一个职责一个 PR 提取 `DefaultTaskOutcomeService` 的 DAG 推进、终态收口等职责；不改变事务入口 |
+| 4 复杂类拆分 | 进行中 | #923：Task Outcome 状态策略提取；#940：`TaskOutcomeNodeRunRecorder`；本批提取 `TaskOutcomeTerminalFinalizer`，集中实例终态后的指标、子状态、结果版本和 replay 收口 | 继续按一个职责一个 PR 提取 `DefaultTaskOutcomeService` 的 DAG 推进、终态收口等职责；不改变事务入口 |
 | 5 测试风格 | 未开始 | — | 在相应生产类拆分后就近治理 fixture 与命名 |
 | 6 例外治理 | 未开始 | — | 审计 suppression、白名单与长期理由 |
 | 7 最终验收 | 未开始 | — | 前述阶段结束后跑 Full Gate、关键 sim 与容器启动验收 |
@@ -158,7 +158,7 @@
 - 先用 characterization test 锁定旧行为，再移动代码；不要同时改算法、SQL 或状态枚举。
 - `ConfigPackageSheetSpecs` 等声明式规格文件除非出现独立变化原因，否则不进入本阶段。
 
-**验收**：主流程可在一个屏幕内读出阶段顺序；构造依赖按职责下降；原测试和新增 characterization test 全绿；状态机、事务和性能基线不退化。
+**验收**：主流程可在一个屏幕内读出阶段顺序；生产协作者全部通过构造器注入，禁止在主服务中手工 `new` 业务协作者（仅历史纯单测可保留明确标注的兼容构造器）；复杂协作者必须有中文类级注释，说明业务原因、事务/锁/副作用边界，而不是只描述代码动作；原测试和新增 characterization test 全绿；状态机、事务和性能基线不退化。
 
 ### 阶段 5：测试代码风格统一（3～5 天）
 
