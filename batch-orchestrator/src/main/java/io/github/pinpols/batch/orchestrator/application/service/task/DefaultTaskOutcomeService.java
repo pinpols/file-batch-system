@@ -53,6 +53,7 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,6 +97,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final OrchestratorWorkflowMappers workflowMappers;
   private final DefaultTaskOutcomeCollaborators collaborators;
   private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
+  private final TaskOutcomeTerminalFinalizer terminalFinalizer;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -124,14 +126,18 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // ADR-041 Phase1.3b:节点产出写入数据库后跨阶段 count 连续性核对(仅告警)。
       CountContinuityOutboxService countContinuityOutboxService) {}
 
+  @Autowired
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
       OrchestratorWorkflowMappers workflowMappers,
-      DefaultTaskOutcomeCollaborators collaborators) {
+      DefaultTaskOutcomeCollaborators collaborators,
+      TaskOutcomeNodeRunRecorder nodeRunRecorder,
+      TaskOutcomeTerminalFinalizer terminalFinalizer) {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
     this.collaborators = collaborators;
-    this.nodeRunRecorder = new TaskOutcomeNodeRunRecorder(workflowMappers);
+    this.nodeRunRecorder = nodeRunRecorder;
+    this.terminalFinalizer = terminalFinalizer;
     this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
         .register(collaborators.meterRegistry());
@@ -141,6 +147,27 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 + " concurrent reports for the same job_instance.")
         .publishPercentileHistogram()
         .register(collaborators.meterRegistry());
+  }
+
+  /**
+   * 保留给历史纯单元测试的兼容构造器；Spring 生产装配始终使用上面的完整构造器注入协作者。
+   */
+  @Deprecated(forRemoval = false)
+  public DefaultTaskOutcomeService(
+      OrchestratorJobMappers jobMappers,
+      OrchestratorWorkflowMappers workflowMappers,
+      DefaultTaskOutcomeCollaborators collaborators) {
+    this(
+        jobMappers,
+        workflowMappers,
+        collaborators,
+        new TaskOutcomeNodeRunRecorder(workflowMappers),
+        new TaskOutcomeTerminalFinalizer(
+            collaborators.jobLifecycleMetricsRecorder(),
+            collaborators.meterRegistry(),
+            collaborators.jobInstanceTerminalChildStateReconciler(),
+            collaborators.resultVersionWriter(),
+            collaborators.batchDayReplayTerminalReconciler()));
   }
 
   // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
@@ -523,52 +550,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
     jobInstance.setInstanceStatus(instanceStatus);
     if (TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
-      // worker REPORT 路径的终态切换也计入 JobLifecycleMetrics，与
-      // JobInstanceTerminalStatusApplicationService（运维/超时路径）走同一 helper。
-      // jobFullyComplete 决定 finishedAt 是否进入实例 — null 时 helper 走 afterCommit 时刻回退。
-      collaborators
-          .jobLifecycleMetricsRecorder()
-          .recordCompletionAfterCommit(
-              command.tenantId(),
-              jobInstance.getId(),
-              instanceStatus,
-              jobFullyComplete ? finishedAt : null);
-      // ADR-012 Stage 5: 失败终态打 failure_class 维度 metric, alert routing / 看板使用。
-      if (EmptyChecks.isNotNull(instanceFailureClass)) {
-        collaborators
-            .meterRegistry()
-            .counter(
-                "batch.job.failure",
-                "tenant",
-                Optional.ofNullable(command.tenantId()).orElse("unknown"),
-                "jobCode",
-                Optional.ofNullable(jobInstance.getJobCode()).orElse("unknown"),
-                "class",
-                instanceFailureClass)
-            .increment();
-      }
-      collaborators
-          .jobInstanceTerminalChildStateReconciler()
-          .reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
-      // ADR-017 Stage 2: SUCCESS / PARTIAL_FAILED → 落 result_version (writer 自身做幂等 + 非成功类终态 skip)
-      // perf(#5): 终态时才需要 output_summary 做产出聚合,此处按需全量读(实例终态每实例仅一次)。
-      collaborators
-          .resultVersionWriter()
-          .writeOnTerminal(
-              jobInstance,
-              TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-                  loadPartitions(command, task), command));
-      // ADR-020 Stage 5: replay-driven 实例 → 反查 entry 推进 entry / session 状态
-      if (EmptyChecks.isNotNull(jobInstance.getReplaySessionId())) {
-        collaborators
-            .batchDayReplayTerminalReconciler()
-            .reconcileOnTerminal(
-                jobInstance.getTenantId(),
-                jobInstance.getReplaySessionId(),
-                jobInstance.getJobCode(),
-                jobInstance.getId(),
-                instanceStatus);
-      }
+      // 终态写入成功后集中完成指标、结果版本、子状态和 replay 会话的旁路收口。
+      terminalFinalizer.finalizeTerminal(
+          jobInstance,
+          command,
+          instanceStatus,
+          jobFullyComplete ? finishedAt : null,
+          instanceFailureClass,
+          loadPartitions(command, task));
     }
     // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
     if (jobFullyComplete && TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {

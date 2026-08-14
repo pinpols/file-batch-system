@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusPara
 import java.time.Duration;
 import java.time.Instant;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Component;
 
 /**
  * 负责 workflow node_run 的记录生命周期。
@@ -20,6 +21,7 @@ import org.springframework.dao.DuplicateKeyException;
  * <p>本类不声明事务边界。事务由 {@link DefaultTaskOutcomeService} 的公开入口统一管理，保证节点记录和
  * task、partition、workflow 状态仍在同一个事务中提交。
  */
+@Component
 final class TaskOutcomeNodeRunRecorder {
 
   private final OrchestratorWorkflowMappers workflowMappers;
