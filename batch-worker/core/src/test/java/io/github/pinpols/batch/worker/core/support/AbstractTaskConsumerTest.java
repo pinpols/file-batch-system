@@ -286,6 +286,12 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  void topics_resolvesAtomicWorkerTypeToAtomicDispatchTopic() {
+    AbstractTaskConsumer consumer = buildConsumer("ATOMIC", mock(TaskDispatchExecutor.class), null);
+    assertThat(consumer.topics()).containsExactly("batch.task.dispatch.atomic");
+  }
+
+  @Test
   void topics_returnsBothBaseAndDirectTopicWhenWorkerCodePresent() {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "w1");
