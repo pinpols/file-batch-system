@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
@@ -13,21 +12,13 @@ import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
-import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
-import java.net.ConnectException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
@@ -36,10 +27,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.ResourceAccessException;
 
 /**
  * Kafka 消费骨架（所有 worker 通用）。
@@ -131,41 +119,21 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    * <p>子类继续走 super(...) 链;通过 @PostConstruct {@link #initSemaphore()} 在 Spring 完成依赖注入后立即初始化
    * semaphore,避免 ensureSemaphore() 懒初始化路径在 maxConcurrentTasks=0 默认值下静默降级为 1。
    */
-  private final int maxConcurrentTasks;
-
-  /**
-   * 当前正在执行的 task 数 = maxConcurrentTasks - 可用许可. semaphore 未初始化 (worker 启动早期) 时返回 0. 由 {@code
-   * DefaultHeartbeatService} 心跳路径读取写入 {@code WorkerRegistration.currentLoad}.
-   */
-  @Override
-  public int currentLoad() {
-    Semaphore local = semaphore.get();
-    if (local == null) {
-      return 0;
-    }
-    int inFlight = maxConcurrentTasks - local.availablePermits();
-    return Math.max(0, inFlight);
-  }
-
-  private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
-  // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
-  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final AtomicReference<Counter> backpressurePauseCounter = new AtomicReference<>();
-  private final AtomicReference<Counter> backpressureResumeCounter = new AtomicReference<>();
+  private final TaskConsumerBackpressureController backpressure;
 
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
   private WorkerKafkaSubscribeProperties subscribeProperties;
 
-  private final AtomicReference<Semaphore> semaphore = new AtomicReference<>();
-
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
       @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
-    this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
-    this.meterRegistryProvider = meterRegistryProvider;
-    this.maxConcurrentTasks = maxConcurrentTasks;
+    this.backpressure = new TaskConsumerBackpressureController(
+        kafkaListenerEndpointRegistry,
+        meterRegistryProvider,
+        maxConcurrentTasks,
+        () -> workerConfiguration().workerType());
   }
 
   @Override
@@ -177,7 +145,13 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
   @PostConstruct
   void initSemaphore() {
-    ensureSemaphore();
+    backpressure.initialize();
+  }
+
+  /** 当前正在执行的 task 数，供 worker heartbeat 上报容量占用。 */
+  @Override
+  public int currentLoad() {
+    return backpressure.currentLoad();
   }
 
   /**
@@ -186,12 +160,12 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
    */
   protected boolean doConsume(String payload) {
-    Semaphore sem = ensureSemaphore();
+    Semaphore sem = backpressure.semaphore();
     boolean acquired = sem.tryAcquire();
     if (!acquired) {
       // 背压：当实例内并发达到上限时，暂停拉取新消息。
       // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程长期停滞导致 rebalance 风险）。
-      pauseContainer(listenerId());
+      backpressure.pause(listenerId());
       return false;
     }
     // C-2.2: 所有 acquired=true 之后的出口（包括 JSON 解析异常 / accepts 失败 / 业务异常）
@@ -278,7 +252,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       // 无论处理成功/失败/抛异常，都必须释放 permit；
       // 若之前触发过 pause，则在释放后尝试恢复消费。
       sem.release();
-      resumeContainerIfPaused(listenerId());
+      backpressure.resumeIfPaused(listenerId());
       BatchMdc.removeAll(
           StructuredLogField.TENANT_ID,
           StructuredLogField.TRACE_ID,
@@ -305,11 +279,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     if (payloads == null || payloads.isEmpty()) {
       return true;
     }
-    Semaphore sem = ensureSemaphore();
+    Semaphore sem = backpressure.semaphore();
     int n = payloads.size();
     if (!sem.tryAcquire(n)) {
       // 背压:实例内并发不足以吃下整批 → 暂停拉取,不提交,等容量恢复后重投。
-      pauseContainer(batchListenerId());
+      backpressure.pause(batchListenerId());
       return false;
     }
     try {
@@ -366,7 +340,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       return allDlq;
     } finally {
       sem.release(n);
-      resumeContainerIfPaused(batchListenerId());
+      backpressure.resumeIfPaused(batchListenerId());
       BatchMdc.removeAll(
           StructuredLogField.TENANT_ID,
           StructuredLogField.TRACE_ID,
@@ -479,16 +453,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    * <p>其它（4xx 业务拒绝、序列化错误、代码缺陷 RuntimeException）按"不可恢复"走 DLQ。
    */
   private boolean isTransientOrchestratorFailure(Throwable t) {
-    for (Throwable cur = t; cur != null; cur = cur.getCause()) {
-      if (cur instanceof HttpServerErrorException
-          || cur instanceof ResourceAccessException
-          || cur instanceof ConnectException
-          || cur instanceof SocketTimeoutException
-          || cur instanceof UnknownHostException) {
-        return true;
-      }
-    }
-    return false;
+    return TaskConsumerFailurePolicy.isTransientOrchestratorFailure(t);
   }
 
   /** #4-3: 安全发布到 DLQ，返回是否成功。DLQ 写入失败时返回 false，调用方据此决定是否提交偏移量。 */
@@ -508,80 +473,6 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           dlqEx.getMessage(),
           dlqEx);
       return false;
-    }
-  }
-
-  private Semaphore ensureSemaphore() {
-    Semaphore local = semaphore.get();
-    if (local != null) {
-      return local;
-    }
-    synchronized (this) {
-      local = semaphore.get();
-      if (local == null) {
-        int permits = Math.max(1, maxConcurrentTasks);
-        local = new Semaphore(permits);
-        semaphore.set(local);
-        // #6-2: 暴露信号量可用许可数到 Actuator/Prometheus
-        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        if (registry != null) {
-          registry.gauge(
-              "batch.worker.semaphore.available",
-              Tags.of("workerType", workerConfiguration().workerType()),
-              local,
-              Semaphore::availablePermits);
-          String workerType = workerConfiguration().workerType();
-          backpressurePauseCounter.set(Counter.builder("batch.worker.consumer.pause.total")
-              .description("Kafka listener pause events caused by exhausted worker permits")
-              .tag("workerType", workerType)
-              .register(registry));
-          backpressureResumeCounter.set(Counter.builder("batch.worker.consumer.resume.total")
-              .description("Kafka listener resume events after worker permits became available")
-              .tag("workerType", workerType)
-              .register(registry));
-        }
-      }
-      return local;
-    }
-  }
-
-  private void pauseContainer(String containerId) {
-    MessageListenerContainer container =
-        kafkaListenerEndpointRegistry.getListenerContainer(containerId);
-    if (container == null) {
-      return;
-    }
-    try {
-      if (!container.isPauseRequested()) {
-        container.pause();
-        Counter counter = backpressurePauseCounter.get();
-        if (counter != null) {
-          counter.increment();
-        }
-      }
-    } catch (Exception ex) {
-      log.warn(
-          "failed to pause container: listenerId={}, error={}", containerId, ex.getMessage(), ex);
-    }
-  }
-
-  private void resumeContainerIfPaused(String containerId) {
-    MessageListenerContainer container =
-        kafkaListenerEndpointRegistry.getListenerContainer(containerId);
-    if (container == null) {
-      return;
-    }
-    try {
-      if (container.isPauseRequested()) {
-        container.resume();
-        Counter counter = backpressureResumeCounter.get();
-        if (counter != null) {
-          counter.increment();
-        }
-      }
-    } catch (Exception ex) {
-      log.warn(
-          "failed to resume container: listenerId={}, error={}", containerId, ex.getMessage(), ex);
     }
   }
 
@@ -610,14 +501,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    * SINGLE 模式下能匹配 producer 端实际写出的 topic。
    */
   public String[] topics() {
-    WorkerConfiguration cfg = workerConfiguration();
-    String configuredWorkerCode = cfg.workerCode();
-    String baseTopic = resolveBaseTopic(cfg);
-    if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
-      return new String[] {baseTopic};
-    }
-    return new String[] {baseTopic, BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode)
-    };
+    return TaskConsumerRoutingPolicy.topics(workerConfiguration());
   }
 
   /**
@@ -639,80 +523,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    * @return Kafka topic 正则 pattern（已转义 base 中的点；调用方直接传给 {@code @KafkaListener.topicPattern}）
    */
   public String topicPattern() {
-    WorkerConfiguration cfg = workerConfiguration();
-    String baseTopic = resolveBaseTopic(cfg);
-    String safeBase = baseTopic.replace(".", "\\.");
-    String configuredWorkerCode = cfg.workerCode();
-    String nodeDirect = (configuredWorkerCode == null || configuredWorkerCode.isBlank())
-        ? null
-        : "\\.node\\." + escapeRegex(configuredWorkerCode);
-
-    WorkerKafkaSubscribeProperties properties = subscribeProperties;
-    WorkerKafkaSubscribeProperties.Mode mode = properties == null
-        ? WorkerKafkaSubscribeProperties.Mode.PATTERN
-        : properties.getSubscribeMode();
-
-    String suffixAlt;
-    switch (mode) {
-      case FIXED:
-        // 仅 base + 自己的 node-direct，不订阅任何后缀；producer 处于 SINGLE 模式时等价
-        suffixAlt = nodeDirect;
-        break;
-      case TENANT_SCOPED:
-        // 只订阅 allowlist 中的 tenant 后缀（+ node-direct）；其他 tenant 的后缀不接
-        List<String> allow = properties == null || properties.getTenantAllowlist() == null
-            ? List.of()
-            : properties.getTenantAllowlist();
-        if (allow.isEmpty()) {
-          suffixAlt = nodeDirect;
-        } else {
-          String tenantAlt = allow.stream()
-              .filter(s -> s != null && !s.isBlank())
-              .map(AbstractTaskConsumer::escapeRegex)
-              .reduce((a, b) -> a + "|" + b)
-              .orElse(null);
-          String tenantBranch = tenantAlt == null ? null : "\\.(" + tenantAlt + ")";
-          suffixAlt = joinAlt(nodeDirect, tenantBranch);
-        }
-        break;
-      case PATTERN:
-      default:
-        // 宽松：base / base.<single-segment> / base.node.<workerCode>
-        suffixAlt = joinAlt(nodeDirect, "\\.[^.]+");
-    }
-    if (suffixAlt == null) {
-      return "^" + safeBase + "$";
-    }
-    return "^" + safeBase + "(" + suffixAlt + ")?$";
-  }
-
-  private static String joinAlt(String a, String b) {
-    if (a == null) {
-      return b;
-    }
-    if (b == null) {
-      return a;
-    }
-    return a + "|" + b;
-  }
-
-  private static String escapeRegex(String value) {
-    return value.replaceAll("([\\\\\\.\\[\\]\\(\\)\\{\\}\\^\\$\\|\\?\\*\\+])", "\\\\$1");
-  }
-
-  private String resolveBaseTopic(WorkerConfiguration cfg) {
-    String configuredWorkerCode = cfg.workerCode();
-    String baseTopic = cfg.topic();
-    if (baseTopic == null || baseTopic.isBlank()) {
-      baseTopic = resolveTopicByWorkerType(cfg.workerType());
-      if (baseTopic == null || baseTopic.isBlank()) {
-        baseTopic = resolveTopicByWorkerCode(configuredWorkerCode);
-      }
-    }
-    if (baseTopic == null || baseTopic.isBlank()) {
-      baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
-    }
-    return baseTopic;
+    return TaskConsumerRoutingPolicy.topicPattern(workerConfiguration(), subscribeProperties);
   }
 
   /**
@@ -721,42 +532,6 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    */
   public String consumerGroupId() {
     return workerConfiguration().consumerGroupId();
-  }
-
-  private static final Map<String, String> WORKER_TYPE_TOPIC = Map.of(
-      "IMPORT", BatchTopics.TASK_DISPATCH_IMPORT,
-      "EXPORT", BatchTopics.TASK_DISPATCH_EXPORT,
-      "PROCESS", BatchTopics.TASK_DISPATCH_PROCESS,
-      "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH);
-
-  // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → process → dispatch）
-  // P2: 改用 LinkedHashMap 保留顺序又表达 Map 语义,避免 List<Entry> 在阅读时被误读为 List。
-  private static final Map<String, String> WORKER_CODE_KEYWORD_TOPIC =
-      buildWorkerCodeKeywordTopic();
-
-  private static Map<String, String> buildWorkerCodeKeywordTopic() {
-    LinkedHashMap<String, String> map = new LinkedHashMap<>(4);
-    map.put("import", BatchTopics.TASK_DISPATCH_IMPORT);
-    map.put("export", BatchTopics.TASK_DISPATCH_EXPORT);
-    map.put("process", BatchTopics.TASK_DISPATCH_PROCESS);
-    map.put("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH);
-    return Collections.unmodifiableMap(map);
-  }
-
-  private String resolveTopicByWorkerType(String workerType) {
-    if (workerType == null || workerType.isBlank()) {
-      return null;
-    }
-    return WORKER_TYPE_TOPIC.get(workerType.toUpperCase());
-  }
-
-  private String resolveTopicByWorkerCode(String workerCode) {
-    String wc = workerCode == null ? "" : workerCode.toLowerCase(Locale.ROOT);
-    return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
-        .filter(entry -> wc.contains(entry.getKey()))
-        .map(Map.Entry::getValue)
-        .findFirst()
-        .orElse(null);
   }
 
   private boolean accepts(TaskDispatchMessage message, WorkerRegistration registration) {
@@ -773,16 +548,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           message.workerType());
       return false;
     }
-    WorkerConfiguration cfg = workerConfiguration();
-    if (cfg.workerType() == null || !cfg.workerType().equalsIgnoreCase(message.workerType())) {
-      return false;
-    }
-    if (message.selectedWorkerId() != null
-        && (registration == null
-            || !message.selectedWorkerId().equals(registration.getWorkerId()))) {
-      return false;
-    }
-    return acceptsConfiguredTenantScope(cfg, message);
+    return TaskConsumerRoutingPolicy.accepts(
+        message, registration, workerConfiguration(), this::acceptsConfiguredTenantScope);
   }
 
   /**
