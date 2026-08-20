@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -138,6 +139,6 @@ public class ExportStepExecutionAdapter
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
     return new StepExecutionResponse(
-        true, "SUCCESS", objectName.isBlank() ? "export stage completed" : objectName);
+        true, "SUCCESS", EmptyChecks.isBlank(objectName) ? "export stage completed" : objectName);
   }
 }
