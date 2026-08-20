@@ -46,20 +46,22 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
       if (!isResuming(ctx)) {
         writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows, ctx);
       }
-      return generatePaged(ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
-        StringBuilder line = new StringBuilder();
-        for (ColumnLayout column : columns) {
-          line.append(fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
-        }
-        if (recordLength > 0) {
-          line = new StringBuilder(padRight(line.toString(), recordLength));
-        }
-        writeText(writer, line.toString(), "data-row-" + (rowIndex + 1), null, ctx);
-        writeNewLine(writer, ctx);
-        if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
-          writer.flush();
-        }
-      });
+      return ExportPageGenerationCoordinator.generatePaged(
+          ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
+            StringBuilder line = new StringBuilder();
+            for (ColumnLayout column : columns) {
+              line.append(
+                  fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
+            }
+            if (recordLength > 0) {
+              line = new StringBuilder(padRight(line.toString(), recordLength));
+            }
+            writeText(writer, line.toString(), "data-row-" + (rowIndex + 1), null, ctx);
+            writeNewLine(writer, ctx);
+            if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+              writer.flush();
+            }
+          });
     }
   }
 

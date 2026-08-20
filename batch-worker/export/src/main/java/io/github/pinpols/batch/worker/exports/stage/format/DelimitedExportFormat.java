@@ -65,8 +65,8 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       if (!resuming) {
         writeDelimitedHeaderRows(writer, columns, formatConfig, ctx);
       }
-      long recordCount =
-          generatePaged(ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
+      long recordCount = ExportPageGenerationCoordinator.generatePaged(
+          ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
             writeDelimitedFields(
                 writer, columns, batch, detail, formatConfig, "data-row-" + (rowIndex + 1), ctx);
             writeNewLine(writer, ctx);
