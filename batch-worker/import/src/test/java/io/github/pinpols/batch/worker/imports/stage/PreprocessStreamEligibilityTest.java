@@ -11,33 +11,34 @@ class PreprocessStreamEligibilityTest {
 
   @Test
   void treatsNullTemplateAsPlainTextStreamable() {
-    assertThat(PreprocessStep.canStreamObjectDirect(null, null)).isTrue();
+    assertThat(ImportPreprocessObjectSource.canStreamObjectDirect(null, null)).isTrue();
   }
 
   @Test
   void rejectsBinaryFormats() {
-    assertThat(PreprocessStep.canStreamObjectDirect(payload("EXCEL"), Map.of())).isFalse();
-    assertThat(PreprocessStep.canStreamObjectDirect(payload("BINARY"), Map.of()))
+    assertThat(ImportPreprocessObjectSource.canStreamObjectDirect(payload("EXCEL"), Map.of()))
+        .isFalse();
+    assertThat(ImportPreprocessObjectSource.canStreamObjectDirect(payload("BINARY"), Map.of()))
         .isFalse();
   }
 
   @Test
   void rejectsConfiguredPreprocessPipeline() {
-    assertThat(PreprocessStep.canStreamObjectDirect(
+    assertThat(ImportPreprocessObjectSource.canStreamObjectDirect(
             payload("DELIMITED"), Map.of("preprocess_pipeline", List.of("GUNZIP"))))
         .isFalse();
   }
 
   @Test
   void acceptsNoneCompressionAndEncryption() {
-    assertThat(PreprocessStep.canStreamObjectDirect(
+    assertThat(ImportPreprocessObjectSource.canStreamObjectDirect(
             payload("DELIMITED"), Map.of("compress_type", "NONE", "encrypt_type", "")))
         .isTrue();
   }
 
   @Test
   void rejectsConfiguredCompression() {
-    assertThat(PreprocessStep.canStreamObjectDirect(
+    assertThat(ImportPreprocessObjectSource.canStreamObjectDirect(
             payload("DELIMITED"), Map.of("compress_type", "GZIP")))
         .isFalse();
   }
