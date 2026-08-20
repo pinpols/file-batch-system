@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
-import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
@@ -14,10 +13,7 @@ import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
@@ -121,6 +117,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
    */
   private final TaskConsumerBackpressureController backpressure;
 
+  private final TaskConsumerBatchExecutionCoordinator batchExecution;
+
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
   private WorkerKafkaSubscribeProperties subscribeProperties;
@@ -134,6 +132,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
         meterRegistryProvider,
         maxConcurrentTasks,
         () -> workerConfiguration().workerType());
+    this.batchExecution = new TaskConsumerBatchExecutionCoordinator(
+        () -> workerConfiguration().workerType(),
+        this::taskDispatchExecutor,
+        this::accepts,
+        this::publishToDlqSafely);
   }
 
   @Override
@@ -288,32 +291,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     }
     try {
       WorkerRegistration registration = workerLoop().ensureStarted();
-      // 解码 + accepts 过滤,按 tenant 分组(RLS 是单 tenant 语义,不能整批混绑)。解析失败是 payload
-      // 级毒丸,只 DLQ 当前消息,不能拖同 poll 的正常消息一起进 DLQ。
-      Map<String, List<BatchPayload>> byTenant = new LinkedHashMap<>();
-      for (String payload : payloads) {
-        TaskDispatchMessage message;
-        try {
-          message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
-        } catch (Exception parseEx) {
-          log.error(
-              "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
-              workerConfiguration().workerType(),
-              parseEx.getMessage(),
-              parseEx);
-          if (!publishToDlqSafely(payload, parseEx.getMessage())) {
-            return false;
-          }
-          continue;
-        }
-        if (!accepts(message, registration)) {
-          continue;
-        }
-        byTenant
-            .computeIfAbsent(message.tenantId(), k -> new ArrayList<>())
-            .add(new BatchPayload(payload, message));
-      }
-      return processBatchGroups(byTenant, registration.getWorkerId());
+      return batchExecution.process(payloads, registration);
     } catch (Exception ex) {
       if (isTransientOrchestratorFailure(ex)) {
         log.warn(
@@ -350,93 +328,6 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           StructuredLogField.WORKER_ID,
           StructuredLogField.RUN_MODE);
     }
-  }
-
-  private record BatchPayload(String payload, TaskDispatchMessage message) {}
-
-  private boolean processBatchGroups(Map<String, List<BatchPayload>> byTenant, String workerId) {
-    boolean allDlq = true;
-    for (Map.Entry<String, List<BatchPayload>> entry : byTenant.entrySet()) {
-      String tenantId = entry.getKey();
-      List<BatchPayload> group = entry.getValue();
-      List<TaskDispatchMessage> messages =
-          group.stream().map(BatchPayload::message).toList();
-      List<BatchItemExecution> executions = executeBatchForTenant(tenantId, messages, workerId);
-      for (BatchItemExecution execution : executions) {
-        if (execution == null || execution.skipped()) {
-          continue;
-        }
-        if (execution.error() == null) {
-          logBatchSuccess(execution.result());
-          continue;
-        }
-        if (isTransientOrchestratorFailure(execution.error())) {
-          log.warn(
-              "{} batch item transient failure (5xx/network) — NOT committing, will retry whole"
-                  + " batch: taskId={}, error={}",
-              workerConfiguration().workerType(),
-              execution.message() == null ? null : execution.message().taskId(),
-              execution.error().getMessage());
-          return false;
-        }
-        String payload = originalPayload(execution, group);
-        if (payload == null) {
-          log.error(
-              "{} batch item has no matching original payload — refusing to commit offset:"
-                  + " messageIndex={}, taskId={}",
-              workerConfiguration().workerType(),
-              execution.messageIndex(),
-              execution.message() == null ? null : execution.message().taskId());
-          allDlq = false;
-          continue;
-        }
-        log.error(
-            "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
-                + " error={}",
-            workerConfiguration().workerType(),
-            execution.message() == null ? null : execution.message().taskId(),
-            execution.error().getMessage(),
-            execution.error());
-        if (!publishToDlqSafely(payload, execution.error().getMessage())) {
-          allDlq = false;
-        }
-      }
-    }
-    return allDlq; // 整批成功或逐项不可恢复已 DLQ → 提交 offset
-  }
-
-  private List<BatchItemExecution> executeBatchForTenant(
-      String tenantId, List<TaskDispatchMessage> messages, String workerId) {
-    if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
-      return RlsTenantContextHolder.runWithTenant(
-          tenantId, () -> taskDispatchExecutor().executeBatchDetailed(messages, workerId));
-    }
-    return taskDispatchExecutor().executeBatchDetailed(messages, workerId);
-  }
-
-  private void logBatchSuccess(WorkerExecutionResult result) {
-    if (result != null) {
-      log.info(
-          "{} batch task processed: taskId={}, success={}, message={}",
-          workerConfiguration().workerType(),
-          result.taskId(),
-          result.success(),
-          result.message());
-    }
-  }
-
-  private String originalPayload(BatchItemExecution execution, List<BatchPayload> group) {
-    int index = execution.messageIndex();
-    if (index >= 0 && index < group.size()) {
-      return group.get(index).payload();
-    }
-    // Compatibility for test/custom executors that still construct an unindexed result.
-    for (BatchPayload item : group) {
-      if (item.message() == execution.message()) {
-        return item.payload();
-      }
-    }
-    return null;
   }
 
   /**
