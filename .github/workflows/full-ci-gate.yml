@@ -76,6 +76,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-java-readability.py
 
+      - name: Verify Java readability inventory
+        shell: bash
+        run: python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md
+
       - name: Enforce centralized empty checks
         shell: bash
         # main push 工作树干净，按本次 push 的前一提交检查新增生产 Java 行。

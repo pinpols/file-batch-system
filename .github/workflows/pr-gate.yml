@@ -163,6 +163,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-java-readability.py
 
+      - name: Verify Java readability inventory
+        shell: bash
+        run: python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md
+
       - name: Verify Console controller ↔ OpenAPI route sync
         shell: bash
         # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。

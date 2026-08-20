@@ -7,16 +7,16 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2182 |
+| 生产 Java 源文件 | 2200 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2032 |
-| 含 Map 的源文件 | 437 |
+| `Map<String, Object>` 出现次数 | 2037 |
+| 含 Map 的源文件 | 441 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 211 |
-| 含 suppression 的源文件 | 159 |
+| `@SuppressWarnings` | 209 |
+| 含 suppression 的源文件 | 160 |
 | `@Configuration` 类 | 47 |
-| 大于等于 700 行的源文件 | 13 |
+| 大于等于 700 行的源文件 | 7 |
 | `PMD.ExcessiveParameterList` 显式例外 | 26 |
 
 ## 模块源文件
@@ -24,11 +24,11 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 293 |
-| `batch-console-api` | 860 |
-| `batch-orchestrator` | 509 |
+| `batch-console-api` | 863 |
+| `batch-orchestrator` | 517 |
 | `batch-trigger` | 59 |
-| `batch-worker` | 363 |
-| `sdk` | 89 |
+| `batch-worker` | 369 |
+| `sdk` | 90 |
 | `security-scan` | 9 |
 
 ## CGLIB 自注入
@@ -41,18 +41,12 @@
 | 文件 | 行数 |
 |---|---:|
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
-| `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStep.java` | 1042 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskOutcomeService.java` | 915 |
-| `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcher.java` | 906 |
-| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 839 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java` | 817 |
-| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumer.java` | 814 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 765 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultConsoleWorkflowDefinitionApplicationService.java` | 755 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 738 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 715 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 711 |
+| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 709 |
 
 ## Public Map 契约候选
 
@@ -88,7 +82,7 @@
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationConfigSupport.java` | `L21: public Map<String, Object> toMap`<br>`L41: public Map<String, Object> firstMap`<br>`L49: public Map<String, Object> payloadToMap` |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationRuleSetMerger.java` | `L31: public Map<String, Object> merge` |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/ParseSupport.java` | `L61: public Map<String, Object> parseHints`<br>`L75: public Map<String, Object> readJsonObject` |
-| `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcher.java` | `L455: public Map<String, Object> progressSnapshot` |
+| `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcher.java` | `L447: public Map<String, Object> progressSnapshot` |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/SdkRowResult.java` | `L63: public Map<String, Object> toOutput` |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/typed/SdkTypedParameters.java` | `L71: public Map<String, Object> toOutputMap` |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/ProgressReporter.java` | `L29: public Map<String, Object> latest` |

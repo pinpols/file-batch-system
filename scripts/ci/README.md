@@ -160,3 +160,6 @@ python3 scripts/ci/report-java-readability-inventory.py \
 python3 scripts/ci/report-java-readability-inventory.py \
   --check docs/analysis/java-readability-inventory-2026-08-12.md
 ```
+
+`--check` 是阶段 7 的防漂移门禁：生产 Java 文件增删或候选统计变化时，必须重新生成并审核快照，
+不能让过期报告继续作为验收证据。
