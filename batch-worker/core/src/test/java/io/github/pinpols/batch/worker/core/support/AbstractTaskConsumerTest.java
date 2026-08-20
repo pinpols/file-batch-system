@@ -31,7 +31,6 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Tests for AbstractTaskConsumer covering: - malformed message dropped silently - worker type
@@ -48,8 +47,7 @@ class AbstractTaskConsumerTest {
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
     TaskDispatchMessage msg = buildMessage(null, "t1", "IMPORT", null);
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
+    boolean result = consumer.doConsume(JsonUtils.toJson(msg));
 
     assertThat(result).isTrue();
     verify(executor, never()).execute(any(), anyString());
@@ -63,8 +61,7 @@ class AbstractTaskConsumerTest {
 
     String j1 = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
     String j2 = JsonUtils.toJson(buildMessage(2L, "t1", "IMPORT", null));
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(j1, j2));
+    boolean result = consumer.doConsumeBatch(List.of(j1, j2));
 
     assertThat(result).isTrue(); // 整批成功 → 提交
     @SuppressWarnings("unchecked")
@@ -79,8 +76,7 @@ class AbstractTaskConsumerTest {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
-    assertThat((boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of()))
-        .isTrue();
+    assertThat(consumer.doConsumeBatch(List.of())).isTrue();
     verify(executor, never()).executeBatchDetailed(any(), anyString());
   }
 
@@ -94,8 +90,7 @@ class AbstractTaskConsumerTest {
     String good = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
     String bad = "{not-json";
 
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(good, bad));
+    boolean result = consumer.doConsumeBatch(List.of(good, bad));
 
     assertThat(result).isTrue();
     verify(dlq).publish(org.mockito.ArgumentMatchers.eq(bad), any(), any(), any());
@@ -119,8 +114,7 @@ class AbstractTaskConsumerTest {
             BatchItemExecution.completed(0, m1, new WorkerExecutionResult("1", true, "ok")),
             BatchItemExecution.failed(1, m2, new IllegalArgumentException("bad item"))));
 
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(p1, p2));
+    boolean result = consumer.doConsumeBatch(List.of(p1, p2));
 
     assertThat(result).isTrue();
     verify(dlq).publish(org.mockito.ArgumentMatchers.eq(p2), any(), any(), any());
@@ -140,8 +134,7 @@ class AbstractTaskConsumerTest {
             BatchItemExecution.failed(0, first, new IllegalArgumentException("first failed")),
             BatchItemExecution.completed(1, second, new WorkerExecutionResult("1", true, "ok"))));
 
-    boolean result = (boolean) ReflectionTestUtils.invokeMethod(
-        consumer, "doConsumeBatch", List.of(firstPayload, secondPayload));
+    boolean result = consumer.doConsumeBatch(List.of(firstPayload, secondPayload));
 
     assertThat(result).isTrue();
     verify(dlq).publish(org.mockito.ArgumentMatchers.eq(firstPayload), any(), any(), any());
@@ -155,8 +148,7 @@ class AbstractTaskConsumerTest {
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
     TaskDispatchMessage msg = buildMessage(1L, "t1", null, null);
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
+    boolean result = consumer.doConsume(JsonUtils.toJson(msg));
 
     assertThat(result).isTrue();
     verify(executor, never()).execute(any(), anyString());
@@ -168,8 +160,7 @@ class AbstractTaskConsumerTest {
     AbstractTaskConsumer consumer = buildConsumer("EXPORT", executor, null);
 
     TaskDispatchMessage msg = buildMessage(1L, "t1", "IMPORT", null);
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
+    boolean result = consumer.doConsume(JsonUtils.toJson(msg));
 
     assertThat(result).isTrue();
     verify(executor, never()).execute(any(), anyString());
@@ -183,8 +174,7 @@ class AbstractTaskConsumerTest {
     // Message targets worker-B, but this consumer is worker-A
     TaskDispatchMessage msg = new TaskDispatchMessage(
         "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-B", null, "tr", "k", null, null);
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
+    boolean result = consumer.doConsume(JsonUtils.toJson(msg));
 
     assertThat(result).isTrue();
     verify(executor, never()).execute(any(), anyString());
@@ -198,7 +188,7 @@ class AbstractTaskConsumerTest {
 
     TaskDispatchMessage msg = new TaskDispatchMessage(
         "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-A", null, "tr", "k", null, null);
-    ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
+    consumer.doConsume(JsonUtils.toJson(msg));
 
     verify(executor).execute(any(), anyString());
   }
@@ -209,8 +199,7 @@ class AbstractTaskConsumerTest {
     when(executor.execute(any(), any())).thenReturn(null); // CLAIM race lost
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", buildImportMessage());
+    boolean result = consumer.doConsume(buildImportMessage());
 
     assertThat(result).isTrue();
   }
@@ -222,8 +211,7 @@ class AbstractTaskConsumerTest {
     DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq);
 
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", buildImportMessage());
+    boolean result = consumer.doConsume(buildImportMessage());
 
     assertThat(result).isTrue();
     verify(dlq).publish(any(), any(), any(), any());
@@ -235,8 +223,7 @@ class AbstractTaskConsumerTest {
     when(executor.execute(any(), any())).thenThrow(new RuntimeException("boom"));
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", buildImportMessage());
+    boolean result = consumer.doConsume(buildImportMessage());
 
     assertThat(result).isTrue();
   }
@@ -250,7 +237,7 @@ class AbstractTaskConsumerTest {
     });
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
-    ReflectionTestUtils.invokeMethod(consumer, "doConsume", buildImportMessage());
+    consumer.doConsume(buildImportMessage());
 
     assertThat(MDC.get("tenantId")).isNull();
     assertThat(MDC.get("traceId")).isNull();
@@ -263,7 +250,7 @@ class AbstractTaskConsumerTest {
     when(executor.execute(any(), any())).thenThrow(new RuntimeException("fail"));
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
-    ReflectionTestUtils.invokeMethod(consumer, "doConsume", buildImportMessage());
+    consumer.doConsume(buildImportMessage());
 
     assertThat(MDC.get("tenantId")).isNull();
     assertThat(MDC.get("traceId")).isNull();
