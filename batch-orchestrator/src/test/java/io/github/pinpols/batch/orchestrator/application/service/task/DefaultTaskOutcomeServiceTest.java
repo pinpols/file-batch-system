@@ -65,7 +65,7 @@ class DefaultTaskOutcomeServiceTest {
     WorkflowNodeRunEntity waiting =
         nodeRun("WAITING", 1, WorkflowNodeRunStatus.WAITING_DEPENDENCY.code());
 
-    assertThat(DefaultTaskOutcomeService.resolveActiveNodeCodes(
+    assertThat(TaskOutcomeStatePolicy.resolveActiveNodeCodes(
             java.util.List.of(fork, end, oldBranch, finishedBranch, waiting)))
         .containsExactly("WAITING");
   }
