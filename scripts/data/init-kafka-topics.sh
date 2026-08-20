@@ -16,6 +16,10 @@
 #   KAFKA_TOPICS=batch.task.dispatch.import,batch.task.result \
 #     bash scripts/data/init-kafka-topics.sh
 #
+# 非容器环境：
+#   - 安装 Kafka CLI，并设置 KAFKA_BIN_DIR=/path/to/kafka/bin；或
+#   - 直接设置 KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh。
+#
 # 生产环境配置示例（10 实例 × 4 并发，3 节点 Kafka 集群）：
 #   KAFKA_TOPIC_REPLICATION_FACTOR=3
 #   KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2      # ← 配 RF=3 + producer acks=all，在途事件 0 丢
@@ -39,6 +43,21 @@ default_partitions="${KAFKA_TOPIC_PARTITIONS:-4}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 # 空 = 不下发 topic 级 min.insync.replicas（dev 默认，沿用 broker 默认）；prod 设 2。
 min_insync_replicas="${KAFKA_TOPIC_MIN_INSYNC_REPLICAS:-}"
+kafka_topics_bin="${KAFKA_TOPICS_BIN:-}"
+if [ -z "${kafka_topics_bin}" ] && [ -n "${KAFKA_BIN_DIR:-}" ]; then
+  kafka_topics_bin="${KAFKA_BIN_DIR%/}/kafka-topics.sh"
+fi
+if [ -z "${kafka_topics_bin}" ]; then
+  if command -v kafka-topics.sh >/dev/null 2>&1; then
+    kafka_topics_bin="$(command -v kafka-topics.sh)"
+  else
+    kafka_topics_bin="/opt/kafka/bin/kafka-topics.sh"
+  fi
+fi
+if ! command -v "${kafka_topics_bin}" >/dev/null 2>&1; then
+  echo "kafka-topics.sh not found: set KAFKA_BIN_DIR or KAFKA_TOPICS_BIN" >&2
+  exit 2
+fi
 
 # 各 topic 类型分区数（未设置则回退到 default_partitions）
 partitions_dispatch="${KAFKA_PARTITIONS_DISPATCH:-${default_partitions}}"
@@ -64,13 +83,13 @@ resolve_partitions() {
 }
 
 echo "Waiting for Kafka at ${bootstrap_server} ..."
-until /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_server}" --list >/dev/null 2>&1; do
+until "${kafka_topics_bin}" --bootstrap-server "${bootstrap_server}" --list >/dev/null 2>&1; do
   sleep 2
 done
 
 topic_partitions() {
   topic="$1"
-  /opt/kafka/bin/kafka-topics.sh \
+  "${kafka_topics_bin}" \
     --bootstrap-server "${bootstrap_server}" \
     --describe \
     --topic "${topic}" 2>/dev/null \
@@ -84,7 +103,7 @@ ensure_topic() {
   if [ -z "${current}" ]; then
     # min.insync.replicas 为空则不下发该 --config（dev 行为不变）。
     if [ -n "${min_insync_replicas}" ]; then
-      /opt/kafka/bin/kafka-topics.sh \
+      "${kafka_topics_bin}" \
         --bootstrap-server "${bootstrap_server}" \
         --create \
         --if-not-exists \
@@ -93,7 +112,7 @@ ensure_topic() {
         --replication-factor "${replication_factor}" \
         --config "min.insync.replicas=${min_insync_replicas}"
     else
-      /opt/kafka/bin/kafka-topics.sh \
+      "${kafka_topics_bin}" \
         --bootstrap-server "${bootstrap_server}" \
         --create \
         --if-not-exists \
@@ -105,7 +124,7 @@ ensure_topic() {
   fi
   if [ "${current}" -lt "${partitions}" ]; then
     echo "Increasing ${topic} partitions ${current} -> ${partitions}"
-    /opt/kafka/bin/kafka-topics.sh \
+    "${kafka_topics_bin}" \
       --bootstrap-server "${bootstrap_server}" \
       --alter \
       --topic "${topic}" \

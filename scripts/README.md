@@ -30,6 +30,28 @@
 - `scripts/ops/` 下的巡检和自愈脚本适合在本地或 staging 前做验证
 - `scripts/data/` 下的数据加载脚本适合初始化开发/测试环境
 
+## 执行环境约定
+
+脚本分三类，不要混用：
+
+- **Docker-only**：`scripts/docker/`、`scripts/sim/`、`scripts/sim-4day/` 和少量本地灾备演练脚本，默认依赖 Docker Compose 的容器名，例如 `batch-postgres-primary`、`batch-kafka`、`batch-minio`。这些脚本用于本地受管验证栈，不承诺直接连外部环境。
+- **Host/auto**：`scripts/ops/`、`scripts/data/`、`load-tests/scripts/` 中的通用巡检、初始化、压测脚本优先通过环境变量连接外部服务；能本机执行就不要求进容器。
+- **CI 专用**：`scripts/ci/` 内脚本由 GitHub Actions 组合调用，单独执行前先看文件头部说明。
+
+非容器环境建议安装这些本机客户端：
+
+- PostgreSQL client：提供 `psql`、`pg_dump`、`pg_basebackup`。macOS 可用 `brew install libpq`，并把 `libpq/bin` 加入 `PATH`。
+- Kafka CLI：提供 `kafka-topics.sh`、`kafka-consumer-groups.sh`。设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`，或直接设置 `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`。
+- MinIO client：提供 `mc`，用于对象存储 seed 和检查。
+- `curl`、`jq`、`python3`：巡检、HTTP 调用和轻量数据处理使用。
+
+通用环境变量：
+
+- `BATCH_SCRIPT_RUNTIME=auto|host|docker`：支持该开关的脚本默认 `auto`。`host` 强制使用本机客户端；`docker` 强制使用 Docker 容器内客户端。
+- PostgreSQL：`PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PGDATABASE`。
+- Kafka：`KAFKA_BOOTSTRAP_SERVER` 或 `KAFKA_HOST_BOOTSTRAP`，以及 `KAFKA_BIN_DIR` / `KAFKA_TOPICS_BIN`。
+- 对象存储：`BATCH_S3_ENDPOINT`、`BATCH_S3_ACCESS_KEY`、`BATCH_S3_SECRET_KEY`、`BATCH_S3_BUCKET`。
+
 ## 相关文档
 
 - [docs/testing/README.md](../docs/testing/README.md)

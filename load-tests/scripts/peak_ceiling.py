@@ -8,12 +8,14 @@
   - 峰值持续完成率 (max Δterminal / 采样窗)  ← 这是真正的「天花板」
   - REJECT / FAILED 计数(背压信号)
 
-统计走 docker exec psql(无本地密码依赖);单机 join 可用(Citus 需改共置 join)。
-环境变量:TRIGGER_BASE / SECRET / PG_CONTAINER / PG_USER / PG_DB / BIZ_DATE / LEVELS / PER_LEVEL。
+统计默认优先走宿主机 psql,找不到时回退 docker exec psql;单机 join 可用(Citus 需改共置 join)。
+环境变量:TRIGGER_BASE / SECRET / BATCH_SCRIPT_RUNTIME / PGHOST / PGPORT / PGUSER / PGDATABASE /
+PGPASSWORD / PG_CONTAINER / PG_USER / PG_DB / BIZ_DATE / LEVELS / PER_LEVEL。
 """
 import concurrent.futures
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -22,9 +24,13 @@ import urllib.request
 
 TRIGGER_BASE = os.environ.get("TRIGGER_BASE", "http://localhost:18081").rstrip("/")
 SECRET = os.environ["SECRET"]
+SCRIPT_RUNTIME = os.environ.get("BATCH_SCRIPT_RUNTIME", "auto").lower()
+PGHOST = os.environ.get("PGHOST", os.environ.get("PG_HOST", "localhost"))
+PGPORT = os.environ.get("PGPORT", os.environ.get("PG_PORT", "15432"))
+PGUSER = os.environ.get("PGUSER", os.environ.get("PG_USER", "batch_user"))
+PGDATABASE = os.environ.get("PGDATABASE", os.environ.get("PG_DB", "batch_platform"))
+PGPASSWORD = os.environ.get("PGPASSWORD", os.environ.get("PG_PASSWORD", ""))
 PG_CONTAINER = os.environ.get("PG_CONTAINER", "batch-postgres-primary")
-PG_USER = os.environ.get("PG_USER", "batch_user")
-PG_DB = os.environ.get("PG_DB", "batch_platform")
 BIZ_DATE = os.environ.get("BIZ_DATE", "2026-05-05")
 JOB_CODE = os.environ.get("JOB_CODE", "atomic_sql_demo")
 TENANTS = os.environ.get("TENANTS", "ta,tb,tc").split(",")
@@ -36,7 +42,22 @@ COLOCATED = os.environ.get("COLOCATED", "0") == "1"  # Citus:join 补 tenant_id 
 
 
 def psql(sql):
-    cmd = ["docker", "exec", "-i", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PG_DB, "-At", "-c", sql]
+    if SCRIPT_RUNTIME not in ("auto", "host", "docker"):
+        raise RuntimeError("BATCH_SCRIPT_RUNTIME must be one of: auto, host, docker")
+    use_host = SCRIPT_RUNTIME == "host" or (SCRIPT_RUNTIME == "auto" and shutil.which("psql"))
+    if use_host:
+        env = os.environ.copy()
+        if PGPASSWORD:
+            env["PGPASSWORD"] = PGPASSWORD
+        cmd = [
+            "psql", "-h", PGHOST, "-p", PGPORT, "-U", PGUSER, "-d", PGDATABASE,
+            "-At", "-c", sql,
+        ]
+        return subprocess.check_output(cmd, text=True, env=env).strip()
+    cmd = [
+        "docker", "exec", "-i", PG_CONTAINER, "psql", "-U", PGUSER, "-d", PGDATABASE,
+        "-At", "-c", sql,
+    ]
     return subprocess.check_output(cmd, text=True).strip()
 
 
