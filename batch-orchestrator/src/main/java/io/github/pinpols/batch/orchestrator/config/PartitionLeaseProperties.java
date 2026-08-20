@@ -52,13 +52,14 @@ public class PartitionLeaseProperties {
     if (expireSeconds >= maxPollSec) {
       throw new IllegalStateException("FATAL: batch.partition-lease.expire-seconds ("
           + expireSeconds
-          + "s) 必须 < spring.kafka.consumer.properties.max-poll-interval-ms ("
+          + "s) must be lower than spring.kafka.consumer.properties.max-poll-interval-ms ("
           + maxPollSec
-          + "s)。"
-          + " rebalance 窗口与 lease 过期同时发生会触发双执行（worker reclaim + Kafka 再派给新 consumer）。"
-          + " 建议 expire-seconds ≤ max-poll-interval/2（当前推荐 ≤"
+          + "s)."
+          + " Rebalance and lease expiry in the same window can cause duplicate execution"
+          + " (worker reclaim plus Kafka redelivery to a new consumer)."
+          + " Recommended expire-seconds <= max-poll-interval/2 (current recommendation <= "
           + (maxPollSec / 2)
-          + "s）。");
+          + "s).");
     }
     if (expireSeconds >= maxPollSec / 2) {
       log.warn(

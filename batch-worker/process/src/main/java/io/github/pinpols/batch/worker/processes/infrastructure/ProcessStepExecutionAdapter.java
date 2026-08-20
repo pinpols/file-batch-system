@@ -140,7 +140,7 @@ public class ProcessStepExecutionAdapter
     if (EmptyChecks.isNotEmpty(outputs)) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
-    return new StepExecutionResponse(true, "SUCCESS", "加工阶段执行完成");
+    return new StepExecutionResponse(true, "SUCCESS", "process stage completed");
   }
 
   @Override

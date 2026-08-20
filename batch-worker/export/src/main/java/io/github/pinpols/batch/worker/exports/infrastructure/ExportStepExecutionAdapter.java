@@ -138,6 +138,6 @@ public class ExportStepExecutionAdapter
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
     return new StepExecutionResponse(
-        true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
+        true, "SUCCESS", objectName.isBlank() ? "export stage completed" : objectName);
   }
 }

@@ -183,7 +183,7 @@ public class DefaultExportStageExecutor
 
   @Override
   protected String cycleDetectedMessage() {
-    return "导出 pipeline 步骤流程存在循环依赖";
+    return "export pipeline stage flow contains a cycle";
   }
 
   private ExportStage toStage(String stageCode) {

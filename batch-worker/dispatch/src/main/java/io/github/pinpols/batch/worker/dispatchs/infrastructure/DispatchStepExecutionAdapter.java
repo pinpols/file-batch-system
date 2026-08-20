@@ -115,6 +115,6 @@ public class DispatchStepExecutionAdapter
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
-    return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
+    return new StepExecutionResponse(true, "SUCCESS", "dispatch stage completed");
   }
 }

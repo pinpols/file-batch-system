@@ -105,7 +105,7 @@ public class RegisterStep implements ExportStageStep {
             "EXPORT_REGISTER_CHECKSUM_CONFLICT",
             "error.export.register.checksum_conflict",
             new Object[0],
-            "已有 file_record 的校验值不一致",
+            "existing file_record checksum does not match expected checksum",
             ERROR_OBJECT_MAPPER);
       }
       return reuseExistingFileRecord(context, batch, existing);
