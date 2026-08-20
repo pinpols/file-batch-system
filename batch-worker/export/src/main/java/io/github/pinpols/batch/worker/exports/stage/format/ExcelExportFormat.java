@@ -66,8 +66,8 @@ public class ExcelExportFormat extends AbstractExportFormat {
             StandardOpenOption.WRITE)) {
       ExcelSheetWriter writer = new ExcelSheetWriter(
           workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
-      long recordCount = generatePaged(
-          ctx, firstPage, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
+      long recordCount = ExportPageGenerationCoordinator.generatePaged(
+          ctx, firstPage, null, (batch, detail, rowIndex) -> writer.writeDataRow(batch, detail));
       workbook.write(outputStream);
       return recordCount;
     }

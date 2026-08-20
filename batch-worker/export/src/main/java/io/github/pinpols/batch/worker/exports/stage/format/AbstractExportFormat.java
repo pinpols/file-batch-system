@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import java.io.BufferedWriter;
@@ -49,120 +48,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
    */
   private static final int DEFAULT_MAX_COLUMNS = 1024;
 
-  /**
-   * P-1/P-2 同系列防御：插件返回循环 cursor 时 fail-fast。1M 行 / 约数 GB 已足够任何合理业务； 超此值即视为 data plugin 返回陈旧 cursor
-   * 的严重 bug。
-   */
-  protected static final int DEFAULT_MAX_PAGES = 100_000;
-
-  /**
-   * 2026-06-04 docs/design/pipeline-stage-progress-display.md:EXPORT GENERATE 行级进度上报节流。 心跳默认
-   * 30s/次,每行 publish 是无意义的 AtomicReference set;每 1000 行 publish 一次足够细。
-   */
-  private static final int PROGRESS_PUBLISH_EVERY_N_ROWS = 1000;
-
   protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   protected final ObjectMapper objectMapper;
 
   protected AbstractExportFormat(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
-  }
-
-  /**
-   * 通用分页 generate 模板：负责 {@code loadDetailPage → iterate rows → nextCursor → MAX_PAGES} 循环骨架， 各
-   * format 只需实现 row 写入逻辑。
-   *
-   * <p>当调用方已因 column 推断等原因预取了首页，可通过 {@code preFetchedFirstPage} 传入以避免重复 读取；为 {@code null}
-   * 时由本方法负责首次加载。
-   *
-   * @return 已处理的 row 总数
-   */
-  protected long generatePaged(
-      ExportFormatContext ctx,
-      ExportDataPlugin.DetailPage preFetchedFirstPage,
-      PageRowWriter rowWriter)
-      throws Exception {
-    return generatePaged(ctx, preFetchedFirstPage, null, rowWriter);
-  }
-
-  /** 无预取首页版本，从 {@code cursor=null} 开始加载。 */
-  protected long generatePaged(ExportFormatContext ctx, PageRowWriter rowWriter) throws Exception {
-    return generatePaged(ctx, null, null, rowWriter);
-  }
-
-  /**
-   * ADR-038 P3 续跑感知版本:在 {@code preFetchedFirstPage} + {@code rowWriter} 之外接入 {@link
-   * FileSync},于<b>分页边界</b> fsync 文件并推进续跑位点。
-   *
-   * <p>续跑(ctx.checkpoint().resuming())时:起始 recordCount = 续跑行数、忽略预取首页、从 {@code resumeCursor} 续拉;
-   * 位点仅在 {@code cursor != null}(还有后继页)时推进 —— 终页交由 {@code GenerateStep.markCompleted} 收尾, 以保证存下来的
-   * cursor 永远是有效续跑起点。{@code fileSync == null} 或无 checkpoint 时退化为纯全量写(行为同今天)。
-   *
-   * @return 已处理的 row 总数(含续跑前已写的行)
-   */
-  protected long generatePaged(
-      ExportFormatContext ctx,
-      ExportDataPlugin.DetailPage preFetchedFirstPage,
-      FileSync fileSync,
-      PageRowWriter rowWriter)
-      throws Exception {
-    Long batchIdLong =
-        EmptyChecks.isNull(ctx.batchId()) ? null : Long.valueOf(String.valueOf(ctx.batchId()));
-    GenerateCheckpoint checkpoint = ctx.checkpoint();
-    boolean resuming = EmptyChecks.isNotNull(checkpoint) && checkpoint.resuming();
-    long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
-    ExportDataPlugin.DetailPage page;
-    if (resuming) {
-      page = ctx.dataPlugin()
-          .loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
-    } else {
-      page = EmptyChecks.isNotNull(preFetchedFirstPage)
-          ? preFetchedFirstPage
-          : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
-    }
-    int pageNo = 0;
-    while (true) {
-      if (EmptyChecks.isNull(page)) {
-        break;
-      }
-      List<Map<String, Object>> details = page.rows();
-      if (EmptyChecks.isEmpty(details)) {
-        break;
-      }
-      for (Map<String, Object> detail : details) {
-        rowWriter.writeRow(ctx.batch(), detail, recordCount);
-        recordCount++;
-        // 2026-06-04 docs/design/pipeline-stage-progress-display.md:每 1000 行 publish 一次,
-        // 节流匹配心跳节奏(30s/次);AtomicReference set 极廉价但无须每行调。
-        // totalRowsHint=null:export 走 cursor 分页 plugin 不报总量,FE 退化为只显计数器不显 ETA;
-        // 未来 ExportDataPlugin 暴露 estimateTotal() 时可在此带上。
-        if (recordCount % PROGRESS_PUBLISH_EVERY_N_ROWS == 0) {
-          PipelineStageProgressSink.publish(recordCount, null);
-        }
-      }
-      Object cursor = page.nextCursor();
-      // ADR-038 P3:页边界 fsync + 推进位点。仅在还有后继页(cursor != null)时推进 ——
-      // 终页不记位点,避免存下 null cursor 导致续跑从头重写。fileSync/checkpoint 为空时无位点(全量跑)。
-      if (EmptyChecks.isNotNull(checkpoint)
-          && EmptyChecks.isNotNull(fileSync)
-          && EmptyChecks.isNotNull(cursor)) {
-        long byteOffset = fileSync.flushAndSync();
-        checkpoint.advance(byteOffset, cursor, recordCount);
-      }
-      if (EmptyChecks.isNull(cursor)) {
-        break;
-      }
-      if (++pageNo >= DEFAULT_MAX_PAGES) {
-        throw new IllegalStateException("export page iteration exceeded MAX_PAGES="
-            + DEFAULT_MAX_PAGES
-            + "; data plugin likely returning stale cursor");
-      }
-      page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
-    }
-    // 终态收尾上报(若总行数不是 1000 的倍数,最后一段不会被循环里的节流捕获)
-    PipelineStageProgressSink.publish(recordCount, null);
-    return recordCount;
   }
 
   /**
@@ -295,27 +186,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
   protected boolean isResuming(ExportFormatContext ctx) {
     return EmptyChecks.isNotNull(ctx.checkpoint()) && ctx.checkpoint().resuming();
-  }
-
-  /** 分页边界文件同步回调:flush + fsync,返回当前字节数(续跑 truncate 目标)。 */
-  @FunctionalInterface
-  @SuppressWarnings("java:S112")
-  protected interface FileSync {
-    long flushAndSync() throws Exception;
-  }
-
-  /**
-   * 分页模板的行写入回调。允许抛 {@link Exception}（IO / 格式转换）。
-   *
-   * @param batch batch-level 数据
-   * @param detail 当前行
-   * @param rowIndex 当前行序号（0-based），便于 format 决定是否插分隔符 / 换行 / flush
-   */
-  @FunctionalInterface
-  @SuppressWarnings("java:S112")
-  protected interface PageRowWriter {
-    void writeRow(Map<String, Object> batch, Map<String, Object> detail, long rowIndex)
-        throws Exception;
   }
 
   /** 优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。 */

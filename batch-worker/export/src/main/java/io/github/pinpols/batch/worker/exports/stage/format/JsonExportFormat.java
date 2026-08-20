@@ -44,16 +44,17 @@ public class JsonExportFormat extends AbstractExportFormat {
       writeJsonValue(writer, ctx.batch(), ctx);
       writer.write(",\"details\":[");
     }
-    long recordCount = generatePaged(ctx, null, file::flushAndSync, (batch, detail, rowIndex) -> {
-      // rowIndex 续跑时接续跑行数往后排,故 >0 自然在续写首行前补逗号,衔接残文件末尾的 …,detailN。
-      if (rowIndex > 0) {
-        writer.write(",");
-      }
-      writeJsonValue(writer, detail, ctx);
-      if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
-        writer.flush();
-      }
-    });
+    long recordCount = ExportPageGenerationCoordinator.generatePaged(
+        ctx, null, file::flushAndSync, (batch, detail, rowIndex) -> {
+          // rowIndex 续跑时接续跑行数往后排,故 >0 自然在续写首行前补逗号,衔接残文件末尾的 …,detailN。
+          if (rowIndex > 0) {
+            writer.write(",");
+          }
+          writeJsonValue(writer, detail, ctx);
+          if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+            writer.flush();
+          }
+        });
     // 后缀只在生成整体完成时写一次(首跑/续跑皆然);崩溃残文件因尚未写后缀,续跑 truncate 后续写,收尾再补 ]}。
     writer.write("]}");
     return recordCount;
