@@ -15,7 +15,7 @@
 | 2 自注入迁移 | 已完成 | #918：低风险自注入；#922：Console 租户初始化事务协作者；#926～#932：Orchestrator 事务边界迁移；#935：retry/dead-letter 显式新事务 | 生产源码自注入复扫为 0；后续新增代理调用须直接使用窄事务协作者或 `TransactionTemplate` |
 | 3 固定 Map 契约 | 已完成 | #924：Console/内部 API/Java SDK 首批固定响应 DTO；#933：文件维护投影；#936：batch-day replay 影响投影；本批将文件治理延迟指标固定为 record | 剩余机器候选均已登记为动态 JSON/metadata/插件载荷、通用工具或兼容转换边界；新增固定契约不得回退为 Map |
 | 4 复杂类拆分 | 已完成 | #923：Task Outcome 状态策略提取；#940：`TaskOutcomeNodeRunRecorder`；#942：`TaskOutcomeTerminalFinalizer`；#941：`TaskOutcomeDagProgressor`、`TaskOutcomeParentTaskSignaler`；本阶段完成 `TaskOutcomeWorkflowFinalizer`、`DefaultConsoleWorkflowDefinitionApplicationService`、`DefaultTaskOutcomeService`、`PreprocessStep`、Java SDK `TaskDispatcher`、`DefaultRetryGovernanceService`、`AbstractTaskConsumer` 和 `AbstractExportFormat` 的职责拆分 | 阶段验收完成；后续只在出现独立变化原因时继续局部重构，不以文件行数或分层完整度为目标；保持事务入口、Kafka offset、claim/report 顺序、缓存失效和 API wire 字段不变 |
-| 5 测试风格 | 未开始 | — | 在相应生产类拆分后就近治理 fixture 与命名 |
+| 5 测试风格 | 已完成 | 已按阶段 4 影响域统一 fixture、契约命名和协作者窄单测；移除 worker 消费测试对受保护业务入口的反射调用，保留服务级契约测试 | 后续新增测试沿用本阶段规则；不对全仓测试做机械重写，动态 Map 和 test-as-spec inline fixture 按既有边界保留 |
 | 6 例外治理 | 未开始 | — | 审计 suppression、白名单与长期理由 |
 | 7 最终验收 | 未开始 | — | 前述阶段结束后跑 Full Gate、关键 sim 与容器启动验收 |
 
@@ -183,6 +183,14 @@
 - 对拆分后的协作者补窄单测，同时保留原服务级契约测试。
 
 **验收**：测试失败信息能直接指出业务契约；不得因抽 fixture 降低场景可见性或共享可变状态。
+
+**阶段 5 已完成批次记录**：
+
+- 重试治理域：新增 `RetryRequeueCoordinatorTest`，覆盖 claim 丢失、分区版本冲突、任务/分区重排队、缺失源分区和 retry outbox 写入；测试保留场景数据可见性，未引入共享可变 fixture。
+- worker 消费域：新增 `TaskConsumerBatchExecutionCoordinatorTest`，覆盖租户分组、坏消息 DLQ、瞬时失败不提交 offset 和单条业务失败隔离；`AbstractTaskConsumerTest` 改用同包直接调用受保护业务入口，不再用反射调用方法名。
+- import/export 域：新增对象来源边界和分页协调器测试，固定大文件直流/范围切片的可用性规则、分页行号单调性和预取页语义。
+- Console/Java SDK 域：新增工作流响应组装和 dispatcher retry 协作者窄单测；原应用服务、Generate、Preprocess 和 dispatcher 服务级契约测试继续保留。
+- 本阶段定向验证覆盖 `batch-orchestrator`、`batch-worker/core`、`batch-worker/import`、`batch-worker/export`、`batch-console-api` 和 `sdk/java/core`，未修改生产行为。
 
 ### 阶段 6：例外与 suppression 治理（2～3 天）
 
