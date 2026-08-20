@@ -346,15 +346,15 @@ public class ConfigPackageExcelWorkbookWriter {
         String colName = spec.columns().get(ci);
         Row row = sheet.createRow(rowIdx++);
         row.setHeightInPoints(18);
-        writeGuideRow(
-            row,
+        ConsoleExcelStyles.ColumnGuide guide = spec.guides().get(colName);
+        GuideRowData rowData = new GuideRowData(
             spec.name(),
             ci == 0 ? spec.name() : EMPTY,
             colName,
-            spec.guides().get(colName),
+            guide,
             appliesToFor(spec.name(), colName),
-            fillExampleFor(spec.name(), colName, spec.guides().get(colName)),
-            styles);
+            fillExampleFor(spec.name(), colName, guide));
+        writeGuideRow(row, rowData, styles);
       }
       int sectionEnd = rowIdx - 1;
       // 单 sheet 多列时合并第一列；单列 sheet 无需合并
@@ -401,21 +401,18 @@ public class ConfigPackageExcelWorkbookWriter {
     }
   }
 
-  private void writeGuideRow(
-      Row row,
-      String sheetName,
-      String sectionLabel,
-      String colName,
-      ConsoleExcelStyles.ColumnGuide guide,
-      String appliesTo,
-      String fillExample,
-      GuideStyles styles) {
+  private void writeGuideRow(Row row, GuideRowData rowData, GuideStyles styles) {
+    ConsoleExcelStyles.ColumnGuide guide = rowData.guide();
     boolean isRequired = guide != null && guide.required();
-    writeGuideCell(row, 0, sectionLabel, styles.body());
-    writeGuideCell(row, 1, colName, styles.body());
+    writeGuideCell(row, 0, rowData.sectionLabel(), styles.body());
+    writeGuideCell(row, 1, rowData.columnName(), styles.body());
     writeGuideCell(
         row, 2, isRequired ? "★ 必填" : "选填", isRequired ? styles.required() : styles.optional());
-    writeGuideCell(row, 3, guideLevelFor(sheetName, colName, isRequired), styles.body());
+    writeGuideCell(
+        row,
+        3,
+        guideLevelFor(rowData.sheetName(), rowData.columnName(), isRequired),
+        styles.body());
     writeGuideCell(
         row, 4, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
     writeGuideCell(row, 5, joinAllowedValues(guide), styles.body());
@@ -423,9 +420,19 @@ public class ConfigPackageExcelWorkbookWriter {
         row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
     writeGuideCell(
         row, 7, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
-    writeGuideCell(row, 8, appliesTo == null ? EMPTY : appliesTo, styles.body());
-    writeGuideCell(row, 9, fillExample == null ? EMPTY : fillExample, styles.body());
+    writeGuideCell(
+        row, 8, rowData.appliesTo() == null ? EMPTY : rowData.appliesTo(), styles.body());
+    writeGuideCell(
+        row, 9, rowData.fillExample() == null ? EMPTY : rowData.fillExample(), styles.body());
   }
+
+  private record GuideRowData(
+      String sheetName,
+      String sectionLabel,
+      String columnName,
+      ConsoleExcelStyles.ColumnGuide guide,
+      String appliesTo,
+      String fillExample) {}
 
   private static String guideLevelFor(String sheetName, String colName, boolean required) {
     if (required) {
