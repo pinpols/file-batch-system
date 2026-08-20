@@ -1,12 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
-import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
@@ -23,14 +20,10 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
-import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
-import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
@@ -40,10 +33,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>写入 task 的终态（SUCCESS/FAILED）
  *   <li>根据失败决定是否进入重试（写 retry_schedule，并把 partition/task/step 标记为 RETRYING）
- *   <li>推进 partition/job_instance/workflow_run 的状态机（含 DAG 节点切换与下一节点派发）
+ *   <li>委托协作者推进 partition/job_instance/workflow_run 的状态机（含 DAG 节点切换与下一节点派发）
  *   <li>更新 step 镜像 {@code job_step_instance}（用于审计/可视化口径一致）
  * </ul>
  *
@@ -80,13 +70,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private final OrchestratorJobMappers jobMappers;
-  private final OrchestratorWorkflowMappers workflowMappers;
   private final DefaultTaskOutcomeCollaborators collaborators;
   private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
-  private final TaskOutcomeTerminalFinalizer terminalFinalizer;
-  private final TaskOutcomeDagProgressor dagProgressor;
-  private final TaskOutcomeParentTaskSignaler parentTaskSignaler;
-  private final TaskOutcomeWorkflowFinalizer workflowFinalizer;
+  private final TaskOutcomeInstanceProgressor instanceProgressor;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -128,15 +114,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       OrchestratorJobMappers jobMappers,
       OrchestratorWorkflowMappers workflowMappers,
       DefaultTaskOutcomeCollaborators collaborators,
-      TaskOutcomeAuxiliaryCollaborators auxiliaryCollaborators) {
+      TaskOutcomeAuxiliaryCollaborators auxiliaryCollaborators,
+      TaskOutcomeInstanceProgressor instanceProgressor) {
     this.jobMappers = jobMappers;
-    this.workflowMappers = workflowMappers;
     this.collaborators = collaborators;
     this.nodeRunRecorder = auxiliaryCollaborators.nodeRunRecorder();
-    this.terminalFinalizer = auxiliaryCollaborators.terminalFinalizer();
-    this.dagProgressor = auxiliaryCollaborators.dagProgressor();
-    this.parentTaskSignaler = auxiliaryCollaborators.parentTaskSignaler();
-    this.workflowFinalizer = auxiliaryCollaborators.workflowFinalizer();
+    this.instanceProgressor = instanceProgressor;
     this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
         .register(collaborators.meterRegistry());
@@ -161,6 +144,26 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         workflowMappers,
         collaborators,
         compatibilityAuxiliaryCollaborators(workflowMappers, collaborators));
+  }
+
+  private DefaultTaskOutcomeService(
+      OrchestratorJobMappers jobMappers,
+      OrchestratorWorkflowMappers workflowMappers,
+      DefaultTaskOutcomeCollaborators collaborators,
+      TaskOutcomeAuxiliaryCollaborators auxiliaryCollaborators) {
+    this(
+        jobMappers,
+        workflowMappers,
+        collaborators,
+        auxiliaryCollaborators,
+        new TaskOutcomeInstanceProgressor(
+            jobMappers,
+            workflowMappers,
+            collaborators,
+            auxiliaryCollaborators.terminalFinalizer(),
+            auxiliaryCollaborators.dagProgressor(),
+            auxiliaryCollaborators.parentTaskSignaler(),
+            auxiliaryCollaborators.workflowFinalizer()));
   }
 
   private static TaskOutcomeAuxiliaryCollaborators compatibilityAuxiliaryCollaborators(
@@ -311,7 +314,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // (纯排序加锁、丢结果)会把同 instance 的并发 report 完全串行、且是 O(N) 行锁。改用事务级 advisory lock:
     // 对 (tenantId, jobInstanceId) 取一把 pg_advisory_xact_lock,把同 instance 的并发 outcome 串行化,
     // 随事务自动释放。锁的是逻辑序而非行,因此:1) 下方 markStatus / updateOutputSummary(单分区写锁)与
-    // advancePartitionAndInstance(复读计数)始终在同一把逻辑锁下顺序执行,消除了 outcome-vs-outcome 的锁顺序反转;
+    // instanceProgressor(复读计数)始终在同一把逻辑锁下顺序执行,消除了 outcome-vs-outcome 的锁顺序反转;
     // 2) outcome 不再批量锁全兄弟分区,消除了旧的「reclaim asc N 行 / outcome desc N 行」环形死锁。
     // 注意(边界):advisory lock 只串行化 outcome-vs-outcome,reclaim 不取该 advisory lock;outcome 仍按
     // task(finishTask)→ partition(markStatus)取行锁,与 reclaim 的 partition→task 相反,单 outcome × 单
@@ -358,7 +361,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
     updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
     if (EmptyChecks.isNotNull(jobInstance)) {
-      advancePartitionAndInstance(command, task, jobInstance, finishedAt);
+      instanceProgressor.advance(command, task, jobInstance, finishedAt, this::applyTaskOutcome);
     }
     return jobMappers.jobTaskMapper.selectById(command.tenantId(), command.taskId());
   }
@@ -426,177 +429,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
   }
 
-  /** 推进分区/实例状态机：统计分区完成情况，更新 job_instance 状态，处理 DAG 节点流转。 */
-  private void advancePartitionAndInstance(
-      TaskOutcomeCommand command,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      Instant finishedAt) {
-    // 并发 outcome 的分区计数一致性由入口处的 advisory lock(同 instance 串行化)保证,不再需要
-    // whole-instance FOR UPDATE 行锁。此处普通读即可拿到一致快照(含本事务已写入的自身分区状态)。
-    // perf(#5): 常规 REPORT 只需各分区状态做计数,改用 (id, partition_status) 轻量投影,避免每次 REPORT 的
-    // select *(含 output_summary jsonb 大列)把 N 个分区全量拉进内存 —— 单 instance 万级 fan-out 下那是
-    // O(N)/REPORT × N REPORT = O(N²) 且被 advisory lock 串行的 report choke。output_summary 只在下面
-    // 「节点完成 / 实例终态」聚合产出时才按需全量再读。
-    List<PartitionStatusRef> statusRefs = jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
-        command.tenantId(), task.getJobInstanceId());
-    long successCount = statusRefs.stream()
-        .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
-        .count();
-    long failedCount = statusRefs.stream()
-        .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
-        .count();
-    long finishedPartitionCount = successCount + failedCount;
-    boolean allPartitionsFinished =
-        EmptyChecks.isNotEmpty(statusRefs) && finishedPartitionCount == statusRefs.size();
-    WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
-        command.tenantId(), jobInstance.getId());
-    String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
-    // perf: 只取 (job_partition_id, workflowNodeCode) 轻量投影做按节点计分区,避免 select * 拉全部 task 行
-    // (task_payload / effective_parameters 两个大 JSON 列)。计数口径不变:仍以 partition 状态计成功/失败。
-    List<NodePartitionAssignment> nodeAssignments =
-        jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
-            command.tenantId(), task.getJobInstanceId());
-    NodePartitionProgressCalculator.Result nodeProgress = NodePartitionProgressCalculator.calculate(
-        statusRefs, nodeAssignments, currentNodeCode, workflowRun);
-    Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
-        ? new LinkedHashSet<>()
-        : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
-
-    if (nodeProgress.allFinished() && EmptyChecks.isNotNull(workflowRun)) {
-      // perf(#5): 节点完成时才需要 output_summary 做产出聚合,此处按需全量读(节点完成远少于每 REPORT)。
-      List<JobPartitionEntity> nodeCompletionPartitions = loadPartitions(command, task);
-      TaskOutcomeDagProgressor.Context advanceCtx = TaskOutcomeDagProgressor.Context.builder()
-          .command(command)
-          .task(task)
-          .jobInstance(jobInstance)
-          .workflowRun(workflowRun)
-          .currentNodeCode(currentNodeCode)
-          .nodeProgress(nodeProgress)
-          .nodeOutputs(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
-              TaskOutcomeSummaryBuilder.filterPartitionsByIds(
-                  nodeCompletionPartitions, nodeProgress.partitionIds()),
-              command))
-          .activeNodes(activeNodes)
-          .finishedAt(finishedAt)
-          .build();
-      dagProgressor.advance(advanceCtx);
-      // current_node_code 是派发期缓存，fan-out gateway 会递归创建分支但可能仍残留已完成的 FORK。
-      // 节点完成后以 workflow_node_run 的最新状态重建活跃集合，避免 END 已成功却永久 RUNNING。
-      activeNodes.clear();
-      activeNodes.addAll(TaskOutcomeStatePolicy.resolveActiveNodeCodes(
-          workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId())));
-    }
-
-    boolean dagContinues =
-        EmptyChecks.isNotNull(workflowRun) && EmptyChecks.isNotEmpty(activeNodes);
-    boolean jobFullyComplete = allPartitionsFinished && !dagContinues;
-    // #3-1: 重新读取 instance 获取最新 version，避免并发 outcome 间版本冲突导致永久循环。
-    // 此时分区行已被 FOR UPDATE 锁住，保证了分区计数的串行性，
-    // 但 job_instance 本身可能被其他已完成的 outcome 更新了 version。
-    // C-2.2: 重新读取 instance 获取最新 version 和状态，直接用 freshInstance 做状态机转换，
-    // 避免 jobInstance 上残留过期字段导致 stateMachine 基于错误状态计算转换结果
-    JobInstanceEntity freshInstance =
-        jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstance.getId());
-    if (EmptyChecks.isNotNull(freshInstance)) {
-      jobInstance.setVersion(freshInstance.getVersion());
-      jobInstance.setInstanceStatus(freshInstance.getInstanceStatus());
-    }
-    String instanceEvent = TaskOutcomeStatePolicy.resolveInstanceEvent(
-        successCount,
-        failedCount,
-        allPartitionsFinished,
-        dagContinues,
-        TaskOutcomeStatePolicy.isDryRun(
-            EmptyChecks.isNotNull(freshInstance) ? freshInstance : jobInstance));
-    String instanceStatus = collaborators
-        .stateMachine()
-        .transition(
-            EmptyChecks.isNotNull(freshInstance) ? freshInstance : jobInstance, instanceEvent)
-        .toState();
-    if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-        EmptyChecks.isNotNull(freshInstance)
-            ? freshInstance.getInstanceStatus()
-            : jobInstance.getInstanceStatus(),
-        instanceEvent,
-        successCount,
-        failedCount,
-        allPartitionsFinished,
-        dagContinues)) {
-      // 重试/补偿可能在旧失败终态写入后完成全部分区。此时子状态已证明失败是陈旧结果，允许受限收敛为 SUCCESS。
-      instanceStatus = instanceEvent;
-      log.info(
-          "promoting stale failed job instance to success after all partitions completed:"
-              + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
-          command.tenantId(),
-          jobInstance.getId(),
-          EmptyChecks.isNotNull(freshInstance)
-              ? freshInstance.getInstanceStatus()
-              : jobInstance.getInstanceStatus(),
-          successCount);
-    }
-    // ADR-012: instance 级 failure_class 仅在终态且失败类（FAILED / PARTIAL_FAILED）时填；
-    // SUCCESS 终态保持 NULL。来源 = 当前命令本次推断的 class（合并 worker 上报 + classifier 回退）。
-    String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
-            && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
-                || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))
-        ? collaborators
-            .failureClassifier()
-            .classify(command.failureClass(), null)
-            .code()
-        : null;
-    int progressUpdated =
-        jobMappers.jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()
-            .tenantId(command.tenantId())
-            .id(jobInstance.getId())
-            .instanceStatus(instanceStatus)
-            .successPartitionCount((int) successCount)
-            .failedPartitionCount((int) failedCount)
-            .resultSummary(TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-                jobInstance,
-                successCount,
-                TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
-                command))
-            .finishedAt(jobFullyComplete ? finishedAt : null)
-            .failureClass(instanceFailureClass)
-            .expectedVersion(jobInstance.getVersion())
-            .build());
-    if (progressUpdated <= 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
-    }
-    jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
-    jobInstance.setInstanceStatus(instanceStatus);
-    if (TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
-      // 终态写入成功后集中完成指标、结果版本、子状态和 replay 会话的旁路收口。
-      terminalFinalizer.finalizeTerminal(
-          jobInstance,
-          command,
-          instanceStatus,
-          jobFullyComplete ? finishedAt : null,
-          instanceFailureClass,
-          loadPartitions(command, task));
-    }
-    // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
-    if (jobFullyComplete && TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
-      parentTaskSignaler
-          .buildParentOutcome(jobInstance, instanceStatus, command)
-          .ifPresent(this::applyTaskOutcome);
-    }
-    if (EmptyChecks.isNotNull(workflowRun)) {
-      workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
-          .command(command)
-          .workflowRun(workflowRun)
-          .failedPartitionCount(failedCount)
-          .allPartitionsFinished(allPartitionsFinished)
-          .dagContinues(dagContinues)
-          .jobFullyComplete(jobFullyComplete)
-          .activeNodes(activeNodes)
-          .currentNodeCode(currentNodeCode)
-          .finishedAt(finishedAt)
-          .build());
-    }
-  }
-
   private void updateStepInstanceProgress(
       TaskOutcomeCommand command, JobTaskEntity task, boolean retryScheduled, Instant finishedAt) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
@@ -629,40 +461,5 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_progress_conflict");
     }
-  }
-
-  private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
-    String nodeCode = TaskOutcomePayloadSupport.payloadStringValue(
-        EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
-    if (EmptyChecks.isNotBlank(nodeCode)) {
-      return nodeCode;
-    }
-    Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
-        ? Set.of()
-        : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
-    // 多活动节点同时缺 workflowNodeCode 即数据错乱：fallback 到 iterator.first 会把错误节点结掉，必须拒绝。
-    if (EmptyChecks.isNotNull(workflowRun) && activeNodes.size() > 1) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.workflow.task_payload_missing_node_code",
-          String.valueOf(EmptyChecks.isNull(task) ? null : task.getId()));
-    }
-    if (EmptyChecks.isNotEmpty(activeNodes)) {
-      return activeNodes.iterator().next();
-    }
-    return WorkflowNodeCode.START.code();
-  }
-
-  /**
-   * perf(#5): 按需全量读取该 instance 的 {@code job_partition}(含 {@code output_summary} 大列),只用于「节点完成 /
-   * 实例终态」的产出聚合。与常规 REPORT 计数路径(轻量投影)隔离,避免每次 REPORT 都拉全量。
-   */
-  private List<JobPartitionEntity> loadPartitions(TaskOutcomeCommand command, JobTaskEntity task) {
-    return jobMappers.jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
-  }
-
-  static Set<String> resolveActiveNodeCodes(List<WorkflowNodeRunEntity> nodeRuns) {
-    return TaskOutcomeStatePolicy.resolveActiveNodeCodes(nodeRuns);
   }
 }
