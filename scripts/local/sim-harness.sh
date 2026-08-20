@@ -175,13 +175,16 @@ reset() {
       LOOP EXECUTE format('TRUNCATE TABLE biz.%I CASCADE', r.relname); END LOOP;
     END \$reset\$;" >/dev/null && ok "biz 数据已清(动态枚举,跳过不存在的表)" || { c_red "  ✗ biz 清理失败"; return 1; }
 
-  # 平台运行态 truncate(job_/pipeline_/workflow_/outbox/file_record 等),保留 *_definition/config/tenant/user/系统表
+  # 平台运行态 truncate(job_/pipeline_/workflow_/retry/outbox/file_record 等),保留
+  # *_definition/config/tenant/user/系统表。retry_schedule / worker_report_outbox 不会被
+  # job_instance 的 CASCADE 一并清理；若漏清，历史 WAITING retry 会在全量 sim 期间持续抢
+  # scheduler，拖慢后续场景的终态落库并造成假性超时。
   docker exec "$PG" psql -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c "
     DO \$reset\$
     DECLARE r record;
     BEGIN
       FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='batch'
-        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|pipeline_progress|workflow_run|workflow_node_run|outbox_event|event_outbox_retry|trigger_outbox_event|file_record|file_error_record|compensation_command|dead_letter)'
+        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|pipeline_progress|workflow_run|workflow_node_run|retry_schedule|outbox_event|event_outbox_retry|trigger_outbox_event|worker_report_outbox|file_record|file_error_record|compensation_command|dead_letter_task)'
       LOOP EXECUTE format('TRUNCATE TABLE batch.%I CASCADE', r.tablename); END LOOP;
     END \$reset\$;" >/dev/null && ok "平台运行态已清(保留定义/配置/租户/用户/系统表)" || { c_red "  ✗ 平台运行态清理失败"; return 1; }
   c_grn "== reset 完成 =="
@@ -211,6 +214,15 @@ prereq() {
     < scripts/db/test-seed/platform_seed.sql >"$SIM_LOG_DIR/platform-seed.log" 2>&1 \
     && ok "platform_seed(atomic/procedure)" \
     || { c_red "  ✗ platform_seed(见 $SIM_LOG_DIR/platform-seed.log)"; return 1; }
+
+  # platform_seed 同时带有供治理页面展示的历史 retry 样例。它们不是 sim 的输入，
+  # 但 WAITING 且 next_retry_at 已过期时会被真实 scheduler 反复重派，污染后续阶段的
+  # Kafka/报告时序；仅清理已经过期的 WAITING 样例，保留 seed 定义和未到期运行态。
+  docker exec "$PG" psql -q -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c \
+    "DELETE FROM batch.retry_schedule WHERE retry_status = 'WAITING' AND next_retry_at < CURRENT_TIMESTAMP;" \
+    >/dev/null \
+    && ok "清理 platform_seed 过期 retry 样例" \
+    || { c_red "  ✗ platform_seed 过期 retry 清理失败"; return 1; }
 
   echo "== prereq:shard-1(幂等)=="
   bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >"$SIM_LOG_DIR/shard1.log" 2>&1 && ok "shard-1 就绪" || { c_red "  ✗ shard-1(见 $SIM_LOG_DIR/shard1.log)"; return 1; }
@@ -260,6 +272,29 @@ ensure_core_runtime() {
   done
 }
 
+# 健康探针只代表 HTTP 进程已启动，不能证明 worker 已注册并能被调度器选中。
+# 全量 sim 在高负载/重启窗口内若直接发任务，会把“worker 尚未就绪”误报成业务终态超时。
+ensure_worker_registrations() {
+  local groups=(IMPORT EXPORT PROCESS DISPATCH ATOMIC)
+  local group count
+  for group in "${groups[@]}"; do
+    for _ in $(seq 1 45); do
+      count=$(docker exec "$PG" psql -U "$PGU" -d "$PLAT_DB" -tAc \
+        "select count(*) from batch.worker_registry where worker_group='${group}' and status='ONLINE' and heartbeat_at >= current_timestamp - interval '90 seconds'" \
+        2>/dev/null | tr -d '[:space:]' || true)
+      if [[ "${count:-0}" =~ ^[1-9][0-9]*$ ]]; then
+        break
+      fi
+      sleep 2
+    done
+    if ! [[ "${count:-0}" =~ ^[1-9][0-9]*$ ]]; then
+      echo "  [worker-runtime] ${group} worker 未注册或心跳已过期(count=${count:-0})" >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
 # ---------------------------------------------------------
 # sim:全量阶段 04→25
 # restart_import:为特定 stage 切换 worker-import 互斥配置。
@@ -300,6 +335,7 @@ sim() {
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     ensure_core_runtime
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
+    ensure_worker_registrations || exit 1
     local sum="$SIM_LOG_DIR/sim-summary.txt"; : > "$sum"
     local sim_failed=0
     while IFS= read -r s; do
@@ -322,6 +358,7 @@ sim() {
         25-*) restart_import checkpoint ;;  # checkpoint=true
       esac
       ensure_core_runtime || exit 1
+      ensure_worker_registrations || exit 1
       echo ">>> $n $(date +%T)" | tee -a "$sum"
       local stage_log="$SIM_LOG_DIR/$n.log"
       # 阶段脚本不能继承 while-read 的 stdin；否则内部命令读取 stdin 时会吞掉后续阶段文件名。

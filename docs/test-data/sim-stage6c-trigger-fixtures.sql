@@ -1,6 +1,75 @@
 -- Stage 6c Quartz trigger fixtures。
 -- 必需的 psql 变量:batch_no, biz_date
 
+-- 这组 fixture 会被 stage6c/stage6d 多次复用。sim reset 保留 job/pipeline 定义，
+-- 因此上一轮用其他租户跑出来的同名测试定义不能继续留在 Quartz 调度面；否则
+-- misfire 扫描会同时处理多个历史租户，污染本轮 ta 的时序和断言。
+CREATE TEMP TABLE sim_stage6c_jobs AS
+SELECT tenant_id, job_code
+FROM batch.job_definition
+WHERE job_code IN ('TA_TRIGGER_STAGE6C_SCHEDULED', 'TA_TRIGGER_STAGE6C_MISFIRE');
+
+CREATE TEMP TABLE sim_stage6c_old_jobs AS
+SELECT tenant_id, job_code
+FROM sim_stage6c_jobs
+WHERE tenant_id <> 'ta';
+
+CREATE TEMP TABLE sim_stage6c_old_triggers AS
+SELECT trigger_row.sched_name, trigger_row.trigger_name, trigger_row.trigger_group
+FROM quartz.qrtz_triggers trigger_row
+JOIN sim_stage6c_jobs job
+  ON trigger_row.job_name = job.tenant_id || ':' || job.job_code;
+
+DELETE FROM quartz.qrtz_fired_triggers fired
+USING sim_stage6c_old_triggers old_trigger
+WHERE fired.sched_name = old_trigger.sched_name
+  AND fired.trigger_name = old_trigger.trigger_name
+  AND fired.trigger_group = old_trigger.trigger_group;
+
+DELETE FROM quartz.qrtz_blob_triggers child
+USING sim_stage6c_old_triggers old_trigger
+WHERE child.sched_name = old_trigger.sched_name
+  AND child.trigger_name = old_trigger.trigger_name
+  AND child.trigger_group = old_trigger.trigger_group;
+
+DELETE FROM quartz.qrtz_cron_triggers child
+USING sim_stage6c_old_triggers old_trigger
+WHERE child.sched_name = old_trigger.sched_name
+  AND child.trigger_name = old_trigger.trigger_name
+  AND child.trigger_group = old_trigger.trigger_group;
+
+DELETE FROM quartz.qrtz_simple_triggers child
+USING sim_stage6c_old_triggers old_trigger
+WHERE child.sched_name = old_trigger.sched_name
+  AND child.trigger_name = old_trigger.trigger_name
+  AND child.trigger_group = old_trigger.trigger_group;
+
+DELETE FROM quartz.qrtz_simprop_triggers child
+USING sim_stage6c_old_triggers old_trigger
+WHERE child.sched_name = old_trigger.sched_name
+  AND child.trigger_name = old_trigger.trigger_name
+  AND child.trigger_group = old_trigger.trigger_group;
+
+DELETE FROM quartz.qrtz_triggers trigger_row
+USING sim_stage6c_old_triggers old_trigger
+WHERE trigger_row.sched_name = old_trigger.sched_name
+  AND trigger_row.trigger_name = old_trigger.trigger_name
+  AND trigger_row.trigger_group = old_trigger.trigger_group;
+
+DELETE FROM quartz.qrtz_job_details job
+USING sim_stage6c_jobs stage_job
+WHERE job.job_name = stage_job.tenant_id || ':' || stage_job.job_code;
+
+-- 运行态表可能仍保留这些测试定义的历史实例，不能物理删除定义；禁用后由
+-- TriggerReconciler 维持 Quartz 不再注册，避免违反 job_instance 外键。
+UPDATE batch.job_definition job
+SET enabled = false,
+    updated_by = 'sim',
+    updated_at = CURRENT_TIMESTAMP
+FROM sim_stage6c_old_jobs old_job
+WHERE job.tenant_id = old_job.tenant_id
+  AND job.job_code = old_job.job_code;
+
 INSERT INTO batch.business_calendar (
     tenant_id, calendar_code, calendar_name, timezone, holiday_roll_rule,
     catch_up_policy, catch_up_max_days, enabled, cutoff_time,

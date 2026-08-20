@@ -6,6 +6,11 @@ spring:
   application:
     # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-trigger
+  datasource:
+    hikari:
+      # Quartz JDBC JobStore 与业务 SQL 共用此池。Hikari 的初始化 SQL 放在
+      # 公共 pg-session SQL 之后，确保 Quartz misfire 事务使用 10 分钟空闲上限。
+      connection-init-sql: "SET idle_in_transaction_session_timeout TO ${BATCH_PG_TRIGGER_IDLE_IN_TX_TIMEOUT_MS:600000}"
   config:
     # noinspection SpringBootApplicationYaml
     # 资源来自 batch-common 依赖；Qodana 的单模块索引无法解析依赖 JAR 的 classpath 资源。
@@ -54,6 +59,13 @@ spring:
 
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
+  datasource:
+    pg-session:
+      platform:
+        # Quartz JDBC JobStore 的 misfire recovery 可能在一次事务内等待锁/处理多条
+        # 触发器；沿用全局平台池 60s 会被 PostgreSQL 提前终止。Trigger 单独放宽，
+        # 其他模块仍保持 batch-defaults.yml 的 60s 防护。
+        idle-in-transaction-timeout: ${BATCH_PG_TRIGGER_IDLE_IN_TX_TIMEOUT:10m}
   startup-self-check:
     enabled: true
     context-name: trigger

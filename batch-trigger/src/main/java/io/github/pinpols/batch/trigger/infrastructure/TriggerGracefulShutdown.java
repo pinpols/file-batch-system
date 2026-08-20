@@ -10,11 +10,13 @@ import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.ReadinessState;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,6 +48,19 @@ public class TriggerGracefulShutdown
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
     this.eventPublisher = applicationEventPublisher;
+  }
+
+  /**
+   * 正常启动完成后显式发布就绪状态。
+   *
+   * <p>Spring Boot 的 readiness 默认状态可能仍为 {@code REFUSING_TRAFFIC}；如果只在排水解除
+   * 时发布 {@code ACCEPTING_TRAFFIC}，新启动的 Trigger 会一直被健康探针判为未就绪。
+   */
+  @EventListener(ApplicationReadyEvent.class)
+  public void markReady() {
+    if (!drainState.isDraining()) {
+      publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
+    }
   }
 
   @Override
