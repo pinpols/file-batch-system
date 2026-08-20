@@ -23,7 +23,7 @@ class TaskDispatcherClaimJitterTest {
     long exponentialMs = baseDelayMs << attempt;
     long upperExclusive = exponentialMs + Math.max(1L, exponentialMs / 10L);
     for (int i = 0; i < 200; i++) {
-      long actual = TaskDispatcher.backoffWithJitter(baseDelayMs, attempt);
+      long actual = TaskDispatcherRetryCoordinator.backoffWithJitter(baseDelayMs, attempt);
       assertThat(actual).isGreaterThanOrEqualTo(exponentialMs).isLessThan(upperExclusive);
     }
   }
@@ -33,7 +33,8 @@ class TaskDispatcherClaimJitterTest {
   void shouldProduceVariedDelays_acrossSamples() {
     Set<Long> seen = new HashSet<>();
     for (int i = 0; i < 100; i++) {
-      seen.add(TaskDispatcher.backoffWithJitter(200L, 3)); // exp=1600,jitter [0,160)
+      seen.add(
+          TaskDispatcherRetryCoordinator.backoffWithJitter(200L, 3)); // exp=1600,jitter [0,160)
     }
     // 100 次抽样,jitter 范围 [0,160) → 几乎不可能全相等;>1 即证 jitter 生效
     assertThat(seen).hasSizeGreaterThan(1);
@@ -42,14 +43,14 @@ class TaskDispatcherClaimJitterTest {
   @Test
   @DisplayName("baseDelayMs=0 → 立即返回 0(无 jitter,无 sleep)")
   void shouldReturnZero_whenBaseDelayIsZero() {
-    assertThat(TaskDispatcher.backoffWithJitter(0L, 5)).isZero();
+    assertThat(TaskDispatcherRetryCoordinator.backoffWithJitter(0L, 5)).isZero();
   }
 
   @Test
   @DisplayName("attempt 巨大不应 overflow(safeAttempt 限 30)")
   void shouldNotOverflow_whenAttemptHuge() {
     // attempt=100 被钳到 30,200ms << 30 仍是有限大 long
-    long actual = TaskDispatcher.backoffWithJitter(200L, 100);
+    long actual = TaskDispatcherRetryCoordinator.backoffWithJitter(200L, 100);
     long expectedExp = 200L << 30;
     assertThat(actual)
         .isGreaterThanOrEqualTo(expectedExp)

@@ -19,7 +19,6 @@ import io.github.pinpols.batch.sdk.task.SdkErrorCode;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,7 +29,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,7 +58,6 @@ public class TaskDispatcher {
 
   private final BatchPlatformClientConfig config;
   private final Map<String, SdkTaskHandler> handlers;
-  private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
 
   private static final ObjectMapper RESULT_SUMMARY_MAPPER = SdkJsonMapperFactory.create();
@@ -114,20 +111,14 @@ public class TaskDispatcher {
 
   /**
    * P1-2 fail-fast:CLAIM 收到 401/403 后置 true,后续 onMessage 直接拒收(等 K8s liveness probe 拉起或运维人工介入)。 与
-   * {@link #draining} 区分:fatal 是"不可恢复",draining 是"主动 stop"。两者都让 onMessage 静默 drop。
+   * {@link #draining} 区分:retry coordinator 的 fatal 是"不可恢复",draining 是"主动 stop"。两者都让 onMessage 静默 drop。
    */
-  private final AtomicBoolean fatal = new AtomicBoolean(false);
-
-  /**
-   * P7-2:CLAIM / REPORT 连续(非鉴权、非 409)4xx 客户端错误计数。达 {@link
-   * BatchPlatformClientConfig#getClientErrorFailFastThreshold()} → 置 {@link #fatal};任一次成功调用归零。
-   */
-  private final AtomicInteger consecutiveClientErrors = new AtomicInteger(0);
+  private final TaskDispatcherRetryCoordinator retryCoordinator;
 
   /**
    * SDK Phase 2 §2.4:平台指令驱动的 4 态状态机。心跳回包(见 {@link HeartbeatDirective})每次 tick 更新此态; {@code PAUSED}
    * / {@code DRAINING} 时 {@link #onMessage} 拒新任务,{@link KafkaTaskConsumer} 据此 pause partition(不丢
-   * offset,可恢复)。区别于 {@link #draining}(本地主动 stop)/ {@link #fatal}(不可恢复鉴权失效)。
+   * offset,可恢复)。区别于 {@link #draining}(本地主动 stop)/ retry coordinator fatal(不可恢复鉴权失效)。
    */
   private final AtomicReference<WorkerRuntimeState> platformState =
       new AtomicReference<>(WorkerRuntimeState.NORMAL);
@@ -199,7 +190,7 @@ public class TaskDispatcher {
     Map<String, SdkTaskHandler> decorated = new HashMap<>(handlers.size());
     handlers.forEach((type, handler) -> decorated.put(type, decorate(handler, idempotencyStore)));
     this.handlers = Map.copyOf(decorated);
-    this.httpClient = httpClient;
+    this.retryCoordinator = new TaskDispatcherRetryCoordinator(config, httpClient, throttledLog);
     this.executor = Executors.newFixedThreadPool(
         config.getMaxConcurrentTasks(), namedThreadFactory("batch-sdk-dispatch"));
     // permit 数 == 线程数:提交即占 permit,跑满 max 后 onMessage 返回 RETRY_LATER → 不提交 offset + pause partition,
@@ -242,11 +233,11 @@ public class TaskDispatcher {
 
   /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */
   public DispatchDecision onMessage(TaskDispatchMessage msg) {
-    if (draining.get() || fatal.get()) {
+    if (draining.get() || retryCoordinator.isFatal()) {
       // P0 hardening:已发起 stop 或 P1-2 fail-fast 后,不接新消息
       log.info(
           "dispatcher {} , skipping new dispatch msg taskId={}, jobCode={}",
-          fatal.get() ? "fatal" : "draining",
+          retryCoordinator.isFatal() ? "fatal" : "draining",
           msg == null ? null : msg.taskId(),
           msg == null ? null : msg.jobCode());
       return DispatchDecision.RETRY_LATER;
@@ -350,7 +341,8 @@ public class TaskDispatcher {
     if (partitionInvocationId != null) {
       claimBody.put("partitionInvocationId", partitionInvocationId);
     }
-    ClaimResult claimResult = claimWithRetry(msg, idemClaim, claimBody);
+    TaskDispatcherRetryCoordinator.ClaimResult claimResult =
+        retryCoordinator.claimWithRetry(msg, idemClaim, claimBody);
     if (!claimResult.claimed()) {
       // claim 失败直接返回,不进 finally 清理块 —— partitionInvocations 必须在 claim 成功后才落,否则泄漏。
       return;
@@ -404,8 +396,8 @@ public class TaskDispatcher {
     // REPORT — body 对齐 TaskExecutionReportDto(taskId/tenantId/workerId/success/message/outputs/...)
     String idemReport = BatchPlatformClient.newIdempotencyKey();
     try {
-      reportWithRetry(msg.taskId(), idemReport, successReportBody(msg, result));
-      resetClientErrorStreak();
+      retryCoordinator.reportWithRetry(msg.taskId(), idemReport, successReportBody(msg, result));
+      retryCoordinator.resetClientErrorStreak();
     } catch (PlatformHttpException httpEx) {
       // REPORT 失败:orchestrator 会因 lease 超时自动 retry 派单。非鉴权 4xx 计入连续错误,持续则 fail-fast(P7-2)。
       log.error(
@@ -414,7 +406,7 @@ public class TaskDispatcher {
           msg.taskId(),
           httpEx);
       if (httpEx.isClientError() && !httpEx.isAuthError() && !httpEx.isConflict()) {
-        recordClientError(httpEx.statusCode(), msg.taskId(), "REPORT");
+        retryCoordinator.recordClientError(httpEx.statusCode(), msg.taskId(), "REPORT");
       }
     } catch (Exception reportEx) {
       // 传输层 / 其它错误:orchestrator lease 超时回退重派,记 error 给运维查。
@@ -485,247 +477,6 @@ public class TaskDispatcher {
     }
   }
 
-  /**
-   * P1-2:CLAIM 重试 + fail-fast 分类。
-   *
-   * <ul>
-   *   <li>401/403 → fail-fast,标记 dispatcher fatal(后续 onMessage 拒收),log ERROR;返回 false
-   *   <li>409 → peer 已 claim(正常竞争),log INFO,返回 false(不 report)
-   *   <li>其它 4xx → 客户端构造错误(非鉴权),log WARN,返回 false(重试无益)
-   *   <li>5xx / 传输错误 → 指数退避重试 {@link BatchPlatformClientConfig#getClaimMax5xxRetries()} 次,
-   *       仍失败则放弃(orchestrator 自然会因 lease 超时重派)
-   * </ul>
-   *
-   * @return CLAIM 结果;成功时保留平台返回的生效配置，供 renew/report 回传 invocation fence
-   */
-  ClaimResult claimWithRetry(TaskDispatchMessage msg, String idemKey, Map<String, Object> body) {
-    int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
-    long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
-    int attempt = 0;
-    while (true) {
-      try {
-        PlatformHttpClient.TaskClaimResponse response =
-            httpClient.claim(msg.taskId(), idemKey, body);
-        resetClientErrorStreak();
-        return new ClaimResult(
-            true, response == null ? new PlatformHttpClient.TaskClaimResponse(null) : response);
-      } catch (PlatformHttpException httpEx) {
-        if (httpEx.isAuthError()) {
-          // 鉴权失败:apiKey 配错 / 已 revoke → 重试无益,fail-fast 让运维介入(K8s liveness probe 拉起)
-          fatal.set(true);
-          log.error(
-              "CLAIM auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
-                  + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
-              httpEx.statusCode(),
-              msg.taskId());
-          return ClaimResult.notClaimed();
-        }
-        if (httpEx.isConflict()) {
-          // 409:peer worker 已 claim,正常竞争,不 report(orchestrator 已 owned by peer)
-          log.info("CLAIM 409 for taskId={} (taken by peer), skipping", msg.taskId());
-          return ClaimResult.notClaimed();
-        }
-        if (httpEx.isServerError()) {
-          // 5xx:平台侧问题,指数退避重试。耗尽场景在平台抖动时会同时被 N 个 worker 命中,走 throttledLog 防刷屏。
-          if (attempt >= maxRetries) {
-            throttledLog.warn(
-                "claim_5xx_exhausted",
-                "CLAIM 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
-                    + "(orchestrator will redispatch on lease timeout)",
-                httpEx.statusCode(),
-                msg.taskId(),
-                maxRetries);
-            return ClaimResult.notClaimed();
-          }
-          long delayMs =
-              backoffWithJitter(baseDelayMs, attempt); // 200 / 400 / 800 ms ... + 0-10% jitter
-          log.info(
-              "CLAIM 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
-              httpEx.statusCode(),
-              msg.taskId(),
-              attempt + 1,
-              delayMs);
-          if (!sleepInterruptible(delayMs)) return ClaimResult.notClaimed();
-          attempt++;
-          continue;
-        }
-        // 其它 4xx(400 / 404 / 422 ...):客户端构造问题,重试无益。SDK/合约不匹配场景下每条 dispatch
-        // 都会触发,走 throttledLog 节流(同时 recordClientError 仍正常计数,到阈值会 fatal)。
-        throttledLog.warn(
-            "claim_client_error_" + httpEx.statusCode(),
-            "CLAIM client error (HTTP {}) for taskId={}, giving up: {}",
-            httpEx.statusCode(),
-            msg.taskId(),
-            httpEx.getMessage());
-        recordClientError(httpEx.statusCode(), msg.taskId(), "CLAIM");
-        return ClaimResult.notClaimed();
-      } catch (IOException ioEx) {
-        // 传输层错误(socket / read timeout / 中断包装)— 当 5xx 一样退避重试。网络故障同样会 N worker
-        // 同时刷屏,走 throttledLog 节流。
-        if (attempt >= maxRetries) {
-          throttledLog.warn(
-              "claim_transport_exhausted",
-              "CLAIM transport error for taskId={} exhausted {} retries, giving up: {}",
-              msg.taskId(),
-              maxRetries,
-              ioEx.getMessage());
-          return ClaimResult.notClaimed();
-        }
-        long delayMs = backoffWithJitter(baseDelayMs, attempt);
-        log.info(
-            "CLAIM transport error for taskId={} attempt={} retry in {}ms: {}",
-            msg.taskId(),
-            attempt + 1,
-            delayMs,
-            ioEx.getMessage());
-        if (!sleepInterruptible(delayMs)) return ClaimResult.notClaimed();
-        attempt++;
-      }
-    }
-  }
-
-  record ClaimResult(boolean claimed, PlatformHttpClient.TaskClaimResponse response) {
-    static ClaimResult notClaimed() {
-      return new ClaimResult(false, new PlatformHttpClient.TaskClaimResponse(null));
-    }
-  }
-
-  /**
-   * REPORT 重试 + 分类(复用 CLAIM 的同一套 5xx 指数退避配置 {@link
-   * BatchPlatformClientConfig#getClaimMax5xxRetries()} / {@link
-   * BatchPlatformClientConfig#getClaimRetryBaseDelay()}):
-   *
-   * <ul>
-   *   <li>2xx → 正常返回
-   *   <li>401/403 → 标记 dispatcher fatal,直接抛出(重试无益,等运维介入)
-   *   <li>其它 4xx(含 409)→ 不重试,直接抛出(交由调用方 catch 分类计数 / 记 log)
-   *   <li>5xx / 传输错误 → 指数退避重试 {@code maxRetries} 次,耗尽后抛出最后一次异常
-   * </ul>
-   *
-   * <p>契约见 {@code docs/api/sdk-contract-fixtures/09-report-5xx-retry-backoff.json}:5xx 必须指数退避
-   * (200/400/800ms),不能定长、不能无限重试、不能阻塞心跳调度。退避 sleep 被打断时抛出 {@link IOException} 停止重试。
-   */
-  void reportWithRetry(Long taskId, String idemKey, Map<String, Object> body) throws IOException {
-    int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
-    long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
-    int attempt = 0;
-    while (true) {
-      try {
-        httpClient.report(taskId, idemKey, body);
-        return;
-      } catch (PlatformHttpException httpEx) {
-        if (httpEx.isAuthError()) {
-          fatal.set(true);
-          log.error(
-              "REPORT auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
-                  + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
-              httpEx.statusCode(),
-              taskId);
-          throw httpEx;
-        }
-        if (!httpEx.isServerError()) {
-          // 其它 4xx(含 409):客户端构造问题 / 已被处理,重试无益,交回调用方分类。
-          throw httpEx;
-        }
-        if (attempt >= maxRetries) {
-          throttledLog.warn(
-              "report_5xx_exhausted",
-              "REPORT 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
-                  + "(orchestrator will reclaim on lease timeout)",
-              httpEx.statusCode(),
-              taskId,
-              maxRetries);
-          throw httpEx;
-        }
-        long delayMs = backoffWithJitter(baseDelayMs, attempt); // 200 / 400 / 800 ms ... + jitter
-        log.info(
-            "REPORT 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
-            httpEx.statusCode(),
-            taskId,
-            attempt + 1,
-            delayMs);
-        if (!sleepInterruptible(delayMs)) {
-          throw new IOException("report retry interrupted for taskId=" + taskId);
-        }
-        attempt++;
-      } catch (IOException ioEx) {
-        if (attempt >= maxRetries) {
-          throttledLog.warn(
-              "report_transport_exhausted",
-              "REPORT transport error for taskId={} exhausted {} retries, giving up: {}",
-              taskId,
-              maxRetries,
-              ioEx.getMessage());
-          throw ioEx;
-        }
-        long delayMs = backoffWithJitter(baseDelayMs, attempt);
-        log.info(
-            "REPORT transport error for taskId={} attempt={} retry in {}ms: {}",
-            taskId,
-            attempt + 1,
-            delayMs,
-            ioEx.getMessage());
-        if (!sleepInterruptible(delayMs)) {
-          throw new IOException("report retry interrupted for taskId=" + taskId, ioEx);
-        }
-        attempt++;
-      }
-    }
-  }
-
-  /**
-   * P7-2:记一次(非鉴权、非 409)4xx 客户端错误。连续达阈值 → fatal。{@code op} 仅用于日志(CLAIM / REPORT)。 阈值 ≤ 0
-   * 时关闭(只计数不触发)。
-   */
-  private void recordClientError(int statusCode, long taskId, String op) {
-    int threshold = config.getClientErrorFailFastThreshold();
-    int count = consecutiveClientErrors.incrementAndGet();
-    if (threshold > 0 && count >= threshold && fatal.compareAndSet(false, true)) {
-      log.error(
-          "{} client error (HTTP {}) for taskId={} reached {} consecutive 4xx — marking dispatcher"
-              + " FATAL; likely SDK/contract mismatch, SDK will reject subsequent dispatches and"
-              + " report unhealthy for K8s restart",
-          op,
-          statusCode,
-          taskId,
-          count);
-    }
-  }
-
-  /** P7-2:一次成功的 CLAIM / REPORT 归零连续 4xx 计数。 */
-  private void resetClientErrorStreak() {
-    consecutiveClientErrors.set(0);
-  }
-
-  /**
-   * 指数退避 + 0-10% jitter:base * 2^attempt + rand[0, exp/10)。
-   *
-   * <p>±10% jitter 防 N 个 worker 同步雪崩 retry(N 个 worker 同时收 5xx 后,纯指数退避会让它们 同步在 200/400/800ms
-   * 后再次撞墙)。见 wire-protocol §C / TOP #10。
-   *
-   * <p>包内可见:单测断言 jitter 边界。
-   */
-  static long backoffWithJitter(long baseDelayMs, int attempt) {
-    if (baseDelayMs <= 0L) return 0L;
-    long safeAttempt = Math.min(attempt, 30); // 防 shift overflow
-    long exponentialMs = baseDelayMs << safeAttempt;
-    long jitterCeilExclusive = Math.max(1L, exponentialMs / 10L);
-    long jitterMs = ThreadLocalRandom.current().nextLong(0L, jitterCeilExclusive);
-    return exponentialMs + jitterMs;
-  }
-
-  /** 可被 interrupt 打断的 sleep;true=正常 sleep 完,false=被打断(应放弃重试)。 */
-  private static boolean sleepInterruptible(long ms) {
-    if (ms <= 0) return true;
-    try {
-      Thread.sleep(ms);
-      return true;
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      return false;
-    }
-  }
-
   private void reportFailure(TaskDispatchMessage msg, String message, Throwable error) {
     String idem = BatchPlatformClient.newIdempotencyKey();
     try {
@@ -743,7 +494,7 @@ public class TaskDispatcher {
       // result_summary 是 JSONB:发 {code,message} 对象(裸串 → invalid input syntax for type json → 500)。
       // 原异常类名保留在 resultSummary.message 里维持可诊断性(平台读 resultSummary;errorMessage 字段是红线,禁发)。
       body.put("resultSummary", resultSummaryJson(code, diagnosticMessage(message, error)));
-      reportWithRetry(msg.taskId(), idem, body);
+      retryCoordinator.reportWithRetry(msg.taskId(), idem, body);
     } catch (Exception ex) {
       log.error("reportFailure failed for taskId={}: {}", msg.taskId(), ex.getMessage());
     }
@@ -887,12 +638,12 @@ public class TaskDispatcher {
 
   /** 暴露给测试 + 调用方:fatal 状态(401/403 触发,不可恢复)。 */
   public boolean isFatal() {
-    return fatal.get();
+    return retryCoordinator.isFatal();
   }
 
   /** P7-2:当前连续(非鉴权、非 409)4xx 客户端错误计数,暴露给测试断言。 */
   int consecutiveClientErrors() {
-    return consecutiveClientErrors.get();
+    return retryCoordinator.consecutiveClientErrors();
   }
 
   private static ThreadFactory namedThreadFactory(String prefix) {
