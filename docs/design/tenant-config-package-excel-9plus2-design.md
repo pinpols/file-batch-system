@@ -103,7 +103,7 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 |---|---|---|
 | `填写说明` | 面向用户的填写入口说明 | 说明 9+2 范围、导入流程、可选 sheet、注意事项 |
 | `依赖说明` | 单独说明跨 sheet / 数据库依赖关系 | 新增；按依赖来源、字段、目标、是否允许库中已有、错误示例组织 |
-| `字段说明` | 每个字段的必填、类型、枚举、示例、填写示例、关联关系 | 第一列按 sheet 合并单元格；末尾新增“填写示例”和“关联关系说明”列 |
+| `字段说明` | 每个字段的必填、填写层级、类型、枚举、示例、填写示例 | 第一列按 sheet 合并单元格；用“填写层级”区分必填/常用/高级；跨 sheet 关联关系放到 `依赖说明` |
 | `四类Worker示例` | 展示 IMPORT / EXPORT / PROCESS / DISPATCH 的典型配置组合 | 新增；仅说明用途，不参与导入解析 |
 | `校验` | preview 时输出错误 | 保持现有错误输出能力，建议增加错误级别和关联目标 |
 
@@ -147,9 +147,9 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 
 1. 第一列 `所属 Sheet` 按连续 sheet 分组纵向合并单元格。
 2. 合并单元格应垂直居中、顶部加粗边框，用于区分 sheet 分段。
-3. 末尾新增两列：`填写示例`、`关联关系说明`。
+3. 新增 `填写层级` 列：`必填 / 常用 / 高级 / 可选`，其中 `file_template_config` 的低频安全、压缩、加密、固定宽度、导出专用字段标为高级。
 4. `示例` 用短值展示格式，`填写示例` 用贴近真实业务的完整值或 JSON 片段。
-5. 非关联字段的 `关联关系说明` 留空；关联字段写清来源和目标。
+5. 跨 sheet 引用关系不再挤进字段说明，统一放到 `依赖说明` sheet。
 6. **字段说明中的枚举值必须以真实 validator / enum 为准**（详见 §当前模板审计与体验优化）。CI 单测必须断言"字段说明 sheet 行内容 == 后端 enum 集合"，否则文档漂移即编译挂。
 7. **environment-specific 字段加 `[env-specific]` 前缀**（参见 §Environment-specific 字段标识表）。
 
@@ -160,21 +160,22 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 | 1 | `所属 Sheet` |
 | 2 | `列名` |
 | 3 | `必填` |
-| 4 | `类型` |
-| 5 | `可选值` |
-| 6 | `说明` |
-| 7 | `示例` |
-| 8 | `填写示例` |
-| 9 | `关联关系说明` |
+| 4 | `填写层级` |
+| 5 | `类型` |
+| 6 | `可选值` |
+| 7 | `说明` |
+| 8 | `示例` |
+| 9 | `适用 Worker` |
+| 10 | `填写示例` |
 
 示例：
 
-| 所属 Sheet | 列名 | 必填 | 类型 | 可选值 | 说明 | 示例 | 填写示例 | 关联关系说明 |
-|---|---|---|---|---|---|---|---|---|
-| `job_definition` | `queue_code` | 选填 | 字符串 |  | 资源队列编码 | `import_queue` | `import_heavy_queue` | 引用 `resource_queue.queue_code`；本包或库中必须存在 |
-| `job_definition` | `default_params` | 选填 | JSON |  | 默认参数 | `{"templateCode":"import_customer_v1"}` | `{"templateCode":"import_customer_v1","bizDate":"${bizDate}"}` | `templateCode` 引用 `file_template_config.template_code` |
-| `file_template_config` | `query_param_schema` | 选填 | JSON |  | 模板运行参数 | `{...}` | `{"jdbcMappedImport":{"schema":"biz","table":"customer_account"}}` | Import 使用 `jdbcMappedImport.table`；Export 可使用 `jdbcMappedExport.*` |
-| `file_template_config` | `default_query_sql` | 选填 | SQL | SELECT | 导出查询 SQL | `select id,...` | `select id, tenant_id, settlement_no from biz.settlement_detail where tenant_id = :tenantId order by id asc` | Export SQL；仅允许安全 SELECT |
+| 所属 Sheet | 列名 | 必填 | 填写层级 | 类型 | 可选值 | 说明 | 示例 | 适用 Worker | 填写示例 |
+|---|---|---|---|---|---|---|---|---|---|
+| `job_definition` | `queue_code` | 选填 | 可选 | 字符串 |  | 资源队列编码 | `import_queue` | ALL | `import_heavy_queue` |
+| `job_definition` | `default_params` | 选填 | 可选 | JSON |  | 默认参数 | `{"templateCode":"import_customer_v1"}` | IMPORT/EXPORT | `{"templateCode":"import_customer_v1","bizDate":"${bizDate}"}` |
+| `file_template_config` | `query_param_schema` | 选填 | 常用 | JSON |  | 模板运行参数 | `{...}` | IMPORT/EXPORT | `{"jdbcMappedImport":{"schema":"biz","table":"customer_account"}}` |
+| `file_template_config` | `default_query_sql` | 选填 | 高级 | SQL | SELECT | 导出查询 SQL | `select id,...` | EXPORT | `select id, tenant_id, settlement_no from biz.settlement_detail where tenant_id = :tenantId order by id asc` |
 
 ## `四类Worker示例` Sheet
 

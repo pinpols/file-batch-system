@@ -856,7 +856,7 @@ final class ConfigPackageSheetSpecs {
         Map.entry("quote_char", optionalColumn("引用符。", GUIDE_STR, "\"")),
         Map.entry("escape_char", optionalColumn("转义符。", GUIDE_STR, "\\")),
         Map.entry("record_length", optionalColumn("定长文件记录长度。", GUIDE_INT, "0")),
-        Map.entry("header_rows", optionalColumn("导入跳过头部行数。", GUIDE_INT, "1")),
+        Map.entry("header_rows", optionalColumn("导入跳过头部行数；留空默认 0，CSV 首行为表头时填 1。", GUIDE_INT, "0")),
         Map.entry("footer_rows", optionalColumn("导入跳过尾部行数。", GUIDE_INT, "0")),
         Map.entry("header_template", optionalColumn("导出头部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
         Map.entry("trailer_template", optionalColumn("导出尾部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
@@ -913,7 +913,7 @@ final class ConfigPackageSheetSpecs {
             optionalColumn("错误行是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(
             "log_masking_enabled",
-            optionalColumn("日志是否脱敏。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+            optionalColumn("日志是否脱敏；留空默认 FALSE。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(
             "content_encryption_enabled",
             optionalColumn("内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),

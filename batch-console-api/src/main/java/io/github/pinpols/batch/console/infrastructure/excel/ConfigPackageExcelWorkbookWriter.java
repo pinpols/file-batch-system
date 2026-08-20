@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -40,6 +41,31 @@ import org.springframework.context.i18n.LocaleContextHolder;
 public class ConfigPackageExcelWorkbookWriter {
 
   private static final String EMPTY = "";
+  private static final String GUIDE_LEVEL_REQUIRED = "必填";
+  private static final String GUIDE_LEVEL_COMMON = "常用";
+  private static final String GUIDE_LEVEL_ADVANCED = "高级";
+  private static final String GUIDE_LEVEL_OPTIONAL = "可选";
+
+  private static final Set<String> FILE_TEMPLATE_COMMON_OPTIONAL_COLUMNS = Set.of(
+      COL_TENANT_ID,
+      ConfigPackageExcelSchema.COL_BIZ_TYPE,
+      ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+      ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+      ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
+      ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
+      ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
+      ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+      ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
+      ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
+      ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET,
+      ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA,
+      ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED,
+      ConfigPackageExcelSchema.FileTemplate.COL_PAGE_SIZE,
+      ConfigPackageExcelSchema.FileTemplate.COL_FETCH_SIZE,
+      ConfigPackageExcelSchema.FileTemplate.COL_CHUNK_SIZE,
+      ConfigPackageExcelSchema.COL_ENABLED,
+      ConfigPackageExcelSchema.COL_VERSION,
+      ConfigPackageExcelSchema.COL_DESCRIPTION);
 
   /** 兼容转发：dropdown 数组权威源已移到 {@link ConfigPackageSheetSpecs}，测试仍引用 writer 入口。 */
   static final String[] JOB_TYPE_DROPDOWN = ConfigPackageSheetSpecs.JOB_TYPE_DROPDOWN;
@@ -322,6 +348,7 @@ public class ConfigPackageExcelWorkbookWriter {
         row.setHeightInPoints(18);
         writeGuideRow(
             row,
+            spec.name(),
             ci == 0 ? spec.name() : EMPTY,
             colName,
             spec.guides().get(colName),
@@ -342,12 +369,13 @@ public class ConfigPackageExcelWorkbookWriter {
     sheet.setColumnWidth(0, 6500); // 所属 Sheet
     sheet.setColumnWidth(1, 7000); // 列名
     sheet.setColumnWidth(2, 3500); // 必填
-    sheet.setColumnWidth(3, 3500); // 类型
-    sheet.setColumnWidth(4, 14000); // 可选值
-    sheet.setColumnWidth(5, 18000); // 说明
-    sheet.setColumnWidth(6, 7000); // 示例
-    sheet.setColumnWidth(7, 8000); // 适用 Worker
-    sheet.setColumnWidth(8, 20000); // 填写示例（完整可抄片段）
+    sheet.setColumnWidth(3, 3500); // 填写层级
+    sheet.setColumnWidth(4, 3500); // 类型
+    sheet.setColumnWidth(5, 14000); // 可选值
+    sheet.setColumnWidth(6, 18000); // 说明
+    sheet.setColumnWidth(7, 7000); // 示例
+    sheet.setColumnWidth(8, 8000); // 适用 Worker
+    sheet.setColumnWidth(9, 20000); // 填写示例（完整可抄片段）
   }
 
   private GuideStyles buildGuideStyles(Workbook wb) {
@@ -364,7 +392,8 @@ public class ConfigPackageExcelWorkbookWriter {
   private static void writeGuideHeader(Sheet sheet, CellStyle headStyle) {
     Row header = sheet.createRow(0);
     header.setHeightInPoints(22);
-    String[] headers = {"所属 Sheet", "列名", "必填", "类型", "可选值", "说明", "示例", "适用 Worker", "填写示例"};
+    String[] headers = {"所属 Sheet", "列名", "必填", "填写层级", "类型", "可选值", "说明", "示例", "适用 Worker", "填写示例"
+    };
     for (int i = 0; i < headers.length; i++) {
       Cell c = header.createCell(i);
       c.setCellValue(headers[i]);
@@ -374,6 +403,7 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private void writeGuideRow(
       Row row,
+      String sheetName,
       String sectionLabel,
       String colName,
       ConsoleExcelStyles.ColumnGuide guide,
@@ -385,15 +415,28 @@ public class ConfigPackageExcelWorkbookWriter {
     writeGuideCell(row, 1, colName, styles.body());
     writeGuideCell(
         row, 2, isRequired ? "★ 必填" : "选填", isRequired ? styles.required() : styles.optional());
+    writeGuideCell(row, 3, guideLevelFor(sheetName, colName, isRequired), styles.body());
     writeGuideCell(
-        row, 3, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
-    writeGuideCell(row, 4, joinAllowedValues(guide), styles.body());
+        row, 4, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
+    writeGuideCell(row, 5, joinAllowedValues(guide), styles.body());
     writeGuideCell(
-        row, 5, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
+        row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
     writeGuideCell(
-        row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
-    writeGuideCell(row, 7, appliesTo == null ? EMPTY : appliesTo, styles.body());
-    writeGuideCell(row, 8, fillExample == null ? EMPTY : fillExample, styles.body());
+        row, 7, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
+    writeGuideCell(row, 8, appliesTo == null ? EMPTY : appliesTo, styles.body());
+    writeGuideCell(row, 9, fillExample == null ? EMPTY : fillExample, styles.body());
+  }
+
+  private static String guideLevelFor(String sheetName, String colName, boolean required) {
+    if (required) {
+      return GUIDE_LEVEL_REQUIRED;
+    }
+    if (!FILE_TEMPLATE_SHEET.equals(sheetName)) {
+      return GUIDE_LEVEL_OPTIONAL;
+    }
+    return FILE_TEMPLATE_COMMON_OPTIONAL_COLUMNS.contains(colName)
+        ? GUIDE_LEVEL_COMMON
+        : GUIDE_LEVEL_ADVANCED;
   }
 
   /**
