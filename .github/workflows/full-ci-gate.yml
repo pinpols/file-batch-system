@@ -381,14 +381,8 @@ jobs:
 
       - name: Install upstream modules to ~/.m2 (skip tests)
         shell: bash
-        # `test-compile` 不够:e2e-tests 跑 surefire 时 Maven 从 ~/.m2 解析 sibling
-        # module(batch-worker/dispatch / batch-common:tests 等)的 jar/test-jar,
-        # 必须 install 到本地仓库。
-        # `-pl !batch-e2e-tests`:排除 e2e-tests 自身(它没有 surefire 跳过后的 jar
-        # artifact,直接 install 会因「packaging plugin did not assign a file」失败)。
-        # `-DskipTests` 跳上游测试(unit-it job 已跑过),只取 jar/test-jar。
-        run: |
-          ./mvnw install -DskipTests -pl '!batch-e2e-tests' -B
+        # 共享脚本保留原 reactor 范围，并对 Maven Central 临时 5xx 做有限重试。
+        run: bash scripts/ci/install-upstream-modules.sh
 
       - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
         shell: bash

@@ -126,6 +126,17 @@ e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「s
 ```bash
 bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
 ```
+
+## `install-upstream-modules.sh`
+
+将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`。它保持 `batch-e2e-tests`
+排除和 `-DskipTests` 约束不变，并对 Maven Central 的临时 5xx / 传输失败使用 Maven
+强制更新、传输层重试和最多三轮退避重试，避免依赖下载瞬时失败被误报为 E2E 业务失败。
+
+```bash
+bash scripts/ci/install-upstream-modules.sh
+```
+
 ## `check-java-readability.py`
 
 检查生产 Java 主代码的可读性边界：禁止使用隐式 `var`，并要求普通 Spring

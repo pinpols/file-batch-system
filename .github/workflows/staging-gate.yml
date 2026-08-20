@@ -104,8 +104,8 @@ jobs:
 
       - name: Install upstream modules to ~/.m2 (skip tests)
         shell: bash
-        run: |
-          ./mvnw install -DskipTests -pl '!batch-e2e-tests' -B
+        # 与 full-ci-gate 共用，避免依赖仓库临时 5xx 误报 staging/E2E 失败。
+        run: bash scripts/ci/install-upstream-modules.sh
 
       - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
         shell: bash
