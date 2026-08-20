@@ -2,12 +2,9 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import io.github.pinpols.batch.common.enums.DeadLetterErrorClass;
 import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
-import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RetryPolicyType;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
-import io.github.pinpols.batch.common.enums.RunMode;
-import io.github.pinpols.batch.common.enums.StepInstanceStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
@@ -16,24 +13,18 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity;
-import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.RetryScheduleQuery;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import java.time.Instant;
@@ -104,10 +95,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private final DeadLetterTaskMapper deadLetterTaskMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final JobTaskMapper jobTaskMapper;
-  private final JobPartitionMapper jobPartitionMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final JobStepInstanceMapper jobStepInstanceMapper;
-  private final TaskDispatchOutboxService taskDispatchOutboxService;
+  private final RetryRequeueCoordinator retryRequeueCoordinator;
   private final BatchOrchestratorGovernanceProperties governance;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final PlatformTransactionManager transactionManager;
@@ -208,8 +196,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         governance.retry().getBatchSize()));
     for (RetryScheduleEntity retrySchedule : dueRetries) {
       try {
-        inNewTransaction(() -> requeueOneRetry(retrySchedule));
-      } catch (TransientConflictException conflict) {
+        inNewTransaction(() -> retryRequeueCoordinator.requeueRetry(retrySchedule));
+      } catch (RetryRequeueCoordinator.TransientConflictException conflict) {
         log.warn(
             "retry dispatch version conflict, will retry later: retryId={}, error={}",
             retrySchedule.getId(),
@@ -241,28 +229,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         }
       }
     }
-  }
-
-  /**
-   * R2-P0-2：单条 retry 的独立事务（REQUIRES_NEW）。
-   *
-   * <p>由调用方以独立事务执行。markRunning + requeuePartition + markSuccess 同事务，任一失败整体回滚。
-   */
-  private void requeueOneRetry(RetryScheduleEntity retrySchedule) {
-    if (retryScheduleMapper.markRunning(
-            retrySchedule.getTenantId(),
-            retrySchedule.getId(),
-            RetryScheduleStatus.WAITING.code(),
-            RetryScheduleStatus.RUNNING.code())
-        <= 0) {
-      return; // 另一实例已 claim
-    }
-    requeuePartition(retrySchedule);
-    retryScheduleMapper.markSuccess(
-        retrySchedule.getTenantId(),
-        retrySchedule.getId(),
-        RetryScheduleStatus.RUNNING.code(),
-        RetryScheduleStatus.SUCCESS.code());
   }
 
   /** R2-P0-2：非 transient 失败的独立事务标记，避免与外层扫描状态混合。 */
@@ -337,7 +303,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   @Override
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void retryPartition(String tenantId, Long partitionId, String eventKey) {
-    requeuePartition(tenantId, partitionId, eventKey);
+    retryRequeueCoordinator.requeuePartition(tenantId, partitionId, eventKey);
   }
 
   @Override
@@ -354,10 +320,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_not_terminal", status);
     }
     if (task.getJobPartitionId() != null) {
-      requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
+      retryRequeueCoordinator.requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
       return;
     }
-    requeueTaskWithoutPartition(tenantId, task, eventKey);
+    retryRequeueCoordinator.requeueTaskWithoutPartition(tenantId, task, eventKey);
   }
 
   @Override
@@ -376,10 +342,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           "reclaim only allowed from RUNNING or terminal state, current status: " + status);
     }
     if (task.getJobPartitionId() != null) {
-      requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
+      retryRequeueCoordinator.requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
       return;
     }
-    requeueTaskWithoutPartition(tenantId, task, eventKey);
+    retryRequeueCoordinator.requeueTaskWithoutPartition(tenantId, task, eventKey);
   }
 
   @Override
@@ -470,7 +436,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
               "error.dead_letter.unsupported_source_type",
               deadLetterTask.getSourceType());
         }
-        requeuePartition(
+        retryRequeueCoordinator.requeuePartition(
             tenantId, deadLetterTask.getSourceId(), tenantId + ":dead-letter:" + deadLetterTaskId);
         deadLetterTaskMapper.markReplaySuccess(
             tenantId,
@@ -517,94 +483,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         BatchMdc.remove(StructuredLogField.TENANT_ID);
       }
     }
-  }
-
-  private void requeuePartition(RetryScheduleEntity retrySchedule) {
-    requeuePartition(
-        retrySchedule.getTenantId(),
-        retrySchedule.getRelatedId(),
-        retrySchedule.getTenantId() + ":retry:" + retrySchedule.getId());
-  }
-
-  private void requeuePartition(String tenantId, Long partitionId, String eventKey) {
-    JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, partitionId);
-    if (partition == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_not_found");
-    }
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectById(tenantId, partition.getJobInstanceId());
-    if (jobInstance == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_instance_not_found");
-    }
-    String traceId = jobInstance.getTraceId();
-    boolean injectMdc = traceId != null && !traceId.isBlank();
-    if (injectMdc) {
-      BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
-      BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-      BatchMdc.put(
-          StructuredLogField.JOB_INSTANCE_ID,
-          jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-    }
-    try {
-      List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-          new JobTaskQuery(tenantId, jobInstance.getId(), partition.getId(), null, null));
-      JobTaskEntity task = tasks.stream()
-          .sorted((left, right) -> Integer.compare(
-              left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
-              right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
-          .findFirst()
-          .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.task.retry_not_found"));
-
-      JobStepInstanceEntity stepInstance =
-          jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
-      if (stepInstance != null) {
-        int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-        jobStepInstanceMapper.resetForRetryByJobTaskId(
-            tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
-      }
-      if (jobPartitionMapper.resetForDispatch(
-              tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion())
-          <= 0) {
-        throw new TransientConflictException(
-            "partition version conflict, requeue aborted: partitionId=" + partition.getId());
-      }
-      if (jobTaskMapper.resetForRetry(
-              tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion())
-          <= 0) {
-        throw new TransientConflictException(
-            "task version conflict, requeue aborted: taskId=" + task.getId());
-      }
-      taskDispatchOutboxService.writeDispatchEvent(
-          jobInstance, task, partition, jobInstance.getTraceId(), eventKey, RunMode.RETRY);
-    } finally {
-      if (injectMdc) {
-        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-        BatchMdc.remove(StructuredLogField.TRACE_ID);
-        BatchMdc.remove(StructuredLogField.TENANT_ID);
-      }
-    }
-  }
-
-  private void requeueTaskWithoutPartition(String tenantId, JobTaskEntity task, String eventKey) {
-    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
-    if (jobInstance == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_instance_not_found");
-    }
-    JobStepInstanceEntity stepInstance =
-        jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
-    if (stepInstance != null) {
-      int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-      jobStepInstanceMapper.resetForRetryByJobTaskId(
-          tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
-    }
-    if (jobTaskMapper.resetForRetry(
-            tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion())
-        <= 0) {
-      throw new TransientConflictException(
-          "task version conflict, requeue aborted: taskId=" + task.getId());
-    }
-    taskDispatchOutboxService.writeDispatchEvent(
-        jobInstance, task, null, jobInstance.getTraceId(), eventKey, RunMode.RETRY);
   }
 
   private RetryPolicyPlan resolveRetryPolicy(Long jobDefinitionId) {
@@ -804,14 +682,4 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {}
-
-  /**
-   * 乐观锁 CAS 失败时抛出，表示瞬态版本冲突，可在下次调度周期重试。 与 {@link IllegalStateException}（资源不存在等永久性错误）区分，避免
-   * retry_schedule 被错误地置为 FAILED。
-   */
-  private static final class TransientConflictException extends RuntimeException {
-    TransientConflictException(String message) {
-      super(message);
-    }
-  }
 }
