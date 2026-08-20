@@ -39,11 +39,11 @@
 | 类 | 行数 | 初步裁定 |
 |---|---:|---|
 | `ConfigPackageSheetSpecs` | 1074 | 声明式规格注册，行数高但职责单一；默认不拆 |
-| `PreprocessStep` | 1042 | 优先按输入探测、预处理和 checkpoint 协作拆分 |
+| `PreprocessStep` | 1042 | 已提取输入对象读取与分段职责到 `ImportPreprocessObjectSource`（PR #947） |
 | `DefaultTaskOutcomeService` | 921 | 优先按状态推进、结果持久化和 DAG 后处理拆分 |
-| Java SDK `TaskDispatcher` | 903 | 优先按 claim、调度、withhold/背压和生命周期拆分 |
+| Java SDK `TaskDispatcher` | 903 | 已提取 CLAIM/REPORT 重试、4xx 计数和退避职责到 `TaskDispatcherRetryCoordinator`（PR #948） |
 | `AbstractExportFormat` | 832 | 按格式无关流程与格式策略拆分 |
-| `DefaultRetryGovernanceService` | 811 | 按查询/决策、重放执行和审计拆分 |
+| `DefaultRetryGovernanceService` | 811 | 已提取重试重排队与 dispatch outbox 协作到 `RetryRequeueCoordinator`（本批次） |
 | `AbstractTaskConsumer` | 810 | 按消费循环、执行上下文和 report/lease 协作拆分 |
 | `DefaultConsoleWorkflowDefinitionApplicationService` | 755 | 按读取投影、写入编排和校验拆分 |
 
@@ -156,6 +156,13 @@
 - 主类保留用例编排和关键顺序，纯判断下沉 Policy，载荷组装下沉 Builder/Assembler，外部副作用下沉窄协作者。
 - 一个 PR 只提取一个职责，优先 package-private/final 协作者，不为了“分层完整”新增空接口。
 - 先用 characterization test 锁定旧行为，再移动代码；不要同时改算法、SQL 或状态枚举。
+
+**阶段 4 已完成批次记录**：
+
+- `DefaultTaskOutcomeService`：已完成状态推进、结果持久化和 DAG 后处理拆分（PR #946）。
+- `PreprocessStep`：已完成对象读取、大小校验、全量/范围分段职责拆分（PR #947）。
+- Java SDK `TaskDispatcher`：已完成 CLAIM/REPORT 重试与退避职责拆分（PR #948）。
+- `DefaultRetryGovernanceService`：本批次仅提取重排队协调，不改变重试策略、死信状态机或事务创建边界；验证通过后提交独立 PR。
 - `ConfigPackageSheetSpecs` 等声明式规格文件除非出现独立变化原因，否则不进入本阶段。
 
 **验收**：主流程可在一个屏幕内读出阶段顺序；生产协作者全部通过构造器注入，禁止在主服务中手工 `new` 业务协作者（仅历史纯单测可保留明确标注的兼容构造器）；复杂协作者必须有中文类级注释，说明业务原因、事务/锁/副作用边界，而不是只描述代码动作；原测试和新增 characterization test 全绿；状态机、事务和性能基线不退化。

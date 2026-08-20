@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultRetryGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RetryRequeueCoordinator;
 import io.github.pinpols.batch.orchestrator.config.RetryGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
@@ -63,15 +64,20 @@ class DeadLetterAutoRetryTest {
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
 
+    RetryRequeueCoordinator retryRequeueCoordinator = new RetryRequeueCoordinator(
+        retryScheduleMapper,
+        jobTaskMapper,
+        jobPartitionMapper,
+        jobInstanceMapper,
+        jobStepInstanceMapper,
+        taskDispatchOutboxService);
+
     service = new DefaultRetryGovernanceService(
         retryScheduleMapper,
         deadLetterTaskMapper,
         jobDefinitionMapper,
         jobTaskMapper,
-        jobPartitionMapper,
-        jobInstanceMapper,
-        jobStepInstanceMapper,
-        taskDispatchOutboxService,
+        retryRequeueCoordinator,
         governance,
         null /* jobExecutionLogMapper: audit 在本测试不覆盖 */,
         transactionManager);
