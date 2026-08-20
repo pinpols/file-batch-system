@@ -25,7 +25,6 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -34,9 +33,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -58,8 +55,6 @@ import org.springframework.stereotype.Component;
 public class PreprocessStep implements ImportStageStep {
 
   private static final String ERROR_CODE_PREPROCESS_INVALID = "IMPORT_PREPROCESS_INVALID";
-  private static final String ERROR_CODE_OBJECT_LOAD_FAILED =
-      "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED";
 
   /**
    * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB， 通过 {@code
@@ -72,11 +67,8 @@ public class PreprocessStep implements ImportStageStep {
 
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
-  // ADR-sim:大文件对象自动加载——内联 content 受 Kafka 消息体上限(~1MB)限制,
-  // 大文件须把对象路径下发、由 worker 直接从 MinIO 拉取(payload 只带 path,不带内容)。
-  private final S3StorageProperties s3StorageProperties;
-  private final BatchObjectStore objectStore;
   private final WorkerImportPayloadProperties payloadProperties;
+  private final ImportPreprocessObjectSource objectSource;
 
   public PreprocessStep(
       PlatformFileRuntimeRepository runtimeRepository,
@@ -104,9 +96,9 @@ public class PreprocessStep implements ImportStageStep {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
-    this.s3StorageProperties = s3StorageProperties;
-    this.objectStore = objectStore;
     this.payloadProperties = payloadProperties;
+    this.objectSource = new ImportPreprocessObjectSource(
+        runtimeRepository, s3StorageProperties, objectStore, payloadProperties);
   }
 
   @Override
@@ -159,7 +151,7 @@ public class PreprocessStep implements ImportStageStep {
       // storage_path(逐字相等)。payload 来自上游消息,storagePath/storageBucket 字段一旦被篡改/伪造即可
       // 指向他租户对象;这里 fail-fast 把"裸信任 payload 直接拉取"收敛成"只拉本租户登记的那个对象"。
       if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
-        assertObjectBelongsToTenant(context, importPayload);
+        objectSource.assertObjectBelongsToTenant(context, importPayload);
       }
 
       // 大文件流式直载:无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件,
@@ -171,8 +163,8 @@ public class PreprocessStep implements ImportStageStep {
               && Texts.hasText(importPayload.storagePath())
               && !Texts.hasText(importPayload.content())
               && !Texts.hasText(importPayload.contentBase64())
-              && canStreamObjectDirect(importPayload, templateConfig))
-          ? objectSizeBytes(importPayload)
+              && ImportPreprocessObjectSource.canStreamObjectDirect(importPayload, templateConfig))
+          ? objectSource.objectSizeBytes(importPayload)
           : -1L;
       if (directStreamObjectBytes >= payloadProperties.getPreprocessSpoolBytes()) {
         // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
@@ -181,21 +173,22 @@ public class PreprocessStep implements ImportStageStep {
         Integer partitionCount = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT));
         Charset directCharset = resolveCharset(importPayload, templateConfigObject);
         // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
-        if (objectStore.supportsRangeRead()
-            && rangeSliceEligible(
+        if (objectSource.supportsRangeRead()
+            && ImportPreprocessObjectSource.rangeSliceEligible(
                 importPayload, templateConfig, partitionNo, partitionCount, directCharset)) {
-          return streamObjectRangeToSpool(
+          return objectSource.streamObjectRangeToSpool(
               context,
               importPayload,
               templateConfig,
               templateConfigObject,
-              new RangeSlice(directCharset, directStreamObjectBytes, partitionNo, partitionCount));
+              new ImportPreprocessObjectSource.RangeSlice(
+                  directCharset, directStreamObjectBytes, partitionNo, partitionCount));
         }
-        return streamObjectToSpoolAndReturn(
+        return objectSource.streamObjectToSpoolAndReturn(
             context, importPayload, templateConfig, templateConfigObject);
       }
 
-      byte[] rawBytes = resolveRawBytes(context, importPayload, templateConfigObject);
+      byte[] rawBytes = objectSource.resolveRawBytes(context, importPayload, templateConfigObject);
       // 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）。
       // 处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，
       // 在此处透明解密后再进入预处理 pipeline。
@@ -244,13 +237,14 @@ public class PreprocessStep implements ImportStageStep {
       byte[] processed,
       Map<String, Object> templateConfig,
       Object templateConfigObject) {
-    String formatType = resolveFileFormatType(importPayload, templateConfig);
+    String formatType =
+        ImportPreprocessObjectSource.resolveFileFormatType(importPayload, templateConfig);
     // 字节级剥离 UTF-8 BOM（Windows Excel "CSV UTF-8" / 部分编辑器自动加 BOM）。只在文本格式做；
     // EXCEL/BINARY 走字节原文，BOM 属于其二进制结构的一部分，不能动。
-    if (!isBinaryImportFormat(formatType)) {
+    if (!ImportPreprocessObjectSource.isBinaryImportFormat(formatType)) {
       processed = EncodingUtils.stripUtf8Bom(processed);
     }
-    if (isBinaryImportFormat(formatType)) {
+    if (ImportPreprocessObjectSource.isBinaryImportFormat(formatType)) {
       attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, processed);
       context.setRawPayload("");
       attrs.remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
@@ -289,272 +283,6 @@ public class PreprocessStep implements ImportStageStep {
     return ImportStageResult.success(stage());
   }
 
-  private static boolean isBinaryImportFormat(String formatType) {
-    if (!Texts.hasText(formatType)) {
-      return false;
-    }
-    String u = formatType.trim().toUpperCase();
-    return "EXCEL".equals(u) || "BINARY".equals(u);
-  }
-
-  private static String resolveFileFormatType(
-      ImportPayload importPayload, Map<String, Object> templateConfig) {
-    if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
-      return importPayload.fileFormatType();
-    }
-    Object v = templateConfig.get("file_format_type");
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return String.valueOf(v);
-    }
-    return null;
-  }
-
-  private byte[] resolveRawBytes(
-      ImportJobContext context, ImportPayload importPayload, Object templateConfigObject) {
-    if (importPayload != null && Texts.hasText(importPayload.contentBase64())) {
-      return Base64.getDecoder().decode(importPayload.contentBase64().trim());
-    }
-    if (importPayload != null && Texts.hasText(importPayload.content())) {
-      Charset cs = resolveCharsetForContentBytes(importPayload, templateConfigObject);
-      return importPayload.content().getBytes(cs);
-    }
-    // ADR-sim 大文件对象自动加载:无内联内容但带 storagePath → 直接从 MinIO 拉对象(扫描器登记的
-    // RECEIVED 大文件 / 大数据由此入库,绕开 Kafka 消息体上限——payload 只带 path 不带内容)。
-    if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
-      return downloadObjectBytes(importPayload);
-    }
-    String raw = context.getRawPayload();
-    return raw == null ? new byte[0] : raw.getBytes(StandardCharsets.UTF_8);
-  }
-
-  /**
-   * 对象拉取前的租户归属校验:payload 携带的 {@code storagePath} 必须逐字命中本租户已登记 file_record (按 {@code tenant_id} +
-   * {@code FILE_ID} 加载)的 {@code storage_path}。 这是比"前缀匹配"更强的约束——只放行平台为本文件登记的那一个对象,杜绝跨租户/任意路径读取。
-   * 校验失败抛 {@link ImportPreprocessException},由 execute 的 catch 转优雅失败(非直接抛出未映射异常)。
-   */
-  private void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
-    Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    Map<String, Object> fileRecord =
-        fileId == null ? Map.of() : runtimeRepository.loadFileRecord(context.getTenantId(), fileId);
-    Object registeredPath = fileRecord.get("storage_path");
-    if (registeredPath == null
-        || !importPayload.storagePath().equals(String.valueOf(registeredPath))) {
-      throw new ImportPreprocessException(
-          "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
-          "import object path not owned by tenant (tenant="
-              + context.getTenantId()
-              + ", path="
-              + importPayload.storagePath()
-              + "); refusing to fetch object not registered to this tenant's file_record");
-    }
-  }
-
-  /**
-   * 从对象存储拉取 import 源对象的原始字节。bucket 取 {@code payload.storageBucket},缺省默认回退 bucket; object 取 {@code
-   * payload.storagePath}。超过 {@code batch.worker.import.max-object-bytes} fail-fast 防 OOM。
-   */
-  private byte[] downloadObjectBytes(ImportPayload importPayload) {
-    String bucket = Texts.hasText(importPayload.storageBucket())
-        ? importPayload.storageBucket()
-        : s3StorageProperties.getBucket();
-    String object = importPayload.storagePath();
-    try (InputStream in = objectStore.get(bucket, object)) {
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      byte[] buf = new byte[64 * 1024];
-      long total = 0;
-      int n;
-      while ((n = in.read(buf)) >= 0) {
-        total += n;
-        if (total > payloadProperties.getMaxObjectBytes()) {
-          throw new ImportPreprocessException(
-              "IMPORT_PREPROCESS_OBJECT_TOO_LARGE",
-              "import object exceeds max-object-bytes="
-                  + payloadProperties.getMaxObjectBytes()
-                  + " (bucket="
-                  + bucket
-                  + ", object="
-                  + object
-                  + "); raise batch.worker.import.max-object-bytes or split the file");
-        }
-        out.write(buf, 0, n);
-      }
-      log.info(
-          "import preprocess loaded object from storage: bucket={}, object={}, bytes={}",
-          bucket,
-          object,
-          total);
-      return out.toByteArray();
-    } catch (ImportPreprocessException ex) {
-      throw ex;
-    } catch (Exception ex) {
-      // 对象缺失 / 拉取失败 → 走 PREPROCESS 优雅失败(execute 的 catch 转 ImportStageResult.failure),
-      // 而非直接抛出未映射异常未捕获异常。
-      throw new ImportPreprocessException(
-          ERROR_CODE_OBJECT_LOAD_FAILED,
-          "failed to load import object from storage (bucket="
-              + bucket
-              + ", object="
-              + object
-              + "): "
-              + ex.getMessage(),
-          ex);
-    }
-  }
-
-  /**
-   * 是否可对 storagePath 对象走「流式直载」(不读进堆):纯文本格式 + 无 compress / encrypt(非 NONE)/ preprocess_pipeline
-   * 变换。需变换或二进制(EXCEL/BINARY)时返回 false,回退 byte[] 路径(受对象大小配置限制)。
-   */
-  static boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> tc) {
-    Map<String, Object> config = tc == null ? Map.of() : tc;
-    String formatType = resolveFileFormatType(importPayload, config);
-    if (formatType != null && isBinaryImportFormat(formatType)) {
-      return false;
-    }
-    Object pp = config.get("preprocess_pipeline");
-    if (pp != null
-        && Texts.hasText(String.valueOf(pp))
-        && !"[]".equals(String.valueOf(pp).trim())) {
-      return false;
-    }
-    return isNoneOrBlank(config.get("compress_type")) && isNoneOrBlank(config.get("encrypt_type"));
-  }
-
-  /** statObject 取对象字节数;失败(对象缺失/网络)返回 -1 → 调用方不走流式,交 byte[] 路径报明确错误。 */
-  private long objectSizeBytes(ImportPayload importPayload) {
-    String bucket = Texts.hasText(importPayload.storageBucket())
-        ? importPayload.storageBucket()
-        : s3StorageProperties.getBucket();
-    try {
-      return objectStore.statSize(bucket, importPayload.storagePath());
-    } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:statObject", ex);
-      return -1L;
-    }
-  }
-
-  private static boolean isNoneOrBlank(Object v) {
-    if (v == null) {
-      return true;
-    }
-    String s = String.valueOf(v).trim();
-    return s.isEmpty() || "NONE".equalsIgnoreCase(s);
-  }
-
-  /**
-   * 流式把对象存储里的源对象拷到 spool 临时文件,设 {@code IMPORT_LARGE_TEXT_PATH}/charset 交 PARSE 流式逐行消费。 全程 {@code
-   * Files.copy(InputStream, Path)} 8K 缓冲流转,不分配整文件 byte[],无堆内存上限(仅受 /tmp 磁盘)。 spool 文件生命周期由 PARSE
-   * 收尾删除;本方法失败时自行清理并抛 {@link ImportPreprocessException}。
-   */
-  private ImportStageResult streamObjectToSpoolAndReturn(
-      ImportJobContext context,
-      ImportPayload importPayload,
-      Map<String, Object> templateConfig,
-      Object templateConfigObject) {
-    String bucket = Texts.hasText(importPayload.storageBucket())
-        ? importPayload.storageBucket()
-        : s3StorageProperties.getBucket();
-    String object = importPayload.storagePath();
-    Path spool = null;
-    try {
-      spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-", ".raw");
-      long bytes;
-      try (InputStream in = objectStore.get(bucket, object)) {
-        // 大文件直载同样在字节层剥 UTF-8 BOM，保证 PARSE 首个字段不混入 \uFEFF。
-        bytes =
-            Files.copy(EncodingUtils.stripUtf8Bom(in), spool, StandardCopyOption.REPLACE_EXISTING);
-      }
-      Charset charset = resolveCharset(importPayload, templateConfigObject);
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
-      context.setRawPayload("");
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-      log.info(
-          "import preprocess streamed object to spool (no heap buffering): bucket={}, object={},"
-              + " bytes={}, spool={}",
-          bucket,
-          object,
-          bytes,
-          spool);
-      Map<String, Object> fileMetadata = new LinkedHashMap<>();
-      fileMetadata.put("preprocessed", Boolean.TRUE);
-      String fmt = resolveFileFormatType(importPayload, templateConfig);
-      fileMetadata.put("preprocessFormat", fmt == null ? "" : fmt);
-      fileMetadata.put("sourceObject", object);
-      fileMetadata.put("sourceBytes", bytes);
-      ImportStageSupport.updateFileStatusRecoverAware(
-          runtimeRepository, context, "PARSING", fileMetadata);
-      return ImportStageResult.success(stage());
-    } catch (Exception ex) {
-      if (spool != null) {
-        try {
-          Files.deleteIfExists(spool);
-        } catch (IOException ignored) {
-          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
-        }
-      }
-      throw new ImportPreprocessException(
-          ERROR_CODE_OBJECT_LOAD_FAILED,
-          "failed to stream import object from storage (bucket="
-              + bucket
-              + ", object="
-              + object
-              + "): "
-              + ex.getMessage(),
-          ex);
-    }
-  }
-
-  /**
-   * range-slice 资格判定:多分片 + 物理换行=记录边界的安全格式 + 0x0A 安全字符集。 直载前提(纯文本/无变换/≥16MB)由调用方已 gate。任一不满足 →
-   * 回退整份直载 + line-mod。
-   */
-  static boolean rangeSliceEligible(
-      ImportPayload importPayload,
-      Map<String, Object> tc,
-      Integer partitionNo,
-      Integer partitionCount,
-      Charset charset) {
-    if (partitionNo == null || partitionCount == null || partitionCount <= 1) {
-      return false;
-    }
-    if (partitionNo < 1 || partitionNo > partitionCount) {
-      return false;
-    }
-    if (!isNewlineSafeCharset(charset)) {
-      return false;
-    }
-    return isRangeSliceableFormat(resolveFileFormatType(importPayload, tc), tc);
-  }
-
-  /**
-   * 物理换行=记录边界才能按字节切:FIXED_WIDTH 逐行读 → 自动安全;DELIMITED/CSV/TSV 走 Univocity RFC4180 (支持引号内嵌跨行字段)→
-   * 默认不安全,仅当模板 {@code partition_range_slice=true} 声明无内嵌换行才 opt-in; JSON/XML/EXCEL 等多行结构 → 不安全。
-   */
-  private static boolean isRangeSliceableFormat(String format, Map<String, Object> tc) {
-    if (!Texts.hasText(format)) {
-      return false;
-    }
-    String u = format.trim().toUpperCase();
-    if ("FIXED_WIDTH".equals(u) || "FIXEDWIDTH".equals(u)) {
-      return true;
-    }
-    if ("DELIMITED".equals(u) || "CSV".equals(u) || "TSV".equals(u)) {
-      Object optIn = tc == null ? null : tc.get("partition_range_slice");
-      return optIn != null && "true".equalsIgnoreCase(String.valueOf(optIn).trim());
-    }
-    return false;
-  }
-
-  /** 0x0A 始终是 LF、不会是多字节续字节的字符集(UTF-8 自同步 / ASCII / Latin-1 单字节),才能字节级扫换行切片。 */
-  private static boolean isNewlineSafeCharset(Charset charset) {
-    return StandardCharsets.UTF_8.equals(charset)
-        || StandardCharsets.US_ASCII.equals(charset)
-        || StandardCharsets.ISO_8859_1.equals(charset);
-  }
-
   private static Integer intOrNull(Object value) {
     if (value == null) {
       return null;
@@ -568,166 +296,6 @@ public class PreprocessStep implements ImportStageStep {
       SwallowedExceptionLogger.info(PreprocessStep.class, "catch:NumberFormatException", ignored);
       return null;
     }
-  }
-
-  /**
-   * range-slice 大文件直载:对象存储 range GET(offset=rawStart)只下本片 {@code [rawStart, rawEnd)} 字节,行边界对齐后落
-   * spool,置 {@link PipelineRuntimeKeys#PARTITION_PRESLICED} 让 PARSE 跳过 line-mod。 失败时清理 spool
-   * 并**回退整份流式直载**(优化绝不导致导入失败)。
-   */
-  /** range-slice 入参打包(避免 streamObjectRangeToSpool 超 6 参,PMD ExcessiveParameterList)。 */
-  private record RangeSlice(
-      Charset charset, long objectBytes, int partitionNo, int partitionCount) {}
-
-  private ImportStageResult streamObjectRangeToSpool(
-      ImportJobContext context,
-      ImportPayload importPayload,
-      Map<String, Object> templateConfig,
-      Object templateConfigObject,
-      RangeSlice slice) {
-    Charset charset = slice.charset();
-    long objectBytes = slice.objectBytes();
-    int partitionNo = slice.partitionNo();
-    int partitionCount = slice.partitionCount();
-    String bucket = Texts.hasText(importPayload.storageBucket())
-        ? importPayload.storageBucket()
-        : s3StorageProperties.getBucket();
-    String object = importPayload.storagePath();
-    long rawStart = objectBytes * (partitionNo - 1) / partitionCount;
-    long rawEnd =
-        partitionNo == partitionCount ? objectBytes : objectBytes * partitionNo / partitionCount;
-    Path spool = null;
-    try {
-      spool = PrivateTempFiles.createTempFile("batch-preprocess-obj-p" + partitionNo + "-", ".raw");
-      long keptBytes;
-      try (InputStream in = objectStore.getFrom(bucket, object, rawStart);
-          OutputStream out = Files.newOutputStream(
-              spool,
-              StandardOpenOption.CREATE,
-              StandardOpenOption.TRUNCATE_EXISTING,
-              StandardOpenOption.WRITE)) {
-        // BOM 只属于整份文件开头（partition 1 / rawStart=0）；后续分片位于文件中部，绝不能剥。
-        InputStream source = partitionNo == 1 ? EncodingUtils.stripUtf8Bom(in) : in;
-        keptBytes = copyPartitionRange(source, out, rawEnd - rawStart, partitionNo > 1);
-      }
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
-      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
-      context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
-      context.setRawPayload("");
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
-      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
-      log.info(
-          "import preprocess range-sliced object to spool: bucket={}, object={}, partition={}/{},"
-              + " offset={}, sliceBytes={}, keptBytes={}, spool={}",
-          bucket,
-          object,
-          partitionNo,
-          partitionCount,
-          rawStart,
-          rawEnd - rawStart,
-          keptBytes,
-          spool);
-      Map<String, Object> fileMetadata = new LinkedHashMap<>();
-      fileMetadata.put("preprocessed", Boolean.TRUE);
-      String fmt = resolveFileFormatType(importPayload, templateConfig);
-      fileMetadata.put("preprocessFormat", fmt == null ? "" : fmt);
-      fileMetadata.put("sourceObject", object);
-      fileMetadata.put("rangeSlice", partitionNo + "/" + partitionCount);
-      ImportStageSupport.updateFileStatusRecoverAware(
-          runtimeRepository, context, "PARSING", fileMetadata);
-      return ImportStageResult.success(stage());
-    } catch (Exception ex) {
-      if (spool != null) {
-        try {
-          Files.deleteIfExists(spool);
-        } catch (IOException ignored) {
-          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
-        }
-      }
-      // range 优化失败不让导入挂:清掉 preslice 标记,回退整份流式直载(current behavior)。
-      context.getAttributes().remove(PipelineRuntimeKeys.PARTITION_PRESLICED);
-      log.warn(
-          "import preprocess range-slice failed, fallback to full stream: object={},"
-              + " partition={}/{}, err={}",
-          object,
-          partitionNo,
-          partitionCount,
-          ex.getMessage());
-      return streamObjectToSpoolAndReturn(
-          context, importPayload, templateConfig, templateConfigObject);
-    }
-  }
-
-  /**
-   * 从已定位到 rawStart 的 ranged 流拷出本片**完整行**到 out(标准 split 边界法,同 Hadoop TextInputFormat):
-   *
-   * <ul>
-   *   <li>{@code skipPartialFirstLine}(partitionNo&gt;1)为 true:先丢弃 rawStart 后到首个 {@code '\n'}(含)的残行
-   *       —— 该残行归上一分片(上一分片读过其 rawEnd 补齐了它)。
-   *   <li>之后逐行拷贝:仅当**行起始偏移** {@code consumed <= sliceLen}(= rawEnd-rawStart)时才读该行,并把它读完整 (可能越过
-   *       rawEnd 到行尾)。保证每条完整行被恰好一个分片拥有,无重叠无遗漏。
-   * </ul>
-   *
-   * <p>仅在 0x0A 安全字符集下调用(UTF-8/ASCII/Latin-1),字节级扫 {@code '\n'} 不会误命中多字节续字节。 返回写出字节数。
-   * package-private static 便于纯函数单测。
-   */
-  static long copyPartitionRange(
-      InputStream rawIn, OutputStream out, long sliceLen, boolean skipPartialFirstLine)
-      throws IOException {
-    BufferedInputStream in = rawIn instanceof BufferedInputStream buffered
-        ? buffered
-        : new BufferedInputStream(rawIn, 64 * 1024);
-    long consumed = 0; // 自 rawStart 起从流读出的字节数(含跳过的残行)
-    long written = 0;
-    int b;
-    if (skipPartialFirstLine) {
-      while ((b = in.read()) >= 0) {
-        consumed++;
-        if (b == '\n') {
-          break;
-        }
-      }
-    }
-    // consumed 此刻 = 本分片首条完整行的起始偏移。逐行读:行起始 <= sliceLen 才属本片。
-    while (consumed <= sliceLen) {
-      int c = in.read();
-      if (c < 0) {
-        break; // EOF
-      }
-      consumed++;
-      out.write(c);
-      written++;
-      if (c == '\n') {
-        continue; // 空行/单字节行,循环重新判定下一行起始偏移
-      }
-      // 行已开读 → 读到 '\n'/EOF 整行收完(允许越过 sliceLen 补齐跨界末行)
-      while ((c = in.read()) >= 0) {
-        consumed++;
-        out.write(c);
-        written++;
-        if (c == '\n') {
-          break;
-        }
-      }
-      if (c < 0) {
-        break; // 末行无换行结尾
-      }
-    }
-    return written;
-  }
-
-  private Charset resolveCharsetForContentBytes(
-      ImportPayload importPayload, Object templateConfigObject) {
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object charset = templateConfig.get("charset");
-      if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        return EncodingUtils.resolve(String.valueOf(charset));
-      }
-    }
-    if (importPayload != null && Texts.hasText(importPayload.charset())) {
-      return EncodingUtils.resolve(importPayload.charset());
-    }
-    return StandardCharsets.UTF_8;
   }
 
   private static Map<String, Object> toStringKeyMap(Object templateConfigObject) {

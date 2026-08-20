@@ -11,8 +11,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * range-slice 核心算法 {@link PreprocessStep#copyPartitionRange} + 资格判定 {@link
- * PreprocessStep#rangeSliceEligible} 单测。
+ * range-slice 核心算法 {@link ImportPreprocessObjectSource#copyPartitionRange} + 资格判定 {@link
+ * ImportPreprocessObjectSource#rangeSliceEligible} 单测。
  *
  * <p>核心不变式:N 个分片各自 range 输出按序拼接 == 原文件字节(等价于 无重叠 + 无遗漏 + 不劈行 + 保序)。
  */
@@ -29,7 +29,7 @@ class PreprocessRangeSliceTest {
         long skipped = in.skip(rawStart);
         assertThat(skipped).isEqualTo(rawStart);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        PreprocessStep.copyPartitionRange(in, out, rawEnd - rawStart, p > 1);
+        ImportPreprocessObjectSource.copyPartitionRange(in, out, rawEnd - rawStart, p > 1);
         concat.writeBytes(out.toByteArray());
       }
     }
@@ -89,7 +89,7 @@ class PreprocessRangeSliceTest {
       try (InputStream in = new ByteArrayInputStream(data)) {
         in.skip(rawStart);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        PreprocessStep.copyPartitionRange(in, out, rawEnd - rawStart, p > 1);
+        ImportPreprocessObjectSource.copyPartitionRange(in, out, rawEnd - rawStart, p > 1);
         all.append(new String(out.toByteArray(), StandardCharsets.UTF_8));
       }
     }
@@ -104,21 +104,21 @@ class PreprocessRangeSliceTest {
 
   @Test
   void eligible_fixedWidthUtf8MultiPartition() {
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.UTF_8))
         .isTrue();
   }
 
   @Test
   void notEligible_delimitedWithoutOptIn() {
-    assertThat(
-            PreprocessStep.rangeSliceEligible(null, tc("DELIMITED"), 1, 4, StandardCharsets.UTF_8))
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
+            null, tc("DELIMITED"), 1, 4, StandardCharsets.UTF_8))
         .isFalse();
   }
 
   @Test
   void eligible_delimitedWithOptIn() {
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null,
             Map.of("file_format_type", "DELIMITED", "partition_range_slice", "true"),
             3,
@@ -130,7 +130,8 @@ class PreprocessRangeSliceTest {
   @Test
   void notEligible_jsonXmlExcel() {
     for (String fmt : new String[] {"JSON", "XML", "EXCEL"}) {
-      assertThat(PreprocessStep.rangeSliceEligible(null, tc(fmt), 2, 4, StandardCharsets.UTF_8))
+      assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
+              null, tc(fmt), 2, 4, StandardCharsets.UTF_8))
           .as(fmt)
           .isFalse();
     }
@@ -138,30 +139,30 @@ class PreprocessRangeSliceTest {
 
   @Test
   void notEligible_singlePartitionOrBadIndex() {
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), 1, 1, StandardCharsets.UTF_8))
         .isFalse();
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), 5, 4, StandardCharsets.UTF_8))
         .isFalse();
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), null, 4, StandardCharsets.UTF_8))
         .isFalse();
   }
 
   @Test
   void notEligible_newlineUnsafeCharset() {
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.UTF_16))
         .isFalse();
   }
 
   @Test
   void eligible_asciiAndLatin1AreNewlineSafe() {
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.US_ASCII))
         .isTrue();
-    assertThat(PreprocessStep.rangeSliceEligible(
+    assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
             null, tc("FIXED_WIDTH"), 2, 4, StandardCharsets.ISO_8859_1))
         .isTrue();
   }
