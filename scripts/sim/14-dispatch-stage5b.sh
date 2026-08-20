@@ -19,7 +19,7 @@ SIM_STAGE_NAME="dispatch-stage5b"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 echo "==> seed dispatch stage5b job/channel fixture"
 docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" \
@@ -43,7 +43,7 @@ export FILE_ID
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5b.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5b.log"
 import json, os, subprocess, sys, time, urllib.request
 
 BASE = os.environ["TRIGGER_BASE"]

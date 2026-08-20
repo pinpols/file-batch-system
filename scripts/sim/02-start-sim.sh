@@ -6,6 +6,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
+batch_require_python
 ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
 echo "==> docker compose up sftp + mockserver(network: batch-network)"
@@ -46,7 +49,7 @@ if [[ "$code" != "200" ]]; then
 fi
 echo "  mockserver status: HTTP $code"
 stubs=$(curl -s --max-time 30 --connect-timeout 5 -X PUT "http://localhost:${sm_port}/mockserver/retrieve?type=ACTIVE_EXPECTATIONS&format=JSON" 2>/dev/null \
-  | python3 -c "import json,sys;print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+  | "$PYTHON_BIN" -c "import json,sys;print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
 echo "  mockserver stubs loaded: $stubs"
 
 echo "==> ✅ 模拟器 UP:sftp(host:${SFTP_HOST_PORT:-12222}) mockserver(host:${MOCKSERVER_HOST_PORT:-11080})"

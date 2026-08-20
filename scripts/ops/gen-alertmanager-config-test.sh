@@ -3,13 +3,17 @@
 # 生成器逻辑一改动、输出漂移即红。可在 CI/本地跑:bash scripts/ops/gen-alertmanager-config-test.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=../lib/python-runtime.sh
+source "$REPO/scripts/lib/python-runtime.sh"
+batch_require_python
 INPUT="$HERE/testdata/alert-routing-sample.json"
 EXPECTED="$HERE/testdata/alert-routing-sample.expected.yml"
 
 ACTUAL="$(mktemp)"
 trap 'rm -f "$ACTUAL"' EXIT
 
-python3 "$HERE/gen-alertmanager-config.py" --input "$INPUT" --output "$ACTUAL"
+"$PYTHON_BIN" "$HERE/gen-alertmanager-config.py" --input "$INPUT" --output "$ACTUAL"
 
 if diff -u "$EXPECTED" "$ACTUAL"; then
   echo "OK: gen-alertmanager-config snapshot matches"

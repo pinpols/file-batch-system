@@ -22,7 +22,7 @@ source "$ROOT/scripts/lib/process.sh"
 
 export STORM_COUNT="${STORM_COUNT:-60}"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 # Fixture 会直接重置 Quartz 的测试 job/trigger。必须先停 Trigger，再清理 fixture，最后
 # 启动 Trigger；仅调用 drain 或“重启后立即清理”都可能让新进程的 reconciler 与 psql 争抢
@@ -63,7 +63,7 @@ done
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6c.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6c.log"
 import json, os, subprocess, sys, time, urllib.request
 
 BASE = os.environ["TRIGGER_BASE"]

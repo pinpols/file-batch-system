@@ -95,10 +95,10 @@ else
   PRECHECK_FAIL=1
 fi
 
-if command -v python3 >/dev/null 2>&1; then
-  pass "python3 可用" "$(python3 --version 2>/dev/null)"
+if command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  pass "${PYTHON_BIN} 可用" "$("$PYTHON_BIN" --version 2>/dev/null)"
 else
-  fail "python3 缺失" "本脚本用 python3 解析 JSON / YAML 响应"
+  fail "${PYTHON_BIN} 缺失" "本脚本用 ${PYTHON_BIN} 解析 JSON / YAML 响应"
   PRECHECK_FAIL=1
 fi
 
@@ -178,23 +178,23 @@ fi
 hdr "2. cron-preview 真实 Quartz 引擎"
 
 simple=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 0 2 * * ?" --data-urlencode "count=3" "$BASE/api/console/system/cron-preview")
-valid_field=$(echo "$simple" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
-runs_count=$(echo "$simple" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
+valid_field=$(echo "$simple" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
+runs_count=$(echo "$simple" | "$PYTHON_BIN" -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
 [[ "$valid_field" == "True" && "$runs_count" == "3" ]] \
   && pass "简单 expr (0 0 2 * * ?) → valid=true, 3 runs" "tz=Asia/Shanghai" \
   || fail "简单 expr 异常" "valid=$valid_field runs=$runs_count"
 
 # Quartz L 表达式（当月最后一个周五）
 quartz_l=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 15 10 ? * 6L" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
-l_valid=$(echo "$quartz_l" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
+l_valid=$(echo "$quartz_l" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 [[ "$l_valid" == "True" ]] \
   && pass "Quartz L 高级语法 (0 15 10 ? * 6L)" "valid=true (本地自实现解析必然失败)" \
   || fail "Quartz L 解析失败" "valid=$l_valid"
 
 # 非法表达式不抛 500
 invalid=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=garbage" "$BASE/api/console/system/cron-preview")
-i_valid=$(echo "$invalid" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
-i_err=$(echo "$invalid" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['error'])" 2>/dev/null)
+i_valid=$(echo "$invalid" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
+i_err=$(echo "$invalid" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['error'])" 2>/dev/null)
 [[ "$i_valid" == "False" && -n "$i_err" && "$i_err" != "None" ]] \
   && pass "非法 expr 安全降级" "valid=false + error='$(echo "$i_err" | head -c 50)'" \
   || fail "非法 expr 未安全降级" "valid=$i_valid err=$i_err"
@@ -208,8 +208,8 @@ for entry in \
   "0 0 0/2 * * ?|每 2 小时"; do
   expr="${entry%%|*}"; label="${entry##*|}"
   r=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=$expr" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
-  v=$(echo "$r" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
-  c=$(echo "$r" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
+  v=$(echo "$r" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
+  c=$(echo "$r" | "$PYTHON_BIN" -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
   [[ "$v" == "True" && "$c" -ge 1 ]] \
     && pass "Quartz [$label]" "expr=$expr → valid + $c runs" \
     || fail "Quartz [$label] 异常" "expr=$expr valid=$v runs=$c"
@@ -241,7 +241,7 @@ fi
 hdr "4. maintenance 状态接口"
 
 MS=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance")
-enabled=$(echo "$MS" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
+enabled=$(echo "$MS" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
 [[ "$enabled" == "False" ]] \
   && pass "maintenance status 探活" "enabled=false(正常运行态)" \
   || fail "maintenance status 异常" "enabled=$enabled"
@@ -294,7 +294,7 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
       fi
       sleep 2
     done
-    enabled_after=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
+    enabled_after=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
     [[ "$enabled_after" == "False" ]] \
       && pass "恢复正常模式" "enabled=false" \
       || fail "恢复异常" "enabled=$enabled_after"
@@ -330,7 +330,7 @@ if [[ ! -f "$OPENAPI_YAML" ]]; then
   skip "OpenAPI 检查" "$OPENAPI_YAML 不存在"
 else
   # MaintenanceStatus schema 字段(从 yaml 中解析,要求 schema 块 properties 下的 key)
-  yaml_fields=$(python3 -c "
+  yaml_fields=$("$PYTHON_BIN" -c "
 import yaml, sys
 with open('$OPENAPI_YAML') as f:
     spec = yaml.safe_load(f)
@@ -339,7 +339,7 @@ print(','.join(sorted(schema.get('properties', {}).keys())))
 " 2>/dev/null)
   # BE 实际响应字段
   be_fields=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance" | \
-    python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
+    "$PYTHON_BIN" -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
   if [[ "$yaml_fields" == "$be_fields" ]]; then
     pass "MaintenanceStatus schema 对齐" "$yaml_fields"
   else
@@ -347,7 +347,7 @@ print(','.join(sorted(schema.get('properties', {}).keys())))
   fi
 
   # CronPreview 的 schema 结构
-  yaml_cron=$(python3 -c "
+  yaml_cron=$("$PYTHON_BIN" -c "
 import yaml
 with open('$OPENAPI_YAML') as f:
     spec = yaml.safe_load(f)
@@ -355,7 +355,7 @@ schema = spec.get('components', {}).get('schemas', {}).get('CronPreview', {})
 print(','.join(sorted(schema.get('properties', {}).keys())))
 " 2>/dev/null)
   be_cron=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 0 2 * * ?" "$BASE/api/console/system/cron-preview" | \
-    python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
+    "$PYTHON_BIN" -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
   if [[ "$yaml_cron" == "$be_cron" ]]; then
     pass "CronPreview schema 对齐" "$yaml_cron"
   else

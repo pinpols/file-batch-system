@@ -26,7 +26,7 @@ export SOURCE_DIR="${SOURCE_DIR:-/tmp/batch/stage5c-source}"
 export STORAGE_PATH="$SOURCE_DIR/$BATCH_NO.json"
 mkdir -p "$REPORT_DIR" "$SOURCE_DIR" /tmp/batch/stage5c-local /tmp/batch/stage5c-nas
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 cat > "$STORAGE_PATH" <<JSON
 {"batchNo":"$BATCH_NO","scenario":"dispatch-stage5c","bizDate":"$BIZ_DATE"}
@@ -46,7 +46,7 @@ export FILE_ID
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5c.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5c.log"
 import glob, json, os, subprocess, sys, time, urllib.request
 
 BASE = os.environ["TRIGGER_BASE"]

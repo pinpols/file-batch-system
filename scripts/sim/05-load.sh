@@ -29,9 +29,9 @@ export ONLY="${ONLY:-}"
 export CLEAN_SIM_OUTPUTS="${CLEAN_SIM_OUTPUTS:-false}"
 export MINIO_BUCKET="${MINIO_BUCKET:-$BATCH_S3_BUCKET}"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
-python3 - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json, os, subprocess, sys, time, urllib.request
 
 BASE   = os.environ["TRIGGER_BASE"]

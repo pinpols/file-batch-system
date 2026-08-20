@@ -19,9 +19,9 @@ SIM_STAGE_NAME="atomic-stage5c"
 source "$ROOT/scripts/sim/env-common.sh"
 
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/atomic-stage5c.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/atomic-stage5c.log"
 import json, os, subprocess, sys, time, urllib.error, urllib.request
 
 BASE = os.environ["TRIGGER_BASE"]

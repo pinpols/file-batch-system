@@ -12,7 +12,7 @@
 #   sonar-report.md    — 摘要报告（各模块 BLOCKER/CRITICAL 分布 + 关键指标）
 #   reports/sonar/latest -> <timestamp>  （软链，始终指向最新一次）
 #
-# 依赖：docker、mvn（Java 21）、curl、python3
+# 依赖：docker、mvn（Java 21）、curl、Python 3
 # =============================================================================
 set -euo pipefail
 
@@ -38,6 +38,8 @@ SONAR_MAVEN_PLUGIN_VERSION="${SONAR_MAVEN_PLUGIN_VERSION:-5.7.0.6970}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/process.sh
 source "${PROJECT_ROOT}/scripts/lib/process.sh"
+# shellcheck source=../lib/python-runtime.sh
+source "${PROJECT_ROOT}/scripts/lib/python-runtime.sh"
 SCAN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
 OUT_DIR="${PROJECT_ROOT}/reports/sonar/${SCAN_TS}"
 TOKEN_NAME="batch-scan-$(date +%s)"
@@ -57,7 +59,7 @@ if $STOP_ONLY; then
 fi
 
 # ── 检查依赖 ──────────────────────────────────────────────────────────────────
-for cmd in docker mvn curl python3; do
+for cmd in docker mvn curl "$PYTHON_BIN"; do
   command -v "$cmd" &>/dev/null || { error "Required command not found: $cmd"; exit 1; }
 done
 
@@ -124,7 +126,7 @@ curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
 TOKEN_JSON=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   "${SONAR_URL}/api/user_tokens/generate" \
   -d "name=${TOKEN_NAME}&type=GLOBAL_ANALYSIS_TOKEN")
-SONAR_TOKEN=$(echo "$TOKEN_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
+SONAR_TOKEN=$(echo "$TOKEN_JSON" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['token'])")
 ok "Token generated."
 
 # ── 3.5 质量配置：S3776 认知复杂度阈值 15→20 ─────────────────────────────
@@ -139,19 +141,19 @@ curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   --data-urlencode "project=${PROJECT_KEY}" &>/dev/null || true
 CUSTOM_PROFILE_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
   "${SONAR_URL}/api/qualityprofiles/search?language=java" \
-  | python3 -c "
+  | "$PYTHON_BIN" -c "
 import json,sys
 ps=json.load(sys.stdin)['profiles']
 print(next((p['key'] for p in ps if p['name']=='${CUSTOM_PROFILE_NAME}'), ''))")
 if [ -z "${CUSTOM_PROFILE_KEY}" ]; then
   FROM_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
     "${SONAR_URL}/api/qualityprofiles/search?language=java" \
-    | python3 -c "import json,sys; print(next(p['key'] for p in json.load(sys.stdin)['profiles'] if p['isDefault']))")
+    | "$PYTHON_BIN" -c "import json,sys; print(next(p['key'] for p in json.load(sys.stdin)['profiles'] if p['isDefault']))")
   CUSTOM_PROFILE_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
     "${SONAR_URL}/api/qualityprofiles/copy" \
     --data-urlencode "fromKey=${FROM_KEY}" \
     --data-urlencode "toName=${CUSTOM_PROFILE_NAME}" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin)['key'])")
+    | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['key'])")
 fi
 curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   "${SONAR_URL}/api/qualityprofiles/activate_rule" \
@@ -246,7 +248,7 @@ if [ -n "$TASK_URL" ]; then
   while true; do
     TASK_STATUS="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
       "${SONAR_URL}/api/ce/task?id=${TASK_ID}" \
-      | python3 -c "import json,sys; print(json.load(sys.stdin)['task']['status'])" 2>/dev/null || true)"
+      | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['task']['status'])" 2>/dev/null || true)"
     case "$TASK_STATUS" in
       SUCCESS)
         break
@@ -280,7 +282,7 @@ SONAR_ADMIN_PASS="$SONAR_ADMIN_PASS" \
 SONAR_URL="$SONAR_URL" \
 PROJECT_KEY="$PROJECT_KEY" \
 OUT_DIR="$OUT_DIR" \
-python3 - <<'PYEOF'
+"$PYTHON_BIN" - <<'PYEOF'
 import base64
 import csv
 import json

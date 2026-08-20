@@ -10,6 +10,9 @@ if [[ -z "${BATCH_ENV_COMMON_ROOT:-}" ]]; then
   BATCH_ENV_COMMON_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
 
+# shellcheck source=python-runtime.sh
+source "$BATCH_ENV_COMMON_ROOT/scripts/lib/python-runtime.sh"
+
 batch_source_env_file() {
   local env_file="${1:-${COMPOSE_ENV_FILE:-$BATCH_ENV_COMMON_ROOT/.env.local}}"
   if [[ -f "$env_file" ]]; then
@@ -36,6 +39,7 @@ batch_load_default_env() {
   export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
   export LANG="${LANG:-$BATCH_LOCALE}"
   export LC_ALL="${LC_ALL:-$BATCH_LOCALE}"
+  batch_configure_python_runtime
 
   export POSTGRES_PORT="${POSTGRES_PORT:-15432}"
   export POSTGRES_DB="${POSTGRES_DB:-batch_platform}"

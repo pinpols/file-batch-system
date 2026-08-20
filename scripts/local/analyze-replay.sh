@@ -24,6 +24,10 @@
 
 set -uo pipefail
 
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT_DIR/scripts/lib/python-runtime.sh"
+
 COUNT_TOL="${REPLAY_COUNT_TOL_PCT:-5}"
 TIME_TOL="${REPLAY_TIME_TOL_PCT:-20}"
 
@@ -40,9 +44,9 @@ done
 [[ -f "$PROD"   ]] || { echo "[fatal] --prod 文件不存在: $PROD" >&2; exit 1; }
 [[ -f "$REPLAY" ]] || { echo "[fatal] --replay 文件不存在: $REPLAY" >&2; exit 1; }
 [[ -n "$OUT" ]]    || { echo "[fatal] --out 未给" >&2; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "[fatal] 缺 python3" >&2; exit 1; }
+batch_require_python
 
-python3 - "$PROD" "$REPLAY" "$OUT" "$COUNT_TOL" "$TIME_TOL" <<'PY'
+"$PYTHON_BIN" - "$PROD" "$REPLAY" "$OUT" "$COUNT_TOL" "$TIME_TOL" <<'PY'
 import json, sys, math
 from collections import OrderedDict
 
