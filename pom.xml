@@ -96,6 +96,10 @@
         <netty.version>4.2.16.Final</netty.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <postgresql.version>42.7.12</postgresql.version>
+        <!-- CVE-2026-54399 / CVE-2026-54428: Anthropic client 2.16.1 经 Spring AI BOM
+             传入 httpcore5 5.4.2；5.4.3 起包含修复。统一覆盖 core 与 HTTP/2 变体，避免
+             仅覆盖一个工件后依赖树再次漂移。 -->
+        <httpcomponents-core5.version>5.4.3</httpcomponents-core5.version>
 
         <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
              2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4 + JDK25 是否能跑。
@@ -218,6 +222,16 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5</artifactId>
+                <version>${httpcomponents-core5.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5-h2</artifactId>
+                <version>${httpcomponents-core5.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.javacrumbs.shedlock</groupId>
