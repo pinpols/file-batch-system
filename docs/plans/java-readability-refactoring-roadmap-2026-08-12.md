@@ -194,6 +194,8 @@
 
 ### 阶段 6：例外与 suppression 治理（2～3 天）
 
+**状态：已完成首批治理（2026-08-20）**
+
 **目的**：让每个静态检查例外可解释、范围最小、不会永久掩盖新问题。
 
 **工作项**：
@@ -202,6 +204,13 @@
 - 合理例外缩到字段/方法/局部变量，并在不直观时写明框架或协议原因。
 - 检查 PMD/Spotless/ArchTest 白名单，删除已不存在的类和永久失效的豁免。
 - 对必须长期保留的框架例外建立集中索引，不复制散落注释。
+
+**本批完成记录**：
+
+- 复扫生产 Java `@SuppressWarnings`：209 个注解、212 个规则项、18 个精确规则，未发现 PMD/Spotless/ArchTest 中引用已删除类的白名单。
+- 删除 `DistributedLockAspect` 中没有运行时用途的 `SimpleLock` 编译守卫及其 `unused` suppression；锁切面执行逻辑不变。
+- 新增 [Java Suppression 登记表](../standards/java-suppression-registry.md) 和 `check-java-suppression-registry.py`，将新增 suppression 变成需要登记的 CI 守卫。
+- 保留的例外按 JSON/Map、SPI 异常契约、动态 SQL 安全边界、Spring 配置误报和 PMD 结构例外分类；不以 suppression 数量归零为目标。
 
 **验收**：不以 suppression 数量归零为目标；每个保留项都有明确所有权和原因，新增无理由例外由 CI/review 阻断。
 

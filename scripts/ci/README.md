@@ -137,6 +137,16 @@ bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-r
 python3 scripts/ci/check-java-readability.py
 ```
 
+## `check-java-suppression-registry.py`
+
+检查生产 Java 的 `@SuppressWarnings` 是否使用已审核的精确规则。它不要求 suppression 数量归零，
+但会阻断未登记的新规则，防止静态检查例外在重构中无理由扩散。规则用途和移除条件见
+`docs/standards/java-suppression-registry.md`。
+
+```bash
+python3 scripts/ci/check-java-suppression-registry.py
+```
+
 ## `report-java-readability-inventory.py`
 
 生成 Java 可读性治理候选快照，覆盖 CGLIB 自注入、大类、public Map 契约、

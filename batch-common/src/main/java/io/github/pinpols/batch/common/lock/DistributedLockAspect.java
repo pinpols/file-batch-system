@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import net.javacrumbs.shedlock.core.SimpleLock;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -122,8 +121,4 @@ public class DistributedLockAspect {
     }
     return null;
   }
-
-  // SimpleLock 类型显式 import(IDE 不会标红),用于编译期校验 ShedLock SPI 存在
-  @SuppressWarnings("unused")
-  private static final Class<?> SHEDLOCK_API_GUARD = SimpleLock.class;
 }
