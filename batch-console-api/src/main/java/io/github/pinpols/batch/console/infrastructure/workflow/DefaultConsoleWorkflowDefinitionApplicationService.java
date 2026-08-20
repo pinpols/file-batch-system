@@ -1,16 +1,10 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
-import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
-import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -23,26 +17,14 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
-import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
-import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
-import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,19 +64,14 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   private final WorkflowNodeMapper nodeMapper;
   private final WorkflowEdgeMapper edgeMapper;
   private final WorkflowDefinitionVersionMapper versionMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
   private final ConsoleRealtimeEventPort domainEventPublisher;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
   private final WorkflowDesignLockService designLockService;
   private final WorkflowDagValidator dagValidator;
-  private final ObjectMapper objectMapper;
-
-  // 反序列化历史 nodes_json / edges_json — JSONB 全文 → entity list
-  private static final TypeReference<List<WorkflowNodeEntity>> NODE_LIST_TYPE =
-      new TypeReference<>() {};
-  private static final TypeReference<List<WorkflowEdgeEntity>> EDGE_LIST_TYPE =
-      new TypeReference<>() {};
+  private final WorkflowDefinitionResponseAssembler responseAssembler;
+  private final WorkflowDefinitionWriteSupport writeSupport;
+  private final WorkflowDefinitionDagInspector dagInspector;
 
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -105,7 +82,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
     List<WorkflowEdgeEntity> edges =
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
-    return toDetailResponse(def, nodes, edges);
+    return responseAssembler.toDetailResponse(def, nodes, edges);
   }
 
   @Override
@@ -136,7 +113,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     entity.setEnabled(request.getEnabled() == null || request.getEnabled());
     definitionMapper.insert(entity);
 
-    upsertNodesAndEdges(resolvedTenant, entity.getId(), request);
+    writeSupport.upsertNodesAndEdges(resolvedTenant, entity.getId(), request);
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, request.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-created");
 
@@ -164,7 +141,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
     nodeMapper.deleteByWorkflowDefinitionId(id);
     edgeMapper.deleteByWorkflowDefinitionId(id);
-    upsertNodesAndEdges(resolvedTenant, id, request);
+    writeSupport.upsertNodesAndEdges(resolvedTenant, id, request);
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-updated");
 
@@ -222,53 +199,19 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
     nodeMapper.deleteByWorkflowDefinitionId(id);
     edgeMapper.deleteByWorkflowDefinitionId(id);
-    upsertNodesAndEdges(resolvedTenant, id, body);
+    writeSupport.upsertNodesAndEdges(resolvedTenant, id, body);
 
     // 同事务追加版本快照(workflow-dag-designer Polish):新 version = 旧 version + 1。
-    // 序列化用 ObjectMapper 写当前持久化后的 entity list — 与 detail 读路径一致,
+    // 版本协作者序列化当前持久化后的 entity list — 与 detail 读路径一致，
     // 避免基于 request DTO 序列化导致下游字段差异。
     Integer newVersion = def.getVersion() + 1;
-    appendVersionSnapshot(resolvedTenant, id, def.getWorkflowCode(), newVersion, body, currentUser);
+    writeSupport.appendVersionSnapshot(
+        resolvedTenant, id, def.getWorkflowCode(), newVersion, body, currentUser);
 
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-full-updated");
 
     return loadDetail(resolvedTenant, id);
-  }
-
-  private void appendVersionSnapshot(
-      String tenantId,
-      Long definitionId,
-      String workflowCode,
-      Integer newVersion,
-      WorkflowDefinitionSaveRequest body,
-      String savedBy) {
-    List<WorkflowNodeEntity> nodes =
-        nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null));
-    List<WorkflowEdgeEntity> edges =
-        edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(tenantId, definitionId, null));
-    WorkflowDefinitionVersionInsertParam param = new WorkflowDefinitionVersionInsertParam();
-    param.setTenantId(tenantId);
-    param.setWorkflowDefinitionId(definitionId);
-    param.setWorkflowCode(workflowCode);
-    param.setVersion(newVersion);
-    param.setWorkflowName(body.getWorkflowName());
-    param.setWorkflowType(body.getWorkflowType());
-    param.setEnabled(body.getEnabled());
-    try {
-      param.setNodesJson(objectMapper.writeValueAsString(nodes));
-      param.setEdgesJson(objectMapper.writeValueAsString(edges));
-    } catch (JsonProcessingException e) {
-      // 主路径已持久化成功;序列化失败属编程错(entity 字段全 Jackson-friendly POJO),
-      // 走 BizException 让事务回滚,避免主表 + 历史表分裂。
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          "error.workflow.version_snapshot.serialize_failed",
-          e.getMessage());
-    }
-    param.setSavedBy(savedBy);
-    // summary 暂留 null(FE 未提交字段,Spike 不展示)
-    versionMapper.insertVersionSnapshot(param);
   }
 
   @Override
@@ -299,7 +242,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     List<WorkflowEdgeEntity> edges =
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
 
-    List<DagValidationResult.Finding> findings = validateDag(resolvedTenant, nodes, edges);
+    List<DagValidationResult.Finding> findings = dagInspector.inspect(resolvedTenant, nodes, edges);
     List<String> errors = findings.stream()
         .filter(f -> DagValidationResult.Finding.LEVEL_ERROR.equals(f.level()))
         .map(DagValidationResult.Finding::message)
@@ -309,357 +252,13 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
   // 版本列表 / 版本详情真实实现见文件末尾的 listVersions / getVersion(V167 历史表闭环)。
 
-  private void upsertNodesAndEdges(
-      String tenantId, Long definitionId, WorkflowDefinitionSaveRequest request) {
-    if (request.getNodes() != null) {
-      for (WorkflowDefinitionSaveRequest.NodeItem n : request.getNodes()) {
-        WorkflowNodeUpsertParam param = new WorkflowNodeUpsertParam();
-        param.setTenantId(tenantId);
-        param.setWorkflowDefinitionId(definitionId);
-        param.setNodeCode(n.getNodeCode());
-        param.setNodeName(n.getNodeName());
-        param.setNodeType(n.getNodeType());
-        param.setRelatedJobCode(n.getRelatedJobCode());
-        param.setRelatedPipelineCode(n.getRelatedPipelineCode());
-        param.setWorkerGroup(n.getWorkerGroup());
-        param.setWindowCode(n.getWindowCode());
-        param.setNodeOrder(n.getNodeOrder());
-        param.setRetryPolicy(n.getRetryPolicy());
-        param.setRetryMaxCount(n.getRetryMaxCount());
-        param.setTimeoutSeconds(n.getTimeoutSeconds());
-        param.setNodeParams(n.getNodeParams());
-        param.setEnabled(n.getEnabled());
-        nodeMapper.upsertWorkflowNode(param);
-      }
-    }
-    if (request.getEdges() != null) {
-      for (WorkflowDefinitionSaveRequest.EdgeItem e : request.getEdges()) {
-        WorkflowEdgeUpsertParam param = new WorkflowEdgeUpsertParam();
-        param.setTenantId(tenantId);
-        param.setWorkflowDefinitionId(definitionId);
-        param.setFromNodeCode(e.getFromNodeCode());
-        param.setToNodeCode(e.getToNodeCode());
-        param.setEdgeType(e.getEdgeType());
-        param.setConditionExpr(e.getConditionExpr());
-        param.setEnabled(e.getEnabled());
-        edgeMapper.upsertWorkflowEdge(param);
-      }
-    }
-  }
-
   private WorkflowDefinitionDetailResponse loadDetail(String tenantId, Long id) {
     WorkflowDefinitionEntity def = definitionMapper.selectById(tenantId, id);
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, id, null));
     List<WorkflowEdgeEntity> edges =
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(tenantId, id, null));
-    return toDetailResponse(def, nodes, edges);
-  }
-
-  private WorkflowDefinitionDetailResponse toDetailResponse(
-      WorkflowDefinitionEntity def,
-      List<WorkflowNodeEntity> nodes,
-      List<WorkflowEdgeEntity> edges) {
-    return new WorkflowDefinitionDetailResponse(
-        def.getId(),
-        def.getTenantId(),
-        def.getWorkflowCode(),
-        def.getWorkflowName(),
-        def.getWorkflowType(),
-        def.getVersion(),
-        def.getEnabled(),
-        def.getDescription(),
-        def.getCreatedAt(),
-        def.getUpdatedAt(),
-        nodes.stream().map(this::toNodeResponse).toList(),
-        edges.stream().map(this::toEdgeResponse).toList());
-  }
-
-  private ConsoleWorkflowNodeResponse toNodeResponse(WorkflowNodeEntity n) {
-    return new ConsoleWorkflowNodeResponse(
-        n.getId(),
-        n.getWorkflowDefinitionId(),
-        n.getNodeCode(),
-        n.getNodeName(),
-        n.getNodeType(),
-        n.getRelatedJobCode(),
-        n.getRelatedPipelineCode(),
-        n.getWorkerGroup(),
-        n.getWindowCode(),
-        n.getNodeOrder(),
-        n.getRetryPolicy(),
-        n.getRetryMaxCount(),
-        n.getTimeoutSeconds(),
-        n.getNodeParams(),
-        n.getEnabled(),
-        n.getCreatedAt(),
-        n.getUpdatedAt(),
-        n.getCrossDayDependencies(),
-        n.getCrossDayDependencyTimeoutSeconds());
-  }
-
-  private ConsoleWorkflowEdgeResponse toEdgeResponse(WorkflowEdgeEntity e) {
-    return new ConsoleWorkflowEdgeResponse(
-        e.getId(),
-        e.getWorkflowDefinitionId(),
-        e.getFromNodeCode(),
-        e.getToNodeCode(),
-        e.getEdgeType(),
-        e.getConditionExpr(),
-        e.getEnabled(),
-        e.getCreatedAt(),
-        e.getUpdatedAt());
-  }
-
-  private List<DagValidationResult.Finding> validateDag(
-      String tenantId, List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
-    List<DagValidationResult.Finding> findings = new ArrayList<>();
-    Set<String> nodeCodes = new HashSet<>();
-    List<String> startNodes = new ArrayList<>();
-    List<String> endNodes = new ArrayList<>();
-
-    for (WorkflowNodeEntity n : nodes) {
-      nodeCodes.add(n.getNodeCode());
-      if ("START".equalsIgnoreCase(n.getNodeType())) {
-        startNodes.add(n.getNodeCode());
-      }
-      if ("END".equalsIgnoreCase(n.getNodeType())) {
-        endNodes.add(n.getNodeCode());
-      }
-    }
-
-    validateNodeReferences(findings, nodeCodes, startNodes, endNodes, edges);
-    validateJobNodeReferences(findings, tenantId, nodes);
-    validateConditionEdges(findings, edges);
-    DagAdjacency dag = buildAdjacency(nodeCodes, edges);
-    detectCycles(findings, dag, nodeCodes);
-    validateReachability(findings, nodes, nodeCodes, startNodes, endNodes, dag);
-
-    return findings;
-  }
-
-  // WF-design-5: JOB 节点必须填 related_job_code 且对应 job_definition 必须存在且 enabled=true。
-  private void validateJobNodeReferences(
-      List<DagValidationResult.Finding> findings, String tenantId, List<WorkflowNodeEntity> nodes) {
-    for (WorkflowNodeEntity n : nodes) {
-      if (!"JOB".equalsIgnoreCase(n.getNodeType())) {
-        continue;
-      }
-      String jobCode = n.getRelatedJobCode();
-      if (jobCode == null || jobCode.isBlank()) {
-        findings.add(DagValidationResult.Finding.error(
-            "JOB_REF_MISSING",
-            "JOB node missing related_job_code: " + n.getNodeCode(),
-            n.getNodeCode(),
-            null));
-        continue;
-      }
-      JobDefinitionEntity jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-      if (jobDef == null) {
-        findings.add(DagValidationResult.Finding.error(
-            "JOB_REF_NOT_FOUND",
-            "JOB node " + n.getNodeCode() + " references non-existent job_definition: " + jobCode,
-            n.getNodeCode(),
-            null));
-        continue;
-      }
-      if (Boolean.FALSE.equals(jobDef.getEnabled())) {
-        findings.add(DagValidationResult.Finding.error(
-            "JOB_REF_DISABLED",
-            "JOB node " + n.getNodeCode() + " references disabled job_definition: " + jobCode,
-            n.getNodeCode(),
-            null));
-      }
-    }
-  }
-
-  // WF-design-6: edge_type=CONDITION 必须填 condition_expr。
-  private void validateConditionEdges(
-      List<DagValidationResult.Finding> findings, List<WorkflowEdgeEntity> edges) {
-    for (WorkflowEdgeEntity e : edges) {
-      if (!"CONDITION".equalsIgnoreCase(e.getEdgeType())) {
-        continue;
-      }
-      if (e.getConditionExpr() == null || e.getConditionExpr().isBlank()) {
-        findings.add(DagValidationResult.Finding.error(
-            "EDGE_CONDITION_MISSING_EXPR",
-            "CONDITION edge missing condition_expr: "
-                + e.getFromNodeCode()
-                + " -> "
-                + e.getToNodeCode(),
-            null,
-            edgeIdOf(e)));
-      }
-    }
-  }
-
-  private void validateNodeReferences(
-      List<DagValidationResult.Finding> findings,
-      Set<String> nodeCodes,
-      List<String> startNodes,
-      List<String> endNodes,
-      List<WorkflowEdgeEntity> edges) {
-    if (startNodes.isEmpty()) {
-      findings.add(
-          DagValidationResult.Finding.error("MISSING_START", "Missing START node", null, null));
-    } else if (startNodes.size() > 1) {
-      // 多个 START 时把第 2 个之后的位置标到具体 node 以便前端高亮
-      for (int i = 1; i < startNodes.size(); i++) {
-        findings.add(DagValidationResult.Finding.error(
-            "MULTIPLE_START",
-            "Multiple START nodes found: " + startNodes,
-            startNodes.get(i),
-            null));
-      }
-    }
-
-    if (endNodes.isEmpty()) {
-      findings.add(
-          DagValidationResult.Finding.error("MISSING_END", "Missing END node", null, null));
-    } else if (endNodes.size() > 1) {
-      for (int i = 1; i < endNodes.size(); i++) {
-        findings.add(DagValidationResult.Finding.error(
-            "MULTIPLE_END", "Multiple END nodes found: " + endNodes, endNodes.get(i), null));
-      }
-    }
-
-    for (WorkflowEdgeEntity e : edges) {
-      if (!nodeCodes.contains(e.getFromNodeCode())) {
-        findings.add(DagValidationResult.Finding.error(
-            "EDGE_SOURCE_MISSING",
-            "Edge references non-existent source node: " + e.getFromNodeCode(),
-            null,
-            edgeIdOf(e)));
-      }
-      if (!nodeCodes.contains(e.getToNodeCode())) {
-        findings.add(DagValidationResult.Finding.error(
-            "EDGE_TARGET_MISSING",
-            "Edge references non-existent target node: " + e.getToNodeCode(),
-            null,
-            edgeIdOf(e)));
-      }
-    }
-  }
-
-  /** 边没有持久化的 string id，前端用 `${from}-${to}-${edgeType}` 拼，保持一致。 */
-  private static String edgeIdOf(WorkflowEdgeEntity e) {
-    return e.getFromNodeCode() + "-" + e.getToNodeCode() + "-" + e.getEdgeType();
-  }
-
-  private DagAdjacency buildAdjacency(Set<String> nodeCodes, List<WorkflowEdgeEntity> edges) {
-    Map<String, List<String>> adj = new HashMap<>();
-    Map<String, List<String>> reverseAdj = new HashMap<>();
-    Map<String, Integer> inDegree = new HashMap<>();
-    for (String code : nodeCodes) {
-      adj.put(code, new ArrayList<>());
-      reverseAdj.put(code, new ArrayList<>());
-      inDegree.put(code, 0);
-    }
-    for (WorkflowEdgeEntity e : edges) {
-      if (nodeCodes.contains(e.getFromNodeCode()) && nodeCodes.contains(e.getToNodeCode())) {
-        adj.get(e.getFromNodeCode()).add(e.getToNodeCode());
-        reverseAdj.get(e.getToNodeCode()).add(e.getFromNodeCode());
-        inDegree.merge(e.getToNodeCode(), 1, Integer::sum);
-      }
-    }
-    return new DagAdjacency(adj, reverseAdj, inDegree);
-  }
-
-  private void detectCycles(
-      List<DagValidationResult.Finding> findings, DagAdjacency dag, Set<String> nodeCodes) {
-    Deque<String> queue = new ArrayDeque<>();
-    Map<String, Integer> inDegree = new HashMap<>(dag.inDegree());
-    for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
-      if (entry.getValue() == 0) {
-        queue.add(entry.getKey());
-      }
-    }
-    int visited = 0;
-    while (!queue.isEmpty()) {
-      String cur = queue.poll();
-      visited++;
-      for (String next : dag.adj().get(cur)) {
-        int deg = inDegree.get(next) - 1;
-        inDegree.put(next, deg);
-        if (deg == 0) {
-          queue.add(next);
-        }
-      }
-    }
-    if (visited < nodeCodes.size()) {
-      // 把仍有 inDegree > 0 的节点（在环里）逐个标出，便于前端高亮
-      for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
-        if (entry.getValue() > 0) {
-          findings.add(DagValidationResult.Finding.error(
-              "CYCLE_DETECTED",
-              "Cycle detected in workflow DAG (node still has incoming edges)",
-              entry.getKey(),
-              null));
-        }
-      }
-    }
-  }
-
-  private void validateReachability(
-      List<DagValidationResult.Finding> findings,
-      List<WorkflowNodeEntity> nodes,
-      Set<String> nodeCodes,
-      List<String> startNodes,
-      List<String> endNodes,
-      DagAdjacency dag) {
-    if (startNodes.size() == 1) {
-      String startCode = startNodes.get(0);
-      Set<String> reachableFromStart = new HashSet<>();
-      bfs(startCode, dag.adj(), reachableFromStart);
-      for (String code : nodeCodes) {
-        if (!"START".equalsIgnoreCase(nodeTypeByCode(nodes, code))
-            && !reachableFromStart.contains(code)) {
-          findings.add(DagValidationResult.Finding.error(
-              "UNREACHABLE_FROM_START", "Node not reachable from START: " + code, code, null));
-        }
-      }
-    }
-
-    if (endNodes.size() == 1) {
-      String endCode = endNodes.get(0);
-      Set<String> reachableToEnd = new HashSet<>();
-      bfs(endCode, dag.reverseAdj(), reachableToEnd);
-      for (String code : nodeCodes) {
-        if (!"END".equalsIgnoreCase(nodeTypeByCode(nodes, code))
-            && !reachableToEnd.contains(code)) {
-          findings.add(DagValidationResult.Finding.error(
-              "CANNOT_REACH_END", "Node cannot reach END: " + code, code, null));
-        }
-      }
-    }
-  }
-
-  private record DagAdjacency(
-      Map<String, List<String>> adj,
-      Map<String, List<String>> reverseAdj,
-      Map<String, Integer> inDegree) {}
-
-  private void bfs(String start, Map<String, List<String>> adj, Set<String> visited) {
-    Deque<String> queue = new ArrayDeque<>();
-    queue.add(start);
-    visited.add(start);
-    while (!queue.isEmpty()) {
-      String cur = queue.poll();
-      for (String next : adj.getOrDefault(cur, List.of())) {
-        if (visited.add(next)) {
-          queue.add(next);
-        }
-      }
-    }
-  }
-
-  private String nodeTypeByCode(List<WorkflowNodeEntity> nodes, String code) {
-    for (WorkflowNodeEntity n : nodes) {
-      if (n.getNodeCode().equals(code)) {
-        return n.getNodeType();
-      }
-    }
-    return null;
+    return responseAssembler.toDetailResponse(def, nodes, edges);
   }
 
   private void publishRefresh(String tenantId, String eventType) {
@@ -708,48 +307,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       throw BizException.of(
           ResultCode.NOT_FOUND, "error.workflow_version.not_found", id, version, def.getVersion());
     }
-    List<WorkflowNodeEntity> nodes = readNodesJson(snapshot.getNodesJson());
-    List<WorkflowEdgeEntity> edges = readEdgesJson(snapshot.getEdgesJson());
-    return new WorkflowDefinitionDetailResponse(
-        def.getId(),
-        def.getTenantId(),
-        snapshot.getWorkflowCode(),
-        snapshot.getWorkflowName(),
-        snapshot.getWorkflowType(),
-        snapshot.getVersion(),
-        snapshot.getEnabled(),
-        def.getDescription(),
-        def.getCreatedAt(),
-        snapshot.getSavedAt(),
-        nodes.stream().map(this::toNodeResponse).toList(),
-        edges.stream().map(this::toEdgeResponse).toList());
-  }
-
-  private List<WorkflowNodeEntity> readNodesJson(String json) {
-    if (json == null || json.isBlank()) {
-      return List.of();
-    }
-    try {
-      return objectMapper.readValue(json, NODE_LIST_TYPE);
-    } catch (JsonProcessingException e) {
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          "error.workflow.version_snapshot.deserialize_failed",
-          e.getMessage());
-    }
-  }
-
-  private List<WorkflowEdgeEntity> readEdgesJson(String json) {
-    if (json == null || json.isBlank()) {
-      return List.of();
-    }
-    try {
-      return objectMapper.readValue(json, EDGE_LIST_TYPE);
-    } catch (JsonProcessingException e) {
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          "error.workflow.version_snapshot.deserialize_failed",
-          e.getMessage());
-    }
+    List<WorkflowNodeEntity> nodes = writeSupport.readNodesJson(snapshot.getNodesJson());
+    List<WorkflowEdgeEntity> edges = writeSupport.readEdgesJson(snapshot.getEdgesJson());
+    return responseAssembler.toHistoricalDetailResponse(def, snapshot, nodes, edges);
   }
 }

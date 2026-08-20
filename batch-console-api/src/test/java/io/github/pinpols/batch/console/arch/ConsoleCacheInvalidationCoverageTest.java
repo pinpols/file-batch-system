@@ -66,19 +66,9 @@ class ConsoleCacheInvalidationCoverageTest {
       "io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService";
 
   /**
-   * 显式豁免集："全限定类名#方法名"。每条必须注释说明"为何这个写方法语义上不需要 evict"（典型：写的是非缓存的侧表 / 历史快照表，不进 orchestrator 读热点；或私有
-   * helper，其全部 public 调用方已对父键 evict）。仅这 2 条 workflow 私有 helper 豁免；新增条目须有明确架构理由，否则护栏失效。
+   * 缓存写入协作者不在本组 service 清单中；主 service 仍负责在事务内显式 evict 父聚合缓存。
+   * 如果后续把 mapper 写操作重新放回受守护 service，必须同时补充 evict 或登记明确的非缓存表理由。
    */
-  private static final Set<String> EXEMPTIONS = Set.of(
-      // 私有 helper，被 create/update/fullUpdate 调用 —— 它写的是 workflow_node / workflow_edge
-      // （workflow 定义聚合的一部分），三个 public 入口都在同事务里调 evictWorkflowDefinition 清父键，
-      // 子表随父键一起失效，无需在 helper 内重复 evict。
-      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService#upsertNodesAndEdges",
-      // 私有 helper，仅 fullUpdate 调用 —— 它写的是 workflow_definition_version 历史快照表，
-      // 不在 orchestrator launch 读热点缓存路径上（只供 console 版本 diff 列表读），故无需 evict 配置缓存；
-      // fullUpdate 本身已对主定义 evictWorkflowDefinition。
-      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService#appendVersionSnapshot");
-
   @Test
   void everyWriteMethodInCachedServicesMustEvictCache() {
     // 硬化:5 个受守护 service 必须都能解析到。若有人改名/移包,FQN 失配会让护栏"无方法可查"而静默通过
@@ -111,10 +101,6 @@ class ConsoleCacheInvalidationCoverageTest {
         "evict console config cache whenever they call a mapper write method") {
       @Override
       public void check(JavaMethod method, ConditionEvents events) {
-        String memberKey = method.getOwner().getFullName() + "#" + method.getName();
-        if (EXEMPTIONS.contains(memberKey)) {
-          return;
-        }
         boolean writesMapper = false;
         boolean evictsCache = false;
         for (JavaMethodCall call : method.getMethodCallsFromSelf()) {

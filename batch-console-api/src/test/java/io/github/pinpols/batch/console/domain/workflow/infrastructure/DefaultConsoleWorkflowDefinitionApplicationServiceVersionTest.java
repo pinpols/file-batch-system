@@ -33,6 +33,9 @@ import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefin
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,13 +81,15 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
         nodeMapper,
         edgeMapper,
         versionMapper,
-        mock(JobDefinitionMapper.class),
         mock(ConsoleRealtimeEventPort.class),
         tenantGuard,
         mock(ConsoleConfigCacheInvalidationService.class),
         lockService,
         mock(WorkflowDagValidator.class),
-        new ObjectMapper());
+        new WorkflowDefinitionResponseAssembler(),
+        new WorkflowDefinitionWriteSupport(
+            nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
+        new WorkflowDefinitionDagInspector(mock(JobDefinitionMapper.class)));
   }
 
   @Test

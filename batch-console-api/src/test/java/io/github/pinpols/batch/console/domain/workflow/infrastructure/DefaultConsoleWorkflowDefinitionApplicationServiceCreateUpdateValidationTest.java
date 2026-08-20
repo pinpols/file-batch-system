@@ -25,6 +25,9 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,13 +59,18 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceCreateUpdateValidationTe
         nodeMapper,
         edgeMapper,
         mock(WorkflowDefinitionVersionMapper.class),
-        mock(JobDefinitionMapper.class),
         mock(ConsoleRealtimeEventPort.class),
         tenantGuard,
         mock(ConsoleConfigCacheInvalidationService.class),
         mock(WorkflowDesignLockService.class),
         dagValidator,
-        new ObjectMapper());
+        new WorkflowDefinitionResponseAssembler(),
+        new WorkflowDefinitionWriteSupport(
+            nodeMapper,
+            edgeMapper,
+            mock(WorkflowDefinitionVersionMapper.class),
+            new ObjectMapper()),
+        new WorkflowDefinitionDagInspector(mock(JobDefinitionMapper.class)));
   }
 
   private WorkflowDefinitionSaveRequest request() {
