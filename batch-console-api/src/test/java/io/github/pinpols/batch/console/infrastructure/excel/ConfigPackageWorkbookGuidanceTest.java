@@ -123,8 +123,15 @@ class ConfigPackageWorkbookGuidanceTest {
       Sheet sheet = wb.getSheet("字段说明");
       assertThat(sheet).isNotNull();
       Row header = sheet.getRow(0);
-      // 第 9 列(index 8)= 填写示例
-      assertThat(header.getCell(8).getStringCellValue()).isEqualTo("填写示例");
+      assertThat(header.getCell(3).getStringCellValue()).isEqualTo("填写层级");
+      // 第 10 列(index 9)= 填写示例
+      assertThat(header.getCell(9).getStringCellValue()).isEqualTo("填写示例");
+      assertThat(rowOf(sheet, "template_code").getCell(3).getStringCellValue()).isEqualTo("必填");
+      assertThat(rowOf(sheet, "field_mappings").getCell(3).getStringCellValue()).isEqualTo("常用");
+      assertThat(rowOf(sheet, "encrypt_type").getCell(3).getStringCellValue()).isEqualTo("高级");
+      assertThat(rowOf(sheet, "header_rows").getCell(6).getStringCellValue()).contains("留空默认 0");
+      assertThat(rowOf(sheet, "log_masking_enabled").getCell(6).getStringCellValue())
+          .contains("留空默认 FALSE");
 
       // 收集 file_template_config 段的 field_mappings / query_param_schema 行的填写示例,
       // 必须同时含 import 和 export 两套结构关键字,且非空 {}。
@@ -146,12 +153,16 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   private static String fillExampleOf(Sheet sheet, String colName) {
+    return rowOf(sheet, colName).getCell(9).getStringCellValue();
+  }
+
+  private static Row rowOf(Sheet sheet, String colName) {
     for (Row row : sheet) {
       if (row.getRowNum() == 0) {
         continue;
       }
       if (colName.equals(row.getCell(1).getStringCellValue())) {
-        return row.getCell(8).getStringCellValue();
+        return row;
       }
     }
     throw new AssertionError("column not found in field guide: " + colName);
