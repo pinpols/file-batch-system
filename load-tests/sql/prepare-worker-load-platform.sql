@@ -29,8 +29,45 @@ ON CONFLICT (tenant_id, job_code) DO UPDATE SET
 DELETE FROM batch.pipeline_step_definition
 WHERE pipeline_definition_id IN (
   SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code IN ('lt_process_sql_job', 'lt_process_copy_job')
+  WHERE tenant_id = 'default-tenant'
+    AND job_code IN ('lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job')
 );
+
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+    version, enabled, description, created_at, updated_at
+)
+SELECT
+    'default-tenant', 'lt_dispatch_local_job', 'Load Test Dispatch Local Pipeline',
+    'DISPATCH', 'LOAD_TEST', 'DISPATCH', 1, true,
+    'load test local dispatch pipeline', now(), now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_dispatch_local_job' AND version = 1
+);
+
+WITH pd AS (
+  SELECT id FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_dispatch_local_job' AND version = 1
+  ORDER BY id DESC
+  LIMIT 1
+), steps(stage_code, step_order, step_code, step_name, impl_code, step_params) AS (
+  VALUES
+    ('PREPARE',    1, 'DISPATCH_PREPARE',    'Prepare',    'DISPATCH_PREPARE',    '{}'::jsonb),
+    ('DISPATCH',   2, 'DISPATCH_DISPATCH',   'Dispatch',   'DISPATCH_DISPATCH',   '{}'::jsonb),
+    ('ACK',        3, 'DISPATCH_ACK',        'Ack',        'DISPATCH_ACK',        '{"onSuccessNextStageCode":"COMPLETE"}'::jsonb),
+    ('RETRY',      4, 'DISPATCH_RETRY',      'Retry',      'DISPATCH_RETRY',      '{"onFailureNextStageCode":"COMPENSATE"}'::jsonb),
+    ('COMPENSATE', 5, 'DISPATCH_COMPENSATE', 'Compensate', 'DISPATCH_COMPENSATE', '{"terminalOnSuccess":true}'::jsonb),
+    ('COMPLETE',   6, 'DISPATCH_COMPLETE',   'Complete',   'DISPATCH_COMPLETE',   '{"terminalOnSuccess":true}'::jsonb)
+)
+INSERT INTO batch.pipeline_step_definition (
+    pipeline_definition_id, step_code, step_name, stage_code, step_order,
+    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
+    enabled, created_at, updated_at
+)
+SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
+       steps.impl_code, steps.step_params, 300, 'NONE', 0, true, now(), now()
+FROM pd CROSS JOIN steps;
 
 INSERT INTO batch.pipeline_definition (
     tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,

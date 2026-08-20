@@ -37,6 +37,41 @@ P2 本地容量画像已补跑：process kill / PG 断链恢复可恢复；10w s
   - 未检出 `orch likely unreachable` / `renew skipped: circuit OPEN` / `renew circuit OPENED`
 - 解释：FAILED 均为 launch 阶段 `failure_class=BUSINESS_RULE`，没有 task，属于当前本机配额/容量 fail-close，不是 worker 执行后丢终态。
 
+## 2026-08-21 完整 Sim 与 Mixed 压力复验
+
+### 完整 Sim
+
+- 命令：`bash scripts/local/start-all.sh && bash scripts/local/sim-harness.sh all`
+- 结果：Stage 04–27 全部 PASS，包含 Stage 5c 混合分发、Stage 21 atomic、Stage 25 import checkpoint kill/retry。
+- Stage 25 关键断言：`markerBeforeKill=15`、`processedFinal=5000`、`rows=5000`、终态 `SUCCESS`。
+- 日志目录：`logs/runs/sim-harness/sim-harness-20260821-000136-db68dfa1d`
+
+### Mixed 压力
+
+- 压测脚本：`load-tests/scripts/run-control-plane-worker-benchmark.sh`
+- 参数：`parallel`，process/dispatch/atomic/trigger 各 `3.0/s`，scheduler read `3.0/s`，持续 `60s`，各模块 `USERS=4`。
+- 本轮有效 RUN_ID：`preprod-p0-mixed-20260821d`
+- 报告：`load-tests/target/control-plane-worker-report-preprod-p0-mixed-20260821d.md`
+
+| 指标 | 2026-06-08 基线 | 2026-08-21 复验 | 变化 |
+|---|---:|---:|---:|
+| Gatling 请求 | 1080 / 1080 OK | 1080 / 1080 OK | 无回退 |
+| 平均响应时间 | 60ms | 41ms | 改善 31.7% |
+| p95 | 150ms | 105ms | 改善 30.0% |
+| p99 | 1050ms | 319ms | 改善 69.6% |
+| 最大响应时间 | 1344ms | 504ms | 改善 62.5% |
+| 实例终态 | 720 / 720 | 720 / 720 | 无回退 |
+| `non_terminal` | 0 | 0 | 无回退 |
+| Kafka lag | 0 | 0 | 无回退 |
+
+实例完成 p95 仍受本地配额 fail-close 和并发调度波动影响：atomic `1.015s`、dispatch `0.915s`、process `1.359s`、trigger `1.044s`，均为终态，不能用它们替代入口延迟 SLO。
+
+### 压测夹具修复与边界
+
+- 复验前发现 `prepare-worker-load-platform.sql` 只创建了 `lt_dispatch_local_job`，没有创建对应 pipeline definition，导致第一次复跑的 dispatch 实例全部 `definition_not_found`；该无效批次未纳入比较。
+- 已补齐 dispatch `PREPARE → DISPATCH → ACK → RETRY → COMPENSATE → COMPLETE` 六阶段夹具，后续压测不再依赖残留数据库 fixture。
+- 两次有效复跑均观察到少量同一 `fileId + channel` 并发下的 `DISPATCH_ACK_FAILED`。这是现有 `file_dispatch_record` 按文件/渠道做 CAS 的并发语义，不影响本轮入口性能、终态收敛或 Kafka lag；若业务要求同一文件并发投递全部返回成功，需要另开 dispatch 幂等语义专项，不在本轮性能结论中隐瞒。
+
 ## P0-2 Atomic 1w Storm
 
 - RUN_ID：`preprod-p0-atomic1w-20260608140503`
