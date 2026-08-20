@@ -16,14 +16,14 @@
 | 3 固定 Map 契约 | 已完成 | #924：Console/内部 API/Java SDK 首批固定响应 DTO；#933：文件维护投影；#936：batch-day replay 影响投影；本批将文件治理延迟指标固定为 record | 剩余机器候选均已登记为动态 JSON/metadata/插件载荷、通用工具或兼容转换边界；新增固定契约不得回退为 Map |
 | 4 复杂类拆分 | 已完成 | #923：Task Outcome 状态策略提取；#940：`TaskOutcomeNodeRunRecorder`；#942：`TaskOutcomeTerminalFinalizer`；#941：`TaskOutcomeDagProgressor`、`TaskOutcomeParentTaskSignaler`；本阶段完成 `TaskOutcomeWorkflowFinalizer`、`DefaultConsoleWorkflowDefinitionApplicationService`、`DefaultTaskOutcomeService`、`PreprocessStep`、Java SDK `TaskDispatcher`、`DefaultRetryGovernanceService`、`AbstractTaskConsumer` 和 `AbstractExportFormat` 的职责拆分 | 阶段验收完成；后续只在出现独立变化原因时继续局部重构，不以文件行数或分层完整度为目标；保持事务入口、Kafka offset、claim/report 顺序、缓存失效和 API wire 字段不变 |
 | 5 测试风格 | 已完成 | 已按阶段 4 影响域统一 fixture、契约命名和协作者窄单测；移除 worker 消费测试对受保护业务入口的反射调用，保留服务级契约测试 | 后续新增测试沿用本阶段规则；不对全仓测试做机械重写，动态 Map 和 test-as-spec inline fixture 按既有边界保留 |
-| 6 例外治理 | 未开始 | — | 审计 suppression、白名单与长期理由 |
-| 7 最终验收 | 未开始 | — | 前述阶段结束后跑 Full Gate、关键 sim 与容器启动验收 |
+| 6 例外治理 | 进行中 | 独立 PR：suppression 登记表、精确规则守卫、失效编译守卫清理 | 等待 CI 后合入；合入后复扫规则数量 |
+| 7 最终验收 | 进行中 | 刷新可读性扫描快照；将快照一致性接入 PR/full gate | 等阶段 6 合入后重生成快照，完成 Full Gate、关键 sim 与容器启动验收 |
 
 近期合入记录：#918 `529b9a319`、#921 `557897f4b`、#922 `c053c4544`、#923 `8e5e1342`、#924 `cfa33e871`、#933 `911fd15d8`、#935 `fb2c7ad59`、#936 `490d02c73`、#938 `a2b5ca682`。#935 后已用 `@Lazy/@Autowired`、`ObjectProvider` 及常见 self/proxy 标识复扫生产源码，结果为 0；#936 保持 batch-day replay 预览 JSON 字段不变，仅将两组固定 SQL 投影移至 record 边界。本批继续保持 wire 字段不变，将文件治理延迟指标的 Controller/调度读取边界改为固定 record，Redis 内部缓存协议保持兼容。
 
 ## 1. 当前基线
 
-以下数据为 2026-08-12 对 `src/main/java` 的词法扫描快照，只用于确定治理范围，不作为质量 KPI：
+以下数据为 2026-08-20 对 `src/main/java` 的词法扫描快照，只用于确定治理范围，不作为质量 KPI；快照由 CI 检查与源码一致：
 
 | 项 | 当前值 | 判断 |
 |---|---:|---|
