@@ -370,12 +370,12 @@ Stage 6 trigger 去重复核：
 |---|---|---|
 | `preflight` / `prereq` / 双 PG `verify-data` | PASS | 基础依赖、RLS、租户导入、两片真实 PG 路由均通过 |
 | Stage 04–20 | PASS | import/export/process/dispatch/trigger/atomic 主链与扩展场景通过 |
-| Stage 21 Atomic HTTP/SQL/shell cancel | 混压首次超时，单独复跑 PASS | 单独复跑确认 HTTP SUCCESS、SQL `TIMEOUT`、shell `WORKER_EXECUTION_CANCELLED`，`cancel_requested=true` |
+| Stage 21 Atomic HTTP/SQL/shell cancel | 混压首轮受 worker 未就绪影响，单独复跑 PASS | 单独复跑确认 HTTP SUCCESS、SQL `TIMEOUT`、shell `WORKER_EXECUTION_CANCELLED`，`cancel_requested=true` |
 | Stage 22 Trigger 6c | PASS | scheduled、misfire pending、catch-up replay、60 条 API storm 全通过 |
 | Stage 23–27 | PASS | skip profile、trigger 6d、checkpoint kill/retry、bundle import、batch claim 均通过 |
 | Trigger focused tests | PASS | 16 tests，0 failure / 0 error |
 
-Stage 21 的混压超时不是任务执行失败：worker 在约 1 分钟内已完成取消并上报，但控制面终态落库超过脚本原有 90 秒窗口；单独复跑通过，因此保留为“混压下终态延迟”观察项，不把它伪装成全量一次性零失败。
+Stage 21 的混压首轮超时后来完成了时间线核对：任务在 20:33 创建，但 Atomic worker 到 20:42 才重新启动，20:43 才消费，20:44:49 才落终态。该证据不能证明控制面 report 链路本身存在 10 分钟终态延迟；它反映的是 sim 在 worker 未注册/心跳未就绪时已经发起场景。单独复跑 Stage 5c 已通过，因此 harness 增加 `worker_registry` 在线心跳门禁，避免把运行环境未就绪误报为业务失败。
 
 ### 本次修复
 

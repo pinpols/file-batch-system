@@ -272,6 +272,29 @@ ensure_core_runtime() {
   done
 }
 
+# 健康探针只代表 HTTP 进程已启动，不能证明 worker 已注册并能被调度器选中。
+# 全量 sim 在高负载/重启窗口内若直接发任务，会把“worker 尚未就绪”误报成业务终态超时。
+ensure_worker_registrations() {
+  local groups=(IMPORT EXPORT PROCESS DISPATCH ATOMIC)
+  local group count
+  for group in "${groups[@]}"; do
+    for _ in $(seq 1 45); do
+      count=$(docker exec "$PG" psql -U "$PGU" -d "$PLAT_DB" -tAc \
+        "select count(*) from batch.worker_registry where worker_group='${group}' and status='ONLINE' and heartbeat_at >= current_timestamp - interval '90 seconds'" \
+        2>/dev/null | tr -d '[:space:]' || true)
+      if [[ "${count:-0}" =~ ^[1-9][0-9]*$ ]]; then
+        break
+      fi
+      sleep 2
+    done
+    if ! [[ "${count:-0}" =~ ^[1-9][0-9]*$ ]]; then
+      echo "  [worker-runtime] ${group} worker 未注册或心跳已过期(count=${count:-0})" >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
 # ---------------------------------------------------------
 # sim:全量阶段 04→25
 # restart_import:为特定 stage 切换 worker-import 互斥配置。
@@ -312,6 +335,7 @@ sim() {
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     ensure_core_runtime
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
+    ensure_worker_registrations || exit 1
     local sum="$SIM_LOG_DIR/sim-summary.txt"; : > "$sum"
     local sim_failed=0
     while IFS= read -r s; do
@@ -334,6 +358,7 @@ sim() {
         25-*) restart_import checkpoint ;;  # checkpoint=true
       esac
       ensure_core_runtime || exit 1
+      ensure_worker_registrations || exit 1
       echo ">>> $n $(date +%T)" | tee -a "$sum"
       local stage_log="$SIM_LOG_DIR/$n.log"
       # 阶段脚本不能继承 while-read 的 stdin；否则内部命令读取 stdin 时会吞掉后续阶段文件名。
