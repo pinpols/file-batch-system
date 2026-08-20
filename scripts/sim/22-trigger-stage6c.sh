@@ -18,15 +18,48 @@ cd "$ROOT"
 SIM_STAGE_NAME="trigger-stage6c"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
+source "$ROOT/scripts/lib/process.sh"
 
 export STORM_COUNT="${STORM_COUNT:-60}"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
+# Fixture 会直接重置 Quartz 的测试 job/trigger。必须先停 Trigger，再清理 fixture，最后
+# 启动 Trigger；仅调用 drain 或“重启后立即清理”都可能让新进程的 reconciler 与 psql 争抢
+# QRTZ_LOCKS。这个停启只属于 sim 的数据边界隔离，不代表生产流程需要按阶段重启服务。
+echo "==> stop trigger before direct Quartz fixture reset"
+trigger_pids="$(process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" || true)"
+if [[ -n "$trigger_pids" ]]; then
+  # shellcheck disable=SC2086
+  kill -9 $trigger_pids 2>/dev/null || true
+fi
+for _ in $(seq 1 30); do
+  process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" | grep -q . || break
+  sleep 1
+done
+if process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" | grep -q .; then
+  echo "❌ trigger 停止失败，无法安全清理 Quartz fixture" >&2
+  exit 1
+fi
+
 echo "==> seed trigger stage6c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage6c-trigger-fixtures.sql >/dev/null
+
+echo "==> start trigger after direct Quartz fixture reset"
+bash scripts/local/restart.sh trigger >"$REPORT_DIR/trigger-restart.log" 2>&1
+health_code=""
+for _ in $(seq 1 60); do
+  health_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$TRIGGER_BASE/actuator/health" 2>/dev/null || true)
+  [[ "$health_code" == "200" ]] && break
+  sleep 2
+done
+[[ "$health_code" == "200" ]] || {
+  echo "❌ trigger fixture 后启动健康检查失败，详见 $REPORT_DIR/trigger-restart.log" >&2
+  exit 1
+}
+
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 

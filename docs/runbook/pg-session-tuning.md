@@ -9,6 +9,11 @@
 | **platform**（调度态/状态机/短事务） | **15m** | **60s** | orchestrator / trigger / console 主库, worker 平台池 |
 | **business**（导入/导出/PROCESS 大 SQL） | **30m** | **10m** | worker 业务池 (`batch.datasource.business`) |
 
+Trigger 是平台池的例外：它同时承载 Quartz JDBC JobStore。Quartz misfire recovery 可能在一次事务
+内等待锁并处理多条触发器，Trigger 使用 `BATCH_PG_TRIGGER_IDLE_IN_TX_TIMEOUT`，默认 **10m**；
+orchestrator / console / worker 平台池仍使用上表的 60s。若调度器规模或数据库锁等待明显增加，
+应先处理 Quartz 锁竞争和积压，再按实际最长恢复事务调整该值。
+
 ## 何时调整
 
 ### 1. Flyway 大型迁移撞 `statement_timeout`

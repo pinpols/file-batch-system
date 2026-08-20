@@ -360,6 +360,40 @@ Stage 6 trigger 去重复核：
 - 本地 dispatch 到 `localhost:11080` 需要 `BATCH_SECURITY_BYPASS_MODE=true`，本轮仅对 `worker-dispatch` 本地进程开启，用于本地 sim。
 - `06-verify.sh` 的“近 10 分钟全局状态”可能混入探索失败记录；结论以本报告的精确时间过滤 SQL 为准。
 
+## 2026-08-20 sim 复验附录
+
+本次按 checkpoint 设计要求实际启动 Docker 基础依赖、8 个 Spring Boot 后端和真实 PostgreSQL/Kafka/MinIO/Valkey，执行了 `sim-harness` 的 `preflight → reset → prereq → verify-data → sim`。
+
+### 结果
+
+| 范围 | 结果 | 证据 |
+|---|---|---|
+| `preflight` / `prereq` / 双 PG `verify-data` | PASS | 基础依赖、RLS、租户导入、两片真实 PG 路由均通过 |
+| Stage 04–20 | PASS | import/export/process/dispatch/trigger/atomic 主链与扩展场景通过 |
+| Stage 21 Atomic HTTP/SQL/shell cancel | 混压首次超时，单独复跑 PASS | 单独复跑确认 HTTP SUCCESS、SQL `TIMEOUT`、shell `WORKER_EXECUTION_CANCELLED`，`cancel_requested=true` |
+| Stage 22 Trigger 6c | PASS | scheduled、misfire pending、catch-up replay、60 条 API storm 全通过 |
+| Stage 23–27 | PASS | skip profile、trigger 6d、checkpoint kill/retry、bundle import、batch claim 均通过 |
+| Trigger focused tests | PASS | 16 tests，0 failure / 0 error |
+
+Stage 21 的混压超时不是任务执行失败：worker 在约 1 分钟内已完成取消并上报，但控制面终态落库超过脚本原有 90 秒窗口；单独复跑通过，因此保留为“混压下终态延迟”观察项，不把它伪装成全量一次性零失败。
+
+### 本次修复
+
+1. Trigger 正常启动完成后发布 `ACCEPTING_TRAFFIC`，避免新进程健康探针长期 `OUT_OF_SERVICE`。
+2. Trigger 的 Quartz JDBC JobStore 使用独立的 10 分钟 `idle_in_transaction_session_timeout`，避免 misfire recovery 被全局 60 秒上限提前断开；配置和原因已同步到 `docs/runbook/pg-session-tuning.md`。
+3. Stage 6c fixture 改为可重复执行，并在直接清理 Quartz 表前严格停 Trigger、清理后再启动，避免 fixture 与 `QRTZ_LOCKS` 竞争。
+4. sim reset 补清 `retry_schedule`、`worker_report_outbox`、`dead_letter_task` 等运行态；prereq 另清理 `platform_seed` 注入的已过期 WAITING retry 样例，避免历史重试污染后续阶段。
+
+### 复验命令
+
+```bash
+bash scripts/local/build-apps.sh
+bash scripts/local/start-all.sh
+bash scripts/local/sim-harness.sh all
+```
+
+Stage 6c fixture 若直接单独复跑，脚本会自行停启 Trigger；这只用于隔离直接修改 Quartz 测试数据的边界，不代表生产运行需要按业务阶段重启服务。
+
 ## 下一阶段
 
 1. Import：checkpoint 真实崩溃续跑已通过 Stage 2e；后续只补 PG/Kafka 断链等更广故障注入。

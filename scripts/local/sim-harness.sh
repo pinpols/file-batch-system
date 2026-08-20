@@ -175,13 +175,16 @@ reset() {
       LOOP EXECUTE format('TRUNCATE TABLE biz.%I CASCADE', r.relname); END LOOP;
     END \$reset\$;" >/dev/null && ok "biz 数据已清(动态枚举,跳过不存在的表)" || { c_red "  ✗ biz 清理失败"; return 1; }
 
-  # 平台运行态 truncate(job_/pipeline_/workflow_/outbox/file_record 等),保留 *_definition/config/tenant/user/系统表
+  # 平台运行态 truncate(job_/pipeline_/workflow_/retry/outbox/file_record 等),保留
+  # *_definition/config/tenant/user/系统表。retry_schedule / worker_report_outbox 不会被
+  # job_instance 的 CASCADE 一并清理；若漏清，历史 WAITING retry 会在全量 sim 期间持续抢
+  # scheduler，拖慢后续场景的终态落库并造成假性超时。
   docker exec "$PG" psql -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c "
     DO \$reset\$
     DECLARE r record;
     BEGIN
       FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='batch'
-        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|pipeline_progress|workflow_run|workflow_node_run|outbox_event|event_outbox_retry|trigger_outbox_event|file_record|file_error_record|compensation_command|dead_letter)'
+        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|pipeline_progress|workflow_run|workflow_node_run|retry_schedule|outbox_event|event_outbox_retry|trigger_outbox_event|worker_report_outbox|file_record|file_error_record|compensation_command|dead_letter_task)'
       LOOP EXECUTE format('TRUNCATE TABLE batch.%I CASCADE', r.tablename); END LOOP;
     END \$reset\$;" >/dev/null && ok "平台运行态已清(保留定义/配置/租户/用户/系统表)" || { c_red "  ✗ 平台运行态清理失败"; return 1; }
   c_grn "== reset 完成 =="
@@ -211,6 +214,15 @@ prereq() {
     < scripts/db/test-seed/platform_seed.sql >"$SIM_LOG_DIR/platform-seed.log" 2>&1 \
     && ok "platform_seed(atomic/procedure)" \
     || { c_red "  ✗ platform_seed(见 $SIM_LOG_DIR/platform-seed.log)"; return 1; }
+
+  # platform_seed 同时带有供治理页面展示的历史 retry 样例。它们不是 sim 的输入，
+  # 但 WAITING 且 next_retry_at 已过期时会被真实 scheduler 反复重派，污染后续阶段的
+  # Kafka/报告时序；仅清理已经过期的 WAITING 样例，保留 seed 定义和未到期运行态。
+  docker exec "$PG" psql -q -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c \
+    "DELETE FROM batch.retry_schedule WHERE retry_status = 'WAITING' AND next_retry_at < CURRENT_TIMESTAMP;" \
+    >/dev/null \
+    && ok "清理 platform_seed 过期 retry 样例" \
+    || { c_red "  ✗ platform_seed 过期 retry 清理失败"; return 1; }
 
   echo "== prereq:shard-1(幂等)=="
   bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >"$SIM_LOG_DIR/shard1.log" 2>&1 && ok "shard-1 就绪" || { c_red "  ✗ shard-1(见 $SIM_LOG_DIR/shard1.log)"; return 1; }
