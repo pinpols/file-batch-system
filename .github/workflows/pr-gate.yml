@@ -248,6 +248,10 @@ jobs:
         # @Disabled 必须带非空 reason(防覆盖率被静默掏空)。
         run: bash scripts/ci/check-no-silent-disabled-tests.sh
 
+      - name: Java suppression registry
+        shell: bash
+        run: python3 scripts/ci/check-java-suppression-registry.py
+
       - name: PMD + Spotless + dependency boundary
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire

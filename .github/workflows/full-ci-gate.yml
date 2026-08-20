@@ -89,6 +89,7 @@ jobs:
       - name: PMD + Spotless + dependency boundary
         shell: bash
         run: |
+          python3 scripts/ci/check-java-suppression-registry.py
           # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
           ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
 
