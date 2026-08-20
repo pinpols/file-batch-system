@@ -13,7 +13,7 @@
 | 含 Map 的源文件 | 441 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 210 |
+| `@SuppressWarnings` | 209 |
 | 含 suppression 的源文件 | 160 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 7 |

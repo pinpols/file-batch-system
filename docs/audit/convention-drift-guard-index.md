@@ -1,6 +1,6 @@
 # 约定约束与漂移防护总账
 
-> 维护日期: 2026-08-12
+> 维护日期: 2026-08-20
 > 定位: 统一记录项目约定、约束、审计、审核、复扫与 CI 守卫入口,用于后续扫描时防止规范漂移。
 
 本文不是新的规范来源,也不替代 `CLAUDE.md`、编码规约、ADR 或 runbook。它只做一件事:把分散在代码、文档、脚本、CI、审计报告里的约束集中成一张可复扫的总账。
@@ -23,7 +23,7 @@
 |---|---:|---|---|
 | ADR | 47 个 ADR 文件 | [docs/architecture/adr/](../architecture/adr/) | 包含架构边界、SDK、checkpoint、capacity、依赖调度等决策 |
 | 专项审计报告 | 7 个文件 | [docs/audit/](./) | 包含 2026-05-23 全仓架构审计和后续后端深扫 |
-| CI 守卫脚本 | 34 个文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性等 |
+| CI 守卫脚本 | 35 个文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性和 Java suppression/快照防漂移等 |
 | GitHub Actions | 12 个 workflow | `.github/workflows/` | PR gate、full CI、staging、SDK parity、CodeQL、workflow lint |
 | SDK 契约 fixture | 30 个 case | [docs/api/sdk-contract-fixtures/](../api/sdk-contract-fixtures/) | 覆盖注册、心跳、claim、renew、report、Kafka schema 兼容等 |
 | 顶层规范文档 | 3 个核心入口 | [docs/README.md](../README.md) | `agent-baseline`、`coding-conventions`、`changelog` |
