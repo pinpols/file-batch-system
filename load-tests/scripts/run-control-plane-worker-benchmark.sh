@@ -29,6 +29,7 @@ ATOMIC_JOBS_CSV="${ATOMIC_JOBS_CSV:-atomic_sql_demo}"
 KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|atomic)|orchestrator-trigger-launch}"
 KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
 KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
+BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
 
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
@@ -88,9 +89,24 @@ login_token() {
 
 kafka_lag_snapshot() {
   local group_regex="${1:-$KAFKA_LAG_GROUP_REGEX}"
-  local kafka_container output
+  local kafka_cli kafka_container output
+  if [[ -n "${KAFKA_CONSUMER_GROUPS_BIN:-}" && -x "${KAFKA_CONSUMER_GROUPS_BIN}" ]]; then
+    kafka_cli="${KAFKA_CONSUMER_GROUPS_BIN}"
+  elif [[ -n "${KAFKA_BIN_DIR:-}" && -x "${KAFKA_BIN_DIR%/}/kafka-consumer-groups.sh" ]]; then
+    kafka_cli="${KAFKA_BIN_DIR%/}/kafka-consumer-groups.sh"
+  elif command -v kafka-consumer-groups.sh >/dev/null 2>&1; then
+    kafka_cli="$(command -v kafka-consumer-groups.sh)"
+  fi
+
+  if [[ "$BATCH_SCRIPT_RUNTIME" != "docker" && -n "${kafka_cli:-}" ]]; then
+    "$kafka_cli" --bootstrap-server "$KAFKA_HOST_BOOTSTRAP" --describe --all-groups 2>/dev/null \
+      | awk -v re="$group_regex" 'NR==1 || $1 ~ re {print}' \
+      || echo "kafka lag unavailable: host kafka-consumer-groups.sh failed"
+    return 0
+  fi
+
   kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
-  if [[ -n "$kafka_container" ]]; then
+  if [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]]; then
     output="$(
       docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
         --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>&1 || true
@@ -100,13 +116,6 @@ kafka_lag_snapshot() {
       return 0
     fi
     echo "kafka lag via container failed: ${output}" >&2
-  fi
-
-  if command -v kafka-consumer-groups.sh >/dev/null 2>&1; then
-    kafka-consumer-groups.sh --bootstrap-server "$KAFKA_HOST_BOOTSTRAP" --describe --all-groups 2>/dev/null \
-      | awk -v re="$group_regex" 'NR==1 || $1 ~ re {print}' \
-      || echo "kafka lag unavailable: host kafka-consumer-groups.sh failed"
-    return 0
   fi
 
   echo "kafka lag unavailable: kafka-consumer-groups.sh not found in container or host"

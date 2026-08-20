@@ -32,6 +32,7 @@ KAFKA_LAG_BREACH_SECONDS="${KAFKA_LAG_BREACH_SECONDS:-30}"
 ERROR_RATE_THRESHOLD_PCT="${ERROR_RATE_THRESHOLD_PCT:-1.0}"
 ERROR_RATE_BREACH_SECONDS="${ERROR_RATE_BREACH_SECONDS:-300}"
 DISK_USAGE_THRESHOLD_PCT="${DISK_USAGE_THRESHOLD_PCT:-90}"
+BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
 
 # Actuator base(每个模块独立端口),只取 console-api 作主样本
 
@@ -104,16 +105,31 @@ check_hikari() {
   fi
 }
 
-# 3) Kafka lag(本地用 docker exec kafka-consumer-groups,简化:汇总最大 lag)
+# 3) Kafka lag(优先本机 Kafka CLI,可回退 docker exec;简化:汇总最大 lag)
 check_kafka_lag() {
-  local lag kafka_container
-  kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
-  [[ -n "$kafka_container" ]] || return
-  lag="$(
-    docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
-      --bootstrap-server "${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}" --describe --all-groups 2>/dev/null \
-      | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
-  )"
+  local kafka_cli kafka_container lag
+  if [[ -n "${KAFKA_CONSUMER_GROUPS_BIN:-}" && -x "${KAFKA_CONSUMER_GROUPS_BIN}" ]]; then
+    kafka_cli="${KAFKA_CONSUMER_GROUPS_BIN}"
+  elif [[ -n "${KAFKA_BIN_DIR:-}" && -x "${KAFKA_BIN_DIR%/}/kafka-consumer-groups.sh" ]]; then
+    kafka_cli="${KAFKA_BIN_DIR%/}/kafka-consumer-groups.sh"
+  elif command -v kafka-consumer-groups.sh >/dev/null 2>&1; then
+    kafka_cli="$(command -v kafka-consumer-groups.sh)"
+  fi
+  if [[ "$BATCH_SCRIPT_RUNTIME" != "docker" && -n "${kafka_cli:-}" ]]; then
+    lag="$(
+      "$kafka_cli" --bootstrap-server "${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}" \
+        --describe --all-groups 2>/dev/null \
+        | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
+    )"
+  else
+    kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+    [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]] || return
+    lag="$(
+      docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
+        --bootstrap-server "${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}" --describe --all-groups 2>/dev/null \
+        | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
+    )"
+  fi
   if [[ -z "$lag" ]]; then return; fi
   if (( lag > KAFKA_LAG_THRESHOLD )); then
     if (( kafka_breach_since == 0 )); then kafka_breach_since=$(date +%s); fi

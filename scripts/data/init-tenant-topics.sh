@@ -18,6 +18,10 @@
 #   WORKER_TYPES=import,export \
 #     sh scripts/data/init-tenant-topics.sh
 #
+# 非容器环境：
+#   - 安装 Kafka CLI，并设置 KAFKA_BIN_DIR=/path/to/kafka/bin；或
+#   - 直接设置 KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh。
+#
 # tenantId 非法字符（Kafka topic 仅允许 [a-zA-Z0-9._-]）会被替换为 "_"，与
 # BatchTopicResolver.safe() 行为一致——否则 worker 订阅正则匹配不上。
 # =========================================================
@@ -30,6 +34,21 @@ partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 # 空 = 不下发 topic 级 min.insync.replicas（dev 默认）；prod 设 2，与平台 topic 一致。
 min_insync_replicas="${KAFKA_TOPIC_MIN_INSYNC_REPLICAS:-}"
+kafka_topics_bin="${KAFKA_TOPICS_BIN:-}"
+if [ -z "${kafka_topics_bin}" ] && [ -n "${KAFKA_BIN_DIR:-}" ]; then
+  kafka_topics_bin="${KAFKA_BIN_DIR%/}/kafka-topics.sh"
+fi
+if [ -z "${kafka_topics_bin}" ]; then
+  if command -v kafka-topics.sh >/dev/null 2>&1; then
+    kafka_topics_bin="$(command -v kafka-topics.sh)"
+  else
+    kafka_topics_bin="/opt/kafka/bin/kafka-topics.sh"
+  fi
+fi
+if ! command -v "${kafka_topics_bin}" >/dev/null 2>&1; then
+  echo "kafka-topics.sh not found: set KAFKA_BIN_DIR or KAFKA_TOPICS_BIN" >&2
+  exit 2
+fi
 
 # 与 BatchTopicResolver.safe(): [^a-zA-Z0-9._-] -> _
 sanitize() {
@@ -37,13 +56,13 @@ sanitize() {
 }
 
 echo "Waiting for Kafka at ${bootstrap_server} ..."
-until /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_server}" --list >/dev/null 2>&1; do
+until "${kafka_topics_bin}" --bootstrap-server "${bootstrap_server}" --list >/dev/null 2>&1; do
   sleep 2
 done
 
 topic_partitions() {
   topic="$1"
-  /opt/kafka/bin/kafka-topics.sh \
+  "${kafka_topics_bin}" \
     --bootstrap-server "${bootstrap_server}" \
     --describe \
     --topic "${topic}" 2>/dev/null \
@@ -55,7 +74,7 @@ ensure_topic() {
   current="$(topic_partitions "${topic}")"
   if [ -z "${current}" ]; then
     if [ -n "${min_insync_replicas}" ]; then
-      /opt/kafka/bin/kafka-topics.sh \
+      "${kafka_topics_bin}" \
         --bootstrap-server "${bootstrap_server}" \
         --create \
         --if-not-exists \
@@ -64,7 +83,7 @@ ensure_topic() {
         --replication-factor "${replication_factor}" \
         --config "min.insync.replicas=${min_insync_replicas}"
     else
-      /opt/kafka/bin/kafka-topics.sh \
+      "${kafka_topics_bin}" \
         --bootstrap-server "${bootstrap_server}" \
         --create \
         --if-not-exists \
@@ -76,7 +95,7 @@ ensure_topic() {
   fi
   if [ "${current}" -lt "${partitions}" ]; then
     echo "Increasing ${topic} partitions ${current} -> ${partitions}"
-    /opt/kafka/bin/kafka-topics.sh \
+    "${kafka_topics_bin}" \
       --bootstrap-server "${bootstrap_server}" \
       --alter \
       --topic "${topic}" \
@@ -85,10 +104,10 @@ ensure_topic() {
 }
 
 old_ifs=$IFS
-for raw_tenant in $(IFS=','; echo $tenants_csv); do
+for raw_tenant in $(IFS=','; echo "$tenants_csv"); do
   tenant="$(sanitize "$(echo "${raw_tenant}" | tr -d '[:space:]')")"
   [ -n "${tenant}" ] || continue
-  for raw_type in $(IFS=','; echo $worker_types_csv); do
+  for raw_type in $(IFS=','; echo "$worker_types_csv"); do
     wt="$(echo "${raw_type}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
     [ -n "${wt}" ] || continue
     topic="batch.task.dispatch.${wt}.${tenant}"

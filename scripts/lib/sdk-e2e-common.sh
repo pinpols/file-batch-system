@@ -13,7 +13,8 @@
 #
 # 入口需先 export 这些(均有默认):
 #   PGHOST PGPORT PGUSER PGDATABASE BATCH_PLATFORM_DB_PASSWORD
-#   ORCH_URL TRIGGER_URL KAFKA_HOST_PORT KAFKA_CONTAINER TENANT GOROOT_HINT
+#   ORCH_URL TRIGGER_URL KAFKA_HOST_PORT KAFKA_CONTAINER KAFKA_BIN_DIR BATCH_SCRIPT_RUNTIME
+#   TENANT GOROOT_HINT
 # =============================================================================
 
 # ── 默认值(入口可覆盖)──────────────────────────────────────────────────────
@@ -23,6 +24,7 @@
 : "${KAFKA_HOST_PORT:=19092}"; : "${KAFKA_CONTAINER:=batch-kafka}"; : "${TENANT:=default-tenant}"
 : "${GOROOT_HINT:=/usr/local/opt/go/libexec}"
 : "${SDK_E2E_JOB_CODE:=sdk_echo_demo_e2e}"
+: "${BATCH_SCRIPT_RUNTIME:=auto}"
 export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
 
 # repo root (库在 scripts/lib/)
@@ -34,12 +36,49 @@ sdk_e2e_pass(){ printf '✅ %s\n' "$*"; }
 sdk_e2e_fail(){ printf '❌ %s\n' "$*"; }
 sdk_e2e_sha256(){ printf %s "$1" | { command -v sha256sum >/dev/null && sha256sum || shasum -a 256; } | cut -d' ' -f1; }
 
+sdk_e2e_kafka_topics_bin() {
+  if [[ -n "${KAFKA_TOPICS_BIN:-}" && -x "${KAFKA_TOPICS_BIN}" ]]; then
+    printf '%s' "${KAFKA_TOPICS_BIN}"
+    return 0
+  fi
+  if [[ -n "${KAFKA_BIN_DIR:-}" && -x "${KAFKA_BIN_DIR%/}/kafka-topics.sh" ]]; then
+    printf '%s' "${KAFKA_BIN_DIR%/}/kafka-topics.sh"
+    return 0
+  fi
+  command -v kafka-topics.sh 2>/dev/null || return 1
+}
+
+sdk_e2e_kafka_topics() {
+  case "${BATCH_SCRIPT_RUNTIME}" in
+    host)
+      local bin
+      bin="$(sdk_e2e_kafka_topics_bin)" || {
+        sdk_e2e_fail "kafka-topics.sh not found; set KAFKA_BIN_DIR or KAFKA_TOPICS_BIN"
+        return 1
+      }
+      "$bin" --bootstrap-server "localhost:${KAFKA_HOST_PORT}" "$@"
+      ;;
+    docker)
+      docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 "$@"
+      ;;
+    auto)
+      local bin
+      if bin="$(sdk_e2e_kafka_topics_bin)"; then
+        "$bin" --bootstrap-server "localhost:${KAFKA_HOST_PORT}" "$@"
+      else
+        docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 "$@"
+      fi
+      ;;
+    *) sdk_e2e_fail "BATCH_SCRIPT_RUNTIME must be one of: auto, host, docker"; return 2 ;;
+  esac
+}
+
 # 检查本地/CI 栈可达。返回非 0 让入口决定是否自己 boot。
 sdk_e2e_check_stack() {
   curl -fsS "${ORCH_URL}/actuator/health" 2>/dev/null | grep -q '"status":"UP"' || { sdk_e2e_fail "orchestrator not UP at ${ORCH_URL}"; return 1; }
   curl -fsS "${TRIGGER_URL}/actuator/health" 2>/dev/null | grep -q '"status":"UP"' || { sdk_e2e_fail "trigger not UP at ${TRIGGER_URL}"; return 1; }
   sdk_e2e_q "SELECT 1" >/dev/null || { sdk_e2e_fail "postgres not reachable ${PGHOST}:${PGPORT}"; return 1; }
-  docker exec "$KAFKA_CONTAINER" true 2>/dev/null || { sdk_e2e_fail "kafka container ${KAFKA_CONTAINER} not exec-able"; return 1; }
+  sdk_e2e_kafka_topics --list >/dev/null 2>&1 || { sdk_e2e_fail "kafka not reachable"; return 1; }
   sdk_e2e_pass "stack reachable"
 }
 
@@ -65,8 +104,8 @@ sdk_e2e_ensure_echo_job() {
 # pre-create worker 的 node-direct 派单 topic(SDK 消费 *.node.<workerCode>)。
 sdk_e2e_precreate_topic() {
   local wc="$1"
-  docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
-    --create --if-not-exists --topic "batch.task.dispatch.atomic.node.${wc}" --partitions 3 --replication-factor 1 >/dev/null 2>&1
+  sdk_e2e_kafka_topics --create --if-not-exists \
+    --topic "batch.task.dispatch.atomic.node.${wc}" --partitions 3 --replication-factor 1 >/dev/null 2>&1
 }
 
 # 起样例 worker(后台)。echo 出 PID;日志写 $2。
@@ -177,6 +216,5 @@ DELETE FROM batch.worker_registry WHERE worker_code='${wc}';
 DELETE FROM batch.api_key WHERE key_name='${wc}';
 DELETE FROM batch.trigger_request WHERE job_code='${SDK_E2E_JOB_CODE}';
 SQL
-  docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
-    --delete --topic "batch.task.dispatch.atomic.node.${wc}" 2>/dev/null
+  sdk_e2e_kafka_topics --delete --topic "batch.task.dispatch.atomic.node.${wc}" 2>/dev/null
 }
