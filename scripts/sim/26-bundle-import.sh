@@ -33,7 +33,7 @@ if [[ "${RUN_BUNDLE_SIM:-0}" != "1" ]]; then
   exit 0
 fi
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 echo "==> apply bootstrap + bundle-import fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
@@ -44,7 +44,7 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
 
 export MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/bundle-import.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/bundle-import.log"
 import json
 import os
 import subprocess

@@ -43,7 +43,7 @@
 - PostgreSQL client：提供 `psql`、`pg_dump`、`pg_basebackup`。macOS 可用 `brew install libpq`，并把 `libpq/bin` 加入 `PATH`。
 - Kafka CLI：提供 `kafka-topics.sh`、`kafka-consumer-groups.sh`。设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`，或直接设置 `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`。
 - MinIO client：提供 `mc`，用于对象存储 seed 和检查。
-- `curl`、`jq`、`python3`：巡检、HTTP 调用和轻量数据处理使用。
+- `curl`、`jq`、Python 3：巡检、HTTP 调用和轻量数据处理使用。脚本默认优先找 `python3`，可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 覆盖。
 
 通用环境变量：
 
@@ -51,6 +51,7 @@
 - PostgreSQL：`PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PGDATABASE`。
 - Kafka：`KAFKA_BOOTSTRAP_SERVER` 或 `KAFKA_HOST_BOOTSTRAP`，以及 `KAFKA_BIN_DIR` / `KAFKA_TOPICS_BIN`。
 - 对象存储：`BATCH_S3_ENDPOINT`、`BATCH_S3_ACCESS_KEY`、`BATCH_S3_SECRET_KEY`、`BATCH_S3_BUCKET`。
+- Python：`PYTHON_BIN` 或 `PYTHON`，用于指定本机 Python 3 解释器。
 
 ## 相关文档
 

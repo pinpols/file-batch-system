@@ -20,11 +20,14 @@ set -euo pipefail
 AMPORT="${ALERTMANAGER_SMOKE_PORT:-19093}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=../lib/python-runtime.sh
+source "$REPO/scripts/lib/python-runtime.sh"
+batch_require_python
 TEMPLATE="$REPO/docker/observability/alertmanager-batch-template.yml"
 CONTAINER="am-migration-smoke"
 
-iso() { python3 -c "import datetime;print(datetime.datetime.now(datetime.timezone.utc).isoformat())"; }
-iso_plus() { python3 -c "import datetime,sys;print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(minutes=int(sys.argv[1]))).isoformat())" "$1"; }
+iso() { "$PYTHON_BIN" -c "import datetime;print(datetime.datetime.now(datetime.timezone.utc).isoformat())"; }
+iso_plus() { "$PYTHON_BIN" -c "import datetime,sys;print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(minutes=int(sys.argv[1]))).isoformat())" "$1"; }
 
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -46,7 +49,7 @@ echo "-- amtool check-config: shipped template --"
 docker exec "$CONTAINER" amtool check-config /etc/alertmanager/alertmanager.yml
 
 echo "-- gen route from alert_routing_config sample + amtool check-config --"
-python3 "$HERE/gen-alertmanager-config.py" --input "$HERE/testdata/alert-routing-sample.json" --output /tmp/am-gen-smoke.yml
+"$PYTHON_BIN" "$HERE/gen-alertmanager-config.py" --input "$HERE/testdata/alert-routing-sample.json" --output /tmp/am-gen-smoke.yml
 docker cp /tmp/am-gen-smoke.yml "$CONTAINER:/tmp/am-gen-smoke.yml"
 docker exec "$CONTAINER" amtool check-config /tmp/am-gen-smoke.yml
 
@@ -58,16 +61,16 @@ curl -sf -X POST "http://localhost:${AMPORT}/api/v2/alerts" -H 'Content-Type: ap
 sleep 1
 
 echo "-- STEP: GET /api/v2/alerts assert labels --"
-curl -sf "http://localhost:${AMPORT}/api/v2/alerts" | python3 -c "import sys,json;a=json.load(sys.stdin);m=[x for x in a if x['labels'].get('alertname')=='JOB_SLA_BREACH'];assert m,'alert missing';l=m[0]['labels'];assert l['tenant']=='ta' and l['severity']=='critical' and l['alert_group']=='sla',l;print('OK alert labels',l)"
+curl -sf "http://localhost:${AMPORT}/api/v2/alerts" | "$PYTHON_BIN" -c "import sys,json;a=json.load(sys.stdin);m=[x for x in a if x['labels'].get('alertname')=='JOB_SLA_BREACH'];assert m,'alert missing';l=m[0]['labels'];assert l['tenant']=='ta' and l['severity']=='critical' and l['alert_group']=='sla',l;print('OK alert labels',l)"
 
 echo "-- STEP: POST /api/v2/silences (silence bridge shape) --"
 SID="$(curl -sf -X POST "http://localhost:${AMPORT}/api/v2/silences" -H 'Content-Type: application/json' \
   -d "{\"matchers\":[{\"name\":\"alertname\",\"value\":\"JOB_SLA_BREACH\",\"isRegex\":false,\"isEqual\":true},{\"name\":\"tenant\",\"value\":\"ta\",\"isRegex\":false,\"isEqual\":true}],\"startsAt\":\"${NOW}\",\"endsAt\":\"${END}\",\"createdBy\":\"batch-console\",\"comment\":\"console silence id=42\"}" \
-  | python3 -c "import sys,json;print(json.load(sys.stdin)['silenceID'])")"
+  | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['silenceID'])")"
 echo "OK silence created id=$SID"
 
 echo "-- STEP: GET /api/v2/silences assert active --"
-curl -sf "http://localhost:${AMPORT}/api/v2/silences" | python3 -c "import sys,json;s=json.load(sys.stdin);m=[x for x in s if x['id']=='${SID}'];assert m,'silence missing';assert m[0]['status']['state'] in ('active','pending'),m[0]['status'];print('OK silence',m[0]['status']['state'])"
+curl -sf "http://localhost:${AMPORT}/api/v2/silences" | "$PYTHON_BIN" -c "import sys,json;s=json.load(sys.stdin);m=[x for x in s if x['id']=='${SID}'];assert m,'silence missing';assert m[0]['status']['state'] in ('active','pending'),m[0]['status'];print('OK silence',m[0]['status']['state'])"
 
 echo "-- STEP: POST resolved (close bridge endsAt=now) — label 集须与 firing 严格一致(含 service) --"
 RESOLVED_AT="$(iso)"
@@ -77,7 +80,7 @@ echo "OK resolved accepted"
 
 echo "-- STEP: 回读断言 — 原 firing 真的转 resolved(不再 active),而非新建幽灵 --"
 sleep 1
-curl -sf "http://localhost:${AMPORT}/api/v2/alerts?active=true" | python3 -c "import sys,json;a=json.load(sys.stdin);names=[x['labels'].get('alertname') for x in a];assert 'JOB_SLA_BREACH' not in names, ('BUG: 原告警仍 active,resolved label 集与 firing 不一致(幽灵 resolved): '+str(names));print('OK 原告警已转 resolved,active 集中已消失')"
+curl -sf "http://localhost:${AMPORT}/api/v2/alerts?active=true" | "$PYTHON_BIN" -c "import sys,json;a=json.load(sys.stdin);names=[x['labels'].get('alertname') for x in a];assert 'JOB_SLA_BREACH' not in names, ('BUG: 原告警仍 active,resolved label 集与 firing 不一致(幽灵 resolved): '+str(names));print('OK 原告警已转 resolved,active 集中已消失')"
 
 echo "== [A] AM-contract smoke PASSED =="
 

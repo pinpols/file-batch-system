@@ -133,7 +133,7 @@ check_prometheus_targets() {
     return
   fi
 
-  jobs_csv="$(python3 -c 'import json,sys; data=json.load(sys.stdin); print(",".join(sorted({t["labels"].get("job","") + ":" + t.get("health","") for t in data.get("data",{}).get("activeTargets",[])})))' <<<"${body}" 2>/dev/null || true)"
+  jobs_csv="$("$PYTHON_BIN" -c 'import json,sys; data=json.load(sys.stdin); print(",".join(sorted({t["labels"].get("job","") + ":" + t.get("health","") for t in data.get("data",{}).get("activeTargets",[])})))' <<<"${body}" 2>/dev/null || true)"
   if [[ -z "${jobs_csv}" ]]; then
     fail "prometheus targets api returned no active targets"
     return

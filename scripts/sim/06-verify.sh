@@ -4,6 +4,9 @@ if (( BASH_VERSINFO[0] < 4 )); then
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
+batch_require_python
 # shellcheck source=../lib/process.sh
 source "$ROOT/scripts/lib/process.sh"
 # =========================================================
@@ -139,7 +142,7 @@ hdr "DISPATCH 产物(MockServer 收到的请求数)"
 for path in "/tb/callback" "/tb/ingest" "/tc/ingest"; do
   cnt=$(curl -sf --max-time 30 --connect-timeout 5 -X PUT "$MOCK_BASE/mockserver/retrieve?type=REQUESTS&format=JSON" \
         -H "Content-Type: application/json" \
-        -d "{\"path\":\"$path\"}" 2>/dev/null | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null | tr -dc '0-9')
+        -d "{\"path\":\"$path\"}" 2>/dev/null | "$PYTHON_BIN" -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null | tr -dc '0-9')
   cnt="${cnt:-0}"
   if [[ "$cnt" -gt 0 ]]; then
     ok "POST $path" "$cnt 次"

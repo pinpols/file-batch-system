@@ -7,12 +7,15 @@ set -uo pipefail
 START="${1:-2026-06-06}"; BASE="${2:-300}"; WAIT="${WAIT:-150}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=scripts/lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
+batch_require_python
 # shellcheck source=scripts/lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
 SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day "sim-4day-4days-${START//-/}")}"
 log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
 exec > >(tee -a "$SIM4DAY_LOG_DIR/00-run-4days.log") 2>&1
-nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
+nextday(){ "$PYTHON_BIN" -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
 
 echo "########## 4 天批量调度 起=$START 基准行=$BASE 每日间隔=${WAIT}s ##########"
 echo "########## 日志目录: $SIM4DAY_LOG_DIR ##########"

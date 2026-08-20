@@ -27,7 +27,7 @@ arche() { case "$1" in ta|t04|t07|t10) echo retail;; tb|t05|t08) echo bank;; tc|
 
 launch() { # 参数:tenant job bizDate paramsJson
   local t="$1" job="$2" bd="$3" params="$4" rid; rid="sim-${BDC}-${t}-${job}-$(date +%s%N|tail -c 7)"
-  local body; body=$(python3 -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'jobCode':sys.argv[2],'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$job" "$bd" "$rid" "$params")
+  local body; body=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'jobCode':sys.argv[2],'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$job" "$bd" "$rid" "$params")
   local resp; resp=$(curl -sf --max-time 40 -X POST "$TRG/api/triggers/launch" \
     -H "Content-Type: application/json" -H "X-Tenant-Id: $t" -H "X-Internal-Secret: $SECRET" \
     -H "Idempotency-Key: $rid" -H "X-Request-Id: $rid" -d "$body" 2>&1)
@@ -37,7 +37,7 @@ launch() { # 参数:tenant job bizDate paramsJson
 import_content() { # 参数:tenant tpl header rowgen
   local t="$1" tpl="$2" header="$3" gen="$4"
   local csv; csv=$(printf '%s\n' "$header"; eval "$gen")
-  local params; params=$(python3 -c "import json,sys;print(json.dumps({'templateCode':sys.argv[1],'content':sys.argv[2]}))" "$tpl" "$csv")
+  local params; params=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'templateCode':sys.argv[1],'content':sys.argv[2]}))" "$tpl" "$csv")
   launch "$t" "$IMPORT_JOB" "$BD" "$params"
 }
 

@@ -94,10 +94,21 @@ module_jar() {
 # 训练期禁用外部依赖（Flyway/Quartz/Kafka listener）减少失败面
 # SKIP_CDS=1 可关；jar 内容 hash / 路径 / mtime / size 或 JVM 指纹变化时自动重训。
 __CDS_FLAG=""
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "ERROR: sha256sum or shasum is required" >&2
+    exit 2
+  fi
+}
+
 cds_metadata() {
   local jar="$1"
   local jar_hash jar_stat
-  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
+  jar_hash="$(sha256_file "$jar")"
   jar_stat="$(stat -f '%N:%z:%m' "$jar" 2>/dev/null || stat -c '%n:%s:%Y' "$jar" 2>/dev/null || true)"
   printf 'jar_sha256=%s\njar_stat=%s\ncds_stamp=%s\nlocal_fast_jvm_opts=%s\njava_opts=%s\n' \
     "$jar_hash" "$jar_stat" "$CDS_ARCHIVE_STAMP" "$LOCAL_FAST_JVM_OPTS" "${JAVA_OPTS:-}"

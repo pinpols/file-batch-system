@@ -19,7 +19,7 @@ SIM_STAGE_NAME="import-stage2"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 echo "==> apply bootstrap(XML/FIXED_WIDTH runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
@@ -29,7 +29,7 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2.log"
 import json, os, time, urllib.request, subprocess
 
 BASE = os.environ["TRIGGER_BASE"]

@@ -20,7 +20,7 @@ SIM_STAGE_NAME="import-stage2e-checkpoint-crash"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 restart_import_with_checkpoint() {
   # 以 checkpoint enabled 重启 worker-import
@@ -64,7 +64,7 @@ export EXPECTED_ROWS="${EXPECTED_ROWS:-5000}"
 export CHECKPOINT_MIN_MARKER="${CHECKPOINT_MIN_MARKER:-10}"
 export WORKER_IMPORT_PORT="${WORKER_IMPORT_PORT:-18083}"
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2e-checkpoint-crash.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2e-checkpoint-crash.log"
 import json
 import os
 import subprocess

@@ -22,7 +22,13 @@
 : "${PGDATABASE:=batch_platform}"; : "${BATCH_PLATFORM_DB_PASSWORD:=batch_pass_123}"
 : "${ORCH_URL:=http://localhost:18082}"; : "${TRIGGER_URL:=http://localhost:18081}"
 : "${KAFKA_HOST_PORT:=19092}"; : "${KAFKA_CONTAINER:=batch-kafka}"; : "${TENANT:=default-tenant}"
-: "${GOROOT_HINT:=/usr/local/opt/go/libexec}"
+if [[ -z "${GOROOT_HINT:-}" ]]; then
+  if command -v go >/dev/null 2>&1; then
+    GOROOT_HINT="$(go env GOROOT)"
+  else
+    GOROOT_HINT="/usr/local/go"
+  fi
+fi
 : "${SDK_E2E_JOB_CODE:=sdk_echo_demo_e2e}"
 : "${BATCH_SCRIPT_RUNTIME:=auto}"
 export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
@@ -34,7 +40,16 @@ sdk_e2e_q()   { psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tA
 sdk_e2e_say() { printf '\n=== %s ===\n' "$*"; }
 sdk_e2e_pass(){ printf '✅ %s\n' "$*"; }
 sdk_e2e_fail(){ printf '❌ %s\n' "$*"; }
-sdk_e2e_sha256(){ printf %s "$1" | { command -v sha256sum >/dev/null && sha256sum || shasum -a 256; } | cut -d' ' -f1; }
+sdk_e2e_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf %s "$1" | sha256sum | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    printf %s "$1" | shasum -a 256 | cut -d' ' -f1
+  else
+    sdk_e2e_fail "sha256sum or shasum is required"
+    return 2
+  fi
+}
 
 sdk_e2e_kafka_topics_bin() {
   if [[ -n "${KAFKA_TOPICS_BIN:-}" && -x "${KAFKA_TOPICS_BIN}" ]]; then

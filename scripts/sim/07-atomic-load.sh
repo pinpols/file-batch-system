@@ -29,7 +29,7 @@ SIM_STAGE_NAME="atomic-load"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 ROUNDS="${ROUNDS:-1}"
 ATOMIC_TENANT="${ATOMIC_TENANT:-$BATCH_DEFAULT_TENANT_ID}"

@@ -37,6 +37,8 @@ cd "$ROOT_DIR" || exit 1
 source "$ROOT_DIR/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
 source "$ROOT_DIR/scripts/lib/process.sh"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT_DIR/scripts/lib/python-runtime.sh"
 
 # FE_DIR:默认走 sibling 仓相对路径(本仓和 batch-console 平级)。
 # 别人 clone 仓库到不同位置 / Linux 上跑,环境变量 export FE_DIR=/path 覆盖。
@@ -388,7 +390,7 @@ step_7_fe() {
 
 step_8_summary() {
   hdr 8 "$(step_name 8)"
-  local health; health=$(curl -s "http://localhost:$CONSOLE_PORT/actuator/health" | python3 -c "import sys,json;print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
+  local health; health=$(curl -s "http://localhost:$CONSOLE_PORT/actuator/health" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
   [[ "$health" == "UP" ]] && ok "actuator/health: $health" || ng "actuator/health: $health"
   printf "${GREEN}本轮 PASS: %d${RST}  ${RED}FAIL: %d${RST}\n" "$SEQ_PASS" "$SEQ_FAIL"
 }

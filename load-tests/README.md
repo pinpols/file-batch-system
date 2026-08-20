@@ -188,6 +188,7 @@ Kafka lag 默认优先通过 `batch-kafka` 容器内 `/opt/kafka/bin/kafka-consu
 
 - `psql`：压测准备、清理、统计 SQL 都依赖它；macOS 可用 `brew install libpq`，并把 `$(brew --prefix libpq)/bin` 加入 `PATH`。
 - `kafka-consumer-groups.sh` / `kafka-topics.sh`：Kafka lag 和 topic 初始化使用；设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`。
+- Python 3：默认优先找 `python3`，也可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 指定。
 
 可用 `BATCH_SCRIPT_RUNTIME=host` 强制走本机客户端，`BATCH_SCRIPT_RUNTIME=docker` 强制走容器客户端，默认 `auto`。可用
 `KAFKA_LAG_GROUP_REGEX` 收窄 consumer group。

@@ -21,7 +21,7 @@ source "$ROOT/scripts/sim/env-common.sh"
 
 export BATCH_KEY="${BATCH_KEY:-$BATCH_NO-jsonb-idempotent}"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 echo "==> preflight process stage4 job"
 if [[ "$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select count(*) from batch.job_definition where tenant_id='ta' and job_code='TA_PROCESS_STAGE4_JSONB' and enabled=true")" != "1" ]]; then
@@ -40,7 +40,7 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4b.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4b.log"
 import json, os, subprocess, sys, time, urllib.request
 
 BASE = os.environ["TRIGGER_BASE"]

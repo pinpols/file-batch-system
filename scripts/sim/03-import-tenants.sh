@@ -67,7 +67,7 @@ import_one() {
     return 1
   fi
   local token
-  token=$(echo "$upload_resp" | python3 -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('uploadToken',''))" 2>/dev/null)
+  token=$(echo "$upload_resp" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('uploadToken',''))" 2>/dev/null)
   if [[ -z "$token" ]]; then
     echo "  ✗ upload 失败: $upload_resp" >&2
     return 1
@@ -92,7 +92,7 @@ import_one() {
     return 1
   fi
   local code
-  code=$(echo "$apply_resp" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null)
+  code=$(echo "$apply_resp" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null)
   if [[ "$code" == "SUCCESS" || "$code" == "OK" ]]; then
     echo "  ✓ apply OK"
   else

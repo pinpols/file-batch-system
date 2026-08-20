@@ -79,7 +79,7 @@ jdbc_url() {
   if [[ -z "$options" ]]; then
     printf '%s\n' "$BASE_JDBC"
   else
-    printf '%s&options=%s\n' "$BASE_JDBC" "$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$options")"
+    printf '%s&options=%s\n' "$BASE_JDBC" "$("$PYTHON_BIN" -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$options")"
   fi
 }
 
@@ -134,7 +134,7 @@ run_case sync_commit_off "$ORIGINAL_CHECKPOINT_TIMEOUT" "$ORIGINAL_MAX_WAL_SIZE"
 run_case wal_checkpoint_relaxed "15min" "8GB" "" 0 on 4MB 64MB
 run_case extra_indexes_3 "$ORIGINAL_CHECKPOINT_TIMEOUT" "$ORIGINAL_MAX_WAL_SIZE" "" 3 on 4MB 64MB
 
-python3 - "$RAW" "$SUMMARY" "$REPORT" <<'PY'
+"$PYTHON_BIN" - "$RAW" "$SUMMARY" "$REPORT" <<'PY'
 import csv, statistics, sys
 raw, summary, report = sys.argv[1:4]
 rows = list(csv.DictReader(open(raw), delimiter="\t"))

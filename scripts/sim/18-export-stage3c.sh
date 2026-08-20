@@ -18,7 +18,7 @@ SIM_STAGE_NAME="export-stage3c"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
+batch_require_python
 
 echo "==> apply bootstrap + stage3b fixture + stage3c source"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
@@ -33,7 +33,7 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
-python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3c.log"
+"$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3c.log"
 import json, os, subprocess, sys, time, urllib.request
 
 BASE = os.environ["TRIGGER_BASE"]

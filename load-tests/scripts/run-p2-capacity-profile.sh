@@ -45,7 +45,7 @@ trap cleanup EXIT
 require_tooling() {
   command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
   command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
-  command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 2; }
+  batch_require_python
 }
 
 write_report_header() {
@@ -83,7 +83,7 @@ append_sql_summary() {
 run_10w_storm() {
   local storm_run_id="${RUN_ID}-10w"
   local duration
-  duration="$(python3 - <<PY
+  duration="$("$PYTHON_BIN" - <<PY
 import math
 print(math.ceil(${STORM_TOTAL_REQUESTS} / ${STORM_RPS}))
 PY
@@ -120,7 +120,7 @@ run_fairness() {
   INTERNAL_SECRET="$INTERNAL_SECRET" \
   BIZ_DATE="$BIZ_DATE" \
   PGHOST="$PGHOST" PGPORT="$PGPORT" PGUSER="$PGUSER" PGPASSWORD="$PGPASSWORD" PLATFORM_DB="$PLATFORM_DB" \
-    python3 "$LOAD_DIR/scripts/p2_multitenant_fairness.py" \
+    "$PYTHON_BIN" "$LOAD_DIR/scripts/p2_multitenant_fairness.py" \
     | tee "$LOG_DIR/multitenant-fairness.log"
   append_sql_summary "Multi-Tenant Fairness" "$RUN_ID"
 }

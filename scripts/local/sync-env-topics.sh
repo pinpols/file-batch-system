@@ -10,6 +10,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
 SRC="$ROOT/.env.example"
 
 if [[ ! -f "$SRC" ]]; then
@@ -27,7 +29,7 @@ synced=0
 for f in "$ROOT/.env.prod" "$ROOT/.env.local"; do
   [[ -f "$f" ]] || { echo "⏭  跳过(不存在):$(basename "$f")"; continue; }
   # 用 python 替换,避免 sed 的 BSD/GNU 差异 + 特殊字符转义问题
-  python3 - "$f" "$LINE" <<'PY'
+  "$PYTHON_BIN" - "$f" "$LINE" <<'PY'
 import sys
 path, line = sys.argv[1], sys.argv[2]
 lines = open(path, encoding="utf-8").read().splitlines()

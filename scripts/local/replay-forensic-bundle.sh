@@ -105,7 +105,7 @@ psql_platform() {
 }
 
 # ── 前置检查 ────────────────────────────────────────────────────────
-for cmd in unzip jq curl psql python3; do
+for cmd in unzip jq curl psql "$PYTHON_BIN"; do
   command -v "$cmd" >/dev/null 2>&1 || fail "缺少依赖: $cmd"
 done
 
