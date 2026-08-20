@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
@@ -15,9 +16,13 @@ import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,14 +54,12 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
     def.setTenantId(TENANT);
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
 
+    WorkflowDefinitionVersionMapper versionMapper = mock(WorkflowDefinitionVersionMapper.class);
     service = new DefaultConsoleWorkflowDefinitionApplicationService(
         definitionMapper,
         nodeMapper,
         edgeMapper,
-        mock(
-            io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper
-                .class),
-        jobDefinitionMapper,
+        versionMapper,
         mock(ConsoleRealtimeEventPort.class),
         tenantGuard,
         mock(ConsoleConfigCacheInvalidationService.class),
@@ -64,7 +67,10 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
             io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService
                 .class),
         mock(io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator.class),
-        new com.fasterxml.jackson.databind.ObjectMapper());
+        new WorkflowDefinitionResponseAssembler(),
+        new WorkflowDefinitionWriteSupport(
+            nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
+        new WorkflowDefinitionDagInspector(jobDefinitionMapper));
   }
 
   @Test
