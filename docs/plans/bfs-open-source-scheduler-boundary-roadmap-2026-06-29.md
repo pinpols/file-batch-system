@@ -56,6 +56,54 @@
 | 配置中心边界 | 已有 `system_parameter`、领域配置表、Redis 二级缓存和 after-commit 失效；**启动期配置与运行期配置的边界需固化，直接改库的失效流程需持续可见** | P1 | 保留轻量 DB + Redis，不引入 Nacos/Apollo；补配置分类、审计、stale-cache 指标和 runbook |
 | Worker 平台库边界 | Worker 通过 HTTP 使用控制面 claim/report，并直接维护受限运行态；**pipeline definition 自动写入越过职责边界，表级权限/连接池边界还需落地** | P0/P1 | 收回 definition 写入；运行态直写暂保留并限权，不改成跨服务 1PC |
 
+## 1.3 2026-08-21 调度 / 编排强化五块计划
+
+本节补充“是否需要强化调度和编排”的实施边界。结论是:需要强化,但只强化**批量业务调度语义**和**运维恢复闭环**;不得重写调度内核,不得扩成通用 workflow / saga / K8s 调度平台。
+
+主链路影响控制原则:
+
+1. 先做只读诊断、状态标记和影响预览,再做受控动作,最后才接入调度决策。
+2. 所有写动作必须复用现有 requestId / 幂等键 / 审计 / 审批 / 状态 CAS。
+3. 新状态只能补充 `WAITING/DEFER/REJECT/FAILED/PARTIAL_FAILED` 的原因归因,不能新增同义状态机。
+4. worker claim/report、outbox、lease、result_version promote 语义不随本计划改动。
+5. 每块能力必须有单测 + 真 PG/真 Kafka IT 或 sim 证据;没有验证证据不得标记完成。
+
+| 块 | 是否做 | 目标 | 允许范围 | 禁止扩张 | 主链路风险 |
+|---|---|---|---|---|---|
+| 1. 账期 / 业务日语义 | 要做 | 支持日批/月批、bizDate、账期重跑、补数、上游晚到、节假日日历 | 强化 batch_day、calendar、cross-day dependency、rerun/backfill 参数和审计 | 不做外部日历 SaaS、业务金额裁判、前端自行裁决 bizDate | 误判 bizDate 会造成漏跑/重跑,必须由 orchestrator 单点裁决 |
+| 2. 轻量 DAG / readiness | 要做 | job 依赖可等上游产出,支持失败后只续失败分支 | readiness drill-down、1-2 层 impact preview、asset freshness 和 result_version 最新 EFFECTIVE 守卫 | 不做完整血缘治理、任意 DAG 优化器、通用 workflow DSL | 过严会漏触发,过松会消费旧结果;必须守 latest attempt 和 EFFECTIVE |
+| 3. deadline / window-aware | 谨慎做轻量版 | 标记 at-risk / late / missed-window,触发告警和诊断 | deadline_at、SLA、window 状态、告警模板、Console 查询 | 不做智能排程优化、自动改优先级算法、复杂资源预测 | 只读标记先行;写入调度 gate 前必须压测和灰度开关 |
+| 4. 运维编排动作 | 要做 | 运维能 retry failed shards、replay confirm、cancel/resume/rerun、stuck diagnosis | Console 受控动作、二次确认、审批、审计、幂等重放 | 不允许直接改 DB 修状态,不做通用工单/APM/SIEM | 误操作会重复出账或终态漂移;必须有 dry-run/impact preview |
+| 5. 容量感知调度 | 要做基础版 | 防止补数、大租户、重跑拖垮正常日批 | tenant/job/queue/workerGroup quota、pending cap、wait age、Kafka lag gate、queue depth 指标 | 不自研 K8s scheduler、不自动扩 Pod、不做 FinOps 成本平台 | 准入过严会拒跑,过松会排队发散;必须有 DEFER/REJECT 机器原因 |
+
+### 五块分阶段落地顺序
+
+| 阶段 | 先做什么 | 交付物 | 验收 |
+|---|---|---|---|
+| S1 只读诊断 | readiness drill-down、deadline 状态、capacity queue depth、stuck diagnosis 聚合 | Console 查询 API / 指标 / 文档 | 不改变 task 创建逻辑;现有 E2E 全绿 |
+| S2 影响预览 | replay/backfill/failed-shard retry 的 impact preview | preview API、影响 job/result_version/asset 数量 | preview 和 execute 输入一致;无 preview/execute 漂移 |
+| S3 受控动作 | retry failed shards、replay confirm、rerun by bizDate、cancel/resume | 审批、审计、幂等键、终态 CAS | 重复点击不重复成功;跨租户返回 0 行 |
+| S4 调度 gate | dependency defer、deadline gate、pending cap、Kafka lag gate | ResourceScheduler 统一 admission decision | 1k/10k storm 无 `CREATED + NO_TASK`;Kafka lag 最终归零 |
+| S5 容量与演练 | 多租户混压、补数压测、故障注入、soak | benchmark/sim/chaos 报告 | `non_terminal=0` 或仅有可解释且受 TTL 约束的 WAITING/DEFERRED |
+
+### 验证矩阵
+
+| 能力块 | 单测 | IT | sim / benchmark | 必须证明 |
+|---|---|---|---|---|
+| 账期 / 业务日 | calendar、cutoff、DST、rerun 参数 | batch_day + trigger + launch | misfire、catch-up、backfill | bizDate 不由 trigger/worker/前端自行推断 |
+| 轻量 DAG / readiness | latest EFFECTIVE、dependency resolver | 上游成功/失败/旧 attempt | replay 后 readiness 复验 | 不消费 stale / partial / old attempt |
+| deadline / window-aware | at-risk/late/missed 计算 | SLA scheduler + alert event | 高频 cron + late window | 标记不误伤正常启动 |
+| 运维编排动作 | 幂等键、审批、状态 CAS | retry/replay/cancel/resume 真 PG | 故障后按 runbook 恢复 | 不手改 DB,不重复成功 |
+| 容量感知调度 | quota、pending cap、lag snapshot TTL | 1k/10k storm 真 Kafka | 多租户混压、soak | 队列不发散,拒绝/等待原因可解释 |
+
+### 明确暂缓 / 不做
+
+- 暂缓通用 workflow DSL、任意节点编排市场、自动 DAG 优化调度。
+- 暂缓复杂 deadline 优化算法;只做状态标记、告警和轻量 gate。
+- 不做自研 K8s 调度、自动扩 Pod、节点亲和/污点策略。
+- 不做字段级/记录级 lineage、企业数据目录、业务正确性裁判。
+- 不让 Console 或 worker 裁决 `bizDate`、依赖合法性和 result_version 生效。
+
 ### 分阶段实施计划
 
 #### P0-A: WAITING 队列边界
