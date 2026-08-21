@@ -908,7 +908,7 @@ git diff main..HEAD docs/api/console-api-protocol.md | head -30
    - 红线:ZoneId.systemDefault / Charset.forName
 
 2. **API 文档对齐**:
-   - `batch-console-api` controller 改了 → 强制 `console-api.openapi.yaml` + `console-api-protocol.md` 同步
+   - `batch-console-api` Controller 的映射、请求绑定或公开端点方法签名改了 → 强制 `console-api.openapi.yaml` + `console-api-protocol.md` 同步；仅依赖注入或变量重构不触发
    - `batch-orchestrator` `/internal/*` controller 改了 → 提示(P0 立 yaml 后强制)
 
 3. **Flyway 版本号唯一性**:
