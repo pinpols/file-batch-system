@@ -12,7 +12,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-# shellcheck source=../../../scripts/lib/python-runtime.sh
+# shellcheck source=scripts/lib/python-runtime.sh
 source "$ROOT/scripts/lib/python-runtime.sh"
 SCHEMA="$HERE/fixture-schema.json"
 

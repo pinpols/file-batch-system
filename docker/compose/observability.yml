@@ -25,7 +25,7 @@ services:
       - batch-network
 
   alertmanager:
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:${ALERTMANAGER_IMAGE_TAG:-v0.28.1}
     container_name: batch-alertmanager
     restart: unless-stopped
     command:
@@ -39,7 +39,7 @@ services:
 
   # ── 链路 ──────────────────────────────────────────────────────────
   jaeger:
-    image: jaegertracing/jaeger:2.7.0
+    image: jaegertracing/jaeger:${JAEGER_IMAGE_TAG:-2.7.0}
     container_name: batch-jaeger
     restart: unless-stopped
     environment:
@@ -51,7 +51,7 @@ services:
       - batch-network
 
   tempo:
-    image: grafana/tempo:2.6.1
+    image: grafana/tempo:${TEMPO_IMAGE_TAG:-2.6.1}
     container_name: batch-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yml"]
@@ -67,7 +67,7 @@ services:
 
   # ── 日志 ──────────────────────────────────────────────────────────
   loki:
-    image: grafana/loki:3.5.0
+    image: grafana/loki:${LOKI_IMAGE_TAG:-3.5.0}
     container_name: batch-loki
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
@@ -81,7 +81,7 @@ services:
 
   # ── OTel Collector ────────────────────────────────────────────────
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.127.0
+    image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.127.0}
     container_name: batch-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
@@ -101,7 +101,7 @@ services:
 
   # ── 仪表盘 ───────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:11.6.0
+    image: grafana/grafana:${GRAFANA_IMAGE_TAG:-11.6.0}
     container_name: batch-grafana
     restart: unless-stopped
     environment:

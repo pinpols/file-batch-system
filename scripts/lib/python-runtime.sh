@@ -28,6 +28,14 @@ batch_require_python() {
     echo "Python 3 is required; set PYTHON_BIN=/path/to/python3 or install python3" >&2
     return 2
   fi
+  if ! "$PYTHON_BIN" - <<'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info[0] == 3 else 1)
+PY
+  then
+    echo "Python 3 is required; ${PYTHON_BIN} is not Python 3" >&2
+    return 2
+  fi
 }
 
 batch_configure_python_runtime
