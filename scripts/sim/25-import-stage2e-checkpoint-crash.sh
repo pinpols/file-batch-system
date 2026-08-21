@@ -231,6 +231,10 @@ def wait_for_checkpoint(rid):
     raise TimeoutError(f"checkpoint marker not reached; last={last}")
 
 def kill_worker_import():
+    if sh(["docker", "inspect", "batch-worker-import"]).returncode == 0:
+        print("  [kill] worker-import container=batch-worker-import", flush=True)
+        sh(["docker", "kill", "batch-worker-import"], check=True)
+        return
     out = sh([
         "bash", "-lc",
         f"source scripts/lib/process.sh; process_listen_pids {WORKER_PORT} | head -1",

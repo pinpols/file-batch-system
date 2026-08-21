@@ -24,6 +24,28 @@ export PG_BUSINESS_DB="${PG_BUSINESS_DB:-$BUSINESS_DB_NAME}"
 mkdir -p "$REPORT_DIR"
 batch_require_python
 
+# 应用服务运行在 Compose 网络时，夹具中的外部依赖必须使用服务名；宿主机
+# 直接运行 JVM 时才使用端口映射。统一在这里判定，避免每个 sim 脚本各写一套。
+sim_container_stack_active() {
+  docker inspect batch-console-api >/dev/null 2>&1
+}
+
+sim_mockserver_base_url() {
+  if sim_container_stack_active; then
+    printf '%s\n' "http://mockserver:1080"
+  else
+    printf '%s\n' "http://localhost:${MOCKSERVER_HOST_PORT:-11080}"
+  fi
+}
+
+sim_sftp_endpoint() {
+  if sim_container_stack_active; then
+    printf '%s\n' "sftp 22"
+  else
+    printf '%s\n' "${SFTP_HOST:-127.0.0.1} ${SFTP_PORT:-12222}"
+  fi
+}
+
 # 按起始 BIZ_DATE 计算第 N 轮的业务日期(base + N-1 天),供多轮 sim 错开 bizDate、
 # 避免同 job+bizDate 被幂等去重撞掉。
 biz_date_for_round() {
