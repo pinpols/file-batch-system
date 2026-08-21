@@ -514,6 +514,9 @@ services:
       - "${WORKER_DISPATCH_PORT:-18085}:18085"
     volumes:
       - ./logs/current/docker:/app/logs
+      # local/sim 的 LOCAL、NAS、SFTP 夹具共享目录；生产部署应通过 overlay
+      # 指向受控的工作目录，不应依赖宿主机默认 /tmp。
+      - ${BATCH_DISPATCH_LOCAL_ROOT:-/tmp/batch}:/tmp/batch
     networks:
       - batch-network
     healthcheck:

@@ -49,9 +49,9 @@ services:
     networks:
       - batch-network
     healthcheck:
-      # mockserver 5.x 用 /mockserver/status(PUT 或 POST 都行),但镜像里没有 curl;
-      # 退而求其次用 java 自带 nc(busybox)探 1080 端口听就行。
-      test: ["CMD-SHELL", "java -version >/dev/null 2>&1 && (echo > /dev/tcp/localhost/1080) 2>/dev/null || exit 1"]
+      # 镜像没有 /bin/sh，不能使用 CMD-SHELL；HTTP readiness 由 02-start-sim.sh
+      # 从宿主机真实调用 /mockserver/status 负责，这里只做 JVM 存活检查。
+      test: ["CMD", "java", "-version"]
       interval: 10s
       timeout: 3s
       retries: 6

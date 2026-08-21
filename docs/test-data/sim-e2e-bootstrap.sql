@@ -1,4 +1,9 @@
 -- ============================================================================
+
+\if :{?mockserver_base_url}
+\else
+\set mockserver_base_url 'http://localhost:11080'
+\endif
 -- sim-e2e-bootstrap.sql
 --
 -- A4 fixture 工程化产物:把 sim-e2e (2026-05-29) 第 1+2 波 P0-P3 验证收尾
@@ -657,9 +662,9 @@ SET target_endpoint = m.endpoint,
     updated_at = CURRENT_TIMESTAMP
 FROM (
     VALUES
-      ('tb', 'tb_api_push',      format('http://localhost:%s/tb/callback', :'mockserver_host_port')),
-      ('tb', 'tb_api_ingest',    format('http://localhost:%s/tb/ingest', :'mockserver_host_port')),
-      ('tc', 'tc_api_risk_push', format('http://localhost:%s/tc/ingest', :'mockserver_host_port'))
+      ('tb', 'tb_api_push',      :'mockserver_base_url' || '/tb/callback'),
+      ('tb', 'tb_api_ingest',    :'mockserver_base_url' || '/tb/ingest'),
+      ('tc', 'tc_api_risk_push', :'mockserver_base_url' || '/tc/ingest')
 ) AS m(tenant_id, channel_code, endpoint)
 WHERE batch.file_channel_config.tenant_id = m.tenant_id
   AND batch.file_channel_config.channel_code = m.channel_code;
