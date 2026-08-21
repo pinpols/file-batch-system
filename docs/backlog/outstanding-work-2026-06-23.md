@@ -26,7 +26,7 @@
 - **验证基础设施 r3 系列**(来源:`plans/r3-1`…`r3-4`)
   - r3-1:Chaos/Toxiproxy 集成测试框架(Kafka 延迟 / Redis down / PG 连接重置)。
   - r3-2:运维剧本(部分已落地于 `docs/runbook/playbooks/`,**核对剩余篇目**)。
-  - r3-3:24h Soak Test。**已知阻塞**:`BatchDateTimeSupport` 未读 `-Dbatch.testing.clock-offset`,跨日偏移当前不生效,需在 batch-common 加 `@Profile("soak")` 的 offsetClock。
+  - r3-3:24h Soak Test。时钟偏移已在 `BatchClockConfig` 实现并有单测；当前本地复验因磁盘使用率 97% 被保护阈值停止，需释放至少 30GB 后完成 30 分钟/24 小时窗口。
   - r3-4:Forensic Bundle 本地回放工具(解包 + schema 还原 + replay + diff)。
 - **ADR-046 Phase 2 worker 攒批生产启用门**(来源:`backlog/adr046-phase2-2.3-worker-batch-construction.md`)
   - 代码 2.0–2.4 + 2.3a–d 已全部落 main,flag `batch.worker.batch-claim.enabled` 默认关。

@@ -66,32 +66,37 @@ jcmd $pid GC.heap_dump logs/soak/heap-$(date +%Y%m%d-%H%M).hprof
 ## 步骤拆解
 
 ### Step 1 — 流量驱动(3h)
-- [ ] 抽取 `run-worker-stress-tests.sh` 的压力源逻辑成可复用模块
-- [ ] 加 `--mode=soak` 长跑选项(rps + duration + 退出条件)
+- [x] 抽取 `run-worker-stress-tests.sh` 的压力源逻辑成可复用模块
+- [x] 加 `--mode=soak` 长跑选项(rps + duration + 退出条件)
 
 ### Step 2 — JFR / heap 采集(2h)
-- [ ] `start-soak.sh`:启动 console-api + 4 worker,JVM 参数注入 JFR
-- [ ] `monitor-soak.sh`:后台 cron 跑 jcmd heap dump + 健康检查 + 退出条件评估
+- [x] `start-soak.sh`:启动 console-api + 4 worker,JVM 参数注入 JFR
+- [x] `monitor-soak.sh`:后台 cron 跑 jcmd heap dump + 健康检查 + 退出条件评估
 
 ### Step 3 — 分析报告(2h)
-- [ ] `analyze-soak.sh`:`jfr summary` + jq 解析 → markdown 报告
-- [ ] 输出:`logs/soak/soak-report-YYYYMMDD.md`
+- [x] `analyze-soak.sh`:`jfr summary` + jq 解析 → markdown 报告
+- [x] 输出:`logs/soak/soak-report-YYYYMMDD.md`
 
 ### Step 4 — 跨日时间偏移(1h)
-- [ ] 启动前 `faketime` 或 JVM `-Dbatch.testing.clock-offset=+12h`(需 BatchDateTimeSupport 支持注入 offset)
+- [x] 启动前通过 JVM `-Dbatch.testing.clock-offset=+12h` 注入演练时钟偏移（仅本地 soak 生效）
 - [ ] 验 `batch_day_instance` 在测试时钟 00:00 翻批正确
 
-> **TODO / 阻塞**:`BatchDateTimeSupport` 当前使用注入的 `Clock` bean(`clock.instant()`),**不读** `-Dbatch.testing.clock-offset`。
-> `start-soak.sh` 已透传该 `-D` 参数,但要真正生效,需在 `batch-common` 的 Clock bean 配置上增加 offset 注入:
-> 例如新增一个 `@Profile("soak") @Bean Clock offsetClock(...)` 用 `Clock.offset(Clock.systemUTC(), Duration.parse(...))` 包一层。
-> 在该 bean 上线前,跨日时间偏移 走另一条路:用 `faketime`(macOS `libfaketime`)包 JVM 进程,或直接改宿主机时钟(不推荐)。
-> 报告里的"跨日"维度会照常解析 `batch_day_instance`,只是触发依赖外部条件。
+> `BatchClockConfig` 在显式设置 `-Dbatch.testing.clock-offset` 时使用 offset Clock；未设置时保持 UTC。该属性只用于本地 soak/故障演练，不应进入生产配置。
+
+## 2026-08-21 复验结果
+
+- 短 soak 入口已运行，但因宿主机磁盘使用率 97% 被 `monitor-soak.sh` 按保护阈值主动停止。
+- 监控和报告链路通过；24h soak 不在低于 30GB 可用空间的环境中强行执行。
+- 详细记录见 [`docs/verifications/quality-closure-2026-08-21.md`](../verifications/quality-closure-2026-08-21.md)。
+
+当前只完成了时钟注入和保护退出验证；`batch_day_instance` 跨日翻批仍需在有足够磁盘的环境中完成一次真实窗口验证。未设置
+`batch.testing.clock-offset` 时保持生产默认 UTC，不依赖 `faketime` 或修改宿主机时钟。
 
 ## 验收标准
 - [ ] 一次 24h 真跑完成,报告无异常
 - [ ] 报告里 5 项核心指标曲线平稳(heap 不持续涨 / 连接池不见底 / GC 停顿稳定)
 - [ ] 至少 1 次跨日触发,`batch_day_instance` 状态机正确
-- [ ] 退出条件触发时能 stop + 留 dump,不 hang
+- [x] 退出条件触发时能 stop + 留 dump,不 hang
 
 ## 风险 / 依赖
 - **依赖**:本地需 ~16GB RAM + 100GB 磁盘(24h JFR + 5 个 heap dump 约 20GB)
@@ -101,6 +106,6 @@ jcmd $pid GC.heap_dump logs/soak/heap-$(date +%Y%m%d-%H%M).hprof
 ## 检查点
 | 里程碑 | 产出 |
 |---|---|
-| M1 | 流量驱动 1h 试跑通 |
-| M2 | JFR + heap dump 自动化,可生成草报告 |
+| M1 | 流量驱动 1h 试跑通 | 已具备短跑入口；长窗口受宿主机磁盘保护阻断 |
+| M2 | JFR + heap dump 自动化,可生成草报告 | 已完成 |
 | M3 | 24h 真跑 + 完整报告 |
