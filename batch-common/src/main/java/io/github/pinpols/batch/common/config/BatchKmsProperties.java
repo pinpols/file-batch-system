@@ -7,6 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.security.kms")
+/** KMS 集成的连接与密钥引用配置。 */
 public class BatchKmsProperties {
 
   private String defaultKeyRef = "DEFAULT_TEST";

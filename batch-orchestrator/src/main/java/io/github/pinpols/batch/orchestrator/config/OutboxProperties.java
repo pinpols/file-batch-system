@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.outbox")
+/** Outbox 发布、重试和积压保护参数。 */
 public class OutboxProperties {
 
   private int batchSize = 100;

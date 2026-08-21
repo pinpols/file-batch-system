@@ -23,6 +23,19 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# 记录调用方是否显式指定了容器内 S3 endpoint。env-common 为裸 JVM
+# 自动补出的 localhost:19000 不能直接传进 Compose 网络。
+_BATCH_S3_ENDPOINT_EXPLICIT=0
+if [[ -n "${BATCH_S3_ENDPOINT+x}" ]]; then
+  _BATCH_S3_ENDPOINT_EXPLICIT=1
+else
+  for _env_file in "${COMPOSE_ENV_FILE:-$ROOT/.env.local}" "$ROOT/.env"; do
+    if [[ -f "$_env_file" ]] && grep -Eq '^[[:space:]]*(export[[:space:]]+)?BATCH_S3_ENDPOINT=' "$_env_file"; then
+      _BATCH_S3_ENDPOINT_EXPLICIT=1
+      break
+    fi
+  done
+fi
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
 # shellcheck source=../lib/logging.sh
@@ -149,6 +162,62 @@ port_for() {
   esac
 }
 
+# 容器栈与裸 JVM 共用本脚本。容器模式必须通过 Compose 重建服务，不能
+# 按宿主端口查 PID 后 kill；Docker Desktop 的端口代理并不是业务 JVM。
+container_name_for() {
+  case "$1" in
+    orchestrator)    echo batch-orchestrator ;;
+    trigger)         echo batch-trigger ;;
+    console)         echo batch-console-api ;;
+    worker-import)   echo batch-worker-import ;;
+    worker-export)   echo batch-worker-export ;;
+    worker-process)  echo batch-worker-process ;;
+    worker-dispatch) echo batch-worker-dispatch ;;
+    worker-atomic)   echo batch-worker-atomic ;;
+    *) return 1 ;;
+  esac
+}
+
+compose_service_for() {
+  case "$1" in
+    orchestrator)    echo orchestrator ;;
+    trigger)         echo trigger ;;
+    console)         echo console-api ;;
+    worker-import)   echo worker-import ;;
+    worker-export)   echo worker-export ;;
+    worker-process)  echo worker-process ;;
+    worker-dispatch) echo worker-dispatch ;;
+    worker-atomic)   echo worker-atomic ;;
+    *) return 1 ;;
+  esac
+}
+
+is_containerized_module() {
+  local name="$1" container
+  container="$(container_name_for "$name")" || return 1
+  docker info >/dev/null 2>&1 || return 1
+  docker inspect "$container" >/dev/null 2>&1
+}
+
+compose_restart_module() {
+  local name="$1" service
+  service="$(compose_service_for "$name")"
+  local app_java_opts="${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}"
+  if [[ -n "${JAVA_OPTS:-}" ]]; then
+    app_java_opts+=" ${JAVA_OPTS}"
+  fi
+  local compose_args=(docker compose)
+  if [[ -f "$COMPOSE_ENV_FILE" ]]; then
+    compose_args+=(--env-file "$COMPOSE_ENV_FILE")
+  fi
+  compose_args+=(-f docker-compose.yml -f docker/compose/app.yml --profile apps --profile replica up -d --no-deps --force-recreate "$service")
+  local compose_s3_endpoint="${BATCH_S3_ENDPOINT:-http://minio:9000}"
+  if [[ "$_BATCH_S3_ENDPOINT_EXPLICIT" != 1 ]]; then
+    compose_s3_endpoint=http://minio:9000
+  fi
+  BATCH_S3_ENDPOINT="$compose_s3_endpoint" BATCH_APP_JAVA_OPTS="$app_java_opts" "${compose_args[@]}"
+}
+
 # ── Maven 模块名（用于 build） ────────────────────────────────
 maven_module_for() {
   case "$1" in
@@ -181,6 +250,10 @@ maven_dir_for() {
 # ── 停止：kill 端口上的进程 ───────────────────────────────────
 stop_module() {
   local name="$1"
+  if is_containerized_module "$name"; then
+    echo "  ${name} 由 Compose 管理，跳过宿主端口 kill"
+    return 0
+  fi
   local port
   port="$(port_for "$name")"
   local pids
@@ -230,6 +303,21 @@ build_module() {
 # ── 启动模块 ──────────────────────────────────────────────────
 start_module() {
   local name="$1"
+  if is_containerized_module "$name"; then
+    echo "  重建容器 ${name}"
+    compose_restart_module "$name"
+    local container
+    container="$(container_name_for "$name")"
+    for _ in $(seq 1 90); do
+      if docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null | grep -q healthy; then
+        echo "  ${name} 容器已就绪"
+        return 0
+      fi
+      sleep 2
+    done
+    echo "ERROR: ${name} 容器在超时时间内未健康，请检查 docker logs ${container}" >&2
+    return 1
+  fi
   local jar="$RUNTIME_JAR_DIR/$name.jar"
   if [ ! -f "$jar" ]; then
     echo "ERROR: 未找到 ${jar}，请先执行 ./scripts/local/build-apps.sh" >&2

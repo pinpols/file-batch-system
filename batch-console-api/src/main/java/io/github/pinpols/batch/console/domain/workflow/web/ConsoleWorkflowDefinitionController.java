@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
@@ -44,7 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleWorkflowDefinitionController {
 
-  private final ConsoleWorkflowDefinitionApplicationService workflowDefinitionApplicationService;
+  private final WorkflowDefinitionService workflowDefinitionService;
   private final ConsoleResponseFactory responseFactory;
   private final WorkflowDesignLockService designLockService;
 
@@ -53,21 +53,21 @@ public class ConsoleWorkflowDefinitionController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<WorkflowDefinitionDetailResponse> getById(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionApplicationService.getById(id, tenantId));
+    return responseFactory.success(workflowDefinitionService.getById(id, tenantId));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
   public CommonResponse<WorkflowDefinitionDetailResponse> create(
       @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
-    return responseFactory.success(workflowDefinitionApplicationService.create(request));
+    return responseFactory.success(workflowDefinitionService.create(request));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
   public CommonResponse<WorkflowDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
-    return responseFactory.success(workflowDefinitionApplicationService.update(id, request));
+    return responseFactory.success(workflowDefinitionService.update(id, request));
   }
 
   /** 启用/禁用工作流定义。 */
@@ -75,8 +75,7 @@ public class ConsoleWorkflowDefinitionController {
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
   public CommonResponse<Void> patch(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    workflowDefinitionApplicationService.toggleEnabled(
-        id, request.getTenantId(), request.getEnabled());
+    workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 
@@ -84,7 +83,7 @@ public class ConsoleWorkflowDefinitionController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<DagValidationResult> validate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionApplicationService.validate(id, tenantId));
+    return responseFactory.success(workflowDefinitionService.validate(id, tenantId));
   }
 
   /**
@@ -96,8 +95,7 @@ public class ConsoleWorkflowDefinitionController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<WorkflowMermaidResponse> mermaid(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    WorkflowDefinitionDetailResponse detail =
-        workflowDefinitionApplicationService.getById(id, tenantId);
+    WorkflowDefinitionDetailResponse detail = workflowDefinitionService.getById(id, tenantId);
     return responseFactory.success(
         new WorkflowMermaidResponse(WorkflowMermaidRenderer.render(detail)));
   }
@@ -116,7 +114,7 @@ public class ConsoleWorkflowDefinitionController {
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(workflowDefinitionApplicationService.listVersions(id, tenantId));
+    return responseFactory.success(workflowDefinitionService.listVersions(id, tenantId));
   }
 
   /**
@@ -131,8 +129,7 @@ public class ConsoleWorkflowDefinitionController {
       @PathVariable Long id,
       @PathVariable Integer version,
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        workflowDefinitionApplicationService.getVersion(id, tenantId, version));
+    return responseFactory.success(workflowDefinitionService.getVersion(id, tenantId, version));
   }
 
   // ─── BE Spike: workflow-dag-designer 全量替换 + 单人编辑锁 ───────────────────────────
@@ -148,7 +145,7 @@ public class ConsoleWorkflowDefinitionController {
   public CommonResponse<WorkflowDefinitionDetailResponse> fullUpdate(
       @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionFullUpdateRequest request) {
     return responseFactory.success(
-        workflowDefinitionApplicationService.fullUpdate(id, request, currentUsername()));
+        workflowDefinitionService.fullUpdate(id, request, currentUsername()));
   }
 
   /** 申请编辑锁(5min TTL)。别人持锁 → 409 CONFLICT 带 lockedBy。 */

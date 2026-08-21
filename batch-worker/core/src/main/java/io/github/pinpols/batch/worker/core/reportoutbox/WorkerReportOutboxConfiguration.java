@@ -3,8 +3,8 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
 import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.SqliteSessionFactorySupport;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
-import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteSessionFactorySupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -78,7 +78,7 @@ public class WorkerReportOutboxConfiguration {
     @Bean(name = "workerReportOutboxSqliteSqlSessionFactory")
     SqlSessionFactory workerReportOutboxSqliteSqlSessionFactory(
         @Qualifier("workerReportOutboxDataSource") DataSource dataSource) throws Exception {
-      return WorkerReportOutboxSqliteSessionFactorySupport.createSqlSessionFactory(dataSource);
+      return SqliteSessionFactorySupport.createSqlSessionFactory(dataSource);
     }
 
     @Bean(name = "workerReportOutboxSqliteSqlSessionTemplate")

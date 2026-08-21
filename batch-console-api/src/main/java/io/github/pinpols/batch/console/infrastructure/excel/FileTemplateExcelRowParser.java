@@ -28,7 +28,7 @@ import lombok.experimental.Accessors;
  * file_template_config Excel 行解析 + upsert param 转换的纯函数工具类。
  *
  * <p>从 {@code DefaultConsoleFileTemplateExcelApplicationService} 抽离，让 9+2 租户配置包 （{@code
- * DefaultConsoleTenantConfigPackageExcelApplicationService}）和独立 file_template Excel 入口
+ * DefaultTenantConfigPackageExcelService}）和独立 file_template Excel 入口
  * 共用同一份解析与转换逻辑，避免双线漂移（9+2 设计文档 §实施步骤 P0-2）。
  *
  * <p>本类**无依赖**：所有方法 static，输入皆通过参数传入；不持有 mapper / dataSource，所以两个调用方各自管控事务 与 mapper upsert。

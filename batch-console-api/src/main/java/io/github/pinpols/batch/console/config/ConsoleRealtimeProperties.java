@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.console.realtime")
+/** Console 实时事件推送与连接保活参数。 */
 public class ConsoleRealtimeProperties {
 
   /** 单个 tenant + stream 回放缓冲的最大事件数。小于等于 0 表示不按条数裁剪。 */

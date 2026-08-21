@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration
+/** 注册批处理平台统一的 Jackson 序列化约定。 */
 public class BatchJsonAutoConfiguration {
 
   @Bean

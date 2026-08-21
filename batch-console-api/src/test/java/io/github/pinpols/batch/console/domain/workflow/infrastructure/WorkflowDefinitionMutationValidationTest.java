@@ -24,7 +24,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
-import io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 
 /** #5:create / update 入口必须强制走 DAG validator(防脚本/旧前端绕过 fullUpdate 的校验)。 */
 @DisplayName("workflow create/update 强制 DAG 校验")
-class DefaultConsoleWorkflowDefinitionApplicationServiceCreateUpdateValidationTest {
+class WorkflowDefinitionMutationValidationTest {
 
   private static final String TENANT = "t1";
   private static final long DEF_ID = 100L;
@@ -43,7 +43,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceCreateUpdateValidationTe
   private WorkflowNodeMapper nodeMapper;
   private WorkflowEdgeMapper edgeMapper;
   private WorkflowDagValidator dagValidator;
-  private DefaultConsoleWorkflowDefinitionApplicationService service;
+  private DefaultWorkflowDefinitionService service;
 
   @BeforeEach
   void setUp() {
@@ -54,7 +54,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceCreateUpdateValidationTe
     ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
 
-    service = new DefaultConsoleWorkflowDefinitionApplicationService(
+    service = new DefaultWorkflowDefinitionService(
         definitionMapper,
         nodeMapper,
         edgeMapper,

@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClient;
   TriggerRuntimeProperties.class,
   TriggerOutboxRelayProperties.class
 })
+/** 装配 Quartz 调度器、作业工厂和触发器执行器。 */
 public class QuartzTriggerConfiguration {
 
   /**

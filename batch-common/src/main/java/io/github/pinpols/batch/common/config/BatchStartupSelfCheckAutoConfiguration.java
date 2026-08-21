@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Bean;
     havingValue = "true",
     matchIfMissing = true)
 @EnableConfigurationProperties(BatchStartupSelfCheckProperties.class)
+/** 按开关装配启动期基础设施与迁移自检。 */
 public class BatchStartupSelfCheckAutoConfiguration {
 
   @Bean

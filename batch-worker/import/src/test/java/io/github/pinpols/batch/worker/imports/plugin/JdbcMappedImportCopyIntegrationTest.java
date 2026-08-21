@@ -22,7 +22,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers(disabledWithoutDocker = true)
-class GenericJdbcMappedImportLoadPluginCopyIntegrationTest {
+class JdbcMappedImportCopyIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")

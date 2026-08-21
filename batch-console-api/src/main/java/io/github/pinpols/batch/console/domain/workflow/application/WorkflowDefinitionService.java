@@ -7,7 +7,7 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefi
 import java.util.List;
 
 /** 工作流定义应用服务：管理工作流定义的 CRUD 及 DAG 校验操作。 */
-public interface ConsoleWorkflowDefinitionApplicationService {
+public interface WorkflowDefinitionService {
 
   WorkflowDefinitionDetailResponse getById(Long id, String tenantId);
 

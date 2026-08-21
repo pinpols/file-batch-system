@@ -41,6 +41,7 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
 })
 @ConfigurationPropertiesScan(
     basePackages = {"io.github.pinpols.batch.console", "io.github.pinpols.batch.common"})
+/** Console API 服务启动入口。 */
 public class BatchConsoleApiApplication {
 
   public static void main(String[] args) {

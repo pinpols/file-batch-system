@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.resource-scheduler")
+/** 资源队列调度、公平性和并发配额参数。 */
 public class ResourceSchedulerProperties {
 
   private int waitingDispatchBatchSize = 100;

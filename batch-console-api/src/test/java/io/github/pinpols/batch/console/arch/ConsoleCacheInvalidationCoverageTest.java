@@ -49,7 +49,7 @@ class ConsoleCacheInvalidationCoverageTest {
   /** 受缓存约束的 5 个 application service 实现类（全限定名）。 */
   private static final Set<String> CACHED_SERVICE_FQNS = Set.of(
       "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService",
-      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService",
+      "io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService",
       "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleCalendarApplicationService",
       "io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleBatchWindowApplicationService",
       "io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleQuotaPolicyApplicationService");

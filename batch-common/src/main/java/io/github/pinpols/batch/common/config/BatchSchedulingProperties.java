@@ -10,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 @Data
 @Validated
 @ConfigurationProperties(prefix = "batch.scheduling")
+/** 共享任务调度线程池与停机等待参数。 */
 public class BatchSchedulingProperties {
 
   /**

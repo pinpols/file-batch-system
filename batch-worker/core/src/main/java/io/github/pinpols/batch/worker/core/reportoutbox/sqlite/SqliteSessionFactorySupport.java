@@ -9,9 +9,9 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
  * ADR-015：SQLite report outbox 使用独立 {@link SqlSessionFactory}，与 Spring Boot 主 MyBatis 数据源隔离；
  * 装配逻辑供运行时配置与测试共用。
  */
-public final class WorkerReportOutboxSqliteSessionFactorySupport {
+public final class SqliteSessionFactorySupport {
 
-  private WorkerReportOutboxSqliteSessionFactorySupport() {}
+  private SqliteSessionFactorySupport() {}
 
   public static SqlSessionFactory createSqlSessionFactory(DataSource dataSource) throws Exception {
     SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();

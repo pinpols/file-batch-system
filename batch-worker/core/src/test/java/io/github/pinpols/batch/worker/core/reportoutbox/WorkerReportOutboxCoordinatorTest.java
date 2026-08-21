@@ -9,8 +9,8 @@ import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperti
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.infrastructure.HttpTaskExecutionClient;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.SqliteSessionFactorySupport;
 import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
-import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteSessionFactorySupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,8 +48,7 @@ class WorkerReportOutboxCoordinatorTest {
     ds.setDriverClassName("org.sqlite.JDBC");
     ds.setUrl("jdbc:sqlite:" + dbFile.toAbsolutePath());
     JdbcTemplate jdbc = new JdbcTemplate(ds);
-    SqlSessionFactory sf =
-        WorkerReportOutboxSqliteSessionFactorySupport.createSqlSessionFactory(ds);
+    SqlSessionFactory sf = SqliteSessionFactorySupport.createSqlSessionFactory(ds);
     // SqlSessionTemplate 原 close() 抛 UnsupportedOperationException(Spring 托管 session),
     // 覆写为 destroy()(DisposableBean)走真正的清理,这样可放进 try-with-resources。
     try (MockWebServer server = new MockWebServer();

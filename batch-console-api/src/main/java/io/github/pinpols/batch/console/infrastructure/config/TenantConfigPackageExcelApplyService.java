@@ -50,7 +50,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 租户配置包 Excel apply 阶段的写库逻辑（从 {@link DefaultConsoleTenantConfigPackageExcelApplicationService}
+ * 租户配置包 Excel apply 阶段的写库逻辑（从 {@link DefaultTenantConfigPackageExcelService}
  * 拆出）。按 resourceQueue → businessCalendar → batchWindow → fileTemplate → channel → job →
  * pipeline+step → workflow+node+edge 顺序 upsert；调用方负责事务边界与 totalInvalid 闸门。
  */

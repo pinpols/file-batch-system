@@ -11,7 +11,7 @@ import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEvent
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -19,7 +19,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
-import io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
@@ -28,7 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** WF-design-5 / WF-design-6: JOB 节点 related_job_code + CONDITION 边 condition_expr 校验。 */
-class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
+class WorkflowDefinitionValidationTest {
 
   private static final String TENANT = "t1";
   private static final long DEF_ID = 100L;
@@ -38,7 +38,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
   private WorkflowEdgeMapper edgeMapper;
   private JobDefinitionMapper jobDefinitionMapper;
   private ConsoleTenantGuard tenantGuard;
-  private DefaultConsoleWorkflowDefinitionApplicationService service;
+  private DefaultWorkflowDefinitionService service;
 
   @BeforeEach
   void setUp() {
@@ -55,7 +55,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
 
     WorkflowDefinitionVersionMapper versionMapper = mock(WorkflowDefinitionVersionMapper.class);
-    service = new DefaultConsoleWorkflowDefinitionApplicationService(
+    service = new DefaultWorkflowDefinitionService(
         definitionMapper,
         nodeMapper,
         edgeMapper,

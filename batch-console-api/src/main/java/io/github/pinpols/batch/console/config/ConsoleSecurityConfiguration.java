@@ -38,6 +38,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
 @RequiredArgsConstructor
+/** Console Web 安全链、认证和授权规则。 */
 public class ConsoleSecurityConfiguration {
 
   private final ConsoleSecurityProperties properties;

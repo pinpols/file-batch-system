@@ -20,6 +20,7 @@ import org.springframework.util.ErrorHandler;
 
 @AutoConfiguration
 @EnableConfigurationProperties(BatchSchedulingProperties.class)
+/** 装配共享任务调度器及其优雅停机策略。 */
 public class BatchSchedulingAutoConfiguration {
 
   /**
