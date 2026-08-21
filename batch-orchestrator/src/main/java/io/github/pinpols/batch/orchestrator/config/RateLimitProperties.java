@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 @Data
 @ConfigurationProperties(prefix = "batch.rate-limit")
+/** Orchestrator 入口限流策略参数。 */
 public class RateLimitProperties {
 
   /**

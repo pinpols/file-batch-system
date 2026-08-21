@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.domain.workflow.web.response.PipelineDefi
 import java.util.Map;
 
 /** 流水线定义应用服务：管理流水线定义的 CRUD 及启停操作。 */
-public interface ConsolePipelineDefinitionApplicationService {
+public interface PipelineDefinitionService {
 
   PageResponse<Map<String, Object>> list(
       String tenantId,

@@ -54,7 +54,7 @@ public class WaitingPartitionDispatchScheduler {
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorConfigCacheService configCacheService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final WaitingPartitionDispatchTransactionService transactionService;
+  private final WaitingPartitionDispatcher dispatcher;
 
   /** WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。 */
   @Scheduled(
@@ -140,7 +140,7 @@ public class WaitingPartitionDispatchScheduler {
         continue;
       }
       try {
-        // RLS Phase B：dispatchWaitingPartition → transactionService (REQUIRES_NEW) → 多张 batch 表写入，
+        // RLS Phase B：dispatchWaitingPartition → dispatcher (REQUIRES_NEW) → 多张 batch 表写入，
         // 必须在事务协作者调用前绑好 holder，事务起点才能读到 app.tenant_id。
         // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
         RlsTenantContextHolder.runWithTenant(
@@ -217,7 +217,7 @@ public class WaitingPartitionDispatchScheduler {
           StructuredLogField.JOB_INSTANCE_ID,
           jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
       try {
-        transactionService.executeDispatch(partition, task, jobInstance, decision);
+        dispatcher.executeDispatch(partition, task, jobInstance, decision);
       } finally {
         BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
       }

@@ -15,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.web.request.PipelineDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -31,8 +31,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 /** P1: ConsolePipelineDefinitionController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
 class ConsolePipelineDefinitionControllerBehaviorTest {
 
-  private final ConsolePipelineDefinitionApplicationService service =
-      mock(ConsolePipelineDefinitionApplicationService.class);
+  private final PipelineDefinitionService service = mock(PipelineDefinitionService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;

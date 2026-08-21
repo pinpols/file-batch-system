@@ -14,7 +14,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -47,7 +47,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 class ConsoleWorkflowFullUpdateControllerTest {
 
   @Mock
-  private ConsoleWorkflowDefinitionApplicationService service;
+  private WorkflowDefinitionService service;
 
   @Mock
   private WorkflowDesignLockService lockService;

@@ -20,6 +20,11 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * Orchestrator 进程入口。
+ *
+ * <p>负责启用任务调度、扫描编排侧 Mapper，并提供 outbox 发布路径使用的统一 Kafka ProducerFactory。
+ */
 @SpringBootApplication(
     scanBasePackages = "io.github.pinpols.batch",
     exclude = {DataRedisRepositoriesAutoConfiguration.class})

@@ -7,8 +7,7 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
 @Component
-public class InMemoryTenantConfigPackageExcelImportStore
-    implements TenantConfigPackageExcelImportStore {
+public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelImportStore {
 
   // P0:原 ConcurrentHashMap 无 TTL / 无上限,大 Excel 会话(多 sheet 完整解析后驻内存)
   // 在用户放弃 preview/apply 时永久驻留,高并发可累积到 OOM。

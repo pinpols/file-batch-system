@@ -32,7 +32,7 @@ import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefin
 import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
-import io.github.pinpols.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
@@ -52,7 +52,7 @@ import org.mockito.ArgumentCaptor;
  * 历史版本可读(JSONB 反序列化)。
  */
 @DisplayName("workflow definition version history (V167 — Polish 闭环)")
-class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
+class WorkflowDefinitionVersionTest {
 
   private static final String TENANT = "t1";
   private static final long DEF_ID = 100L;
@@ -64,7 +64,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
   private WorkflowEdgeMapper edgeMapper;
   private WorkflowDefinitionVersionMapper versionMapper;
   private WorkflowDesignLockService lockService;
-  private DefaultConsoleWorkflowDefinitionApplicationService service;
+  private DefaultWorkflowDefinitionService service;
 
   @BeforeEach
   void setUp() {
@@ -76,7 +76,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
     ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
 
-    service = new DefaultConsoleWorkflowDefinitionApplicationService(
+    service = new DefaultWorkflowDefinitionService(
         definitionMapper,
         nodeMapper,
         edgeMapper,

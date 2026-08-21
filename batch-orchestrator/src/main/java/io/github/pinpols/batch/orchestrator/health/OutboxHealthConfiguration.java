@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(OutboxLagHealthProperties.class)
+/** 装配 Outbox 可用性健康检查。 */
 public class OutboxHealthConfiguration {
 
   @Bean

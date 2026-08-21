@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnClass({TimedAspect.class, MeterRegistry.class})
+/** 装配 Orchestrator 服务方法的指标切面。 */
 public class OrchestratorMetricsAspectConfiguration {
 
   @Bean

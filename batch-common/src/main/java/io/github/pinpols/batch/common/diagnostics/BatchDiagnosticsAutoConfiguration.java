@@ -14,6 +14,7 @@ import org.springframework.core.env.Environment;
 
 @AutoConfiguration
 @ConditionalOnClass(Endpoint.class)
+/** 装配诊断端点所需的运行时信息采集能力。 */
 public class BatchDiagnosticsAutoConfiguration {
 
   @Bean

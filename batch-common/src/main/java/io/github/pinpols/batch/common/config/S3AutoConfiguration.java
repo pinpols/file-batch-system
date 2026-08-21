@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 // S3Presigner/健康探针——否则会对不存在的 endpoint 发 headBucket,把 readiness 拉 DOWN。
 @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
 @EnableConfigurationProperties(S3StorageProperties.class)
+/** 根据存储配置装配 S3 客户端与对象存储实现。 */
 public class S3AutoConfiguration {
 
   @Bean

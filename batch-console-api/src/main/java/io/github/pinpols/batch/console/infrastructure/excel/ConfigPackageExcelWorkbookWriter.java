@@ -9,6 +9,7 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.w
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.infrastructure.config.DefaultTenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
@@ -36,7 +37,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 
 /**
- * 为租户配置包生成 Excel 工作簿(导出、模板、预览)。从 DefaultConsoleTenantConfigPackageExcelApplicationService 抽出以缩减类体积。
+ * 为租户配置包生成 Excel 工作簿(导出、模板、预览)。从 {@link DefaultTenantConfigPackageExcelService} 抽出以缩减类体积。
  */
 public class ConfigPackageExcelWorkbookWriter {
 

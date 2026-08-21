@@ -6,6 +6,11 @@ import io.github.pinpols.batch.common.utils.Texts;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 编排侧 Kafka Topic 配置。
+ *
+ * <p>保留五类 worker 的独立派发 Topic，并按 {@link JobType} 解析目标 Topic；未识别类型不路由，避免误投递。
+ */
 @Data
 @ConfigurationProperties(prefix = "batch.mq.topics")
 public class BatchMqTopicsProperties {

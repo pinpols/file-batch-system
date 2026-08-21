@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigPackageExcelApplicationService;
+import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
@@ -27,7 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
-  private ConsoleTenantConfigPackageExcelApplicationService service;
+  private TenantConfigPackageExcelService service;
 
   @Autowired
   private TenantConfigPackageExcelImportStore importStore;

@@ -11,6 +11,7 @@ import org.springframework.core.env.Environment;
 @Data
 @Slf4j
 @ConfigurationProperties(prefix = "batch.security")
+/** 平台内部认证、生产环境保护与密钥校验配置。 */
 public class BatchSecurityProperties implements EnvironmentAware {
 
   /**

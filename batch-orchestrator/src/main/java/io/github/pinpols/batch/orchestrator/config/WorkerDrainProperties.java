@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.worker.drain")
+/** Worker 下线 drain 的超时与回收策略。 */
 public class WorkerDrainProperties {
 
   /** Orchestrator 接管飞行中任务前的默认排空等待窗口。 */

@@ -4,7 +4,7 @@
 #
 # SDK 路线图 PR 推送前自查 — 拦截两类高频被 CI 拦截的事:
 #   1. Java 编码反例(CLAUDE.md 「Java 编码细则」10 条)
-#   2. API 文档对齐(controller 改了但 OpenAPI / protocol.md 没改)
+#   2. API 文档对齐(Controller API 契约改了但 OpenAPI / protocol.md 没改)
 #
 # 设计原则:
 #   - 只检查"本 PR 改过的文件",不扫全仓(快,< 30s)
@@ -261,8 +261,23 @@ if [[ -n "$CHANGED_CTL" ]]; then
     CONSOLE_CTL=$(printf '%s' "$FILTERED_CTL" | sed '/^$/d')
   fi
 
+  # 只有映射、请求绑定或公开端点方法签名变化才是 API 契约变更。依赖注入、变量或服务类型的
+  # 内部重构不应强制制造 OpenAPI/协议文档噪声。
+  API_CONTRACT_CTL=""
+  while IFS= read -r ctl; do
+    [[ -z "$ctl" ]] && continue
+    if [[ -z "$BASE_REF" ]] \
+        || git diff -U0 "$BASE_REF...HEAD" -- "$ctl" | grep -qE \
+          '^[+-][^+-].*@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestBody|PathVariable|RequestParam|RequestHeader)|^[+-][^+-].*public[[:space:]]+(void|[A-Za-z_][A-Za-z0-9_]*(<[^(){};]*>)?(\[\])?)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\('; then
+      API_CONTRACT_CTL+="$ctl"$'\n'
+    else
+      info "  跳过无 API 契约变化的 Controller 内部重构:$ctl"
+    fi
+  done <<< "$CONSOLE_CTL"
+  CONSOLE_CTL=$(printf '%s' "$API_CONTRACT_CTL" | sed '/^$/d')
+
   if [[ -n "$CONSOLE_CTL" ]]; then
-    info "Console-api controller 变更:"
+    info "Console-api API 契约变更:"
     echo "$CONSOLE_CTL" | sed 's/^/    /'
 
     if [[ -z "$CHANGED_YAML" ]] || ! echo "$CHANGED_YAML" | grep -q "console-api.openapi.yaml"; then

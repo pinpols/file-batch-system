@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigPackageExcelApplicationService;
+import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
@@ -100,8 +100,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @Service
 @RequiredArgsConstructor
 @SuppressWarnings({"java:S2259", "java:S2583"})
-public class DefaultConsoleTenantConfigPackageExcelApplicationService
-    implements ConsoleTenantConfigPackageExcelApplicationService {
+public class DefaultTenantConfigPackageExcelService implements TenantConfigPackageExcelService {
 
   private static final String KEY_ID = "id";
 
@@ -208,9 +207,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       }
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(
-          DefaultConsoleTenantConfigPackageExcelApplicationService.class,
-          "catch:RuntimeException",
-          ignored);
+          DefaultTenantConfigPackageExcelService.class, "catch:RuntimeException", ignored);
 
       // step_registry 表尚未创建 / 查询失败时降级为空，writer 跳过 impl_code 下拉
     }

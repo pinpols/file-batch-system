@@ -10,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 @Setter
 @ConfigurationProperties(prefix = "batch.orchestrator.health.outbox")
 @Validated
+/** Outbox 积压健康检查阈值。 */
 public class OutboxLagHealthProperties {
 
   /** NEW + FAILED 状态事件总数达到该阈值,健康端点 DOWN。 */

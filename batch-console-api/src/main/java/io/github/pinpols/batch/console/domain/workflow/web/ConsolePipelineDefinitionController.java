@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.web.request.PipelineDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.web.response.ConsolePipelineDefinitionListItemResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse;
@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsolePipelineDefinitionController {
 
-  private final ConsolePipelineDefinitionApplicationService pipelineDefinitionApplicationService;
+  private final PipelineDefinitionService pipelineDefinitionService;
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
@@ -42,8 +42,8 @@ public class ConsolePipelineDefinitionController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    PageResponse<Map<String, Object>> page = pipelineDefinitionApplicationService.list(
-        tenantId, jobCode, pipelineType, enabled, pageNo, pageSize);
+    PageResponse<Map<String, Object>> page =
+        pipelineDefinitionService.list(tenantId, jobCode, pipelineType, enabled, pageNo, pageSize);
     return responseFactory.success(new PageResponse<>(
         page.total(),
         page.pageNo(),
@@ -58,7 +58,7 @@ public class ConsolePipelineDefinitionController {
   @GetMapping("/{id}")
   public CommonResponse<PipelineDefinitionDetailResponse> detail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(pipelineDefinitionApplicationService.detail(id, tenantId));
+    return responseFactory.success(pipelineDefinitionService.detail(id, tenantId));
   }
 
   @PostMapping
@@ -68,7 +68,7 @@ public class ConsolePipelineDefinitionController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<PipelineDefinitionDetailResponse> create(
       @Valid @RequestBody PipelineDefinitionSaveRequest request) {
-    return responseFactory.success(pipelineDefinitionApplicationService.create(request));
+    return responseFactory.success(pipelineDefinitionService.create(request));
   }
 
   @PutMapping("/{id}")
@@ -79,7 +79,7 @@ public class ConsolePipelineDefinitionController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<PipelineDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody PipelineDefinitionSaveRequest request) {
-    return responseFactory.success(pipelineDefinitionApplicationService.update(id, request));
+    return responseFactory.success(pipelineDefinitionService.update(id, request));
   }
 
   @PostMapping("/{id}/toggle")
@@ -92,7 +92,7 @@ public class ConsolePipelineDefinitionController {
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("enabled") Boolean enabled) {
-    pipelineDefinitionApplicationService.toggle(id, tenantId, enabled);
+    pipelineDefinitionService.toggle(id, tenantId, enabled);
     return responseFactory.success(null);
   }
 }

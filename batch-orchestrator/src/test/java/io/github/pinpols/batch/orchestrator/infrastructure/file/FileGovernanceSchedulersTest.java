@@ -22,7 +22,7 @@ class FileGovernanceSchedulersTest {
   private FileGovernanceReconcileScheduler reconcileScheduler;
   private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
   private FileGovernanceLatencyScheduler latencyScheduler;
-  private FileGovernanceUploadSessionCleanupScheduler uploadSessionCleanupScheduler;
+  private UploadSessionCleanupScheduler uploadSessionCleanupScheduler;
 
   @BeforeEach
   void setUp() {
@@ -35,7 +35,7 @@ class FileGovernanceSchedulersTest {
     latencyScheduler =
         new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
     uploadSessionCleanupScheduler =
-        new FileGovernanceUploadSessionCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
+        new UploadSessionCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
   }
 
   @Test

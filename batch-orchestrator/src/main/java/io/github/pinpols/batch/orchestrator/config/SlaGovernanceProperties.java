@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.sla")
+/** 任务 SLA 监控、告警与升级参数。 */
 public class SlaGovernanceProperties {
 
   private boolean enabled = true;

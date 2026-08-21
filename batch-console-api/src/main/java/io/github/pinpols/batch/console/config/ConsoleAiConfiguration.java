@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
+/** 装配 Console 的 AI 审计与调用客户端。 */
 public class ConsoleAiConfiguration {
 
   /**

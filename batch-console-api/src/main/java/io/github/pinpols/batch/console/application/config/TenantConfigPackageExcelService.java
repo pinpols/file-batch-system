@@ -10,8 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-/** 租户配置包 Excel（8 Sheet）：job_definition / file_channel / alert_routing / pipeline / workflow。 */
-public interface ConsoleTenantConfigPackageExcelApplicationService {
+/** 租户配置包 Excel（11 Sheet）：资源队列、日历、窗口、作业、文件、流水线和工作流配置。 */
+public interface TenantConfigPackageExcelService {
 
   ResponseEntity<StreamingResponseBody> exportPackage(String tenantId);
 

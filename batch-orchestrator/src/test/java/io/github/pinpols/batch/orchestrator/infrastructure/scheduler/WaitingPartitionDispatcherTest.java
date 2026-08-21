@@ -30,7 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-class WaitingPartitionDispatchTransactionServiceTest {
+class WaitingPartitionDispatcherTest {
 
   private final JobInstanceMapper jobInstanceMapper =
       org.mockito.Mockito.mock(JobInstanceMapper.class);
@@ -43,7 +43,7 @@ class WaitingPartitionDispatchTransactionServiceTest {
   private final TenantActionRateLimiter tenantActionRateLimiter =
       org.mockito.Mockito.mock(TenantActionRateLimiter.class);
 
-  private WaitingPartitionDispatchTransactionService service;
+  private WaitingPartitionDispatcher dispatcher;
 
   @BeforeEach
   void setUp() {
@@ -57,7 +57,7 @@ class WaitingPartitionDispatchTransactionServiceTest {
         org.mockito.Mockito.mock(WorkflowNodeMapper.class),
         workflowRunMapper,
         org.mockito.Mockito.mock(WorkflowNodeRunMapper.class));
-    service = new WaitingPartitionDispatchTransactionService(
+    dispatcher = new WaitingPartitionDispatcher(
         jobMappers,
         workflowMappers,
         taskDispatchOutboxService,
@@ -70,7 +70,7 @@ class WaitingPartitionDispatchTransactionServiceTest {
     JobInstanceEntity instance = waitingInstance();
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(false);
 
-    service.executeDispatch(partition(), task(), instance, dispatchDecision());
+    dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
 
     verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
     verify(taskDispatchOutboxService, never())
@@ -92,7 +92,7 @@ class WaitingPartitionDispatchTransactionServiceTest {
     when(jobInstanceMapper.markRunning(any())).thenReturn(1);
     when(workflowRunMapper.selectByRelatedJobInstanceId("tenant-a", 7L)).thenReturn(workflowRun);
 
-    service.executeDispatch(partition(), task(), instance, dispatchDecision());
+    dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
 
     verify(taskDispatchOutboxService).writeDispatchEvent(eq(instance), any(), any(), any(), any());
     ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam>

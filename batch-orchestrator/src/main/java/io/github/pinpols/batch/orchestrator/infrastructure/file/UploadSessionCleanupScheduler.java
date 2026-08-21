@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-public class FileGovernanceUploadSessionCleanupScheduler {
+public class UploadSessionCleanupScheduler {
 
   private final FileGovernanceScheduler fileGovernanceScheduler;
   private final OrchestratorGracefulShutdown gracefulShutdown;

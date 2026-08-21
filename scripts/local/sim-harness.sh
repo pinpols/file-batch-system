@@ -310,6 +310,26 @@ restart_import() {
     skip) extra="-Dbatch.worker.checkpoint.enabled=false -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" ;;
     checkpoint) extra="-Dbatch.worker.checkpoint.enabled=true" ;;
   esac
+  # 容器模式不能按 18083 查 PID；Docker 端口代理被误杀会连带终止 Docker
+  # daemon。restart.sh 会检测受管容器并改用 Compose 重建指定服务。
+  if docker inspect batch-worker-import >/dev/null 2>&1; then
+    local checkpoint_enabled=false skip_enabled=false skip_max=0 error_sink=BOTH
+    if [[ "$mode" == checkpoint ]]; then
+      checkpoint_enabled=true
+    elif [[ "$mode" == skip ]]; then
+      skip_enabled=true
+      skip_max=1
+      error_sink=ERROR_TABLE
+    fi
+    BATCH_WORKER_CHECKPOINT_ENABLED="$checkpoint_enabled" \
+    BATCH_WORKER_IMPORT_SKIP_ENABLED="$skip_enabled" \
+    BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE=ABSOLUTE \
+    BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_COUNT="$skip_max" \
+    BATCH_WORKER_IMPORT_ERROR_SINK_TYPE="$error_sink" \
+    JAVA_OPTS="$extra" \
+      bash scripts/local/restart.sh worker-import
+    return $?
+  fi
   local pid; pid="$(process_listen_pids "$WORKER_IMPORT_PORT" | head -1)"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null

@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
+/** 提供统一 UTC 时钟，避免业务逻辑直接依赖系统默认时区。 */
 public class BatchClockConfig {
 
   private static final String TESTING_CLOCK_OFFSET_PROPERTY = "batch.testing.clock-offset";

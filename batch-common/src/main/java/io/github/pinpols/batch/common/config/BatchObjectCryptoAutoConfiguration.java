@@ -10,6 +10,7 @@ import org.springframework.core.env.Environment;
 
 @AutoConfiguration
 @EnableConfigurationProperties({BatchSecurityProperties.class, BatchKmsProperties.class})
+/** 按配置装配对象存储加解密能力。 */
 public class BatchObjectCryptoAutoConfiguration {
 
   @Bean

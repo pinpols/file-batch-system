@@ -217,6 +217,15 @@ jobs:
         # 只扫本 PR 新增/改动的 db/migration,拦危险 DDL(DROP COLUMN / 改类型 / 加 UNIQUE 长锁等)。
         run: bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
 
+      - name: Database comment coverage (diff-only)
+        shell: bash
+        # 新建业务表及状态/策略/载荷/幂等等关键字段必须在同一迁移声明注释；历史基线见审计文档。
+        run: bash scripts/ci/check-db-comment-coverage.sh "$GUARD_BASE"
+
+      - name: Required Java architecture documentation
+        shell: bash
+        run: bash scripts/ci/check-required-java-docs.sh
+
       - name: DB scripts safety lint (scripts/db/** 手工 DDL)
         shell: bash
         # 补 squawk 盲区:batch_business 不走 Flyway,partition-migration / business 下的手工

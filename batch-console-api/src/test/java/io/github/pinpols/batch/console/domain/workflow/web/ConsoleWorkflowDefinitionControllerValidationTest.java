@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -32,8 +32,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  */
 class ConsoleWorkflowDefinitionControllerValidationTest {
 
-  private final ConsoleWorkflowDefinitionApplicationService service =
-      mock(ConsoleWorkflowDefinitionApplicationService.class);
+  private final WorkflowDefinitionService service = mock(WorkflowDefinitionService.class);
   private final WorkflowDesignLockService lockService = mock(WorkflowDesignLockService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);

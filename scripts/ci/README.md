@@ -111,6 +111,27 @@ python3 scripts/ci/check-helm-env-sync.py
 bash scripts/ci/check-db-scripts-safety.sh
 ```
 
+## `check-db-comment-coverage.sh`
+
+校验本次新增或修改的 Flyway 迁移：新建 `batch` / `archive` 业务表必须在同文件包含
+`COMMENT ON TABLE`；`batch` 表中名称命中状态、策略、载荷、幂等、密钥引用、哈希、超时、窗口、
+时区、版本、重试、优先级、目标或来源引用等关键语义的新增字段必须包含 `COMMENT ON COLUMN`。
+`archive` 镜像字段继承源表语义，只维护表级说明，避免双份字段注释漂移。历史对象的补齐基线和豁免
+口径见 `docs/audit/database-and-class-comment-audit-2026-08-21.md`。
+
+```bash
+bash scripts/ci/check-db-comment-coverage.sh origin/main
+```
+
+## `check-required-java-docs.sh`
+
+校验应用入口及标注 `@Configuration`、`@AutoConfiguration`、`@ConfigurationProperties` 的 Spring
+类型均有顶层 Javadoc，要求注释说明架构职责，不对 DTO、实体、Mapper、枚举等自解释类型制造模板注释。
+
+```bash
+bash scripts/ci/check-required-java-docs.sh
+```
+
 ## `check-version-alignment.sh`
 
 校验版本一致性:根 `pom.xml <revision>` ↔ helm `Chart.yaml appVersion`(预发态下 appVersion 合法地停在上一 GA,仅 GA 态强制相等)↔ `load-tests/pom.xml`(独立 reactor,版本手工同步,CLAUDE.md 点名高危点);并校验 `.env.*` 的 `*_IMAGE_TAG` 不漂移。接入 `pr-gate.yml` 的 `static-checks` job。

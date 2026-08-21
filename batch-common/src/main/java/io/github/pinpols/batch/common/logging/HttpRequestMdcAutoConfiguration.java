@@ -9,6 +9,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass(OncePerRequestFilter.class)
+/** 为 HTTP 请求装配 trace、租户等 MDC 上下文。 */
 public class HttpRequestMdcAutoConfiguration {
 
   @Bean

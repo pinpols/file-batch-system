@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-08-08"
+  x-last-updated: "2026-08-21"
   x-changelog:
+    - date: "2026-08-21"
+      summary: "Console tenant-package Excel、workflow/pipeline definition Controller 仅同步内部 service/fixture 命名与注释治理；HTTP 路径、请求/响应字段、鉴权、状态码和 wire schema 均不变"
     - date: "2026-08-08"
       summary: "Sonar 静态治理仅收敛 Console Controller 泛型返回声明与抑制误报注解；HTTP 路径、请求/响应字段、鉴权、状态码和 wire schema 均不变"
     - date: "2026-08-05"

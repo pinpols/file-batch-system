@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.web.request.PipelineDefinitionSaveRequest;
@@ -31,11 +31,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** {@link ConsolePipelineDefinitionApplicationService} 的默认实现。 */
+/** {@link PipelineDefinitionService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsolePipelineDefinitionApplicationService
-    implements ConsolePipelineDefinitionApplicationService {
+public class DefaultPipelineDefinitionService implements PipelineDefinitionService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_PIPELINE_NAME = "pipeline_name";

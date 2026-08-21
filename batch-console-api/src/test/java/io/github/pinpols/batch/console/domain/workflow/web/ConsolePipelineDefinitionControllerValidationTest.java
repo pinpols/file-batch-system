@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -29,8 +29,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  */
 class ConsolePipelineDefinitionControllerValidationTest {
 
-  private final ConsolePipelineDefinitionApplicationService service =
-      mock(ConsolePipelineDefinitionApplicationService.class);
+  private final PipelineDefinitionService service = mock(PipelineDefinitionService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;

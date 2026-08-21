@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -54,8 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleWorkflowDefinitionApplicationService
-    implements ConsoleWorkflowDefinitionApplicationService {
+public class DefaultWorkflowDefinitionService implements WorkflowDefinitionService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String ERR_WORKFLOW_NOT_FOUND = "Workflow definition not found: ";

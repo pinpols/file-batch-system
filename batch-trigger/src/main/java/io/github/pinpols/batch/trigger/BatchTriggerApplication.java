@@ -23,6 +23,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @ImportAutoConfiguration({BatchJsonAutoConfiguration.class, RestClientAutoConfiguration.class})
 @MapperScan({"io.github.pinpols.batch.trigger.mapper", "io.github.pinpols.batch.common.mapper"})
+/** Trigger 服务启动入口。 */
 public class BatchTriggerApplication {
 
   public static void main(String[] args) {

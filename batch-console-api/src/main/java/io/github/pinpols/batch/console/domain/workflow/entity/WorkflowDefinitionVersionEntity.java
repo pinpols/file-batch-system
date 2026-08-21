@@ -6,7 +6,7 @@ import lombok.Data;
 /**
  * workflow-dag-designer Polish — {@code batch.workflow_definition_version}(V167)。
  *
- * <p>每次 {@code DefaultConsoleWorkflowDefinitionApplicationService#fullUpdate} 成功(主表 version+1)后,
+ * <p>每次 {@code DefaultWorkflowDefinitionService#fullUpdate} 成功(主表 version+1)后,
  * 同事务追加一行快照,承载历史 nodes / edges 全文(ObjectMapper.writeValueAsString)。
  *
  * <p>{@code nodesJson} / {@code edgesJson} 为 JSONB 全文,mapper 端 {@code ::text} 读出为字符串, 反序列化由

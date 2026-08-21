@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.KafkaAdmin;
 
 @Configuration(proxyBeanMethods = false)
+/** 配置 Console 侧 Kafka 消费与序列化约定。 */
 class ConsoleKafkaConfiguration {
 
   @Bean

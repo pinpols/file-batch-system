@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigPackageExcelApplicationService;
+import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
@@ -46,7 +46,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @Idempotent
 public class ConsoleTenantConfigPackageExcelController {
 
-  private final ConsoleTenantConfigPackageExcelApplicationService applicationService;
+  private final TenantConfigPackageExcelService tenantConfigExcelService;
   private final ConsoleResponseFactory responseFactory;
 
   /**
@@ -58,7 +58,7 @@ public class ConsoleTenantConfigPackageExcelController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<StreamingResponseBody> export(
       @RequestParam(required = false) String tenantId) {
-    return applicationService.exportPackage(tenantId);
+    return tenantConfigExcelService.exportPackage(tenantId);
   }
 
   /**
@@ -69,7 +69,7 @@ public class ConsoleTenantConfigPackageExcelController {
   @GetMapping("/template")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<StreamingResponseBody> template() {
-    return applicationService.downloadTemplate();
+    return tenantConfigExcelService.downloadTemplate();
   }
 
   /**
@@ -85,7 +85,7 @@ public class ConsoleTenantConfigPackageExcelController {
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "tenantId", required = false) String tenantId)
       throws IOException {
-    return responseFactory.success(applicationService.upload(file, tenantId));
+    return responseFactory.success(tenantConfigExcelService.upload(file, tenantId));
   }
 
   /**
@@ -97,7 +97,7 @@ public class ConsoleTenantConfigPackageExcelController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> preview(
       @PathVariable String uploadToken) {
-    return responseFactory.success(applicationService.preview(uploadToken));
+    return responseFactory.success(tenantConfigExcelService.preview(uploadToken));
   }
 
   /**
@@ -111,7 +111,7 @@ public class ConsoleTenantConfigPackageExcelController {
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> patchPreviewRow(
       @PathVariable String uploadToken,
       @Valid @RequestBody TenantConfigPackageExcelPatchRequest request) {
-    return responseFactory.success(applicationService.patchRow(
+    return responseFactory.success(tenantConfigExcelService.patchRow(
         uploadToken, request.getSheetName(), request.getRowNo(), request.getValues()));
   }
 
@@ -123,7 +123,7 @@ public class ConsoleTenantConfigPackageExcelController {
   @GetMapping("/preview/{uploadToken}/workbook")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public ResponseEntity<StreamingResponseBody> previewWorkbook(@PathVariable String uploadToken) {
-    return applicationService.downloadPreviewWorkbook(uploadToken);
+    return tenantConfigExcelService.downloadPreviewWorkbook(uploadToken);
   }
 
   /**
@@ -139,6 +139,6 @@ public class ConsoleTenantConfigPackageExcelController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,
       @Valid @RequestBody TenantConfigPackageExcelApplyRequest request) {
-    return responseFactory.success(applicationService.apply(uploadToken, request));
+    return responseFactory.success(tenantConfigExcelService.apply(uploadToken, request));
   }
 }
