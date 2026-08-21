@@ -6,7 +6,7 @@
 
 **Tech Stack:** Java 21 + Spring Boot,MyBatis/JdbcTemplate,PostgreSQL(`hashtext`),JUnit5 + AssertJ + Mockito,Testcontainers(`AbstractIntegrationTest`)。
 
-设计来源:[docs/backlog/export-partition-slice-fix-2026-06-06.md](../backlog/export-partition-slice-fix-2026-06-06.md)
+设计来源:[docs/archive/backlog/export-partition-slice-fix-2026-06-06.md](../archive/backlog/export-partition-slice-fix-2026-06-06.md)
 
 ---
 
@@ -581,7 +581,7 @@ git commit -m "test(export): 分片完整性 IT — 4 片无重叠 + 全覆盖(s
 ## Task 7: 全量验证 + 文档收尾
 
 **Files:**
-- Modify: `docs/backlog/export-partition-slice-fix-2026-06-06.md`(状态改「已实现」)
+- Modify: `docs/archive/backlog/export-partition-slice-fix-2026-06-06.md`(状态改「已实现」)
 - Modify: `docs/changelog.md`(追加一行 bugfix,日期倒序)
 
 - [ ] **Step 1: 全模块 clean 编译 + 测试**
@@ -593,7 +593,7 @@ Expected: BUILD SUCCESS,新单测全部通过
 
 - [ ] **Step 2: 更新设计文档状态**
 
-把 `docs/backlog/export-partition-slice-fix-2026-06-06.md` 顶部状态由「已设计,待实现」改为「已实现(feature/export-partition-slice)」。
+把 `docs/archive/backlog/export-partition-slice-fix-2026-06-06.md` 顶部状态由「已设计,待实现」改为「已实现(feature/export-partition-slice)」。
 
 - [ ] **Step 3: changelog 追加一行**
 
@@ -605,6 +605,6 @@ Expected: BUILD SUCCESS,新单测全部通过
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docs/backlog/export-partition-slice-fix-2026-06-06.md docs/changelog.md
+git add docs/archive/backlog/export-partition-slice-fix-2026-06-06.md docs/changelog.md
 git commit -m "docs(export): 分片修复落地,更新 backlog 状态 + changelog"
 ```

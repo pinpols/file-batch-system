@@ -16,7 +16,10 @@
 |---|---|
 | `analysis/` | 分析报告 / bug 路线图 / engineering backlog / 深度分析多版本 |
 | `architecture/` | 架构 audit / 命名重构候选 / 历史 scalability 评估 / design gap |
+| `backlog/` | 已实现 / 已替代 / 已裁定暂不继续滚动维护的 backlog 与施工方案 |
 | `design/` | mega 设计文档历史快照 |
+| `review/` | 历史代码审查快照 |
+| `runbook/` | 已废弃或已被新 SOP 替代的运维流程 |
 | `testing/` | 历史测试报告 + 测试 plan 旧版 + 跑测产物 |
 
 ## 当前权威 vs 归档对照
@@ -39,3 +42,13 @@
 | Worker ADR backlog 优先级 | CLAUDE.md "ADR 实施范围纪律" + `architecture/adr/` 各 ADR 文档 | `archive/analysis/worker-adr-backlog-priority-2026-05-03.md`（时效性 priority 表）|
 | 测试计划 | `testing/full-project-test-plan.md` | `archive/testing/test-plan-2026-03-28.md` |
 | 测试报告 | `testing/load-test-report.md` | `archive/testing/historical-test-reports-2026-04-09-10.md` |
+| 发布流程 | `runbook/releasing.md` | `archive/runbook/release-process-2026-05-22.md`（已废弃 GitOps 蓝图） |
+| 代码审查 | `review/` 当前保留近期仍有参考价值的快照 | `archive/review/` 历史快照 |
+
+## 2026-08-21 归档批次
+
+本批只移动以下三类文件，不修改原文内容：
+
+1. `analysis/` 下已 fold 到滚动文档或只保留历史证据的一次性 audit / review / 升级评估。
+2. `backlog/` 下已实现、已替代，或由当前容量/验证文档接管的施工方案。
+3. `runbook/` 下文件名和正文均已标明废弃的历史发布流程。

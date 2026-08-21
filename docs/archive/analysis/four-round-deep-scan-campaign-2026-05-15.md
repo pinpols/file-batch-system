@@ -123,8 +123,8 @@
 
 - 上一份审计快照：[`backend-deep-scan-bug-design-review-2026-05-14.md`](backend-deep-scan-bug-design-review-2026-05-14.md)（R0 已知跳过清单）
 - 接受度报告：[`backend-acceptance-report-2026-05-14.md`](backend-acceptance-report-2026-05-14.md)
-- 上线检查清单：[`../runbook/releasing.md`](../runbook/releasing.md) §0 / §0.1 / §0.2（含 V124 partial unique 诊断 SQL）
-- ADR-029 共享配置基线：[`../architecture/adr/ADR-029-shared-config-defaults-module.md`](../architecture/adr/ADR-029-shared-config-defaults-module.md)
+- 上线检查清单：[`../../runbook/releasing.md`](../../runbook/releasing.md) §0 / §0.1 / §0.2（含 V124 partial unique 诊断 SQL）
+- ADR-029 共享配置基线：[`../../architecture/adr/ADR-029-shared-config-defaults-module.md`](../../architecture/adr/ADR-029-shared-config-defaults-module.md)
 - ADR-030 §D7 Stage B 收尾（双轨 → cookie-only）：见 git log `6c6f4547`
 
 ## 9 个 commit 速查

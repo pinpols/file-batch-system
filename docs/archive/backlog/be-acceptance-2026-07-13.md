@@ -26,5 +26,5 @@
 ## gh CLI dry-run(确认后自己 push)
 ```bash
 # 把本文件作为 issue body
-gh issue create --title "BE 验收 backlog 2026-07-13" --body-file "docs/backlog/be-acceptance-2026-07-13.md" --label "backlog,be-acceptance"
+gh issue create --title "BE 验收 backlog 2026-07-13" --body-file "docs/archive/backlog/be-acceptance-2026-07-13.md" --label "backlog,be-acceptance"
 ```

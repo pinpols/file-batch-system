@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 开:消费端攒 K 条 → 一次 {@code claim-batch} → 逐 partition 独立执行并沿用逐任务 report。当前阶段先降低 CLAIM 往返,report-batch
  * 仍保留在 orchestrator 端点侧,worker 未接入。
  *
- * <p>护栏(见 {@code docs/backlog/adr046-phase2-2.3-worker-batch-construction.md}):partition 执行/幂等/
+ * <p>护栏(见 {@code docs/archive/backlog/adr046-phase2-2.3-worker-batch-construction.md}):partition 执行/幂等/
  * lease/DLQ/背压逐项保持;无束状态机、无 worker 束循环;**生产启用前须全栈压测**。{@code maxBatchSize} 必须 ≤ orchestrator 侧
  * {@code batch.task.batch-claim.maxBatchSize}(否则批调用被 4xx 拒)。
  */

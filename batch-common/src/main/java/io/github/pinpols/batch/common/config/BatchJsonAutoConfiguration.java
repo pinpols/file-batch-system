@@ -20,7 +20,7 @@ public class BatchJsonAutoConfiguration {
     mapper.registerModule(new JavaTimeModule());
     // 用 FlexibleInstantDeserializer 覆盖默认 InstantDeserializer：
     // 前端发 naive datetime / date-only 字符串时按平台默认时区回退解析，避免 400
-    // (见 docs/analysis/frontend-issue-handoff-2026-05-17.md §5)
+    // (见 docs/archive/analysis/frontend-issue-handoff-2026-05-17.md §5)
     SimpleModule flexibleInstant = new SimpleModule("FlexibleInstantModule");
     flexibleInstant.addDeserializer(
         Instant.class, new FlexibleInstantDeserializer(timezoneProvider));
