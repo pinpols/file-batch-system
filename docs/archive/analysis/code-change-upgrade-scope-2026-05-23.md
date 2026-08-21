@@ -6,7 +6,7 @@
 >
 > 评估口径:数据基于 2026-05-23 当日仓库扫描,不是经验估。
 >
-> **范围**:本文只覆盖 `file-batch-system` 仓库的 Java 主代码升级。前端 FE 同类评估在 [`../../../batch-console/docs/reports/code-change-upgrade-scope-2026-05-23.md`](../../../batch-console/docs/reports/code-change-upgrade-scope-2026-05-23.md)。
+> **范围**:本文只覆盖 `file-batch-system` 仓库的 Java 主代码升级。前端 FE 同类评估在 [`../../../../batch-console/docs/reports/code-change-upgrade-scope-2026-05-23.md`](../../../../batch-console/docs/reports/code-change-upgrade-scope-2026-05-23.md)。
 
 ## TL;DR
 

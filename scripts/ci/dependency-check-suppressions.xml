@@ -3,7 +3,7 @@
   <!--
     R7 安全扫描 2026-05-16 — OWASP dependency-check 已知假阳性白名单。
     抑制条件需要 packageUrl 精确匹配，并附人工核查 notes + 评审日期，每年至少 review 一次。
-    详见 docs/analysis/security-scan-2026-05-16.md §2。
+    详见 docs/archive/analysis/security-scan-2026-05-16.md §2。
   -->
   <suppress>
     <notes><![CDATA[

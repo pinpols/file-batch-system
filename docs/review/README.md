@@ -21,8 +21,11 @@
 |---|---|---|
 | `batch-worker-sdk-deep-review-2026-05-31.md` | SDK 三件套(core + starter + testkit) | SDK 全模块代码深度审查,产生改进点列表 |
 | `project-deep-review-2026-06-08.md` | 前后端全项目 | 架构/设计/安全/资源/业务/流程/运维/测试全局深度审查快照 |
-| `code-review-2026-05-21.md` | 全仓 | 单次代码审查快照 |
 | `be-test-consistency-2026-05-21.md` | 全仓测试代码 | 测试一致性专项审查 |
+| `p1-p2-follow-up-2026-08-06.md` | 历史 P1/P2 | 跟进复核与整改计划 |
+| `idea-qodana-sonar-cross-review-2026-08-12.md` | IDEA/Qodana/Sonar | 静态扫描交叉复核快照 |
+
+历史单次审查快照见 [`../archive/review/`](../archive/review/)。
 
 ## 维护策略
 

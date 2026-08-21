@@ -12,9 +12,7 @@
 | 04 | [project-assessment.md](./project-assessment.md) | 项目工程深度评估（当前权威）：四维评分 + 演进 delta + ops 缺口锁定 | 看"项目今天整体水准"一页式判断 |
 | 05 | [system-scope-boundary.md](./system-scope-boundary.md) | 系统职责范围基准：批量调度 + 文件交付闭环的边界守护 | 判定新功能是否越界、季度复盘 |
 | 06 | [todo-master.md](./todo-master.md) | 全仓待办整合：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
-| 07 | [frontend-backend-contract-cleanup-2026-05-19.md](./frontend-backend-contract-cleanup-2026-05-19.md) | 前后端契约与文档整理记录：OpenAPI 路径漂移、Job Bundle 事务语义、前端导入闭环 | 修 Console API / Job Bundle / 前端联调前 |
-| 08 | [dba-schema-review-2026-05-20.md](./dba-schema-review-2026-05-20.md) | DBA 审查报告：Schema / 索引 / 分区归档 / 约束四维 Top 10 问题 + Quick wins + 多日重构 | 评估 DB 健康度、排期 partition / 索引整合 / 生命周期补齐 |
-| 09 | [java-readability-phase-0-classification-2026-08-12.md](./java-readability-phase-0-classification-2026-08-12.md) | Java 可读性治理分类总账；机器快照见 [inventory](./java-readability-inventory-2026-08-12.md) | 实施可读性路线图阶段 0～3、复核保留例外 |
+| 07 | [java-readability-phase-0-classification-2026-08-12.md](./java-readability-phase-0-classification-2026-08-12.md) | Java 可读性治理分类总账；机器快照见 [inventory](./java-readability-inventory-2026-08-12.md) | 实施可读性路线图阶段 0～3、复核保留例外 |
 
 ## 工作循环
 
@@ -51,3 +49,13 @@
 按日期命名的专项 deep-scan / SDK round 文件属于**快照证据**，落地后归 [`../archive/analysis/`](../archive/analysis/)。主干权威仍是 `deep-issue-analysis.md` / `fix-report.md` / `hardening-backlog.md`。
 
 新增日期快照时短期可放在本目录；完成 fold 或失去当前决策价值后移入 `archive/analysis/`，避免主干检索噪音回潮。
+
+## 已归档的近期快照
+
+下列文档已不作为主干权威入口维护，仅保留历史证据：
+
+| 文件 | 归档位置 | 当前替代入口 |
+|---|---|---|
+| 前后端契约整理记录（2026-05-19） | [`../archive/analysis/frontend-backend-contract-cleanup-2026-05-19.md`](../archive/analysis/frontend-backend-contract-cleanup-2026-05-19.md) | [`../api/console-api-protocol.md`](../api/console-api-protocol.md) + OpenAPI |
+| DBA schema 审查（2026-05-20） | [`../archive/analysis/dba-schema-review-2026-05-20.md`](../archive/analysis/dba-schema-review-2026-05-20.md) | [`hardening-backlog.md`](./hardening-backlog.md) + `db/migration/` |
+| 2026-05 多轮 deep-scan / go-live / 升级评估快照 | [`../archive/analysis/`](../archive/analysis/) | 本目录滚动三件套：`deep-issue-analysis.md` / `fix-report.md` / `hardening-backlog.md` |
