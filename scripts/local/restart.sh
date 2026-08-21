@@ -212,7 +212,11 @@ compose_restart_module() {
   fi
   compose_args+=(-f docker-compose.yml -f docker/compose/app.yml --profile apps --profile replica up -d --no-deps --force-recreate "$service")
   local compose_s3_endpoint="${BATCH_S3_ENDPOINT:-http://minio:9000}"
-  if [[ "$_BATCH_S3_ENDPOINT_EXPLICIT" != 1 ]]; then
+  # .env.local 通常为裸 JVM 保留 localhost:19000；这个地址在容器网络内
+  # 一定指向当前容器自身，不能视为容器 S3 配置。
+  if [[ "$_BATCH_S3_ENDPOINT_EXPLICIT" != 1 \
+        || "$compose_s3_endpoint" == *://localhost:* \
+        || "$compose_s3_endpoint" == *://127.0.0.1:* ]]; then
     compose_s3_endpoint=http://minio:9000
   fi
   BATCH_S3_ENDPOINT="$compose_s3_endpoint" BATCH_APP_JAVA_OPTS="$app_java_opts" "${compose_args[@]}"
