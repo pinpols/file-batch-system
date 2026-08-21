@@ -13,7 +13,7 @@
 
 ### 前置条件
 
-- `docker`、`mvn`（Java 21）、`curl`、`python3`
+- `docker`、`mvn`（Java 21）、`curl`、Python 3（默认找 `python3`，可用 `PYTHON_BIN` 或 `PYTHON` 覆盖）
 - 首次运行会自动拉取 `sonarqube:community` 镜像并启动容器（端口 9001，可用 `SONAR_PORT` 覆盖）
 
 ### 命令

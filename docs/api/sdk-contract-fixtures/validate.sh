@@ -2,7 +2,7 @@
 # Lane P(漂移守护):用 fixture-schema.json 校验每个 fixture JSON。
 # 由 CI sdk-contract-parity.yml 调用,推送前也在本地跑。
 #
-# 依赖:python3 + `jsonschema` 包(pip install jsonschema)。
+# 依赖:Python 3 + `jsonschema` 包(pip install jsonschema)。
 # 退出码:
 #   0 = 所有 fixture 合法
 #   1 = 一个或多个 fixture 违反 schema
@@ -11,19 +11,19 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
 SCHEMA="$HERE/fixture-schema.json"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "ERROR: python3 not on PATH" >&2
-  exit 2
-fi
+batch_require_python
 
-if ! python3 -c "import jsonschema" >/dev/null 2>&1; then
+if ! "$PYTHON_BIN" -c "import jsonschema" >/dev/null 2>&1; then
   echo "ERROR: 'jsonschema' python package missing. Install with: pip install jsonschema" >&2
   exit 2
 fi
 
-python3 - "$SCHEMA" "$HERE" <<'PY'
+"$PYTHON_BIN" - "$SCHEMA" "$HERE" <<'PY'
 import glob
 import json
 import os
