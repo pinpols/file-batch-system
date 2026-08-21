@@ -49,11 +49,11 @@ services:
       MOCKSERVER_LOG_LEVEL: ${MOCKSERVER_LOG_LEVEL:-INFO}
     volumes:
       - ./docker/mockserver/expectations.json:/config/expectations.json:ro
+      - ./docker/mockserver/HealthCheck.java:/config/HealthCheck.java:ro
     networks:
       - batch-network
     healthcheck:
-      # mockserver/mockserver:5.15.0 将 fat jar 放在根目录；该探针只验证测试辅助容器可执行。
-      test: ["CMD", "java", "-jar", "/mockserver-netty-jar-with-dependencies.jar", "-version"]
+      test: ["CMD", "java", "/config/HealthCheck.java"]
       interval: 10s
       timeout: 5s
       retries: 6

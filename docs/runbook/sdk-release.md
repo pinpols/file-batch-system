@@ -114,7 +114,7 @@ Actions → `sdk-release-validation` → **Run workflow**(`workflow_dispatch`),`
 cd sdk/typescript && npm install && npm run build && npm pack --pack-destination /tmp/pkg
 # Python(需 3.12):build + venv 装 wheel + import
 cd sdk/python && python3.12 -m build && python3.12 -m venv /tmp/v && /tmp/v/bin/pip install dist/*.whl
-# Go(本机需 export GOROOT=/usr/local/opt/go/libexec)
+# Go(默认使用 go env GOROOT；特殊安装可显式 export GOROOT_HINT=/path/to/go)
 cd sdk/go && go vet ./... && go build ./...
 # Rust / Java 交 CI(本机常缺 cargo / JDK 21 慢)
 ```

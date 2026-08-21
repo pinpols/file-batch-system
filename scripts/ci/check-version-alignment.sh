@@ -7,36 +7,40 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FAIL=0
 
+# shellcheck source=scripts/lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
+batch_require_python
+
 # ─── 1. 应用版本对齐 ──────────────────────────────────────────────
-POM_REV="$(python3 -c "
+POM_REV="$("$PYTHON_BIN" -c "
 import re
 with open('$ROOT/pom.xml') as f:
     m = re.search(r'<revision>([^<]+)</revision>', f.read())
     print(m.group(1) if m else '')
 ")"
 
-CHART_APPVERSION="$(python3 -c "
+CHART_APPVERSION="$("$PYTHON_BIN" -c "
 import re
 with open('$ROOT/helm/batch-platform/Chart.yaml') as f:
     m = re.search(r'^appVersion:\s*\"?([^\"\s]+)\"?\s*$', f.read(), re.M)
     print(m.group(1) if m else '')
 ")"
 
-PROD_IMAGE_TAG="$(python3 -c "
+PROD_IMAGE_TAG="$("$PYTHON_BIN" -c "
 import re
 txt = open('$ROOT/helm/values-prod.yaml').read()
 m = re.search(r'^image:\\s*\\n(?:  .+\\n)*?  tag:\\s*\"?([^\"\\s]+)\"?\\s*$', txt, re.M)
 print(m.group(1) if m else '')
 ")"
 
-ORCH_OPENAPI_VER="$(python3 -c "
+ORCH_OPENAPI_VER="$("$PYTHON_BIN" -c "
 import re
 txt = open('$ROOT/docs/api/orchestrator-internal.openapi.yaml').read()
 m = re.search(r'^info:\\s*\\n(?:  .+\\n)*?  version:\\s*\"?([^\"\\s]+)\"?\\s*$', txt, re.M)
 print(m.group(1) if m else '')
 ")"
 
-SDK_QUICKSTART_VER="$(python3 -c "
+SDK_QUICKSTART_VER="$("$PYTHON_BIN" -c "
 import re
 txt = open('$ROOT/docs/sdk/quickstart.md').read()
 m = re.search(r'<artifactId>batch-worker-sdk</artifactId>\\s*\\n\\s*<version>([^<]+)</version>', txt)
@@ -88,7 +92,7 @@ else
 fi
 
 if [[ "$POM_REV" != *-* ]]; then
-  CHANGELOG_STATUS="$(ROOT="$ROOT" POM_REV="$POM_REV" python3 <<'PY'
+  CHANGELOG_STATUS="$(ROOT="$ROOT" POM_REV="$POM_REV" "$PYTHON_BIN" <<'PY'
 import os
 import pathlib
 import re
@@ -166,7 +170,7 @@ done
 # load-tests 是独立 reactor（未纳入根 reactor），无法继承根 ${revision}，版本字面量手工同步。
 # CLAUDE.md 点名为高危点 → 必须与根 <revision> 一致。
 # 取 <artifactId>batch-load-tests</artifactId> 紧随其后的 project <version>（非 dependency 里的）。
-LOADTEST_VER="$(python3 -c "
+LOADTEST_VER="$("$PYTHON_BIN" -c "
 import re
 with open('$ROOT/load-tests/pom.xml') as f:
     txt = f.read()
@@ -191,7 +195,9 @@ echo "── 基础服务镜像（4 个 .env 对比） ─────"
 
 # 注:缓存服务运行 Valkey 镜像,但保留 REDIS_IMAGE_TAG 兼容旧 env / 脚本命名。
 TAGS=(POSTGRES_IMAGE_TAG KAFKA_IMAGE_TAG KAFKA_UI_IMAGE_TAG MINIO_IMAGE_TAG MINIO_MC_IMAGE_TAG REDIS_IMAGE_TAG VALKEY_IMAGE_TAG \
-      REDIS_EXPORTER_IMAGE_TAG POSTGRES_EXPORTER_IMAGE_TAG KAFKA_EXPORTER_IMAGE_TAG)
+      SFTP_IMAGE_TAG MOCKSERVER_IMAGE_TAG PROMETHEUS_IMAGE_TAG ALERTMANAGER_IMAGE_TAG JAEGER_IMAGE_TAG TEMPO_IMAGE_TAG \
+      LOKI_IMAGE_TAG OTEL_COLLECTOR_IMAGE_TAG GRAFANA_IMAGE_TAG REDIS_EXPORTER_IMAGE_TAG POSTGRES_EXPORTER_IMAGE_TAG \
+      KAFKA_EXPORTER_IMAGE_TAG NODE_EXPORTER_IMAGE_TAG CADVISOR_IMAGE_TAG)
 
 # .env.example 是仓内模板（tracked），.env.local/test/prod 由开发者各自持有（.gitignore）。
 # 校验逻辑：以 .env.example 为基准，所有本地存在的 .env.* 必须匹配。

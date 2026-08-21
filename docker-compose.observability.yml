@@ -1,10 +1,11 @@
 # 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
+# legacy 叠加文件；active 路径是 docker/compose/observability.yml。镜像默认值需保持一致。
 # 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 services:
 
   # ── 指标 ──────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:v3.4.1
+    image: prom/prometheus:${PROMETHEUS_IMAGE_TAG:-v3.11.3}
     container_name: batch-prometheus
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
@@ -25,7 +26,7 @@ services:
       - batch-network
 
   alertmanager:
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:${ALERTMANAGER_IMAGE_TAG:-v0.28.1}
     container_name: batch-alertmanager
     restart: unless-stopped
     command:
@@ -39,7 +40,7 @@ services:
 
   # ── 链路 ──────────────────────────────────────────────────────────
   jaeger:
-    image: jaegertracing/jaeger:2.7.0
+    image: jaegertracing/jaeger:${JAEGER_IMAGE_TAG:-2.7.0}
     container_name: batch-jaeger
     restart: unless-stopped
     environment:
@@ -51,7 +52,7 @@ services:
       - batch-network
 
   tempo:
-    image: grafana/tempo:2.6.1
+    image: grafana/tempo:${TEMPO_IMAGE_TAG:-2.6.1}
     container_name: batch-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yml"]
@@ -67,7 +68,7 @@ services:
 
   # ── 日志 ──────────────────────────────────────────────────────────
   loki:
-    image: grafana/loki:3.5.0
+    image: grafana/loki:${LOKI_IMAGE_TAG:-3.5.0}
     container_name: batch-loki
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
@@ -81,7 +82,7 @@ services:
 
   # ── OTel Collector ────────────────────────────────────────────────
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.127.0
+    image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.127.0}
     container_name: batch-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
@@ -101,7 +102,7 @@ services:
 
   # ── 仪表盘 ───────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:11.6.0
+    image: grafana/grafana:${GRAFANA_IMAGE_TAG:-11.6.0}
     container_name: batch-grafana
     restart: unless-stopped
     environment:
@@ -125,7 +126,7 @@ services:
 
   # ── 基础设施 Exporters ───────────────────────────────────────────
   redis-exporter:
-    image: oliver006/redis_exporter:v1.73.0
+    image: oliver006/redis_exporter:${REDIS_EXPORTER_IMAGE_TAG:-v1.84.0}
     container_name: batch-redis-exporter
     restart: unless-stopped
     environment:
@@ -137,7 +138,7 @@ services:
         condition: service_healthy
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.16.0
+    image: prometheuscommunity/postgres-exporter:${POSTGRES_EXPORTER_IMAGE_TAG:-v0.19.1}
     container_name: batch-postgres-exporter
     restart: unless-stopped
     environment:
@@ -153,7 +154,7 @@ services:
         condition: service_healthy
 
   kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.9.0
+    image: danielqsj/kafka-exporter:${KAFKA_EXPORTER_IMAGE_TAG:-v1.9.0}
     container_name: batch-kafka-exporter
     restart: unless-stopped
     command: ["--kafka.server=kafka:29092"]
@@ -164,14 +165,14 @@ services:
         condition: service_healthy
 
   node-exporter:
-    image: prom/node-exporter:v1.9.1
+    image: prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG:-v1.11.1}
     container_name: batch-node-exporter
     restart: unless-stopped
     networks:
       - batch-network
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    image: gcr.io/cadvisor/cadvisor:${CADVISOR_IMAGE_TAG:-v0.52.1}
     container_name: batch-cadvisor
     restart: unless-stopped
     privileged: true

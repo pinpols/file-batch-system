@@ -3,7 +3,7 @@ name: strict-verify
 # 严格模式真实数据验证(scripts/local/strict-verify.sh)的 CI 接入。
 #
 # 两种模式:
-#   1) dry-run smoke(默认,自动触发):仅校验脚本前置依赖(docker / curl / python3),
+#   1) dry-run smoke(默认,自动触发):仅校验脚本前置依赖(docker / curl / Python 3),
 #      ~1s,不连 PG / console-api。作用是保证脚本本身没语法 / 参数解析腐烂。
 #      paths 触发限定到该脚本 + run-full-regression 自身改动。
 #
