@@ -123,8 +123,7 @@ echo "==> analyze-soak: 生成 $REPORT"
     limit 50;" 2>/dev/null || echo "(batch_day_instance 不存在或无数据)"
   echo '```'
   echo
-  echo "> 跨日时间偏移 依赖 \`-Dbatch.testing.clock-offset\`;当前 BatchDateTimeSupport 未读该属性。"
-  echo "> 真正生效需在 Clock bean 上实现 offset 注入,见 docs/plans/r3-3-soak-tests.md 的阻塞说明。"
+  echo "> 跨日时间偏移仅在本地 soak 显式设置 \`-Dbatch.testing.clock-offset\` 时生效；生产默认使用 UTC。"
   echo
 
   # === 退出条件触发 ===

@@ -44,9 +44,7 @@ PCT_EXPORT="${PCT_EXPORT:-20}"
 PCT_DISPATCH="${PCT_DISPATCH:-30}"
 PCT_WORKFLOW="${PCT_WORKFLOW:-20}"
 
-# 跨日时间偏移:启动 JVM clock offset(BatchDateTimeSupport 当前未支持该属性,
-# 启动脚本仅尝试注入 -Dbatch.testing.clock-offset;真正生效需后续在 Clock bean
-# 上实现注入。详见 docs/plans/r3-3-soak-tests.md 的阻塞说明)。
+# 跨日时间偏移:仅用于显式的本地 soak/演练 JVM；生产默认不设置该属性。
 CLOCK_OFFSET="${CLOCK_OFFSET:-+12h}"
 
 # 调试/跳过开关

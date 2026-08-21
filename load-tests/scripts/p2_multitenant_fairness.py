@@ -20,7 +20,10 @@ TOTAL = int(os.environ.get("FAIRNESS_TOTAL_REQUESTS", "6000"))
 CONCURRENCY = int(os.environ.get("FAIRNESS_CONCURRENCY", "96"))
 WEIGHTS = os.environ.get("FAIRNESS_WEIGHTS", "ta:3,tb:1,tc:1")
 WAIT_SECONDS = int(os.environ.get("FAIRNESS_WAIT_SECONDS", "1200"))
-MODE = os.environ.get("FAIRNESS_MODE", "orchestrator")
+# The trigger endpoint creates the trigger_request that the asynchronous
+# orchestrator consumer requires. Direct orchestrator mode is retained for
+# pre-seeded trigger_request fixtures only.
+MODE = os.environ.get("FAIRNESS_MODE", "trigger")
 
 
 def parse_weights(raw):
