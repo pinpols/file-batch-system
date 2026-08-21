@@ -415,7 +415,7 @@ Baseline 182s
 ### 2.3 已落地与已验证
 
 - **横向加速 keyset 区间分片**(PR #390 + #393):激活时每分片只读游标列一段值区间走索引区间扫,放大 N× → ~1×。
-  详见 `docs/backlog/export-partition-keyset-range-2026-06-06.md`(§10 实现记录)。
+  详见 `docs/archive/backlog/export-partition-keyset-range-2026-06-06.md`(§10 实现记录)。
   覆盖多租户并发峰值流量场景;单租户单流耗时不缩(同 Citus 限制)。
 - 流式 keyset 游标分页(原有):任意时刻只持一页,worker RSS 常数,无 OOM 风险。
 
@@ -918,7 +918,7 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 ### 5.4 相关文档
 
 - 实证:[streaming-large-file-import-export-2026-06-06](../verifications/streaming-large-file-import-export-2026-06-06.md) §5.3 扩展决策树
-- 导出 keyset 分片实现:[export-partition-keyset-range-2026-06-06](./export-partition-keyset-range-2026-06-06.md)
+- 导出 keyset 分片实现:[export-partition-keyset-range-2026-06-06](../archive/backlog/export-partition-keyset-range-2026-06-06.md)
 
 ### 5.5 分支纪律
 
