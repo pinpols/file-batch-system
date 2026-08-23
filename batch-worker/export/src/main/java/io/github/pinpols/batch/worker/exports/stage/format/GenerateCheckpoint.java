@@ -6,8 +6,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingS
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * ADR-038 P3 Export GENERATE 续跑编排:封装「从哪续 / 何时推进位点」,由 {@code GenerateStep} 每个 pipeline 实例创建一个, 注入
@@ -25,9 +24,8 @@ import org.slf4j.LoggerFactory;
  *       (本次降级为不可续跑的全量跑,生成本身不受影响)。
  * </ul>
  */
+@Slf4j
 public final class GenerateCheckpoint {
-
-  private static final Logger log = LoggerFactory.getLogger(GenerateCheckpoint.class);
 
   private final ProcessingPositionStore store;
   private final GenerateCursorCodec codec;
