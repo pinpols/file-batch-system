@@ -796,6 +796,14 @@ public class DefaultTriggerService {
 
 关键上下文通过 MDC 传递（tenantId、traceId 等），供日志平台检索。
 
+普通生产类统一使用 Lombok `@Slf4j`。仅以下场景允许直接 `LoggerFactory`：
+
+- 日志工具类内部需要按调用方 `Class<?>` 获取 logger（如 `SwallowedExceptionLogger`）。
+- 独立命名 logger 需要被 logback 单独路由（如 `audit.console.approval`）。
+- 抽象基类需要按运行时子类输出 logger 名。
+
+生产服务代码禁止 `System.out/err` 和 `printStackTrace()`；CLI 工具、benchmark 输出和测试诊断输出可以保留标准输出。
+
 ### 12.3 日志级别约定
 
 

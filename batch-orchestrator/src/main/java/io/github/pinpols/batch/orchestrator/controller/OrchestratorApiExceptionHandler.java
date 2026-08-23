@@ -5,8 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,9 +15,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice(basePackageClasses = LaunchController.class)
+@Slf4j
 public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler {
-
-  private static final Logger log = LoggerFactory.getLogger(OrchestratorApiExceptionHandler.class);
 
   public OrchestratorApiExceptionHandler(BizMessageResolver bizMessageResolver) {
     super(bizMessageResolver);

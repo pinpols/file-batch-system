@@ -14,8 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Pipeline 阶段执行器的模板方法基类，三条链路（import / export / dispatch）共用的 while 循环骨架封装于此。
@@ -23,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * @param <C> pipeline 上下文类型（须实现 {@link ExecutionContext}）
  * @param <R> 阶段结果类型（须实现 {@link StageExecutionResult}）
  */
+@Slf4j
 public abstract class AbstractStageExecutor<
     C extends ExecutionContext, R extends StageExecutionResult> {
 
@@ -33,8 +33,6 @@ public abstract class AbstractStageExecutor<
    * private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
    */
   public static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
-
-  private static final Logger log = LoggerFactory.getLogger(AbstractStageExecutor.class);
 
   protected final PlatformFileRuntimeRepository runtimeRepository;
 
