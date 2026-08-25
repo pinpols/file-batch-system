@@ -79,7 +79,37 @@
 
 验证使用本地 JVM 应用和 Docker 基础设施。`scripts/sim/27-batch-claim-consume.sh` 现会在判定前严格核对实际分区数，避免 `partitionCount` 被所选作业策略忽略时把单分区结果误报为高 fan-out 成功；`REQUIRE_BATCH_CLAIM=false` 可将它用于纯分区/实例聚合验证。
 
-本轮没有把 worker batch-claim 收益记为通过：启用该开关但让 worker 与任务同时启动时，Kafka poll 实际每批只有一条消息，观测为 `256 claim-batch calls / 256 partitions`，未产生可证明的往返减少。这是测试拓扑未预积压消息，不是聚合失败。批量 claim 的后续验收必须先积压 task dispatch，再启动 batch listener，且保持该项为独立证据。
+首次启用该开关时让 worker 与任务同时启动，Kafka poll 实际每批只有一条消息，观测为
+`256 claim-batch calls / 256 partitions`，因此当时没有把 batch-claim 收益记为通过。这是测试拓扑未预积压
+消息，不是聚合失败。
+
+### 256 分片预积压 batch-claim 复验（2026-08-26）
+
+本次按正确拓扑重做：先仅启动本地 JVM control plane，向 `TA_PROCESS_STAGE4_SHARDED` 写入 1,024 条隔离
+`HFE*` 源记录并触发 256 个 partition；确认全部 task 已是 `READY` 后，才启动 PROCESS worker。Docker 仍只提供
+PostgreSQL、Kafka、MinIO 和 Valkey。worker 使用以下容量矩阵：
+
+```text
+listener.concurrency = 4
+max.poll.records = 8
+max-concurrent-tasks = 32
+execution.pool-size = 32
+```
+
+该矩阵满足 batch listener 的启动约束
+`max-concurrent-tasks >= listener.concurrency * max.poll.records`，也满足执行池不小于任务许可数的既有约束。
+
+| 项目 | 结果 |
+|---|---|
+| 实例 / job | `86103` / `TA_PROCESS_STAGE4_SHARDED` |
+| 分区终态 | 256 `SUCCESS`，0 `FAILED`，0 非终态 |
+| 实例终态 | `SUCCESS` |
+| 目标数据 | `biz.process_stage4_target` 写入 1,024 条 `HFE*` 记录 |
+| claim 指标 | 34 次 claim-batch，258 个 claim item，有效 K=7.59 |
+
+本地 Kafka topic 保留了前面中断验证的 2 条可重放消息，所以指标为 258 而非严格 256；它们均被正常 claim，
+没有影响本实例的 256 个分区终态。关键证据是 `34 < 256` 且实例全终态，已证明预积压时实际走批量 claim，
+不再把单条 poll 误当作 batch-claim 收益。该结果仍只是开发机本地证据，不构成生产吞吐或容量承诺。
 
 256 是当前静态分片的安全上限；1k/1w fan-out 必须以 bundle 或受控的动态分片场景单独验证，并采集 report 延迟、WAL、锁等待和 lag。在该证据出现前，不改变逐项 report 事务或引入异步执行旁路。
 
