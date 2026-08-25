@@ -65,4 +65,20 @@
 
 该结果不能作为生产容量承诺：运行在开发机、任务只执行 `SELECT 1`，也没有覆盖多实例、慢外部依赖、DAG/补偿或大文件负载。Kafka lag 在本轮 `BATCH_SCRIPT_RUNTIME=host` 下未能由本机 CLI 采集；该运行模式刻意不回退到容器 CLI，因此不能据此声明 lag 已验证。
 
-PR #970 的非 DAG 聚合优化也没有被“每实例一个 task”的拓扑直接压到。下一轮应使用高 fan-out 的非 DAG 实例，采集聚合 SQL 的 `EXPLAIN (ANALYZE, BUFFERS)`、report 延迟、WAL、锁等待和 lag；在该证据出现前，不改变逐项 report 事务或引入异步执行旁路。
+### 256 分片非 DAG 聚合复验
+
+为直接覆盖 PR #970 的非 DAG 聚合路径，使用 `TA_PROCESS_STAGE4_SHARDED` 在单实例内展开 256 个静态分区。测试前临时写入 1,024 条隔离的 `HFA*` 源记录，使每个分区恰好得到 4 条记录，符合该 PROCESS fixture 的业务校验；测试结束后源表和目标表中的这批记录均已删除。
+
+| 项目 | 结果 |
+|---|---|
+| 实例 / job | `84622` / `TA_PROCESS_STAGE4_SHARDED` |
+| 分区终态 | 256 `SUCCESS`，0 `FAILED` |
+| 实例终态 | `SUCCESS` |
+| 执行时间 | 11.378 s |
+| 聚合查询 | `idx_job_partition_instance_status` Index Only Scan，256 行，0.419 ms，129 shared-buffer hits |
+
+验证使用本地 JVM 应用和 Docker 基础设施。`scripts/sim/27-batch-claim-consume.sh` 现会在判定前严格核对实际分区数，避免 `partitionCount` 被所选作业策略忽略时把单分区结果误报为高 fan-out 成功；`REQUIRE_BATCH_CLAIM=false` 可将它用于纯分区/实例聚合验证。
+
+本轮没有把 worker batch-claim 收益记为通过：启用该开关但让 worker 与任务同时启动时，Kafka poll 实际每批只有一条消息，观测为 `256 claim-batch calls / 256 partitions`，未产生可证明的往返减少。这是测试拓扑未预积压消息，不是聚合失败。批量 claim 的后续验收必须先积压 task dispatch，再启动 batch listener，且保持该项为独立证据。
+
+256 是当前静态分片的安全上限；1k/1w fan-out 必须以 bundle 或受控的动态分片场景单独验证，并采集 report 延迟、WAL、锁等待和 lag。在该证据出现前，不改变逐项 report 事务或引入异步执行旁路。

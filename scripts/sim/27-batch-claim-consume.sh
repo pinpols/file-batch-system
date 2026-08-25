@@ -6,13 +6,17 @@
 #   claim-batch → 逐 partition 执行」路径,控制面 CLAIM 往返 O(N)→⌈N/K⌉。
 #
 # 设计(适配 sim 套件 flag 默认关):
-#   - 触发既有 4 分片 process 作业 TA_PROCESS_STAGE4_SHARDED(stage19 已 seed),等 SUCCESS;
+#   - 触发已 seed 的分片 process 作业，等 SUCCESS；默认使用 TA_PROCESS_STAGE4_SHARDED；
 #   - 比对 orchestrator batch_task_batch_claim_size 指标增量:
 #       · 增量>0 → 攒批路径被实际命中 + 作业 SUCCESS → PASS(回归绿)。
 #       · 增量=0 → workers 跑单条路径(flag 关,sim 默认)→ SKIP(不破默认套件)。
 #   - 即:本 stage 在 flag 开时是端到端攒批回归,flag 关时自动 SKIP。
 #
 # 退出码:0 = PASS 或 SKIP;非 0 = 攒批路径命中但作业未达 SUCCESS(真回归)。
+#
+# 可通过 JOB_CODE、PARTITION_COUNT 覆盖作业和分片数（2-256，默认 4）；用于在不改生产配置的前提下复验
+# 高 fan-out 的 claim/report 与实例聚合路径。REQUIRE_BATCH_CLAIM=false 时只验证分片终态与实例聚合，
+# 不把 Kafka poll 恰好只取到一条消息误判为控制面失败。
 # =========================================================
 set -euo pipefail
 
@@ -33,9 +37,15 @@ ORCH = os.environ["ORCH_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
+JOB_CODE = os.environ.get("JOB_CODE", "TA_PROCESS_STAGE4_SHARDED")
+PARTITION_COUNT = int(os.environ.get("PARTITION_COUNT", "4"))
+REQUIRE_BATCH_CLAIM = os.environ.get("REQUIRE_BATCH_CLAIM", "true").lower() == "true"
 PG = os.environ.get("PG_CONTAINER", "batch-postgres-primary")
 PGU = os.environ.get("POSTGRES_USER", "batch_user")
 PLAT = os.environ.get("PLATFORM_DB", "batch_platform")
+
+if not 2 <= PARTITION_COUNT <= 256:
+    raise ValueError("PARTITION_COUNT must be within 2..256")
 
 def psql(sql):
     out = subprocess.run(
@@ -84,15 +94,38 @@ def wait_instance(rid, expected, timeout=240):
         time.sleep(3)
     raise TimeoutError(f"timeout waiting {rid}")
 
+def partition_counts(instance_id):
+    value = psql(
+        "select count(*) || '|' || count(*) filter (where partition_status = 'SUCCESS') "
+        f"from batch.job_partition where tenant_id='ta' and job_instance_id={instance_id}")
+    if not value:
+        raise RuntimeError(f"missing partitions for instance {instance_id}")
+    total, success = value.split("|", 1)
+    return int(total), int(success)
+
 # 1) 指标基线
 before_calls = scrape("batch_task_batch_claim_size_count")
 before_parts = scrape("batch_task_batch_claim_size_sum")
 print(f"==> baseline: claim-batch calls={before_calls:.0f} partitions(sum)={before_parts:.0f}", flush=True)
 
-# 2) 触发 4 分片 process 作业(stage19 已 seed TA_PROCESS_STAGE4_SHARDED + fixtures)
-print("==> launch TA_PROCESS_STAGE4_SHARDED (4 shards)", flush=True)
-rid = launch("TA_PROCESS_STAGE4_SHARDED", "sharded", {"batchNo": BATCH + "-bc", "bizDate": BIZ, "partitionCount": 4})
+# 2) 触发分片 process 作业（调用方负责选择已 seed 的兼容 fixture）
+print(f"==> launch {JOB_CODE} ({PARTITION_COUNT} shards)", flush=True)
+rid = launch(JOB_CODE, "sharded", {
+    "batchNo": BATCH + "-bc", "bizDate": BIZ, "partitionCount": PARTITION_COUNT})
 iid, status = wait_instance(rid, "SUCCESS")
+partition_total, partition_success = partition_counts(iid)
+print(
+    f"==> partitions: total={partition_total} success={partition_success} "
+    f"expected={PARTITION_COUNT}", flush=True)
+
+if partition_total != PARTITION_COUNT:
+    raise RuntimeError(
+        f"partition fan-out mismatch: expected={PARTITION_COUNT}, actual={partition_total}; "
+        "verify the selected job shard strategy and input fixture")
+if partition_success != PARTITION_COUNT or status != "SUCCESS":
+    raise RuntimeError(
+        f"high fan-out terminal mismatch: instance={status}, "
+        f"partitions={partition_success}/{partition_total}")
 
 # 3) 指标增量 → 判定攒批路径是否被命中
 after_calls = scrape("batch_task_batch_claim_size_count")
@@ -101,6 +134,10 @@ d_calls = after_calls - before_calls
 d_parts = after_parts - before_parts
 print(f"==> delta: claim-batch calls={d_calls:.0f} partitions={d_parts:.0f}", flush=True)
 
+if not REQUIRE_BATCH_CLAIM:
+    print("✅ PASS: 高 fan-out 分区与实例聚合全 SUCCESS；本次未要求命中 batch-claim。", flush=True)
+    sys.exit(0)
+
 if d_calls <= 0:
     # flag 关(sim 默认):workers 走单条路径,batch listener 未启动 → SKIP,不破默认套件
     print("🟡 SKIP: batch-claim flag 未开(单条路径),攒批 listener 未命中。", flush=True)
@@ -108,10 +145,6 @@ if d_calls <= 0:
     sys.exit(0)
 
 # flag 开:既要作业 SUCCESS,又要攒批路径确被命中
-if status != "SUCCESS":
-    print(f"❌ 攒批路径命中但作业未 SUCCESS: status={status}", flush=True)
-    sys.exit(1)
-
 eff_k = (d_parts / d_calls) if d_calls else 0
 print(f"✅ PASS: 攒批路径命中 + 作业 SUCCESS;有效 K(parts/call)={eff_k:.1f},往返 {d_parts:.0f}→{d_calls:.0f}", flush=True)
 PY
