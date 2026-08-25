@@ -12,17 +12,20 @@ import org.springframework.test.util.ReflectionTestUtils;
 class KafkaConsumerConfigurationTest {
 
   @Test
-  void batchListenerFactoryRejectsPollBatchLargerThanWorkerConcurrencyWhenEnabled() {
+  void batchListenerFactoryRejectsTotalConcurrentPollCapacityLargerThanWorkerCapacityWhenEnabled() {
     KafkaConsumerConfiguration configuration = new KafkaConsumerConfiguration();
     ReflectionTestUtils.setField(configuration, "batchClaimEnabled", true);
-    ReflectionTestUtils.setField(configuration, "maxPollRecords", 10);
+    ReflectionTestUtils.setField(configuration, "listenerConcurrency", 4);
+    ReflectionTestUtils.setField(configuration, "maxPollRecords", 8);
     ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
 
     assertThatThrownBy(() -> configuration.batchKafkaListenerContainerFactory(
             consumerFactory(), ObservationRegistry.NOOP))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("max-poll-records=10")
-        .hasMessageContaining("max-concurrent-tasks=8");
+        .hasMessageContaining("listener-concurrency=4")
+        .hasMessageContaining("max-poll-records=8")
+        .hasMessageContaining("max-concurrent-tasks=8")
+        .hasMessageContaining("required-permits=32");
   }
 
   @Test
@@ -30,8 +33,8 @@ class KafkaConsumerConfigurationTest {
     KafkaConsumerConfiguration configuration = new KafkaConsumerConfiguration();
     ReflectionTestUtils.setField(configuration, "batchClaimEnabled", true);
     ReflectionTestUtils.setField(configuration, "maxPollRecords", 8);
-    ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
-    ReflectionTestUtils.setField(configuration, "listenerConcurrency", 1);
+    ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 32);
+    ReflectionTestUtils.setField(configuration, "listenerConcurrency", 4);
 
     assertThatCode(() -> configuration.batchKafkaListenerContainerFactory(
             consumerFactory(), ObservationRegistry.NOOP))

@@ -129,14 +129,24 @@ public class KafkaConsumerConfiguration {
   }
 
   private void validateBatchBackpressureConfiguration() {
-    if (!batchClaimEnabled || maxPollRecords <= maxConcurrentTasks) {
+    if (!batchClaimEnabled) {
+      return;
+    }
+    int effectiveListenerConcurrency = Math.max(1, listenerConcurrency);
+    long requiredPermits = (long) Math.max(1, maxPollRecords) * effectiveListenerConcurrency;
+    if (requiredPermits <= maxConcurrentTasks) {
       return;
     }
     throw new IllegalStateException(
-        "batch.worker.batch-claim.enabled=true requires spring.kafka.consumer.max-poll-records "
-            + "<= batch.worker.max-concurrent-tasks; got max-poll-records="
+        "batch.worker.batch-claim.enabled=true requires batch.worker.max-concurrent-tasks "
+            + ">= spring.kafka.listener.concurrency * spring.kafka.consumer.max-poll-records; got "
+            + "listener-concurrency="
+            + effectiveListenerConcurrency
+            + ", max-poll-records="
             + maxPollRecords
             + ", max-concurrent-tasks="
-            + maxConcurrentTasks);
+            + maxConcurrentTasks
+            + ", required-permits="
+            + requiredPermits);
   }
 }

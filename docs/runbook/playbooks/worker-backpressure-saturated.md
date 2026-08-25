@@ -6,6 +6,12 @@
 
 worker 的执行许可持续耗尽，Kafka listener 会主动 pause，目的是保护进程和避免 claim 后无界堆积。先确认是下游变慢还是并发配置过低，再决定降载、恢复依赖或扩容；不要只盲目调大 `max-concurrent-tasks`。
 
+启用 `batch.worker.batch-claim.enabled=true` 时，启动校验要求
+`batch.worker.max-concurrent-tasks >= spring.kafka.listener.concurrency * spring.kafka.consumer.max-poll-records`。
+这是 batch listener 同时 poll 的最大许可需求；不满足时 worker 会拒绝启动，避免多个 listener 在共享许可不足时反复 pause/resume 而使已拉取批次停滞。
+执行线程池也必须满足 `batch.worker.execution.pool-size >= batch.worker.max-concurrent-tasks`；扩容 batch
+listener 时应同步核对 Kafka 并发、执行许可和执行线程池三者，而不是仅提高其中一个值。
+
 ## 怎么发现
 
 - `batch_worker_semaphore_available{workerType="..."} == 0` 持续 10 分钟触发 `WorkerBackpressureSaturated`。
