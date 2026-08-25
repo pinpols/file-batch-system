@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import java.time.Instant;
@@ -67,23 +68,37 @@ public final class TaskOutcomeInstanceProgressor {
       JobInstanceEntity jobInstance,
       Instant finishedAt,
       Consumer<TaskOutcomeCommand> parentOutcomeApplier) {
-    List<PartitionStatusRef> statusRefs = jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
-        command.tenantId(), task.getJobInstanceId());
-    long successCount = statusRefs.stream()
-        .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
-        .count();
-    long failedCount = statusRefs.stream()
-        .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
-        .count();
-    long finishedPartitionCount = successCount + failedCount;
-    boolean allPartitionsFinished =
-        EmptyChecks.isNotEmpty(statusRefs) && finishedPartitionCount == statusRefs.size();
     WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
         command.tenantId(), jobInstance.getId());
-    String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
-    List<NodePartitionAssignment> nodeAssignments =
-        jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
+    boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
+    List<PartitionStatusRef> statusRefs = dagInstance
+        ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
+            command.tenantId(), task.getJobInstanceId())
+        : List.of();
+    PartitionStatusSummary statusSummary = dagInstance
+        ? null
+        : jobMappers.jobPartitionMapper.selectStatusSummaryByInstance(
             command.tenantId(), task.getJobInstanceId());
+    long totalPartitionCount =
+        dagInstance ? statusRefs.size() : statusSummary == null ? 0L : statusSummary.totalCount();
+    long successCount = dagInstance
+        ? statusRefs.stream()
+            .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
+            .count()
+        : statusSummary == null ? 0L : statusSummary.successCount();
+    long failedCount = dagInstance
+        ? statusRefs.stream()
+            .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
+            .count()
+        : statusSummary == null ? 0L : statusSummary.failedCount();
+    long finishedPartitionCount = successCount + failedCount;
+    boolean allPartitionsFinished =
+        totalPartitionCount > 0 && finishedPartitionCount == totalPartitionCount;
+    String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
+    List<NodePartitionAssignment> nodeAssignments = dagInstance
+        ? jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
+            command.tenantId(), task.getJobInstanceId())
+        : List.of();
     NodePartitionProgressCalculator.Result nodeProgress = NodePartitionProgressCalculator.calculate(
         statusRefs, nodeAssignments, currentNodeCode, workflowRun);
     Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
@@ -173,7 +188,9 @@ public final class TaskOutcomeInstanceProgressor {
             .resultSummary(TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
                 jobInstance,
                 successCount,
-                TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
+                dagInstance
+                    ? TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs)
+                    : statusSummary == null ? 0L : statusSummary.broadFailedCount(),
                 command))
             .finishedAt(jobFullyComplete ? finishedAt : null)
             .failureClass(instanceFailureClass)
