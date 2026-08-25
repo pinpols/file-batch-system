@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,8 +29,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
-import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -43,7 +43,6 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -236,12 +235,10 @@ class DefaultTaskOutcomeServiceTest {
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
     when(jobTaskMapper.finishTask(any())).thenReturn(1);
-    // perf(#5): 常规 REPORT 计数改走轻量 (id, status) 投影,不再每次 REPORT select * 全量拉分区。
-    when(jobPartitionMapper.selectStatusRefsByInstance("t1", 10L))
-        .thenReturn(List.of(new PartitionStatusRef(99L, PartitionStatus.RUNNING.code())));
+    // 非 DAG 实例走数据库单行聚合，不把全部分区状态加载到 JVM。
+    when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
+        .thenReturn(new PartitionStatusSummary(1L, 0L, 0L, 0L));
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
-    when(jobTaskMapper.selectNodeAssignmentsByInstance("t1", 10L))
-        .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
@@ -254,6 +251,9 @@ class DefaultTaskOutcomeServiceTest {
         .build();
 
     service.applyTaskOutcome(command);
+
+    verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
+    verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
 
     InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
     // instance 级 advisory lock 必须先于针对自己分区的 markStatus 写锁。
@@ -294,10 +294,8 @@ class DefaultTaskOutcomeServiceTest {
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
     when(jobTaskMapper.finishTask(any())).thenReturn(1);
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
-    when(jobPartitionMapper.selectStatusRefsByInstance("t1", 10L))
-        .thenReturn(List.of(new PartitionStatusRef(99L, PartitionStatus.SUCCESS.code())));
-    when(jobTaskMapper.selectNodeAssignmentsByInstance("t1", 10L))
-        .thenReturn(List.of(new NodePartitionAssignment(99L, null)));
+    when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
+        .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L));
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);

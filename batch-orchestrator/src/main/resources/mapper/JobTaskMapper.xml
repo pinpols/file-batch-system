@@ -202,6 +202,10 @@
         order by id desc
     </select>
 
+    <!--
+      备用队列扫描路径：若被调度器启用，必须在同一事务内完成后续 claim，避免多实例重复拿到同一批 READY task。
+      当前生产主链路按 Kafka taskId + assignWorker CAS 认领；本查询保留为安全的数据库拉取语义。
+    -->
     <select id="selectReadyTasks" resultMap="JobTaskResultMap">
         select *
         from batch.job_task
@@ -209,6 +213,7 @@
           and task_status = #{readyStatus}
         order by id asc
         limit #{batchSize}
+        for update skip locked
     </select>
 
     <select id="selectActiveByAssignedWorker" resultMap="JobTaskResultMap">

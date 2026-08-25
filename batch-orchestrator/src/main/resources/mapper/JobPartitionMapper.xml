@@ -219,8 +219,35 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="PartitionStatusSummaryMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary">
+        <constructor>
+            <arg column="total_count" javaType="java.lang.Long"/>
+            <arg column="success_count" javaType="java.lang.Long"/>
+            <arg column="failed_count" javaType="java.lang.Long"/>
+            <arg column="broad_failed_count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
     <select id="selectStatusRefsByInstance" resultMap="PartitionStatusRefMap">
         select id, partition_status
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+    </select>
+
+    <!--
+      普通实例 REPORT 的聚合快路径：只返回一行计数，不把该实例全部分区状态物化到 JVM。
+      FAILED/CANCELLED/TERMINATED 的 broadFailed 口径与 TaskOutcomeSummaryBuilder 保持一致。
+      DAG 实例仍走 selectStatusRefsByInstance，因为节点推进必须保留分区 ID。
+    -->
+    <select id="selectStatusSummaryByInstance"
+            resultMap="PartitionStatusSummaryMap">
+        select count(*) as total_count,
+               count(*) filter (where partition_status = 'SUCCESS') as success_count,
+               count(*) filter (where partition_status = 'FAILED') as failed_count,
+               count(*) filter (where partition_status in ('FAILED', 'CANCELLED', 'TERMINATED'))
+                   as broad_failed_count
         from batch.job_partition
         where tenant_id = #{tenantId}
           and job_instance_id = #{jobInstanceId}

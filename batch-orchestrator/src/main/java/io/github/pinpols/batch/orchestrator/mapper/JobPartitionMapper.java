@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.mapper;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
@@ -27,6 +28,13 @@ public interface JobPartitionMapper {
    * report choke。
    */
   List<PartitionStatusRef> selectStatusRefsByInstance(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
+  /**
+   * 普通实例的状态聚合：数据库返回单行计数，避免每次 task report 将整个实例的分区状态加载到 JVM。
+   * DAG 实例仍须使用 {@link #selectStatusRefsByInstance(String, Long)} 做节点级推进。
+   */
+  PartitionStatusSummary selectStatusSummaryByInstance(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   // C-2: row-level lock to serialize concurrent partition counting during task outcome processing
