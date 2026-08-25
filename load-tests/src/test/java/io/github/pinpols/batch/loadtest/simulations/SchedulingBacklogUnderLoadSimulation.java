@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.loadtest.simulations;
 
 import io.github.pinpols.batch.loadtest.GatlingConfig;
+import io.gatling.javaapi.core.Assertion;
 import io.gatling.javaapi.core.ChainBuilder;
 import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -163,15 +166,29 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
                         .during(GatlingConfig.DURATION_SECONDS))
                 .protocols(consoleProtocol))
         .maxDuration(Duration.ofSeconds(GatlingConfig.DURATION_SECONDS + 60L))
-        .assertions(
-            details("POST /api/triggers/launch")
-                .responseTime()
-                .percentile(95)
-                .lt(GatlingConfig.WRITE_P95_MS),
-            details("GET /internal/scheduler/snapshot")
-                .responseTime()
-                .percentile(99)
-                .lt(GatlingConfig.READ_P99_MS),
-            global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+        .assertions(assertions());
+  }
+
+  /**
+   * 纯写入 profile 不会注入 scheduler read 请求；此时不能对不存在的请求详情建立断言。
+   *
+   * <p>保留读压测启用时的 p99 门槛，避免为了入口延迟画像而弱化常规混合压测的验收条件。
+   */
+  private static Assertion[] assertions() {
+    List<Assertion> assertions = new ArrayList<>();
+    assertions.add(
+        details("POST /api/triggers/launch")
+            .responseTime()
+            .percentile(95)
+            .lt(GatlingConfig.WRITE_P95_MS));
+    if (GatlingConfig.SCHEDULING_READ_RPS > 0) {
+      assertions.add(
+          details("GET /internal/scheduler/snapshot")
+              .responseTime()
+              .percentile(99)
+              .lt(GatlingConfig.READ_P99_MS));
+    }
+    assertions.add(global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+    return assertions.toArray(Assertion[]::new);
   }
 }
