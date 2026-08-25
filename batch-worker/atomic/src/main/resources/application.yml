@@ -24,7 +24,9 @@ spring:
       - io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration
   kafka:
     listener:
-      concurrency: ${BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY:2}
+      # 本地标准 dispatch topic 为 3 分区；默认对齐以免闲置一个可消费分区。
+      # 生产值按实际 topic 分区数、worker 实例数和平台库连接预算通过环境变量覆盖。
+      concurrency: ${BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY:3}
     consumer:
       max-poll-records: ${BATCH_WORKER_ATOMIC_KAFKA_MAX_POLL_RECORDS:5}
       metadata-max-age-ms: ${BATCH_WORKER_ATOMIC_KAFKA_METADATA_MAX_AGE_MS:30000}
