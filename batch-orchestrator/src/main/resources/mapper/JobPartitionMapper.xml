@@ -222,10 +222,10 @@
     <resultMap id="PartitionStatusSummaryMap"
                type="io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary">
         <constructor>
-            <arg column="total_count" javaType="long"/>
-            <arg column="success_count" javaType="long"/>
-            <arg column="failed_count" javaType="long"/>
-            <arg column="broad_failed_count" javaType="long"/>
+            <arg column="total_count" javaType="java.lang.Long"/>
+            <arg column="success_count" javaType="java.lang.Long"/>
+            <arg column="failed_count" javaType="java.lang.Long"/>
+            <arg column="broad_failed_count" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
