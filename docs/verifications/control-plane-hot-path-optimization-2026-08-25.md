@@ -82,3 +82,27 @@
 本轮没有把 worker batch-claim 收益记为通过：启用该开关但让 worker 与任务同时启动时，Kafka poll 实际每批只有一条消息，观测为 `256 claim-batch calls / 256 partitions`，未产生可证明的往返减少。这是测试拓扑未预积压消息，不是聚合失败。批量 claim 的后续验收必须先积压 task dispatch，再启动 batch listener，且保持该项为独立证据。
 
 256 是当前静态分片的安全上限；1k/1w fan-out 必须以 bundle 或受控的动态分片场景单独验证，并采集 report 延迟、WAL、锁等待和 lag。在该证据出现前，不改变逐项 report 事务或引入异步执行旁路。
+
+### Trigger 入口 p95 拆分（2026-08-26）
+
+为区分 trigger 同步写入成本与完整执行链路造成的共享平台库争用，本地只启动
+`orchestrator`、`trigger`、`console` 三个 JVM，不启动 worker；Docker 仍只提供 PostgreSQL、Kafka、
+MinIO、Valkey。每档 15 秒，以 `atomic_sql_demo` 发起唯一幂等键的 API launch，读取负载为 0；每档结束
+均按独立 `RUN_ID` 清理 `job_instance`、outbox 与 trigger 记录。
+
+| Launch rate | 请求数 | p95 | p99 | 失败 |
+|---|---:|---:|---:|---:|
+| 5 RPS | 75 | 49 ms | 81 ms | 0 |
+| 10 RPS | 150 | 42 ms | 142 ms | 0 |
+| 25 RPS | 375 | 359 ms | 889 ms | 0 |
+| 50 RPS | 750 | 21 ms | 211 ms | 0 |
+
+25 RPS 有短暂尾部尖峰，但 p95 仍在 500 ms 本地写入门槛内；50 RPS 复测未复现，不能把单次尖峰归因为
+确定的代码缺陷。与前述“worker 参与、1,000 实例完整终态”时的 1.739 s launch HTTP p95 对照，可确认
+入口事务本身不是当前改造目标。高压完整链路的入口尾延迟来自 worker claim/report、实例推进和 outbox 同时
+写入平台库后的资源竞争；后续应在 1w/10w task storm 中采集 PG 锁等待、连接池占用、WAL 与 outbox backlog，
+再决定是否优化写模型。
+
+为支持纯入口画像，`SchedulingBacklogUnderLoadSimulation` 现在仅在
+`scheduling.read.rps > 0` 时登记 scheduler-read p99 断言。此前 `0` 会对不存在的请求详情断言并让
+Gatling 误报失败；常规读写混压的读 p99 门槛未改变。
