@@ -113,6 +113,30 @@ class RemoteFilesystemNasPathTest {
     assertThat(tempDir.resolve("disabled.dat.chk")).doesNotExist();
   }
 
+  @Test
+  void dispatchNas_recreatesCopyExecutorAfterShutdown() throws Exception {
+    RemoteFilesystemDispatchSupport.shutdownNasCopyExecutor();
+    byte[] payload = "restartable executor\n".getBytes(StandardCharsets.UTF_8);
+    DispatchFileContentResolver resolver = mock(DispatchFileContentResolver.class);
+    Map<String, Object> fileRecord = Map.of("id", 12L, "file_name", "source.dat");
+    when(resolver.openInputStream(fileRecord)).thenReturn(new ByteArrayInputStream(payload));
+    DispatchCommand command = new DispatchCommand(
+        "t1",
+        "tr-3",
+        fileRecord,
+        Map.of(
+            "nas_remote_directory",
+            tempDir.toString(),
+            "nas_remote_file_name",
+            "after-shutdown.dat"),
+        new DispatchPayload("12", null, "NAS_CH", null, "ext-3", "R-3", null, null, null, null));
+
+    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(command, resolver);
+
+    assertThat(result.success()).isTrue();
+    assertThat(tempDir.resolve("after-shutdown.dat")).hasContent("restartable executor\n");
+  }
+
   private static String sha256(byte[] payload) throws Exception {
     return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload));
   }

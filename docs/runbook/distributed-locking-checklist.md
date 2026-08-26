@@ -10,10 +10,10 @@
 
 | 机制 | 实现 | 典型场景 | 互斥强度 | 性能 |
 |---|---|---|---|---|
-| **ShedLock + Redis** | `RedisShedLockProvider` SET NX + Lua CAS 解锁 | 定时任务跨实例互斥（archive / reconcile / settle / metrics） | **软互斥**（短窗双跑可能，幂等业务必须） | 高（亚毫秒） |
+| **ShedLock + Redis** | `BatchShedLockAutoConfiguration` + ShedLock 官方 `RedisLockProvider` | 定时任务跨实例互斥（archive / reconcile / settle / metrics） | **软互斥**（短窗双跑可能，幂等业务必须） | 高（亚毫秒） |
 | **PG 行级锁** `FOR UPDATE SKIP LOCKED` | mapper XML | 多实例并发扫表派发（outbox / trigger_outbox / 队列消费） | 强（PG 事务级）| 中（依赖事务）|
 | **乐观锁 CAS** `version` 列 + `updateWithCas` | mapper SQL `UPDATE ... WHERE version=:expected` | 状态机表（job_instance / job_partition / quota_runtime_state / batch_day_instance）| 强（DB 唯一性回退） | 高（无阻塞） |
-| **PG advisory lock** `pg_try_advisory_lock` | 当前**未使用**，留作回退候选 | 必须严格单跑且业务非幂等的任务（金融对账、序列号生成） | 强（PG session 级） | 中 |
+| **PG advisory lock** `pg_advisory_xact_lock` | mapper XML | 单事务内必须严格串行的业务键（task outcome / result version / step run seq） | 强（PG 事务级） | 中 |
 
 ---
 
@@ -25,7 +25,7 @@
 │   ├─ 业务幂等？（重复执行不写异常数据 / 不发重复消息）
 │   │   └─ ✅ ShedLock
 │   └─ 业务非幂等？（必须严格单跑）
-│       └─ ⚠️ ShedLock 不够 → PG advisory lock
+│       └─ ⚠️ ShedLock 不够 → PG advisory lock + 幂等键/终态 CAS
 │
 ├─ 多实例从同一队列/表"竞争消费"
 │   ├─ 队列在 PG 里？
@@ -81,18 +81,20 @@ grep -rn "@SchedulerLock" --include='*.java' batch-*/src/main
 
 当前实现一次设 TTL，整个执行期不续约。如果你的任务**实际可能跑 2 小时**，TTL 就要设 `PT2H30M`，不能寄希望于"任务跑完前会续约"。
 
-如果某个任务执行时长不可预测（取决于数据量），**改用 PG advisory lock + 自己控制释放时机**，不要依赖 ShedLock 的固定 TTL。
+如果某个任务执行时长不可预测（取决于数据量），**改用业务表 CAS / PG advisory lock / lease 续约组合**，不要依赖 ShedLock 的固定 TTL。
 
 ### 红线 D — environment 前缀必须正确
 
-[RedisShedLockProvider:42](batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/RedisShedLockProvider.java:42) 用 `BatchRedisKeys.shedLock(environment, name)` 生成键，environment 来自 `${spring.application.name:batch-orchestrator}`。**如果 dev / staging / prod 共用一套 Redis，这个前缀必须区分环境**，否则跨环境串号。
+ShedLock Redis provider 由 [BatchShedLockAutoConfiguration](../../batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchShedLockAutoConfiguration.java) 统一创建，`batch.shedlock.redis.key-prefix-env` 默认取 `${spring.application.name}`。实际 Redis key 为 `job-lock:shedlock:<env>:<lockName>`。**如果 dev / staging / prod 共用一套 Redis，这个前缀必须显式区分环境**，否则跨环境串号。
 
 部署前检查：
 
 ```bash
 # 在每个环境的容器里
-echo $SPRING_APPLICATION_NAME  # 或 application.yml 的 spring.application.name
-# 三个环境必须返回不同的值（或 redis URL 本身不共用）
+echo $SPRING_APPLICATION_NAME
+echo $BATCH_SHEDLOCK_REDIS_ENV
+# 同一 Redis 集群里必须让每个环境的 BATCH_SHEDLOCK_REDIS_ENV 不同；
+# 如果未设置，则至少确认各服务 spring.application.name 不同，且 Redis 不跨环境共用。
 ```
 
 ---
@@ -162,9 +164,9 @@ UPDATE job_instance
 
 ### 1. ShedLock 锁获取失败监控
 
-**当前**：[RedisShedLockProvider:54-57](batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/RedisShedLockProvider.java:54) 把 Redis 错误当"未拿到锁"处理，仅 `log.warn`。
+**当前**：统一使用 ShedLock 官方 `RedisLockProvider`。Redis 不可达时锁获取会抛连接异常，由各 scheduler 外层按任务类型记录 warn/error 并等待下一轮；不会被当作普通竞争失败。
 
-**风险**：Redis 长时间不可用 → 所有 scheduler 静默不跑 → 运维不见得发现。
+**风险**：Redis 长时间不可用 → 默认 Redis provider 下所有 scheduler 无法获得锁并跳过本轮；如果只有业务日志没有指标，运维仍可能晚发现。
 
 **该补**：
 

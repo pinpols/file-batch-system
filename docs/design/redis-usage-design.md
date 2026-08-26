@@ -28,7 +28,7 @@
 | `console:cache:workers:{tenantId}:*` | Worker 自托管 / 指纹只读缓存 | 默认 TTL `10s` |
 | `ratelimit:{tenantId}:{action}:{windowStartEpochSecond}` | 固定窗口速率限制 | 60s 窗口 |
 | `circuit:outbox_publish` | Outbox 熔断状态 | fields: `failedPolls/openUntilMs` |
-| `shedlock:{environment}:{name}` | ShedLock 分布式锁 | value 为随机 token |
+| `job-lock:shedlock:{environment}:{name}` | ShedLock 分布式锁 | `environment` 默认取 `spring.application.name`，跨环境共 Redis 时用 `BATCH_SHEDLOCK_REDIS_ENV` 覆盖 |
 | `config:{tenantId}:{type}:{code}` | 配置类缓存 | TTL `5m` |
 | `metrics:file_governance:{tenantId}` | 文件治理指标缓存 | TTL `60s` |
 
@@ -67,18 +67,18 @@ TTL:    cooldown 和最小保底窗口中的较大值
 
 ### 3. ShedLock 切换 Redis Provider
 
-orchestrator 的 `@SchedulerLock` 已切换到自定义 `RedisShedLockProvider`，不再依赖 JDBC `shedlock` 表。
+各模块的 `@SchedulerLock` 统一由 `batch-common` 的 `BatchShedLockAutoConfiguration` 装配到 ShedLock 官方 `RedisLockProvider`，默认不再依赖 JDBC `shedlock` 表。
 
 ```
-key:   shedlock:{environment}:{name}
-value: 随机 token
+key:   job-lock:shedlock:{environment}:{name}
+value: ShedLock provider 内部值
 TTL:   lockAtMostFor
 ```
 
 实现文件：
 
-- `batch-orchestrator/.../config/ShedLockConfiguration.java`
-- `batch-orchestrator/.../redis/RedisShedLockProvider.java`
+- `batch-common/.../config/BatchShedLockAutoConfiguration.java`
+- `batch-common/.../config/ShedLockProviderFactory.java`
 
 ### 4. 配置类数据缓存
 

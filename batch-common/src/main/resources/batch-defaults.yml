@@ -251,10 +251,12 @@ batch:
     auto-create: ${BATCH_SHEDLOCK_AUTO_CREATE:false}  # jdbc 模式启动期自建 batch.shedlock 表(dev 用)
     redis:
       # key 命名空间,默认 = spring.application.name(每服务独立命名空间)。
-      # 实际 key 格式:job-lock:<env>:shedlock:<env>:<lockName>
-      #   - 如 orchestrator:job-lock:batch-orchestrator:shedlock:batch-orchestrator:outbox_poll
+      # ShedLock 官方 RedisLockProvider key 格式为 job-lock:<environment>:<lockName>；
+      # 本工程传入的 environment 为 shedlock:<env>，因此实际 key:
+      #   job-lock:shedlock:<env>:<lockName>
+      #   如 orchestrator:job-lock:shedlock:batch-orchestrator:outbox_poll
       # 多环境共享同 Redis 集群时:export BATCH_SHEDLOCK_REDIS_ENV=prod-orchestrator 防撞 key。
-      key-prefix-env: ${BATCH_SHEDLOCK_REDIS_ENV:}
+      key-prefix-env: ${BATCH_SHEDLOCK_REDIS_ENV:${spring.application.name:default}}
 
   # 安全 / KMS（orchestrator + worker + console 共用）
   security:

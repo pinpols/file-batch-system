@@ -46,7 +46,7 @@
      redis-cli -h localhost -p ${REDIS_PORT:-16379} \
        --scan --pattern '*shedlock:*:batch_day_settle'
      ```
-     - 实际 key 格式是 `job-lock:<env>:shedlock:<env>:<lockName>`(`<env>` 默认取 `spring.application.name`,见 `batch-defaults.yml` 注释与 `ShedLockProviderFactory#redisLockProvider`),所以 scan pattern 要以 `*shedlock:` 起头才能命中
+     - 实际 key 为 `job-lock:shedlock:<env>:<lockName>`，`<env>` 默认取 `spring.application.name`，跨环境共 Redis 时应由 `BATCH_SHEDLOCK_REDIS_ENV` 显式覆盖；scan pattern 以 `*shedlock:` 起头即可兼容 provider 前缀差异
    - 切到 `jdbc` 后,锁在 `batch.shedlock` 表
      ```sql
      select name, lock_until, locked_at, locked_by
@@ -135,7 +135,7 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
 - **写 incident-response 关联本剧本**:在 `docs/runbook/incident-response.md` 表里追加 P1 行。
 - **思考默认 provider 选择**:本仓 2026-05-28 默认切 `redis`(批注见 `BatchShedLockAutoConfiguration`),如果半年内 Redis 已 down 过 2 次 → 考虑默认回 `jdbc`,把 redis 当性能优化的可选项。
 - **观测边界**:`BatchOutboxCircuitBreakerFailOpen` 已覆盖 Redis 降级可见性；ShedLock acquire 失败仍以 Redis 探活、锁状态查询和日志为准，后续只有在能稳定产生低基数失败事件时才新增独立告警。
-- **剧本走不通**:Redis 又活了但锁没释放(`job-lock:<env>:shedlock:<env>:<lockName>` key 有残留 TTL),手动 `DEL` 该 key,补一篇 `redis-shedlock-stuck-lock.md`。
+- **剧本走不通**:Redis 又活了但锁没释放(`job-lock:shedlock:<env>:<lockName>` key 有残留 TTL),手动 `DEL` 该 key,补一篇 `redis-shedlock-stuck-lock.md`。
 
 ## 关联
 

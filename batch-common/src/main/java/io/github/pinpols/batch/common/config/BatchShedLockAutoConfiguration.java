@@ -18,8 +18,8 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
  * ShedLock 共享自动配置：每个模块只要 classpath 含 {@code shedlock-spring} + 容器有 {@link DataSource} bean，就自动获得
  * JDBC {@link LockProvider} + {@link LockingTaskExecutor} bean，{@code @SchedulerLock} AOP 同步激活。
  *
- * <p><b>覆盖机制</b>：定义自己的 {@code @Bean LockProvider}（如 orchestrator 的 {@code
- * RedisShedLockProvider}）即可覆盖默认 JDBC 实现（{@link ConditionalOnMissingBean} 让 auto-config 让位）。
+ * <p><b>覆盖机制</b>：定义自己的 {@code @Bean LockProvider} 即可覆盖默认实现（{@link ConditionalOnMissingBean}
+ * 让 auto-config 让位）。
  *
  * <p><b>auto-create 开关</b>：{@code batch.shedlock.auto-create=true} 启动期 {@code ensureShedLockTable}
  * 回退建 {@code batch.shedlock} 表（仅 dev / 测试，prod 由 Flyway 迁移建表，开关默认 false）。
@@ -67,8 +67,8 @@ public class BatchShedLockAutoConfiguration {
       matchIfMissing = true)
   public LockProvider redisLockProvider(
       RedisConnectionFactory connectionFactory,
-      // 默认用 spring.application.name 做 env prefix(每服务一份命名空间,统一格式
-      // job-lock:<service>:<lockName>),想跨环境隔离时显式覆盖 batch.shedlock.redis.key-prefix-env。
+      // 默认用 spring.application.name 做 env prefix(每服务一份命名空间),想跨环境隔离时显式覆盖
+      // batch.shedlock.redis.key-prefix-env / BATCH_SHEDLOCK_REDIS_ENV。
       @Value("${batch.shedlock.redis.key-prefix-env:${spring.application.name:default}}")
           String environment) {
     LockProvider provider =

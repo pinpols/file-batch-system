@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -107,6 +108,25 @@ public class OpenLineageEmitter {
       recordLineageMetric("rejected", terminalStatus);
       SwallowedExceptionLogger.info(
           OpenLineageEmitter.class, "catch:RejectedExecutionException", ex);
+    }
+  }
+
+  /** 停机时有限等待已入队 emit drain，避免 daemon 线程直接丢弃队列。 */
+  @PreDestroy
+  public void shutdown() {
+    if (executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+        log.warn("OpenLineageEmitter executor did not drain within 5s; forcing interruption");
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException ex) {
+      SwallowedExceptionLogger.info(OpenLineageEmitter.class, "catch:InterruptedException", ex);
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
     }
   }
 
