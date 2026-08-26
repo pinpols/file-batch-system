@@ -160,3 +160,54 @@ Valkey；orchestrator、trigger、console 和五类 worker 均由本地 JVM 启�
 积压恢复证据，不应表述为低延迟容量承诺。该结果也不能直接外推到生产：负载为轻量 SQL，未包含
 多实例、慢外部依赖、复杂 DAG、补偿或生产数据库规格。后续若要提升 50 RPS 的入口尾延迟，应先采集
 PostgreSQL 锁等待、连接池占用、WAL、outbox backlog 和 JVM CPU/GC，再决定是否改动写模型。
+
+### 当前代码 1w/10w Atomic Storm（2026-08-26）
+
+继续使用本地 JVM 应用和既有 Docker PostgreSQL、Kafka、MinIO、Valkey 基础环境，工作负载为
+`atomic_sql_demo` 的轻量 `SELECT 1`。为使画像测量执行链路而不是默认 fail-close quota，运行期间临时把
+`default-tenant` 配额提升为 `10,000 job / 10,000 partition / 1,000 QPS / QUEUE_DEFER`；每轮结束均恢复
+`8 / 16 / 80 / REJECT`，并验证该轮 `job_instance` 残留为 0。此临时配额不是生产推荐值。
+
+| 档位 | Gatling 请求结果 | 服务端终态 | 实例 p95 | task claim p95 | 结论 |
+|---|---|---|---:|---:|---|
+| 1w，200 RPS | 10,000 / 10,000 HTTP OK | 10,000 `SUCCESS`，0 failed，0 non-terminal | 0.527 s | 0.483 s | 当前本机完整执行链路正确收敛 |
+| 10w，200 RPS | 99,986 请求；64,699 OK、35,287 KO（35.29%）；p95 60.002 s | 85,848 `SUCCESS`，0 failed，0 non-terminal | 0.658 s | 0.601 s | 入口达到本机容量边界，不是执行链路终态错误 |
+
+10w 运行中 Gatling 的主要失败为 60 秒请求/连接超时；但其中一部分请求已在服务端继续创建并执行。因此，
+`HTTP OK`、`请求是否被服务端接受` 和 `实例是否最终成功` 在超时窗口内不是同一指标，不能把 85,848 个成功
+实例误记为 85,848 个可靠的客户端成功。这是本轮最重要的产品结论：入口必须在客户端超时前给出明确的
+admission 结果，或让调用方通过幂等键查询确定的 request/instance 状态；不能依赖超时后重试来猜测是否已创建。
+
+PostgreSQL 5 秒采样峰值为 19 个活跃连接、3 个锁等待会话和 3 个未授予锁，未出现锁等待发散。运行期间
+平台库体积从约 1.19 GB 升至约 2.22 GB；这是 10w 临时运行记录和后续删除产生的本地写放大证据，不能用
+物理文件大小替代 vacuum、归档和长期分区策略的结论。清理后的 85,848 行大删除已完成，运行 id 残留为 0。
+生产同构环境仍须补充 WAL、CPU/IO、autovacuum、archive lag 和多 orchestrator 实例的留档。
+
+本次同时修复两个压测工具问题：先清理 Trigger/outbox 持久来源，再清理异步在途实例；P2 profile 按
+`<run-id>-10w` 清理并校验 storm 子 run，而不是错误使用父 run id。`run-control-plane-worker-benchmark.sh`
+也不再吞掉 Gatling 的退出码，因此 `CAPACITY_STRICT=1` 现在会在报告生成和终态等待完成后正确返回失败。
+默认 `CAPACITY_STRICT=0` 仍只记录容量画像，不把预期的低延迟 SLO 超限伪装成通过。
+
+### P2 多租户公平性夹具复核（2026-08-26）
+
+公平性 profile 使用隔离的 `p2fa/p2fb/p2fc` 临时租户，避免历史 `ta/tb/tc` 的运行实例污染共享组计数。
+策略权重固定为 `3:1:1`，请求供给默认采用 `1:1:1` 并轮转提交。直接写入临时作业定义和 quota 策略后，脚本会通过已有
+Console Ops API 同时失效 job-definition 与 quota cache；结束时删除实例、Trigger 请求、策略、作业定义和临时租户。
+同一工作区的 profile 通过本地锁互斥，避免一轮 cleanup 删除另一轮的临时 fixture。
+
+首轮 600 条预验暴露了真实缺陷：`group_shared_max_running_jobs` 仅做非原子 `count -> compare`，首个调度窗口完成
+95 条，穿透了配置的 12 条上限。修复后，共享组计数前取得 PostgreSQL 事务级 advisory lock，并将锁保持到
+`job_instance` 状态提交；WAITING 出队在其 `REQUIRES_NEW` 写事务内再次校验，不能再依赖事务外候选排序的旧判断。
+
+| 场景 | 结果 |
+|---|---|
+| 硬上限验证：120 条、组上限 12 | 120 `SUCCESS`，0 non-terminal；0.2 秒采样峰值 `READY + RUNNING = 12`；三租户各 40 条；临时数据清理为 0 |
+| 公平画像：600 条、组上限 96 | 600 `SUCCESS`，0 non-terminal；三租户各 200 条；采样峰值 87（未超过 96）；临时数据清理为 0 |
+
+低上限硬约束与高并发画像现在是两个独立参数：`FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS=12` 配合小规模请求验证原子
+admission；默认 `96` 与 6,000 请求 / 1,200 秒的画像预算匹配。上述结果是本地 JVM + Docker 基础设施的正确性与
+基础容量证据，不构成生产公平份额、吞吐或延迟承诺；6,000 条和多实例 worker 的生产级容量结论仍需在同构 staging 留档。
+
+本轮还补了 `job_instance(trigger_request_id)` 与 `job_step_instance(job_partition_id)` 索引迁移。前者避免
+删除 Trigger 请求时重复扫描运行实例表；后者覆盖分区删除时的 step 外键检查。它们同时使 Trigger 模式的
+压测清理能够按 `trigger_request` 关联实例，而不再只依赖 `params_snapshot` 中的 `runId`。

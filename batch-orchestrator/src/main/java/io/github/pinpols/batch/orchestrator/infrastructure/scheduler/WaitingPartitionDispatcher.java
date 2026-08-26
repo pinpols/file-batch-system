@@ -18,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,8 @@ class WaitingPartitionDispatcher {
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final PartitionLifecycleService partitionLifecycleService;
   private final TenantActionRateLimiter tenantActionRateLimiter;
+  private final OrchestratorConfigCacheService configCacheService;
+  private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void executeDispatch(
@@ -49,6 +52,12 @@ class WaitingPartitionDispatcher {
       ResourceSchedulingDecision decision) {
     if (!tenantActionRateLimiter.tryConsume(
         jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE)) {
+      return;
+    }
+    // 候选排序时的 schedule() 发生在事务外，只能作为快速筛选。共享组硬上限必须在本
+    // REQUIRES_NEW 事务里再次判定，并把 advisory lock 持有到 WAITING -> RUNNING 提交完成。
+    if (!fairShareGroupAdmissionGuard.hasCapacity(
+        configCacheService.findEnabledQuotaPolicy(jobInstance.getTenantId()))) {
       return;
     }
     if (!partitionLifecycleService.releaseForDispatch(

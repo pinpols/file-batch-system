@@ -76,9 +76,10 @@ public class DefaultConsoleFileDownloadApplicationService
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
-    if (requiresDownloadApproval(security)
+    boolean downloadApprovalRequired = requiresDownloadApproval(security)
         && !Texts.hasText(approvalId)
-        && !batchSecurityProperties.isBypassMode()) {
+        && !batchSecurityProperties.isBypassMode();
+    if (downloadApprovalRequired) {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
     }
     if (Texts.hasText(approvalId)) {

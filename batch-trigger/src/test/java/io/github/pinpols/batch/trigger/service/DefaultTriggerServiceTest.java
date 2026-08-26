@@ -18,6 +18,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -95,6 +96,16 @@ class DefaultTriggerServiceTest {
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.MISSING_IDEMPOTENCY_KEY);
+  }
+
+  @Test
+  void shouldFindLaunchStatusByTenantAndIdempotencyKey() {
+    TriggerLaunchStatus expected = new TriggerLaunchStatus(
+        "req-001", "trace-001", "ACCEPTED", null, null, Instant.parse("2026-08-26T15:00:00Z"));
+    when(triggerRequestMapper.selectLaunchStatus("t1", "idem-001")).thenReturn(expected);
+
+    assertThat(service.findLaunchStatus("t1", "idem-001")).isSameAs(expected);
+    verify(triggerRequestMapper).selectLaunchStatus("t1", "idem-001");
   }
 
   @Test

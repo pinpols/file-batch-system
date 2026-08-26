@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.mapper;
 
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.query.TriggerRequestQuery;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -15,6 +16,9 @@ public interface TriggerRequestMapper {
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
   TriggerRequestEntity selectByTenantAndDedupKey(
+      @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
+
+  TriggerLaunchStatus selectLaunchStatus(
       @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
 
   int insert(TriggerRequestEntity entity);

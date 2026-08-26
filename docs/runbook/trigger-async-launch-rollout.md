@@ -4,6 +4,40 @@
 
 > ~~**状态**:Stage 4 Kafka producer/consumer 已实装,Stage 6 灰度切换待执行(operational)。本文档是 staging → 单租户 → 全量切换的操作步骤。~~
 
+## 0.0 客户端超时后的确定性查询
+
+`POST /api/triggers/launch` 返回的是“已写入 trigger_request 和 outbox”的异步接收结果，不代表
+`job_instance` 已经创建。客户端若因网络或入口负载超时，不得直接使用新的幂等键重试；应使用原租户和
+原 `Idempotency-Key` 查询：
+
+```bash
+curl --fail --silent \
+  -H "X-Internal-Secret: ${STAGING_INTERNAL_SECRET}" \
+  -H "Idempotency-Key: ${ORIGINAL_IDEMPOTENCY_KEY}" \
+  "${STAGING_TRIGGER_HOST}/api/triggers/launch/status?tenantId=${TENANT_ID}"
+```
+
+响应字段含义：
+
+- `requestStatus=ACCEPTED`：请求已持久化，等待 outbox relay / Kafka / orchestrator；不应重复提交。
+- `requestStatus=LAUNCHED`：orchestrator 已接收并已回写实例关联；`relatedJobInstanceId` 通常非空。
+- `instanceStatus`：已关联实例的当前终态或运行态；请求刚 ACCEPTED 时允许为 `null`。
+- 未找到记录：原请求未在 trigger 事务中提交，可以使用同一幂等键重试；不要生成新的业务幂等键。
+
+该接口只返回最小状态投影，不返回原始参数和幂等键；所有访问仍要求 `X-Internal-Secret`。它用于消除
+超时后的“是否已创建”歧义，不改变现有 outbox、Kafka 去重和 job_instance 状态机。
+
+### 0.0.1 入口 admission 配置
+
+手工 `POST /api/triggers/launch` 还受每个 Trigger 实例的本地并发闸门保护：
+`BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY` 默认 `64`。拿不到许可的请求立即返回 `RATE_LIMITED`（HTTP
+429），不会进入数据库事务；Quartz 定时触发、outbox relay 和内部 scheduled launch 不受影响。
+该值应按实例 Hikari 连接池、数据库预算和副本数配置，不能把各副本的值相加当作全局容量；全局业务上限仍由
+租户 quota、Kafka 和 orchestrator admission 共同决定。
+
+客户端收到 429 时应沿用原幂等键查询上述状态接口，按 `ACCEPTED/LAUNCHED` 决定等待还是继续，不要为同一业务
+动作生成新的幂等键。
+
 ## 0. 前置检查清单
 
 切换前必须确认(checked = ✅):

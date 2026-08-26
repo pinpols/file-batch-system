@@ -17,7 +17,9 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Orchest
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -42,6 +44,10 @@ class WaitingPartitionDispatcherTest {
       org.mockito.Mockito.mock(PartitionLifecycleService.class);
   private final TenantActionRateLimiter tenantActionRateLimiter =
       org.mockito.Mockito.mock(TenantActionRateLimiter.class);
+  private final OrchestratorConfigCacheService configCacheService =
+      org.mockito.Mockito.mock(OrchestratorConfigCacheService.class);
+  private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard =
+      org.mockito.Mockito.mock(FairShareGroupAdmissionGuard.class);
 
   private WaitingPartitionDispatcher dispatcher;
 
@@ -62,7 +68,9 @@ class WaitingPartitionDispatcherTest {
         workflowMappers,
         taskDispatchOutboxService,
         partitionLifecycleService,
-        tenantActionRateLimiter);
+        tenantActionRateLimiter,
+        configCacheService,
+        fairShareGroupAdmissionGuard);
   }
 
   @Test
@@ -87,6 +95,7 @@ class WaitingPartitionDispatcherTest {
     workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
     workflowRun.setCurrentNodeCode("export");
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    when(fairShareGroupAdmissionGuard.hasCapacity(any())).thenReturn(true);
     when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
         .thenReturn(true);
     when(jobInstanceMapper.markRunning(any())).thenReturn(1);
@@ -105,6 +114,21 @@ class WaitingPartitionDispatcherTest {
     verify(workflowRunMapper)
         .markRunning(
             eq("tenant-a"), eq(99L), eq(WorkflowRunStatus.RUNNING.code()), eq("export"), any());
+  }
+
+  @Test
+  void doesNotReleaseWhenFairShareGroupHasNoCapacity() {
+    when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    TenantQuotaPolicyEntity quotaPolicy = new TenantQuotaPolicyEntity(
+        1L, "tenant-a", "p", 0, 0, 0, 1, "settlement", 0, 0, "NONE", 1, true, "QUEUE_DEFER");
+    when(configCacheService.findEnabledQuotaPolicy("tenant-a")).thenReturn(quotaPolicy);
+    when(fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)).thenReturn(false);
+
+    dispatcher.executeDispatch(partition(), task(), waitingInstance(), dispatchDecision());
+
+    verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
+    verify(taskDispatchOutboxService, never())
+        .writeDispatchEvent(any(), any(), any(), any(), any());
   }
 
   private static JobInstanceEntity waitingInstance() {

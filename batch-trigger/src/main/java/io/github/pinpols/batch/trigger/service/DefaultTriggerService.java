@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -84,6 +85,21 @@ public class DefaultTriggerService implements TriggerService {
     assertTenantActive(command.request().getTenantId());
     LaunchRequest launchRequest = launchAdapterService.fromApiRequest(command);
     return persistAndForward(launchRequest, command.idempotencyKey());
+  }
+
+  @Override
+  public TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey) {
+    if (EmptyChecks.isBlank(tenantId)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
+    }
+    if (EmptyChecks.isBlank(idempotencyKey)) {
+      throw BizException.of(
+          ResultCode.MISSING_IDEMPOTENCY_KEY,
+          "error.common.missing_idempotency_key_detail",
+          ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
+    }
+    TriggerLaunchStatus status = triggerRequestMapper.selectLaunchStatus(tenantId, idempotencyKey);
+    return Guard.requireFound(status, "launch request not found");
   }
 
   @Override
@@ -330,9 +346,10 @@ public class DefaultTriggerService implements TriggerService {
           command.descriptor().getJobCode(),
           command.fireTime());
     }
-    if (EmptyChecks.isNotNull(pending)
+    boolean canAssociateCatchUpRequest = EmptyChecks.isNotNull(pending)
         && EmptyChecks.isNotNull(pending.getId())
-        && EmptyChecks.isNotNull(request.getId())) {
+        && EmptyChecks.isNotNull(request.getId());
+    if (canAssociateCatchUpRequest) {
       triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
     }
   }

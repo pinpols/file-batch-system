@@ -34,6 +34,7 @@ import org.springframework.stereotype.Component;
 public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
   private final JobInstanceMapper jobInstanceMapper;
+  private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
   private final OrchestratorConfigCacheService configCacheService;
   private final QuotaRuntimeStateService quotaRuntimeStateService;
   private final BatchOrchestratorGovernanceProperties governance;
@@ -86,9 +87,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     if (Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
         && quotaPolicy.groupSharedMaxRunningJobs() > 0) {
-      long groupActive =
-          jobInstanceMapper.countActiveByFairShareGroup(quotaPolicy.fairShareGroup());
-      if (groupActive >= quotaPolicy.groupSharedMaxRunningJobs()) {
+      if (!fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)) {
         return applyStrategy(
             strategy,
             "FAIR_SHARE_GROUP_JOB_LIMIT",

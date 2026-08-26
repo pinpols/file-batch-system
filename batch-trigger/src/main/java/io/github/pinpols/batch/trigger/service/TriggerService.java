@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -12,6 +13,8 @@ import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 public interface TriggerService {
 
   LaunchResponse launch(TriggerLaunchCommand command);
+
+  TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey);
 
   LaunchResponse launchScheduled(ScheduledTriggerCommand command);
 

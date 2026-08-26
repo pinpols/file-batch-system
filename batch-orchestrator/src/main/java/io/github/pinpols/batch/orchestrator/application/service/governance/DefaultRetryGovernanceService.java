@@ -189,11 +189,12 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     // 2) 每条独立 tx 走 requeueOne：markRunning + requeuePartition + markSuccess 同事务，
     //    抛 TransientConflictException → 整 tx 回滚 → markRunning 也撤销 → 状态自动留 WAITING 等下轮
     // 3) 非 transient 异常 → 在独立 tx 内 markFailed
-    List<RetryScheduleEntity> dueRetries = retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
+    RetryScheduleQuery dueRetryQuery = new RetryScheduleQuery(
         null,
         RetryScheduleStatus.WAITING.code(),
         BatchDateTimeSupport.utcNow(),
-        governance.retry().getBatchSize()));
+        governance.retry().getBatchSize());
+    List<RetryScheduleEntity> dueRetries = retryScheduleMapper.selectByQuery(dueRetryQuery);
     for (RetryScheduleEntity retrySchedule : dueRetries) {
       try {
         inNewTransaction(() -> retryRequeueCoordinator.requeueRetry(retrySchedule));

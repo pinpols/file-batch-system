@@ -216,7 +216,9 @@ public class ConsoleClusterDiagnosticService {
     long activeOutboxEvents = countStatuses(outboxStatusCounts, ACTIVE_OUTBOX_STATUSES);
 
     String instanceStatus = stringValue(instance.get("instanceStatus"), "");
-    if (isActive(instanceStatus) && totalPartitions == 0 && totalTasks == 0) {
+    boolean activeInstanceWithoutChildren =
+        isActive(instanceStatus) && totalPartitions == 0 && totalTasks == 0;
+    if (activeInstanceWithoutChildren) {
       findings.add(finding(
           "ERROR",
           "INSTANCE_HAS_NO_CHILDREN",

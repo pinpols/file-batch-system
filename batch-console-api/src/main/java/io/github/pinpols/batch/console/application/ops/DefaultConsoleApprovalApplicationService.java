@@ -241,15 +241,16 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   private void approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
+    ApprovalActionRequest approvalAction = new ApprovalActionRequest(
+        tenantId,
+        ConsoleTextSanitizer.safeInput(operatorId, 64),
+        ConsoleTextSanitizer.safeInput(reason, 512));
     restClient
         .post()
         .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-        .body(new ApprovalActionRequest(
-            tenantId,
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            ConsoleTextSanitizer.safeInput(reason, 512)))
+        .body(approvalAction)
         .retrieve()
         .toBodilessEntity();
   }
@@ -257,15 +258,16 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   private void rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
+    ApprovalActionRequest approvalAction = new ApprovalActionRequest(
+        tenantId,
+        ConsoleTextSanitizer.safeInput(operatorId, 64),
+        ConsoleTextSanitizer.safeInput(reason, 512));
     restClient
         .post()
         .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-        .body(new ApprovalActionRequest(
-            tenantId,
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            ConsoleTextSanitizer.safeInput(reason, 512)))
+        .body(approvalAction)
         .retrieve()
         .toBodilessEntity();
   }

@@ -82,3 +82,5 @@ batch:
       # 上游未就绪时使用 Quartz one-shot trigger 重检，期间固定原始 fire 时间，避免 bizDate 漂移。
       readiness-window-seconds: ${BATCH_TRIGGER_READINESS_WINDOW_SECONDS:7200}
       readiness-recheck-interval-seconds: ${BATCH_TRIGGER_READINESS_RECHECK_INTERVAL_SECONDS:30}
+      # 手工 API launch 的本实例并发闸门；超过后立即返回 429，避免请求堆积到 Servlet 线程和连接池。
+      api-launch-max-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY:64}

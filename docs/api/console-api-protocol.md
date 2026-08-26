@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-08-26 | **Trigger 超时恢复查询**：新增内部只读 `GET /api/triggers/launch/status?tenantId`，要求复用原 `Idempotency-Key` 和 `X-Internal-Secret`，返回 `requestId/traceId/requestStatus/relatedJobInstanceId/instanceStatus/updatedAt` 最小投影。用于 POST 超时后的确定性查询，不改变异步 outbox/Kafka 链路，也不暴露原始参数和幂等键。 |
 | 2026-08-21 | **命名与注释治理（wire 不变）**：Console tenant-package Excel、workflow/pipeline definition Controller 仅同步内部 service/fixture 命名与注释治理；HTTP 路径、请求/响应字段、鉴权、状态码和 OpenAPI schema 均不变。 |
 | 2026-08-13 | **固定 Console 响应类型收敛（wire 不变）**：文件 channel/template/detail、文件 record detail、Kafka lag、通知/审批/诊断、实例与工作流操作等固定字段响应改由 record 承载；JSON 字段名、null 省略规则、路径、鉴权和状态码不变。文件详情的 `metadata_json` 仍保留为具名动态 JSONB 字段。OpenAPI 对三个文件详情端点由无类型 object 补为具体 schema。 |
 | 2026-08-09 | **Console 层边界治理（无 API 变更）**：`ConsoleWorkflowDefinitionController` 依赖的 `WorkflowMermaidRenderer` 从 infrastructure 迁至 `domain.workflow.web.support`；`ConsoleConfigCacheController` 依赖的 `ConsoleConfigCacheInvalidationService` 从 `infrastructure.config` 迁至 `application.config`。HTTP 路径、请求/响应字段、鉴权、状态码与 wire schema 均不变。 |

@@ -108,6 +108,13 @@ public interface JobInstanceMapper {
   long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
 
   /**
+   * 获取公平共享组的事务级 advisory lock。
+   *
+   * <p>锁必须覆盖共享组活跃实例计数到实例状态提交的整个事务，避免并发 admission 同时读到同一个空余槽位。
+   */
+  Integer acquireFairShareGroupAdvisoryLock(@Param("fairShareGroup") String fairShareGroup);
+
+  /**
    * R7-A3-P1：批量预聚合多个 fair_share_group → count，替代 N+1 单条查询。
    *
    * @return {@code Map<{fairShareGroup,cnt}>} 列表；未出现的 group = 0。

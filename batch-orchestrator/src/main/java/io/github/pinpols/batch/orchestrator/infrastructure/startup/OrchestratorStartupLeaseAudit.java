@@ -59,13 +59,14 @@ public class OrchestratorStartupLeaseAudit {
       long outboxStuck = outboxEventMapper.countStalePublishing(
           OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
 
-      if (drainingStale == 0
+      boolean noRuntimeResidual = drainingStale == 0
           && staleOnlineWorkers == 0
           && decommissionedActiveClaims == 0
           && invalidCapabilityTags == 0
           && terminalActiveChildren == 0
           && leasesExpired == 0
-          && outboxStuck == 0) {
+          && outboxStuck == 0;
+      if (noRuntimeResidual) {
         log.info(
             "Startup runtime audit passed (orchestrator): no stale worker, overdue drain, or active decommissioned"
                 + " claims / invalid capability_tags / terminal active children / expired leases / long-stuck"
@@ -74,13 +75,14 @@ public class OrchestratorStartupLeaseAudit {
       }
 
       // 仅存在「终态实例仍有活跃子节点」时常为重启间隙的可自愈状态，由 JobInstanceTerminalChildStateReconciler 收敛；降级为 INFO 减少噪音
-      if (drainingStale == 0
+      boolean onlyTerminalChildStateResidual = drainingStale == 0
           && staleOnlineWorkers == 0
           && decommissionedActiveClaims == 0
           && invalidCapabilityTags == 0
           && terminalActiveChildren > 0
           && leasesExpired == 0
-          && outboxStuck == 0) {
+          && outboxStuck == 0;
+      if (onlyTerminalChildStateResidual) {
         log.info(
             "Startup runtime audit (orchestrator): terminalActiveChildren={} (will be reconciled by"
                 + " JobInstanceTerminalChildStateReconciler; all other counters are 0)",
