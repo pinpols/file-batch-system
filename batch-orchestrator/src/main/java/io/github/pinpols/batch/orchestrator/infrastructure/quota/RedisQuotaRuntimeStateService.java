@@ -211,13 +211,14 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
         return ResourceCheck.allow();
       }
-      return waitForCapacity(new QuotaReservationRequest(
+      QuotaReservationRequest unavailableBackendRequest = new QuotaReservationRequest(
           request.owner(),
           request.policy(),
           request.currentActiveCount(),
           request.requestedCount(),
           new QuotaReservationReason(
-              "QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable")));
+              "QUOTA_BACKEND_UNAVAILABLE", "quota coordination backend unavailable"));
+      return waitForCapacity(unavailableBackendRequest);
     }
 
     if (result == null || result.isEmpty()) {

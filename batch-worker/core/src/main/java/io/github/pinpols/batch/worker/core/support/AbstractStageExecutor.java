@@ -79,9 +79,10 @@ public abstract class AbstractStageExecutor<
         throw BizException.of(
             ResultCode.STATE_CONFLICT, "error.workflow.cycle_detected", cycleDetectedMessage());
       }
-      if (stageSkipEnabled
+      boolean canSkipSucceededStage = stageSkipEnabled
           && skipSafeStages.contains(currentStep.stageCode())
-          && priorSucceededStepCodes.contains(currentStep.stepCode())) {
+          && priorSucceededStepCodes.contains(currentStep.stepCode());
+      if (canSkipSucceededStage) {
         // 上一 attempt 该 stage 已成功且副作用已持久化到可由稳定键重建的位置(见
         // skipSafeStages() 契约)。幂等跳过:不执行 step、不重写 step_run、只推进 last_success_stage
         // 与下一步指针。不改 orchestrator 状态机、不写 outbox。

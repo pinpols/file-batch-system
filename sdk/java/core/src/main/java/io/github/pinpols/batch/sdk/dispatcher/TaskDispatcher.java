@@ -405,7 +405,9 @@ public class TaskDispatcher {
           httpEx.statusCode(),
           msg.taskId(),
           httpEx);
-      if (httpEx.isClientError() && !httpEx.isAuthError() && !httpEx.isConflict()) {
+      boolean shouldRecordReportClientError =
+          httpEx.isClientError() && !httpEx.isAuthError() && !httpEx.isConflict();
+      if (shouldRecordReportClientError) {
         retryCoordinator.recordClientError(httpEx.statusCode(), msg.taskId(), "REPORT");
       }
     } catch (Exception reportEx) {

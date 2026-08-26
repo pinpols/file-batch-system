@@ -127,19 +127,20 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
+    FileOperationRequest fileOperation = new FileOperationRequest(
+        tenantId,
+        null,
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
+        requestMetadata.traceId(),
+        ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+        request.getApprovalId());
     FileDownloadResponse response = restClient
         .post()
         .uri("/internal/files/{fileId}/presign", request.getFileId())
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(new FileOperationRequest(
-            tenantId,
-            null,
-            ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-            requestMetadata.traceId(),
-            ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-            request.getApprovalId()))
+        .body(fileOperation)
         .retrieve()
         .body(FileDownloadResponse.class);
     return response == null
@@ -153,19 +154,20 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
+    ArrivalGroupOperationRequest arrivalGroupOperation = new ArrivalGroupOperationRequest(
+        tenantId,
+        request.getAction(),
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
+        requestMetadata.traceId(),
+        ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+        request.getExtendWaitSeconds());
     FileOperationResponse response = restClient
         .post()
         .uri("/internal/files/arrival-groups/{fileGroupCode}/actions", request.getFileGroupCode())
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(new ArrivalGroupOperationRequest(
-            tenantId,
-            request.getAction(),
-            ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-            requestMetadata.traceId(),
-            ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-            request.getExtendWaitSeconds()))
+        .body(arrivalGroupOperation)
         .retrieve()
         .body(FileOperationResponse.class);
     return response == null ? null : new ConsoleFileOperationResponse(response.status());
@@ -279,19 +281,20 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
+    FileOperationRequest fileOperation = new FileOperationRequest(
+        ctx.tenantId(),
+        ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128),
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
+        requestMetadata.traceId(),
+        ConsoleTextSanitizer.safeInput(ctx.reason(), 512),
+        ctx.approvalId());
     FileOperationResponse response = restClient
         .post()
         .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(new FileOperationRequest(
-            ctx.tenantId(),
-            ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128),
-            ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-            requestMetadata.traceId(),
-            ConsoleTextSanitizer.safeInput(ctx.reason(), 512),
-            ctx.approvalId()))
+        .body(fileOperation)
         .retrieve()
         .body(FileOperationResponse.class);
     return response == null ? null : new ConsoleFileOperationResponse(response.status());
@@ -302,7 +305,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     // tenantId，与 presignDownload 带 approvalId 分支一致；否则租户 A 会话可借 body tenantId=B
     // 向租户 B 的审批队列注入攻击者可控审批单（跨租户写越权）。
     String tenantId = tenantGuard.resolveTenant(extractTenantId(ctx.payload()));
-    String approvalNo = approvalClient.submitApproval(ApprovalSubmitCommand.builder()
+    ApprovalSubmitCommand approvalCommand = ApprovalSubmitCommand.builder()
         .tenantId(tenantId)
         .approvalType(ctx.approvalType())
         .actionType(ctx.actionType())
@@ -311,7 +314,8 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         .payloadJson(JsonUtils.toJson(ctx.payload()))
         .approvalReason(ctx.approvalReason())
         .idempotencyKey(ctx.idempotencyKey())
-        .build());
+        .build();
+    String approvalNo = approvalClient.submitApproval(approvalCommand);
     return new ConsolePresignDownloadResponse(approvalNo, null);
   }
 

@@ -270,44 +270,31 @@ public class ConsoleFileQueryService {
   public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
       FileArrivalGroupQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<FileArrivalGroupEntity> rows =
-        fileMappers.fileArrivalGroupMapper.selectByQuery(new FileArrivalGroupQuery(
-            TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
-            request.getFileGroupCode(),
-            request.getArrivalState(),
-            null,
-            null,
-            pageRequest));
-    long total = fileMappers.fileArrivalGroupMapper.countByQuery(new FileArrivalGroupQuery(
+    FileArrivalGroupQuery query = new FileArrivalGroupQuery(
         TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
         request.getFileGroupCode(),
         request.getArrivalState(),
         null,
         null,
-        pageRequest));
+        pageRequest);
+    List<FileArrivalGroupEntity> rows = fileMappers.fileArrivalGroupMapper.selectByQuery(query);
+    long total = fileMappers.fileArrivalGroupMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileArrivalGroupResponse);
   }
 
   public PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(
       FileErrorRecordQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<FileErrorRecordEntity> rows =
-        fileMappers.fileErrorRecordMapper.selectByQuery(new FileErrorRecordQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getFileId(),
-            request.getErrorStage(),
-            request.getErrorCode(),
-            request.getSkipped(),
-            pageRequest));
-    applyErrorLineMasking(
-        resolveTenant(tenantGuard, request.getTenantId()), request.getFileId(), rows);
-    long total = fileMappers.fileErrorRecordMapper.countByQuery(new FileErrorRecordQuery(
+    FileErrorRecordQuery query = new FileErrorRecordQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getFileId(),
         request.getErrorStage(),
         request.getErrorCode(),
         request.getSkipped(),
-        pageRequest));
+        pageRequest);
+    List<FileErrorRecordEntity> rows = fileMappers.fileErrorRecordMapper.selectByQuery(query);
+    applyErrorLineMasking(query.tenantId(), request.getFileId(), rows);
+    long total = fileMappers.fileErrorRecordMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileErrorRecordResponse);
   }
 
@@ -444,9 +431,10 @@ public class ConsoleFileQueryService {
     Instant lastHeartbeatAt = instantValue(row, "last_heartbeat_at");
     // 仅当持久值为 null 且该 step 运行中时,才用 cache 桥接的实时行数;total 保持 null(不做百分比)。
     Long rowsProcessed = longOrNull(row, "rows_processed");
-    if (EmptyChecks.isNull(rowsProcessed)
+    boolean shouldBridgeLiveRowsProcessed = EmptyChecks.isNull(rowsProcessed)
         && EmptyChecks.isNotNull(liveRowsProcessed)
-        && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))) {
+        && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"));
+    if (shouldBridgeLiveRowsProcessed) {
       rowsProcessed = liveRowsProcessed;
     }
     return new ConsoleFilePipelineStepProgressResponse(

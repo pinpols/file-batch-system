@@ -330,9 +330,10 @@ public class DefaultTriggerService implements TriggerService {
           command.descriptor().getJobCode(),
           command.fireTime());
     }
-    if (EmptyChecks.isNotNull(pending)
+    boolean canAssociateCatchUpRequest = EmptyChecks.isNotNull(pending)
         && EmptyChecks.isNotNull(pending.getId())
-        && EmptyChecks.isNotNull(request.getId())) {
+        && EmptyChecks.isNotNull(request.getId());
+    if (canAssociateCatchUpRequest) {
       triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
     }
   }

@@ -111,17 +111,14 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
       OutboxRetryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<Map<String, Object>> rows =
-        opsMappers.outboxRetryLogMapper.selectByQuery(new OutboxRetryLogQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getRetryStatus(),
-            request.getEventKey(),
-            pageRequest));
-    long total = opsMappers.outboxRetryLogMapper.countByQuery(
+    OutboxRetryLogQuery query = new OutboxRetryLogQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getRetryStatus(),
         request.getEventKey(),
         pageRequest);
+    List<Map<String, Object>> rows = opsMappers.outboxRetryLogMapper.selectByQuery(query);
+    long total = opsMappers.outboxRetryLogMapper.countByQuery(
+        query.tenantId(), query.retryStatus(), query.eventKey(), query.pageRequest());
     return page(pageRequest, total, rows, this::toOutboxRetryResponse);
   }
 
@@ -129,38 +126,28 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<Map<String, Object>> rows =
-        opsMappers.outboxDeliveryLogMapper.selectByQuery(new OutboxDeliveryLogQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getDeliveryStatus(),
-            request.getEventType(),
-            request.getEventKey(),
-            request.getTraceId(),
-            pageRequest));
-    long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
+    OutboxDeliveryLogQuery query = new OutboxDeliveryLogQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getDeliveryStatus(),
         request.getEventType(),
         request.getEventKey(),
         request.getTraceId(),
         pageRequest);
+    List<Map<String, Object>> rows = opsMappers.outboxDeliveryLogMapper.selectByQuery(query);
+    long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
+        query.tenantId(),
+        query.deliveryStatus(),
+        query.eventType(),
+        query.eventKey(),
+        query.traceId(),
+        query.pageRequest());
     return page(pageRequest, total, rows, this::toOutboxDeliveryResponse);
   }
 
   @Override
   public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<ConsoleAiAuditLogEntity> rows =
-        opsMappers.consoleAiAuditLogMapper.selectByQuery(new ConsoleAiAuditLogQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getSessionId(),
-            request.getOperatorId(),
-            request.getPromptCategory(),
-            request.getPromptDecision(),
-            parseInstant(request.getFromTime(), "fromTime"),
-            parseInstant(request.getToTime(), "toTime"),
-            pageRequest));
-    long total = opsMappers.consoleAiAuditLogMapper.countByQuery(new ConsoleAiAuditLogQuery(
+    ConsoleAiAuditLogQuery query = new ConsoleAiAuditLogQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getSessionId(),
         request.getOperatorId(),
@@ -168,7 +155,9 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         request.getPromptDecision(),
         parseInstant(request.getFromTime(), "fromTime"),
         parseInstant(request.getToTime(), "toTime"),
-        pageRequest));
+        pageRequest);
+    List<ConsoleAiAuditLogEntity> rows = opsMappers.consoleAiAuditLogMapper.selectByQuery(query);
+    long total = opsMappers.consoleAiAuditLogMapper.countByQuery(query);
     return page(pageRequest, total, rows, entity -> {
       AiAuditLogResponse row = new AiAuditLogResponse();
       row.setId(entity.getId());

@@ -261,22 +261,25 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
             max,
             dispatcher.platformState());
       }
-    } else if (paused && !platformPaused && capacityResumeOk) {
-      // 容量 / 平台恢复 → resume 整个 assignment(含被 RETRY_LATER seek+pause 的瞬时背压分区)。WITHHOLD 不再 pause
-      // 分区(只记 commit 天花板),故不存在「resume 后重读 poison 忙旋转」的问题,无需排除任何分区。
-      Set<TopicPartition> assignment = consumer.assignment();
-      if (!assignment.isEmpty()) {
-        consumer.resume(assignment);
+    } else {
+      boolean canResumeConsumer = paused && !platformPaused && capacityResumeOk;
+      if (canResumeConsumer) {
+        // 容量 / 平台恢复 → resume 整个 assignment(含被 RETRY_LATER seek+pause 的瞬时背压分区)。WITHHOLD 不再 pause
+        // 分区(只记 commit 天花板),故不存在「resume 后重读 poison 忙旋转」的问题,无需排除任何分区。
+        Set<TopicPartition> assignment = consumer.assignment();
+        if (!assignment.isEmpty()) {
+          consumer.resume(assignment);
+        }
+        paused = false;
+        log.info(
+            "consumer resume: inFlight={} max={} platformState={} resumed={} (below {}*0.5"
+                + " hysteresis)",
+            inFlight,
+            max,
+            dispatcher.platformState(),
+            assignment.size(),
+            max);
       }
-      paused = false;
-      log.info(
-          "consumer resume: inFlight={} max={} platformState={} resumed={} (below {}*0.5"
-              + " hysteresis)",
-          inFlight,
-          max,
-          dispatcher.platformState(),
-          assignment.size(),
-          max);
     }
   }
 

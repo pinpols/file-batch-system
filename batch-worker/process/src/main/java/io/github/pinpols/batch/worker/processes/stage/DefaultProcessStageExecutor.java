@@ -155,9 +155,10 @@ public class DefaultProcessStageExecutor
   private String resolvePluginCode(ProcessJobContext context, PipelineStepDefinition computeStep) {
     if (EmptyChecks.isNotNull(computeStep)) {
       String implCode = computeStep.implCode();
-      if (Texts.hasText(implCode)
+      boolean hasExplicitComputePlugin = Texts.hasText(implCode)
           && !ProcessStage.COMPUTE.name().equals(implCode)
-          && !"PROCESS_COMPUTE".equals(implCode)) {
+          && !"PROCESS_COMPUTE".equals(implCode);
+      if (hasExplicitComputePlugin) {
         return implCode;
       }
     }
