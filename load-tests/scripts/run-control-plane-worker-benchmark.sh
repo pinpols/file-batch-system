@@ -41,13 +41,15 @@ on_exit_cleanup() {
   local rc=$?
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place for inspection"
-    exit $rc
+    exit "$rc"
   fi
   echo "Auto-cleanup RUN_ID=${RUN_ID} ..." >&2
+  cleanup_atomic_trigger >&2 || echo "WARN: atomic/trigger cleanup failed for RUN_ID=${RUN_ID}" >&2
+  # Trigger ingress is asynchronous. Remove its durable source first, then wait for and remove
+  # any instance that was already in flight when the trigger records were deleted.
   RUN_ID="$RUN_ID" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2 || \
     echo "WARN: cleanup-worker-load-data failed for RUN_ID=${RUN_ID}" >&2
-  cleanup_atomic_trigger >&2 || echo "WARN: atomic/trigger cleanup failed for RUN_ID=${RUN_ID}" >&2
-  exit $rc
+  exit "$rc"
 }
 trap on_exit_cleanup EXIT
 
@@ -246,6 +248,7 @@ run_trigger_pressure() {
 run_mixed_pressure() {
   local log_file="$LOG_DIR/mixed.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
+  local gatling_rc
 
   echo "==> mixed: modules=${MODULES_CSV}, duration=${TRIGGER_DURATION_SECONDS}s"
   echo "==> mixed rates: process=${PROCESS_LAUNCH_RPS}/s dispatch=${DISPATCH_LAUNCH_RPS}/s atomic=${ATOMIC_LAUNCH_RPS}/s trigger=${TRIGGER_LAUNCH_RPS}/s scheduler_read=${TRIGGER_READ_RPS}/s"
@@ -264,6 +267,9 @@ run_mixed_pressure() {
     local sampler_pid=""
   fi
 
+  # Keep collecting terminal-state evidence after a Gatling SLO failure. The caller receives the
+  # original exit code only after the sampler and asynchronous execution chain have settled.
+  set +e
   (
     cd "$LOAD_DIR"
     mvn gatling:test \
@@ -288,12 +294,15 @@ run_mixed_pressure() {
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       --batch-mode
   ) | tee "$log_file"
+  gatling_rc=${PIPESTATUS[0]}
+  set -e
 
   if [[ -n "$sampler_pid" ]]; then
     wait "$sampler_pid" || true
   fi
 
-  wait_run_terminal mixed
+  wait_run_terminal mixed || return 1
+  return "$gatling_rc"
 }
 
 write_params() {
@@ -547,7 +556,12 @@ case "$CONTROL_PLANE_MODE" in
     fi
     ;;
   parallel)
-    run_mixed_pressure || true
+    # Do not let the shell abort before the report and cleanup run. Preserve the measured SLO
+    # result so capacity-profile callers can enforce CAPACITY_STRICT=1.
+    set +e
+    run_mixed_pressure
+    BENCHMARK_RC=$?
+    set -e
     ;;
   *)
     echo "CONTROL_PLANE_MODE must be sequential or parallel" >&2
@@ -559,3 +573,4 @@ kafka_lag_snapshot > "$LOG_DIR/kafka-lag-after.txt"
 write_report
 
 echo "Control-plane worker benchmark report written: $REPORT"
+exit "${BENCHMARK_RC:-0}"

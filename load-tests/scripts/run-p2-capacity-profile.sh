@@ -45,6 +45,18 @@ psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
 }
 
+assert_no_residue() {
+  local cleanup_run_id="$1"
+  local remaining
+  remaining="$(psql_platform -tA -v run_id="$cleanup_run_id" \
+    -f "$LOAD_DIR/sql/p2-run-instance-residue-count.sql" 2>/dev/null || echo unknown)"
+  remaining="${remaining//[[:space:]]/}"
+  if [[ "$remaining" != "0" ]]; then
+    echo "capacity cleanup left ${remaining} job_instance rows for RUN_ID=${cleanup_run_id}" >&2
+    return 1
+  fi
+}
+
 cleanup() {
   local rc=$?
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
@@ -54,11 +66,19 @@ cleanup() {
     exit "$rc"
   fi
   if [[ "$RUN_10W_STORM" == "1" ]]; then
+    # The Trigger consumer can create an instance after the load generator has stopped. Clear
+    # trigger/outbox sources first, then let the worker cleanup wait for and remove that tail.
+    if ! psql_platform -v run_id="${RUN_ID}-10w" \
+        -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
+      rc=1
+    fi
     if ! RUN_ID="${RUN_ID}-10w" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2; then
       rc=1
     fi
   fi
-  if ! psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
+  # Fairness uses the profile run id directly. Keep it separate from the storm's -10w suffix.
+  if [[ "$RUN_FAIRNESS" == "1" ]] \
+      && ! psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
     rc=1
   fi
   if [[ "$RUN_FAIRNESS" == "1" && "$FAIRNESS_LOCK_HELD" == "1" ]]; then
@@ -70,12 +90,10 @@ cleanup() {
     fi
     release_fairness_lock
   fi
-  local remaining
-  remaining="$(psql_platform -tA -v run_id="$RUN_ID" \
-    -f "$LOAD_DIR/sql/p2-run-instance-residue-count.sql" 2>/dev/null || echo unknown)"
-  remaining="${remaining//[[:space:]]/}"
-  if [[ "$remaining" != "0" ]]; then
-    echo "capacity cleanup left ${remaining} job_instance rows for RUN_ID=${RUN_ID}" >&2
+  if [[ "$RUN_FAIRNESS" == "1" ]] && ! assert_no_residue "$RUN_ID"; then
+    rc=1
+  fi
+  if [[ "$RUN_10W_STORM" == "1" ]] && ! assert_no_residue "${RUN_ID}-10w"; then
     rc=1
   fi
   exit "$rc"
