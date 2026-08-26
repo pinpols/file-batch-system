@@ -37,6 +37,7 @@ class QuotaExceededStrategyLimiterTest {
   private JobInstanceMapper jobInstanceMapper;
   private OrchestratorConfigCacheService configCache;
   private QuotaRuntimeStateService quotaRuntime;
+  private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
   private ResourceSchedulerProperties resScheduler;
 
   @BeforeEach
@@ -44,6 +45,7 @@ class QuotaExceededStrategyLimiterTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     configCache = mock(OrchestratorConfigCacheService.class);
     quotaRuntime = mock(QuotaRuntimeStateService.class);
+    fairShareGroupAdmissionGuard = mock(FairShareGroupAdmissionGuard.class);
     BatchOrchestratorGovernanceProperties governance =
         mock(BatchOrchestratorGovernanceProperties.class);
     resScheduler = mock(ResourceSchedulerProperties.class);
@@ -53,8 +55,8 @@ class QuotaExceededStrategyLimiterTest {
     // ADR-041 Phase2.3:平台默认有界队列(QUEUE_DEFER),与生产 ResourceSchedulerProperties 默认一致。
     when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.QUEUE_DEFER);
 
-    limiter =
-        new DefaultConcurrencyLimiter(jobInstanceMapper, configCache, quotaRuntime, governance);
+    limiter = new DefaultConcurrencyLimiter(
+        jobInstanceMapper, fairShareGroupAdmissionGuard, configCache, quotaRuntime, governance);
   }
 
   @Test

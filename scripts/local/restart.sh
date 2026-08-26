@@ -196,7 +196,9 @@ is_containerized_module() {
   local name="$1" container
   container="$(container_name_for "$name")" || return 1
   docker info >/dev/null 2>&1 || return 1
-  docker inspect "$container" >/dev/null 2>&1
+  # docker compose 会保留 stopped / created 容器；它们不能说明当前服务由 Compose 托管。
+  # 若只按 inspect 是否存在判断，会跳过本地 JVM 的 stop/start，导致新构建的 jar 没有生效。
+  [[ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" == "true" ]]
 }
 
 compose_restart_module() {

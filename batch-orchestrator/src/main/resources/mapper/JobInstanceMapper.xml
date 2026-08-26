@@ -455,6 +455,17 @@
           )
     </select>
 
+    <!--
+      共享组硬上限：同一组内串行化「统计活跃实例 -> 推进实例 RUNNING」。
+      pg_advisory_xact_lock 随派发事务提交或回滚释放；事务外的预调度读不取得 admission，真正 release 前必须复核。
+    -->
+    <select id="acquireFairShareGroupAdvisoryLock" resultType="java.lang.Integer">
+        select 1 as locked
+        from (
+            select pg_advisory_xact_lock(hashtext('fair-share-group:' || #{fairShareGroup}))
+        ) l
+    </select>
+
     <!-- R7-A3-P1: 批量预聚合 group → count，替代 service 层 N+1 单条查询。 -->
     <select id="countActiveByFairShareGroups" resultType="java.util.Map">
         select tqp.fair_share_group as "fairShareGroup",

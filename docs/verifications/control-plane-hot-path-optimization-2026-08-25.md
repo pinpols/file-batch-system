@@ -163,15 +163,23 @@ PostgreSQL 锁等待、连接池占用、WAL、outbox backlog 和 JVM CPU/GC，�
 
 ### P2 多租户公平性夹具复核（2026-08-26）
 
-公平性 profile 现使用隔离的 `p2fa/p2fb/p2fc` 临时租户，避免历史 `ta/tb/tc` 的运行实例污染共享组计数。
-策略权重固定为 `3:1:1`，请求供给默认采用 `1:1:1` 并轮转提交；脚本在直接写入临时策略后通过已有
-Console Ops API 失效 quota cache，结束时删除实例、Trigger 请求、策略、作业定义和临时租户。
+公平性 profile 使用隔离的 `p2fa/p2fb/p2fc` 临时租户，避免历史 `ta/tb/tc` 的运行实例污染共享组计数。
+策略权重固定为 `3:1:1`，请求供给默认采用 `1:1:1` 并轮转提交。直接写入临时作业定义和 quota 策略后，脚本会通过已有
+Console Ops API 同时失效 job-definition 与 quota cache；结束时删除实例、Trigger 请求、策略、作业定义和临时租户。
+同一工作区的 profile 通过本地锁互斥，避免一轮 cleanup 删除另一轮的临时 fixture。
 
-600 条预验全部收敛为 `SUCCESS`，三租户各 200 条，自动清理后的 profile 残留、临时策略、临时租户均为 0。
-不能把该结果表述为“共享组 12 条硬上限已验证”：首个调度窗口完成了 95 条，说明当前
-`group_shared_max_running_jobs` 仍是读取活跃计数后的非原子判断，并发 launch 可以穿透上限。权重排序与
-最终非饥饿已得到覆盖；共享组的严格并发上限需另行实现事务内原子保留、终态/reclaim 释放与对账，完成前
-不运行或宣称 6,000 条的严格公平性容量结论。
+首轮 600 条预验暴露了真实缺陷：`group_shared_max_running_jobs` 仅做非原子 `count -> compare`，首个调度窗口完成
+95 条，穿透了配置的 12 条上限。修复后，共享组计数前取得 PostgreSQL 事务级 advisory lock，并将锁保持到
+`job_instance` 状态提交；WAITING 出队在其 `REQUIRES_NEW` 写事务内再次校验，不能再依赖事务外候选排序的旧判断。
+
+| 场景 | 结果 |
+|---|---|
+| 硬上限验证：120 条、组上限 12 | 120 `SUCCESS`，0 non-terminal；0.2 秒采样峰值 `READY + RUNNING = 12`；三租户各 40 条；临时数据清理为 0 |
+| 公平画像：600 条、组上限 96 | 600 `SUCCESS`，0 non-terminal；三租户各 200 条；采样峰值 87（未超过 96）；临时数据清理为 0 |
+
+低上限硬约束与高并发画像现在是两个独立参数：`FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS=12` 配合小规模请求验证原子
+admission；默认 `96` 与 6,000 请求 / 1,200 秒的画像预算匹配。上述结果是本地 JVM + Docker 基础设施的正确性与
+基础容量证据，不构成生产公平份额、吞吐或延迟承诺；6,000 条和多实例 worker 的生产级容量结论仍需在同构 staging 留档。
 
 本轮还补了 `job_instance(trigger_request_id)` 与 `job_step_instance(job_partition_id)` 索引迁移。前者避免
 删除 Trigger 请求时重复扫描运行实例表；后者覆盖分区删除时的 step 外键检查。它们同时使 Trigger 模式的

@@ -85,11 +85,11 @@ INSERT INTO batch.tenant_quota_policy (
   updated_at
 )
 VALUES
-  ('p2fa', 'p2-fairness-profile', 0, 0, 0, 3, 'p2-load-fairness', 0, 0, 'NONE', 12,
+  ('p2fa', 'p2-fairness-profile', 0, 0, 0, 3, 'p2-load-fairness', 0, 0, 'NONE', :fairness_group_cap,
    true, 'QUEUE_DEFER', 'Ephemeral P2 fairness load-test policy', now(), now()),
-  ('p2fb', 'p2-fairness-profile', 0, 0, 0, 1, 'p2-load-fairness', 0, 0, 'NONE', 12,
+  ('p2fb', 'p2-fairness-profile', 0, 0, 0, 1, 'p2-load-fairness', 0, 0, 'NONE', :fairness_group_cap,
    true, 'QUEUE_DEFER', 'Ephemeral P2 fairness load-test policy', now(), now()),
-  ('p2fc', 'p2-fairness-profile', 0, 0, 0, 1, 'p2-load-fairness', 0, 0, 'NONE', 12,
+  ('p2fc', 'p2-fairness-profile', 0, 0, 0, 1, 'p2-load-fairness', 0, 0, 'NONE', :fairness_group_cap,
    true, 'QUEUE_DEFER', 'Ephemeral P2 fairness load-test policy', now(), now())
 ON CONFLICT (tenant_id, policy_code) DO UPDATE SET
   max_running_jobs_per_tenant = EXCLUDED.max_running_jobs_per_tenant,
