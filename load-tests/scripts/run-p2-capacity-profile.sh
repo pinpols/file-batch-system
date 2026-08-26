@@ -48,6 +48,8 @@ psql_platform() {
 cleanup() {
   local rc=$?
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
+    # 保留 fixture 只用于人工取证，不能遗留本地执行锁，否则后续 profile 会被永久误判为并发运行。
+    release_fairness_lock
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place"
     exit "$rc"
   fi
