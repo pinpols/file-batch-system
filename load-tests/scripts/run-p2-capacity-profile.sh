@@ -14,7 +14,10 @@ STORM_RPS="${STORM_RPS:-200}"
 STORM_WAIT_SECONDS="${STORM_WAIT_SECONDS:-2400}"
 FAIRNESS_TOTAL_REQUESTS="${FAIRNESS_TOTAL_REQUESTS:-6000}"
 FAIRNESS_CONCURRENCY="${FAIRNESS_CONCURRENCY:-96}"
-FAIRNESS_WEIGHTS="${FAIRNESS_WEIGHTS:-ta:3,tb:1,tc:1}"
+# The fixture applies the fixed admission policy ta:tb:tc = 3:1:1. Submit an
+# equal tenant demand by default, otherwise the result cannot distinguish the
+# configured share from a tenant simply sending more work.
+FAIRNESS_LAUNCH_WEIGHTS="${FAIRNESS_LAUNCH_WEIGHTS:-p2fa:1,p2fb:1,p2fc:1}"
 FAIRNESS_WAIT_SECONDS="${FAIRNESS_WAIT_SECONDS:-1200}"
 # Default to the real trigger ingress so every request creates its own
 # trigger_request before the asynchronous orchestrator launch. Set
@@ -51,6 +54,14 @@ cleanup() {
   if ! psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
     rc=1
   fi
+  if [[ "$RUN_FAIRNESS" == "1" ]]; then
+    if ! psql_platform -f "$LOAD_DIR/sql/cleanup-p2-multitenant-fairness-policy.sql" >&2; then
+      rc=1
+    fi
+    if ! evict_fairness_policy_cache >&2; then
+      rc=1
+    fi
+  fi
   local remaining
   remaining="$(psql_platform -tA -v run_id="$RUN_ID" \
     -f "$LOAD_DIR/sql/p2-run-instance-residue-count.sql" 2>/dev/null || echo unknown)"
@@ -64,9 +75,19 @@ cleanup() {
 trap cleanup EXIT
 
 require_tooling() {
+  command -v curl >/dev/null || { echo "curl is required" >&2; exit 2; }
   command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
   command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
   batch_require_python
+}
+
+evict_fairness_policy_cache() {
+  local tenant_id
+  for tenant_id in p2fa p2fb p2fc; do
+    curl --fail --silent --show-error --request POST \
+      "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-quota-policies?tenantId=${tenant_id}" \
+      >/dev/null
+  done
 }
 
 write_report_header() {
@@ -131,14 +152,16 @@ PY
 }
 
 run_fairness() {
-  echo "==> prepare ta/tb/tc atomic job definitions"
+  echo "==> prepare isolated p2fa/p2fb/p2fc atomic job definitions"
   psql_platform -f "$LOAD_DIR/sql/prepare-p2-multitenant-atomic.sql"
-  echo "==> multi-tenant fairness run_id=${RUN_ID}, total=${FAIRNESS_TOTAL_REQUESTS}, weights=${FAIRNESS_WEIGHTS}"
+  echo "==> evict p2fa/p2fb/p2fc quota-policy cache after direct SQL setup"
+  evict_fairness_policy_cache
+  echo "==> multi-tenant fairness run_id=${RUN_ID}, total=${FAIRNESS_TOTAL_REQUESTS}, policy_weights=p2fa:3,p2fb:1,p2fc:1, launch_weights=${FAIRNESS_LAUNCH_WEIGHTS}"
   set +e
   RUN_ID="$RUN_ID" \
   FAIRNESS_TOTAL_REQUESTS="$FAIRNESS_TOTAL_REQUESTS" \
   FAIRNESS_CONCURRENCY="$FAIRNESS_CONCURRENCY" \
-  FAIRNESS_WEIGHTS="$FAIRNESS_WEIGHTS" \
+  FAIRNESS_LAUNCH_WEIGHTS="$FAIRNESS_LAUNCH_WEIGHTS" \
   FAIRNESS_WAIT_SECONDS="$FAIRNESS_WAIT_SECONDS" \
   FAIRNESS_MODE="$FAIRNESS_MODE" \
   TRIGGER_BASE_URL="$TRIGGER_BASE_URL" \

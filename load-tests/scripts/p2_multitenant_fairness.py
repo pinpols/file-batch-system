@@ -18,7 +18,7 @@ INTERNAL_SECRET = os.environ["INTERNAL_SECRET"]
 BIZ_DATE = os.environ["BIZ_DATE"]
 TOTAL = int(os.environ.get("FAIRNESS_TOTAL_REQUESTS", "6000"))
 CONCURRENCY = int(os.environ.get("FAIRNESS_CONCURRENCY", "96"))
-WEIGHTS = os.environ.get("FAIRNESS_WEIGHTS", "ta:3,tb:1,tc:1")
+LAUNCH_WEIGHTS = os.environ.get("FAIRNESS_LAUNCH_WEIGHTS", "p2fa:1,p2fb:1,p2fc:1")
 WAIT_SECONDS = int(os.environ.get("FAIRNESS_WAIT_SECONDS", "1200"))
 # The trigger endpoint creates the trigger_request that the asynchronous
 # orchestrator consumer requires. Direct orchestrator mode is retained for
@@ -26,18 +26,21 @@ WAIT_SECONDS = int(os.environ.get("FAIRNESS_WAIT_SECONDS", "1200"))
 MODE = os.environ.get("FAIRNESS_MODE", "trigger")
 
 
-def parse_weights(raw):
+def parse_launch_weights(raw):
     out = []
     for item in raw.split(","):
         tenant, weight = item.split(":", 1)
-        out.append((tenant.strip(), int(weight)))
+        tenant = tenant.strip()
+        if not tenant or any(not (char.isalnum() or char in "_-") for char in tenant):
+            raise ValueError(f"invalid fairness tenant: {tenant!r}")
+        out.append((tenant, int(weight)))
     if not out:
-        raise ValueError("empty FAIRNESS_WEIGHTS")
+        raise ValueError("empty FAIRNESS_LAUNCH_WEIGHTS")
     return out
 
 
 def planned_requests():
-    weights = parse_weights(WEIGHTS)
+    weights = parse_launch_weights(LAUNCH_WEIGHTS)
     weight_sum = sum(weight for _, weight in weights)
     counts = []
     used = 0
@@ -118,36 +121,53 @@ def psql(sql):
     return subprocess.check_output(cmd, env=env, text=True).strip()
 
 
-def terminal_counts():
+def terminal_counts(tenants):
+    tenant_list = ",".join(f"'{tenant}'" for tenant in tenants)
     if MODE == "orchestrator":
         sql = f"""
-        select count(*) || '|' ||
+        select tenant_id || '|' || count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'))
         from batch.job_instance
-        where tenant_id in ('ta','tb','tc')
+        where tenant_id in ({tenant_list})
           and params_snapshot::text like '%{RUN_ID}%'
+        group by tenant_id
+        order by tenant_id
         """
     else:
         sql = f"""
-        select count(*) || '|' ||
+        select tr.tenant_id || '|' || count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'))
         from batch.trigger_request tr
         left join batch.job_instance ji on ji.id = tr.related_job_instance_id
-        where tr.tenant_id in ('ta','tb','tc')
+        where tr.tenant_id in ({tenant_list})
           and tr.request_id like '{RUN_ID}%'
+        group by tr.tenant_id
+        order by tr.tenant_id
         """
     raw = psql(sql)
-    total, terminal = raw.split("|")
-    return int(total), int(terminal)
+    counts = {}
+    for line in raw.splitlines():
+        tenant, total, terminal = line.split("|")
+        counts[tenant] = (int(total), int(terminal))
+    return counts
+
+
+def interleaved_tasks(plan):
+    # Preserve equal ingress opportunity. A tenant's configured fairness score,
+    # not client-side queue ordering, must decide who obtains constrained slots.
+    counts = dict(plan)
+    for seq in range(max(counts.values(), default=0)):
+        for tenant, _ in plan:
+            if seq < counts[tenant]:
+                yield tenant, seq
 
 
 def main():
     plan = planned_requests()
     print(f"plan={plan} total={TOTAL} concurrency={CONCURRENCY} mode={MODE}", flush=True)
     tasks = queue.Queue()
-    for tenant, count in plan:
-        for seq in range(count):
-            tasks.put((tenant, seq))
+    for tenant, seq in interleaved_tasks(plan):
+        tasks.put((tenant, seq))
 
     results = []
 
@@ -190,8 +210,13 @@ def main():
 
     deadline = time.time() + WAIT_SECONDS
     while time.time() < deadline:
-        total, terminal = terminal_counts()
-        print(f"terminal={terminal}/{total}", flush=True)
+        counts = terminal_counts([tenant for tenant, _ in plan])
+        total = sum(item[0] for item in counts.values())
+        terminal = sum(item[1] for item in counts.values())
+        by_tenant = ",".join(
+            f"{tenant}:{item[1]}/{item[0]}" for tenant, item in sorted(counts.items())
+        )
+        print(f"terminal={terminal}/{total} tenants={by_tenant}", flush=True)
         if total >= ok and terminal >= total:
             return 0
         time.sleep(5)

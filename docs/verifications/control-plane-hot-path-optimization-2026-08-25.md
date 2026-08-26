@@ -160,3 +160,19 @@ Valkey；orchestrator、trigger、console 和五类 worker 均由本地 JVM 启�
 积压恢复证据，不应表述为低延迟容量承诺。该结果也不能直接外推到生产：负载为轻量 SQL，未包含
 多实例、慢外部依赖、复杂 DAG、补偿或生产数据库规格。后续若要提升 50 RPS 的入口尾延迟，应先采集
 PostgreSQL 锁等待、连接池占用、WAL、outbox backlog 和 JVM CPU/GC，再决定是否改动写模型。
+
+### P2 多租户公平性夹具复核（2026-08-26）
+
+公平性 profile 现使用隔离的 `p2fa/p2fb/p2fc` 临时租户，避免历史 `ta/tb/tc` 的运行实例污染共享组计数。
+策略权重固定为 `3:1:1`，请求供给默认采用 `1:1:1` 并轮转提交；脚本在直接写入临时策略后通过已有
+Console Ops API 失效 quota cache，结束时删除实例、Trigger 请求、策略、作业定义和临时租户。
+
+600 条预验全部收敛为 `SUCCESS`，三租户各 200 条，自动清理后的 profile 残留、临时策略、临时租户均为 0。
+不能把该结果表述为“共享组 12 条硬上限已验证”：首个调度窗口完成了 95 条，说明当前
+`group_shared_max_running_jobs` 仍是读取活跃计数后的非原子判断，并发 launch 可以穿透上限。权重排序与
+最终非饥饿已得到覆盖；共享组的严格并发上限需另行实现事务内原子保留、终态/reclaim 释放与对账，完成前
+不运行或宣称 6,000 条的严格公平性容量结论。
+
+本轮还补了 `job_instance(trigger_request_id)` 与 `job_step_instance(job_partition_id)` 索引迁移。前者避免
+删除 Trigger 请求时重复扫描运行实例表；后者覆盖分区删除时的 step 外键检查。它们同时使 Trigger 模式的
+压测清理能够按 `trigger_request` 关联实例，而不再只依赖 `params_snapshot` 中的 `runId`。
