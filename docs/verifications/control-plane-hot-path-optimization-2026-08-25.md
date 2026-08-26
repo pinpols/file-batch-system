@@ -136,3 +136,27 @@ MinIO、Valkey。每档 15 秒，以 `atomic_sql_demo` 发起唯一幂等键的 
 为支持纯入口画像，`SchedulingBacklogUnderLoadSimulation` 现在仅在
 `scheduling.read.rps > 0` 时登记 scheduler-read p99 断言。此前 `0` 会对不存在的请求详情断言并让
 Gatling 误报失败；常规读写混压的读 p99 门槛未改变。
+
+### 当前代码 1k Atomic 完整链路复验（2026-08-26）
+
+在合入非 DAG 聚合优化、Atomic listener 并发对齐和 batch-claim 容量启动校验后，使用既有
+`run-control-plane-worker-benchmark.sh` 重跑完整链路。Docker 只提供 PostgreSQL、Kafka、MinIO、
+Valkey；orchestrator、trigger、console 和五类 worker 均由本地 JVM 启动。每档均以
+`atomic_sql_demo` 发起 1,000 个唯一幂等键请求；压测期间仅临时提高本地默认租户配额，结束后恢复
+`8 job / 16 partition / 80 QPS / REJECT`，脚本自动清理本轮实例、任务、outbox 和业务 seed。
+
+| 档位 | 入口请求 | 终态 | 入口 p95 | 实例终态 p95 | task claim p95 | task 执行 p95 | Kafka lag |
+|---|---:|---|---:|---:|---:|---:|---|
+| 25 RPS，40 秒 | 1,000 | 1,000 `SUCCESS`，0 failed，0 non-terminal | 31 ms | 2.871 s | 2.847 s | 34 ms | 前后均为 0 |
+| 50 RPS，20 秒 | 1,000 | 1,000 `SUCCESS`，0 failed，0 non-terminal | 2.062 s | 5.291 s | 5.235 s | 74 ms | 前后均为 0 |
+
+原始报告：
+
+- `load-tests/target/control-plane-worker-report-hotpath-20260826080210-1k-25rps.md`
+- `load-tests/target/control-plane-worker-report-hotpath-20260826080001-1k.md`
+
+结论：25 RPS 在当前本机完整链路下满足 500 ms 入口 p95 门槛，且所有任务和实例均收敛；50 RPS
+仍保持正确性、终态收敛和 lag 清零，但入口 p95 超过该门槛。因此 50 RPS 只能作为本机的正确性与
+积压恢复证据，不应表述为低延迟容量承诺。该结果也不能直接外推到生产：负载为轻量 SQL，未包含
+多实例、慢外部依赖、复杂 DAG、补偿或生产数据库规格。后续若要提升 50 RPS 的入口尾延迟，应先采集
+PostgreSQL 锁等待、连接池占用、WAL、outbox backlog 和 JVM CPU/GC，再决定是否改动写模型。
