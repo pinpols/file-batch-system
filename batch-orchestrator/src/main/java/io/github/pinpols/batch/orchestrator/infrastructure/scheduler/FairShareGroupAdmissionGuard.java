@@ -20,10 +20,11 @@ class FairShareGroupAdmissionGuard {
   private final JobInstanceMapper jobInstanceMapper;
 
   boolean hasCapacity(TenantQuotaPolicyEntity quotaPolicy) {
-    if (quotaPolicy == null
-        || !Texts.hasText(quotaPolicy.fairShareGroup())
-        || quotaPolicy.groupSharedMaxRunningJobs() == null
-        || quotaPolicy.groupSharedMaxRunningJobs() <= 0) {
+    boolean sharedGroupHardCapEnabled = quotaPolicy != null
+        && Texts.hasText(quotaPolicy.fairShareGroup())
+        && quotaPolicy.groupSharedMaxRunningJobs() != null
+        && quotaPolicy.groupSharedMaxRunningJobs() > 0;
+    if (!sharedGroupHardCapEnabled) {
       return true;
     }
     jobInstanceMapper.acquireFairShareGroupAdvisoryLock(quotaPolicy.fairShareGroup());
