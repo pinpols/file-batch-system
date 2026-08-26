@@ -95,6 +95,14 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
         "t1",
         "req-001");
     assertThat(outboxCount).isEqualTo(1);
+
+    var launchStatus = triggerService.findLaunchStatus("t1", "idem-001");
+    assertThat(launchStatus.requestId()).isEqualTo("req-001");
+    assertThat(launchStatus.traceId()).isEqualTo("trace-001");
+    assertThat(launchStatus.requestStatus()).isEqualTo("ACCEPTED");
+    assertThat(launchStatus.relatedJobInstanceId()).isNull();
+    assertThat(launchStatus.instanceStatus()).isNull();
+    assertThat(launchStatus.updatedAt()).isNotNull();
   }
 
   @Test

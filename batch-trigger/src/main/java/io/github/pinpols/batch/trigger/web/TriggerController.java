@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
@@ -15,10 +16,12 @@ import io.github.pinpols.batch.trigger.web.request.TriggerCatchUpRequest;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -50,6 +53,18 @@ public class TriggerController {
     TriggerLaunchCommand launchCommand =
         new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId);
     return CommonResponse.success(triggerService.launch(launchCommand));
+  }
+
+  /**
+   * 查询异步 launch 的确定性状态。
+   *
+   * <p>客户端在 POST 超时后使用原幂等键查询，避免把不确定的超时结果再次当作新请求提交。
+   */
+  @GetMapping("/launch/status")
+  public CommonResponse<TriggerLaunchStatus> launchStatus(
+      @RequestParam String tenantId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
+    return CommonResponse.success(triggerService.findLaunchStatus(tenantId, idempotencyKey));
   }
 
   @PostMapping("/catch-up/approve")

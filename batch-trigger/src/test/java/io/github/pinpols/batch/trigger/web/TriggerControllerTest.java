@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.service.TriggerService;
@@ -74,6 +76,24 @@ class TriggerControllerTest {
     assertThat(command.idempotencyKey()).isEqualTo("idem-001");
     assertThat(command.requestId()).startsWith("req-");
     assertThat(command.traceId()).hasSize(32);
+  }
+
+  @Test
+  void shouldReturnLaunchStatusByTenantAndIdempotencyKey() throws Exception {
+    when(triggerService.findLaunchStatus("t1", "idem-status"))
+        .thenReturn(
+            new TriggerLaunchStatus("req-001", "trace-001", "LAUNCHED", 42L, "SUCCESS", null));
+
+    mockMvc
+        .perform(get("/api/triggers/launch/status")
+            .queryParam("tenantId", "t1")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-status"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.requestId").value("req-001"))
+        .andExpect(jsonPath("$.data.requestStatus").value("LAUNCHED"))
+        .andExpect(jsonPath("$.data.relatedJobInstanceId").value(42))
+        .andExpect(jsonPath("$.data.instanceStatus").value("SUCCESS"));
   }
 
   @Test
