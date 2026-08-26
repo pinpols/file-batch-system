@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
+import io.github.pinpols.batch.trigger.config.TriggerApiAdmissionGuard;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -35,6 +36,7 @@ public class TriggerController {
 
   private final TriggerService triggerService;
   private final TriggerGracefulShutdown gracefulShutdown;
+  private final TriggerApiAdmissionGuard apiAdmissionGuard;
 
   @PostMapping("/launch")
   public CommonResponse<LaunchResponse> launch(
@@ -52,7 +54,8 @@ public class TriggerController {
     String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
     TriggerLaunchCommand launchCommand =
         new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId);
-    return CommonResponse.success(triggerService.launch(launchCommand));
+    return apiAdmissionGuard.execute(
+        () -> CommonResponse.success(triggerService.launch(launchCommand)));
   }
 
   /**

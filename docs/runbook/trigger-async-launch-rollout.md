@@ -27,6 +27,17 @@ curl --fail --silent \
 该接口只返回最小状态投影，不返回原始参数和幂等键；所有访问仍要求 `X-Internal-Secret`。它用于消除
 超时后的“是否已创建”歧义，不改变现有 outbox、Kafka 去重和 job_instance 状态机。
 
+### 0.0.1 入口 admission 配置
+
+手工 `POST /api/triggers/launch` 还受每个 Trigger 实例的本地并发闸门保护：
+`BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY` 默认 `64`。拿不到许可的请求立即返回 `RATE_LIMITED`（HTTP
+429），不会进入数据库事务；Quartz 定时触发、outbox relay 和内部 scheduled launch 不受影响。
+该值应按实例 Hikari 连接池、数据库预算和副本数配置，不能把各副本的值相加当作全局容量；全局业务上限仍由
+租户 quota、Kafka 和 orchestrator admission 共同决定。
+
+客户端收到 429 时应沿用原幂等键查询上述状态接口，按 `ACCEPTED/LAUNCHED` 决定等待还是继续，不要为同一业务
+动作生成新的幂等键。
+
 ## 0. 前置检查清单
 
 切换前必须确认(checked = ✅):

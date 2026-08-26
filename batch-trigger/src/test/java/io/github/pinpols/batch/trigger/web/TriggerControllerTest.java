@@ -15,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.trigger.config.TriggerApiAdmissionGuard;
+import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
@@ -42,8 +44,10 @@ class TriggerControllerTest {
 
   @BeforeEach
   void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new TriggerController(triggerService, triggerGracefulShutdown))
+    mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(
+            triggerService,
+            triggerGracefulShutdown,
+            new TriggerApiAdmissionGuard(new TriggerRuntimeProperties())))
         .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
         .setMessageConverters(new JacksonJsonHttpMessageConverter())
         .build();
