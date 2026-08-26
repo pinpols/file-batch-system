@@ -39,6 +39,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -80,32 +81,34 @@ final class RemoteFilesystemDispatchSupport {
   // 池满即拒绝)。拒绝时该次 dispatch 走现有失败路径快速失败（见 copyWithTimeout 的
   // RejectedExecutionException 分支），不再无限堆积等待线程。
   private static final int NAS_COPY_MAX_THREADS = 8;
-  private static final ExecutorService NAS_COPY_EXECUTOR = new ThreadPoolExecutor(
-      0,
-      NAS_COPY_MAX_THREADS,
-      60L,
-      TimeUnit.SECONDS,
-      new SynchronousQueue<>(),
-      new ThreadFactory() {
-        private final AtomicLong index = new AtomicLong();
-
-        @Override
-        public Thread newThread(Runnable r) {
-          Thread t = new Thread(r, "nas-copy-" + index.incrementAndGet());
-          t.setDaemon(true);
-          return t;
-        }
-      },
-      new ThreadPoolExecutor.AbortPolicy());
+  private static final AtomicLong NAS_COPY_THREAD_INDEX = new AtomicLong();
+  private static final AtomicReference<ExecutorService> NAS_COPY_EXECUTOR =
+      new AtomicReference<>(newNasCopyExecutor());
 
   private RemoteFilesystemDispatchSupport() {}
+
+  static void shutdownNasCopyExecutor() {
+    ExecutorService executor = NAS_COPY_EXECUTOR.get();
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+        log.warn("NAS copy executor did not drain within 5s; forcing interruption");
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException ex) {
+      SwallowedExceptionLogger.info(
+          RemoteFilesystemDispatchSupport.class, "catch:InterruptedException", ex);
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
+  }
 
   /** R2-P1-10：有超时保护的 Files.copy。stale NFS mount 时不会让派发线程永久阻塞。 */
   private static void copyWithTimeout(
       InputStream in, Path target, DispatchRuntimeProperties properties) throws IOException {
     Future<?> future;
     try {
-      future = NAS_COPY_EXECUTOR.submit(() -> {
+      future = nasCopyExecutor().submit(() -> {
         try {
           Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ioe) {
@@ -149,6 +152,40 @@ final class RemoteFilesystemDispatchSupport {
         throw ioe2;
       }
       throw new IOException("NAS Files.copy failed", cause == null ? ee : cause);
+    }
+  }
+
+  private static ExecutorService nasCopyExecutor() {
+    while (true) {
+      ExecutorService current = NAS_COPY_EXECUTOR.get();
+      if (!current.isShutdown() && !current.isTerminated()) {
+        return current;
+      }
+      ExecutorService replacement = newNasCopyExecutor();
+      if (NAS_COPY_EXECUTOR.compareAndSet(current, replacement)) {
+        return replacement;
+      }
+      replacement.shutdownNow();
+    }
+  }
+
+  private static ExecutorService newNasCopyExecutor() {
+    return new ThreadPoolExecutor(
+        0,
+        NAS_COPY_MAX_THREADS,
+        60L,
+        TimeUnit.SECONDS,
+        new SynchronousQueue<>(),
+        new NasCopyThreadFactory(),
+        new ThreadPoolExecutor.AbortPolicy());
+  }
+
+  private static final class NasCopyThreadFactory implements ThreadFactory {
+    @Override
+    public Thread newThread(Runnable r) {
+      Thread t = new Thread(r, "nas-copy-" + NAS_COPY_THREAD_INDEX.incrementAndGet());
+      t.setDaemon(true);
+      return t;
     }
   }
 

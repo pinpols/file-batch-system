@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -147,6 +148,18 @@ class OpenLineageEmitterTest {
   }
 
   @Test
+  void shutdownStopsExecutorWhenEnabled() throws ReflectiveOperationException {
+    OpenLineageEmitter emitter = new OpenLineageEmitter(
+        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+    ExecutorService executor = executorOf(emitter);
+
+    assertThat(executor.isShutdown()).isFalse();
+    emitter.shutdown();
+
+    assertThat(executor.isShutdown()).isTrue();
+  }
+
+  @Test
   void deterministicRunId_isStableAndUuid() {
     String a = OpenLineageEmitter.deterministicRunId(42L);
     String b = OpenLineageEmitter.deterministicRunId(42L);
@@ -175,5 +188,12 @@ class OpenLineageEmitterTest {
         storagePath,
         "GENERATED",
         "trace-abc");
+  }
+
+  private static ExecutorService executorOf(OpenLineageEmitter emitter)
+      throws ReflectiveOperationException {
+    var field = OpenLineageEmitter.class.getDeclaredField("executor");
+    field.setAccessible(true);
+    return (ExecutorService) field.get(emitter);
   }
 }

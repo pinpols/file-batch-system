@@ -119,6 +119,16 @@ class ConfigDriftGuardTest {
   }
 
   @Test
+  void shedLockRedisNamespaceDefaultsToApplicationName() throws IOException {
+    Map<String, Object> flat = flatten(loadYaml(baselineYml()));
+
+    assertThat(flat.get("batch.shedlock.redis.key-prefix-env"))
+        .as("ShedLock Redis namespace must default to spring.application.name; blank falls back to"
+            + " 'default' for every service and can cross-lock unrelated modules sharing Redis")
+        .isEqualTo("${BATCH_SHEDLOCK_REDIS_ENV:${spring.application.name:default}}");
+  }
+
+  @Test
   void serviceModulesDoNotRedefineBaselineOwnedKeys() throws IOException {
     Path root = repoRoot();
     Map<String, String> drift = new LinkedHashMap<>();
