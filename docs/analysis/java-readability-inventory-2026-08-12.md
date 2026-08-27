@@ -7,16 +7,16 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2204 |
+| 生产 Java 源文件 | 2209 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2037 |
-| 含 Map 的源文件 | 441 |
+| `Map<String, Object>` 出现次数 | 2045 |
+| 含 Map 的源文件 | 442 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 209 |
-| 含 suppression 的源文件 | 160 |
+| `@SuppressWarnings` | 212 |
+| 含 suppression 的源文件 | 162 |
 | `@Configuration` 类 | 47 |
-| 大于等于 700 行的源文件 | 7 |
+| 大于等于 700 行的源文件 | 8 |
 | `PMD.ExcessiveParameterList` 显式例外 | 26 |
 
 ## 模块源文件
@@ -24,7 +24,7 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 293 |
-| `batch-console-api` | 863 |
+| `batch-console-api` | 868 |
 | `batch-orchestrator` | 519 |
 | `batch-trigger` | 61 |
 | `batch-worker` | 369 |
@@ -40,6 +40,7 @@
 
 | 文件 | 行数 |
 |---|---:|
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1106 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 775 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 765 |

@@ -40,7 +40,7 @@
 - 不通过配置包创建业务表结构；只校验业务表和列存在。
 - 不把归档、巡检、观测、告警事件等环境治理配置放入配置包。
 - **不把 `alert_routing_config` 放入配置包**：告警路由（team / receiver / severity → channel 映射）是**环境侧治理资产**，prod / staging / dev 各有自己的 oncall 拓扑，跨环境照搬反而是反模式。`alert_routing` 已有前端独立 CRUD 页 `/observability/alert-routings`（`AlertRoutingPanel.vue`）+ 后端 `ConsoleAlertRoutingController` 单条 CRUD API，**不再提供 Excel 批量入口**（规模小、强环境相关，Excel 批量没价值）。
-- **不解决环境参数 / 配置骨架分层**：本设计接受"配置包混合了部分环境特定字段（如 `resource_queue.max_running_jobs` / `file_channel_config.endpoint` / `business_calendar.holidays`）"，通过字段标识 + preview warning 提示用户 review；彻底的 logical skeleton + per-env overlay 分层属于另一份 ADR。
+- **Excel 不拆成 logical skeleton + per-env overlay 双文件格式**：本设计仍保持 11-sheet 单包，避免让一线租户维护两份 Excel。轻量的 base package + tenant overlay 已在 Console REST 层落地：`/api/console/config/tenant-overlay/preview` 以基础租户为 base，按目标租户生成只含 add/update 的 `overlayBundle`，并对 `file_channel`、`resource_queue`、`batch_window`、`business_calendar` 等环境特定配置给出 review 提示。
 
 ## 9+2 Sheet 范围
 
@@ -572,4 +572,10 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 3. 目标环境 preview，确认无 ERROR / WARNING 后 apply。
 4. 单独走 `/observability/alert-routings` 入口配置目标 env 的告警路由。
 
-> 长期方案：见 ADR-TBD「配置包 logical skeleton + per-env overlay」（待立项）。
+### Base Package + Tenant Overlay 轻量方案
+
+- 基础包仍由一个基准租户承载，包含 job / pipeline / workflow / template / channel / queue / calendar / window 等完整骨架。
+- 租户差异不通过第二份 Excel 表达，而由 `POST /api/console/config/tenant-overlay/preview` 计算：目标租户缺失项为 `ADD`，内容不同为 `UPDATE`，相同项默认不展示，目标租户独有项只作为 `DELETE_CANDIDATE` 提示且不自动删除。
+- job 粒度复制和预览使用 dependency-aware bundle：先取 job，再取关联 pipeline / workflow / queue / window / calendar，并从 job default params、pipeline step params、workflow node params 递归识别 `templateCode` / `fileTemplateCode` / `channelCode` / `fileChannelCode` 等显式引用；无显式引用时才保留旧 `bizType` template/channel 兜底。
+- 同一 job 多租户配置漂移由 `POST /api/console/config/tenant-config-matrix` 展示，重点看 schedule、queue、calendar、window、workerGroup、template、channel。
+- 边界：不做通用配置中心，不做跨租户自动删除，不把 alert routing / quota / worker registry 重新塞回 Excel。

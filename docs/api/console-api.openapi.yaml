@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-08-21"
+  x-last-updated: "2026-08-27"
   x-changelog:
+    - date: "2026-08-27"
+      summary: "新增租户配置治理接口：POST /api/console/config/tenant-copy 支持 jobCodes dependency-aware 最小复制包；新增 /tenant-copy/preview、/tenant-overlay/preview、/tenant-config-matrix，支持 base package + tenant overlay 差异包、跨租户 job 配置矩阵。"
     - date: "2026-08-21"
       summary: "Console tenant-package Excel、workflow/pipeline definition Controller 仅同步内部 service/fixture 命名与注释治理；HTTP 路径、请求/响应字段、鉴权、状态码和 wire schema 均不变"
     - date: "2026-08-08"
@@ -7914,6 +7916,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
 
+  /api/console/config/tenant-copy/preview:
+    post:
+      tags: [Config]
+      summary: Preview cross-tenant configuration copy impact
+      description: >
+        Read-only preview for cross-tenant config copy. Returns add/update/unchanged/delete-candidate
+        items, environment-specific review hints, and a target-specific overlay bundle.
+      operationId: previewTenantConfigCopy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigPreviewRequest'
+      responses:
+        '200':
+          description: Read-only copy preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigDiffPreviewResponse'
+
+  /api/console/config/tenant-overlay/preview:
+    post:
+      tags: [Config]
+      summary: Preview base-package plus tenant overlay
+      description: >
+        Read-only preview that treats sourceTenantId as the base package tenant and returns the
+        target tenant overlay bundle containing only add/update differences.
+      operationId: previewTenantConfigOverlay
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigPreviewRequest'
+      responses:
+        '200':
+          description: Read-only overlay preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigDiffPreviewResponse'
+
+  /api/console/config/tenant-config-matrix:
+    post:
+      tags: [Config]
+      summary: Compare same job config across tenants
+      description: >
+        Returns a tenant/job matrix for schedule, queue, window, calendar, template and channel drift.
+      operationId: compareTenantJobConfigMatrix
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigMatrixRequest'
+      responses:
+        '200':
+          description: Same-job cross-tenant matrix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigMatrixResponse'
+
   /api/console/ops/governance:
     get:
       tags: [Governance]
@@ -15650,6 +15723,14 @@ components:
           items:
             $ref: '#/components/schemas/TenantConfigCopyType'
           description: 空表示复制全部 10 类
+        jobCodes:
+          type: array
+          maxItems: 100
+          description: 非空时按 jobCode 构建 dependency-aware 最小配置包，而不是复制整类配置。
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
         mode:
           type: string
           enum: [SKIP_EXISTING, UPSERT]
@@ -15657,6 +15738,223 @@ components:
         dryRun:
           type: boolean
           default: false
+
+    TenantConfigPreviewRequest:
+      type: object
+      required: [sourceTenantId, targetTenantIds]
+      description: |
+        Read-only config diff request. `jobCodes` narrows the source to dependency-aware job bundles;
+        omitted `configTypes` means all tenant config types.
+      properties:
+        sourceTenantId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        targetTenantIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        configTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigCopyType'
+        jobCodes:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+        includeUnchanged:
+          type: boolean
+          default: false
+        includeDeleteCandidates:
+          type: boolean
+          default: false
+
+    TenantConfigMatrixRequest:
+      type: object
+      required: [tenantIds, jobCodes]
+      properties:
+        tenantIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        jobCodes:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+        baselineTenantId:
+          type: string
+          maxLength: 64
+          nullable: true
+
+    TenantConfigDiffPreviewResponse:
+      type: object
+      properties:
+        sourceTenantId:
+          type: string
+        targetTenantIds:
+          type: array
+          items:
+            type: string
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigDiffResult'
+        summary:
+          $ref: '#/components/schemas/TenantConfigDiffSummary'
+
+    TenantConfigDiffResult:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        addCount:
+          type: integer
+        updateCount:
+          type: integer
+        unchangedCount:
+          type: integer
+        deleteCandidateCount:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigDiffItem'
+        impacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigImpactItem'
+        overlayBundle:
+          $ref: '#/components/schemas/ConfigSyncBundlePayload'
+
+    TenantConfigDiffItem:
+      type: object
+      properties:
+        configType:
+          $ref: '#/components/schemas/TenantConfigCopyType'
+        configKey:
+          type: string
+        action:
+          type: string
+          enum: [ADD, UPDATE, UNCHANGED, DELETE_CANDIDATE]
+        reason:
+          type: string
+        source:
+          type: object
+          additionalProperties: true
+        target:
+          type: object
+          additionalProperties: true
+
+    TenantConfigImpactItem:
+      type: object
+      properties:
+        impactType:
+          type: string
+        ref:
+          type: string
+        message:
+          type: string
+
+    TenantConfigDiffSummary:
+      type: object
+      properties:
+        targetTenantCount:
+          type: integer
+        addCount:
+          type: integer
+        updateCount:
+          type: integer
+        unchangedCount:
+          type: integer
+        deleteCandidateCount:
+          type: integer
+
+    TenantConfigMatrixResponse:
+      type: object
+      properties:
+        baselineTenantId:
+          type: string
+        tenantIds:
+          type: array
+          items:
+            type: string
+        jobCodes:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigMatrixRow'
+
+    TenantConfigMatrixRow:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        exists:
+          type: boolean
+        enabled:
+          type: boolean
+          nullable: true
+        scheduleType:
+          type: string
+          nullable: true
+        scheduleExpr:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        queueCode:
+          type: string
+          nullable: true
+        calendarCode:
+          type: string
+          nullable: true
+        windowCode:
+          type: string
+          nullable: true
+        workerGroup:
+          type: string
+          nullable: true
+        pipelineJobCodes:
+          type: array
+          items:
+            type: string
+        workflowCodes:
+          type: array
+          items:
+            type: string
+        templateCodes:
+          type: array
+          items:
+            type: string
+        channelCodes:
+          type: array
+          items:
+            type: string
+        driftFields:
+          type: array
+          items:
+            type: string
 
     TenantConfigCopyType:
       type: string
@@ -16100,6 +16398,26 @@ components:
           type: string
         data:
           $ref: '#/components/schemas/TenantConfigPackageExcelApplyResponse'
+      required: [code, message, data]
+    CommonResponseTenantConfigDiffPreviewResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TenantConfigDiffPreviewResponse'
+      required: [code, message, data]
+    CommonResponseTenantConfigMatrixResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TenantConfigMatrixResponse'
       required: [code, message, data]
     TenantConfigPackageExcelApplyRequest:
       type: object
