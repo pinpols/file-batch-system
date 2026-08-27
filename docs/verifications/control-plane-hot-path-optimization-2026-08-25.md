@@ -211,3 +211,36 @@ admission；默认 `96` 与 6,000 请求 / 1,200 秒的画像预算匹配。上�
 本轮还补了 `job_instance(trigger_request_id)` 与 `job_step_instance(job_partition_id)` 索引迁移。前者避免
 删除 Trigger 请求时重复扫描运行实例表；后者覆盖分区删除时的 step 外键检查。它们同时使 Trigger 模式的
 压测清理能够按 `trigger_request` 关联实例，而不再只依赖 `params_snapshot` 中的 `runId`。
+
+### 2026-08-27 Process report-batch / PG 资源画像
+
+使用同一套 Docker 基础设施和本地 JVM，运行 `aggregate`、`copy`、`idempotency` 三个 Process 场景，
+每个场景 10 个并发用户、5,000 条源数据。原始报告：
+`load-tests/target/process-worker-report-pgprofile-20260827081115.md`。
+
+| 指标 | 结果 |
+|---|---:|
+| 实例终态 | 22 个终态：14 个 `SUCCESS`、8 个 `FAILED`，0 个非终态 |
+| COPY `COMMIT` p95 | 72.2 ms |
+| SQL `COMMIT` p95 | 53.5 ms |
+| PG rollback 增量 | 0 |
+| `process_event_copy` dead tuple | 5,000（幂等 upsert/清理前观测值） |
+| PostgreSQL CPU（采样前/后） | 12.68% / 1.29% |
+| 业务库 WAL records 增量 | 176,381 |
+
+本轮未证明需要把 `report-batch` 改成 set-based 写入：任务终态和幂等结果均正确，当前证据不足以抵消
+逐项事务对 DAG、补偿和重试语义的保护价值。`process_event_copy` 的 dead tuple 说明高频幂等写入需要
+纳入后续 vacuum/膨胀观察，但不是本轮的状态机缺陷。
+
+### 2026-08-27 分区与生命周期只读核查
+
+- `batch.job_instance`：RANGE(`biz_date`)，37 个子分区，含 1 个 default 分区。
+- `batch.outbox_event`：RANGE(`created_at`)，37 个子分区，含 1 个 default 分区。
+- `archive.job_instance_archive`、`archive.outbox_event_archive`：当前无遗留行。
+- `batch.process_staging`：当前 0 行；核查时无运行中的 vacuum 作业。
+- 分区裁剪执行计划：按当天 `biz_date` 查询 `job_instance` 移除 36 个子计划，执行约 0.05 ms；按本月起
+  查询 `outbox_event` 移除 25 个子计划，执行约 2.39 ms。当前分区裁剪生效，查询计划没有退化为全量子分区扫描。
+
+这证明当前本地结构和清理后的即时状态正常，不等于长期生产生命周期已验收。仍需 staging 长周期演练，
+记录 archive lag、dead tuple、autovacuum 延迟、磁盘增长和未来分区创建失败告警；完成前不把历史表
+膨胀风险标记为关闭。
