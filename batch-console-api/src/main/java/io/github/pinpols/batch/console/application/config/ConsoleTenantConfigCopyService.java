@@ -3,7 +3,11 @@ package io.github.pinpols.batch.console.application.config;
 import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest.ConfigType;
+import io.github.pinpols.batch.console.web.request.config.TenantConfigMatrixRequest;
+import io.github.pinpols.batch.console.web.request.config.TenantConfigPreviewRequest;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigMatrixResponse;
 import java.util.Set;
 
 /**
@@ -26,6 +30,15 @@ public interface ConsoleTenantConfigCopyService {
    */
   TenantConfigBatchInitResponse copy(
       TenantConfigCopyRequest request, String operator, String batchOperationId);
+
+  /** Read-only diff preview before copying a source tenant package to target tenants. */
+  TenantConfigDiffPreviewResponse preview(TenantConfigPreviewRequest request);
+
+  /** Read-only overlay preview from a base tenant package to target tenant overrides. */
+  TenantConfigDiffPreviewResponse previewOverlay(TenantConfigPreviewRequest request);
+
+  /** Compare the same job configuration across tenants. */
+  TenantConfigMatrixResponse matrix(TenantConfigMatrixRequest request);
 
   /**
    * 从源租户读取指定配置类型构建 bundle 载荷,不下推。

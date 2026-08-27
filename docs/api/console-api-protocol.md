@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-08-27 | **租户配置治理闭环**：`POST /api/console/config/tenant-copy` 新增可选 `jobCodes`，非空时按 job 构建 dependency-aware 最小复制包；新增 `POST /api/console/config/tenant-copy/preview`、`POST /api/console/config/tenant-overlay/preview`、`POST /api/console/config/tenant-config-matrix`。preview 返回 add/update/unchanged/delete-candidate、环境特定 review 提示和每个目标租户的 `overlayBundle`；overlay 端点把 `sourceTenantId` 作为 base package，只返回目标租户相对基础包的差异；matrix 按同一 `jobCode` 比较 schedule/queue/window/calendar/template/channel 漂移。job 级 bundle 解析从旧 `bizType` heuristic 收敛为显式 `templateCode/channelCode` JSON 引用，旧 bizType 只在无显式 template/channel 引用时作为兼容兜底。 |
 | 2026-08-26 | **Trigger 超时恢复查询**：新增内部只读 `GET /api/triggers/launch/status?tenantId`，要求复用原 `Idempotency-Key` 和 `X-Internal-Secret`，返回 `requestId/traceId/requestStatus/relatedJobInstanceId/instanceStatus/updatedAt` 最小投影。用于 POST 超时后的确定性查询，不改变异步 outbox/Kafka 链路，也不暴露原始参数和幂等键。 |
 | 2026-08-21 | **命名与注释治理（wire 不变）**：Console tenant-package Excel、workflow/pipeline definition Controller 仅同步内部 service/fixture 命名与注释治理；HTTP 路径、请求/响应字段、鉴权、状态码和 OpenAPI schema 均不变。 |
 | 2026-08-13 | **固定 Console 响应类型收敛（wire 不变）**：文件 channel/template/detail、文件 record detail、Kafka lag、通知/审批/诊断、实例与工作流操作等固定字段响应改由 record 承载；JSON 字段名、null 省略规则、路径、鉴权和状态码不变。文件详情的 `metadata_json` 仍保留为具名动态 JSONB 字段。OpenAPI 对三个文件详情端点由无类型 object 补为具体 schema。 |
@@ -917,11 +918,22 @@ Deployment note:
 
 - `POST /api/console/config/tenant-copy`
 - Reads configuration from a source tenant and pushes it to one or more target tenants.
-- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `PIPELINE_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`, `RESOURCE_QUEUE`, `BATCH_WINDOW`, `BUSINESS_CALENDAR`, `QUOTA_POLICY`, `ALERT_ROUTING`; empty means all 10), `mode` (default `SKIP_EXISTING`), `dryRun`.
+- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `PIPELINE_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`, `RESOURCE_QUEUE`, `BATCH_WINDOW`, `BUSINESS_CALENDAR`, `QUOTA_POLICY`, `ALERT_ROUTING`; empty means all 10), optional `jobCodes` (dependency-aware minimal job bundle), `mode` (default `SKIP_EXISTING`), `dryRun`.
 - Internally reads source tenant's configs and delegates to the tenant-init logic.
 - Response format is identical to `tenant-init`.
 - Requires `ROLE_ADMIN`.
 - Requires `Idempotency-Key` header.
+
+### Tenant Config Preview / Overlay / Matrix
+
+- `POST /api/console/config/tenant-copy/preview`
+- `POST /api/console/config/tenant-overlay/preview`
+- `POST /api/console/config/tenant-config-matrix`
+- `tenant-copy/preview` is read-only and returns add/update/unchanged/delete-candidate items plus impact hints before executing a copy.
+- `tenant-overlay/preview` treats `sourceTenantId` as the base package tenant and returns an `overlayBundle` for each target tenant; only add/update items enter the overlay, delete candidates are advisory.
+- `tenant-config-matrix` compares the same `jobCode` across tenants and highlights schedule, queue, window, calendar, worker group, template and channel drift against `baselineTenantId` (or the first tenant).
+- Job-scoped previews resolve dependencies from explicit JSON refs in job default params, pipeline step params and workflow node params (`templateCode` / `fileTemplateCode` / `channelCode` / `fileChannelCode` variants). `bizType` template/channel matching remains only as a backward-compatible fallback when no explicit ref exists.
+- Requires `ROLE_ADMIN`; no `Idempotency-Key` header because these endpoints do not write.
 
 ### Files
 

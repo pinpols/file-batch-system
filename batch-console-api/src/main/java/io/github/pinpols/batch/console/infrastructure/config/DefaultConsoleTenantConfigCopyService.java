@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
@@ -40,10 +42,22 @@ import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitR
 import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest.ConfigType;
+import io.github.pinpols.batch.console.web.request.config.TenantConfigMatrixRequest;
+import io.github.pinpols.batch.console.web.request.config.TenantConfigPreviewRequest;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse.ConfigDiffItem;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse.ConfigImpactItem;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse.Summary;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse.TenantDiffResult;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigMatrixResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigMatrixResponse.JobMatrixRow;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -51,6 +65,7 @@ import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 跨租户配置复制服务。
@@ -104,6 +119,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConsoleTenantConfigInitApplicationService initService;
+  private final TenantConfigReferenceResolver referenceResolver;
 
   @Override
   public TenantConfigBatchInitResponse copy(
@@ -113,15 +129,15 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     initRequest.setMode(request.getMode());
     initRequest.setDryRun(request.isDryRun());
 
-    ConfigSyncBundlePayload bundle =
-        buildBundle(request.getSourceTenantId(), request.getConfigTypes());
+    ConfigSyncBundlePayload bundle = requestedCopyBundle(request);
     typeTransfers().forEach(t -> t.transferToRequest(bundle, initRequest));
 
     log.info(
-        "[TenantConfigCopy] source={} targets={} types={} dryRun={} batchOp={}",
+        "[TenantConfigCopy] source={} targets={} types={} jobCodes={} dryRun={} batchOp={}",
         request.getSourceTenantId(),
         request.getTargetTenantIds(),
         request.getConfigTypes(),
+        request.getJobCodes(),
         request.isDryRun(),
         batchOperationId);
 
@@ -152,26 +168,363 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     JobDefinitionSpec job = jobs.get(0);
-    bundle.setPipelineDefinitions(
-        filter(all.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode())));
-    bundle.setWorkflowDefinitions(filter(
+    List<PipelineDefinitionSpec> relatedPipelines =
+        filter(all.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode()));
+    List<WorkflowDefinitionSpec> relatedWorkflows = filter(
         all.getWorkflowDefinitions(),
         w -> w.getNodes() != null
-            && w.getNodes().stream().anyMatch(n -> jobCode.equals(n.getRelatedJobCode()))));
+            && w.getNodes().stream()
+                .anyMatch(n -> jobCode.equals(n.getRelatedJobCode())
+                    || jobCode.equals(n.getRelatedPipelineCode())));
+    TenantConfigReferenceResolver.References refs =
+        referenceResolver.resolve(job, relatedPipelines, relatedWorkflows);
+
+    bundle.setPipelineDefinitions(relatedPipelines);
+    bundle.setWorkflowDefinitions(relatedWorkflows);
     bundle.setResourceQueues(
         filter(all.getResourceQueues(), q -> equalsNullable(job.getQueueCode(), q.getQueueCode())));
-    bundle.setBatchWindows(
-        filter(all.getBatchWindows(), w -> equalsNullable(job.getWindowCode(), w.getWindowCode())));
+    bundle.setBatchWindows(filter(
+        all.getBatchWindows(),
+        w -> equalsNullable(job.getWindowCode(), w.getWindowCode())
+            || refs.windowCodes().contains(w.getWindowCode())));
     bundle.setBusinessCalendars(filter(
         all.getBusinessCalendars(),
         c -> equalsNullable(job.getCalendarCode(), c.getCalendarCode())));
-    bundle.setFileTemplates(
-        filter(all.getFileTemplates(), t -> equalsNullable(job.getBizType(), t.getBizType())));
-    bundle.setFileChannels(
-        filter(all.getFileChannels(), c -> equalsNullable(job.getBizType(), c.getChannelCode())));
+    bundle.setFileTemplates(filter(
+        all.getFileTemplates(),
+        t -> refs.templateCodes().contains(t.getTemplateCode())
+            || (EmptyChecks.isEmpty(refs.templateCodes())
+                && equalsNullable(job.getBizType(), t.getBizType()))));
+    bundle.setFileChannels(filter(
+        all.getFileChannels(),
+        c -> refs.channelCodes().contains(c.getChannelCode())
+            || (EmptyChecks.isEmpty(refs.channelCodes())
+                && equalsNullable(job.getBizType(), c.getChannelCode()))));
     bundle.setQuotaPolicies(all.getQuotaPolicies());
     bundle.setAlertRoutings(all.getAlertRoutings());
     return bundle;
+  }
+
+  @Override
+  public TenantConfigDiffPreviewResponse preview(TenantConfigPreviewRequest request) {
+    ConfigSyncBundlePayload sourceBundle = requestedBundle(request);
+    return diffPreview(request, sourceBundle);
+  }
+
+  @Override
+  public TenantConfigDiffPreviewResponse previewOverlay(TenantConfigPreviewRequest request) {
+    ConfigSyncBundlePayload sourceBundle = requestedBundle(request);
+    return diffPreview(request, sourceBundle);
+  }
+
+  @Override
+  public TenantConfigMatrixResponse matrix(TenantConfigMatrixRequest request) {
+    String baselineTenantId = resolveBaselineTenantId(request);
+    Map<String, Map<String, JobMatrixRow>> rowsByTenantAndJob = new LinkedHashMap<>();
+    List<JobMatrixRow> rows = new ArrayList<>();
+    for (String tenantId : request.getTenantIds()) {
+      ConfigSyncBundlePayload bundle = buildBundle(
+          tenantId,
+          Set.of(
+              ConfigType.JOB_DEFINITION,
+              ConfigType.WORKFLOW_DEFINITION,
+              ConfigType.PIPELINE_DEFINITION,
+              ConfigType.FILE_CHANNEL,
+              ConfigType.FILE_TEMPLATE,
+              ConfigType.RESOURCE_QUEUE,
+              ConfigType.BATCH_WINDOW,
+              ConfigType.BUSINESS_CALENDAR));
+      Map<String, JobMatrixRow> tenantRows = new LinkedHashMap<>();
+      for (String jobCode : request.getJobCodes()) {
+        JobMatrixRow row = matrixRow(tenantId, jobCode, bundle);
+        tenantRows.put(jobCode, row);
+        rows.add(row);
+      }
+      rowsByTenantAndJob.put(tenantId, tenantRows);
+    }
+    rows = rows.stream()
+        .map(row -> withDrift(
+            row, rowsByTenantAndJob.getOrDefault(baselineTenantId, Map.of()).get(row.jobCode())))
+        .toList();
+    return new TenantConfigMatrixResponse(
+        baselineTenantId,
+        List.copyOf(request.getTenantIds()),
+        List.copyOf(request.getJobCodes()),
+        rows);
+  }
+
+  private ConfigSyncBundlePayload requestedBundle(TenantConfigPreviewRequest request) {
+    if (EmptyChecks.isEmpty(request.getJobCodes())) {
+      return buildBundle(request.getSourceTenantId(), request.getConfigTypes());
+    }
+    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+    for (String jobCode : request.getJobCodes()) {
+      mergeInto(bundle, buildJobBundle(request.getSourceTenantId(), jobCode));
+    }
+    return filterBundle(bundle, request.getConfigTypes());
+  }
+
+  private ConfigSyncBundlePayload requestedCopyBundle(TenantConfigCopyRequest request) {
+    if (EmptyChecks.isEmpty(request.getJobCodes())) {
+      return buildBundle(request.getSourceTenantId(), request.getConfigTypes());
+    }
+    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+    for (String jobCode : request.getJobCodes()) {
+      mergeInto(bundle, buildJobBundle(request.getSourceTenantId(), jobCode));
+    }
+    return filterBundle(bundle, request.getConfigTypes());
+  }
+
+  private ConfigSyncBundlePayload requestedBundleForTenant(
+      String tenantId, TenantConfigPreviewRequest request) {
+    if (EmptyChecks.isEmpty(request.getJobCodes())) {
+      return buildBundle(tenantId, request.getConfigTypes());
+    }
+    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+    for (String jobCode : request.getJobCodes()) {
+      mergeInto(bundle, buildJobBundle(tenantId, jobCode));
+    }
+    return filterBundle(bundle, request.getConfigTypes());
+  }
+
+  private TenantConfigDiffPreviewResponse diffPreview(
+      TenantConfigPreviewRequest request, ConfigSyncBundlePayload sourceBundle) {
+    List<TenantDiffResult> tenants = new ArrayList<>();
+    int addCount = 0;
+    int updateCount = 0;
+    int unchangedCount = 0;
+    int deleteCandidateCount = 0;
+    for (String targetTenantId : request.getTargetTenantIds()) {
+      TenantDiffResult tenantResult = diffTenant(
+          sourceBundle, requestedBundleForTenant(targetTenantId, request), targetTenantId, request);
+      tenants.add(tenantResult);
+      addCount += tenantResult.addCount();
+      updateCount += tenantResult.updateCount();
+      unchangedCount += tenantResult.unchangedCount();
+      deleteCandidateCount += tenantResult.deleteCandidateCount();
+    }
+    return new TenantConfigDiffPreviewResponse(
+        request.getSourceTenantId(),
+        List.copyOf(request.getTargetTenantIds()),
+        tenants,
+        new Summary(
+            request.getTargetTenantIds().size(),
+            addCount,
+            updateCount,
+            unchangedCount,
+            deleteCandidateCount));
+  }
+
+  private TenantDiffResult diffTenant(
+      ConfigSyncBundlePayload source,
+      ConfigSyncBundlePayload target,
+      String targetTenantId,
+      TenantConfigPreviewRequest request) {
+    List<ConfigDiffItem> items = new ArrayList<>();
+    ConfigSyncBundlePayload overlay = new ConfigSyncBundlePayload();
+    for (ConfigType type : selectedTypes(request.getConfigTypes())) {
+      appendDiffs(type, listOf(source, type), listOf(target, type), request, items, overlay);
+    }
+    int addCount = count(items, "ADD");
+    int updateCount = count(items, "UPDATE");
+    int unchangedCount = count(items, "UNCHANGED");
+    int deleteCandidateCount = count(items, "DELETE_CANDIDATE");
+    return new TenantDiffResult(
+        targetTenantId,
+        addCount,
+        updateCount,
+        unchangedCount,
+        deleteCandidateCount,
+        items,
+        impacts(items),
+        overlay);
+  }
+
+  private void appendDiffs(
+      ConfigType type,
+      List<?> sourceItems,
+      List<?> targetItems,
+      TenantConfigPreviewRequest request,
+      List<ConfigDiffItem> items,
+      ConfigSyncBundlePayload overlay) {
+    Map<String, Object> sourceByKey = indexByKey(type, sourceItems);
+    Map<String, Object> targetByKey = indexByKey(type, targetItems);
+    List<Object> overlayItems = new ArrayList<>();
+    for (Map.Entry<String, Object> sourceEntry : sourceByKey.entrySet()) {
+      Object targetItem = targetByKey.get(sourceEntry.getKey());
+      String action;
+      String reason;
+      if (targetItem == null) {
+        action = "ADD";
+        reason = "missing in target tenant";
+        overlayItems.add(sourceEntry.getValue());
+      } else if (sameSpec(sourceEntry.getValue(), targetItem)) {
+        action = "UNCHANGED";
+        reason = "same as source tenant";
+      } else {
+        action = "UPDATE";
+        reason = "target tenant value differs from source tenant";
+        overlayItems.add(sourceEntry.getValue());
+      }
+      if (request.isIncludeUnchanged() || !"UNCHANGED".equals(action)) {
+        items.add(new ConfigDiffItem(
+            type.name(),
+            sourceEntry.getKey(),
+            action,
+            reason,
+            specMap(sourceEntry.getValue()),
+            specMap(targetItem)));
+      }
+    }
+    if (request.isIncludeDeleteCandidates()) {
+      for (Map.Entry<String, Object> targetEntry : targetByKey.entrySet()) {
+        if (!sourceByKey.containsKey(targetEntry.getKey())) {
+          items.add(new ConfigDiffItem(
+              type.name(),
+              targetEntry.getKey(),
+              "DELETE_CANDIDATE",
+              "exists only in target tenant; preview never deletes automatically",
+              Map.of(),
+              specMap(targetEntry.getValue())));
+        }
+      }
+    }
+    setList(overlay, type, overlayItems);
+  }
+
+  private List<ConfigImpactItem> impacts(List<ConfigDiffItem> items) {
+    List<ConfigImpactItem> impacts = new ArrayList<>();
+    for (ConfigDiffItem item : items) {
+      if ("UNCHANGED".equals(item.action())) {
+        continue;
+      }
+      if (ConfigType.FILE_CHANNEL.name().equals(item.configType())
+          || ConfigType.RESOURCE_QUEUE.name().equals(item.configType())
+          || ConfigType.BATCH_WINDOW.name().equals(item.configType())
+          || ConfigType.BUSINESS_CALENDAR.name().equals(item.configType())) {
+        impacts.add(new ConfigImpactItem(
+            "ENV_SPECIFIC_REVIEW",
+            item.configType() + ":" + item.configKey(),
+            "review endpoint, capacity, calendar or batch window values before apply"));
+      } else if (ConfigType.JOB_DEFINITION.name().equals(item.configType())) {
+        impacts.add(new ConfigImpactItem(
+            "JOB_CONFIG_CHANGE",
+            item.configKey(),
+            "schedule, queue, worker group or default parameters may affect future launches"));
+      } else if (ConfigType.FILE_TEMPLATE.name().equals(item.configType())) {
+        impacts.add(new ConfigImpactItem(
+            "FILE_CONTRACT_CHANGE",
+            item.configKey(),
+            "template format, validation, mapping or SQL may affect import/export results"));
+      }
+    }
+    return impacts;
+  }
+
+  private JobMatrixRow matrixRow(String tenantId, String jobCode, ConfigSyncBundlePayload bundle) {
+    JobDefinitionSpec job =
+        first(filter(bundle.getJobDefinitions(), j -> jobCode.equals(j.getJobCode())));
+    if (job == null) {
+      return new JobMatrixRow(
+          tenantId,
+          jobCode,
+          false,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          List.of(),
+          List.of(),
+          List.of(),
+          List.of(),
+          List.of("missing"));
+    }
+    List<PipelineDefinitionSpec> relatedPipelines =
+        filter(bundle.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode()));
+    List<WorkflowDefinitionSpec> relatedWorkflows = filter(
+        bundle.getWorkflowDefinitions(),
+        w -> w.getNodes() != null
+            && w.getNodes().stream()
+                .anyMatch(n -> jobCode.equals(n.getRelatedJobCode())
+                    || jobCode.equals(n.getRelatedPipelineCode())));
+    TenantConfigReferenceResolver.References refs =
+        referenceResolver.resolve(job, relatedPipelines, relatedWorkflows);
+    List<String> templateCodes = EmptyChecks.isEmpty(refs.templateCodes())
+        ? filter(bundle.getFileTemplates(), t -> equalsNullable(job.getBizType(), t.getBizType()))
+            .stream()
+            .map(FileTemplateSpec::getTemplateCode)
+            .toList()
+        : refs.templateCodes();
+    return new JobMatrixRow(
+        tenantId,
+        jobCode,
+        true,
+        job.getEnabled(),
+        job.getScheduleType(),
+        job.getScheduleExpr(),
+        job.getTimezone(),
+        job.getQueueCode(),
+        job.getCalendarCode(),
+        job.getWindowCode(),
+        job.getWorkerGroup(),
+        refs.pipelineJobCodes(),
+        refs.workflowCodes(),
+        templateCodes,
+        channelCodes(job, bundle, refs),
+        List.of());
+  }
+
+  private JobMatrixRow withDrift(JobMatrixRow row, JobMatrixRow baseline) {
+    if (baseline == null || Objects.equals(row.tenantId(), baseline.tenantId())) {
+      return row;
+    }
+    List<String> fields = new ArrayList<>();
+    addDrift(fields, "exists", row.exists(), baseline.exists());
+    addDrift(fields, "enabled", row.enabled(), baseline.enabled());
+    addDrift(fields, "scheduleType", row.scheduleType(), baseline.scheduleType());
+    addDrift(fields, "scheduleExpr", row.scheduleExpr(), baseline.scheduleExpr());
+    addDrift(fields, "timezone", row.timezone(), baseline.timezone());
+    addDrift(fields, "queueCode", row.queueCode(), baseline.queueCode());
+    addDrift(fields, "calendarCode", row.calendarCode(), baseline.calendarCode());
+    addDrift(fields, "windowCode", row.windowCode(), baseline.windowCode());
+    addDrift(fields, "workerGroup", row.workerGroup(), baseline.workerGroup());
+    addDrift(fields, "templateCodes", row.templateCodes(), baseline.templateCodes());
+    addDrift(fields, "channelCodes", row.channelCodes(), baseline.channelCodes());
+    return new JobMatrixRow(
+        row.tenantId(),
+        row.jobCode(),
+        row.exists(),
+        row.enabled(),
+        row.scheduleType(),
+        row.scheduleExpr(),
+        row.timezone(),
+        row.queueCode(),
+        row.calendarCode(),
+        row.windowCode(),
+        row.workerGroup(),
+        row.pipelineJobCodes(),
+        row.workflowCodes(),
+        row.templateCodes(),
+        row.channelCodes(),
+        List.copyOf(fields));
+  }
+
+  private List<String> channelCodes(
+      JobDefinitionSpec job,
+      ConfigSyncBundlePayload bundle,
+      TenantConfigReferenceResolver.References refs) {
+    if (EmptyChecks.isNotEmpty(refs.channelCodes())) {
+      return refs.channelCodes();
+    }
+    return filter(
+            bundle.getFileChannels(), c -> equalsNullable(job.getBizType(), c.getChannelCode()))
+        .stream()
+        .map(FileChannelSpec::getChannelCode)
+        .toList();
   }
 
   /** 构建 10 条传输描述符。每次按需创建；方法引用是懒求值，不会在此处调用 mapper。 */
@@ -565,6 +918,155 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   private static String str(Map<String, Object> map, String key) {
     Object v = map.get(key);
     return v != null ? v.toString() : null;
+  }
+
+  private ConfigSyncBundlePayload filterBundle(
+      ConfigSyncBundlePayload bundle, Set<ConfigType> configTypes) {
+    if (EmptyChecks.isEmpty(configTypes)) {
+      return bundle;
+    }
+    ConfigSyncBundlePayload filtered = new ConfigSyncBundlePayload();
+    for (ConfigType type : configTypes) {
+      setList(filtered, type, listOf(bundle, type));
+    }
+    return filtered;
+  }
+
+  private void mergeInto(ConfigSyncBundlePayload target, ConfigSyncBundlePayload source) {
+    for (ConfigType type : ConfigType.values()) {
+      setList(target, type, mergeByKey(type, listOf(target, type), listOf(source, type)));
+    }
+  }
+
+  private List<ConfigType> selectedTypes(Set<ConfigType> configTypes) {
+    if (EmptyChecks.isEmpty(configTypes)) {
+      return List.of(ConfigType.values());
+    }
+    return List.copyOf(configTypes);
+  }
+
+  private List<?> mergeByKey(ConfigType type, List<?> left, List<?> right) {
+    Map<String, Object> merged = indexByKey(type, left);
+    for (Object item : right) {
+      merged.putIfAbsent(configKey(type, item), item);
+    }
+    return List.copyOf(merged.values());
+  }
+
+  private Map<String, Object> indexByKey(ConfigType type, Collection<?> items) {
+    Map<String, Object> byKey = new LinkedHashMap<>();
+    if (EmptyChecks.isEmpty(items)) {
+      return byKey;
+    }
+    for (Object item : items) {
+      String key = configKey(type, item);
+      if (StringUtils.hasText(key)) {
+        byKey.put(key, item);
+      }
+    }
+    return byKey;
+  }
+
+  private String configKey(ConfigType type, Object item) {
+    if (item instanceof JobDefinitionSpec spec) {
+      return spec.getJobCode();
+    }
+    if (item instanceof WorkflowDefinitionSpec spec) {
+      return spec.getWorkflowCode();
+    }
+    if (item instanceof PipelineDefinitionSpec spec) {
+      return spec.getJobCode();
+    }
+    if (item instanceof FileChannelSpec spec) {
+      return spec.getChannelCode();
+    }
+    if (item instanceof FileTemplateSpec spec) {
+      String version = spec.getVersion() == null ? "" : "#" + spec.getVersion();
+      return spec.getTemplateCode() + version;
+    }
+    if (item instanceof ResourceQueueSpec spec) {
+      return spec.getQueueCode();
+    }
+    if (item instanceof BatchWindowSpec spec) {
+      return spec.getWindowCode();
+    }
+    if (item instanceof BusinessCalendarSpec spec) {
+      return spec.getCalendarCode();
+    }
+    if (item instanceof TenantQuotaPolicySpec spec) {
+      return spec.getPolicyCode();
+    }
+    if (item instanceof AlertRoutingSpec spec) {
+      return spec.getRouteCode();
+    }
+    throw new IllegalArgumentException("Unsupported config type item: " + type);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> List<T> listOf(ConfigSyncBundlePayload bundle, ConfigType type) {
+    List<?> values =
+        switch (type) {
+          case JOB_DEFINITION -> bundle.getJobDefinitions();
+          case WORKFLOW_DEFINITION -> bundle.getWorkflowDefinitions();
+          case PIPELINE_DEFINITION -> bundle.getPipelineDefinitions();
+          case FILE_CHANNEL -> bundle.getFileChannels();
+          case FILE_TEMPLATE -> bundle.getFileTemplates();
+          case RESOURCE_QUEUE -> bundle.getResourceQueues();
+          case BATCH_WINDOW -> bundle.getBatchWindows();
+          case BUSINESS_CALENDAR -> bundle.getBusinessCalendars();
+          case QUOTA_POLICY -> bundle.getQuotaPolicies();
+          case ALERT_ROUTING -> bundle.getAlertRoutings();
+        };
+    return values == null ? List.of() : (List<T>) values;
+  }
+
+  @SuppressWarnings("unchecked")
+  private void setList(ConfigSyncBundlePayload bundle, ConfigType type, List<?> values) {
+    List<?> safeValues = EmptyChecks.isEmpty(values) ? null : values;
+    switch (type) {
+      case JOB_DEFINITION -> bundle.setJobDefinitions((List<JobDefinitionSpec>) safeValues);
+      case WORKFLOW_DEFINITION ->
+        bundle.setWorkflowDefinitions((List<WorkflowDefinitionSpec>) safeValues);
+      case PIPELINE_DEFINITION ->
+        bundle.setPipelineDefinitions((List<PipelineDefinitionSpec>) safeValues);
+      case FILE_CHANNEL -> bundle.setFileChannels((List<FileChannelSpec>) safeValues);
+      case FILE_TEMPLATE -> bundle.setFileTemplates((List<FileTemplateSpec>) safeValues);
+      case RESOURCE_QUEUE -> bundle.setResourceQueues((List<ResourceQueueSpec>) safeValues);
+      case BATCH_WINDOW -> bundle.setBatchWindows((List<BatchWindowSpec>) safeValues);
+      case BUSINESS_CALENDAR ->
+        bundle.setBusinessCalendars((List<BusinessCalendarSpec>) safeValues);
+      case QUOTA_POLICY -> bundle.setQuotaPolicies((List<TenantQuotaPolicySpec>) safeValues);
+      case ALERT_ROUTING -> bundle.setAlertRoutings((List<AlertRoutingSpec>) safeValues);
+    }
+  }
+
+  private static boolean sameSpec(Object source, Object target) {
+    return Objects.equals(specMap(source), specMap(target));
+  }
+
+  private static Map<String, Object> specMap(Object spec) {
+    return spec == null ? Map.of() : JsonUtils.toMap(spec);
+  }
+
+  private static int count(List<ConfigDiffItem> items, String action) {
+    return (int) items.stream().filter(item -> action.equals(item.action())).count();
+  }
+
+  private static String resolveBaselineTenantId(TenantConfigMatrixRequest request) {
+    if (StringUtils.hasText(request.getBaselineTenantId())) {
+      return request.getBaselineTenantId();
+    }
+    return request.getTenantIds().get(0);
+  }
+
+  private static <T> T first(List<T> values) {
+    return EmptyChecks.isEmpty(values) ? null : values.get(0);
+  }
+
+  private static void addDrift(List<String> fields, String field, Object current, Object baseline) {
+    if (!Objects.equals(current, baseline)) {
+      fields.add(field);
+    }
   }
 
   private static Boolean bool(Map<String, Object> map, String key) {

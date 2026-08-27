@@ -33,6 +33,10 @@ public class TenantConfigCopyRequest {
   /** 要复制的配置类型。为空则复制全部 10 类。 */
   private Set<ConfigType> configTypes;
 
+  /** 非空时按 jobCode 构建最小依赖配置包，而不是复制整类配置。 */
+  @Size(max = 100, message = "jobCodes must not exceed 100")
+  private List<@Size(min = 1, max = 128) String> jobCodes;
+
   /** 初始化模式：SKIP_EXISTING 或 UPSERT。默认 SKIP_EXISTING。 */
   private TenantConfigBatchInitRequest.InitMode mode =
       TenantConfigBatchInitRequest.InitMode.SKIP_EXISTING;
