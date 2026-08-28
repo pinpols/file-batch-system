@@ -9,16 +9,23 @@ import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
 import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
 import io.github.pinpols.batch.worker.imports.stage.format.ParseSupport;
 import java.io.StringReader;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import javax.sql.DataSource;
@@ -246,14 +253,56 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
     for (JdbcMappedImportSpec.ColumnMapping m : spec.columnMappings()) {
       if (m.to().equals(col)) {
-        return resolveRowValue(row, m.from());
+        return coerceMappedValue(resolveRowValue(row, m.from()), m);
       }
     }
     String pattern = spec.systemBindings().get(col);
     if (pattern != null) {
-      return resolveBinding(pattern, context);
+      return resolveSystemBinding(pattern, context);
     }
     throw new IllegalStateException("no binding for column: " + col);
+  }
+
+  private static Object coerceMappedValue(
+      Object value, JdbcMappedImportSpec.ColumnMapping mapping) {
+    if (EmptyChecks.isNull(value) || EmptyChecks.isNull(mapping.type())) {
+      return value;
+    }
+    String type = mapping.type().trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isEmpty(type) || value instanceof Number || value instanceof Boolean) {
+      return value;
+    }
+    String text = String.valueOf(value).trim();
+    if (EmptyChecks.isEmpty(text)) {
+      return null;
+    }
+    try {
+      return switch (type) {
+        case "DECIMAL", "NUMBER", "NUMERIC", "BIGDECIMAL", "INTEGER", "INT", "LONG", "BIGINT" ->
+          new BigDecimal(text);
+        case "DATE", "LOCAL_DATE" -> parseLocalDate(text, mapping.format());
+        case "TIMESTAMP", "DATETIME", "LOCAL_DATE_TIME" -> LocalDateTime.parse(text);
+        case "OFFSET_DATE_TIME", "TIMESTAMPTZ" -> OffsetDateTime.parse(text);
+        case "BOOLEAN", "BOOL" -> Boolean.valueOf(text);
+        default -> value;
+      };
+    } catch (RuntimeException ex) {
+      throw new WorkerConfigException("jdbc-mapped-import value type conversion failed: column="
+          + mapping.to()
+          + ", sourceField="
+          + mapping.from()
+          + ", type="
+          + mapping.type()
+          + ", value="
+          + text);
+    }
+  }
+
+  private static LocalDate parseLocalDate(String text, String format) {
+    if (EmptyChecks.isBlank(format) || "yyyy-MM-dd".equals(format)) {
+      return LocalDate.parse(text);
+    }
+    return LocalDate.parse(text, DateTimeFormatter.ofPattern(format));
   }
 
   /**
@@ -280,7 +329,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
     String pattern = spec.systemBindings().get(col);
     if (pattern != null) {
-      return resolveBinding(pattern, context);
+      return resolveSystemBinding(pattern, context);
     }
     throw new IllegalStateException("no partition binding for column: " + col);
   }
@@ -325,7 +374,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   static String resolveBinding(String pattern, ImportLoadContext context) {
-    if (pattern == null) {
+    if (EmptyChecks.isNull(pattern)) {
       return null;
     }
     return pattern
@@ -339,6 +388,14 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         .replace("${region}", nullSafe(context.region()))
         .replace("${jobCode}", nullSafe(context.jobCode()))
         .replace("${templateCode}", nullSafe(context.templateCode()));
+  }
+
+  private static Object resolveSystemBinding(String pattern, ImportLoadContext context) {
+    String value = resolveBinding(pattern, context);
+    if ("${bizDate}".equals(pattern) && EmptyChecks.isNotBlank(value)) {
+      return LocalDate.parse(value);
+    }
+    return value;
   }
 
   private static String nullSafe(String v) {

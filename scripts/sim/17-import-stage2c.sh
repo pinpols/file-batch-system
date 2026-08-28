@@ -8,6 +8,10 @@
 #   - PARTITION_REPLACE_COPY:同 tenant_id + source_batch_no 先清 stale 再 COPY 新数据
 #
 # SQL fixture 位于 docs/test-data,脚本只负责编排、API 触发和断言。
+#
+# 注意:PARTITION_REPLACE_COPY 与 line-based checkpoint 语义互斥。checkpoint 默认开启后,
+# 本阶段作为 load mode 正向矩阵,会临时以 batch.worker.checkpoint.enabled=false 重启
+# worker-import;结束后恢复默认配置。checkpoint=true 下的拒跑保护由 Stage 2b 覆盖。
 # =========================================================
 set -euo pipefail
 
@@ -19,6 +23,38 @@ SIM_STAGE_NAME="import-stage2c"
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
+
+__RESTARTED_IMPORT_WITH_CHECKPOINT_DISABLED=0
+wait_import_worker() {
+  local port="${BATCH_WORKER_IMPORT_PORT:-18083}"
+  for _ in $(seq 1 90); do
+    if curl -sf --max-time 5 --connect-timeout 2 "http://localhost:${port}/actuator/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: worker-import did not become healthy on port ${port}" >&2
+  return 1
+}
+
+restore_import_default() {
+  if [[ "$__RESTARTED_IMPORT_WITH_CHECKPOINT_DISABLED" == "1" && "${RESTORE_IMPORT_AFTER_STAGE2C:-1}" == "1" ]]; then
+    echo "==> restore worker-import default config"
+    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null || true
+    wait_import_worker || true
+  fi
+}
+trap restore_import_default EXIT
+
+if [[ "${RESTART_IMPORT_WITH_CHECKPOINT_DISABLED:-1}" == "1" ]]; then
+  echo "==> restart worker-import with checkpoint disabled for PARTITION_REPLACE_COPY matrix"
+  COMPOSE_ENV_FILE=/dev/null \
+  BATCH_WORKER_CHECKPOINT_ENABLED=false \
+  JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.checkpoint.enabled=false" \
+    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
+  wait_import_worker
+  __RESTARTED_IMPORT_WITH_CHECKPOINT_DISABLED=1
+fi
 
 echo "==> apply bootstrap + stage2c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
