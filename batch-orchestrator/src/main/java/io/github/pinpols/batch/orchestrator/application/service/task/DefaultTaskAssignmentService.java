@@ -585,7 +585,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   private WorkerRegistryEntity resolveClaimableWorker(String tenantId, String workerCode) {
     WorkerRegistryEntity primary =
         workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-    if (EmptyChecks.isNotNull(primary)) {
+    if (isOnlineWorker(primary)) {
       return primary;
     }
     String fallbackTenant = EmptyChecks.isNull(resourceSchedulerProperties)
@@ -605,5 +605,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
           workerCode);
     }
     return fallback;
+  }
+
+  private static boolean isOnlineWorker(WorkerRegistryEntity worker) {
+    return EmptyChecks.isNotNull(worker)
+        && WorkerRegistryStatus.ONLINE.code().equals(worker.status());
   }
 }

@@ -142,6 +142,28 @@ class DefaultTaskAssignmentServiceTest {
   }
 
   @Test
+  @DisplayName("assignWorker: 主租户同名 worker 已退役时继续走 shared-tenant fallback")
+  void assignWorkerFallsBackWhenPrimaryWorkerIsNotOnline() {
+    resourceProps.setSharedTenantFallback("default-tenant");
+    JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
+    JobTaskEntity claimed = task(100L, 2L, TaskStatus.RUNNING.code());
+    claimed.setAssignedWorkerCode("w1");
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial, claimed);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
+        .thenReturn(worker(WorkerRegistryStatus.DECOMMISSIONED.code(), "PROCESS"));
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("default-tenant", "w1"))
+        .thenReturn(worker("default-tenant", "w1", WorkerRegistryStatus.ONLINE.code(), "PROCESS"));
+    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(1);
+
+    JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
+
+    assertThat(result).isSameAs(claimed);
+    verify(workerRegistryMapper).selectByTenantAndWorkerCode("ta", "w1");
+    verify(workerRegistryMapper).selectByTenantAndWorkerCode("default-tenant", "w1");
+    verify(jobTaskMapper).assignWorker(any(AssignWorkerParam.class));
+  }
+
+  @Test
   @DisplayName("assignWorker: workerGroup 与 partition group 不匹配 → 返 current")
   void assignWorkerGroupMismatchReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
@@ -462,7 +484,12 @@ class DefaultTaskAssignmentServiceTest {
   }
 
   private WorkerRegistryEntity worker(String status, String group) {
+    return worker("ta", "w1", status, group);
+  }
+
+  private WorkerRegistryEntity worker(
+      String tenantId, String workerCode, String status, String group) {
     return new WorkerRegistryEntity(
-        1L, "ta", "w1", group, null, null, status, Instant.now(), 0, 10, null, null);
+        1L, tenantId, workerCode, group, null, null, status, Instant.now(), 0, 10, null, null);
   }
 }
