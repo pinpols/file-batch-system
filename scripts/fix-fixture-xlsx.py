@@ -33,6 +33,69 @@ TARGETS = ["ta-tenant-config-package-test.xlsx",
 
 LINUX_5FIELD_RE = re.compile(r"^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$")
 
+CANONICAL_COLUMNS: dict[str, list[str]] = {
+    "resource_queue": [
+        "tenant_id", "queue_code", "queue_name", "queue_type", "max_running_jobs",
+        "max_running_partitions", "max_qps", "worker_group", "resource_tag",
+        "priority_policy", "fair_share_weight", "enabled", "description",
+    ],
+    "business_calendar": [
+        "tenant_id", "calendar_code", "calendar_name", "timezone", "holiday_roll_rule",
+        "catch_up_policy", "catch_up_max_days", "holidays", "enabled", "description",
+    ],
+    "batch_window": [
+        "tenant_id", "window_code", "window_name", "timezone", "start_time", "end_time",
+        "end_strategy", "out_of_window_action", "allow_cross_day", "enabled", "description",
+    ],
+    "job_definition": [
+        "tenant_id", "job_code", "job_name", "job_type", "biz_type", "queue_code",
+        "worker_group", "schedule_type", "schedule_expr", "depends_on_job_code",
+        "calendar_code", "window_code", "retry_policy", "retry_max_count",
+        "timeout_seconds", "shard_strategy", "execution_mode", "watermark_field",
+        "execution_handler", "param_schema", "default_params", "enabled", "description",
+    ],
+    "file_channel_config": [
+        "tenant_id", "channel_code", "channel_name", "channel_type", "target_endpoint",
+        "auth_type", "config_json", "receipt_policy", "timeout_seconds", "enabled",
+    ],
+    "file_template_config": [
+        "tenant_id", "template_code", "template_name", "template_type", "biz_type",
+        "file_format_type", "charset", "target_charset", "with_bom", "line_separator",
+        "delimiter", "quote_char", "escape_char", "record_length", "header_rows",
+        "footer_rows", "header_template", "trailer_template", "checksum_type",
+        "compress_type", "encrypt_type", "naming_rule", "field_mappings",
+        "validation_rule_set", "default_query_code", "default_query_sql",
+        "query_param_schema", "streaming_enabled", "page_size", "fetch_size",
+        "chunk_size", "preview_masking_enabled", "error_line_masking_enabled",
+        "log_masking_enabled", "content_encryption_enabled", "encryption_key_ref",
+        "download_requires_approval", "masking_rule_set", "enabled", "version",
+        "description",
+    ],
+    "pipeline_definition": [
+        "tenant_id", "job_code", "pipeline_name", "pipeline_type", "biz_type",
+        "worker_group", "version", "enabled", "description",
+    ],
+    "pipeline_step_definition": [
+        "job_code", "version", "step_code", "step_name", "stage_code", "step_order",
+        "impl_code", "step_params", "timeout_seconds", "retry_policy",
+        "retry_max_count", "enabled",
+    ],
+    "workflow_definition": [
+        "tenant_id", "workflow_code", "workflow_name", "workflow_type", "version",
+        "enabled", "description",
+    ],
+    "workflow_node": [
+        "tenant_id", "workflow_code", "workflow_version", "node_code", "node_name",
+        "node_type", "related_job_code", "related_pipeline_code", "worker_group",
+        "window_code", "node_order", "retry_policy", "retry_max_count",
+        "timeout_seconds", "node_params", "enabled",
+    ],
+    "workflow_edge": [
+        "tenant_id", "workflow_code", "workflow_version", "from_node_code",
+        "to_node_code", "edge_type", "condition_expr", "enabled",
+    ],
+}
+
 SFTP_KEY_MAP = {
     "host": "sftp_host",
     "sftpHost": "sftp_host",
@@ -152,6 +215,56 @@ def linux5_to_quartz6(expr: str) -> str | None:
     else:
         q_dom, q_dow = dom, "?"
     return f"0 {minute} {hour} {q_dom} {month} {q_dow}"
+
+
+def row_has_values(values: list[object]) -> bool:
+    return any(v not in (None, "") for v in values)
+
+
+def default_cell_value(sheet_name: str, column: str, row_values: dict[str, object]) -> object:
+    if sheet_name == "job_definition" and column == "execution_mode":
+        return "FULL" if row_has_values(list(row_values.values())) else None
+    if column == "enabled" and row_has_values(list(row_values.values())):
+        return "TRUE"
+    return None
+
+
+def align_sheet_columns(ws, columns: list[str]) -> int:
+    old_headers = [c.value for c in ws[1]]
+    if old_headers == columns:
+        return 0
+
+    rows: list[list[object]] = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        old_values = {
+            str(header): row[i]
+            for i, header in enumerate(old_headers)
+            if header not in (None, "") and i < len(row)
+        }
+        if not row_has_values(list(old_values.values())):
+            continue
+        rows.append([
+            old_values.get(column, default_cell_value(ws.title, column, old_values))
+            for column in columns
+        ])
+
+    ws.delete_cols(1, ws.max_column)
+    for col_idx, column in enumerate(columns, start=1):
+        ws.cell(row=1, column=col_idx).value = column
+    for row_idx, values in enumerate(rows, start=2):
+        for col_idx, value in enumerate(values, start=1):
+            ws.cell(row=row_idx, column=col_idx).value = value
+    return 1
+
+
+def align_workbook_columns(wb) -> int:
+    touched = 0
+    for sheet_name, columns in CANONICAL_COLUMNS.items():
+        if sheet_name not in wb.sheetnames:
+            wb.create_sheet(sheet_name)
+            touched += 1
+        touched += align_sheet_columns(wb[sheet_name], columns)
+    return touched
 
 
 def patch_schedule_expr(ws) -> int:
@@ -464,6 +577,7 @@ def process(path: Path) -> dict:
     before = path.stat().st_size
     wb = load_workbook(path)
     result = {"file": path.name, "before_bytes": before}
+    result["sheets_aligned"] = align_workbook_columns(wb)
     if "job_definition" in wb.sheetnames:
         ws = wb["job_definition"]
         result["schedule_expr_fixed"] = patch_schedule_expr(ws)
@@ -484,6 +598,18 @@ def process(path: Path) -> dict:
 def verify(path: Path) -> dict:
     wb = load_workbook(path, data_only=True)
     out = {"file": path.name}
+    out["header_mismatches"] = {}
+    for sheet_name, columns in CANONICAL_COLUMNS.items():
+        if sheet_name not in wb.sheetnames:
+            out["header_mismatches"][sheet_name] = {"missing_sheet": True}
+            continue
+        ws = wb[sheet_name]
+        headers = [c.value for c in ws[1]]
+        if headers != columns:
+            out["header_mismatches"][sheet_name] = {
+                "expected": columns,
+                "actual": headers,
+            }
     if "job_definition" in wb.sheetnames:
         ws = wb["job_definition"]
         headers = [c.value for c in ws[1]]
@@ -563,13 +689,29 @@ def verify(path: Path) -> dict:
     return out
 
 
+def verify_failed(result: dict) -> bool:
+    return bool(result.get("header_mismatches")) \
+        or result.get("non_quartz_schedule_count", 0) != 0 \
+        or result.get("missing_execution_mode_count", 0) != 0 \
+        or result.get("sftp_legacy_keys_left", 0) != 0 \
+        or result.get("field_mapping_missing_name_count", 0) != 0 \
+        or result.get("export_select_star_count", 0) != 0 \
+        or result.get("workflow_boundary_ok") is False
+
+
 if __name__ == "__main__":
+    check_only = "--check" in sys.argv
+    failed = False
     for name in TARGETS:
         p = SUITE_DIR / name
         if not p.exists():
             print(f"MISSING {p}")
+            failed = True
             continue
-        r = process(p)
-        print("PATCH", r)
+        if not check_only:
+            r = process(p)
+            print("PATCH", r)
         v = verify(p)
         print("VERIFY", v)
+        failed = failed or verify_failed(v)
+    sys.exit(1 if failed else 0)
