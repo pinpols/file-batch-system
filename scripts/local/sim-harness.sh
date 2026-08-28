@@ -111,6 +111,11 @@ preflight() {
     [[ -f "$FIXTURE_DIR/${t}-tenant-config-package-test.xlsx" ]] \
       && ok "fixture $t 存在" || fail "fixture $t 缺失:$FIXTURE_DIR/${t}-tenant-config-package-test.xlsx"
   done
+  if "${PYTHON_BIN:-python3}" scripts/fix-fixture-xlsx.py --check >/tmp/sim-fixture-xlsx-check.log 2>&1; then
+    ok "tenant-package xlsx fixture header 与当前 11 sheet schema 对齐"
+  else
+    fail "tenant-package xlsx fixture 过时或 openpyxl 不可用:$(tail -20 /tmp/sim-fixture-xlsx-check.log | tr '\n' ' ')"
+  fi
 
   echo "== preflight:sim env(TRIGGER_BASE 等)=="
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT

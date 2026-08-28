@@ -17,9 +17,9 @@ OUT = "docs/test-data/test-full-coverage-import-suite/default-tenant-config-pack
 # ─── 8 业务核心 sheet 列定义 ──────────────────────────────────────────────────
 JOB_COLS = [
     "tenant_id","job_code","job_name","job_type","biz_type","queue_code","worker_group",
-    "schedule_type","schedule_expr","calendar_code","window_code","retry_policy",
-    "retry_max_count","timeout_seconds","shard_strategy","execution_handler",
-    "param_schema","default_params","enabled","description",
+    "schedule_type","schedule_expr","depends_on_job_code","calendar_code","window_code",
+    "retry_policy","retry_max_count","timeout_seconds","shard_strategy","execution_mode",
+    "watermark_field","execution_handler","param_schema","default_params","enabled","description",
 ]
 CHANNEL_COLS = [
     "tenant_id","channel_code","channel_name","channel_type","target_endpoint",
@@ -80,8 +80,8 @@ def jd(job_code, job_name):
     # worker_group=EXPORT, window_code=always_open, priority=5
     return [
         TENANT, job_code, job_name, "WORKFLOW", None, "export_queue", "EXPORT",
-        "MANUAL", None, None, "always_open", "NONE",
-        0, 14400, "NONE", None,
+        "MANUAL", None, None, None, "always_open", "NONE",
+        0, 14400, "NONE", "FULL", None, None,
         "{}", "{}", "TRUE", f"P2 seed aligned - {job_name}",
     ]
 
