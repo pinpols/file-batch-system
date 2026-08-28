@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
+import java.math.BigDecimal;
 import java.sql.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,7 +43,7 @@ class JdbcMappedImportCopyIntegrationTest {
     RlsTenantContextHolder.set("t1");
     dataSource = new DriverManagerDataSource();
     dataSource.setDriverClassName("org.postgresql.Driver");
-    dataSource.setUrl(POSTGRES.getJdbcUrl() + "&stringtype=unspecified");
+    dataSource.setUrl(POSTGRES.getJdbcUrl());
     dataSource.setUsername(POSTGRES.getUsername());
     dataSource.setPassword(POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
@@ -79,13 +80,23 @@ class JdbcMappedImportCopyIntegrationTest {
         PARTITION OF biz.copy_import_customer_part
         FOR VALUES FROM ('2026-06-07') TO ('2026-06-08')
         """);
+    jdbcTemplate.execute("""
+        CREATE TABLE biz.batch_upsert_transaction (
+          tenant_id text NOT NULL,
+          txn_no text NOT NULL,
+          amount numeric(20,2) NOT NULL,
+          txn_date date NOT NULL,
+          remark text,
+          PRIMARY KEY (tenant_id, txn_no, txn_date)
+        )
+        """);
     jdbcTemplate.update(
         "INSERT INTO biz.copy_import_customer VALUES (?,?,?,?,?,?)",
         "t1",
         Date.valueOf("2026-06-07"),
         "old-target",
         "old target",
-        "1.00",
+        new BigDecimal("1.00"),
         "delete me");
     jdbcTemplate.update(
         "INSERT INTO biz.copy_import_customer VALUES (?,?,?,?,?,?)",
@@ -93,7 +104,7 @@ class JdbcMappedImportCopyIntegrationTest {
         Date.valueOf("2026-06-06"),
         "keep-date",
         "keep other date",
-        "2.00",
+        new BigDecimal("2.00"),
         "keep");
     jdbcTemplate.update(
         "INSERT INTO biz.copy_import_customer VALUES (?,?,?,?,?,?)",
@@ -101,7 +112,7 @@ class JdbcMappedImportCopyIntegrationTest {
         Date.valueOf("2026-06-07"),
         "keep-tenant",
         "keep other tenant",
-        "3.00",
+        new BigDecimal("3.00"),
         "keep");
     jdbcTemplate.update(
         "INSERT INTO biz.copy_import_customer_part VALUES (?,?,?,?,?,?)",
@@ -109,7 +120,7 @@ class JdbcMappedImportCopyIntegrationTest {
         Date.valueOf("2026-06-07"),
         "old-target",
         "old target",
-        "1.00",
+        new BigDecimal("1.00"),
         "delete me");
   }
 
@@ -213,6 +224,48 @@ class JdbcMappedImportCopyIntegrationTest {
                 """, Integer.class)).isEqualTo(2);
   }
 
+  @Test
+  void batchUpsertCoercesTemplateTypedNumericAndDateValues() throws Exception {
+    ImportLoadContext context = new ImportLoadContext(
+        "t1",
+        "IMPORT_TRANSACTION",
+        "trace-upsert",
+        "worker-1",
+        "transactions.csv",
+        "BATCH-1",
+        "2026-06-07",
+        "TRANSACTION",
+        null,
+        "TPL-UPsert",
+        batchUpsertTemplateConfig());
+
+    int inserted = plugin.loadChunk(
+        context,
+        List.of(Map.of(
+            "txnNo", "T001",
+            "amount", "101.50",
+            "txnDate", "2026-06-07",
+            "remark", "first")));
+    int updated = plugin.loadChunk(
+        context,
+        List.of(Map.of(
+            "txnNo", "T001",
+            "amount", "202.75",
+            "txnDate", "2026-06-07",
+            "remark", "updated")));
+
+    assertThat(inserted).isEqualTo(1);
+    assertThat(updated).isEqualTo(1);
+    Map<String, Object> row = jdbcTemplate.queryForMap("""
+        SELECT amount, txn_date, remark
+        FROM biz.batch_upsert_transaction
+        WHERE tenant_id='t1' AND txn_no='T001'
+        """);
+    assertThat(row.get("amount")).isEqualTo(new BigDecimal("202.75"));
+    assertThat(row.get("txn_date")).isEqualTo(Date.valueOf("2026-06-07"));
+    assertThat(row.get("remark")).isEqualTo("updated");
+  }
+
   private boolean rowExists(String tenantId, String bizDate, String customerNo) {
     Integer count = jdbcTemplate.queryForObject(
         """
@@ -287,5 +340,39 @@ class JdbcMappedImportCopyIntegrationTest {
                 "copy_import_customer_part_20260607",
                 "attachClause",
                 "FOR VALUES FROM ('2026-06-07') TO ('2026-06-08')")));
+  }
+
+  private static Map<String, Object> batchUpsertTemplateConfig() {
+    return Map.of(
+        "field_mappings",
+        List.of(
+            Map.of("name", "txnNo", "targetColumn", "txn_no", "type", "STRING"),
+            Map.of("name", "amount", "targetColumn", "amount", "type", "DECIMAL"),
+            Map.of(
+                "name",
+                "txnDate",
+                "targetColumn",
+                "txn_date",
+                "type",
+                "DATE",
+                "format",
+                "yyyy-MM-dd"),
+            Map.of("name", "remark", "targetColumn", "remark", "type", "STRING")),
+        "jdbc_mapped_import",
+        Map.of(
+            "schema",
+            "biz",
+            "table",
+            "batch_upsert_transaction",
+            "tenantColumn",
+            "tenant_id",
+            "columnMappings",
+            List.of(
+                Map.of("from", "txnNo", "to", "txn_no"),
+                Map.of("from", "amount", "to", "amount"),
+                Map.of("from", "txnDate", "to", "txn_date"),
+                Map.of("from", "remark", "to", "remark")),
+            "conflictColumns",
+            List.of("tenant_id", "txn_no", "txn_date")));
   }
 }

@@ -3,7 +3,7 @@
 # run-worker-business-scenario-matrix.sh
 #
 # 本地真实上下游 worker 业务场景矩阵统一入口。
-# 默认运行已稳定的小矩阵 Stage 2/2b/2c/3/3b/3c/4/4b/4c/5/5c/6/6c；Stage 1 基线需显式选择。
+# 默认运行已稳定的小矩阵 Stage 2/2b/2c/3/3b/3c/4/4b/4c/5/5c/6/6c；Stage 1/1i 基线需显式选择。
 # =========================================================
 set -euo pipefail
 
@@ -21,7 +21,7 @@ usage() {
 Usage:
   PROFILE=smoke bash load-tests/scripts/run-worker-business-scenario-matrix.sh
   STAGES=2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c bash load-tests/scripts/run-worker-business-scenario-matrix.sh
-  STAGES=1,2,3,4 bash load-tests/scripts/run-worker-business-scenario-matrix.sh
+  STAGES=1,1i,2,3,4 bash load-tests/scripts/run-worker-business-scenario-matrix.sh
 
 Profiles:
   smoke  Stage 2/2b/2c/3/3b/3c/4/4b/4c/5/5c/6/6c: worker 业务小矩阵
@@ -101,6 +101,10 @@ for stage in "${STAGE_LIST[@]}"; do
     1)
       run_stage 1 "sim baseline" bash scripts/sim/05-load.sh
       run_stage 1 "sim verify" bash scripts/sim/06-verify.sh
+      ;;
+    1i)
+      RUN_ID="import-mainline-$RUN_ID" \
+        run_stage 1i "import mainline only" bash scripts/sim/28-import-mainline.sh
       ;;
     2)
       RUN_ID="import-stage2-$RUN_ID" run_stage 2 "import XML/FIXED_WIDTH" bash scripts/sim/08-import-stage2.sh

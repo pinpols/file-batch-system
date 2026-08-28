@@ -34,7 +34,11 @@ public record JdbcMappedImportSpec(
     ImportLoadStrategy loadStrategy,
     List<String> replacePartitionColumns,
     StageSwap stageSwap) {
-  public record ColumnMapping(String from, String to) {}
+  public record ColumnMapping(String from, String to, String type, String format) {
+    public ColumnMapping(String from, String to) {
+      this(from, to, null, null);
+    }
+  }
 
   public record StageSwap(String partitionTable, String attachClause) {}
 
@@ -180,8 +184,11 @@ public record JdbcMappedImportSpec(
     if (from == null || to == null) {
       return Optional.empty();
     }
-    return Optional.of(
-        new ColumnMapping(String.valueOf(from).trim(), String.valueOf(to).trim()));
+    return Optional.of(new ColumnMapping(
+        String.valueOf(from).trim(),
+        String.valueOf(to).trim(),
+        textOrNull(m.get("type")),
+        textOrNull(m.get("format"))));
   }
 
   /**
@@ -206,7 +213,8 @@ public record JdbcMappedImportSpec(
           ? String.valueOf(target).trim()
           : normalizeColumn(name);
       if (Texts.hasText(to)) {
-        out.add(new ColumnMapping(name, to));
+        out.add(
+            new ColumnMapping(name, to, textOrNull(fm.get("type")), textOrNull(fm.get("format"))));
       }
     }
     return out;
@@ -221,14 +229,28 @@ public record JdbcMappedImportSpec(
     if (explicit.isEmpty()) {
       return inferred;
     }
+    Map<String, ColumnMapping> inferredByFrom = inferred.stream()
+        .collect(Collectors.toMap(
+            ColumnMapping::from, m -> m, (left, right) -> left, LinkedHashMap::new));
     Set<String> explicitFroms = explicit.stream()
         .map(ColumnMapping::from)
         .collect(Collectors.toCollection(LinkedHashSet::new));
     List<ColumnMapping> out = inferred.stream()
         .filter(inf -> !explicitFroms.contains(inf.from()))
         .collect(Collectors.toCollection(ArrayList::new));
-    out.addAll(explicit);
+    out.addAll(explicit.stream()
+        .map(exp -> withInferredType(exp, inferredByFrom.get(exp.from())))
+        .toList());
     return out;
+  }
+
+  private static ColumnMapping withInferredType(ColumnMapping explicit, ColumnMapping inferred) {
+    if (inferred == null) {
+      return explicit;
+    }
+    String type = explicit.type() == null ? inferred.type() : explicit.type();
+    String format = explicit.format() == null ? inferred.format() : explicit.format();
+    return new ColumnMapping(explicit.from(), explicit.to(), type, format);
   }
 
   private static List<Map<String, Object>> extractFieldMappings(
@@ -282,6 +304,15 @@ public record JdbcMappedImportSpec(
       return true;
     }
     return null;
+  }
+
+  @Nullable
+  private static String textOrNull(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String text = String.valueOf(value).trim();
+    return Texts.hasText(text) ? text : null;
   }
 
   /**

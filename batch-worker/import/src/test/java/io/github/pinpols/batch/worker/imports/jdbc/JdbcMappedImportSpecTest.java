@@ -74,6 +74,30 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  void explicitMappingsInheritFieldMappingTypeAndFormat() {
+    Map<String, Object> template = Map.of(
+        "field_mappings",
+        List.of(Map.of(
+            "name", "txnDate",
+            "targetColumn", "txn_date",
+            "type", "DATE",
+            "format", "yyyy-MM-dd")),
+        "jdbc_mapped_import",
+        Map.of(
+            "schema", "biz",
+            "table", "transaction",
+            "tenantColumn", "tenant_id",
+            "columnMappings", List.of(Map.of("from", "txnDate", "to", "txn_date"))));
+
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+
+    assertThat(spec.columnMappings())
+        .extracting(
+            ColumnMapping::from, ColumnMapping::to, ColumnMapping::type, ColumnMapping::format)
+        .containsExactly(tuple("txnDate", "txn_date", "DATE", "yyyy-MM-dd"));
+  }
+
+  @Test
   void shouldInferWhenColumnMappingsIsEmptyJsonArray() {
     Map<String, Object> template = Map.of(
         "field_mappings",
