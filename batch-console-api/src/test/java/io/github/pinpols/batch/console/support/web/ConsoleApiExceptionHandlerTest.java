@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -16,7 +17,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * {@link ConsoleApiExceptionHandler} 的 status/code 映射单测,聚焦两条审查修复:
@@ -125,6 +128,17 @@ class ConsoleApiExceptionHandlerTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(500);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.SYSTEM_ERROR);
+  }
+
+  @Test
+  void shouldReturn400InvalidArgument_whenRequestParameterTypeMismatch() {
+    ResponseEntity<?> response = handler()
+        .handleTypeMismatch(
+            new MethodArgumentTypeMismatchException("1", LocalDate.class, "bizDate", null, null),
+            new MockHttpServletRequest("GET", "/api/console/asset-partitions/readiness"));
+
+    assertThat(response.getStatusCode().value()).isEqualTo(400);
+    assertThat(bodyOf(response).code()).isEqualTo(ResultCode.INVALID_ARGUMENT);
   }
 
   private static RestClientResponseException restError(HttpStatus status, String body) {
