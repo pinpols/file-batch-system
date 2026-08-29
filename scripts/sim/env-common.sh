@@ -26,8 +26,13 @@ batch_require_python
 
 # 应用服务运行在 Compose 网络时，夹具中的外部依赖必须使用服务名；宿主机
 # 直接运行 JVM 时才使用端口映射。统一在这里判定，避免每个 sim 脚本各写一套。
+sim_container_running() {
+  local container_name="$1"
+  [[ "$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || true)" == "true" ]]
+}
+
 sim_container_stack_active() {
-  docker inspect batch-console-api >/dev/null 2>&1
+  sim_container_running batch-console-api
 }
 
 sim_mockserver_base_url() {
