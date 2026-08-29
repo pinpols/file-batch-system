@@ -28,7 +28,7 @@ batch_require_python
 # 启动 Trigger；仅调用 drain 或“重启后立即清理”都可能让新进程的 reconciler 与 psql 争抢
 # QRTZ_LOCKS。这个停启只属于 sim 的数据边界隔离，不代表生产流程需要按阶段重启服务。
 echo "==> stop trigger before direct Quartz fixture reset"
-if docker inspect batch-trigger >/dev/null 2>&1; then
+if sim_container_running batch-trigger; then
   # 容器端口由 Docker 代理监听，不能按宿主端口 kill，否则会连带终止
   # Docker daemon。容器栈通过 Compose 停止，后续 restart.sh 负责重建。
   docker compose --env-file "${COMPOSE_ENV_FILE:-.env.local}" \

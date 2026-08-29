@@ -160,3 +160,9 @@ SET channel_name = EXCLUDED.channel_name,
     enabled = EXCLUDED.enabled,
     is_deleted = EXCLUDED.is_deleted,
     updated_at = CURRENT_TIMESTAMP;
+
+-- Stage 5c 是通道矩阵验收脚本，fixture 每轮都会按当前运行模式重写 SFTP endpoint。
+-- 清理同名通道的健康快照，避免上一轮错误 endpoint 的退避窗口污染本轮验证。
+DELETE FROM batch.file_channel_health
+WHERE tenant_id = 'tb'
+  AND channel_code IN ('tb_stage5c_local', 'tb_stage5c_nas', 'tb_stage5c_sftp');

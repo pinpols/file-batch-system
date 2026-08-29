@@ -20,13 +20,8 @@ SIM_STAGE_NAME="dispatch-stage5c"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-if sim_container_stack_active; then
-  export SFTP_HOST="sftp"
-  export SFTP_PORT="22"
-else
-  export SFTP_HOST="${SFTP_HOST:-127.0.0.1}"
-  export SFTP_PORT="${SFTP_PORT:-12222}"
-fi
+read -r SFTP_HOST SFTP_PORT <<< "$(sim_sftp_endpoint)"
+export SFTP_HOST SFTP_PORT
 export SOURCE_DIR="${SOURCE_DIR:-/tmp/batch/stage5c-source}"
 export STORAGE_PATH="$SOURCE_DIR/$BATCH_NO.json"
 mkdir -p "$REPORT_DIR" "$SOURCE_DIR" /tmp/batch/stage5c-local /tmp/batch/stage5c-nas
