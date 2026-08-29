@@ -6,8 +6,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerBusyException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -66,5 +68,12 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
     // 直接用 ResultCode.label()(已是中文),避免 standalone MockMvc 测试因为父类 protected
     // helper 调用链 + null resolver 间接抛异常导致 response body 为空。
     return ResponseEntity.badRequest().body(CommonResponse.failure(code, code.label()));
+  }
+
+  @ExceptionHandler(TriggerSchedulerBusyException.class)
+  public ResponseEntity<CommonResponse<Void>> handleTriggerSchedulerBusy(
+      TriggerSchedulerBusyException exception) {
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .body(CommonResponse.failure(ResultCode.RATE_LIMITED, exception.getMessage()));
   }
 }

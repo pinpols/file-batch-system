@@ -7,6 +7,7 @@ import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -16,8 +17,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
-import lombok.RequiredArgsConstructor;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.quartz.CronExpression;
@@ -33,6 +36,7 @@ import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -56,110 +60,143 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   public static final String JOB_GROUP = "batch-trigger";
+  private static final Duration DEFAULT_MANAGEMENT_LOCK_TIMEOUT = Duration.ofSeconds(5);
 
   private final TriggerDefinitionLoader triggerDefinitionLoader;
   private final Scheduler scheduler;
+  private final Duration managementLockTimeout;
+  private final ReentrantLock managementLock = new ReentrantLock(true);
+
+  @Autowired
+  public TriggerSchedulerFacade(
+      TriggerDefinitionLoader triggerDefinitionLoader, Scheduler scheduler) {
+    this(triggerDefinitionLoader, scheduler, DEFAULT_MANAGEMENT_LOCK_TIMEOUT);
+  }
+
+  TriggerSchedulerFacade(
+      TriggerDefinitionLoader triggerDefinitionLoader,
+      Scheduler scheduler,
+      Duration managementLockTimeout) {
+    this.triggerDefinitionLoader = triggerDefinitionLoader;
+    this.scheduler = scheduler;
+    this.managementLockTimeout = managementLockTimeout;
+  }
 
   @Override
   // M-13: lockAtMostFor 从 PT5M 增加到 PT15M，大集群枚举注册所有触发器可能超过 5 分钟
   @SchedulerLock(name = "trigger_register_all", lockAtMostFor = "PT15M", lockAtLeastFor = "PT10S")
   public void registerAll() {
-    List<TriggerDescriptor> descriptors = triggerDefinitionLoader.loadAll();
-    // 调度注册具有外部副作用，显式顺序执行，便于保留失败位置和逐项调试语义。
-    for (TriggerDescriptor descriptor : descriptors) {
-      if (descriptor.isEnabled()) {
-        scheduleDescriptor(descriptor);
+    runManaged("registerAll", () -> {
+      List<TriggerDescriptor> descriptors = triggerDefinitionLoader.loadAll();
+      // 调度注册具有外部副作用，显式顺序执行，便于保留失败位置和逐项调试语义。
+      for (TriggerDescriptor descriptor : descriptors) {
+        if (descriptor.isEnabled()) {
+          scheduleDescriptor(descriptor);
+        }
       }
-    }
+    });
   }
 
   @Override
   public void registerByJobCode(String tenantId, String jobCode) {
-    TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
-    if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
-      scheduleDescriptor(descriptor);
-    }
+    runManaged("registerByJobCode", () -> {
+      TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
+      if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
+        scheduleDescriptor(descriptor);
+      }
+    });
   }
 
   @Override
   public void unregisterByJobCode(String tenantId, String jobCode) {
-    try {
-      JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-      if (scheduler.checkExists(jobKey)) {
-        scheduler.deleteJob(jobKey);
+    runManaged("unregisterByJobCode", () -> {
+      try {
+        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
+        if (scheduler.checkExists(jobKey)) {
+          scheduler.deleteJob(jobKey);
+        }
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to unregister trigger: " + jobCode, e);
       }
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to unregister trigger: " + jobCode, e);
-    }
+    });
   }
 
   @Override
   public void pauseByJobCode(String tenantId, String jobCode) {
-    try {
-      JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-      if (scheduler.checkExists(jobKey)) {
-        scheduler.pauseJob(jobKey);
+    runManaged("pauseByJobCode", () -> {
+      try {
+        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
+        if (scheduler.checkExists(jobKey)) {
+          scheduler.pauseJob(jobKey);
+        }
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to pause trigger: " + jobCode, e);
       }
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to pause trigger: " + jobCode, e);
-    }
+    });
   }
 
   @Override
   public void resumeByJobCode(String tenantId, String jobCode) {
-    try {
-      JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-      if (scheduler.checkExists(jobKey)) {
-        scheduler.resumeJob(jobKey);
+    runManaged("resumeByJobCode", () -> {
+      try {
+        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
+        if (scheduler.checkExists(jobKey)) {
+          scheduler.resumeJob(jobKey);
+        }
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to resume trigger: " + jobCode, e);
       }
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to resume trigger: " + jobCode, e);
-    }
+    });
   }
 
   @Override
   public void pauseByTenant(String tenantId) {
-    try {
-      String prefix = tenantId + ":";
-      for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
-        if (jobKey.getName().startsWith(prefix)) {
-          scheduler.pauseJob(jobKey);
+    runManaged("pauseByTenant", () -> {
+      try {
+        String prefix = tenantId + ":";
+        for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
+          if (jobKey.getName().startsWith(prefix)) {
+            scheduler.pauseJob(jobKey);
+          }
         }
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to pause triggers for tenant: " + tenantId, e);
       }
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to pause triggers for tenant: " + tenantId, e);
-    }
+    });
   }
 
   @Override
   public void resumeByTenant(String tenantId) {
-    try {
-      String prefix = tenantId + ":";
-      for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
-        if (jobKey.getName().startsWith(prefix)) {
-          scheduler.resumeJob(jobKey);
+    runManaged("resumeByTenant", () -> {
+      try {
+        String prefix = tenantId + ":";
+        for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
+          if (jobKey.getName().startsWith(prefix)) {
+            scheduler.resumeJob(jobKey);
+          }
         }
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to resume triggers for tenant: " + tenantId, e);
       }
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to resume triggers for tenant: " + tenantId, e);
-    }
+    });
   }
 
   @Override
   public List<TriggerStatusInfo> listRegisteredTriggers() {
-    try {
-      List<TriggerStatusInfo> result = new ArrayList<>();
-      for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
-        appendTriggerStatus(result, jobKey);
+    return callManaged("listRegisteredTriggers", () -> {
+      try {
+        List<TriggerStatusInfo> result = new ArrayList<>();
+        for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
+          appendTriggerStatus(result, jobKey);
+        }
+        return result;
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to list triggers", e);
       }
-      return result;
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to list triggers", e);
-    }
+    });
   }
 
   private void appendTriggerStatus(List<TriggerStatusInfo> result, JobKey jobKey)
@@ -223,42 +260,48 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   @Override
   public void pauseAll() {
-    try {
-      scheduler.pauseAll();
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to pause all triggers", e);
-    }
+    runManaged("pauseAll", () -> {
+      try {
+        scheduler.pauseAll();
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to pause all triggers", e);
+      }
+    });
   }
 
   @Override
   public void resumeAll() {
-    try {
-      scheduler.resumeAll();
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to resume all triggers", e);
-    }
+    runManaged("resumeAll", () -> {
+      try {
+        scheduler.resumeAll();
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to resume all triggers", e);
+      }
+    });
   }
 
   @Override
   public String schedulerStatus() {
-    try {
-      if (scheduler.isShutdown()) {
-        return "SHUTDOWN";
-      }
-      if (scheduler.isInStandbyMode()) {
-        return "STANDBY";
-      }
-      if (scheduler.isStarted()) {
-        Set<String> pausedGroups = scheduler.getPausedTriggerGroups();
-        if (pausedGroups.contains(JOB_GROUP)) {
-          return "PAUSED";
+    return callManaged("schedulerStatus", () -> {
+      try {
+        if (scheduler.isShutdown()) {
+          return "SHUTDOWN";
         }
-        return "STARTED";
+        if (scheduler.isInStandbyMode()) {
+          return "STANDBY";
+        }
+        if (scheduler.isStarted()) {
+          Set<String> pausedGroups = scheduler.getPausedTriggerGroups();
+          if (pausedGroups.contains(JOB_GROUP)) {
+            return "PAUSED";
+          }
+          return "STARTED";
+        }
+        return "UNKNOWN";
+      } catch (SchedulerException e) {
+        throw new IllegalStateException("failed to get scheduler status", e);
       }
-      return "UNKNOWN";
-    } catch (SchedulerException e) {
-      throw new IllegalStateException("failed to get scheduler status", e);
-    }
+    });
   }
 
   /**
@@ -404,5 +447,30 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
           + seconds);
     }
     return seconds;
+  }
+
+  private void runManaged(String operation, Runnable action) {
+    callManaged(operation, () -> {
+      action.run();
+      return null;
+    });
+  }
+
+  private <T> T callManaged(String operation, Supplier<T> action) {
+    boolean locked = false;
+    try {
+      locked = managementLock.tryLock(managementLockTimeout.toMillis(), TimeUnit.MILLISECONDS);
+      if (!locked) {
+        throw new TriggerSchedulerBusyException(operation);
+      }
+      return action.get();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new TriggerSchedulerBusyException(operation, e);
+    } finally {
+      if (locked) {
+        managementLock.unlock();
+      }
+    }
   }
 }
