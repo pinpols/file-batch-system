@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,7 +13,13 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -187,6 +195,36 @@ class TriggerSchedulerFacadeTest {
     facade.registerAll();
 
     verifyNoInteractions(scheduler);
+  }
+
+  @Test
+  void shouldFailFastWhenConcurrentManagementOperationIsAlreadyRunning() throws Exception {
+    facade = new TriggerSchedulerFacade(triggerDefinitionLoader, scheduler, Duration.ofMillis(50));
+    CountDownLatch enteredQuartzCall = new CountDownLatch(1);
+    CountDownLatch releaseQuartzCall = new CountDownLatch(1);
+    doAnswer(invocation -> {
+          enteredQuartzCall.countDown();
+          assertThat(releaseQuartzCall.await(2, TimeUnit.SECONDS)).isTrue();
+          return null;
+        })
+        .when(scheduler)
+        .pauseAll();
+
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> firstOperation = executor.submit(facade::pauseAll);
+      assertThat(enteredQuartzCall.await(1, TimeUnit.SECONDS)).isTrue();
+
+      assertThatThrownBy(facade::resumeAll)
+          .isInstanceOf(TriggerSchedulerBusyException.class)
+          .hasMessageContaining("resumeAll");
+
+      releaseQuartzCall.countDown();
+      firstOperation.get(1, TimeUnit.SECONDS);
+    } finally {
+      releaseQuartzCall.countDown();
+      executor.shutdownNow();
+    }
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────
