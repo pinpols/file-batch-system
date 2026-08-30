@@ -424,9 +424,9 @@ SET query_param_schema = '{
           {"from": "txn_no", "to": "txn_no"},
           {"from": "account_no", "to": "account_no"},
           {"from": "txn_type", "to": "txn_type"},
-          {"from": "amount", "to": "amount"},
+          {"from": "amount", "to": "amount", "type": "NUMERIC"},
           {"from": "currency_code", "to": "currency_code"},
-          {"from": "txn_date", "to": "txn_date"},
+          {"from": "txn_date", "to": "txn_date", "type": "DATE"},
           {"from": "remark", "to": "remark"}
         ],
         "conflictColumns": ["tenant_id", "txn_no", "txn_date"]
@@ -446,9 +446,9 @@ SET query_param_schema = '{
         "columnMappings": [
           {"from": "entity_id", "to": "entity_id"},
           {"from": "entity_type", "to": "entity_type"},
-          {"from": "score_value", "to": "score_value"},
+          {"from": "score_value", "to": "score_value", "type": "NUMERIC"},
           {"from": "score_band", "to": "score_band"},
-          {"from": "score_date", "to": "score_date"}
+          {"from": "score_date", "to": "score_date", "type": "DATE"}
         ],
         "conflictColumns": ["tenant_id", "entity_id", "score_date"]
       }
