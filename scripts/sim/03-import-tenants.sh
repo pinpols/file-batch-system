@@ -117,6 +117,13 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -v ON_
   -f /dev/stdin < "$ROOT/docs/test-data/sim-e2e-bootstrap.sql" >/dev/null
 echo "  ✓ bootstrap OK"
 
+if [[ "${SIM_IMPORT_TENANTS_QUIESCE_SCHEDULES:-true}" == "true" ]]; then
+  echo
+  echo "==> 静默自动 fire 的定时触发,避免导入配置后污染普通 sim"
+  SIM_QUIESCE_FROM_IMPORT_TENANTS=1 bash "$ROOT/scripts/sim/98-quiesce-schedules.sh" >/dev/null
+  echo "  ✓ schedules quiesced"
+fi
+
 echo
 echo "==> ✅ 导入完成,验证"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \

@@ -27,9 +27,15 @@ source "$ROOT/scripts/sim/env-common.sh"
 export ROWS="${ROUNDS:-5}"               # 每个 import 生成多少数据行
 export ONLY="${ONLY:-}"
 export CLEAN_SIM_OUTPUTS="${CLEAN_SIM_OUTPUTS:-false}"
+export SIM_QUIESCE_SCHEDULES="${SIM_QUIESCE_SCHEDULES:-true}"
 export MINIO_BUCKET="${MINIO_BUCKET:-$BATCH_S3_BUCKET}"
 
 batch_require_python
+
+if [[ "$SIM_QUIESCE_SCHEDULES" == "true" ]]; then
+  echo "==> quiesce:静默自动 fire 的定时触发,避免普通 sim 被后台 schedule 污染"
+  bash "$ROOT/scripts/sim/98-quiesce-schedules.sh" >/dev/null
+fi
 
 "$PYTHON_BIN" - <<'PY'
 import json, os, subprocess, sys, time, urllib.request
@@ -222,7 +228,8 @@ for t in TENANTS:
             errors.append(msg)
             print(f"  [DISPATCH] {t}/{job}: ✗ {msg}")
     for job in WORKFLOWS.get(t, []):
-        run("WORKFLOW", t, job, {"batchNo": f"{BATCH}-wf"})
+        workflow_batch = f"{BATCH}-wf-{job.lower().replace('_', '-')}"
+        run("WORKFLOW", t, job, {"batchNo": workflow_batch})
 
 print(f"\n==> 完成:total={tot} succ={ok}")
 print("提示:worker 真正写 MinIO/biz.* 需 60~120s,建议 sleep 120 后跑 06-verify.sh")
