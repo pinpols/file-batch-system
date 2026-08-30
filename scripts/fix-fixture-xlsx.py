@@ -190,6 +190,101 @@ EXPORT_SQL: dict[str, str] = {
         "FROM biz.risk_score WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL",
 }
 
+IMPORT_TARGETS: dict[str, dict[str, object]] = {
+    "TA_IMPORT_CUSTOMER_TPL": {
+        "schema": "biz",
+        "table": "customer_account",
+        "tenantColumn": "tenant_id",
+        "conflictColumns": ["tenant_id", "customer_no"],
+        "systemBindings": {
+            "source_file_name": "${sourceFileName}",
+            "source_batch_no": "${batchNo}",
+            "source_trace_id": "${traceId}",
+            "created_by": "${workerId}",
+            "updated_by": "${workerId}",
+        },
+    },
+    "TA_IMPORT_ORDER_TPL": {
+        "schema": "biz",
+        "table": "customer_account",
+        "tenantColumn": "tenant_id",
+        "conflictColumns": ["tenant_id", "customer_no"],
+        "systemBindings": {
+            "source_file_name": "${sourceFileName}",
+            "source_batch_no": "${batchNo}",
+            "source_trace_id": "${traceId}",
+            "created_by": "${workerId}",
+            "updated_by": "${workerId}",
+        },
+    },
+    "TB_IMPORT_TRANSACTION_TPL": {
+        "schema": "biz",
+        "table": "transaction",
+        "tenantColumn": "tenant_id",
+        "conflictColumns": ["tenant_id", "txn_no", "txn_date"],
+    },
+    "TC_IMPORT_RISK_SCORE_TPL": {
+        "schema": "biz",
+        "table": "risk_score",
+        "tenantColumn": "tenant_id",
+        "conflictColumns": ["tenant_id", "entity_id", "score_date"],
+    },
+}
+
+EXPORT_QUERY_PARAM_SCHEMA = {
+    "export_data_ref": "sql_template_export",
+    "sqlTemplateExport": {"cursorColumn": "id"},
+}
+
+JOB_DEFAULT_PARAMS: dict[str, dict[str, object]] = {
+    "TA_IMPORT_CUSTOMER": {
+        "templateCode": "TA_IMPORT_CUSTOMER_TPL",
+        "content": (
+            "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status\n"
+            "WF-CUST-000001,工作流客户1,PERSONAL,WFID000001,13900000001,wf1@sim.com,ACTIVE\n"
+        ),
+    },
+    "TA_IMPORT_ORDER": {
+        "templateCode": "TA_IMPORT_ORDER_TPL",
+        "content": (
+            "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status\n"
+            "WF-ORDER-000001,工作流订单客户1,PERSONAL,WFOD000001,13900000002,wfo1@sim.com,ACTIVE\n"
+        ),
+    },
+    "TA_EXPORT_REPORT": {"templateCode": "TA_EXPORT_REPORT_TPL"},
+    "TB_IMPORT_TRANSACTION": {
+        "templateCode": "TB_IMPORT_TRANSACTION_TPL",
+        "content": (
+            "txn_no,account_no,txn_type,amount,currency_code,txn_date,remark\n"
+            "WF-TB-TXN-000001,WFACC000001,DEPOSIT,101.00,CNY,2026-06-08,wf-default\n"
+        ),
+    },
+    "TB_EXPORT_STATEMENT": {"templateCode": "TB_EXPORT_STATEMENT_TPL"},
+    "TC_IMPORT_RISK_SCORE": {
+        "templateCode": "TC_IMPORT_RISK_SCORE_TPL",
+        "content": (
+            "entity_id,entity_type,score_value,score_band,score_date\n"
+            "WF-ENT-000001,ACCOUNT,701,MEDIUM,2026-06-08\n"
+        ),
+    },
+    "TC_EXPORT_RISK_ALERT": {"templateCode": "TC_EXPORT_RISK_ALERT_TPL"},
+}
+
+IMPORT_STAGE_CHAIN = [
+    ("STEP_RECEIVE", "接收文件", "RECEIVE", 1, "IMPORT_RECEIVE"),
+    ("STEP_PREPROCESS", "预处理", "PREPROCESS", 2, "IMPORT_PREPROCESS"),
+    ("STEP_PARSE", "解析", "PARSE", 3, "IMPORT_PARSE"),
+    ("STEP_VALIDATE", "校验", "VALIDATE", 4, "IMPORT_VALIDATE"),
+    ("STEP_LOAD", "入库", "LOAD", 5, "IMPORT_LOAD"),
+]
+
+IMPORT_JOBS = {
+    "TA_IMPORT_CUSTOMER",
+    "TA_IMPORT_ORDER",
+    "TB_IMPORT_TRANSACTION",
+    "TC_IMPORT_RISK_SCORE",
+}
+
 
 def linux5_to_quartz6(expr: str) -> str | None:
     if not expr:
@@ -339,7 +434,13 @@ def patch_channel_config_json(ws) -> int:
 
 def patch_file_template_config(ws) -> int:
     headers = [c.value for c in ws[1]]
-    required = {"template_code", "template_type", "field_mappings", "default_query_sql"}
+    required = {
+        "template_code",
+        "template_type",
+        "field_mappings",
+        "default_query_sql",
+        "query_param_schema",
+    }
     if not required.issubset(set(headers)):
         return 0
     idx = {h: i for i, h in enumerate(headers)}
@@ -387,6 +488,131 @@ def patch_file_template_config(ws) -> int:
             if cell.value != sql:
                 cell.value = sql
                 fixed += 1
+            query_cell = row[idx["query_param_schema"]]
+            rendered_query = json.dumps(
+                EXPORT_QUERY_PARAM_SCHEMA, ensure_ascii=False, separators=(",", ":")
+            )
+            if query_cell.value != rendered_query:
+                query_cell.value = rendered_query
+                fixed += 1
+
+        target = IMPORT_TARGETS.get(template_code)
+        if target is not None:
+            mappings = TEMPLATE_MAPPINGS[template_code]
+            column_mappings = []
+            for item in mappings:
+                mapping = {
+                    "from": item["name"],
+                    "to": item.get("targetColumn", item["name"]),
+                }
+                if item.get("type") and item["type"] != "STRING":
+                    mapping["type"] = item["type"]
+                if item.get("format"):
+                    mapping["format"] = item["format"]
+                column_mappings.append(mapping)
+            rendered_query = json.dumps(
+                {"jdbcMappedImport": {**target, "columnMappings": column_mappings}},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            query_cell = row[idx["query_param_schema"]]
+            if query_cell.value != rendered_query:
+                query_cell.value = rendered_query
+                fixed += 1
+    return fixed
+
+
+def patch_job_default_params(ws) -> int:
+    headers = [c.value for c in ws[1]]
+    if "job_code" not in headers or "default_params" not in headers:
+        return 0
+    idx = {h: i for i, h in enumerate(headers)}
+    fixed = 0
+    for row in ws.iter_rows(min_row=2):
+        job_code = row[idx["job_code"]].value
+        params = JOB_DEFAULT_PARAMS.get(job_code)
+        if params is None:
+            continue
+        rendered = json.dumps(params, ensure_ascii=False, separators=(",", ":"))
+        cell = row[idx["default_params"]]
+        if cell.value != rendered:
+            cell.value = rendered
+            fixed += 1
+    return fixed
+
+
+def patch_import_pipeline_steps(ws) -> int:
+    headers = [c.value for c in ws[1]]
+    required = {
+        "job_code",
+        "version",
+        "step_code",
+        "step_name",
+        "stage_code",
+        "step_order",
+        "impl_code",
+        "step_params",
+        "timeout_seconds",
+        "retry_policy",
+        "retry_max_count",
+        "enabled",
+    }
+    if not required.issubset(set(headers)):
+        return 0
+    idx = {h: i for i, h in enumerate(headers)}
+    fixed = 0
+    rows_by_job: dict[str, list] = {}
+    for row in ws.iter_rows(min_row=2):
+        job_code = row[idx["job_code"]].value
+        if job_code in IMPORT_JOBS:
+            rows_by_job.setdefault(job_code, []).append(row)
+
+    for job_code, rows in rows_by_job.items():
+        by_stage = {row[idx["stage_code"]].value: row for row in rows}
+        for step_code, step_name, stage_code, step_order, impl_code in IMPORT_STAGE_CHAIN:
+            row = by_stage.get(stage_code)
+            if row is None:
+                values = [None] * len(headers)
+                values[idx["job_code"]] = job_code
+                values[idx["version"]] = 1
+                values[idx["step_code"]] = step_code
+                values[idx["step_name"]] = step_name
+                values[idx["stage_code"]] = stage_code
+                values[idx["step_order"]] = step_order
+                values[idx["impl_code"]] = impl_code
+                values[idx["step_params"]] = "{}"
+                values[idx["timeout_seconds"]] = 120
+                values[idx["retry_policy"]] = "NONE"
+                values[idx["retry_max_count"]] = 0
+                values[idx["enabled"]] = "TRUE"
+                ws.append(values)
+                fixed += 1
+                continue
+            desired = {
+                "step_code": step_code,
+                "step_name": step_name,
+                "stage_code": stage_code,
+                "step_order": step_order,
+                "impl_code": impl_code,
+                "step_params": json.dumps(
+                    {"spec": "jdbcMappedImport", "version": "1", "commitBatchSize": 500},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+                if stage_code in {"PARSE", "VALIDATE", "LOAD"}
+                else "{}",
+                "timeout_seconds": row[idx["timeout_seconds"]].value or 120,
+                "retry_policy": row[idx["retry_policy"]].value or "NONE",
+                "retry_max_count": row[idx["retry_max_count"]].value
+                if row[idx["retry_max_count"]].value not in (None, "")
+                else 0,
+                "enabled": "TRUE",
+            }
+            for column, value in desired.items():
+                cell = row[idx[column]]
+                if cell.value != value:
+                    cell.value = value
+                    fixed += 1
     return fixed
 
 
@@ -582,10 +808,15 @@ def process(path: Path) -> dict:
         ws = wb["job_definition"]
         result["schedule_expr_fixed"] = patch_schedule_expr(ws)
         result["execution_mode_fixed"] = ensure_execution_mode(ws)
+        result["job_default_params_fixed"] = patch_job_default_params(ws)
     if "file_channel_config" in wb.sheetnames:
         result["sftp_keys_renamed"] = patch_channel_config_json(wb["file_channel_config"])
     if "file_template_config" in wb.sheetnames:
         result["file_template_config_fixed"] = patch_file_template_config(wb["file_template_config"])
+    if "pipeline_step_definition" in wb.sheetnames:
+        result["import_pipeline_steps_fixed"] = patch_import_pipeline_steps(
+            wb["pipeline_step_definition"]
+        )
     nodes_touched, edges_added = ensure_workflow_boundary_nodes(wb)
     result["workflow_nodes_touched"] = nodes_touched
     result["workflow_edges_added"] = edges_added
@@ -651,8 +882,11 @@ def verify(path: Path) -> dict:
         headers = [c.value for c in ws[1]]
         fm = headers.index("field_mappings")
         sql = headers.index("default_query_sql")
+        query_schema = headers.index("query_param_schema")
+        template_code = headers.index("template_code")
         missing_name = 0
         select_star = 0
+        import_specs_missing = []
         for row in ws.iter_rows(min_row=2, values_only=True):
             raw = row[fm]
             if raw not in (None, ""):
@@ -667,8 +901,34 @@ def verify(path: Path) -> dict:
             query = str(row[sql] or "")
             if re.search(r"(?is)\bselect\s+\*", query):
                 select_star += 1
+            tpl = row[template_code]
+            if tpl in IMPORT_TARGETS:
+                try:
+                    qps = json.loads(str(row[query_schema] or "{}"))
+                except Exception:
+                    qps = {}
+                if not isinstance(qps, dict) or not qps.get("jdbcMappedImport"):
+                    import_specs_missing.append(tpl)
         out["field_mapping_missing_name_count"] = missing_name
         out["export_select_star_count"] = select_star
+        out["import_specs_missing"] = import_specs_missing
+    if "pipeline_step_definition" in wb.sheetnames:
+        ws = wb["pipeline_step_definition"]
+        headers = [c.value for c in ws[1]]
+        idx = {h: i for i, h in enumerate(headers)}
+        seen: dict[str, list[tuple[int, str]]] = {}
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            job_code = row[idx["job_code"]]
+            if job_code in IMPORT_JOBS and str(row[idx["enabled"]]).upper() == "TRUE":
+                seen.setdefault(job_code, []).append(
+                    (int(row[idx["step_order"]] or 0), str(row[idx["stage_code"]]))
+                )
+        expected = [stage for _, _, stage, _, _ in IMPORT_STAGE_CHAIN]
+        out["import_stage_chain_mismatches"] = {
+            job_code: [stage for _, stage in sorted(stages)]
+            for job_code, stages in seen.items()
+            if [stage for _, stage in sorted(stages)][: len(expected)] != expected
+        }
     if "workflow_node" in wb.sheetnames:
         ws = wb["workflow_node"]
         headers = [c.value for c in ws[1]]
@@ -696,6 +956,8 @@ def verify_failed(result: dict) -> bool:
         or result.get("sftp_legacy_keys_left", 0) != 0 \
         or result.get("field_mapping_missing_name_count", 0) != 0 \
         or result.get("export_select_star_count", 0) != 0 \
+        or bool(result.get("import_specs_missing")) \
+        or bool(result.get("import_stage_chain_mismatches")) \
         or result.get("workflow_boundary_ok") is False
 
 
