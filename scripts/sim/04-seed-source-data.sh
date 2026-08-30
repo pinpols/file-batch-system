@@ -11,6 +11,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 BIZ_DATE="${BIZ_DATE:-$(date +%Y%m%d)}"
+BIZ_DAY="${BIZ_DATE:0:4}-${BIZ_DATE:4:2}-${BIZ_DATE:6:2}"
 SFTP_CONTAINER="${SFTP_CONTAINER:-sftp}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -27,18 +28,18 @@ done
 
 # tb: transaction 200 行
 cat > "$TMP/tb-transaction-${BIZ_DATE}.csv" << 'EOF'
-txn_no,account_no,txn_type,currency_code,remark
+txn_no,account_no,txn_type,amount,currency_code,txn_date,remark
 EOF
 for i in $(seq 1 200); do
-  echo "TB-TXN-$(printf '%08d' $i),ACC$(printf '%010d' $i),DEPOSIT,CNY,自动生成-$i" >> "$TMP/tb-transaction-${BIZ_DATE}.csv"
+  echo "TB-TXN-$(printf '%08d' $i),ACC$(printf '%010d' $i),DEPOSIT,$((100 + i)).50,CNY,${BIZ_DAY},自动生成-$i" >> "$TMP/tb-transaction-${BIZ_DATE}.csv"
 done
 
 # tc: risk score 50 行
 cat > "$TMP/tc-risk-score-${BIZ_DATE}.csv" << 'EOF'
-customer_no,score,risk_level,assessed_at
+entity_id,entity_type,score_value,score_band,score_date
 EOF
 for i in $(seq 1 50); do
-  echo "TC-CUST-$(printf '%06d' $i),$((RANDOM % 100)),$([ $((RANDOM % 3)) -eq 0 ] && echo HIGH || echo LOW),$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$TMP/tc-risk-score-${BIZ_DATE}.csv"
+  echo "TC-ENTITY-$(printf '%06d' $i),ACCOUNT,$((RANDOM % 100)),$([ $((RANDOM % 3)) -eq 0 ] && echo HIGH || echo LOW),${BIZ_DAY}" >> "$TMP/tc-risk-score-${BIZ_DATE}.csv"
 done
 
 echo "==> 投放到 SFTP /inbound/(用户各自 chroot)"
@@ -58,7 +59,7 @@ echo
 echo "==> SFTP /inbound 现状"
 for t in ta tb tc; do
   echo "── $t"
-  docker exec "$SFTP_CONTAINER" ls -la "/home/$t/inbound/" 2>&1 | head
+  docker exec "$SFTP_CONTAINER" ls -la "/home/$t/inbound/" 2>&1 | awk 'NR <= 10'
 done
 
 echo

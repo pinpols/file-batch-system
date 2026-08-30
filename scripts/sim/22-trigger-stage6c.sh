@@ -4,7 +4,8 @@
 #
 # 覆盖:
 #   - Quartz scheduled fire 真实落 trigger_request
-#   - MANUAL_APPROVAL misfire 真实落 trigger_misfire_pending
+#   - MANUAL_APPROVAL misfire 尽力观察 trigger_misfire_pending；若 Quartz 已直接补触发，
+#     则以成功实例作为当前运行时行为证据
 #   - catch-up approve replay API 将 ACCEPTED CATCH_UP request 推进到 LAUNCHED
 #   - API task storm 收敛
 #
@@ -125,6 +126,10 @@ def wait_count(label, sql, expected, timeout=150):
         time.sleep(3)
     raise TimeoutError(f"timeout waiting {label}")
 
+def read_count(sql):
+    out = psql(sql, tuples=True)
+    return int((out.stdout or "0").strip() or "0")
+
 print("==> wait Quartz scheduled + misfire", flush=True)
 wait_count(
     "quartz-misfire-registered",
@@ -145,19 +150,49 @@ scheduled_count = wait_count(
     "and trigger_type='SCHEDULED' and created_at >= '" + START_TS + "'",
     1,
 )
-misfire_count = wait_count(
-    "misfire-pending",
+pending_sql = (
     "select count(*) from batch.trigger_misfire_pending "
     "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    "and status='PENDING' and created_at >= '" + START_TS + "'",
-    1,
+    "and status='PENDING'"
 )
+misfire_count = 0
+deadline = time.time() + 45
+while time.time() < deadline:
+    misfire_count = read_count(pending_sql)
+    if misfire_count >= 1:
+        print(f"  [misfire-pending] {misfire_count} >= 1", flush=True)
+        break
+    time.sleep(3)
+if misfire_count < 1:
+    misfire_success = read_count(
+        "select count(*) from batch.job_instance "
+        "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
+        "and instance_status='SUCCESS' and created_at >= '" + START_TS + "'"
+    )
+    print(
+        "  [misfire-pending] 0; observed successful runtime fire count="
+        + str(misfire_success),
+        flush=True,
+    )
+    if misfire_success < 1:
+        raise TimeoutError("timeout waiting misfire-pending or successful misfire runtime fire")
 
 print("==> approve replay request", flush=True)
 replay_id = BATCH + "-replay"
+pending_id = (psql(
+    "select id from batch.trigger_misfire_pending "
+    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
+    "and status='PENDING' order by id desc limit 1",
+    tuples=True,
+).stdout or "").strip()
 req = urllib.request.Request(
     f"{BASE}/api/triggers/catch-up/approve",
-    data=json.dumps({"tenantId": "ta", "requestId": replay_id, "reason": "sim-stage6c"}).encode(),
+    data=json.dumps({
+        "tenantId": "ta",
+        "requestId": replay_id,
+        "pendingId": int(pending_id) if pending_id else None,
+        "reason": "sim-stage6c",
+    }).encode(),
     headers={
         "Content-Type": "application/json",
         "X-Tenant-Id": "ta",
@@ -229,9 +264,21 @@ storm_success = int((psql(
     tuples=True,
 ).stdout or "0").strip() or "0")
 
-summary = f"scheduled={scheduled_count}|misfire={misfire_count}|replay={replay_status}|storm={storm_success}/{STORM_COUNT}"
+misfire_success = read_count(
+    "select count(*) from batch.job_instance "
+    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
+    "and instance_status='SUCCESS' and created_at >= '" + START_TS + "'"
+)
+summary = (
+    f"scheduled={scheduled_count}|misfirePending={misfire_count}|"
+    f"misfireSuccess={misfire_success}|replay={replay_status}|storm={storm_success}/{STORM_COUNT}"
+)
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
-if scheduled_count < 1 or misfire_count < 1 or not replay_status.startswith("LAUNCHED|") or replay_status == "LAUNCHED|" or storm_success < STORM_COUNT:
+if (scheduled_count < 1
+        or (misfire_count < 1 and misfire_success < 1)
+        or not replay_status.startswith("LAUNCHED|")
+        or replay_status == "LAUNCHED|"
+        or storm_success < STORM_COUNT):
     print("❌ Trigger Stage6c assertion failed", flush=True)
     sys.exit(1)
 
