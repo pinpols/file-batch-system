@@ -28,4 +28,8 @@ public class TriggerDefinitionLoader {
   public TriggerDescriptor loadByJobCode(String tenantId, String jobCode) {
     return triggerDefinitionMapper.selectByJobCode(tenantId, jobCode);
   }
+
+  public int setEnabled(String tenantId, String jobCode, boolean enabled) {
+    return triggerDefinitionMapper.updateEnabled(tenantId, jobCode, enabled);
+  }
 }

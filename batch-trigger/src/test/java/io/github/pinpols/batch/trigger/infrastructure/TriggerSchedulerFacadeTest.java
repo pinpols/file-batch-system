@@ -92,6 +92,66 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  void shouldPersistEnabledBeforeRegisteringSingleJob() throws Exception {
+    when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_REENABLE"))
+        .thenReturn(cronDescriptor("t1", "JOB_REENABLE", true));
+
+    facade.registerByJobCode("t1", "JOB_REENABLE");
+
+    var inOrder = inOrder(triggerDefinitionLoader, scheduler);
+    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_REENABLE", true);
+    inOrder.verify(triggerDefinitionLoader).loadByJobCode("t1", "JOB_REENABLE");
+    inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
+  }
+
+  @Test
+  void shouldPersistDisabledAfterUnregisteringSingleJob() throws Exception {
+    when(scheduler.checkExists(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP)))
+        .thenReturn(true);
+
+    facade.unregisterByJobCode("t1", "JOB_STOP");
+
+    var inOrder = inOrder(scheduler, triggerDefinitionLoader);
+    inOrder
+        .verify(scheduler)
+        .checkExists(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP));
+    inOrder
+        .verify(scheduler)
+        .deleteJob(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP));
+    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_STOP", false);
+  }
+
+  @Test
+  void shouldDeleteQuartzJobAndPersistDisabledWhenPausingSingleJob() throws Exception {
+    when(scheduler.checkExists(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP)))
+        .thenReturn(true);
+
+    facade.pauseByJobCode("t1", "JOB_PAUSE");
+
+    var inOrder = inOrder(scheduler, triggerDefinitionLoader);
+    inOrder
+        .verify(scheduler)
+        .checkExists(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP));
+    inOrder
+        .verify(scheduler)
+        .deleteJob(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP));
+    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_PAUSE", false);
+  }
+
+  @Test
+  void shouldPersistEnabledAndScheduleWhenResumingSingleJob() throws Exception {
+    when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_RESUME"))
+        .thenReturn(cronDescriptor("t1", "JOB_RESUME", true));
+
+    facade.resumeByJobCode("t1", "JOB_RESUME");
+
+    var inOrder = inOrder(triggerDefinitionLoader, scheduler);
+    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_RESUME", true);
+    inOrder.verify(triggerDefinitionLoader).loadByJobCode("t1", "JOB_RESUME");
+    inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
+  }
+
+  @Test
   void shouldSkipInvalidCronExpression() throws Exception {
     TriggerDescriptor descriptor = cronDescriptor("t1", "BAD_CRON", true);
     descriptor.setScheduleExpression("not-a-cron");

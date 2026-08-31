@@ -25,6 +25,28 @@ export STORM_COUNT="${STORM_COUNT:-60}"
 
 batch_require_python
 
+restart_trigger_for_fixture() {
+  if [[ "${SIM_TRIGGER_RESTART_MODE:-restart}" == "screen" ]]; then
+    screen -S bfs-trigger -X quit >/dev/null 2>&1 || true
+    screen -dmS bfs-trigger bash -lc "
+      cd '$ROOT'
+      unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
+      source scripts/lib/env-common.sh
+      batch_configure_local_jvm_database_env
+      exec java --enable-native-access=ALL-UNNAMED \
+        ${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off} \
+        ${JAVA_OPTS:-} \
+        -jar build/runtime-jars/trigger.jar --spring.profiles.active=local \
+        >logs/current/app/trigger.log 2>&1
+    "
+    return 0
+  fi
+  (
+    unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
+    bash scripts/local/restart.sh trigger
+  )
+}
+
 # Fixture 会直接重置 Quartz 的测试 job/trigger。必须先停 Trigger，再清理 fixture，最后
 # 启动 Trigger；仅调用 drain 或“重启后立即清理”都可能让新进程的 reconciler 与 psql 争抢
 # QRTZ_LOCKS。这个停启只属于 sim 的数据边界隔离，不代表生产流程需要按阶段重启服务。
@@ -57,7 +79,7 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -f /dev/stdin < docs/test-data/sim-stage6c-trigger-fixtures.sql >/dev/null
 
 echo "==> start trigger after direct Quartz fixture reset"
-bash scripts/local/restart.sh trigger >"$REPORT_DIR/trigger-restart.log" 2>&1
+restart_trigger_for_fixture >"$REPORT_DIR/trigger-restart.log" 2>&1
 health_code=""
 for _ in $(seq 1 60); do
   health_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$TRIGGER_BASE/actuator/health" 2>/dev/null || true)

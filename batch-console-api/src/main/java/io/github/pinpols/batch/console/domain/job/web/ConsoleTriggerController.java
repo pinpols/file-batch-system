@@ -12,12 +12,11 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 触发器运维（Ops-only）：register / unregister / pause / resume 属于 <b>救急修复入口</b>， 仅用于 DB 与 Quartz JobStore
- * 漂移时的强制收敛，不用作日常业务状态切换。
+ * 触发器运维（Ops-only）：register / unregister / pause / resume 属于 <b>救急修复入口</b>，
+ * 同步更新 DB 权威源与 Quartz JobStore，确保人工操作不会被下一轮对账悄悄覆盖。
  *
- * <p>日常禁用 job 请走 {@code POST /api/console/job-definitions/{id}/toggle-enabled}—— DB 是权威源，trigger 侧的
- * {@code TriggerReconciler} 会在 30s 内自动把 Quartz 收敛到 DB 状态。 在此接口上直接注销一个 {@code enabled=true} 的
- * job，会被下一次对账扫描<b>悄悄重建</b>。
+ * <p>日常禁用 job 仍建议走 {@code POST /api/console/job-definitions/{id}/toggle-enabled}—— DB 是权威源，trigger 侧的
+ * {@code TriggerReconciler} 会在 30s 内自动把 Quartz 收敛到 DB 状态。本接口用于需要立即收敛 Quartz 执行态的运维场景。
  *
  * <p>路径 {@code /api/console/ops/triggers}，语义上归类到 Ops 菜单；前端按钮保留但应显式提示风险。
  */

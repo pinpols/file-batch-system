@@ -103,6 +103,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void registerByJobCode(String tenantId, String jobCode) {
     runManaged("registerByJobCode", () -> {
+      triggerDefinitionLoader.setEnabled(tenantId, jobCode, true);
       TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
       if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
         scheduleDescriptor(descriptor);
@@ -118,6 +119,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         if (scheduler.checkExists(jobKey)) {
           scheduler.deleteJob(jobKey);
         }
+        triggerDefinitionLoader.setEnabled(tenantId, jobCode, false);
       } catch (SchedulerException e) {
         throw new IllegalStateException("failed to unregister trigger: " + jobCode, e);
       }
@@ -130,8 +132,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       try {
         JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
         if (scheduler.checkExists(jobKey)) {
-          scheduler.pauseJob(jobKey);
+          scheduler.deleteJob(jobKey);
         }
+        triggerDefinitionLoader.setEnabled(tenantId, jobCode, false);
       } catch (SchedulerException e) {
         throw new IllegalStateException("failed to pause trigger: " + jobCode, e);
       }
@@ -141,13 +144,10 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void resumeByJobCode(String tenantId, String jobCode) {
     runManaged("resumeByJobCode", () -> {
-      try {
-        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-        if (scheduler.checkExists(jobKey)) {
-          scheduler.resumeJob(jobKey);
-        }
-      } catch (SchedulerException e) {
-        throw new IllegalStateException("failed to resume trigger: " + jobCode, e);
+      triggerDefinitionLoader.setEnabled(tenantId, jobCode, true);
+      TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
+      if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
+        scheduleDescriptor(descriptor);
       }
     });
   }
