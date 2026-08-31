@@ -18,12 +18,12 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -40,11 +40,12 @@ public class TriggerSecurityConfiguration {
   private final BatchSecurityProperties securityProperties;
 
   @Bean
-  @SuppressWarnings("java:S4502")
   public SecurityFilterChain triggerSecurityFilterChain(HttpSecurity http) throws Exception {
-    // Trigger exposes stateless internal APIs authenticated by X-Internal-Secret; no browser
-    // cookie/session credential is accepted, so CSRF protection is not applicable to this chain.
-    http.csrf(AbstractHttpConfigurer::disable)
+    // Internal-secret requests cannot be forged by a browser because the secret is not a cookie.
+    // Keep CSRF enabled for every other request so a future authentication path cannot silently
+    // inherit an unprotected state-changing endpoint.
+    http.csrf(csrf ->
+            csrf.ignoringRequestMatchers(new InternalSecretRequestMatcher(securityProperties)))
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth ->
             auth.requestMatchers("/actuator/**").permitAll().anyRequest().authenticated())
@@ -52,6 +53,23 @@ public class TriggerSecurityConfiguration {
             new InternalSecretFilter(securityProperties),
             UsernamePasswordAuthenticationFilter.class);
     return http.build();
+  }
+
+  private static final class InternalSecretRequestMatcher implements RequestMatcher {
+
+    private final BatchSecurityProperties securityProperties;
+
+    private InternalSecretRequestMatcher(BatchSecurityProperties securityProperties) {
+      this.securityProperties = securityProperties;
+    }
+
+    @Override
+    public boolean matches(HttpServletRequest request) {
+      return securityProperties.isBypassMode()
+          || SecretComparator.constantTimeEquals(
+              securityProperties.getInternalSecret(),
+              request.getHeader(CommonConstants.INTERNAL_SECRET_HEADER));
+    }
   }
 
   /**
