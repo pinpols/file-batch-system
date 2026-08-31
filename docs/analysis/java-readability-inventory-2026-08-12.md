@@ -13,8 +13,8 @@
 | 含 Map 的源文件 | 442 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 212 |
-| 含 suppression 的源文件 | 162 |
+| `@SuppressWarnings` | 211 |
+| 含 suppression 的源文件 | 161 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 8 |
 | `PMD.ExcessiveParameterList` 显式例外 | 26 |
