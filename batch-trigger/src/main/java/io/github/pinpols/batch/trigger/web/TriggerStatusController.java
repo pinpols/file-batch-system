@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.trigger.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
+import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown.TriggerDrainStatus;
 import java.util.List;
@@ -21,17 +21,17 @@ public class TriggerStatusController {
 
   private static final String KEY_STATUS = "status";
 
-  private final TriggerRegistrationService triggerRegistrationService;
+  private final TriggerStatusQueryService triggerStatusQueryService;
   private final TriggerGracefulShutdown gracefulShutdown;
 
   @GetMapping("/list")
   public CommonResponse<List<TriggerStatusInfo>> list() {
-    return CommonResponse.success(triggerRegistrationService.listRegisteredTriggers());
+    return CommonResponse.success(triggerStatusQueryService.listRegisteredTriggers());
   }
 
   @GetMapping("/scheduler-status")
   public CommonResponse<Map<String, String>> schedulerStatus() {
-    return CommonResponse.success(Map.of(KEY_STATUS, triggerRegistrationService.schedulerStatus()));
+    return CommonResponse.success(Map.of(KEY_STATUS, triggerStatusQueryService.schedulerStatus()));
   }
 
   @GetMapping("/drain/status")
