@@ -39,3 +39,16 @@
 - Docker 模式验证 `PG_CONTAINER` 内客户端路径。
 - 无客户端场景验证返回非零状态和明确错误信息。
 - Testcontainers 测试继续由 CI/Docker 环境执行；无 Docker 时按测试类既有配置跳过或明确失败。
+
+## 实测记录
+
+2026-09-01 在本地 PostgreSQL `localhost:15432/batch_platform` 上使用临时 Python 虚拟环境完成：
+
+- `BATCH_PG_CLIENT_MODE=python` 强制走 `psycopg` fallback。
+- `-c` 查询和 `-v` 变量替换成功。
+- `-f scripts/ops/sql/common-connectivity.sql` 成功执行。
+- Shell 全量 `bash -n` 检查通过。
+- 缺少 `psycopg` 时返回 `127` 并给出安装提示。
+
+因此“无宿主机 `psql`”已具备可运行路径，但前提是按
+`scripts/requirements-postgres.txt` 安装 Python 驱动；这不是免客户端执行 SQL。
