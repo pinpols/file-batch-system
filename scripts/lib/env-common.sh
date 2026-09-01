@@ -94,6 +94,66 @@ batch_load_default_env() {
   export BATCH_ENV_LOADED=1
 }
 
+# 统一 PostgreSQL 客户端入口。默认优先使用宿主机 psql；需要时可设置
+# BATCH_PG_CLIENT_MODE=docker 复用 PG 容器内的 psql。无宿主机客户端且无可用
+# 容器时明确失败，避免脚本误把“未执行 SQL”当成成功。
+psql() {
+  local mode="${BATCH_PG_CLIENT_MODE:-auto}"
+  local psql_bin="${BATCH_PSQL_BIN:-}"
+  local container="${PG_CONTAINER:-batch-postgres-primary}"
+  local -a args=("$@")
+  local i
+
+  if [[ "$mode" == "host" || "$mode" == "auto" ]] && [[ -n "$psql_bin" ]]; then
+    if [[ ! -x "$psql_bin" ]]; then
+      printf 'PostgreSQL client unavailable: BATCH_PSQL_BIN is not executable: %s\n' "$psql_bin" >&2
+      return 127
+    fi
+  elif [[ "$mode" == "host" || "$mode" == "auto" ]] && command -v psql >/dev/null 2>&1; then
+    psql_bin="$(command -v psql)"
+  fi
+
+  if [[ ( "$mode" == "host" || "$mode" == "auto" ) && -n "$psql_bin" ]]; then
+    command "$psql_bin" "${args[@]}"
+    return
+  fi
+
+  if [[ "$mode" == "python" || ( "$mode" == "auto" && -z "$psql_bin" ) ]]; then
+    if command -v "${PYTHON_BIN:-python3}" >/dev/null 2>&1 && "${PYTHON_BIN:-python3}" -c 'import psycopg' >/dev/null 2>&1; then
+      "${PYTHON_BIN:-python3}" "$BATCH_ENV_COMMON_ROOT/scripts/lib/postgres-client.py" "${args[@]}"
+      return
+    fi
+    if [[ "$mode" == "python" ]]; then
+      printf 'PostgreSQL Python client unavailable: install psycopg or choose BATCH_PG_CLIENT_MODE=host|docker\n' >&2
+      return 127
+    fi
+  fi
+
+  if [[ "$mode" == "host" ]]; then
+    printf 'PostgreSQL client unavailable: set BATCH_PSQL_BIN or install psql\n' >&2
+    return 127
+  fi
+
+  if ! command -v docker >/dev/null 2>&1 || ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -q '^true$'; then
+    printf 'PostgreSQL client unavailable: install psql or start container %s\n' "$container" >&2
+    return 127
+  fi
+
+  # 容器内使用服务名/Unix 网络，不应把宿主机 -h/-p 继续传入容器。
+  local -a docker_args=()
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[$i]}" in
+      -h|-p)
+        ((i++))
+        ;;
+      *)
+        docker_args+=("${args[$i]}")
+        ;;
+    esac
+  done
+  docker exec -i "$container" psql "${docker_args[@]}"
+}
+
 batch_require_internal_secret() {
   if [[ -z "${BATCH_INTERNAL_SECRET:-}" || "$BATCH_INTERNAL_SECRET" == "internal-secret" ]]; then
     echo "BATCH_INTERNAL_SECRET is required and must not be the default internal-secret" >&2
