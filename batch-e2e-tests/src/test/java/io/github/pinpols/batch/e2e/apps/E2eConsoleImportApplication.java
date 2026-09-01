@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2eImportWorkerDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
@@ -54,6 +55,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Import({
   BatchClockConfig.class,
   E2ePlatformDataSourceConfiguration.class,
+  E2eBusinessDataSourceConfiguration.class,
   E2eImportWorkerDataSourceConfiguration.class,
   E2ePlatformMybatisConfiguration.class,
   E2eShedLockConfiguration.class
