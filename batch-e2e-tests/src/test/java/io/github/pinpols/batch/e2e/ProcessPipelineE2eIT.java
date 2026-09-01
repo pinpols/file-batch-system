@@ -28,6 +28,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -73,6 +74,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
   private final ObjectMapper objectMapper;
 
+  @Autowired
   ProcessPipelineE2eIT(
       LaunchService launchService,
       JdbcTemplate jdbcTemplate,

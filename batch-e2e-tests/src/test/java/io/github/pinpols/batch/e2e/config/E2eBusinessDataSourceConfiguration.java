@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /**
  * E2E 业务库连接配置。
@@ -30,6 +31,12 @@ public class E2eBusinessDataSourceConfiguration {
         .password(password)
         .driverClassName("org.postgresql.Driver")
         .build();
+  }
+
+  @Bean(name = "e2eBusinessTransactionManager", autowireCandidate = false)
+  public DataSourceTransactionManager e2eBusinessTransactionManager(
+      @Qualifier("e2eBusinessDataSource") DataSource e2eBusinessDataSource) {
+    return new DataSourceTransactionManager(e2eBusinessDataSource);
   }
 
   @Bean(name = "e2eBusinessSqlSessionFactory")
