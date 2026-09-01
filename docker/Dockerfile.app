@@ -50,7 +50,25 @@ RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
     mvn -B -T 1C -DskipTests -pl '!batch-e2e-tests' package
 
-# ───── Stage 2: per-image runtime(各服务挑自己 jar)─────
+# ───── Stage 2: extract selected jar layers(只解压当前服务的 jar)─────
+FROM builder AS selected-layers
+
+ARG MODULE
+
+COPY --from=builder /workspace/${MODULE}/target/ /tmp/build/
+RUN set -eux; \
+    jar=""; \
+    for f in /tmp/build/"${MODULE}"-*.jar; do \
+        case "$f" in *sources*|*javadoc*|*original*) continue ;; esac; \
+        [ -f "$f" ] || continue; \
+        jar="$f"; \
+        break; \
+    done; \
+    [ -n "$jar" ] || { echo "ERROR: no main jar found for ${MODULE}"; exit 1; }; \
+    java -Djarmode=tools -jar "$jar" extract --layers --destination /layers; \
+    rm -rf /tmp/build
+
+# ───── Stage 3: per-image runtime(各服务挑自己 jar)─────
 FROM eclipse-temurin:21-jre-jammy
 
 ARG MODULE
@@ -75,20 +93,11 @@ WORKDIR /app
 RUN groupadd --system --gid 10001 batch \
     && useradd --system --uid 10001 --gid batch --home-dir /app --shell /sbin/nologin batch
 
-# 从共享 builder 复制本 module target(过滤 sources/javadoc/original)。
-# 不写 `COPY --from=builder /workspace/${MODULE_DIR}/target/${MODULE}-*.jar /app/app.jar`:glob 命中多个时 docker COPY 失败
-COPY --from=builder /workspace/${MODULE_DIR}/target/ /tmp/build/
-RUN set -eux; \
-    jar=""; \
-    for f in /tmp/build/"${MODULE}"-*.jar; do \
-        case "$f" in *sources*|*javadoc*|*original*) continue ;; esac; \
-        [ -f "$f" ] || continue; \
-        jar="$f"; \
-        break; \
-    done; \
-    [ -n "$jar" ] || { echo "ERROR: no main jar found for ${MODULE}"; exit 1; }; \
-    mv "$jar" /app/app.jar; \
-    rm -rf /tmp/build
+# 分层复制：依赖层在业务源码变更时保持 Docker cache；Spring Boot loader 与应用层独立。
+COPY --from=selected-layers /layers/dependencies/ /app/dependencies/
+COPY --from=selected-layers /layers/spring-boot-loader/ /app/spring-boot-loader/
+COPY --from=selected-layers /layers/snapshot-dependencies/ /app/snapshot-dependencies/
+COPY --from=selected-layers /layers/application/ /app/application/
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN mkdir -p /var/log/app /var/cache/app /logs /app/logs \

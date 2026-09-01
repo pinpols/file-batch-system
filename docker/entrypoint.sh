@@ -31,5 +31,14 @@ fi
 # JAVA_OPTS:全模块共享基础(配 Helm configmap)
 # JAVA_OPTS_EXTRA:per-service override(配 Helm 各 service 的 javaOptsExtra,通过
 #   deployment env 注入,优先级高于 envFrom-configmap 同名)
+# Spring Boot 4 layered extraction keeps the launcher, application archive and
+# dependency directories separate so Docker can reuse unchanged dependency layers.
+# Keep the jar fallback for locally assembled images and older deployment artifacts.
 # shellcheck disable=SC2086
+if [ -d /app/spring-boot-loader ] && [ -d /app/application ]; then
+  exec java ${JAVA_OPTS} ${JAVA_OPTS_EXTRA:-} \
+    -cp "/app/spring-boot-loader/*:/app/application/*:/app/application/lib/*:/app/dependencies/lib/*:/app/snapshot-dependencies/lib/*" \
+    org.springframework.boot.loader.launch.JarLauncher
+fi
+
 exec java ${JAVA_OPTS} ${JAVA_OPTS_EXTRA:-} -jar /app/app.jar
