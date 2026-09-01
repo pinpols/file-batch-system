@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.io.IOException;
-import java.io.OutputStream;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -383,44 +383,46 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void doesNotDrainWholeBodyWhenBodyFarExceedsMax() {
-      // OOM 回归守护:下游返回远超 max 的巨量 body 时,executor 只读 max+1 字节即停,不全量物化。
-      // 证明手段:server 用 chunked 流循环写巨量 payload 并计数;客户端读满即关连接 → 背压使 server
-      // 的写在推完全部字节前就被拒(IOException),真实写出字节数 << 声称的巨量总数。
-      // (旧实现 resp.body().bytes() 会把整个 body 读进堆 → server 能把全部字节写完 → 计数==总量。)
-      props.setMaxResponseBytes(16);
+    void readsAtMostMaxPlusOneBytesFromHugeStream() throws IOException {
+      // OOM 回归守护:有界读取的硬契约是客户端最多读取 max+1 字节并关闭流。
+      // 服务端是否能在本机回环网络上感知 TCP 断连受内核/客户端缓冲影响,不是 HTTP API 可保证的语义。
+      int max = 16;
       final long hugeTotal = 64L * 1024 * 1024; // 64 MiB
-      final int chunkSize = 64 * 1024;
       java.util.concurrent.atomic.AtomicLong written = new java.util.concurrent.atomic.AtomicLong();
-      server.createContext("/huge", ex -> {
-        ex.sendResponseHeaders(200, 0); // 0 = chunked,允许流式写
-        byte[] chunk = new byte[chunkSize];
-        java.util.Arrays.fill(chunk, (byte) 'Z');
-        try (OutputStream os = ex.getResponseBody()) {
-          long remaining = hugeTotal;
-          while (remaining > 0) {
-            int n = (int) Math.min(chunkSize, remaining);
-            os.write(chunk, 0, n);
-            os.flush();
-            written.addAndGet(n);
-            remaining -= n;
+      java.util.concurrent.atomic.AtomicBoolean closed =
+          new java.util.concurrent.atomic.AtomicBoolean();
+      InputStream hugeStream = new InputStream() {
+        private long remaining = hugeTotal;
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) {
+          if (remaining == 0) {
+            return -1;
           }
-        } catch (IOException expected) {
-          // 客户端读满 max+1 后关连接 → 后续写被拒:这正是"未全量读"的证据。
-        } finally {
-          ex.close();
+          int count = (int) Math.min(length, remaining);
+          java.util.Arrays.fill(buffer, offset, offset + count, (byte) 'Z');
+          remaining -= count;
+          written.addAndGet(count);
+          return count;
         }
-      });
 
-      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/huge"))));
+        @Override
+        public int read() {
+          byte[] oneByte = new byte[1];
+          return read(oneByte, 0, 1) == -1 ? -1 : oneByte[0] & 0xff;
+        }
 
-      assertThat(r.success()).isTrue();
-      assertThat(((String) r.output().get("responseBody"))).hasSize(16);
-      assertThat(r.output()).containsEntry("responseTruncated", true);
-      // 核心断言:server 无法把 64 MiB 全部推给客户端 —— 客户端在读到 max+1 字节后即停止消费。
-      assertThat(written.get())
-          .as("server should be back-pressured well before draining the full 64 MiB body")
-          .isLessThan(hugeTotal);
+        @Override
+        public void close() {
+          closed.set(true);
+        }
+      };
+
+      byte[] read = HttpTaskExecutor.readBounded(hugeStream, max);
+
+      assertThat(read).hasSize(max + 1).containsOnly((byte) 'Z');
+      assertThat(written).hasValue(max + 1L);
+      assertThat(closed).isTrue();
     }
 
     @Test

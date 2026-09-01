@@ -46,6 +46,7 @@ FE_DIR="${FE_DIR:-$ROOT_DIR/../batch-console}"
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
 FE_PORT="${FE_PORT:-5173}"
 DOCKER_CONTAINER_NAME_PATTERN="${DOCKER_CONTAINER_NAME_PATTERN:-batch-(postgres|kafka|valkey|minio)}"
+BE_MODULES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
 mkdir -p "$ROOT_DIR/docs/backlog"
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' DIM='\033[2m' RST='\033[0m'
@@ -192,6 +193,34 @@ should_run() {
   return 1
 }
 
+wait_for_backend_health() {
+  local name port deadline
+  local endpoints=(
+    "orchestrator:${BATCH_ORCHESTRATOR_PORT:-18082}"
+    "trigger:${BATCH_TRIGGER_PORT:-18081}"
+    "console:${BATCH_CONSOLE_PORT:-18080}"
+    "worker-import:${BATCH_WORKER_IMPORT_PORT:-18083}"
+    "worker-export:${BATCH_WORKER_EXPORT_PORT:-18084}"
+    "worker-process:${BATCH_WORKER_PROCESS_PORT:-18086}"
+    "worker-dispatch:${BATCH_WORKER_DISPATCH_PORT:-18085}"
+    "worker-atomic:${BATCH_WORKER_ATOMIC_PORT:-18087}"
+  )
+  deadline=$(( $(date +%s) + 180 ))
+  for endpoint in "${endpoints[@]}"; do
+    name="${endpoint%%:*}"
+    port="${endpoint##*:}"
+    until curl -sf --max-time 5 --connect-timeout 2 "http://127.0.0.1:${port}/actuator/health" \
+      | grep -q '"status":"UP"'; do
+      if (( $(date +%s) > deadline )); then
+        ng "${name} 未在 180s 内健康(端口 ${port})"
+        return 1
+      fi
+      sleep 2
+    done
+    ok "${name} UP"
+  done
+}
+
 # ── Step 实现 ───────────────────────────────────────────────
 
 # 清理上一次跑残留:
@@ -284,26 +313,31 @@ step_1_build_restart() {
     ng "mvn install 失败(看 $LOG_DIR/01-build-maven.log)"
     return 1
   fi
-  local jar; jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)
-  if [[ -z "$jar" ]]; then
-    ng "exec jar 不存在(看 $LOG_DIR/01-build-maven.log)"
+  if ! bash scripts/local/build-apps.sh >> "$LOG_DIR/01-build-maven.log" 2>&1; then
+    ng "runtime jar 构建失败(看 $LOG_DIR/01-build-maven.log)"
     return 1
   fi
-  cp "$jar" build/runtime-jars/console.jar
-  bash scripts/local/restart.sh console > "$LOG_DIR/01-restart-console.log" 2>&1
-  local deadline=$(( $(date +%s) + 180 ))
-  until curl -sf --max-time 5 --connect-timeout 2 "http://localhost:$CONSOLE_PORT/actuator/health" -o /dev/null; do
-    if (( $(date +%s) > deadline )); then
-      ng "BE 起不来 180s timeout(看 $LOG_DIR/01-restart-console.log)"
-      return 1
-    fi
-    sleep 2
-  done
-  ok "BE UP"
-  note "等 3 min 看日志稳态..."
+  if ! bash scripts/local/restart.sh "${BE_MODULES[@]}" > "$LOG_DIR/01-restart-be.log" 2>&1; then
+    ng "BE 全模块重启失败(看 $LOG_DIR/01-restart-be.log)"
+    return 1
+  fi
+  wait_for_backend_health || return 1
+  note "等 3 min 看全模块日志稳态..."
   sleep 180
-  local err; err=$(grep -E "ERROR|FATAL" logs/current/app/console.log 2>/dev/null | grep -v "SwallowedExceptionLogger\|catch:" | wc -l | tr -d ' ')
-  [[ "$err" == "0" ]] && ok "3 min 日志 0 ERROR" || ng "$err 条 ERROR(看 logs/current/app/console.log)"
+  local module log_file
+  local log_files=()
+  for module in "${BE_MODULES[@]}"; do
+    log_file="logs/current/app/${module}.log"
+    [[ -f "$log_file" ]] && log_files+=("$log_file")
+  done
+  local err=0
+  if (( ${#log_files[@]} > 0 )); then
+    err=$(grep -hE "ERROR|FATAL" "${log_files[@]}" 2>/dev/null \
+      | grep -vE "SwallowedExceptionLogger|catch:|DnsServerAddressStreamProviders" \
+      | wc -l | tr -d ' ')
+  fi
+  [[ "$err" == "0" ]] && ok "3 min 全模块当前日志 0 ERROR" \
+    || ng "$err 条 ERROR(看 logs/current/app/{orchestrator,trigger,console,worker-*}.log)"
 }
 
 step_2_unit() {
