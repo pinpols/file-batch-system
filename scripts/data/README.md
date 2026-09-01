@@ -18,4 +18,4 @@
 
 - Kafka topic 初始化：安装 Kafka CLI，确保 `kafka-topics.sh` 在 `PATH`，或设置 `KAFKA_BIN_DIR=/path/to/kafka/bin` / `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`；连接地址用 `KAFKA_BOOTSTRAP_SERVER`。
 - MinIO 初始化：安装 `mc`；连接地址和凭据用 `MINIO_ENDPOINT`、`MINIO_ROOT_USER`、`MINIO_ROOT_PASSWORD`、`MINIO_BUCKET`。
-- 系统测试数据加载：数据库连接用 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PLATFORM_DB`、`BUSINESS_DB`；默认使用宿主机 `psql`，也可设置 `BATCH_PSQL_BIN` 或 `BATCH_PG_CLIENT_MODE=docker` 复用 PG 容器内客户端。对象存储用 `BATCH_S3_*`。两种客户端都不可用时明确失败。
+- 系统测试数据加载：数据库连接用 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PLATFORM_DB`、`BUSINESS_DB`；默认按宿主机 `psql`、Python `psycopg`、Docker 客户端顺序选择，也可设置 `BATCH_PSQL_BIN` 或 `BATCH_PG_CLIENT_MODE`。Python fallback 依赖 `scripts/requirements-postgres.txt`。对象存储用 `BATCH_S3_*`，无可用客户端时明确失败。

@@ -104,18 +104,29 @@ psql() {
   local -a args=("$@")
   local i
 
-  if [[ "$mode" != "docker" && -n "$psql_bin" ]]; then
+  if [[ "$mode" == "host" || "$mode" == "auto" ]] && [[ -n "$psql_bin" ]]; then
     if [[ ! -x "$psql_bin" ]]; then
       printf 'PostgreSQL client unavailable: BATCH_PSQL_BIN is not executable: %s\n' "$psql_bin" >&2
       return 127
     fi
-  elif [[ "$mode" != "docker" ]] && command -v psql >/dev/null 2>&1; then
+  elif [[ "$mode" == "host" || "$mode" == "auto" ]] && command -v psql >/dev/null 2>&1; then
     psql_bin="$(command -v psql)"
   fi
 
-  if [[ "$mode" != "docker" && -n "$psql_bin" ]]; then
+  if [[ ( "$mode" == "host" || "$mode" == "auto" ) && -n "$psql_bin" ]]; then
     command "$psql_bin" "${args[@]}"
     return
+  fi
+
+  if [[ "$mode" == "python" || ( "$mode" == "auto" && -z "$psql_bin" ) ]]; then
+    if command -v "${PYTHON_BIN:-python3}" >/dev/null 2>&1 && "${PYTHON_BIN:-python3}" -c 'import psycopg' >/dev/null 2>&1; then
+      "${PYTHON_BIN:-python3}" "$BATCH_ENV_COMMON_ROOT/scripts/lib/postgres-client.py" "${args[@]}"
+      return
+    fi
+    if [[ "$mode" == "python" ]]; then
+      printf 'PostgreSQL Python client unavailable: install psycopg or choose BATCH_PG_CLIENT_MODE=host|docker\n' >&2
+      return 127
+    fi
   fi
 
   if [[ "$mode" == "host" ]]; then

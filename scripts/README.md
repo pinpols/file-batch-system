@@ -49,7 +49,7 @@
 
 - `BATCH_SCRIPT_RUNTIME=auto|host|docker`：支持该开关的脚本默认 `auto`。`host` 强制使用本机客户端；`docker` 强制使用 Docker 容器内客户端。
 - PostgreSQL：`PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PGDATABASE`。
-- PostgreSQL 客户端：默认优先使用宿主机 `psql`；可用 `BATCH_PSQL_BIN=/path/to/psql` 指定路径，或用 `BATCH_PG_CLIENT_MODE=docker` 使用 `PG_CONTAINER` 内的 `psql`。宿主机和 Docker 均不可用时脚本会明确失败，不会跳过 SQL。
+- PostgreSQL 客户端：默认依次尝试宿主机 `psql`、Python `psycopg`、Docker 容器内客户端；可用 `BATCH_PSQL_BIN=/path/to/psql`、`BATCH_PG_CLIENT_MODE=python|host|docker` 指定模式。Python fallback 依赖 `scripts/requirements-postgres.txt`，宿主机和 Docker 均不可用且未安装 fallback 时明确失败，不会跳过 SQL。
 - Kafka：`KAFKA_BOOTSTRAP_SERVER` 或 `KAFKA_HOST_BOOTSTRAP`，以及 `KAFKA_BIN_DIR` / `KAFKA_TOPICS_BIN`。
 - 对象存储：`BATCH_S3_ENDPOINT`、`BATCH_S3_ACCESS_KEY`、`BATCH_S3_SECRET_KEY`、`BATCH_S3_BUCKET`。
 - Python：`PYTHON_BIN` 或 `PYTHON`，用于指定本机 Python 3 解释器。
