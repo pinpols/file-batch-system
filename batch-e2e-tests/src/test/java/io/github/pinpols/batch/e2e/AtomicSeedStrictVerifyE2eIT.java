@@ -7,10 +7,10 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eAtomicApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.jdbc.Sql;
 
 /**
  * 真实数据严格验证(testcontainers 级):用 <b>生产形态</b> 的 SPI job 定义跑真链 —— 执行器协议(taskType + 参数) 放在 {@code
@@ -40,7 +39,7 @@ import org.springframework.test.context.jdbc.Sql;
     classes = E2eAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles({"test", "e2e"})
-@Sql(scripts = {E2eTestSql.BIZ_SCHEMA})
+@E2eBusinessSchema
 @Tag("e2e")
 class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 

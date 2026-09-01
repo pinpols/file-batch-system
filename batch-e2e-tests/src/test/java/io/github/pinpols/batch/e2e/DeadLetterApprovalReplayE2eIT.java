@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
@@ -55,9 +56,9 @@ import org.springframework.test.context.jdbc.Sql;
       "batch.console.trigger.base-url=http://127.0.0.1:${local.server.port}"
     })
 @ActiveProfiles({"test", "e2e"})
+@E2eBusinessSchema
 @Sql(
     scripts = {
-      E2eTestSql.BIZ_SCHEMA,
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")

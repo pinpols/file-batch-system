@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
@@ -44,9 +45,9 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
 @ActiveProfiles({"test", "e2e"})
+@E2eBusinessSchema
 @Sql(
     scripts = {
-      E2eTestSql.BIZ_SCHEMA,
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")

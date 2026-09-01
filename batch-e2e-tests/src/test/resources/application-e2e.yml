@@ -108,7 +108,4 @@ batch:
         block-private-ips: false
   datasource:
     business:
-      url: ${spring.datasource.url}
-      username: ${spring.datasource.username}
-      password: ${spring.datasource.password}
       schema: biz

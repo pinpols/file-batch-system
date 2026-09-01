@@ -14,7 +14,8 @@ public class E2eImportWorkerDataSourceConfiguration {
   }
 
   @Bean(name = "importBusinessDataSource")
-  public DataSource importBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
+  public DataSource importBusinessDataSource(
+      @Qualifier("e2eBusinessDataSource") DataSource dataSource) {
     return dataSource;
   }
 }

@@ -6,10 +6,10 @@ import static org.awaitility.Awaitility.await;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eExportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
@@ -22,7 +22,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.jdbc.Sql;
 
 /**
  * 端到端测试：Export 模板不存在导致失败。
@@ -41,10 +40,7 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.export.worker-type=EXPORT")
 @ActiveProfiles({"test", "e2e"})
-@Sql(
-    scripts = {
-      E2eTestSql.BIZ_SCHEMA,
-    })
+@E2eBusinessSchema
 @Tag("e2e")
 class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
