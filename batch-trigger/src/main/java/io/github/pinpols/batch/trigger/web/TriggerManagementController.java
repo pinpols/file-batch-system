@@ -2,10 +2,8 @@ package io.github.pinpols.batch.trigger.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
-import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown.TriggerDrainStatus;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
@@ -27,11 +25,6 @@ public class TriggerManagementController {
 
   private final TriggerRegistrationService triggerRegistrationService;
   private final TriggerGracefulShutdown gracefulShutdown;
-
-  @GetMapping("/list")
-  public CommonResponse<List<TriggerStatusInfo>> list() {
-    return CommonResponse.success(triggerRegistrationService.listRegisteredTriggers());
-  }
 
   @PostMapping("/register")
   public CommonResponse<Map<String, String>> register(
@@ -66,12 +59,6 @@ public class TriggerManagementController {
     return Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, status);
   }
 
-  @GetMapping("/scheduler-status")
-  public CommonResponse<Map<String, String>> schedulerStatus() {
-    String status = triggerRegistrationService.schedulerStatus();
-    return CommonResponse.success(Map.of(KEY_STATUS, status));
-  }
-
   @PostMapping("/pause-all")
   public CommonResponse<Map<String, String>> pauseAll() {
     triggerRegistrationService.pauseAll();
@@ -94,11 +81,6 @@ public class TriggerManagementController {
   public CommonResponse<Map<String, String>> resumeByTenant(@RequestParam String tenantId) {
     triggerRegistrationService.resumeByTenant(tenantId);
     return CommonResponse.success(Map.of(KEY_STATUS, "TENANT_RESUMED", "tenantId", tenantId));
-  }
-
-  @GetMapping("/drain/status")
-  public CommonResponse<TriggerDrainStatus> drainStatus() throws SchedulerException {
-    return CommonResponse.success(gracefulShutdown.status());
   }
 
   @PostMapping("/drain/enable")

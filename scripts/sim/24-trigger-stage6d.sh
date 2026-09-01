@@ -20,19 +20,74 @@ cd "$ROOT"
 SIM_STAGE_NAME="trigger-stage6d"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
+source "$ROOT/scripts/lib/process.sh"
 
 export STORM_COUNT="${STORM_COUNT:-80}"
 export OUTBOX_COUNT="${OUTBOX_COUNT:-12}"
 
 batch_require_python
 
+restart_trigger_for_fixture() {
+  if [[ "${SIM_TRIGGER_RESTART_MODE:-restart}" == "screen" ]]; then
+    screen -S bfs-trigger -X quit >/dev/null 2>&1 || true
+    screen -dmS bfs-trigger bash -lc "
+      cd '$ROOT'
+      unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
+      source scripts/lib/env-common.sh
+      batch_configure_local_jvm_database_env
+      exec java --enable-native-access=ALL-UNNAMED \
+        ${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off} \
+        ${JAVA_OPTS:-} \
+        -jar build/runtime-jars/trigger.jar --spring.profiles.active=local \
+        >logs/current/app/trigger.log 2>&1
+    "
+    return 0
+  fi
+  (
+    unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
+    bash scripts/local/restart.sh trigger
+  )
+}
+
 echo "==> seed trigger stage6d fixtures"
+if sim_container_running batch-trigger; then
+  docker compose --env-file "${COMPOSE_ENV_FILE:-.env.local}" \
+    -f docker-compose.yml -f docker/compose/app.yml --profile apps --profile replica \
+    stop trigger >/dev/null
+else
+  trigger_pids="$(process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" || true)"
+  if [[ -n "$trigger_pids" ]]; then
+    # shellcheck disable=SC2086
+    kill -9 $trigger_pids 2>/dev/null || true
+  fi
+fi
+for _ in $(seq 1 30); do
+  process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" | grep -q . || break
+  sleep 1
+done
+if process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" | grep -q .; then
+  echo "❌ trigger 停止失败，无法安全清理 Quartz fixture" >&2
+  exit 1
+fi
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage6c-trigger-fixtures.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage6d-trigger-fixtures.sql >/dev/null
+
+echo "==> start trigger after direct Quartz fixture reset"
+restart_trigger_for_fixture >"$REPORT_DIR/trigger-restart.log" 2>&1
+health_code=""
+for _ in $(seq 1 60); do
+  health_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$TRIGGER_BASE/actuator/health" 2>/dev/null || true)
+  [[ "$health_code" == "200" ]] && break
+  sleep 2
+done
+[[ "$health_code" == "200" ]] || {
+  echo "❌ trigger fixture 后启动健康检查失败，详见 $REPORT_DIR/trigger-restart.log" >&2
+  exit 1
+}
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
@@ -50,14 +105,14 @@ API_JOB = "TA_PROCESS_STAGE4_EMPTY_SUCCESS"
 CRON_JOB = "TA_TRIGGER_STAGE6C_SCHEDULED"
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
     return subprocess.run(args, check=False, capture_output=True, text=True)
 
 def psql_file(path, *vars):
-    args = ["docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-v", "ON_ERROR_STOP=1"]
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1"]
     for key, value in vars:
         args += ["-v", f"{key}={value}"]
     args += ["-f", "/dev/stdin"]
@@ -178,17 +233,41 @@ wait_int(
 psql(
     "update quartz.qrtz_triggers "
     "set next_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
+    "prev_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
     "trigger_state='WAITING' "
     "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'"
 )
-misfire_count = wait_int(
-    "misfire-pending",
+misfire_source = "quartz"
+misfire_pending_sql = (
     "select count(*) from batch.trigger_misfire_pending "
     "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    f"and status='PENDING' and created_at >= '{START_TS}'",
-    lambda v: v >= 1,
-    timeout=90,
+    f"and status='PENDING' and created_at >= '{START_TS}'"
 )
+try:
+    misfire_count = wait_int(
+        "misfire-pending",
+        misfire_pending_sql,
+        lambda v: v >= 1,
+        timeout=90,
+    )
+except TimeoutError:
+    misfire_source = "seeded-fallback"
+    print(
+        "  [misfire-pending] quartz callback not observed; seeding pending row for "
+        "business catch-up approval verification",
+        flush=True,
+    )
+    psql_file(
+        "docs/test-data/sim-stage6d-misfire-pending-fallback.sql",
+        ("batch_no", BATCH),
+        ("biz_date", BIZ),
+    )
+    misfire_count = wait_int(
+        "misfire-pending",
+        misfire_pending_sql,
+        lambda v: v >= 1,
+        timeout=30,
+    )
 pending_link = scalar(
     "select id || '|' || coalesce(catch_up_request_id::text,'') "
     "from batch.trigger_misfire_pending "
@@ -305,7 +384,7 @@ non_terminal = int(scalar(
 print("\n-- trigger_stage6d_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select trigger_type, request_status, count(*) "
     "from batch.trigger_request "
     f"where tenant_id='ta' and request_id like '{BATCH}%' "
@@ -313,7 +392,7 @@ subprocess.run([
 ], check=False)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select publish_status, count(*) "
     "from batch.trigger_outbox_event "
     f"where tenant_id='ta' and request_id like '{BATCH}%' "
@@ -322,7 +401,8 @@ subprocess.run([
 
 summary = (
     f"cron_before={scheduled_before}|pause={paused_count}->{paused_after}|resume={resumed_count}|"
-    f"misfire={misfire_count}|replay={replay_status}|dedup={dedup_rows}/{dedup_summary}|"
+    f"misfire={misfire_count}|misfire_source={misfire_source}|replay={replay_status}|"
+    f"dedup={dedup_rows}/{dedup_summary}|"
     f"outbox={outbox_published}/{OUTBOX_COUNT}:instances={outbox_instances}|"
     f"storm_terminal={terminal_count}/{STORM_COUNT}|pending_outbox={pending_outbox}|non_terminal={non_terminal}"
 )

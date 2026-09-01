@@ -50,7 +50,7 @@ public abstract class AbstractIntegrationTest {
       .withUsername(DEFAULT_DB_USER)
       .withPassword(DEFAULT_DB_PASSWORD)
       .withUrlParam("sslmode", "disable")
-      .withInitScript("db/business-init.sql")
+      .withInitScript("db/create_biz_tables.sql")
       .withCommand("postgres", "-c", "max_connections=500");
 
   // Kafka 不加 withReuse:OutboxPublishCircuitBreakerKafkaFailureIT 等用 stopKafka/startKafka 做

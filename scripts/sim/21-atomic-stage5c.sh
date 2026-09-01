@@ -161,7 +161,7 @@ status_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", status_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", status_sql
 ], check=False)
 
 out = psql(

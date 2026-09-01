@@ -21,12 +21,12 @@ SIM_STAGE_NAME="reset-runtime"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-PG_PLAT_C="${PG_PLATFORM_CONTAINER:-batch-postgres-primary}"
-PG_PLAT_U="${PG_PLATFORM_USER:-batch_user}"
-PG_PLAT_D="${PG_PLATFORM_DB:-batch_platform}"
-PG_BIZ_C="${PG_BUSINESS_CONTAINER:-batch-postgres-primary}"
-PG_BIZ_U="${PG_BUSINESS_USER:-batch_user}"
-PG_BIZ_D="${PG_BUSINESS_DB:-batch_business}"
+PG_PLAT_C="${PG_PLATFORM_CONTAINER:-$PG_CONTAINER}"
+PG_PLAT_U="${PG_PLATFORM_USER:-$POSTGRES_USER}"
+PG_PLAT_D="${PG_PLATFORM_DB:-$PLATFORM_DB}"
+PG_BIZ_C="${PG_BUSINESS_CONTAINER:-$PG_CONTAINER}"
+PG_BIZ_U="${PG_BUSINESS_USER:-$POSTGRES_USER}"
+PG_BIZ_D="${PG_BUSINESS_DB:-$BUSINESS_DB}"
 
 # 平台运行态(分区父表 TRUNCATE 自动级联子分区;Citus 下 sequential 防分片死锁;CASCADE 兜 FK 依赖)
 PLAT_TABLES="batch.job_instance, batch.job_instance_dedup_key, batch.job_task, batch.job_partition, batch.job_step_instance,
@@ -43,15 +43,37 @@ BIZ_TABLES="biz.customer_account, biz.transaction, biz.risk_score, biz.risk_aler
   biz.process_order_event, biz.process_stage4_source, biz.process_stage4_target, biz.import_stage2c_customer"
 
 echo "==> reset 平台运行态(${PG_PLAT_C}/${PG_PLAT_D})"
-docker exec -i "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$PG_PLAT_D" -v ON_ERROR_STOP=1 <<SQL
+docker exec -i "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$PG_PLAT_D" -v ON_ERROR_STOP=1 \
+  -v reset_tables="$PLAT_TABLES" <<'SQL'
 SET citus.multi_shard_modify_mode TO 'sequential';
-TRUNCATE ${PLAT_TABLES} CASCADE;
+DO $reset$
+DECLARE
+  table_name text;
+BEGIN
+  FOREACH table_name IN ARRAY regexp_split_to_array(:'reset_tables', '\\s*,\\s*') LOOP
+    IF to_regclass(table_name) IS NOT NULL THEN
+      EXECUTE format('TRUNCATE TABLE %s CASCADE', table_name);
+    END IF;
+  END LOOP;
+END
+$reset$;
 SQL
 plat_rc=$?
 
 echo "==> reset biz 业务数据(${PG_BIZ_C}/${PG_BIZ_D})"
-docker exec -i "$PG_BIZ_C" psql -U "$PG_BIZ_U" -d "$PG_BIZ_D" -v ON_ERROR_STOP=1 <<SQL
-TRUNCATE ${BIZ_TABLES} CASCADE;
+docker exec -i "$PG_BIZ_C" psql -U "$PG_BIZ_U" -d "$PG_BIZ_D" -v ON_ERROR_STOP=1 \
+  -v reset_tables="$BIZ_TABLES" <<'SQL'
+DO $reset$
+DECLARE
+  table_name text;
+BEGIN
+  FOREACH table_name IN ARRAY regexp_split_to_array(:'reset_tables', '\\s*,\\s*') LOOP
+    IF to_regclass(table_name) IS NOT NULL THEN
+      EXECUTE format('TRUNCATE TABLE %s CASCADE', table_name);
+    END IF;
+  END LOOP;
+END
+$reset$;
 SQL
 biz_rc=$?
 

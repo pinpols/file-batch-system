@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.core.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -76,6 +78,14 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
           started_at           timestamptz,
           finished_at          timestamptz,
           constraint uk_pipeline_step_run unique (pipeline_instance_id, step_code, run_seq)
+        )
+        """);
+    jdbcTemplate.execute("""
+        create table batch.file_record (
+          id           bigint primary key,
+          file_status  varchar(32) not null,
+          metadata_json jsonb,
+          updated_at   timestamptz
         )
         """);
 
@@ -173,5 +183,39 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     // act + assert
     assertThat(succeededStepCodes(500L)).containsExactly("COMPUTE");
     assertThat(succeededStepCodes(501L)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("LOADED 成功回写清理旧失败元数据但保留本次统计")
+  void loadedStatus_clearsStaleFailureMetadata() {
+    jdbcTemplate.update(
+        "insert into batch.file_record (id, file_status, metadata_json, updated_at) "
+            + "values (700, 'FAILED', ?::jsonb, current_timestamp)",
+        "{\"errorCode\":\"IMPORT_PARSE_FAILED\","
+            + "\"errorMessage\":\"ClosedChannelException\","
+            + "\"errorKey\":\"error.import.parse.failed\","
+            + "\"errorArgs\":\"[]\",\"sourceBytes\":74177868}");
+
+    Map<String, Object> params = new HashMap<>();
+    params.put("fileId", 700L);
+    params.put("fileStatus", "LOADED");
+    params.put("metadataJson", "{\"loadedCount\":800000}");
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      session.getMapper(PlatformFileRuntimeMapper.class).updateFileRecordStatus(params);
+    }
+
+    Map<String, Object> metadata = jdbcTemplate.queryForObject(
+        "select metadata_json from batch.file_record where id = 700", (rs, rowNum) -> {
+          try {
+            return new ObjectMapper()
+                .readValue(rs.getString(1), new TypeReference<Map<String, Object>>() {});
+          } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+          }
+        });
+    assertThat(metadata)
+        .containsEntry("loadedCount", 800000)
+        .containsEntry("sourceBytes", 74177868)
+        .doesNotContainKeys("errorCode", "errorMessage", "errorKey", "errorArgs");
   }
 }

@@ -73,7 +73,7 @@ def launch(request_id, batch_key):
             raise RuntimeError(f"launch failed: {request_id}")
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -112,7 +112,7 @@ dedup_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", dedup_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", dedup_sql
 ], check=False)
 
 print("\n-- storm_status --", flush=True)
@@ -124,7 +124,7 @@ storm_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", storm_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", storm_sql
 ], check=False)
 
 dedup_out = psql(dedup_sql.replace(" as trigger_rows", "").replace(" as instances", ""), tuples=True)

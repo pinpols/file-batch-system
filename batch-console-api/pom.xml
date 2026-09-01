@@ -115,6 +115,14 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
+            <exclusions>
+                <!-- Spring AI 的 OpenAI 客户端误将 json-unit-assertj 作为运行时传递依赖带入；
+                     这是测试断言库，生产 Console 不需要。 -->
+                <exclusion>
+                    <groupId>net.javacrumbs.json-unit</groupId>
+                    <artifactId>json-unit-assertj</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- Anthropic(Claude):默认聊天 provider，领域推理质量更高 -->
         <dependency>

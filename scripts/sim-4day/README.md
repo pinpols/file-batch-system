@@ -62,7 +62,7 @@ bash scripts/sim-4day/50-watch.sh --loop
 - `dead_letter` 会累积失败任务(含清库前的在途重试 churn + order 导入 + 不可用渠道);属预期噪声。
 
 ## 文件
-- `00-clean.sh` 清空异常数据(保留 config)
+- `00-clean.sh` 清空异常数据(保留 config)，同时清理 Kafka runtime topic 历史消息
 - `10-clone-tenants.sql` 克隆 ta/tb/tc → t04–t10(幂等)
 - `30-gen-bigfiles.sh` 生成大文件投 MinIO ingress
 - `40-run-day.sh <bizDate> [ROWS]` 单日驱动(10 租户)

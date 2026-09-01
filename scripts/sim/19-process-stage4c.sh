@@ -82,7 +82,7 @@ def launch(job, label, params):
 def wait_instance(rid, expected, timeout=240):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+        out = psql(os.environ["PLATFORM_DB"], (
             "select i.id || '|' || coalesce(i.instance_status,'') "
             "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' order by tr.created_at desc limit 1"
@@ -109,7 +109,7 @@ shard_instance = wait_instance(rid_shard, "SUCCESS")
 print("\n-- sharded_task_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select p.partition_no,p.partition_status,t.task_status,p.output_summary "
     "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
     f"where p.job_instance_id={shard_instance} order by p.partition_no"
@@ -118,18 +118,18 @@ subprocess.run([
 print("\n-- sharded_target --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c",
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c",
     "select count(*) as rows, sum(total_amount) as amount, sum(event_count) as events, max(high_water_mark) as hwm "
     "from biz.process_stage4_target where tenant_id='ta' and scenario='SHARDED' and biz_date='" + BIZ + "'"
 ], check=False)
 
-shard_check = (psql(os.environ.get("BUSINESS_DB", "batch_business"), (
+shard_check = (psql(os.environ["BUSINESS_DB"], (
     "select count(*) || '|' || coalesce(sum(total_amount),0) || '|' || "
     "coalesce(sum(event_count),0) || '|' || coalesce(max(high_water_mark),0) "
     "from biz.process_stage4_target "
     f"where tenant_id='ta' and scenario='SHARDED' and biz_date='{BIZ}'"
 ), tuples=True).stdout or "").strip()
-task_check = (psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+task_check = (psql(os.environ["PLATFORM_DB"], (
     "select count(*) filter (where t.task_status='SUCCESS') || '|' || "
     "count(*) filter (where p.partition_status='SUCCESS') "
     "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
@@ -147,7 +147,7 @@ cancel_instance = None
 cancel_partition = None
 deadline = time.time() + 30
 while time.time() < deadline:
-    out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+    out = psql(os.environ["PLATFORM_DB"], (
         "select i.id || '|' || p.id || '|' || coalesce(t.task_status,'') "
         "from batch.trigger_request tr "
         "join batch.job_instance i on i.id=tr.related_job_instance_id "
@@ -187,7 +187,7 @@ print(f"  [cancel] instance={cancel_instance} http={cancel_http} body={cancel_bo
 deadline = time.time() + 90
 cancel_status = ""
 while time.time() < deadline:
-    out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+    out = psql(os.environ["PLATFORM_DB"], (
         "select i.instance_status || '|' || p.partition_status || '|' || t.task_status "
         "from batch.job_instance i "
         "join batch.job_partition p on p.job_instance_id=i.id "
@@ -202,7 +202,7 @@ while time.time() < deadline:
 print("\n-- cancel_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select i.id,i.instance_status,p.partition_status,t.task_status,t.cancel_requested,t.error_code "
     "from batch.job_instance i join batch.job_partition p on p.job_instance_id=i.id "
     "join batch.job_task t on t.job_partition_id=p.id "

@@ -109,7 +109,7 @@ def wait_for(job, rid, expected):
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' and tr.job_code='{job}' "
             "order by tr.created_at desc limit 1"
         )
-        out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), sql, tuples=True)
+        out = psql(os.environ["PLATFORM_DB"], sql, tuples=True)
         status = (out.stdout or "").strip()
         if status in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
             marker = "✓" if status == expected else "✗"
@@ -159,7 +159,7 @@ print("\n-- job_status --", flush=True)
 request_list = ",".join("'" + rid + "'" for rid in request_ids)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select i.id,i.job_code,i.instance_status,i.expected_partition_count,"
     "t.task_status,t.error_code,left(coalesce(t.error_message,''),180) as error_message "
     "from batch.trigger_request tr "
@@ -172,14 +172,14 @@ subprocess.run([
 print("\n-- upsert_business_row --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c",
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c",
     f"select tenant_id, customer_no, count(*) as rows, max(customer_name) as customer_name, "
     f"max(source_batch_no) as source_batch_no from biz.customer_account "
     f"where tenant_id='ta' and customer_no='{CUSTOMER}' "
     f"group by tenant_id, customer_no"
 ], check=False)
 
-check = psql(os.environ.get("BUSINESS_DB", "batch_business"), (
+check = psql(os.environ["BUSINESS_DB"], (
     f"select count(*) || '|' || coalesce(max(customer_name),'') "
     f"from biz.customer_account where tenant_id='ta' and customer_no='{CUSTOMER}'"
 ), tuples=True)

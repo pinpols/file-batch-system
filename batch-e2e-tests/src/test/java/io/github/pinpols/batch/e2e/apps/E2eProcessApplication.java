@@ -3,6 +3,7 @@ package io.github.pinpols.batch.e2e.apps;
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
 import io.github.pinpols.batch.e2e.config.E2eProcessWorkerDataSourceConfiguration;
@@ -50,6 +51,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Import({
   BatchClockConfig.class,
   E2ePlatformDataSourceConfiguration.class,
+  E2eBusinessDataSourceConfiguration.class,
   E2eProcessWorkerDataSourceConfiguration.class,
   E2ePlatformMybatisConfiguration.class,
   E2eShedLockConfiguration.class
@@ -99,7 +101,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     sqlSessionFactoryRef = "sqlSessionFactory")
 @MapperScan(
     basePackages = "io.github.pinpols.batch.worker.processes.mapper.business",
-    sqlSessionFactoryRef = "sqlSessionFactory")
+    sqlSessionFactoryRef = "e2eBusinessSqlSessionFactory")
 public class E2eProcessApplication {
 
   public static void main(String[] args) {

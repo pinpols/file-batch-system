@@ -59,4 +59,12 @@
         where jd.tenant_id = #{tenantId}
           and jd.job_code = #{jobCode}
     </select>
+
+    <update id="updateEnabled">
+        update batch.job_definition
+        set enabled = #{enabled},
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </update>
 </mapper>

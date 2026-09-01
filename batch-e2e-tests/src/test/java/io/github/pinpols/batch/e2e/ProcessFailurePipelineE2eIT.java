@@ -7,11 +7,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eProcessApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.e2e.support.ProcessE2eFixture;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -20,13 +20,13 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.jdbc.Sql;
 
 /**
  * 端到端测试：PROCESS 失败路径（VALIDATE 阶段用户校验规则不通过）。
@@ -39,30 +39,38 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.process.worker-type=PROCESS")
 @ActiveProfiles({"test", "e2e"})
-@Sql(scripts = {E2eTestSql.BIZ_SCHEMA})
+@E2eBusinessSchema
 @Tag("e2e")
 class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
+  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
-
-  @Autowired
-  private ObjectMapper objectMapper;
+  ProcessFailurePipelineE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      @Qualifier("processBusinessDataSource") DataSource businessDataSource,
+      E2eOutboxPublishSupport e2eOutboxPublishSupport,
+      ObjectMapper objectMapper) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.businessDataSource = businessDataSource;
+    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+    this.objectMapper = objectMapper;
+  }
 
   @Test
   void wap_sqlTransform_validationFailureAbortsCommit() throws Exception {
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
-    ProcessE2eFixture.cleanProcessRows(jdbcTemplate);
-    ProcessE2eFixture.seedDemoOrderEvents(jdbcTemplate, TENANT);
+    ProcessE2eFixture.cleanProcessRows(businessJdbc);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
     // 用户校验规则：要求所有行 total_amount >= 1000（本批数据是 30/7，所以会失败）
     Map<String, Object> validationRule = Map.of(
         "name",
@@ -99,11 +107,11 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
         });
 
     // Target 表保持空（COMMIT 没跑）
-    assertThat(jdbcTemplate.queryForObject(
+    assertThat(businessJdbc.queryForObject(
             "select count(*)::int from biz.process_account_summary", Integer.class))
         .isZero();
     // staging 仍含本批的 2 行（留 forensics，直到下次 prepare 才清）
-    assertThat(jdbcTemplate.queryForObject(
+    assertThat(businessJdbc.queryForObject(
             "select count(*)::int from batch.process_staging where tenant_id=?",
             Integer.class,
             TENANT))

@@ -147,7 +147,12 @@ public class TriggerReconciler {
         // Quartz 里有 jobKey 但没 trigger（罕见）→ 保守不判 drift，下一轮再说
         return false;
       }
-      Trigger quartzTrigger = triggers.get(0);
+      Trigger quartzTrigger = primaryTrigger(key, triggers);
+      if (EmptyChecks.isNull(quartzTrigger)) {
+        // 同一个 Job 可能临时挂 recovery/readiness retry Trigger。不能用第一条辅助 Trigger
+        // 判断主调度漂移，否则会 delete-and-add 整个 Job，连恢复 Trigger 一起删掉。
+        return false;
+      }
       if ("CRON".equalsIgnoreCase(type)) {
         if (!(quartzTrigger instanceof CronTrigger ct)) {
           return true;
@@ -174,6 +179,16 @@ public class TriggerReconciler {
           exception.getMessage());
       return false;
     }
+  }
+
+  private Trigger primaryTrigger(JobKey key, List<? extends Trigger> triggers) {
+    for (Trigger trigger : triggers) {
+      if (key.getName().equals(trigger.getKey().getName())
+          && TriggerSchedulerFacade.JOB_GROUP.equals(trigger.getKey().getGroup())) {
+        return trigger;
+      }
+    }
+    return null;
   }
 
   private long parseSecondsOrMinusOne(String expression) {

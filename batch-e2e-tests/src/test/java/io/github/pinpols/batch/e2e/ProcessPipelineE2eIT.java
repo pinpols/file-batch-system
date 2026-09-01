@@ -7,11 +7,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eProcessApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
-import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.e2e.support.ProcessE2eFixture;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -25,16 +25,16 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.jdbc.Sql;
 
 /**
  * 端到端测试：PROCESS 主链路成功闭环（WAP+bookends 完整 5 stage）。
@@ -55,7 +55,7 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.process.worker-type=PROCESS")
 @ActiveProfiles({"test", "e2e"})
-@Sql(scripts = {E2eTestSql.BIZ_SCHEMA})
+@E2eBusinessSchema
 @Import(ProcessPipelineE2eIT.ProcessE2eTestConfiguration.class)
 @Tag("e2e")
 @Tag("smoke")
@@ -67,24 +67,32 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   // 否则静默 no-op 防御非数字回报。测试 watermark 用 YYYYMMDD 数字形式,语义对齐 bizDate=2026-01-15。
   private static final String CUSTOM_PLUGIN_WATERMARK = "20260115";
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
+  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
-
-  @Autowired
-  private ObjectMapper objectMapper;
+  ProcessPipelineE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      @Qualifier("processBusinessDataSource") DataSource businessDataSource,
+      E2eOutboxPublishSupport e2eOutboxPublishSupport,
+      ObjectMapper objectMapper) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.businessDataSource = businessDataSource;
+    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+    this.objectMapper = objectMapper;
+  }
 
   @Test
   void wap_sqlTransform_publishesTargetAndCleansStaging() throws Exception {
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
-    ProcessE2eFixture.cleanProcessRows(jdbcTemplate);
-    ProcessE2eFixture.seedDemoOrderEvents(jdbcTemplate, TENANT);
+    ProcessE2eFixture.cleanProcessRows(businessJdbc);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
     ProcessE2eFixture.seedSqlTransformPipelineDefinition(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
 
@@ -114,19 +122,19 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
         });
 
     // Target 表写入正确
-    assertThat(jdbcTemplate.queryForObject(
+    assertThat(businessJdbc.queryForObject(
             "select count(*)::int from biz.process_account_summary where biz_date = date"
                 + " '2026-01-15'",
             Integer.class))
         .isEqualTo(2);
-    assertThat(jdbcTemplate.queryForObject(
+    assertThat(businessJdbc.queryForObject(
             "select total_amount::text from biz.process_account_summary where account_id='A'"
                 + " and biz_date = date '2026-01-15'",
             String.class))
         .isEqualTo("30.00");
 
     // staging 在 FEEDBACK 已清空
-    assertThat(jdbcTemplate.queryForObject(
+    assertThat(businessJdbc.queryForObject(
             "select count(*)::int from batch.process_staging", Integer.class))
         .isZero();
 
@@ -153,9 +161,10 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   @Test
   void wap_customPlugin_simpleComputeOnly_runsAll5StagesAsNoOpForOthers() {
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
-    ProcessE2eFixture.cleanProcessRows(jdbcTemplate);
+    ProcessE2eFixture.cleanProcessRows(businessJdbc);
     ProcessE2eFixture.seedCustomPluginPipelineDefinition(
         jdbcTemplate, TENANT, seed.jobCode(), CUSTOM_PLUGIN_CODE, "{\"processedCount\":1}");
 
@@ -197,7 +206,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
             where pipeline_instance_id = ? and stage_code = 'COMPUTE'
             """, String.class, pipelineInstanceId);
     assertThat(processedCount).isEqualTo("1");
-    assertThat(jdbcTemplate.queryForObject(
+    assertThat(businessJdbc.queryForObject(
             "select count(*)::int from batch.process_staging", Integer.class))
         .isZero();
   }

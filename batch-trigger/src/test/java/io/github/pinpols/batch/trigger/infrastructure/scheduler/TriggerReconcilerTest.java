@@ -14,6 +14,7 @@ import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
 import java.util.Set;
+import java.util.TimeZone;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.quartz.CronTrigger;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
+import org.quartz.SimpleTrigger;
+import org.quartz.TriggerKey;
 import org.quartz.impl.matchers.GroupMatcher;
 
 @ExtendWith(MockitoExtension.class)
@@ -122,6 +125,8 @@ class TriggerReconcilerTest {
     JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
 
     CronTrigger quartzTrigger = mock(CronTrigger.class);
+    when(quartzTrigger.getKey())
+        .thenReturn(TriggerKey.triggerKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP));
     when(quartzTrigger.getCronExpression()).thenReturn("0 0 3 * * ?"); // Quartz still has old
     // timezone stub 被 short-circuit 跳过（cron 不同已命中 drift），故不 stub 以避免 strict mode 报错
 
@@ -133,6 +138,34 @@ class TriggerReconcilerTest {
     reconciler.reconcile();
 
     verify(registration).registerByJobCode("t1", "JOB_A");
+    verify(registration, never()).unregisterByJobCode(any(), any());
+  }
+
+  @Test
+  void auxiliaryRecoveryTriggerDoesNotCauseScheduleDrift() throws Exception {
+    TriggerDescriptor descriptor = enabledDescriptor("t1", "JOB_A");
+    descriptor.setScheduleType("CRON");
+    descriptor.setScheduleExpression("0 0 2 * * ?");
+    descriptor.setTimezone("Asia/Shanghai");
+    JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+
+    SimpleTrigger recoveryTrigger = mock(SimpleTrigger.class);
+    when(recoveryTrigger.getKey())
+        .thenReturn(TriggerKey.triggerKey("misfire-recovery-1", "batch-trigger-recovery"));
+    CronTrigger primaryTrigger = mock(CronTrigger.class);
+    when(primaryTrigger.getKey())
+        .thenReturn(TriggerKey.triggerKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP));
+    when(primaryTrigger.getCronExpression()).thenReturn("0 0 2 * * ?");
+    when(primaryTrigger.getTimeZone()).thenReturn(TimeZone.getTimeZone("Asia/Shanghai"));
+
+    when(loader.loadAll()).thenReturn(List.of(descriptor));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
+        .thenReturn(Set.of(existing));
+    doReturn(List.of(recoveryTrigger, primaryTrigger)).when(scheduler).getTriggersOfJob(existing);
+
+    reconciler.reconcile();
+
+    verify(registration, never()).registerByJobCode(any(), any());
     verify(registration, never()).unregisterByJobCode(any(), any());
   }
 

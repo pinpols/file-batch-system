@@ -16,7 +16,8 @@ public class E2eProcessWorkerDataSourceConfiguration {
   }
 
   @Bean(name = "processBusinessDataSource")
-  public DataSource processBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
+  public DataSource processBusinessDataSource(
+      @Qualifier("e2eBusinessDataSource") DataSource dataSource) {
     return dataSource;
   }
 

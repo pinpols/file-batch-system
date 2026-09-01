@@ -43,6 +43,17 @@ case "$IMPORT_PROFILE" in
   *) echo "IMPORT_PROFILE must be small, medium, or large" >&2; exit 2 ;;
 esac
 
+# Kafka 的默认 request.max.bytes 约为 1 MiB；Trigger/Kafka 外层 JSON 还会
+# 额外增加 envelope 和转义开销。large profile 仍是 inline payload，达到
+# 800 KB 参数文件时就应明确提示改用对象存储导入，而不是把容量边界
+# 伪装成 worker 失败并留下 ACCEPTED/outbox 垃圾数据。
+IMPORT_PARAMS_BYTES="$(wc -c < "$IMPORT_PARAMS" | awk '{print $1}')"
+if [[ "$IMPORT_PROFILE" == "large" && "${IMPORT_PARAMS_BYTES:-0}" -ge 800000 ]]; then
+  echo "IMPORT_PROFILE=large is an inline payload of ${IMPORT_PARAMS_BYTES} bytes and exceeds the Kafka request safety budget." >&2
+  echo "Use the object-backed import scenario for large files; use IMPORT_PROFILE=medium for inline stress tests." >&2
+  exit 2
+fi
+
 LOGIN_RESPONSE="$(
   curl -i -fsS -X POST "$CONSOLE_BASE_URL/api/console/auth/login" \
     -H 'Content-Type: application/json' \

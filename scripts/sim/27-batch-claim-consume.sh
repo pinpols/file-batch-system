@@ -42,7 +42,7 @@ PARTITION_COUNT = int(os.environ.get("PARTITION_COUNT", "4"))
 REQUIRE_BATCH_CLAIM = os.environ.get("REQUIRE_BATCH_CLAIM", "true").lower() == "true"
 PG = os.environ.get("PG_CONTAINER", "batch-postgres-primary")
 PGU = os.environ.get("POSTGRES_USER", "batch_user")
-PLAT = os.environ.get("PLATFORM_DB", "batch_platform")
+PLAT = os.environ["PLATFORM_DB"]
 
 if not 2 <= PARTITION_COUNT <= 256:
     raise ValueError("PARTITION_COUNT must be within 2..256")

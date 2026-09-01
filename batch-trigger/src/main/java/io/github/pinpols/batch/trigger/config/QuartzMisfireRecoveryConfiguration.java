@@ -6,8 +6,8 @@ import org.springframework.boot.quartz.autoconfigure.SchedulerFactoryBeanCustomi
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-@Configuration(proxyBeanMethods = false)
 /** 配置 Quartz misfire 的恢复与补偿行为。 */
+@Configuration(proxyBeanMethods = false)
 public class QuartzMisfireRecoveryConfiguration {
 
   @Bean

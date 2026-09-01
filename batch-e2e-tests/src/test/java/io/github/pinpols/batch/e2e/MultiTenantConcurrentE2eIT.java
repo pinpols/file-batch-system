@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
+import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
@@ -61,9 +62,9 @@ import org.springframework.test.context.jdbc.Sql;
       "batch.worker.import.accept-cross-tenant-dispatch=true"
     })
 @ActiveProfiles({"test", "e2e"})
+@E2eBusinessSchema
 @Sql(
     scripts = {
-      E2eTestSql.BIZ_SCHEMA,
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")

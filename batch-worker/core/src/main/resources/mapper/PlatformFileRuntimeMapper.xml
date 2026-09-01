@@ -307,7 +307,13 @@
     <update id="updateFileRecordStatus">
         update batch.file_record
         set file_status = #{fileStatus},
-            metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
+            metadata_json = (
+                case when #{fileStatus} = 'LOADED'
+                    then coalesce(metadata_json, '{}'::jsonb)
+                        - array['errorCode', 'errorMessage', 'errorKey', 'errorArgs']::text[]
+                    else coalesce(metadata_json, '{}'::jsonb)
+                end
+            ) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
             updated_at = current_timestamp
         where id = #{fileId}
     </update>

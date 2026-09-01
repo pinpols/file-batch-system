@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.Date;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.TriggerListener;
+import org.quartz.impl.matchers.GroupMatcher;
 
 /**
  * Converts a Quartz cron misfire into one business-level recovery execution.
@@ -46,26 +48,44 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
 
   @Override
   public void triggerMisfired(Trigger trigger) {
-    if (!TriggerSchedulerFacade.JOB_GROUP.equals(trigger.getKey().getGroup())
-        || EmptyChecks.isNull(trigger.getNextFireTime())) {
+    if (!TriggerSchedulerFacade.JOB_GROUP.equals(trigger.getKey().getGroup())) {
       return;
+    }
+    Date originalFireTime = trigger.getNextFireTime();
+    if (EmptyChecks.isNull(originalFireTime)) {
+      originalFireTime = trigger.getPreviousFireTime();
+      if (EmptyChecks.isNull(originalFireTime)) {
+        log.warn(
+            "skipping Quartz misfire recovery because original fire time is unavailable:"
+                + " triggerKey={}, jobKey={}",
+            trigger.getKey(),
+            trigger.getJobKey());
+        return;
+      }
+      log.warn(
+          "Quartz misfire recovery using previousFireTime fallback: triggerKey={}, jobKey={},"
+              + " previousFireTime={}",
+          trigger.getKey(),
+          trigger.getJobKey(),
+          originalFireTime);
     }
     Trigger recovery = TriggerBuilder.newTrigger()
         .withIdentity("misfire-recovery-" + UUID.randomUUID(), RECOVERY_GROUP)
         .forJob(trigger.getJobKey())
-        .usingJobData(
-            QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME,
-            trigger.getNextFireTime().getTime())
+        .usingJobData(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME, originalFireTime.getTime())
         .startNow()
         .withSchedule(
             SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
         .build();
     try {
-      schedulerSupplier.get().scheduleJob(recovery);
+      Scheduler scheduler = schedulerSupplier.get();
+      scheduler.resumeTriggers(GroupMatcher.triggerGroupEquals(RECOVERY_GROUP));
+      scheduler.scheduleJob(recovery);
+      scheduler.resumeTrigger(recovery.getKey());
       log.info(
           "scheduled Quartz misfire recovery: jobKey={}, originalFireTime={}",
           trigger.getJobKey(),
-          trigger.getNextFireTime());
+          originalFireTime);
     } catch (SchedulerException exception) {
       log.error(
           "failed to schedule Quartz misfire recovery: jobKey={}", trigger.getJobKey(), exception);

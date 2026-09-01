@@ -112,6 +112,7 @@ USERS_PER_WORKER=1 IMPORT_PROFILE=medium \
 脚本会：
 
 - 生成 IMPORT 小/中/大 CSV payload：20 / 1000 / 10000 行
+- `IMPORT_PROFILE=large` 仍是 inline payload；由于 Trigger/Kafka envelope 和 JSON 转义开销，参数文件达到 800 KB 时压测脚本会提前拒绝，必须改用对象存储导入场景。
 - 准备 EXPORT settlement batch + 5000 detail rows
 - 准备 DISPATCH 本地渠道文件和 `lt_dispatch_local_job`
 - 准备 PROCESS SQL transform 作业 `lt_process_sql_job` + 5000 source rows

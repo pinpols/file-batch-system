@@ -54,10 +54,14 @@ public record FormatParseRequest(
       CharsetDecoder decoder = cs.newDecoder()
           .onMalformedInput(CodingErrorAction.REPORT)
           .onUnmappableCharacter(CodingErrorAction.REPORT);
-      // S1-6 / R2-P2-7：InputStreamReader ctor 罕见情况下抛异常时，原始 InputStream 未关闭 → fd 泄漏。
-      // 包一层 try-catch 在中间环节失败时显式关 in。正常路径下 BufferedReader.close 会向下关闭。
-      try (InputStream in = Files.newInputStream(spoolPath)) {
+      // Reader 返回后由调用方的 try-with-resources 负责关闭 reader 和底层文件流。
+      // 只在构造 reader 失败时关闭已打开的 stream，避免返回一个底层已关闭的 reader。
+      InputStream in = Files.newInputStream(spoolPath);
+      try {
         return new BufferedReader(new InputStreamReader(in, decoder));
+      } catch (RuntimeException | Error failure) {
+        in.close();
+        throw failure;
       }
     }
     return new BufferedReader(new StringReader(payloadText == null ? "" : payloadText));

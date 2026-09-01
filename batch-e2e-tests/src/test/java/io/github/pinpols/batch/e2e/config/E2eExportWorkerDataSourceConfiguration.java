@@ -14,7 +14,8 @@ public class E2eExportWorkerDataSourceConfiguration {
   }
 
   @Bean(name = "exportBusinessDataSource")
-  public DataSource exportBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
+  public DataSource exportBusinessDataSource(
+      @Qualifier("e2eBusinessDataSource") DataSource dataSource) {
     return dataSource;
   }
 }

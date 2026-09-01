@@ -1,5 +1,8 @@
 # 压测报告 — 2026-04-25
 
+> 最新 Import / Export / Dispatch 场景与性能验证见：[import-export-dispatch-scenario-performance-2026-09-01.md](../verifications/import-export-dispatch-scenario-performance-2026-09-01.md)。
+> 最新 Process / Atomic 场景与性能验证见：[process-atomic-scenario-performance-2026-09-01.md](../verifications/process-atomic-scenario-performance-2026-09-01.md)。
+
 ## TL;DR
 
 本地单实例 orchestrator，所有 P2 默认开（quota Redis Lua / worker cache / read replica / Quartz 单独库 / Kafka TENANT mode），跑 Gatling JobLaunchSimulation 找到拐点：

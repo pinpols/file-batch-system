@@ -8,4 +8,6 @@ public interface TriggerDefinitionMapper {
   List<TriggerDescriptor> selectAllScheduledDefinitions();
 
   TriggerDescriptor selectByJobCode(String tenantId, String jobCode);
+
+  int updateEnabled(String tenantId, String jobCode, boolean enabled);
 }

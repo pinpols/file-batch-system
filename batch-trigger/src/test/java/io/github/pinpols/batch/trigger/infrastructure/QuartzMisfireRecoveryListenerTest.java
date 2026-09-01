@@ -16,6 +16,7 @@ import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
 import org.quartz.TriggerKey;
+import org.quartz.impl.matchers.GroupMatcher;
 
 @ExtendWith(MockitoExtension.class)
 class QuartzMisfireRecoveryListenerTest {
@@ -45,6 +46,31 @@ class QuartzMisfireRecoveryListenerTest {
     assertThat(recovery.getJobKey()).isEqualTo(jobKey);
     assertThat(recovery.getJobDataMap().getLongValue(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME))
         .isEqualTo(originalFireTime.toEpochMilli());
+    verify(scheduler)
+        .resumeTriggers(
+            GroupMatcher.triggerGroupEquals(QuartzMisfireRecoveryListener.RECOVERY_GROUP));
+    verify(scheduler).resumeTrigger(recovery.getKey());
+  }
+
+  @Test
+  void shouldUsePreviousFireTimeWhenNextFireTimeIsUnavailable() throws Exception {
+    Instant previousFireTime = Instant.parse("2026-03-27T00:00:00Z");
+    JobKey jobKey = JobKey.jobKey("t1:IMPORT_JOB", TriggerSchedulerFacade.JOB_GROUP);
+    when(trigger.getKey())
+        .thenReturn(TriggerKey.triggerKey("t1:IMPORT_JOB", TriggerSchedulerFacade.JOB_GROUP));
+    when(trigger.getJobKey()).thenReturn(jobKey);
+    when(trigger.getNextFireTime()).thenReturn(null);
+    when(trigger.getPreviousFireTime()).thenReturn(Date.from(previousFireTime));
+
+    new QuartzMisfireRecoveryListener(() -> scheduler).triggerMisfired(trigger);
+
+    ArgumentCaptor<Trigger> captor = ArgumentCaptor.forClass(Trigger.class);
+    verify(scheduler).scheduleJob(captor.capture());
+    assertThat(captor
+            .getValue()
+            .getJobDataMap()
+            .getLongValue(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME))
+        .isEqualTo(previousFireTime.toEpochMilli());
   }
 
   @Test

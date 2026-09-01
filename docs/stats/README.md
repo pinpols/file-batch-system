@@ -4,7 +4,7 @@
 
 新的精简口径使用 [scripts/dev/lean-loc-report.py](../../scripts/dev/lean-loc-report.py)。注意：主流工具（Sonar `NCLOC`、cloc、scc、tokei）的默认结果通常仍是“物理非空/非注释行”，不是逻辑语句行；本口径专门用于回答“格式化换行带来的体量水分”。
 
-最新快照：[loc-2026-08-04-lean.md](./loc-2026-08-04-lean.md)。
+最新快照：[loc-2026-09-01-lean.md](./loc-2026-09-01-lean.md)。
 
 - 只统计 git 跟踪文件。
 - 排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration。

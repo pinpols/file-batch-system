@@ -11,14 +11,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * PROCESS e2e 共享 fixture：业务行 seed、pipeline_definition + pipeline_step_definition seed、 SQL
  * transform spec 构造，避免 happy 与 failure 两个 IT 类重复维护。
  *
- * <p>schema 由 {@link E2eTestSql#BIZ_SCHEMA} 通过 {@code @Sql} 加载（{@code create_biz_tables.sql}），本类只负责
- * 行级 seed / 清理 / pipeline 定义注入。
+ * <p>业务 schema 由 {@link E2eBusinessSchema} 在独立 e2eBusinessDataSource 上加载，本类只负责行级 seed / 清理 /
+ * pipeline 定义注入。pipeline 定义本身写入平台库，业务行和 process staging 写入业务库。
  */
 public final class ProcessE2eFixture {
 
   private ProcessE2eFixture() {}
 
-  /** 清空 PROCESS 业务表行 + staging，确保测试间互相独立。表本身由 BIZ_SCHEMA 创建。 */
+  /** 清空 PROCESS 业务表行 + staging，确保测试间互相独立。表本身由 E2eBusinessSchema 创建。 */
   public static void cleanProcessRows(JdbcTemplate jdbcTemplate) {
     jdbcTemplate.execute("delete from biz.process_order_event");
     jdbcTemplate.execute("delete from biz.process_account_summary");

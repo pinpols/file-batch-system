@@ -11,6 +11,14 @@ INSERT INTO batch.job_definition (
    'MANUAL', 'Asia/Shanghai', 5, 'dispatch_queue', 'DISPATCH',
    'default-calendar', 'always_open', 'API', false, 'NONE',
    'NONE', 0, 600, true, 1, 'local dispatch load test job', 'load-test', 'load-test', now(), now()),
+  ('default-tenant', 'import_customer_job', 'Load Test Customer Import', 'IMPORT', 'LOAD_TEST',
+   'MANUAL', 'Asia/Shanghai', 5, 'import_queue', 'import',
+   'default-calendar', 'always_open', 'API', false, 'NONE',
+   'NONE', 0, 900, true, 1, 'customer import load test job', 'load-test', 'load-test', now(), now()),
+  ('default-tenant', 'export_settlement_job', 'Load Test Settlement Export', 'EXPORT', 'LOAD_TEST',
+   'MANUAL', 'Asia/Shanghai', 5, 'export_queue', 'export',
+   'default-calendar', 'always_open', 'API', false, 'NONE',
+   'NONE', 0, 1200, true, 1, 'settlement export load test job', 'load-test', 'load-test', now(), now()),
   ('default-tenant', 'lt_process_sql_job', 'Load Test Process SQL Aggregate', 'PROCESS', 'LOAD_TEST',
    'MANUAL', 'Asia/Shanghai', 5, 'process_queue', 'PROCESS',
    'default-calendar', 'always_open', 'API', false, 'NONE',
@@ -30,8 +38,105 @@ DELETE FROM batch.pipeline_step_definition
 WHERE pipeline_definition_id IN (
   SELECT id FROM batch.pipeline_definition
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job',
+                     'lt_process_sql_job', 'lt_process_copy_job')
 );
+
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+    version, enabled, description, created_at, updated_at
+)
+SELECT
+    'default-tenant', 'import_customer_job', 'Load Test Customer Import Pipeline',
+    'IMPORT', 'LOAD_TEST', 'import', 1, true,
+    'load test customer import pipeline', now(), now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'import_customer_job' AND version = 1
+);
+
+WITH pd AS (
+  SELECT id FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'import_customer_job' AND version = 1
+  ORDER BY id DESC
+  LIMIT 1
+), steps(stage_code, step_order, step_code, step_name, impl_code, step_params, timeout_seconds,
+         retry_policy, retry_max_count) AS (
+  VALUES
+    ('RECEIVE',    1, 'IMPORT_RECEIVE',    'Receive',    'IMPORT_RECEIVE',    '{}'::jsonb, 300, 'NONE', 0),
+    ('PREPROCESS', 2, 'IMPORT_PREPROCESS', 'Preprocess', 'IMPORT_PREPROCESS', '{}'::jsonb, 600, 'NONE', 0),
+    ('PARSE',      3, 'IMPORT_PARSE',      'Parse',      'IMPORT_PARSE',      '{}'::jsonb, 900, 'FIXED', 1),
+    ('VALIDATE',   4, 'IMPORT_VALIDATE',   'Validate',   'IMPORT_VALIDATE',   '{}'::jsonb, 900, 'FIXED', 1),
+    ('LOAD',       5, 'IMPORT_LOAD',       'Load',       'IMPORT_LOAD',       '{}'::jsonb, 1200, 'NONE', 0)
+)
+INSERT INTO batch.pipeline_step_definition (
+    pipeline_definition_id, step_code, step_name, stage_code, step_order,
+    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
+    enabled, created_at, updated_at
+)
+SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
+       steps.impl_code, steps.step_params, steps.timeout_seconds, steps.retry_policy,
+       steps.retry_max_count, true, now(), now()
+FROM pd CROSS JOIN steps
+ON CONFLICT (pipeline_definition_id, step_code) DO UPDATE SET
+  step_name = EXCLUDED.step_name,
+  stage_code = EXCLUDED.stage_code,
+  step_order = EXCLUDED.step_order,
+  impl_code = EXCLUDED.impl_code,
+  step_params = EXCLUDED.step_params,
+  timeout_seconds = EXCLUDED.timeout_seconds,
+  retry_policy = EXCLUDED.retry_policy,
+  retry_max_count = EXCLUDED.retry_max_count,
+  enabled = true,
+  updated_at = now();
+
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+    version, enabled, description, created_at, updated_at
+)
+SELECT
+    'default-tenant', 'export_settlement_job', 'Load Test Settlement Export Pipeline',
+    'EXPORT', 'LOAD_TEST', 'export', 1, true,
+    'load test settlement export pipeline', now(), now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'export_settlement_job' AND version = 1
+);
+
+WITH pd AS (
+  SELECT id FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'export_settlement_job' AND version = 1
+  ORDER BY id DESC
+  LIMIT 1
+), steps(stage_code, step_order, step_code, step_name, impl_code, step_params, timeout_seconds,
+         retry_policy, retry_max_count) AS (
+  VALUES
+    ('PREPARE',   1, 'EXPORT_PREPARE',  'Prepare',  'EXPORT_PREPARE',  '{"snapshotMode":"BIZ_DATE"}'::jsonb, 300, 'NONE', 0),
+    ('GENERATE',  2, 'EXPORT_GENERATE', 'Generate', 'EXPORT_GENERATE', '{"delimiter":","}'::jsonb, 1200, 'FIXED', 1),
+    ('STORE',     3, 'EXPORT_STORE',    'Store',    'EXPORT_STORE',    '{"bucket":"batch-dev"}'::jsonb, 1200, 'FIXED', 1),
+    ('REGISTER',  4, 'EXPORT_REGISTER', 'Register', 'EXPORT_REGISTER', '{"registerMode":"atomic"}'::jsonb, 300, 'NONE', 0),
+    ('COMPLETE',  5, 'EXPORT_COMPLETE', 'Complete', 'EXPORT_COMPLETE', '{"terminalOnSuccess":true}'::jsonb, 300, 'NONE', 0)
+)
+INSERT INTO batch.pipeline_step_definition (
+    pipeline_definition_id, step_code, step_name, stage_code, step_order,
+    impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
+    enabled, created_at, updated_at
+)
+SELECT pd.id, steps.step_code, steps.step_name, steps.stage_code, steps.step_order,
+       steps.impl_code, steps.step_params, steps.timeout_seconds, steps.retry_policy,
+       steps.retry_max_count, true, now(), now()
+FROM pd CROSS JOIN steps
+ON CONFLICT (pipeline_definition_id, step_code) DO UPDATE SET
+  step_name = EXCLUDED.step_name,
+  stage_code = EXCLUDED.stage_code,
+  step_order = EXCLUDED.step_order,
+  impl_code = EXCLUDED.impl_code,
+  step_params = EXCLUDED.step_params,
+  timeout_seconds = EXCLUDED.timeout_seconds,
+  retry_policy = EXCLUDED.retry_policy,
+  retry_max_count = EXCLUDED.retry_max_count,
+  enabled = true,
+  updated_at = now();
 
 INSERT INTO batch.pipeline_definition (
     tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
