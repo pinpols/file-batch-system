@@ -4,6 +4,8 @@ if (( BASH_VERSINFO[0] < 4 )); then
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 # shellcheck source=../lib/python-runtime.sh
 source "$ROOT/scripts/lib/python-runtime.sh"
 batch_require_python
@@ -19,9 +21,10 @@ source "$ROOT/scripts/lib/process.sh"
 # =========================================================
 set -uo pipefail
 
-PG="${PG_CONTAINER:-batch-postgres-primary}"
-MINIO="${MINIO_CONTAINER:-batch-minio}"
-BUCKET="${MINIO_BUCKET:-batch-dev}"
+MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+PG="$PG_CONTAINER"
+MINIO="$MINIO_CONTAINER"
+BUCKET="$MINIO_BUCKET"
 MOCK_BASE="${MOCK_BASE:-http://localhost:11080}"
 LOOKBACK_MINUTES="${SIM_VERIFY_LOOKBACK_MINUTES:-30}"
 STRICT_DISPATCH="${SIM_VERIFY_STRICT_DISPATCH:-true}"
@@ -32,9 +35,9 @@ if ! [[ "$LOOKBACK_MINUTES" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-PG_USER="${PG_USER:-batch_user}"
+PG_USER="${PG_USER:-$PGUSER}"
 psql_q() { docker exec "$PG" psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
-psql_b() { docker exec "$PG" psql -U "$PG_USER" -d batch_business -tAc "$1" 2>/dev/null; }
+psql_b() { docker exec "$PG" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc "$1" 2>/dev/null; }
 minio_mc() {
   docker exec "$MINIO" sh -c \
     'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && exec mc "$@"' \
@@ -72,7 +75,7 @@ dispatch_issue() {
 hdr "PREREQ(若 EXPORT/DISPATCH 报 0 文件先看这里)"
 
 # (a) EXPORT job_definition 是否齐(说明 03-import-tenants.sh 已跑)
-export_defs=$(psql_q batch_platform \
+export_defs=$(psql_q "$PLATFORM_DB" \
   "select count(*) from batch.job_definition where job_code in
    ('TA_EXPORT_REPORT','TB_EXPORT_STATEMENT','TC_EXPORT_RISK_ALERT')" | tr -dc '0-9')
 export_defs="${export_defs:-0}"
@@ -95,7 +98,7 @@ else
 fi
 
 # (c) 近 10min FAILED 且 step 全停在 READY = 典型无 worker 现场
-ready_fail=$(psql_q batch_platform "select count(*) from batch.job_instance i
+ready_fail=$(psql_q "$PLATFORM_DB" "select count(*) from batch.job_instance i
   where i.job_code like '%EXPORT%' and i.instance_status='FAILED'
     and i.created_at > now() - interval '2 hour'
     and not exists (select 1 from batch.job_step_instance s
@@ -171,7 +174,7 @@ verify_dispatch_case() {
   # (默认 12×5s=60s);真不沉降仍走下方断言失败。
   local _settle_n=0
   while :; do
-  row=$(psql_q batch_platform "
+  row=$(psql_q "$PLATFORM_DB" "
     with latest as (
       select i.id, i.tenant_id, i.job_code, i.instance_status, i.params_snapshot, i.created_at
         from batch.job_instance i
@@ -263,10 +266,10 @@ verify_dispatch_case "tb" "TB_DISPATCH_SETTLE" "tb_api_ingest" "/tb/ingest"
 verify_dispatch_case "tc" "TC_DISPATCH_REVIEW" "tc_api_risk_push" "/tc/ingest"
 
 hdr "WORKFLOW + 全局 job_instance 状态"
-psql_q batch_platform "select instance_status, count(*) from batch.job_instance where created_at > now() - interval '10 min' group by instance_status order by instance_status" | head -10 | sed 's/^/    /'
+psql_q "$PLATFORM_DB" "select instance_status, count(*) from batch.job_instance where created_at > now() - interval '10 min' group by instance_status order by instance_status" | head -10 | sed 's/^/    /'
 
 hdr "Outbox 积压检查(健康度)"
-backlog=$(psql_q batch_platform "select count(*) from batch.outbox_event where publish_status in ('NEW','FAILED')" 2>/dev/null | tr -dc '0-9')
+backlog=$(psql_q "$PLATFORM_DB" "select count(*) from batch.outbox_event where publish_status in ('NEW','FAILED')" 2>/dev/null | tr -dc '0-9')
 backlog="${backlog:-0}"
 if [[ "$backlog" -lt 10 ]]; then
   ok "outbox backlog" "$backlog(健康)"

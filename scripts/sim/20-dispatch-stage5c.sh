@@ -60,7 +60,7 @@ CHANNELS = ["tb_stage5c_local", "tb_stage5c_nas", "tb_stage5c_sftp"]
 request_ids = {}
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -132,7 +132,7 @@ instance_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", instance_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", instance_sql
 ], check=False)
 
 print("\n-- dispatch_records --", flush=True)
@@ -145,7 +145,7 @@ dispatch_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", dispatch_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", dispatch_sql
 ], check=False)
 
 status_out = psql(

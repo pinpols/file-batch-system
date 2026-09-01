@@ -43,7 +43,7 @@ BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -120,7 +120,7 @@ while time.time() < deadline:
 print("\n-- job_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select tr.tenant_id,tr.request_id,i.id,i.job_code,i.instance_status,i.expected_partition_count "
     "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
     f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') order by tr.tenant_id,i.id"
@@ -134,7 +134,7 @@ ta_instance = (psql(
 ).stdout or "").strip()
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select p.partition_no,p.partition_status,t.task_status,t.error_code "
     "from batch.job_partition p left join batch.job_task t on t.job_partition_id=p.id "
     f"where p.job_instance_id={ta_instance} order by p.partition_no"
@@ -143,7 +143,7 @@ subprocess.run([
 print("\n-- file_records --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select tenant_id,source_ref,file_format_type,file_status,count(*) as files,"
     "coalesce(sum((metadata_json->>'recordCount')::int),0) as rows "
     "from batch.file_record "

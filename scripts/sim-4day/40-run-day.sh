@@ -21,12 +21,16 @@ if [[ "${SIM4DAY_CAPTURED:-0}" != "1" ]]; then
 fi
 TRG="${TRIGGER_BASE_URL}"
 SECRET="${BATCH_INTERNAL_SECRET}"
+DEPENDENCY_WAIT="${DEPENDENCY_WAIT:-180}"
+LAST_REQUEST_ID=""
 
 # archetype 原型:retail(类 ta) / bank(类 tb) / risk(类 tc)
 arche() { case "$1" in ta|t04|t07|t10) echo retail;; tb|t05|t08) echo bank;; tc|t06|t09) echo risk;; *) echo retail;; esac; }
 
 launch() { # 参数:tenant job bizDate paramsJson
-  local t="$1" job="$2" bd="$3" params="$4" rid; rid="sim-${BDC}-${t}-${job}-$(date +%s%N|tail -c 7)"
+  local t="$1" job="$2" bd="$3" params="$4" rid
+  rid="${SIM4DAY_RUN_ID:-sim}-${BDC}-${t}-${job}-$(date +%s%N|tail -c 7)"
+  LAST_REQUEST_ID="$rid"
   local body; body=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'tenantId':sys.argv[1],'jobCode':sys.argv[2],'triggerType':'API','bizDate':sys.argv[3],'requestId':sys.argv[4],'params':json.loads(sys.argv[5])}))" "$t" "$job" "$bd" "$rid" "$params")
   local resp; resp=$(curl -sf --max-time 40 -X POST "$TRG/api/triggers/launch" \
     -H "Content-Type: application/json" -H "X-Tenant-Id: $t" -H "X-Internal-Secret: $SECRET" \
@@ -34,19 +38,52 @@ launch() { # 参数:tenant job bizDate paramsJson
   if echo "$resp" | grep -qE '"code"\s*:\s*"(SUCCESS|OK)"'; then printf '.'; return 0; else printf 'x'; return 1; fi
 }
 
+wait_request_success() {
+  local request_id="$1" deadline status instance_status task_failed task_non_success
+  deadline=$(( $(date +%s) + DEPENDENCY_WAIT ))
+  while true; do
+    status=$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+      "select coalesce(i.instance_status,'') || '|' || coalesce((select count(*) from batch.job_task t where t.job_instance_id=i.id and t.task_status in ('FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')),0) || '|' || coalesce((select count(*) from batch.job_task t where t.job_instance_id=i.id and t.task_status <> 'SUCCESS'),0) from batch.trigger_request r left join batch.job_instance i on i.id=r.related_job_instance_id where r.request_id='$request_id' limit 1" 2>/dev/null || true)
+    IFS='|' read -r instance_status task_failed task_non_success <<<"$status"
+    if [[ "$instance_status" == "SUCCESS" && "$task_non_success" == "0" ]]; then
+      return 0
+    fi
+    if [[ "$instance_status" =~ ^(FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED)$ || "$task_failed" =~ ^[1-9] ]]; then
+      printf 'x'
+      return 1
+    fi
+    if (( $(date +%s) >= deadline )); then
+      printf 'x'
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+launch_and_wait() {
+  launch "$@" || return 1
+  wait_request_success "$LAST_REQUEST_ID"
+}
+
 import_content() { # 参数:tenant tpl header rowgen
   local t="$1" tpl="$2" header="$3" gen="$4"
   local csv; csv=$(printf '%s\n' "$header"; eval "$gen")
   local params; params=$("$PYTHON_BIN" -c "import json,sys;print(json.dumps({'templateCode':sys.argv[1],'content':sys.argv[2]}))" "$tpl" "$csv")
-  launch "$t" "$IMPORT_JOB" "$BD" "$params"
+  launch_and_wait "$t" "$IMPORT_JOB" "$BD" "$params"
 }
 
 # DISPATCH 需绑定一个已生成文件 + 渠道:取该租户最新 GENERATED 文件分发(自然形成 export→dispatch 链)。
-dispatch_latest() { # 参数:tenant job channelCode
-  local t="$1" job="$2" ch="$3" fid
+dispatch_latest() { # 参数:tenant job bizDate channelCode
+  local t="$1" job="$2" bd="$3" ch="$4" fid export_job
+  case "$job" in
+    TA_DISPATCH_ORDER) export_job=TA_EXPORT_REPORT ;;
+    TB_DISPATCH_SETTLE) export_job=TB_EXPORT_STATEMENT ;;
+    TC_DISPATCH_REVIEW) export_job=TC_EXPORT_RISK_ALERT ;;
+    *) printf 'x'; return 1 ;;
+  esac
   fid=$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
-    "select id from batch.file_record where tenant_id='$t' and file_status='GENERATED' order by id desc limit 1" 2>/dev/null)
-  if [ -n "$fid" ]; then launch "$t" "$job" "$BD" "{\"fileId\":$fid,\"channelCode\":\"$ch\"}"; else printf '_'; return 0; fi
+    "select id from batch.file_record where tenant_id='$t' and biz_date='$bd' and file_status='GENERATED' and file_size_bytes > 0 and storage_path like 'outbound/$export_job/%' order by id desc limit 1" 2>/dev/null)
+  if [ -n "$fid" ]; then launch_and_wait "$t" "$job" "$BD" "{\"fileId\":$fid,\"channelCode\":\"$ch\"}"; else printf 'x'; return 1; fi
 }
 
 echo "==> 单日驱动 bizDate=$BD rows=$ROWS tenants=${TENANTS[*]}"
@@ -59,25 +96,25 @@ for t in "${TENANTS[@]}"; do
       total=$((total+1)); import_content "$t" TA_IMPORT_CUSTOMER_TPL \
         "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status" \
         'for i in $(seq 1 '"$ROWS"'); do printf "%s-C-%s-%06d,企业%s号-%s,ENTERPRISE,9100%09d,139%08d,c%s%s@ex.com,ACTIVE\n" "'"$t"'" "'"$BDC"'" $i "$i" "'"$BDC"'" $i $i "'"$t"'" $i; done' && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TA_EXPORT_REPORT "$BD" "{\"templateCode\":\"TA_EXPORT_REPORT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
-      total=$((total+1)); dispatch_latest "$t" TA_DISPATCH_ORDER ta_local_archive && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TA_WF_SETTLEMENT "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch_and_wait "$t" TA_EXPORT_REPORT "$BD" "{\"templateCode\":\"TA_EXPORT_REPORT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
+      total=$((total+1)); dispatch_latest "$t" TA_DISPATCH_ORDER "$BD" ta_local_archive && ok=$((ok+1))
+      total=$((total+1)); launch_and_wait "$t" TA_WF_SETTLEMENT "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
     bank)
       IMPORT_JOB=TB_IMPORT_TRANSACTION
       total=$((total+1)); import_content "$t" TB_IMPORT_TRANSACTION_TPL \
         "txn_no,account_no,txn_type,amount,currency_code,txn_date,remark" \
         'for i in $(seq 1 '"$ROWS"'); do printf "%s-T-%s-%08d,ACC%010d,DEPOSIT,%d.00,CNY,%s,auto-%s-%d\n" "'"$t"'" "'"$BDC"'" $i $i $((100+i)) "'"$BD"'" "'"$BDC"'" $i; done' && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TB_EXPORT_STATEMENT "$BD" "{\"templateCode\":\"TB_EXPORT_STATEMENT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
-      total=$((total+1)); dispatch_latest "$t" TB_DISPATCH_SETTLE tb_api_push && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TB_WF_RECONCILE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch_and_wait "$t" TB_EXPORT_STATEMENT "$BD" "{\"templateCode\":\"TB_EXPORT_STATEMENT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
+      total=$((total+1)); dispatch_latest "$t" TB_DISPATCH_SETTLE "$BD" tb_api_push && ok=$((ok+1))
+      total=$((total+1)); launch_and_wait "$t" TB_WF_RECONCILE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
     risk)
       IMPORT_JOB=TC_IMPORT_RISK_SCORE
       total=$((total+1)); import_content "$t" TC_IMPORT_RISK_SCORE_TPL \
         "entity_id,entity_type,score_value,score_band,score_date" \
         'for i in $(seq 1 '"$ROWS"'); do b=$(( i%3==0 ? 1 : 0 )); printf "%s-E-%s-%06d,CUSTOMER,%d,%s,%s\n" "'"$t"'" "'"$BDC"'" $i $((i%100)) "$([ $b -eq 1 ] && echo HIGH || echo LOW)" "'"$BD"'"; done' && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TC_EXPORT_RISK_ALERT "$BD" "{\"templateCode\":\"TC_EXPORT_RISK_ALERT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
-      total=$((total+1)); dispatch_latest "$t" TC_DISPATCH_REVIEW tc_api_risk_push && ok=$((ok+1))
-      total=$((total+1)); launch "$t" TC_WF_RISK_PIPELINE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
+      total=$((total+1)); launch_and_wait "$t" TC_EXPORT_RISK_ALERT "$BD" "{\"templateCode\":\"TC_EXPORT_RISK_ALERT_TPL\",\"batchNo\":\"SIM-$BDC\"}" && ok=$((ok+1))
+      total=$((total+1)); dispatch_latest "$t" TC_DISPATCH_REVIEW "$BD" tc_api_risk_push && ok=$((ok+1))
+      total=$((total+1)); launch_and_wait "$t" TC_WF_RISK_PIPELINE "$BD" "{\"batchNo\":\"SIM-WF-$BDC\"}" && ok=$((ok+1)) ;;
   esac
   echo
 done

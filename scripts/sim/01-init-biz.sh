@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # 01-init-biz.sh:模拟器初始化(幂等)
-#   1. 在 batch_business 库应用 scripts/db/business/create_biz_tables.sql(biz.* 业务表)
+#   1. 在 BUSINESS_DB 配置的业务库应用 scripts/db/business/create_biz_tables.sql(biz.* 业务表)
 #   2. MinIO 创建 ta/tb/tc 各自的 prefix 路径(共用 batch-dev bucket,文件 prefix 隔离)
 #
 # 跑前:主 compose 必须已 up(PG / MinIO healthy)
@@ -11,18 +11,19 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# 统一读取本地环境，业务库名由 BUSINESS_DB / BUSINESS_DB_NAME 管理。
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PG_USER="${POSTGRES_USER:-batch_user}"
+PG_USER="${PG_USER:-$PGUSER}"
 MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
-MINIO_AK="${MINIO_ROOT_USER:-minioadmin}"
-MINIO_SK="${MINIO_ROOT_PASSWORD:-minioadmin123}"
-MINIO_BUCKET="${MINIO_BUCKET:-batch-dev}"
+MINIO_AK="${MINIO_AK:-$MINIO_ROOT_USER}"
+MINIO_SK="${MINIO_SK:-$MINIO_ROOT_PASSWORD}"
 
-echo "==> 1/2 应用 biz.* 业务表(batch_business 库)"
-docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business \
+echo "==> 1/2 应用 biz.* 业务表($BUSINESS_DB 业务库)"
+docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" \
   < scripts/db/business/create_biz_tables.sql > /tmp/init-biz-tables.log 2>&1
-applied=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
+applied=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
   "select count(*) from pg_tables where schemaname='biz'")
 echo "  biz schema 现有 $applied 张表"
 
@@ -37,5 +38,5 @@ done
 docker exec "$MINIO_CONTAINER" mc ls --recursive "local/$MINIO_BUCKET" 2>&1 | grep "\.keep" | head -6
 
 echo "==> ✅ 初始化完成"
-echo "    biz tables: $applied"
+echo "    biz tables: $applied ($BUSINESS_DB)"
 echo "    MinIO bucket: $MINIO_BUCKET(ta/tb/tc prefix 已建)"

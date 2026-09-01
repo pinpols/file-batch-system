@@ -42,7 +42,7 @@ if [[ "${RESTART_IMPORT_WITH_SKIP:-1}" == "1" ]]; then
   BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE=ABSOLUTE \
   BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_COUNT=1 \
   BATCH_WORKER_IMPORT_ERROR_SINK_TYPE=ERROR_TABLE \
-  JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.error-sink-type=ERROR_TABLE" \
+  JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" \
     bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
   __RESTARTED_IMPORT_WITH_SKIP=1
 fi
@@ -133,7 +133,7 @@ def launch(label, content, batch_no):
 def wait_for(rid, expected):
     deadline = time.time() + 180
     while time.time() < deadline:
-        out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+        out = psql(os.environ["PLATFORM_DB"], (
             "select coalesce(i.instance_status,'') || '|' || coalesce(t.task_status,'') || '|' || coalesce(t.error_code,'') "
             "from batch.trigger_request tr "
             "left join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -209,7 +209,7 @@ over_status = wait_for(rid_over, "FAILED")
 print("\n-- job_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select tr.request_id,i.id,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -220,7 +220,7 @@ subprocess.run([
 print("\n-- file_records --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select fr.id,fr.file_status,fr.metadata_json->>'badRecordCount' as bad_records,"
     "fr.metadata_json->>'skippedCount' as skipped,fr.metadata_json->>'validatedCount' as validated,"
     "fr.metadata_json->>'loadedCount' as loaded,fr.metadata_json->>'skipThresholdExceeded' as threshold_exceeded "
@@ -234,7 +234,7 @@ subprocess.run([
 print("\n-- error_records --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select tr.request_id,er.record_no,er.error_code,er.error_stage,er.is_skipped,er.skip_action "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -244,15 +244,15 @@ subprocess.run([
     f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,er.record_no,er.id"
 ], check=False)
 
-loaded_ok = (psql(os.environ.get("BUSINESS_DB", "batch_business"), (
+loaded_ok = (psql(os.environ["BUSINESS_DB"], (
     "select count(*) from biz.customer_account "
     "where tenant_id='ta' and customer_no='S2DSKIPOK001'"
 ), tuples=True).stdout or "").strip()
-loaded_bad = (psql(os.environ.get("BUSINESS_DB", "batch_business"), (
+loaded_bad = (psql(os.environ["BUSINESS_DB"], (
     "select count(*) from biz.customer_account "
     "where tenant_id='ta' and customer_no in ('S2DSKIPBAD001','S2DSKIPEXBAD001','S2DSKIPEXBAD002','S2DSKIPEXOK001')"
 ), tuples=True).stdout or "").strip()
-error_summary = (psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+error_summary = (psql(os.environ["PLATFORM_DB"], (
     "select count(*) filter (where tr.request_id='" + rid_under + "' and er.is_skipped) || '|' || "
     "count(*) filter (where tr.request_id='" + rid_over + "' and er.is_skipped) "
     "from batch.trigger_request tr "

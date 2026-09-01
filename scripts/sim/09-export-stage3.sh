@@ -100,7 +100,7 @@ while time.time() < deadline:
     )
     out = subprocess.run([
         "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-t", "-A", "-c", sql
+        "-d", os.environ["PLATFORM_DB"], "-t", "-A", "-c", sql
     ], capture_output=True, text=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= len(SCENARIOS):
@@ -118,7 +118,7 @@ job_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", job_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", job_sql
 ], check=False)
 
 print("\n-- file_status --", flush=True)
@@ -133,7 +133,7 @@ file_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", file_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", file_sql
 ], check=False)
 
 print("\n-- object_sample --", flush=True)
@@ -146,7 +146,7 @@ object_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", object_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", object_sql
 ], check=False)
 
 print("\n-- expectation_check --", flush=True)
@@ -166,13 +166,13 @@ check_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", check_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", check_sql
 ], check=False)
 
 fail_sql = "select count(*) from (" + check_sql + ") s where not ok"
 out = subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-t", "-A", "-c", fail_sql
+    "-d", os.environ["PLATFORM_DB"], "-t", "-A", "-c", fail_sql
 ], capture_output=True, text=True)
 failures = int((out.stdout or "0").strip() or "0")
 print(f"\n==> Stage 3 export scenario submitted: batchNo={BATCH} startTs={START_TS}", flush=True)

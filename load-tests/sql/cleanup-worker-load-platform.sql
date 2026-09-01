@@ -2,6 +2,21 @@ BEGIN;
 
 -- run_id is generated per profile and is the cleanup boundary. Do not pin this
 -- fixture cleanup to default-tenant: fairness profiles intentionally use ta/tb/tc.
+-- Gatling request_id values are random, so capture the full request set before
+-- deleting outbox rows. The payload marker is needed for oversized inline imports.
+CREATE TEMP TABLE cleanup_trigger_requests ON COMMIT DROP AS
+SELECT DISTINCT tr.id, tr.request_id
+FROM batch.trigger_request tr
+WHERE tr.request_id LIKE '%' || :'run_id' || '%'
+   OR tr.dedup_key LIKE '%' || :'run_id' || '%'
+   OR tr.trace_id LIKE '%' || :'run_id' || '%'
+   OR EXISTS (
+     SELECT 1
+     FROM batch.trigger_outbox_event toe
+     WHERE toe.tenant_id = tr.tenant_id
+       AND toe.request_id = tr.request_id
+       AND toe.payload::text LIKE '%' || :'run_id' || '%'
+   );
 
 WITH ji AS (
   SELECT id
@@ -246,7 +261,9 @@ WHERE (
   );
 
 DELETE FROM batch.trigger_outbox_event
-WHERE request_id LIKE '%' || :'run_id' || '%';
+WHERE request_id IN (SELECT request_id FROM cleanup_trigger_requests)
+   OR request_id LIKE '%' || :'run_id' || '%'
+   OR payload::text LIKE '%' || :'run_id' || '%';
 
 WITH ji AS (
   SELECT id
@@ -260,19 +277,26 @@ WITH ji AS (
 )
 UPDATE batch.trigger_request
 SET related_job_instance_id = NULL
-WHERE related_job_instance_id IN (SELECT id FROM ji);
+WHERE related_job_instance_id IN (SELECT id FROM ji)
+   OR id IN (SELECT id FROM cleanup_trigger_requests);
 
 DELETE FROM batch.job_instance
-WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
-  AND (
-    trace_id LIKE :'run_id' || '%'
-    OR params_snapshot::text LIKE '%' || :'run_id' || '%'
-    OR batch_no = :'run_id' || '-SETTLEMENT'
+WHERE (
+    trigger_request_id IN (SELECT id FROM cleanup_trigger_requests)
+    OR (
+      job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
+      AND (
+      trace_id LIKE :'run_id' || '%'
+      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR batch_no = :'run_id' || '-SETTLEMENT'
+      )
+    )
   );
 
 DELETE FROM batch.trigger_request
 WHERE (
-    request_id LIKE '%' || :'run_id' || '%'
+    id IN (SELECT id FROM cleanup_trigger_requests)
+    OR request_id LIKE '%' || :'run_id' || '%'
     OR dedup_key LIKE '%' || :'run_id' || '%'
     OR trace_id LIKE '%' || :'run_id' || '%'
   );

@@ -25,7 +25,7 @@ batch_require_python
 restart_import_with_checkpoint() {
   # 以 checkpoint enabled 重启 worker-import
   echo "==> restart worker-import with checkpoint enabled"
-  COMPOSE_ENV_FILE=/dev/null \
+  COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT/.env.local}" \
   BATCH_WORKER_CHECKPOINT_ENABLED=true \
   JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.checkpoint.enabled=true" \
     bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
@@ -231,7 +231,10 @@ def wait_for_checkpoint(rid):
     raise TimeoutError(f"checkpoint marker not reached; last={last}")
 
 def kill_worker_import():
-    if sh(["docker", "inspect", "batch-worker-import"]).returncode == 0:
+    container_running = sh([
+        "docker", "inspect", "-f", "{{.State.Running}}", "batch-worker-import"
+    ]).stdout.strip() == "true"
+    if container_running:
         print("  [kill] worker-import container=batch-worker-import", flush=True)
         sh(["docker", "kill", "batch-worker-import"], check=True)
         return
@@ -282,7 +285,7 @@ def retry_partition(partition_id):
 
 def restart_worker():
     env = os.environ.copy()
-    env["COMPOSE_ENV_FILE"] = "/dev/null"
+    env["COMPOSE_ENV_FILE"] = env.get("COMPOSE_ENV_FILE") or os.path.join(os.getcwd(), ".env.local")
     env["BATCH_WORKER_CHECKPOINT_ENABLED"] = "true"
     env["JAVA_OPTS"] = (env.get("JAVA_OPTS", "") + " -Dbatch.worker.checkpoint.enabled=true").strip()
     subprocess.run(

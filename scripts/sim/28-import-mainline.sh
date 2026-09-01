@@ -39,8 +39,8 @@ BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 PG = os.environ.get("PG_CONTAINER", "batch-postgres-primary")
 PGU = os.environ.get("POSTGRES_USER", "batch_user")
-PLATFORM_DB = os.environ.get("PLATFORM_DB", "batch_platform")
-BUSINESS_DB = os.environ.get("BUSINESS_DB", "batch_business")
+PLATFORM_DB = os.environ["PLATFORM_DB"]
+BUSINESS_DB = os.environ["BUSINESS_DB"]
 ROWS = int(os.environ.get("ROWS", "5"))
 
 TOKEN = "".join(ch for ch in BATCH if ch.isalnum())[-14:]

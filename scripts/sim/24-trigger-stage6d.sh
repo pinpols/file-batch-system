@@ -105,14 +105,14 @@ API_JOB = "TA_PROCESS_STAGE4_EMPTY_SUCCESS"
 CRON_JOB = "TA_TRIGGER_STAGE6C_SCHEDULED"
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
     return subprocess.run(args, check=False, capture_output=True, text=True)
 
 def psql_file(path, *vars):
-    args = ["docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-v", "ON_ERROR_STOP=1"]
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1"]
     for key, value in vars:
         args += ["-v", f"{key}={value}"]
     args += ["-f", "/dev/stdin"]
@@ -384,7 +384,7 @@ non_terminal = int(scalar(
 print("\n-- trigger_stage6d_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select trigger_type, request_status, count(*) "
     "from batch.trigger_request "
     f"where tenant_id='ta' and request_id like '{BATCH}%' "
@@ -392,7 +392,7 @@ subprocess.run([
 ], check=False)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select publish_status, count(*) "
     "from batch.trigger_outbox_event "
     f"where tenant_id='ta' and request_id like '{BATCH}%' "

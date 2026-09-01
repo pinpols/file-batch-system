@@ -96,7 +96,7 @@ def launch(label):
 def wait_success(rid):
     deadline = time.time() + 150
     while time.time() < deadline:
-        out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+        out = psql(os.environ["PLATFORM_DB"], (
             "select coalesce(i.instance_status,'') "
             "from batch.trigger_request tr "
             "left join batch.job_instance i on i.id=tr.related_job_instance_id "
@@ -118,7 +118,7 @@ wait_success(rid1)
 print("==> switch source to v2 and rerun same batchKey", flush=True)
 run([
     "docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-v", "ON_ERROR_STOP=1", "-v", f"biz_date={BIZ}", "-f", "/dev/stdin"
+    "-d", os.environ["BUSINESS_DB"], "-v", "ON_ERROR_STOP=1", "-v", f"biz_date={BIZ}", "-f", "/dev/stdin"
 ], input=open("docs/test-data/sim-stage4b-process-source-v2.sql").read())
 
 rid2 = launch("rerun")
@@ -133,7 +133,7 @@ target_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c", target_sql
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c", target_sql
 ], check=False)
 
 print("\n-- staging_leftover --", flush=True)
@@ -144,7 +144,7 @@ staging_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c", staging_sql
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c", staging_sql
 ], check=False)
 
 target_assert_sql = (
@@ -160,8 +160,8 @@ staging_assert_sql = (
     f"where tenant_id='ta' and batch_key='{BATCH_KEY}' "
     "and target_schema='biz' and target_table='process_stage4_target'"
 )
-target_out = psql(os.environ.get("BUSINESS_DB", "batch_business"), target_assert_sql, tuples=True)
-staging_out = psql(os.environ.get("BUSINESS_DB", "batch_business"), staging_assert_sql, tuples=True)
+target_out = psql(os.environ["BUSINESS_DB"], target_assert_sql, tuples=True)
+staging_out = psql(os.environ["BUSINESS_DB"], staging_assert_sql, tuples=True)
 summary = (target_out.stdout or "").strip() + "|" + (staging_out.stdout or "").strip()
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "2|400.00|3|203|0":

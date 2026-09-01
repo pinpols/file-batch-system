@@ -99,7 +99,7 @@ def minio_cmd(*args):
 
 def sql_value(sql):
     out = run_cmd(["docker","exec",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d",os.environ.get("PLATFORM_DB", "batch_platform"),"-t","-A","-c",sql])
+        "-d", os.environ["PLATFORM_DB"], "-t", "-A", "-c", sql])
     return out.stdout.strip()
 
 def cleanup_outputs():
@@ -127,7 +127,7 @@ def cleanup_outputs():
        and source_ref = '{BATCH}';
     """
     run_cmd(["docker","exec","-i",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d",os.environ.get("PLATFORM_DB", "batch_platform"),"-v","ON_ERROR_STOP=1"], sql)
+        "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1"], sql)
     for biz in biz_types:
         result = minio_cmd("rm", "--recursive", "--force",
             f"local/{BUCKET}/outbound/{biz}/{BIZ}/{BATCH}")

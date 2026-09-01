@@ -105,7 +105,7 @@ STORM_COUNT = int(os.environ["STORM_COUNT"])
 START_TS = os.environ["START_TS"].strip()
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off"]
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -271,7 +271,7 @@ while time.time() < deadline:
 print("\n-- trigger_stage6c_status --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c",
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
     "select trigger_type,job_code,request_status,count(*) "
     "from batch.trigger_request "
     "where tenant_id='ta' and (request_id like '" + BATCH + "%' or created_at >= '" + START_TS + "') "

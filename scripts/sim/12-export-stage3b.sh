@@ -91,7 +91,7 @@ with urllib.request.urlopen(req, timeout=30) as resp:
 deadline = time.time() + 180
 instance_id = None
 while time.time() < deadline:
-    out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), (
+    out = psql(os.environ["PLATFORM_DB"], (
         "select i.id || '|' || i.instance_status "
         "from batch.trigger_request tr "
         "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -122,7 +122,7 @@ task_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", task_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", task_sql
 ], check=False)
 
 print("\n-- file_records --", flush=True)
@@ -135,7 +135,7 @@ file_sql = (
 )
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", file_sql
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", file_sql
 ], check=False)
 
 check_sql = (
@@ -152,7 +152,7 @@ check_sql = (
     ") select success_tasks, file_count, tagged_files, exported_rows "
     "from tasks cross join files"
 )
-out = psql(os.environ.get("PLATFORM_DB", "batch_platform"), check_sql, tuples=True)
+out = psql(os.environ["PLATFORM_DB"], check_sql, tuples=True)
 summary = (out.stdout or "").strip()
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "4|4|4|40":

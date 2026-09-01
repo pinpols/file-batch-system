@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
@@ -62,9 +61,6 @@ final class ValidationCoercions {
     try {
       return Integer.valueOf(text);
     } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          ValidationCoercions.class, "catch:NumberFormatException", ignored);
-
       return null;
     }
   }
@@ -88,9 +84,6 @@ final class ValidationCoercions {
     try {
       return new BigDecimal(text);
     } catch (NumberFormatException ignored) {
-      SwallowedExceptionLogger.info(
-          ValidationCoercions.class, "catch:NumberFormatException", ignored);
-
       return null;
     }
   }

@@ -23,7 +23,7 @@ write_import_csv() {
   local file="$2"
   {
     printf 'customerNo,customerName,customerType\n'
-    seq 1 "$rows" | awk '{printf "#{traceId}-IMP-%06d,Load Test Customer %06d,PERSONAL\n", $1, $1}'
+    seq 1 "$rows" | awk -v run_id="$RUN_ID" '{printf "#{traceId}-IMP-%06d,Load Test Customer %s %06d,PERSONAL\n", $1, run_id, $1}'
   } > "$file"
 }
 

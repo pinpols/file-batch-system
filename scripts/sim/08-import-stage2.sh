@@ -166,7 +166,7 @@ while time.time() < deadline:
     )
     out = subprocess.run([
         "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-t", "-A", "-c", sql
+        "-d", os.environ["PLATFORM_DB"], "-t", "-A", "-c", sql
     ], capture_output=True, text=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= expected_jobs:
@@ -194,13 +194,13 @@ for title, sql in queries.items():
     print(f"\n-- {title} --", flush=True)
     subprocess.run([
         "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ.get("PLATFORM_DB", "batch_platform"), "-P", "pager=off", "-c", sql
+        "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", sql
     ], check=False)
 
 print("\n-- business counts --", flush=True)
 subprocess.run([
     "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ.get("BUSINESS_DB", "batch_business"), "-P", "pager=off", "-c",
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c",
     "select tenant_id, count(*) filter (where customer_no like 'S2XML%') as xml_rows, "
     "count(*) filter (where customer_no like 'S2FIX%') as fixed_rows "
     "from biz.customer_account where tenant_id='ta' group by tenant_id"

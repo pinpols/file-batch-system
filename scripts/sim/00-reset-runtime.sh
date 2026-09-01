@@ -21,12 +21,12 @@ SIM_STAGE_NAME="reset-runtime"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-PG_PLAT_C="${PG_PLATFORM_CONTAINER:-batch-postgres-primary}"
-PG_PLAT_U="${PG_PLATFORM_USER:-batch_user}"
-PG_PLAT_D="${PG_PLATFORM_DB:-batch_platform}"
-PG_BIZ_C="${PG_BUSINESS_CONTAINER:-batch-postgres-primary}"
-PG_BIZ_U="${PG_BUSINESS_USER:-batch_user}"
-PG_BIZ_D="${PG_BUSINESS_DB:-batch_business}"
+PG_PLAT_C="${PG_PLATFORM_CONTAINER:-$PG_CONTAINER}"
+PG_PLAT_U="${PG_PLATFORM_USER:-$POSTGRES_USER}"
+PG_PLAT_D="${PG_PLATFORM_DB:-$PLATFORM_DB}"
+PG_BIZ_C="${PG_BUSINESS_CONTAINER:-$PG_CONTAINER}"
+PG_BIZ_U="${PG_BUSINESS_USER:-$POSTGRES_USER}"
+PG_BIZ_D="${PG_BUSINESS_DB:-$BUSINESS_DB}"
 
 # 平台运行态(分区父表 TRUNCATE 自动级联子分区;Citus 下 sequential 防分片死锁;CASCADE 兜 FK 依赖)
 PLAT_TABLES="batch.job_instance, batch.job_instance_dedup_key, batch.job_task, batch.job_partition, batch.job_step_instance,

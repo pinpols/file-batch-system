@@ -62,6 +62,7 @@ INTERNAL_SECRET="${INTERNAL_SECRET:-$BATCH_INTERNAL_SECRET}"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PG_USER="${PG_USER:-$PGUSER}"
 PG_DB="${PG_DB:-$PLATFORM_DB}"
+BUSINESS_DB="${BUSINESS_DB:-$BUSINESS_DB_NAME}"
 AWAIT_TIMEOUT="${AWAIT_TIMEOUT:-30}"
 LOAD_SEED="${LOAD_SEED:-0}"
 ADVANCED="${ADVANCED:-0}"
@@ -120,7 +121,7 @@ psql_w_first() {
 do_cleanup() {
   local pattern="${1:-$SWEEP_PATTERN}"
   psql_file "$PG_DB" "$ROOT/scripts/local/sql/validate-seed-cleanup-platform.sql" -v pattern="$pattern" >/dev/null
-  psql_file batch_business "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
+  psql_file "$BUSINESS_DB" "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
 }
 
 # 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留下无效记录
@@ -221,7 +222,7 @@ if [[ "$LOAD_SEED" == "1" ]]; then
   done
   for f in business_seed.sql business_edge_cases.sql; do
     docker cp "$ROOT/scripts/db/test-seed/$f" "$PG_CONTAINER:/tmp/$f" >/dev/null
-    if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -f "/tmp/$f" >/dev/null 2>&1; then
+    if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -f "/tmp/$f" >/dev/null 2>&1; then
       result pass "biz seed reload" "$f"
     else
       result fail "biz seed reload" "$f 失败"

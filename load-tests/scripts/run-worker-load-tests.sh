@@ -15,6 +15,7 @@ WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-180}"
 
 
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
+RUN_ACCOUNT_PREFIX="$(printf '%s' "$RUN_ID" | tr -cd '[:alnum:]' | cut -c1-16)"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
 # 自动 cleanup（EXIT trap）：压测产物（job_instance / job_partition / job_task /
@@ -47,6 +48,16 @@ case "$IMPORT_PROFILE" in
   large) IMPORT_PARAMS="$IMPORT_LARGE_PARAMS" ;;
   *) echo "IMPORT_PROFILE must be small, medium, or large" >&2; exit 2 ;;
 esac
+
+# Kafka 的默认 request.max.bytes 约为 1 MiB；Trigger/Kafka 外层 JSON 还会
+# 增加 envelope 和转义开销。inline large 达到 800 KB 参数文件时改用
+# 对象存储导入，避免把 RecordTooLargeException 误判为 worker 业务失败。
+IMPORT_PARAMS_BYTES="$(wc -c < "$IMPORT_PARAMS" | awk '{print $1}')"
+if [[ "$IMPORT_PROFILE" == "large" && "${IMPORT_PARAMS_BYTES:-0}" -ge 800000 ]]; then
+  echo "IMPORT_PROFILE=large is an inline payload of ${IMPORT_PARAMS_BYTES} bytes and exceeds the Kafka request safety budget." >&2
+  echo "Use the object-backed import scenario for large files; use IMPORT_PROFILE=medium for inline load tests." >&2
+  exit 2
+fi
 
 LOGIN_RESPONSE="$(
   curl -i -fsS -X POST "$CONSOLE_BASE_URL/api/console/auth/login" \
@@ -181,7 +192,8 @@ psql_business() {
   psql_business -P pager=off -F ' | ' -A -c "
     select 'import_loaded_rows' as metric, count(*)::text as value
     from biz.customer_account
-    where tenant_id = '${LOAD_TEST_TENANT_ID}' and customer_no like '${RUN_ID}-IMP-%'
+    where tenant_id = '${LOAD_TEST_TENANT_ID}'
+      and customer_name like 'Load Test Customer ${RUN_ID} %'
     union all
     select 'export_source_rows', count(*)::text
     from biz.settlement_detail
@@ -189,11 +201,11 @@ psql_business() {
     union all
     select 'process_source_rows', count(*)::text
     from biz.process_order_event
-    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
+    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ACCOUNT_PREFIX}-ACCT-%'
     union all
     select 'process_target_rows', count(*)::text
     from biz.process_account_summary
-    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like 'LTACCT-%';"
+    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ACCOUNT_PREFIX}-ACCT-%';"
   psql_platform -P pager=off -F ' | ' -A -c "
     select 'dispatch_records' as metric, count(*)::text as value
     from batch.file_dispatch_record fdr
