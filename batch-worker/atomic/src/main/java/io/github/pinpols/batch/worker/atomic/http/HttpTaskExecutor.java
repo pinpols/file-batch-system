@@ -538,7 +538,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       ResponseBody respBody = resp.body();
       // 流式读:最多读 max+1 字节即停,不再消费剩余流 —— 绝不把巨量 / 失控下游响应全量读进堆内存
       // (原先 resp.body().bytes() 在截断前就全量物化,maxResponseBytes 形同虚设可致 OOM)。
-      byte[] read = respBody == null ? new byte[0] : readBounded(respBody, max);
+      byte[] read = respBody == null ? new byte[0] : readBounded(respBody.byteStream(), max);
       boolean truncated = read.length > max;
       byte[] kept = truncated ? Arrays.copyOf(read, max) : read;
       if (truncated) {
@@ -570,9 +570,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
    * 的硬内存上界:无论下游返回多大 / 谎报多大 Content-Length, 堆里最多驻留 max+1 字节。对 &lt;= max
    * 的响应,读到的内容与全量读完全一致。try-with-resources 关闭 {@link Response} 会释放底层连接,未读完的剩余流不会阻塞。
    */
-  private static byte[] readBounded(ResponseBody body, int max) throws IOException {
+  static byte[] readBounded(InputStream in, int max) throws IOException {
     long limit = max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
-    try (InputStream in = body.byteStream()) {
+    try (in) {
       ByteArrayOutputStream buf = new ByteArrayOutputStream((int) Math.min(limit, 8192L));
       byte[] chunk = new byte[8192];
       long total = 0;

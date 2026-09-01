@@ -24,6 +24,12 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
 source "$ROOT/scripts/lib/process.sh"
+# 保留父 shell 的污染证据，但固定从当前仓库加载默认环境；否则 set -u 下 PG_CONTAINER
+# 等变量会在 harness 尚未执行 preflight 时就导致脚本退出。
+INHERITED_BATCH_ENV_COMMON_ROOT="${BATCH_ENV_COMMON_ROOT:-}"
+BATCH_ENV_COMMON_ROOT="$ROOT"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 
 PG="$PG_CONTAINER"
 PGU="$PGUSER"
@@ -72,7 +78,7 @@ preflight() {
   echo "== preflight:环境 / 配置 =="
   [[ -f .env.local ]] && ok ".env.local 存在" || fail ".env.local 缺失(从 sibling 或 .env.example 准备)"
 
-  if [[ -n "${BATCH_ENV_COMMON_ROOT:-}" ]]; then
+  if [[ -n "$INHERITED_BATCH_ENV_COMMON_ROOT" ]]; then
     fail "BATCH_ENV_COMMON_ROOT 已设(shell profile 污染)→ unset 后再起,否则 .env.local 不正确加载"
   else
     ok "BATCH_ENV_COMMON_ROOT 未设"
@@ -317,7 +323,7 @@ restart_import() {
   esac
   # 容器模式不能按 18083 查 PID；Docker 端口代理被误杀会连带终止 Docker
   # daemon。restart.sh 会检测受管容器并改用 Compose 重建指定服务。
-  if docker inspect batch-worker-import >/dev/null 2>&1; then
+  if [[ "$(docker inspect -f '{{.State.Running}}' batch-worker-import 2>/dev/null || true)" == "true" ]]; then
     local checkpoint_enabled=false skip_enabled=false skip_max=0 error_sink=BOTH
     if [[ "$mode" == checkpoint ]]; then
       checkpoint_enabled=true
@@ -331,7 +337,7 @@ restart_import() {
     BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE=ABSOLUTE \
     BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_COUNT="$skip_max" \
     BATCH_WORKER_IMPORT_ERROR_SINK_TYPE="$error_sink" \
-    JAVA_OPTS="$extra" \
+    JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS} $extra" \
       bash scripts/local/restart.sh worker-import
     return $?
   fi
@@ -496,6 +502,8 @@ case "${1:-}" in
   verify-data) verify_data ;;
   sim)         sim ;;
   routing-sim) routing_sim ;;
-  all)         preflight && reset && prereq && verify_data && sim ;;
+  # reset 必须先于服务启动，避免旧 scheduler/worker 在清理窗口写入运行态；
+  # prereq 的租户导入又依赖 console 已就绪，因此在两者之间用小堆重启并等待核心服务。
+  all)         preflight && reset && ensure_core_runtime && prereq && verify_data && sim ;;
   *) echo "用法: $0 {preflight|reset|prereq|verify-data|sim|routing-sim|all}"; exit 2 ;;
 esac
