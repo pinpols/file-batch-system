@@ -291,6 +291,22 @@
     </dependencies>
 
     <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <!--
+              Testcontainers 的业务库初始化直接复用生产业务 DDL，避免维护一份过期的测试 schema。
+              该脚本非 Flyway，平台库和业务库仍保持物理隔离。
+            -->
+            <testResource>
+                <directory>${project.basedir}/../scripts/db/business</directory>
+                <targetPath>db</targetPath>
+                <includes>
+                    <include>create_biz_tables.sql</include>
+                </includes>
+            </testResource>
+        </testResources>
         <pluginManagement>
             <plugins>
                 <!-- 纯 IDE 元数据(m2e / vscode-java):告诉 IDE 怎么映射 maven-jar-plugin:test-jar。
