@@ -23,7 +23,6 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,21 +45,24 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
+  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  @Qualifier("processBusinessDataSource")
-  private DataSource businessDataSource;
-
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
-
-  @Autowired
-  private ObjectMapper objectMapper;
+  ProcessFailurePipelineE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      @Qualifier("processBusinessDataSource") DataSource businessDataSource,
+      E2eOutboxPublishSupport e2eOutboxPublishSupport,
+      ObjectMapper objectMapper) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.businessDataSource = businessDataSource;
+    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+    this.objectMapper = objectMapper;
+  }
 
   @Test
   void wap_sqlTransform_validationFailureAbortsCommit() throws Exception {

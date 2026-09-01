@@ -28,7 +28,6 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -68,21 +67,24 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   // 否则静默 no-op 防御非数字回报。测试 watermark 用 YYYYMMDD 数字形式,语义对齐 bizDate=2026-01-15。
   private static final String CUSTOM_PLUGIN_WATERMARK = "20260115";
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
+  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  @Qualifier("processBusinessDataSource")
-  private DataSource businessDataSource;
-
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
-
-  @Autowired
-  private ObjectMapper objectMapper;
+  ProcessPipelineE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      @Qualifier("processBusinessDataSource") DataSource businessDataSource,
+      E2eOutboxPublishSupport e2eOutboxPublishSupport,
+      ObjectMapper objectMapper) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.businessDataSource = businessDataSource;
+    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+    this.objectMapper = objectMapper;
+  }
 
   @Test
   void wap_sqlTransform_publishesTargetAndCleansStaging() throws Exception {
