@@ -42,6 +42,20 @@
 - 运维和压测脚本不得静默跳过 SQL；无 `psql` 时使用 Python fallback 或明确失败。
 - 前端 CI 固定 Node 22，执行 `npm ci`、typecheck、lint、unit、build；E2E 依赖后端可访问和 Playwright 浏览器。
 
+## 构建、运行、部署与 CI
+
+| 阶段 | 后端 | 前端 | 同构结论 |
+|---|---|---|---|
+| 本地构建 | `./mvnw` + JDK 21 | Node 22 + `npm ci` | 版本一致，入口不同 |
+| Docker 构建 | Maven 3.9.16 + Temurin 21 | Node 22 + 完整 `npm run build` | 与本地/CI 工具链对齐 |
+| 单元验证 | Maven Surefire | Vitest | 构建与测试分开，均由 CI 执行 |
+| IT/E2E | JDK 21 + Testcontainers/Docker | Node 22 + Playwright | 依赖真实基础设施，不能改成无依赖假运行 |
+| 应用运行 | Temurin 21 JRE | nginx Alpine 静态服务 | 运行镜像不携带构建工具或开发依赖 |
+| Compose 部署 | PG/Kafka/Valkey/MinIO 使用 `.env` tag | 前端通过 `BACKEND_UPSTREAM_HOST` 连接后端 | 容器服务名与宿主机地址严格分开 |
+| CI | setup-build-env 固定 Java 21，Docker/Testcontainers 镜像与 `.env` 对齐 | setup-node 固定 Node 22，`npm ci` 后执行质量门禁 | 基线一致，职责不重复 |
+
+“同构”在本项目中指版本、镜像和地址契约一致，不要求 Docker 构建重复执行完整 IT。镜像构建跳过 IT 是时间和环境职责边界；IT/E2E 由 CI 在 Docker 环境中执行，不能据此宣称镜像构建本身完成了全量验证。
+
 ## 版本漂移门禁
 
 版本变更必须同时检查：
