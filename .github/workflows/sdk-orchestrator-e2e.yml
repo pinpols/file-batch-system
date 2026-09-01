@@ -88,13 +88,13 @@ jobs:
 
       - name: Set up Node.js
         if: matrix.lang == 'typescript'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
       - name: Set up Rust
         if: matrix.lang == 'rust'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.75.0
 
       - name: Prepare env file
         # .env.example 故意不含 3 个 :? required 密钥(BATCH_PLATFORM/BUSINESS_DB_PASSWORD、
