@@ -8,7 +8,7 @@ public final class E2eTestSql {
   private E2eTestSql() {}
 
   /**
-   * 业务库表结构（单源：{@code docs/sql/business/create_biz_tables.sql}，Maven 打进 {@code classpath:sql/}；非
+   * 业务库表结构（单源：{@code scripts/db/business/create_biz_tables.sql}，Maven 打进 {@code classpath:sql/}；非
    * Flyway）。测试类应通过 {@code @E2eBusinessSchema} 显式绑定独立的 {@code e2eBusinessDataSource}，不要使用
    * 平台库主数据源执行该脚本。
    */
