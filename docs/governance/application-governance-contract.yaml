@@ -1,0 +1,45 @@
+version: 1
+updated: 2026-09-02
+scope: application-runtime
+controls:
+  - id: timeout-budget
+    priority: P1
+    status: implemented
+    evidence:
+      - docs/runbook/pg-session-tuning.md
+      - docs/runbook/ha-elastic-scaling.md
+      - docs/runbook/dependency-aware-fire.md
+    live_validation: staging
+  - id: runtime-compatibility
+    priority: P1
+    status: implemented
+    evidence:
+      - docs/architecture/runtime-compatibility-contract-2026-09-01.md
+      - docs/analysis/script-runtime-compatibility-matrix-2026-09-01.md
+      - docs/runbook/ipv6-runtime-compatibility.md
+    live_validation: ci-and-target-environment
+  - id: fault-injection
+    priority: P1
+    status: implemented
+    evidence:
+      - docs/testing/full-project-test-plan.md
+      - docs/runbook/ha-readiness.md
+      - batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/OutboxPublishCircuitBreakerKafkaFailureIntegrationTest.java
+    live_validation: staging
+  - id: alert-runbook-contract
+    priority: P1
+    status: implemented
+    evidence:
+      - docs/runbook/observability-stack.md
+      - docs/runbook/playbooks/README.md
+      - docker/observability/prometheus-batch-rules.yml
+    live_validation: target-monitoring
+  - id: supply-chain
+    priority: P1
+    status: implemented
+    evidence:
+      - .github/workflows/license-review.yml
+      - .github/workflows/codeql.yml
+      - .github/workflows/sdk-release-validation.yml
+      - docs/runbook/security-scan.md
+    live_validation: release-pipeline
