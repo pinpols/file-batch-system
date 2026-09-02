@@ -2,7 +2,7 @@
 
 > 适用：本仓库 `batch-platform` 根 Maven reactor。平台运行时固定 10 个逻辑模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch,atomic} / batch-console-api），Java SDK 三件套位于 `sdk/java/{core,spring,testkit}` 并纳入根 reactor。共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,详见 ADR-029 修订版。
 >
-> 维护规则：发布操作 = `scripts/ci/bump-version.sh <version>` + 通过 `scripts/ci/check-version-alignment.sh` + 打 git tag。Maven 版本入口在根 pom 单点 `<revision>`，所有根 reactor 模块共版（CI-friendly placeholder + flatten-maven-plugin）。
+> 维护规则：发布操作 = `scripts/ci/bump-version.sh <version>` + 通过 `scripts/ci/check-version-alignment.sh` + 前端 `npm run check:version <version>` + 打 git tag。Maven 版本入口在根 pom 单点 `<revision>`，所有根 reactor 模块共版（CI-friendly placeholder + flatten-maven-plugin）；前后端是独立仓库，必须使用同一个发布版本并分别通过门禁。
 
 ## 0. 运行时硬性前提
 
@@ -184,6 +184,21 @@ git commit -am "chore: back to 1.2.0-SNAPSHOT after RC.1"
 | `load-tests/pom.xml` `<version>` | 独立模块（未入 reactor） | 跟主 reactor 一致（永远 = 当前 main 的 `${revision}`） | §2.2 步骤 1 同时改 |
 | `helm/batch-platform/Chart.yaml` `appVersion` | helm chart 默认 image tag | **= 上一次 GA**（不跟 SNAPSHOT，部署侧重稳定） | §2.2 步骤 4 之后，发了 `vX.Y.Z` 才改成 `X.Y.Z` |
 | `helm/values-prod.yaml` `image.tag` | 生产环境镜像 tag override | **= 当前生产部署版本** | 部署到生产时改（SRE 触发，不在代码 release flow 内强制） |
+| `../batch-console/package.json` `version` | 前端应用版本 | **= 本次后端发布版本** | 前端仓库单独的 release PR 同步修改 |
+| `../batch-console/package-lock.json` root `version` | 前端锁文件根版本 | **= package.json version** | 与前端 `npm run check:version` 一起校验 |
+
+前端仓库不纳入本仓库的 Maven reactor，因此不把它的路径硬编码进后端 CI。发布前在两个仓库分别执行：
+
+```bash
+# backend
+bash scripts/ci/check-version-alignment.sh
+
+# frontend, <version> 必须与 backend pom.xml <revision> 相同
+cd ../batch-console
+npm run check:version -- 1.0.0
+```
+
+前端 `check:version` 同时校验 `package.json` 与 `package-lock.json` 的根版本；传入期望版本时还会校验它与发布号一致。任何一个仓库未通过，都不得创建或移动 `v<version>` 发布 tag。
 
 **对应 sed 命令**（标准 release `X.Y.0`，§2.2 步骤 1 + 步骤 4 之间按顺序执行）：
 

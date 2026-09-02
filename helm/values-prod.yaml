@@ -10,7 +10,7 @@
 
 image:
   registry: "registry.example.com/batch-platform"
-  tag: "1.2.0"
+  tag: "1.0.0"
   # 发布系统可将这里覆盖为镜像 digest；留空时使用固定版本 tag。
   digest: ""
   pullPolicy: Always
