@@ -63,7 +63,7 @@ PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
 mkdir -p "$LOG_DIR" "$CDS_DIR"
 
 # 与 start-all.sh 保持一致的本地 dev 启动加速参数（说明见 start-all.sh）
-LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off}"
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off -Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false}"
 
 # AppCDS：当前本地启动栈下 native-access 状态可能错位（dump/runtime 不一致 →
 # MyBatis/Spring MVC/Tomcat 内部类 NoClassDefFoundError）。统一关 CDS；说明同 start-all.sh。

@@ -14,6 +14,11 @@
 # =========================================================================
 set -eu
 
+# 保留双栈，同时让 JVM 在 DNS 返回多地址时优先尝试 IPv4。
+# 这两个属性必须在 JVM 启动前注入；统一放在入口避免各服务的 compose/Helm 参数漂移。
+JAVA_OPTS="${JAVA_OPTS:-} -Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false"
+export JAVA_OPTS
+
 if [ -n "${POD_NAME:-}" ] && [ -z "${BATCH_OUTBOX_SHARD_INDEX:-}" ]; then
   ordinal="${POD_NAME##*-}"
   case "$ordinal" in
