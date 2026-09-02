@@ -68,6 +68,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-helm-env-sync.py
 
+      - name: Verify production Helm overlay safety
+        shell: bash
+        run: python3 scripts/ci/check-production-overlay-safety.py
+
       - name: Verify code documentation references
         shell: bash
         run: python3 scripts/ci/check-code-doc-references.py

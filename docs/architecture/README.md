@@ -25,6 +25,7 @@
 | 15 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
 | 16 | [architecture-truth.md](./architecture-truth.md) | 2026-04-09 架构快照（已过期，仅保留历史对照） | 审计历史判断来源 |
 | 17 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
+| 18 | [../analysis/p0-p1-governance-status-2026-09-02.md](../analysis/p0-p1-governance-status-2026-09-02.md) | P0/P1 治理状态、证据边界与复扫入口 | 上线前复核治理是否漂移 |
 
 ## 角色路径
 
