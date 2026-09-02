@@ -23,6 +23,42 @@ batch_source_env_file() {
   fi
 }
 
+# 将独立的 host 与 port 组成 URI authority / Kafka bootstrap 形式。
+# IPv6 字面量必须加方括号；已加方括号的输入保持幂等。数据库客户端的
+# `-h` 参数仍使用原始 host，不要把本函数的结果传给 libpq。
+batch_format_host_port() {
+  local host="${1:-}" port="${2:-}"
+  if [[ "$host" == \[*\] ]]; then
+    printf '%s:%s\n' "$host" "$port"
+  elif [[ "$host" == *:* ]]; then
+    printf '[%s]:%s\n' "$host" "$port"
+  else
+    printf '%s:%s\n' "$host" "$port"
+  fi
+}
+
+# 解析单个 host:port authority。支持 hostname、IPv4、裸 IPv6 和 [IPv6]:port。
+# 结果通过 BATCH_PARSED_HOST / BATCH_PARSED_PORT 返回，避免调用方重复实现
+# `${value%%:*}` 这种会截断 IPv6 的脆弱解析。
+batch_parse_host_port() {
+  local value="${1:-}"
+  if [[ "$value" == \[*\]:* ]]; then
+    BATCH_PARSED_HOST="${value#\[}"
+    BATCH_PARSED_HOST="${BATCH_PARSED_HOST%%\]*}"
+    BATCH_PARSED_PORT="${value##*:}"
+  elif [[ "$value" == *:* && "$value" != *:*:* ]]; then
+    BATCH_PARSED_HOST="${value%:*}"
+    BATCH_PARSED_PORT="${value##*:}"
+  elif [[ "$value" == *:*:* ]]; then
+    BATCH_PARSED_HOST="$value"
+    BATCH_PARSED_PORT=""
+  else
+    BATCH_PARSED_HOST="$value"
+    BATCH_PARSED_PORT=""
+  fi
+  export BATCH_PARSED_HOST BATCH_PARSED_PORT
+}
+
 batch_load_default_env() {
   if [[ -n "${BATCH_ENV_LOADED:-}" ]]; then
     return 0
@@ -88,7 +124,7 @@ batch_load_default_env() {
   export BATCH_S3_SECRET_KEY="${BATCH_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin123}}"
 
   export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-19092}"
-  export KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT}}"
+  export KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
   export KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
 
   export BATCH_ENV_LOADED=1
@@ -165,11 +201,11 @@ batch_require_internal_secret() {
 # 读取，其中部分地址使用容器 DNS。调用方在加载默认 env 后显式调用本函数，
 # 将通用 PostgreSQL 配置映射到各应用的强类型配置项。
 batch_configure_local_jvm_database_env() {
-  export BATCH_PLATFORM_DB_URL="${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://localhost:${POSTGRES_PORT}/batch_platform?reWriteBatchedInserts=true}"
+  export BATCH_PLATFORM_DB_URL="${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://$(batch_format_host_port "${PGHOST:-localhost}" "$POSTGRES_PORT")/batch_platform?reWriteBatchedInserts=true}"
   export BATCH_PLATFORM_DB_USERNAME="${BATCH_PLATFORM_DB_USERNAME:-$POSTGRES_USER}"
   export BATCH_PLATFORM_DB_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-$POSTGRES_PASSWORD}"
 
-  export BATCH_BUSINESS_DB_URL="${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://localhost:${POSTGRES_PORT}/${BUSINESS_DB_NAME}?reWriteBatchedInserts=true}"
+  export BATCH_BUSINESS_DB_URL="${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://$(batch_format_host_port "${PGHOST:-localhost}" "$POSTGRES_PORT")/${BUSINESS_DB_NAME}?reWriteBatchedInserts=true}"
   export BATCH_BUSINESS_DB_USERNAME="${BATCH_BUSINESS_DB_USERNAME:-$POSTGRES_USER}"
   export BATCH_BUSINESS_DB_PASSWORD="${BATCH_BUSINESS_DB_PASSWORD:-$POSTGRES_PASSWORD}"
 
@@ -181,9 +217,11 @@ batch_configure_local_jvm_database_env() {
 
   case "${BATCH_CONSOLE_REPLICA_URL:-}" in
     ""|jdbc:postgresql://postgres-replica:*)
-      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://localhost:${POSTGRES_REPLICA_PORT:-15433}/batch_platform?reWriteBatchedInserts=true"
+      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://$(batch_format_host_port "${PG_REPLICA_HOST:-localhost}" "${POSTGRES_REPLICA_PORT:-15433}")/batch_platform?reWriteBatchedInserts=true"
       ;;
   esac
 }
 
-batch_load_default_env
+if [[ "${BATCH_ENV_COMMON_HELPERS_ONLY:-0}" != "1" ]]; then
+  batch_load_default_env
+fi

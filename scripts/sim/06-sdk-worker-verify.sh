@@ -79,7 +79,12 @@ note "0. 预检:运行栈"
 curl -sf -m 5 "$CONSOLE/actuator/health" -o /dev/null && ok "console-api $CONSOLE UP" || { bad "console-api DOWN"; exit 1; }
 curl -sf -m 5 "$ORCH/actuator/health" -o /dev/null && ok "orchestrator $ORCH UP" || { bad "orchestrator DOWN"; exit 1; }
 "${PSQL[@]}" "select 1" >/dev/null 2>&1 && ok "postgres($PG_CONTAINER) 可达" || { bad "postgres 不可达"; exit 1; }
-(exec 3<>"/dev/tcp/${KAFKA%%:*}/${KAFKA##*:}") 2>/dev/null && ok "kafka $KAFKA 端口开" || info "kafka $KAFKA 端口探测失败(worker 起后看日志)"
+batch_parse_host_port "$KAFKA"
+if [[ -n "$BATCH_PARSED_PORT" ]] && (exec 3<>"/dev/tcp/${BATCH_PARSED_HOST}/${BATCH_PARSED_PORT}") 2>/dev/null; then
+  ok "kafka $KAFKA 端口开"
+else
+  info "kafka $KAFKA 端口探测失败(worker 起后看日志)"
+fi
 
 # ---- 1. admin 登录 ----
 note "1. 登录 admin"

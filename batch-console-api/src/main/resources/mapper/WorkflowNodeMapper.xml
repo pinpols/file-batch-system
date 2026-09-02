@@ -107,6 +107,8 @@
             retry_max_count,
             timeout_seconds,
             node_params,
+            cross_day_dependencies,
+            cross_day_dependency_timeout_seconds,
             enabled
         ) values (
             #{tenantId},
@@ -123,6 +125,8 @@
             <choose><when test="retryMaxCount != null">#{retryMaxCount}</when><otherwise>0</otherwise></choose>,
             <choose><when test="timeoutSeconds != null">#{timeoutSeconds}</when><otherwise>0</otherwise></choose>,
             #{nodeParams, jdbcType=VARCHAR}::jsonb,
+            #{crossDayDependencies, jdbcType=VARCHAR}::jsonb,
+            <choose><when test="crossDayDependencyTimeoutSeconds != null">#{crossDayDependencyTimeoutSeconds}</when><otherwise>86400</otherwise></choose>,
             <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
         )
         on conflict (tenant_id, workflow_definition_id, node_code) do update
@@ -137,6 +141,8 @@
             retry_max_count = excluded.retry_max_count,
             timeout_seconds = excluded.timeout_seconds,
             node_params = excluded.node_params,
+            cross_day_dependencies = excluded.cross_day_dependencies,
+            cross_day_dependency_timeout_seconds = excluded.cross_day_dependency_timeout_seconds,
             enabled = excluded.enabled,
             updated_at = current_timestamp
     </insert>

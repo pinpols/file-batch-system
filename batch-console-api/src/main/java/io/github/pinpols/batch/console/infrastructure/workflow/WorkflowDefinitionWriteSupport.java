@@ -61,6 +61,8 @@ public final class WorkflowDefinitionWriteSupport {
         param.setRetryMaxCount(node.getRetryMaxCount());
         param.setTimeoutSeconds(node.getTimeoutSeconds());
         param.setNodeParams(node.getNodeParams());
+        param.setCrossDayDependencies(node.getCrossDayDependencies());
+        param.setCrossDayDependencyTimeoutSeconds(node.getCrossDayDependencyTimeoutSeconds());
         param.setEnabled(node.getEnabled());
         nodeMapper.upsertWorkflowNode(param);
       }

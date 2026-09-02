@@ -47,6 +47,8 @@ public class WorkflowDefinitionSaveRequest {
     private Integer retryMaxCount;
     private Integer timeoutSeconds;
     private String nodeParams;
+    private String crossDayDependencies;
+    private Integer crossDayDependencyTimeoutSeconds;
     private Boolean enabled;
   }
 

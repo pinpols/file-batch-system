@@ -12,7 +12,9 @@ set -euo pipefail
 #   Rust       live rdkafka adapter(feature=gated)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-localhost:19092}"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "${KAFKA_HOST_PORT:-19092}")}"
 PYTHON_BIN="${PYTHON:-}"
 if [[ -z "$PYTHON_BIN" ]]; then
   for candidate in python3.12 python3 python; do
@@ -36,20 +38,25 @@ echo "[sdk-live] Python=$("$PYTHON_BIN" -c 'import sys; print(sys.executable)')"
 # hand) also wait instead of racing the first Kafka call.
 wait_for_kafka() {
   local hostport="$1" host port deadline
-  host="${hostport%%:*}"
-  port="${hostport##*:}"
+  batch_parse_host_port "$hostport"
+  host="$BATCH_PARSED_HOST"
+  port="$BATCH_PARSED_PORT"
+  if [[ -z "$port" ]]; then
+    echo "[sdk-live] ERROR: Kafka bootstrap 缺少端口: ${hostport}" >&2
+    return 1
+  fi
   deadline="${KAFKA_READY_TIMEOUT:-120}"
-  echo "[sdk-live] waiting for Kafka at ${host}:${port} (timeout ${deadline}s)"
+  echo "[sdk-live] waiting for Kafka at $(batch_format_host_port "$host" "$port") (timeout ${deadline}s)"
   while (( deadline > 0 )); do
     if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then
       exec 3>&- 2>/dev/null || true
-      echo "[sdk-live] Kafka reachable at ${host}:${port}"
+      echo "[sdk-live] Kafka reachable at $(batch_format_host_port "$host" "$port")"
       return 0
     fi
     sleep 2
     deadline=$((deadline - 2))
   done
-  echo "[sdk-live] ERROR: Kafka not reachable at ${host}:${port} within timeout" >&2
+  echo "[sdk-live] ERROR: Kafka not reachable at $(batch_format_host_port "$host" "$port") within timeout" >&2
   return 1
 }
 wait_for_kafka "$KAFKA_BOOTSTRAP"

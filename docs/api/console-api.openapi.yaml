@@ -11338,6 +11338,13 @@ components:
           format: int32
         nodeParams:
           type: string
+        crossDayDependencies:
+          type: string
+          description: ADR-018 跨日依赖 JSONB 数组；未声明时省略。
+        crossDayDependencyTimeoutSeconds:
+          type: integer
+          format: int32
+          description: ADR-018 跨日依赖等待上限秒数；0 表示永久等待，未传默认 86400。
         enabled:
           type: boolean
       required: [nodeCode, nodeType]

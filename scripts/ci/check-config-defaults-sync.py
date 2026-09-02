@@ -45,8 +45,9 @@ ENV_REFERENCE = re.compile(r'\$\{([A-Z][A-Z0-9_]*)')
 
 # URL / 连接串前缀
 URL_PREFIXES = ("http://", "https://", "jdbc:")
-# host:port 格式（如 kafka:9092 / localhost:19092）
-HOST_PORT = re.compile(r'^[a-z][a-z0-9.-]*:\d+$')
+# host:port 格式（如 kafka:9092 / localhost:19092 / [2001:db8::20]:9092）。
+# IPv6 必须使用 URL authority 的方括号形式，裸 IPv6 不应被当成 host:port。
+HOST_PORT = re.compile(r'^(?:[a-z][a-z0-9.-]*|\[[0-9A-Fa-f:.%]+\]):\d+$')
 
 
 def is_network_topology_pair(yml_v: str, compose_v: str) -> bool:
@@ -62,8 +63,8 @@ def is_network_topology_pair(yml_v: str, compose_v: str) -> bool:
         return True
     if HOST_PORT.match(yml_v) and HOST_PORT.match(compose_v):
         return True
-    yml_local = "localhost" == yml_v or "localhost" in yml_v.split(":")[0]
-    compose_local = "localhost" == compose_v or "localhost" in compose_v.split(":")[0]
+    yml_local = yml_v == "localhost" or yml_v.startswith("localhost:")
+    compose_local = compose_v == "localhost" or compose_v.startswith("localhost:")
     return yml_local != compose_local
 
 

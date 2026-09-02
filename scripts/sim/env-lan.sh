@@ -24,18 +24,24 @@ if [[ -z "${LAN_HOST:-}" ]]; then
   LAN_HOST="${LAN_HOST:-localhost}"
 fi
 
+# 复用脚本公共 host:port 处理，确保 LAN_HOST=2001:db8::20 时 URI 和 Kafka
+# bootstrap 自动生成 [2001:db8::20]:port。
+LAN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/env-common.sh
+source "$LAN_ROOT/scripts/lib/env-common.sh"
+
 # 2) BE / FE / 模拟器 host 端口(对齐 .env.local 默认值)
 export LAN_HOST
-export CONSOLE_BASE="http://${LAN_HOST}:${CONSOLE_PORT:-18080}"
-export TRIGGER_BASE="http://${LAN_HOST}:${TRIGGER_PORT:-18081}"
-export ORCH_BASE="http://${LAN_HOST}:${ORCHESTRATOR_PORT:-18082}"
-export MOCK_BASE="http://${LAN_HOST}:${MOCKSERVER_HOST_PORT:-11080}"
+export CONSOLE_BASE="http://$(batch_format_host_port "$LAN_HOST" "${CONSOLE_PORT:-18080}")"
+export TRIGGER_BASE="http://$(batch_format_host_port "$LAN_HOST" "${TRIGGER_PORT:-18081}")"
+export ORCH_BASE="http://$(batch_format_host_port "$LAN_HOST" "${ORCHESTRATOR_PORT:-18082}")"
+export MOCK_BASE="http://$(batch_format_host_port "$LAN_HOST" "${MOCKSERVER_HOST_PORT:-11080}")"
 
 # Infra(脚本里 docker exec 不依赖这些,但客户端 / DataGrip 用得着)
 export PG_PRIMARY_HOST="$LAN_HOST"; export PG_PRIMARY_PORT="${POSTGRES_PORT:-15432}"
 export REDIS_HOST="$LAN_HOST";      export REDIS_PORT="${REDIS_PORT:-16379}"
-export KAFKA_BOOTSTRAP="${LAN_HOST}:${KAFKA_HOST_PORT:-19092}"
-export MINIO_URL="http://${LAN_HOST}:${MINIO_API_PORT:-19000}"
+export KAFKA_BOOTSTRAP="$(batch_format_host_port "$LAN_HOST" "${KAFKA_HOST_PORT:-19092}")"
+export MINIO_URL="http://$(batch_format_host_port "$LAN_HOST" "${MINIO_API_PORT:-19000}")"
 export SFTP_HOST="$LAN_HOST"
 export SFTP_PORT="${SFTP_HOST_PORT:-12222}"
 
@@ -47,11 +53,11 @@ cat <<EOF
   TRIGGER_BASE       = $TRIGGER_BASE
   ORCH_BASE          = $ORCH_BASE
   MOCK_BASE          = $MOCK_BASE
-  PG_PRIMARY_HOST:PORT = $PG_PRIMARY_HOST:$PG_PRIMARY_PORT
-  REDIS_HOST:PORT    = $REDIS_HOST:$REDIS_PORT
+  PG_PRIMARY_HOST:PORT = $(batch_format_host_port "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT")
+  REDIS_HOST:PORT    = $(batch_format_host_port "$REDIS_HOST" "$REDIS_PORT")
   KAFKA_BOOTSTRAP    = $KAFKA_BOOTSTRAP
   MINIO_URL          = $MINIO_URL
-  SFTP_HOST:PORT     = $SFTP_HOST:$SFTP_PORT
+  SFTP_HOST:PORT     = $(batch_format_host_port "$SFTP_HOST" "$SFTP_PORT")
 
 LAN 访问从手机 / 别人电脑也用同款 URL(host 同网段即可)。
 EOF
