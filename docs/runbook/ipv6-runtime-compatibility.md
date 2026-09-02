@@ -27,7 +27,7 @@
 - Webhook、Atomic HTTP、Dispatch HTTP 等出站连接必须保留按解析地址的安全校验；不能仅用字符串前缀判断 IPv6 是否为私网。
 - Compose 默认仍使用现有 IPv4 端口映射和服务名，IPv6 Compose 网络需由部署环境显式启用，不在应用启动时自动创建或切换网络。
 - `localhost` 是本地开发默认值，不代表固定 IPv4；需要固定协议族时由部署环境使用 `127.0.0.1` 或 `[::1]` 明确指定。
-- Java 运行时统一注入 `-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false`：保留双栈，不强制禁用 IPv6；当 DNS 同时返回 IPv4/IPv6 时优先 IPv4。容器由 `docker/entrypoint.sh` 统一追加，裸 JVM 和 Sim 由本地启动脚本默认参数注入。
+- Java 运行时统一注入 `-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false`：保留双栈，不强制禁用 IPv6；当 DNS 同时返回 IPv4/IPv6 时优先 IPv4。容器由 `docker/entrypoint.sh` 统一追加，裸 JVM 和 Sim 由公共变量 `BATCH_JVM_NETWORK_OPTS` 注入。
 - 这只是地址选择偏好，不是连接失败降级策略；连接超时、重试和业务错误仍由 HTTP 客户端/调用方处理。对端单栈 IPv6 时 JVM 仍可使用 IPv6，对端仅 IPv4 时保持既有 IPv4 连接。
 
 ## 验证
