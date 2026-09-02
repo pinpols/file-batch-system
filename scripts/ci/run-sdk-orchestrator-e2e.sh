@@ -30,6 +30,10 @@ LANG_ID="${1:?usage: run-sdk-orchestrator-e2e.sh <go|python|java|typescript|rust
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+export BATCH_ENV_COMMON_HELPERS_ONLY=1
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+
 # ── 连接参数(宿主映射端口,与 .env.local 对齐)────────────────────────────
 PGHOST="${BATCH_PLATFORM_DB_HOST:-localhost}"
 PGPORT="${POSTGRES_PORT:-15432}"
@@ -44,7 +48,7 @@ KAFKA_CONTAINER="${KAFKA_CONTAINER:-kafka}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-batch-postgres-primary}"
 TENANT="${TENANT:-default-tenant}"
 ORCH_URL="http://localhost:${ORCH_PORT}"
-KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}"
+KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
 WORKER_CODE="ci-e2e-${LANG_ID}-$$"
 WORKER_LOG="/tmp/sdk-e2e-worker-${LANG_ID}.log"
 

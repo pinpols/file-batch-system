@@ -32,6 +32,11 @@ set -uo pipefail
 # 加载 .env(若存在),让本机默认值生效;命令行 env var 优先级最高
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 [[ -f "$ROOT_DIR/.env" ]] && set -a && source "$ROOT_DIR/.env" 2>/dev/null && set +a
+# 只引入 IPv4/IPv6 host 工具，不让公共入口再次读取 .env，保持本脚本
+# “命令行环境变量优先”的既有契约。
+export BATCH_ENV_COMMON_HELPERS_ONLY=1
+# shellcheck source=../lib/env-common.sh
+source "$ROOT_DIR/scripts/lib/env-common.sh"
 
 # ── 配置(env var 优先,默认本地 docker compose 暴露端口) ───────────────
 PG_PRIMARY_HOST="${PG_PRIMARY_HOST:-localhost}"
@@ -46,7 +51,7 @@ PG_REPLICA_LAG_THRESHOLD_SEC="${PG_REPLICA_LAG_THRESHOLD_SEC:-300}"  # 5min 默�
 REDIS_HOST="${REDIS_HOST:-localhost}"
 REDIS_PORT="${REDIS_PORT:-16379}"
 
-KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
+KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "${KAFKA_HOST_PORT:-19092}")}"
 
 MINIO_URL="${MINIO_URL:-http://localhost:${MINIO_API_PORT:-19000}}"
 MINIO_BUCKET="${MINIO_BUCKET:-batch-dev}"
@@ -107,7 +112,7 @@ tcp_probe() {
 # ── PG primary ────────────────────────────────────────────
 check_pg_primary() {
   if ! tcp_probe "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT" 3; then
-    ng "PG primary" "$PG_PRIMARY_HOST:$PG_PRIMARY_PORT 端口不通"
+    ng "PG primary" "$(batch_format_host_port "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT") 端口不通"
     return
   fi
   if ! command -v psql >/dev/null 2>&1; then
@@ -165,7 +170,7 @@ check_pg_replica() {
 # ── Redis ────────────────────────────────────────────────
 check_redis() {
   if ! tcp_probe "$REDIS_HOST" "$REDIS_PORT" 3; then
-    ng "Redis" "$REDIS_HOST:$REDIS_PORT 端口不通"
+    ng "Redis" "$(batch_format_host_port "$REDIS_HOST" "$REDIS_PORT") 端口不通"
     return
   fi
   # 用 RESP 协议直发 PING(免装 redis-cli)
@@ -176,13 +181,13 @@ check_redis() {
     ok "Redis" "$REDIS_HOST:$REDIS_PORT PONG"
   elif command -v redis-cli >/dev/null 2>&1; then
     if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG; then
-      ok "Redis" "$REDIS_HOST:$REDIS_PORT PONG"
+      ok "Redis" "$(batch_format_host_port "$REDIS_HOST" "$REDIS_PORT") PONG"
     else
       ng "Redis" "端口通但 PING 失败"
     fi
   else
     # TCP 通就当 OK(没 redis-cli 也没法做更多)
-    ok "Redis" "$REDIS_HOST:$REDIS_PORT 端口通(深度检查需 redis-cli)"
+    ok "Redis" "$(batch_format_host_port "$REDIS_HOST" "$REDIS_PORT") 端口通(深度检查需 redis-cli)"
   fi
 }
 
@@ -192,7 +197,12 @@ check_kafka() {
     skip "Kafka" "--no-kafka 跳过"
     return
   fi
-  local host="${KAFKA_BOOTSTRAP%:*}" port="${KAFKA_BOOTSTRAP##*:}"
+  batch_parse_host_port "$KAFKA_BOOTSTRAP"
+  local host="$BATCH_PARSED_HOST" port="$BATCH_PARSED_PORT"
+  if [[ -z "$port" ]]; then
+    ng "Kafka" "$KAFKA_BOOTSTRAP 缺少端口"
+    return
+  fi
   if ! tcp_probe "$host" "$port" 3; then
     ng "Kafka" "$KAFKA_BOOTSTRAP 端口不通"
     return

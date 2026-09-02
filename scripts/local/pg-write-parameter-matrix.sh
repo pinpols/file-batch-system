@@ -41,7 +41,7 @@ RAW="$OUT_DIR/raw.tsv"
 SUMMARY="$OUT_DIR/summary.tsv"
 REPORT="$OUT_DIR/pg-write-parameter-matrix.md"
 
-BASE_JDBC="${DB_URL:-jdbc:postgresql://${PGHOST}:${PGPORT}/${BUSINESS_DB}?reWriteBatchedInserts=true}"
+BASE_JDBC="${DB_URL:-jdbc:postgresql://$(batch_format_host_port "$PGHOST" "$PGPORT")/${BUSINESS_DB}?reWriteBatchedInserts=true}"
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"

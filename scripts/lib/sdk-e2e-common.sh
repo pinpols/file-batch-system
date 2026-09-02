@@ -36,6 +36,13 @@ export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
 # repo root (库在 scripts/lib/)
 SDK_E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# 只引入公共地址格式化和 PostgreSQL 客户端入口，不重读环境文件；入口脚本
+# 已经定义的环境变量必须保持优先级。
+export BATCH_ENV_COMMON_HELPERS_ONLY=1
+# shellcheck source=env-common.sh
+source "$SDK_E2E_ROOT/scripts/lib/env-common.sh"
+KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
+
 sdk_e2e_q()   { psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tA -c "$1" 2>/dev/null; }
 sdk_e2e_say() { printf '\n=== %s ===\n' "$*"; }
 sdk_e2e_pass(){ printf '✅ %s\n' "$*"; }
@@ -71,7 +78,7 @@ sdk_e2e_kafka_topics() {
         sdk_e2e_fail "kafka-topics.sh not found; set KAFKA_BIN_DIR or KAFKA_TOPICS_BIN"
         return 1
       }
-      "$bin" --bootstrap-server "localhost:${KAFKA_HOST_PORT}" "$@"
+      "$bin" --bootstrap-server "$KAFKA_BOOTSTRAP" "$@"
       ;;
     docker)
       docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 "$@"
@@ -79,7 +86,7 @@ sdk_e2e_kafka_topics() {
     auto)
       local bin
       if bin="$(sdk_e2e_kafka_topics_bin)"; then
-        "$bin" --bootstrap-server "localhost:${KAFKA_HOST_PORT}" "$@"
+        "$bin" --bootstrap-server "$KAFKA_BOOTSTRAP" "$@"
       else
         docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 "$@"
       fi
@@ -132,14 +139,14 @@ sdk_e2e_start_worker() {
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-go" \
         && GOROOT="$GOROOT_HINT" PATH="$GOROOT_HINT/bin:$PATH" \
            BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
-           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
+           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            go run . ) >"$logf" 2>&1 & echo $! ;;
     python)
       python -m pip install -q -e "$root/sdk/python" >/dev/null 2>&1
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-python" \
         && python -m pip install -q -e . >/dev/null 2>&1 \
         && BATCH_SDK_BASE_URL="$ORCH_URL" BATCH_SDK_API_KEY="$raw" BATCH_SDK_TENANT_ID="$TENANT" \
-           BATCH_SDK_WORKER_CODE="$wc" BATCH_SDK_KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
+           BATCH_SDK_WORKER_CODE="$wc" BATCH_SDK_KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            python -m sample_tenant_worker ) >"$logf" 2>&1 & echo $! ;;
     typescript)
       # SDK 的 kafka adapter(sdk/typescript/kafka)import 'kafkajs',它从 SDK 自身的
@@ -148,7 +155,7 @@ sdk_e2e_start_worker() {
       npm --prefix "$root/sdk/typescript" install --silent >/dev/null 2>&1
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" && npm install --silent >/dev/null 2>&1 \
         && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
-           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
+           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            node --experimental-strip-types src/main.ts ) >"$logf" 2>&1 & echo $! ;;
     java)
       # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk:1.1.0),再 package 样例。
@@ -159,7 +166,7 @@ sdk_e2e_start_worker() {
       mvn -q -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
       ( cd "$jdir" \
         && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
-           BATCH_WORKER_CODE="$wc" BATCH_KAFKA="localhost:${KAFKA_HOST_PORT}" \
+           BATCH_WORKER_CODE="$wc" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
            java -jar target/sample-tenant-worker-1.0.0-SNAPSHOT.jar ) >>"$logf" 2>&1 & echo $! ;;
     rust)
       # cargo at ~/.cargo/bin (not always on PATH); cmake on PATH for rdkafka build.
@@ -171,7 +178,7 @@ sdk_e2e_start_worker() {
       ( cd "$rdir" \
         && PATH="$cargo_path:/usr/local/bin:$PATH" \
            BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
-           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="localhost:${KAFKA_HOST_PORT}" \
+           BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            ./target/debug/sample-tenant-worker-rust ) >>"$logf" 2>&1 & echo $! ;;
     *) sdk_e2e_fail "unsupported lang '$lang'"; return 2 ;;
   esac
