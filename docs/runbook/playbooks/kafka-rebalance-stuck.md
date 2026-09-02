@@ -1,6 +1,6 @@
 # Kafka consumer group lag 飙高 / rebalance 长期停滞
 
-> 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:`KafkaRebalanceStuckChaosIT`(TODO)
+> 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有 consumer/lease 恢复路径，真实 broker rebalance 仍需 staging 演练
 
 ## TL;DR
 
@@ -12,7 +12,7 @@
 ## 怎么发现
 
 - **Prometheus alert**:`BatchKafkaConsumerLagHigh` 覆盖 worker group lag；Kafka rebalance 状态没有由应用稳定导出的统一低基数指标，`PreparingRebalance` / `CompletingRebalance` 仍需用 consumer-groups 命令和 broker 日志确认，不能仅凭 lag 告警断定 rebalance 卡死。
-- **Grafana**:TODO。临时看:
+- **Grafana**:当前使用下列 Kafka consumer 指标和 broker 命令；专用面板由目标监控环境落地:
   - `kafka_consumer_records_lag_max` 持续 > 1000
   - `kafka_consumer_coordinator_rebalance_total` 在短时间内陡增 → rebalance 抖
 - **日志关键字**(worker / orchestrator 侧):

@@ -1,6 +1,6 @@
 # PG 主库故障切主(postgres-primary → postgres-replica)
 
-> 优先级 P0 · 最后核对版本:2026-05 · 配套 chaos IT:`PgPrimaryFailoverChaosIT`(TODO 与 Plan #1 联调)
+> 优先级 P0 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有故障路径说明，真实主备切换仍需 staging 演练
 
 ## TL;DR
 
@@ -12,7 +12,7 @@
 ## 怎么发现
 
 - **Prometheus alert**:`HikariCpAcquireTimeout` / `HikariCpConnectionExhausted` 覆盖应用连接池故障；`PostgresReplicationStopped`、`PostgresReplicationLagHigh`、`PostgresReplicationLagCritical` 覆盖复制链路。主库网络/进程是否真正 down 仍必须用 `pg_isready` 与容器状态确认，不能把连接池超时直接等同于主库故障。
-- **Grafana 面板**:TODO(待补)。临时看 `actuator/prometheus`:
+- **Grafana 面板**:当前使用 `actuator/prometheus` 指标；专用面板由目标监控环境落地:
   - `hikaricp_connections_pending{datasource="platform"}` 持续 > 0
   - `hikaricp_connections_timeout_total` 单分钟内陡增
 - **日志关键字**:

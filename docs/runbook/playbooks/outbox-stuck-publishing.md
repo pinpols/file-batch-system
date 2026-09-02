@@ -1,6 +1,6 @@
 # outbox_event 卡 PUBLISHING 不进 PUBLISHED
 
-> 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:`OutboxStuckPublishingChaosIT`(TODO 与 Plan #1 联调)
+> 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有 stale 回收和 Kafka 故障路径测试，真实长时间故障仍需 staging 演练
 
 ## TL;DR
 
@@ -12,7 +12,7 @@
 ## 怎么发现
 
 - **Prometheus alert**:`BatchOutboxStalePublishingStuck` 覆盖 stale PUBLISHING 行；`BatchOutboxCircuitBreakerOpen` 覆盖集群级投递暂停；`BatchOutboxCircuitBreakerFailOpen` 覆盖 Redis 不可达时保护状态降级。stale 行本身已是状态型告警，不再重复增加同语义的数量阈值告警。
-- **Grafana**:TODO。临时看:
+- **Grafana**:当前使用下列 Prometheus/SQL 查询；专用面板由目标监控环境落地:
   - 自定义 query:`SELECT count(*) FROM batch.outbox_event WHERE publish_status='PUBLISHING' AND updated_at < now() - interval '2 minutes'`
   - `batch_outbox_publish_failures_total`(由 `OutboxPublishCircuitBreaker` 喂),若持续涨 → 上游 Kafka 写失败
 - **日志关键字**:
