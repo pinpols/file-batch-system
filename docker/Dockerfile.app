@@ -50,12 +50,19 @@ RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
     mvn -B -T 1C -DskipTests -pl '!batch-e2e-tests' package
 
+# 每个可部署模块产出唯一的 *-exec.jar。集中到固定目录后，后续 target 不再依赖
+# 带 ARG 的跨阶段目录 COPY；BuildKit 并行构建多个服务时不会误复用空 target 目录。
+RUN set -eux; \
+    mkdir -p /artifacts; \
+    find /workspace -type f -path '*/target/*-exec.jar' -exec cp {} /artifacts/ \;
+
 # ───── Stage 2: extract selected jar layers(只解压当前服务的 jar)─────
 FROM builder AS selected-layers
 
 ARG MODULE
 
-COPY --from=builder /workspace/${MODULE}/target/ /tmp/build/
+# MODULE 是 Maven artifactId；从 builder 收集的扁平 artifact 目录精确取 jar。
+COPY --from=builder /artifacts/${MODULE}-*.jar /tmp/build/
 RUN set -eux; \
     jar=""; \
     for f in /tmp/build/"${MODULE}"-*.jar; do \
@@ -72,7 +79,6 @@ RUN set -eux; \
 FROM eclipse-temurin:21-jre-jammy
 
 ARG MODULE
-ARG MODULE_DIR=${MODULE}
 
 ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
     TZ="Asia/Shanghai" \
@@ -100,7 +106,14 @@ COPY --from=selected-layers /layers/snapshot-dependencies/ /app/snapshot-depende
 COPY --from=selected-layers /layers/application/ /app/application/
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN mkdir -p /var/log/app /var/cache/app /logs /app/logs \
+RUN app_jar="$(find /app/application -maxdepth 1 -type f -name '*-exec.jar' -print -quit)" \
+    && test -n "$app_jar" \
+    && ln -s "$app_jar" /app/app.jar \
+    && for dependency in /app/dependencies/lib/*.jar /app/snapshot-dependencies/lib/*.jar; do \
+         [ -e "$dependency" ] || continue; \
+         ln -sfn "$dependency" "/app/application/lib/$(basename "$dependency")"; \
+       done \
+    && mkdir -p /var/log/app /var/cache/app /logs /app/logs \
     && chmod +x /app/entrypoint.sh \
     && chown -R batch:batch /app /var/log/app /var/cache/app /logs /app/logs
 

@@ -16,6 +16,6 @@
 
 这些脚本不要求必须进 Docker 容器，但需要本机安装对应客户端并通过环境变量指定连接信息：
 
-- Kafka topic 初始化：安装 Kafka CLI，确保 `kafka-topics.sh` 在 `PATH`，或设置 `KAFKA_BIN_DIR=/path/to/kafka/bin` / `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`；连接地址用 `KAFKA_BOOTSTRAP_SERVER`。
+- Kafka topic 初始化：安装 Kafka CLI，确保 `kafka-topics.sh` 在 `PATH`，或设置 `KAFKA_BIN_DIR=/path/to/kafka/bin` / `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`；连接地址用 `KAFKA_BOOTSTRAP_SERVER`。初始化器始终确保平台核心 topic 存在，`KAFKA_TOPICS` 仅用于追加自定义 topic，不能用旧本地环境文件覆盖核心清单。
 - MinIO 初始化：安装 `mc`；连接地址和凭据用 `MINIO_ENDPOINT`、`MINIO_ROOT_USER`、`MINIO_ROOT_PASSWORD`、`MINIO_BUCKET`。
 - 系统测试数据加载：数据库连接用 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PLATFORM_DB`、`BUSINESS_DB`；默认按宿主机 `psql`、Python `psycopg`、Docker 客户端顺序选择，也可设置 `BATCH_PSQL_BIN` 或 `BATCH_PG_CLIENT_MODE`。Python fallback 依赖 `scripts/requirements-postgres.txt`。对象存储用 `BATCH_S3_*`，无可用客户端时明确失败。

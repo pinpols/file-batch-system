@@ -77,6 +77,8 @@ listener factory **没调 `setConcurrency` → 默认 1**,而 `batch.trigger.lau
 **修复**:`TriggerConsumerProperties` 新增 `concurrency`(默认 4,与分区数对齐),factory 调
 `setConcurrency`。重测:
 
+> **现行基线更新（2026-09-02）**：本段的 4 分区 / 每实例 4 consumer 是当时的实测配置，不再是当前默认值。现行生产基线为每个 Orchestrator 实例 6 个 consumer，Helm 默认 2 个副本，因此 `batch.trigger.launch.v1` 至少 12 分区。扩容、分区和实际消费分配的复验见 [trigger-drain-optimization-2026-09-02.md](trigger-drain-optimization-2026-09-02.md)。
+
 | L | 并发 | 修复前峰值/s | **修复后峰值/s** |
 |---|---|---|---|
 | 1 | 64 | 21.3 | **33.2** |

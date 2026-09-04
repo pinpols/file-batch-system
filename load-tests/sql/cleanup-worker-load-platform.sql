@@ -2,21 +2,22 @@ BEGIN;
 
 -- run_id is generated per profile and is the cleanup boundary. Do not pin this
 -- fixture cleanup to default-tenant: fairness profiles intentionally use ta/tb/tc.
--- Gatling request_id values are random, so capture the full request set before
--- deleting outbox rows. The payload marker is needed for oversized inline imports.
+-- 优先通过已关联实例反查 Trigger 请求；新 Gatling 场景还会把 run_id 写入请求/追踪标识。
+-- 不扫描 trigger_outbox_event.payload：该 JSONB 全表文本匹配在十万级清理时会拖慢回收，且
+-- run_id 已有结构化的 request_id / trace_id 归属边界。
 CREATE TEMP TABLE cleanup_trigger_requests ON COMMIT DROP AS
 SELECT DISTINCT tr.id, tr.request_id
 FROM batch.trigger_request tr
 WHERE tr.request_id LIKE '%' || :'run_id' || '%'
    OR tr.dedup_key LIKE '%' || :'run_id' || '%'
    OR tr.trace_id LIKE '%' || :'run_id' || '%'
-   OR EXISTS (
-     SELECT 1
-     FROM batch.trigger_outbox_event toe
-     WHERE toe.tenant_id = tr.tenant_id
-       AND toe.request_id = tr.request_id
-       AND toe.payload::text LIKE '%' || :'run_id' || '%'
-   );
+UNION
+SELECT DISTINCT tr.id, tr.request_id
+FROM batch.trigger_request tr
+JOIN batch.job_instance ji ON ji.id = tr.related_job_instance_id
+WHERE ji.params_snapshot::text LIKE '%' || :'run_id' || '%'
+   OR ji.trace_id LIKE :'run_id' || '%'
+   OR ji.batch_no = :'run_id' || '-SETTLEMENT';
 
 WITH ji AS (
   SELECT id
@@ -261,9 +262,7 @@ WHERE (
   );
 
 DELETE FROM batch.trigger_outbox_event
-WHERE request_id IN (SELECT request_id FROM cleanup_trigger_requests)
-   OR request_id LIKE '%' || :'run_id' || '%'
-   OR payload::text LIKE '%' || :'run_id' || '%';
+WHERE request_id IN (SELECT request_id FROM cleanup_trigger_requests);
 
 WITH ji AS (
   SELECT id

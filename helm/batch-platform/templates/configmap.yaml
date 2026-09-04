@@ -54,6 +54,7 @@ data:
 
   # R7-A4-P0: orchestrator 限流 + DB 池规模（之前 .env.prod 写了但 Helm 漂移）。
   BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: {{ .Values.orchestrator.platformDb.maxPoolSize | default 30 | quote }}
+  BATCH_TRIGGER_CONSUMER_CONCURRENCY: {{ .Values.orchestrator.triggerConsumer.concurrency | default 6 | quote }}
   # P1-8 (pre-launch audit 2026-05-18)：console 主/从库池暴露,默认 16+16 应对 2 replicas * 64 共 128 上限。
   {{- $consoleReadReplica := .Values.consoleApi.readReplica | default dict }}
   BATCH_CONSOLE_READ_REPLICA_ENABLED: {{ $consoleReadReplica.enabled | default true | quote }}

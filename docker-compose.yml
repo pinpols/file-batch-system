@@ -194,6 +194,7 @@ services:
       KAFKA_PARTITIONS_RESULT: ${KAFKA_PARTITIONS_RESULT:-${KAFKA_DEFAULT_PARTITIONS}}
       KAFKA_PARTITIONS_RETRY: ${KAFKA_PARTITIONS_RETRY:-${KAFKA_DEFAULT_PARTITIONS}}
       KAFKA_PARTITIONS_DEAD_LETTER: ${KAFKA_PARTITIONS_DEAD_LETTER:-${KAFKA_DEFAULT_PARTITIONS}}
+      KAFKA_PARTITIONS_TRIGGER_LAUNCH: ${KAFKA_PARTITIONS_TRIGGER_LAUNCH:-12}
     volumes:
       - ./scripts/data/init-kafka-topics.sh:/scripts/data/init-kafka-topics.sh:ro
     entrypoint: ["/bin/sh", "/scripts/data/init-kafka-topics.sh"]

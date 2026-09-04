@@ -48,6 +48,13 @@ public final class GatlingConfig {
             System.getProperty("bizDate", "2026-01-15");
 
     /**
+     * 压测运行标识。入口请求标识和追踪标识都必须包含该值，以便异步 Trigger 链路能被精确
+     * 回收，不能仅依赖最终落到 job_instance 的参数快照。
+     */
+    public static final String RUN_ID =
+            systemPropertyOrEnv("load.runId", "RUN_ID", "load-unknown");
+
+    /**
      * JSON object inserted as the launch {@code params}. Prefer {@code launch.paramsJsonFile} for
      * large import payloads to avoid command-line length limits.
      */

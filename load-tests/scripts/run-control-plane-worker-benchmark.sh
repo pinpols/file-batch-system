@@ -165,6 +165,7 @@ run_pipeline_completion() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
+      -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$job_code" \
       -DbizDate="$BIZ_DATE" \
@@ -227,6 +228,7 @@ run_trigger_pressure() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
+      -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$TRIGGER_JOB_CODE" \
       -DbizDate="$BIZ_DATE" \
