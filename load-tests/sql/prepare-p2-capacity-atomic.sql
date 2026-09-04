@@ -46,7 +46,7 @@ INSERT INTO batch.tenant_quota_policy (
   created_at, updated_at
 )
 VALUES (
-  :'capacity_tenant_id', 'p2-capacity-profile', 0, 0, 0, 1, NULL, 0, 0, 'NONE', NULL,
+  :'capacity_tenant_id', 'p2-capacity-profile', 0, 0, 0, 1, NULL, 0, 0, 'NONE', 0,
   true, 'QUEUE_DEFER', 'Ephemeral P2 unbounded-admission capacity policy', now(), now()
 )
 ON CONFLICT (tenant_id, policy_code) DO UPDATE SET
@@ -54,7 +54,7 @@ ON CONFLICT (tenant_id, policy_code) DO UPDATE SET
   max_partitions_per_tenant = 0,
   max_qps_per_tenant = 0,
   fair_share_group = NULL,
-  group_shared_max_running_jobs = NULL,
+  group_shared_max_running_jobs = 0,
   enabled = true,
   exceeded_strategy = 'QUEUE_DEFER',
   description = EXCLUDED.description,
