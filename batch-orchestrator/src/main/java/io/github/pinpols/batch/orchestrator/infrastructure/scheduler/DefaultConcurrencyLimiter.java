@@ -87,7 +87,10 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     if (Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
         && quotaPolicy.groupSharedMaxRunningJobs() > 0) {
-      if (!fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)) {
+      boolean fairShareCapacity = request.isEnforceFairShareAdmission()
+          ? fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)
+          : fairShareGroupAdmissionGuard.hasObservedCapacity(quotaPolicy);
+      if (!fairShareCapacity) {
         return applyStrategy(
             strategy,
             "FAIR_SHARE_GROUP_JOB_LIMIT",

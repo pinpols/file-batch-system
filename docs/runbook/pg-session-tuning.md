@@ -14,6 +14,20 @@ Trigger 是平台池的例外：它同时承载 Quartz JDBC JobStore。Quartz mi
 orchestrator / console / worker 平台池仍使用上表的 60s。若调度器规模或数据库锁等待明显增加，
 应先处理 Quartz 锁竞争和积压，再按实际最长恢复事务调整该值。
 
+出现 Quartz `idle in transaction` 时，不要先把 10 分钟改小。先采集一次连接证据：
+
+```sql
+SELECT application_name, state, now() - xact_start AS xact_age,
+       wait_event_type, wait_event, query
+FROM pg_stat_activity
+WHERE application_name LIKE 'batch-trigger%'
+  AND xact_start IS NOT NULL
+ORDER BY xact_start;
+```
+
+若同一 `QRTZ_%` 查询连续超过 60 秒，关联 Quartz execution/misfire 指标和 `QRTZ_LOCKS` 等待后再处置。
+单次停机、schema 初始化或 fixture 清理期间的连接不构成调整超时的依据。
+
 ## 何时调整
 
 ### 1. Flyway 大型迁移撞 `statement_timeout`

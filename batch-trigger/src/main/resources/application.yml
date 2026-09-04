@@ -84,3 +84,7 @@ batch:
       readiness-recheck-interval-seconds: ${BATCH_TRIGGER_READINESS_RECHECK_INTERVAL_SECONDS:30}
       # 手工 API launch 的本实例并发闸门；超过后立即返回 429，避免请求堆积到 Servlet 线程和连接池。
       api-launch-max-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY:64}
+      # 可选 AIMD 准入：慢请求时收缩并发、正常请求逐步恢复。默认关闭，先用指标和压测确定阈值再启用。
+      api-launch-adaptive-enabled: ${BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED:false}
+      api-launch-min-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY:16}
+      api-launch-slow-request-threshold-millis: ${BATCH_TRIGGER_API_LAUNCH_SLOW_REQUEST_THRESHOLD_MILLIS:1000}

@@ -3,6 +3,8 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -33,6 +35,15 @@ class FairShareGroupAdmissionGuardTest {
     when(jobInstanceMapper.countActiveByFairShareGroup("settlement")).thenReturn(3L);
 
     assertThat(guard.hasCapacity(groupPolicy(3))).isFalse();
+  }
+
+  @Test
+  void observesCapacityWithoutAcquiringAdmissionLock() {
+    when(jobInstanceMapper.countActiveByFairShareGroup("settlement")).thenReturn(2L);
+
+    assertThat(guard.hasObservedCapacity(groupPolicy(3))).isTrue();
+
+    verify(jobInstanceMapper, never()).acquireFairShareGroupAdvisoryLock("settlement");
   }
 
   private static TenantQuotaPolicyEntity groupPolicy(int cap) {

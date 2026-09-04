@@ -88,6 +88,14 @@ data:
   BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED: {{ (.Values.orchestrator.businessRouting).enabled | default false | quote }}
   BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE: {{ (.Values.orchestrator.businessRouting).placementSource | default "CONFIG" | quote }}
   BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY: {{ (.Values.orchestrator.resourceScheduler).defaultExceededStrategy | default "QUEUE_DEFER" | quote }}
+  BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchBatchSize | default 100 | quote }}
+  BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchIntervalMillis | default 10000 | quote }}
+  BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchKickEnabled | quote }}
+  BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_DELAY_MILLIS: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchKickDelayMillis | default 250 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMaxConcurrency | default 64 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED: {{ (.Values.trigger.runtime).apiLaunchAdaptiveEnabled | quote }}
+  BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMinConcurrency | default 16 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_SLOW_REQUEST_THRESHOLD_MILLIS: {{ (.Values.trigger.runtime).apiLaunchSlowRequestThresholdMillis | default 1000 | quote }}
   BATCH_WORKER_ATOMIC_ENABLED_TYPES: {{ (.Values.workerAtomic).enabledTaskTypes | default "" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT: {{ (.Values.orchestrator.importScanner).doneFileFormat | default "MARKER" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX: {{ (.Values.orchestrator.importScanner).doneFileSuffix | default ".done" | quote }}

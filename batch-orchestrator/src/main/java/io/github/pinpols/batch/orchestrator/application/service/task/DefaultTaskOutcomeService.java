@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
+import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
@@ -37,6 +38,7 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,7 +101,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // JobLifecycleMetrics helper，统一使用 afterCommit 调度。
       JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
       // ADR-041 Phase1.3b:节点产出写入数据库后跨阶段 count 连续性核对(仅告警)。
-      CountContinuityOutboxService countContinuityOutboxService) {}
+      CountContinuityOutboxService countContinuityOutboxService,
+      ApplicationEventPublisher applicationEventPublisher) {}
 
   @Component
   public record TaskOutcomeAuxiliaryCollaborators(
@@ -362,6 +365,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
     if (EmptyChecks.isNotNull(jobInstance)) {
       instanceProgressor.advance(command, task, jobInstance, finishedAt, this::applyTaskOutcome);
+    }
+    if (!retryScheduled) {
+      // AFTER_COMMIT 监听器会合并同一波 report，不能在事务内直接扫描，否则可能读到未提交状态。
+      collaborators
+          .applicationEventPublisher()
+          .publishEvent(new WaitingCapacityReleasedEvent(command.tenantId()));
     }
     return jobMappers.jobTaskMapper.selectById(command.tenantId(), command.taskId());
   }

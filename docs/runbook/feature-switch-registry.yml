@@ -108,6 +108,20 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.resource-scheduler.waiting-dispatch-kick-enabled
+    module: orchestrator
+    env:
+      - BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED
+    composeRequired: false
+    helmRequired: true
+
+  - key: batch.trigger.runtime.api-launch-adaptive-enabled
+    module: trigger
+    env:
+      - BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED
+    composeRequired: false
+    helmRequired: true
+
   - key: batch.console.ai.enabled
     module: console-api
     env:

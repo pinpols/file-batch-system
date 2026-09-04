@@ -130,7 +130,8 @@ class DefaultTaskOutcomeServiceTest {
         mock(JobLifecycleMetricsRecorder.class),
         mock(
             io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService
-                .class));
+                .class),
+        mock(org.springframework.context.ApplicationEventPublisher.class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 

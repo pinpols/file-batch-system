@@ -202,6 +202,12 @@ trigger:
   javaOptsExtra: ""
   replicaCount: 1
   port: 18081
+  runtime:
+    apiLaunchMaxConcurrency: 64
+    # 保持关闭，先依据 batch.trigger.api_launch 的 p95 和 429 指标完成灰度阈值确认后再开启。
+    apiLaunchAdaptiveEnabled: false
+    apiLaunchMinConcurrency: 16
+    apiLaunchSlowRequestThresholdMillis: 1000
   # Quartz misfire 由幸存节点立即补跑，trigger 自身负担轻；但要给 Quartz cluster
   # 注销节点 + Spring graceful shutdown drain in-flight 的 trigger 转发请求时间。
   gracefulShutdown:
@@ -330,6 +336,10 @@ orchestrator:
     placementSource: "CONFIG"
   resourceScheduler:
     defaultExceededStrategy: "QUEUE_DEFER"
+    waitingDispatchBatchSize: 100
+    waitingDispatchIntervalMillis: 10000
+    waitingDispatchKickEnabled: true
+    waitingDispatchKickDelayMillis: 250
   importScanner:
     doneFileFormat: "MARKER"
     doneFileSuffix: ".done"

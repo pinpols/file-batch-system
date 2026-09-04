@@ -20,15 +20,32 @@ class FairShareGroupAdmissionGuard {
   private final JobInstanceMapper jobInstanceMapper;
 
   boolean hasCapacity(TenantQuotaPolicyEntity quotaPolicy) {
+    if (!hasHardCap(quotaPolicy)) {
+      return true;
+    }
+    jobInstanceMapper.acquireFairShareGroupAdvisoryLock(quotaPolicy.fairShareGroup());
+    return hasObservedCapacity(quotaPolicy);
+  }
+
+  /**
+   * 只读容量快照，不取得事务锁。
+   *
+   * <p>只允许用于 WAITING 队列的候选排序；调用方不得基于这个返回值直接把实例推进为 RUNNING。真正 release
+   * 仍必须调用 {@link #hasCapacity(TenantQuotaPolicyEntity)}。
+   */
+  boolean hasObservedCapacity(TenantQuotaPolicyEntity quotaPolicy) {
+    if (!hasHardCap(quotaPolicy)) {
+      return true;
+    }
+    return jobInstanceMapper.countActiveByFairShareGroup(quotaPolicy.fairShareGroup())
+        < quotaPolicy.groupSharedMaxRunningJobs();
+  }
+
+  private static boolean hasHardCap(TenantQuotaPolicyEntity quotaPolicy) {
     boolean sharedGroupHardCapEnabled = quotaPolicy != null
         && Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
         && quotaPolicy.groupSharedMaxRunningJobs() > 0;
-    if (!sharedGroupHardCapEnabled) {
-      return true;
-    }
-    jobInstanceMapper.acquireFairShareGroupAdvisoryLock(quotaPolicy.fairShareGroup());
-    return jobInstanceMapper.countActiveByFairShareGroup(quotaPolicy.fairShareGroup())
-        < quotaPolicy.groupSharedMaxRunningJobs();
+    return sharedGroupHardCapEnabled;
   }
 }

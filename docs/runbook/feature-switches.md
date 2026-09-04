@@ -57,6 +57,8 @@
 | `batch.worker.checkpoint.enabled` | `true` / `false` | **true** | 断点续跑总开关（P0 默认开，显式 false 回滚到全量重跑） | **P0** | `BATCH_WORKER_CHECKPOINT_ENABLED` | ✅ |
 | `batch.worker.checkpoint.stage-skip.enabled` | `true` / `false` | **false** | PROCESS 阶段级续跑（仅 COMPUTE+VALIDATE，多分片自动降级） | P1 | `BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED` | ✅ |
 | `batch.resource-scheduler.default-exceeded-strategy` | `QUEUE_DEFER` / `REJECT` | **QUEUE_DEFER** | 超配额租户的默认策略（REJECT 为旧行为，可回退） | P1 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY` | ❌ |
+| `batch.resource-scheduler.waiting-dispatch-kick-enabled` | `true` / `false` | **true** | task 终态提交后合并唤醒 WAITING 分区；关闭后只保留周期扫描 | P1 | `BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED` | ✅ |
+| `batch.trigger.runtime.api-launch-adaptive-enabled` | `true` / `false` | **false** | Trigger 手工 launch 的 AIMD 本地准入；慢请求减半、正常请求逐步恢复，需先完成灰度压测 | P1 | `BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED` | ✅ |
 | `batch.worker.lease.renew-batch-max-items` | 正整数 | **256** | 单次 renew-batch HTTP 最多携带任务数，超出自动拆单 | P2 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS` | ❌ |
 
 ### 1.C 安全
