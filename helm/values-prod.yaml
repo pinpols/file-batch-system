@@ -128,6 +128,9 @@ consoleApi:
 
 # P0-5: trigger 在 base values 有 livenessProbe 但缺 startupProbe,prod 补齐
 trigger:
+  runtime:
+    # 保持固定 64 并发，先收集生产 p95/429 后再显式开启 AIMD。
+    apiLaunchAdaptiveEnabled: false
   startupProbe:
     httpGet: {path: /actuator/health/liveness, port: 18081}
     initialDelaySeconds: 20

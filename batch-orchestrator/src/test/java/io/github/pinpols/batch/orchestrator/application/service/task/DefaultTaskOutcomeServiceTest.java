@@ -155,7 +155,8 @@ class DefaultTaskOutcomeServiceTest {
             batchDayReplayReconciler,
             failureClassifier,
             jobLifecycleMetricsRecorder,
-            mock(CountContinuityOutboxService.class));
+            mock(CountContinuityOutboxService.class),
+            mock(org.springframework.context.ApplicationEventPublisher.class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 

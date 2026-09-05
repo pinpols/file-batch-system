@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
@@ -134,6 +135,20 @@ class QuotaExceededStrategyLimiterTest {
     ResourceCheck check = limiter.check(request(), null);
 
     assertThat(check.allowed()).isTrue();
+  }
+
+  @Test
+  void waitingQueuePreview_shouldNotAcquireFairShareAdmissionLock() {
+    TenantQuotaPolicyEntity fairPolicy = new TenantQuotaPolicyEntity(
+        1L, "tenant-x", "fair", 0, 0, 0, 1, "settlement", 0, 0, "NONE", 3, true, "QUEUE_DEFER");
+    when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(fairPolicy);
+    when(fairShareGroupAdmissionGuard.hasObservedCapacity(fairPolicy)).thenReturn(true);
+    ResourceSchedulingRequest request = request();
+    request.setEnforceFairShareAdmission(false);
+
+    assertThat(limiter.check(request, null).allowed()).isTrue();
+
+    verify(fairShareGroupAdmissionGuard).hasObservedCapacity(fairPolicy);
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

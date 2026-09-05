@@ -78,6 +78,8 @@ batch:
   resource-scheduler:
     waiting-dispatch-batch-size: 100
     waiting-dispatch-interval-millis: 10000
+    waiting-dispatch-kick-enabled: true
+    waiting-dispatch-kick-delay-millis: 250
     global-max-running-jobs: ${BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS:0}
     # 本地联调：worker 默认都落在 default-tenant，ta/tb/tc 租户的种子任务没有对应的租户 worker；
     # 放开 fallback 让 selector 在主租户空集时退到 default-tenant 再查一次。

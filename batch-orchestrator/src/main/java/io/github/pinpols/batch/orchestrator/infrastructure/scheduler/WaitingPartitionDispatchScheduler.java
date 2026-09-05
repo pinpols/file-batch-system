@@ -249,6 +249,8 @@ public class WaitingPartitionDispatchScheduler {
     request.setWorkerType(task.getTaskType());
     request.setPriority(jobInstance.getPriority());
     request.setRequestedPartitionCount(1);
+    // 本轮 schedule 只负责给候选排序；executeDispatch 会在 REQUIRES_NEW 事务内重新取得公平组锁并校验。
+    request.setEnforceFairShareAdmission(false);
     request.setWaitingSince(
         partition.getUpdatedAt() == null ? partition.getCreatedAt() : partition.getUpdatedAt());
     // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition

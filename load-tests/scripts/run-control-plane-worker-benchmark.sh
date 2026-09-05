@@ -14,6 +14,9 @@ PIPELINE_MAX_POLLS="${PIPELINE_MAX_POLLS:-0}"
 PIPELINE_POLL_INTERVAL_SEC="${PIPELINE_POLL_INTERVAL_SEC:-2}"
 WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-300}"
 WAIT_TERMINAL_MIN_INSTANCES="${WAIT_TERMINAL_MIN_INSTANCES:-1}"
+# 仅对经 Trigger API 注入的容量画像启用。默认 0 保持其它混合画像原有的最小实例等待语义。
+# 启用后，不能仅因已创建的子集全部终态而提前结束，必须让每个入口请求都已创建并完成实例。
+WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-0}"
 MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
 
 PROCESS_LAUNCH_RPS="${PROCESS_LAUNCH_RPS:-1.0}"
@@ -127,18 +130,49 @@ wait_run_terminal() {
   local label="$1"
   local elapsed=0
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
-    local counts total terminal
+    local counts total terminal trigger_requests linked_terminal
     counts="$(
       psql_platform -Atc "
-        select count(*) || '|' ||
-               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
-        from batch.job_instance
-        where tenant_id = '${LOAD_TEST_TENANT_ID}'
-          and params_snapshot::text like '%${RUN_ID}%';"
+        with scoped_instances as (
+          select id, instance_status
+          from batch.job_instance
+          where tenant_id = '${LOAD_TEST_TENANT_ID}'
+            and params_snapshot::text like '%${RUN_ID}%'
+        ), scoped_trigger_requests as (
+          select related_job_instance_id
+          from batch.trigger_request
+          where tenant_id = '${LOAD_TEST_TENANT_ID}'
+            and (
+              request_id like '%${RUN_ID}%'
+              or dedup_key like '%${RUN_ID}%'
+              or trace_id like '%${RUN_ID}%'
+            )
+        )
+        select
+          (select count(*) from scoped_instances) || '|' ||
+          (select count(*) from scoped_instances
+           where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED')) || '|' ||
+          (select count(*) from scoped_trigger_requests) || '|' ||
+          (select count(*)
+           from scoped_trigger_requests tr
+           join batch.job_instance ji on ji.id = tr.related_job_instance_id
+           where ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'));"
     )"
     total="${counts%%|*}"
-    terminal="${counts##*|}"
-    if [[ "$total" -ge "$WAIT_TERMINAL_MIN_INSTANCES" && "$terminal" -eq "$total" ]]; then
+    counts="${counts#*|}"
+    terminal="${counts%%|*}"
+    counts="${counts#*|}"
+    trigger_requests="${counts%%|*}"
+    linked_terminal="${counts##*|}"
+    if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 ]]; then
+      if [[ "$total" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
+          && "$terminal" -eq "$total" \
+          && "$trigger_requests" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
+          && "$linked_terminal" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" ]]; then
+        echo "==> ${label}: trigger end-to-end terminal ${linked_terminal}/${trigger_requests}"
+        return 0
+      fi
+    elif [[ "$total" -ge "$WAIT_TERMINAL_MIN_INSTANCES" && "$terminal" -eq "$total" ]]; then
       echo "==> ${label}: terminal instances ${terminal}/${total}"
       return 0
     fi
@@ -165,6 +199,7 @@ run_pipeline_completion() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
+      -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$job_code" \
       -DbizDate="$BIZ_DATE" \
@@ -227,6 +262,7 @@ run_trigger_pressure() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
+      -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$TRIGGER_JOB_CODE" \
       -DbizDate="$BIZ_DATE" \

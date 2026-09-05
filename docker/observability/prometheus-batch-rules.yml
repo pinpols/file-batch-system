@@ -461,6 +461,19 @@ groups:
           summary: "Trigger launch failure rate is high"
           description: "trigger launch 失败率 {{ $value | humanize }}/s (非限流原因) 持续 5min. 检查 orchestrator 日志 + DB / Kafka 健康. 失败的 envelope 会留在 Kafka topic 不丢, 但 trigger_request 状态可能错乱."
 
+      # Kafka 已经投递、但 consumer 尚未处理的停留时间。该指标以 Kafka record timestamp 为起点，
+      # 与 relay 的 outbox publish latency 合起来覆盖 trigger 异步链路的两段排队时间。
+      - alert: TriggerLaunchKafkaQueueAgeHigh
+        expr: histogram_quantile(0.95, sum(rate(batch_trigger_launch_kafka_queue_age_seconds_bucket[5m])) by (le)) > 30
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger launch Kafka queue age is high"
+          description: "batch.trigger.launch.v1 消费前 p95 排队时间已超过 30 秒并持续 10 分钟。先检查 consumer group lag、topic 分区数是否至少等于 orchestrator 副本数 × BATCH_TRIGGER_CONSUMER_CONCURRENCY，以及 DB 连接池/launch 耗时。"
+
       # outbox 行被标 GIVE_UP — 通常是 payload 反序列化失败 / 重试上限耗尽,
       # 任意 1 条都需要运维介入(数据问题, 等不到自愈).
       - alert: TriggerOutboxGiveUp

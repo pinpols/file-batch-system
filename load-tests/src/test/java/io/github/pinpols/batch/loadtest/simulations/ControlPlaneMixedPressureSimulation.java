@@ -158,9 +158,10 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
             () ->
                 Map.<String, Object>of(
                     "idempotencyKey", UUID.randomUUID().toString(),
-                    "requestId", module + "-" + UUID.randomUUID(),
+                    "requestId", GatlingConfig.RUN_ID + "-" + module + "-" + UUID.randomUUID(),
                     "traceId",
-                    "mix-"
+                    GatlingConfig.RUN_ID
+                        + "-mix-"
                         + module
                         + "-"
                         + UUID.randomUUID().toString().replace("-", "").substring(0, 16)))

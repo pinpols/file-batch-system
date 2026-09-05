@@ -11,6 +11,11 @@ public class ResourceSchedulerProperties {
 
   private int waitingDispatchBatchSize = 100;
   private long waitingDispatchIntervalMillis = 10000L;
+  /** 任务终态提交后是否合并触发一次 WAITING 队列重派。 */
+  private boolean waitingDispatchKickEnabled = true;
+  /** 合并触发的延迟，避免 report 提交瞬间与连接归还争用。 */
+  private long waitingDispatchKickDelayMillis = 250L;
+
   private int quotaResetSlidingWindowHours = 24;
   private long quotaResetScanIntervalMillis = 60000L;
   private boolean quotaResetEnabled = true;

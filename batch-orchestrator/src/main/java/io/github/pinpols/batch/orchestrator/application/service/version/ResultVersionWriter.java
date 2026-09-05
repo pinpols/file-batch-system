@@ -172,7 +172,7 @@ public class ResultVersionWriter {
           instance, persisted == null ? newVersion : persisted);
     }
 
-    log.info(
+    log.debug(
         "result_version written: tenantId={}, businessKey={}, versionNo={}, status={},"
             + " jobInstanceId={}",
         tenantId,

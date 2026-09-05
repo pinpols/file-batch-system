@@ -26,13 +26,13 @@ public class TriggerConsumerProperties {
   private int maxPollIntervalMs = 300_000;
 
   /**
-   * listener 并发(= ConcurrentKafkaListenerContainerFactory.concurrency)。默认 4,与 {@code
-   * batch.trigger.launch.v1} 分区数对齐。launch→实例创建由该单一 consumer 承担,旧默认 concurrency=1
+   * listener 并发(= ConcurrentKafkaListenerContainerFactory.concurrency)。默认每实例 6。生产基线为 2 个
+   * orchestrator 副本 × 6，因此 {@code batch.trigger.launch.v1} 至少需要 12 个分区。launch→实例创建由该单一 consumer 承担,旧默认 concurrency=1
    * 会让多租并发峰值流量下的实例创建吞吐被单线程封顶(实测 ~20 jobs/s,而 launch 入口能 300+/s、PG 写有 10-15x 余量;详见
    * docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md)。 上限受 topic
    * 分区数约束,调大须同步扩分区。
    */
-  private int concurrency = 4;
+  private int concurrency = 6;
 
   /** ErrorHandler 配置子分组。 */
   private final ErrorHandler errorHandler = new ErrorHandler();

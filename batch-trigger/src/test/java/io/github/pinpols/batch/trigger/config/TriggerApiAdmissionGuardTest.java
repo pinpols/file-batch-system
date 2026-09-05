@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -36,6 +37,25 @@ class TriggerApiAdmissionGuardTest {
     }
   }
 
+  @Test
+  void shouldShrinkAdaptiveBudgetAfterSlowRequestAndRecoverAfterFastRequests() {
+    TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
+    properties.setApiLaunchMaxConcurrency(8);
+    properties.setApiLaunchMinConcurrency(2);
+    properties.setApiLaunchSlowRequestThresholdMillis(1);
+    properties.setApiLaunchAdaptiveEnabled(true);
+    TriggerApiAdmissionGuard guard = new TriggerApiAdmissionGuard(properties);
+
+    guard.execute(() -> {
+      sleep(5);
+      return null;
+    });
+    assertThat(guard.effectiveConcurrencyForTest()).isEqualTo(4);
+
+    guard.execute(() -> null);
+    assertThat(guard.effectiveConcurrencyForTest()).isEqualTo(5);
+  }
+
   private static void await(CountDownLatch latch) {
     try {
       if (!latch.await(2, TimeUnit.SECONDS)) {
@@ -44,6 +64,15 @@ class TriggerApiAdmissionGuardTest {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       throw new AssertionError("admission holder interrupted", exception);
+    }
+  }
+
+  private static void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError("test sleep interrupted", exception);
     }
   }
 }

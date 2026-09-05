@@ -7,7 +7,7 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2213 |
+| 生产 Java 源文件 | 2215 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2045 |
 | 含 Map 的源文件 | 442 |
@@ -25,7 +25,7 @@
 |---|---:|
 | `batch-common` | 293 |
 | `batch-console-api` | 868 |
-| `batch-orchestrator` | 519 |
+| `batch-orchestrator` | 521 |
 | `batch-trigger` | 65 |
 | `batch-worker` | 369 |
 | `sdk` | 90 |

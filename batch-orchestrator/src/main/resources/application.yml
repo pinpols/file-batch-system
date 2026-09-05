@@ -52,6 +52,14 @@ mybatis:
   # MyBatis domain 的别名包路径（用于 mapper XML 简化类型引用）
   type-aliases-package: io.github.pinpols.batch.orchestrator.domain
 
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        # 对应 TriggerLaunchKafkaQueueAgeHigh 告警，必须导出 bucket 才能计算 p95。
+        batch.trigger.launch.kafka.queue.age: true
+        batch.trigger.launch.consume.duration: true
+
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
   alert:
@@ -104,6 +112,9 @@ batch:
     # 单轮最多扫描的策略数
     batch-limit: ${BATCH_ASSET_FRESHNESS_BATCH_LIMIT:500}
   trigger:
+    consumer:
+      # 每个 orchestrator 实例的 listener 数；生产 2 副本时 topic 至少 12 分区。
+      concurrency: ${BATCH_TRIGGER_CONSUMER_CONCURRENCY:6}
     launch:
       created-recovery:
         # 保守恢复 launch T1 已提交但 T2 未派发的 CREATED 实例
@@ -207,6 +218,9 @@ batch:
     waiting-dispatch-batch-size: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE:100}
     # 等待派发扫描间隔（毫秒）
     waiting-dispatch-interval-millis: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS:10000}
+    # task 终态提交后合并唤醒 WAITING 队列；定时扫描仍保留，作为事件遗漏和跨实例的兜底。
+    waiting-dispatch-kick-enabled: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED:true}
+    waiting-dispatch-kick-delay-millis: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_DELAY_MILLIS:250}
     # 配额重置滑动窗口（小时）：用于按时间窗口重置配额
     quota-reset-sliding-window-hours: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SLIDING_WINDOW_HOURS:24}
     # 配额重置扫描间隔（毫秒）

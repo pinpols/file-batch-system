@@ -31,6 +31,8 @@ FAIRNESS_MODE="${FAIRNESS_MODE:-trigger}"
 # allowing CI or a release checklist to turn the measured failure into a hard
 # failure without changing the profile itself.
 CAPACITY_STRICT="${CAPACITY_STRICT:-0}"
+CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
+CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
@@ -38,6 +40,8 @@ REPORT="$LOAD_DIR/target/p2-capacity-profile-${RUN_ID}.md"
 LOG_DIR="$LOAD_DIR/target/p2-capacity-profile-logs/${RUN_ID}"
 FAIRNESS_LOCK_DIR="$LOAD_DIR/target/.p2-multitenant-fairness.lock"
 FAIRNESS_LOCK_HELD=0
+CAPACITY_LOCK_DIR="$LOAD_DIR/target/.p2-capacity.lock"
+CAPACITY_LOCK_HELD=0
 mkdir -p "$LOG_DIR"
 PROFILE_RC=0
 
@@ -62,6 +66,7 @@ cleanup() {
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
     # 保留 fixture 只用于人工取证，不能遗留本地执行锁，否则后续 profile 会被永久误判为并发运行。
     release_fairness_lock
+    release_capacity_lock
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place"
     exit "$rc"
   fi
@@ -75,6 +80,16 @@ cleanup() {
     if ! RUN_ID="${RUN_ID}-10w" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2; then
       rc=1
     fi
+  fi
+  if [[ "$RUN_10W_STORM" == "1" && "$CAPACITY_LOCK_HELD" == "1" ]]; then
+    if ! psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+        -f "$LOAD_DIR/sql/cleanup-p2-capacity-policy.sql" >&2; then
+      rc=1
+    fi
+    if ! evict_capacity_config_cache >&2; then
+      rc=1
+    fi
+    release_capacity_lock
   fi
   # Fairness uses the profile run id directly. Keep it separate from the storm's -10w suffix.
   if [[ "$RUN_FAIRNESS" == "1" ]] \
@@ -110,10 +125,25 @@ acquire_fairness_lock() {
   FAIRNESS_LOCK_HELD=1
 }
 
+acquire_capacity_lock() {
+  if ! mkdir "$CAPACITY_LOCK_DIR" 2>/dev/null; then
+    echo "another P2 capacity profile is already running: $CAPACITY_LOCK_DIR" >&2
+    return 1
+  fi
+  CAPACITY_LOCK_HELD=1
+}
+
 release_fairness_lock() {
   if [[ "$FAIRNESS_LOCK_HELD" == "1" ]]; then
     rmdir "$FAIRNESS_LOCK_DIR" 2>/dev/null || true
     FAIRNESS_LOCK_HELD=0
+  fi
+}
+
+release_capacity_lock() {
+  if [[ "$CAPACITY_LOCK_HELD" == "1" ]]; then
+    rmdir "$CAPACITY_LOCK_DIR" 2>/dev/null || true
+    CAPACITY_LOCK_HELD=0
   fi
 }
 
@@ -134,6 +164,15 @@ evict_fairness_config_cache() {
       "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-quota-policies?tenantId=${tenant_id}" \
       >/dev/null
   done
+}
+
+evict_capacity_config_cache() {
+  curl --fail --silent --show-error --request POST \
+    "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-job-definition?tenantId=${CAPACITY_TENANT_ID}&jobCode=atomic_sql_demo" \
+    >/dev/null
+  curl --fail --silent --show-error --request POST \
+    "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-quota-policies?tenantId=${CAPACITY_TENANT_ID}" \
+    >/dev/null
 }
 
 write_report_header() {
@@ -171,20 +210,34 @@ append_sql_summary() {
 
 run_10w_storm() {
   local storm_run_id="${RUN_ID}-10w"
+  local storm_tenant_id="$LOAD_TEST_TENANT_ID"
   local duration
   duration="$("$PYTHON_BIN" - <<PY
 import math
 print(math.ceil(${STORM_TOTAL_REQUESTS} / ${STORM_RPS}))
 PY
 )"
-  echo "==> 10w storm run_id=${storm_run_id}, total=${STORM_TOTAL_REQUESTS}, rps=${STORM_RPS}, duration=${duration}s"
+  if [[ "$CAPACITY_ISOLATED_TENANT_ENABLED" == "1" ]]; then
+    if ! acquire_capacity_lock; then
+      PROFILE_RC=1
+      return
+    fi
+    echo "==> prepare isolated capacity tenant=${CAPACITY_TENANT_ID} with unbounded admission policy"
+    psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+      -f "$LOAD_DIR/sql/prepare-p2-capacity-atomic.sql"
+    evict_capacity_config_cache
+    storm_tenant_id="$CAPACITY_TENANT_ID"
+  fi
+  echo "==> 10w storm run_id=${storm_run_id}, tenant=${storm_tenant_id}, total=${STORM_TOTAL_REQUESTS}, rps=${STORM_RPS}, duration=${duration}s"
   set +e
   RUN_ID="$storm_run_id" \
+  LOAD_TEST_TENANT_ID="$storm_tenant_id" \
   MODULES_CSV=atomic \
   CONTROL_PLANE_MODE=parallel \
   ATOMIC_LAUNCH_RPS="$STORM_RPS" \
   TRIGGER_DURATION_SECONDS="$duration" \
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
+  WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
   SKIP_AUTO_CLEANUP=1 \
     "$LOAD_DIR/scripts/run-control-plane-worker-benchmark.sh" \
     | tee "$LOG_DIR/10w-storm.log"

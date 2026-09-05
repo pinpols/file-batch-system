@@ -38,7 +38,15 @@ set -eu
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
 default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1"
 default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.dispatch.export.node.export-node-1,batch.task.dispatch.process.node.process-node-1,batch.task.dispatch.dispatch.node.dispatch-node-1,batch.task.dispatch.atomic.node.atomic-node-1"
-topics_csv="${KAFKA_TOPICS:-${default_topics},${KAFKA_DIRECT_WORKER_TOPICS:-${default_direct_topics}}}"
+# 平台核心 topic 永远必须存在。KAFKA_TOPICS 只追加自定义 topic，不能因旧的 gitignored
+# .env 覆盖而漏掉后来引入的 trigger / verifier topic。若未显式声明 KAFKA_TOPICS，保持
+# 历史默认行为，同时初始化 direct worker topic。
+topics_csv="${default_topics}"
+if [ -n "${KAFKA_TOPICS:-}" ]; then
+  topics_csv="${topics_csv},${KAFKA_TOPICS}"
+else
+  topics_csv="${topics_csv},${KAFKA_DIRECT_WORKER_TOPICS:-${default_direct_topics}}"
+fi
 default_partitions="${KAFKA_TOPIC_PARTITIONS:-4}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 # 空 = 不下发 topic 级 min.insync.replicas（dev 默认，沿用 broker 默认）；prod 设 2。
@@ -64,6 +72,7 @@ partitions_dispatch="${KAFKA_PARTITIONS_DISPATCH:-${default_partitions}}"
 partitions_result="${KAFKA_PARTITIONS_RESULT:-${default_partitions}}"
 partitions_retry="${KAFKA_PARTITIONS_RETRY:-${default_partitions}}"
 partitions_dead_letter="${KAFKA_PARTITIONS_DEAD_LETTER:-${default_partitions}}"
+partitions_trigger_launch="${KAFKA_PARTITIONS_TRIGGER_LAUNCH:-12}"
 
 # 根据 topic 名称后缀匹配分区数
 resolve_partitions() {
@@ -77,6 +86,8 @@ resolve_partitions() {
       echo "${partitions_retry}" ;;
     *.dead-letter)
       echo "${partitions_dead_letter}" ;;
+    batch.trigger.launch.v1)
+      echo "${partitions_trigger_launch}" ;;
     *)
       echo "${default_partitions}" ;;
   esac

@@ -13,6 +13,10 @@ fi
 # shellcheck source=python-runtime.sh
 source "$BATCH_ENV_COMMON_ROOT/scripts/lib/python-runtime.sh"
 
+# JVM 网络地址选择策略：保留双栈，但多地址解析时优先 IPv4。
+# 所有本地启动脚本从这里取值，避免参数在各脚本中重复维护。
+export BATCH_JVM_NETWORK_OPTS="${BATCH_JVM_NETWORK_OPTS:--Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false}"
+
 batch_source_env_file() {
   local env_file="${1:-${COMPOSE_ENV_FILE:-$BATCH_ENV_COMMON_ROOT/.env.local}}"
   if [[ -f "$env_file" ]]; then

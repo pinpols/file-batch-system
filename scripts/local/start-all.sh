@@ -47,7 +47,7 @@ REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
 #   UseSerialGC          本地负载小，Serial 比 G1 启动开销更低
 # （JDK 13+ 已弃用 -Xverify:none / -noverify，默认不再注入，避免告警）
 # 用户可在外部 export LOCAL_FAST_JVM_OPTS="" 禁用；JAVA_OPTS 追加在后面，同 flag 以后者为准。
-LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off}"
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off ${BATCH_JVM_NETWORK_OPTS}}"
 
 # AppCDS：当前本地启动栈下 dump/runtime 的 native-access 状态可能错位，
 # 导致 MyBatis ExceptionUtil / Spring MVC PartialMatchHelper / Tomcat RequestUtil 等内部类

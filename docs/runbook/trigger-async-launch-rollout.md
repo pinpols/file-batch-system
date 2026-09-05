@@ -43,13 +43,15 @@ curl --fail --silent \
 切换前必须确认(checked = ✅):
 
 - [ ] V80 migration 已 apply 到目标环境(`SELECT 1 FROM batch.trigger_outbox_event LIMIT 1` 不报错)
-- [ ] Kafka topic `batch.trigger.launch.v1` 已创建(分区数 ≥ tenant 数,replication-factor=3)
+- [ ] Kafka topic `batch.trigger.launch.v1` 已创建。分区数必须 ≥ `orchestrator replicaCount × BATCH_TRIGGER_CONSUMER_CONCURRENCY`；默认生产基线为 `2 × 6 = 12`，replication-factor=3。
 - [ ] orchestrator + trigger 镜像版本 ≥ 含 ADR-010 Stage 1-4 的版本（`git log` 含 `9587b8bf` / `087f6b7a` / `1ca3a957` + Stage 4 收尾 commit）
 - [ ] orchestrator consumer group `orchestrator-trigger-launch` 不存在或 offset 在最新位置(避免重复消费历史消息)
 - [ ] Prometheus 已抓取以下指标(`{__name__=~"batch.trigger.*"}`):
   - `batch.trigger.launch.consumed.total`(orchestrator 端)
   - `batch.trigger.launch.deduped.total`
   - `batch.trigger.launch.failed.total`
+  - `batch.trigger.launch.kafka.queue.age`（Kafka publish 后到实际消费前的排队时间）
+  - `batch.trigger.launch.consume.duration`（单条 launch 消费处理时间）
   - trigger outbox 监控参考 `batch.outbox.publish.duration`(orchestrator outbox 同款指标命名)
 
 ## 0.1 本地 docker-compose 实测验证记录(2026-04-30)
@@ -64,7 +66,7 @@ curl --fail --silent \
 | Kafka topic `batch.trigger.launch.v1` 存在 | ✅ | `kafka-topics.sh --list` 命中(由 kafka-init 默认 KAFKA_TOPICS 创建) |
 | trigger TriggerOutboxRelay bean 启动 | ✅ | 日志:`TriggerOutboxRelay 已启动:poll=200ms batch=100 backoff_max=60s` |
 | trigger Kafka producer config 用容器名 | ✅ | 日志:`bootstrap.servers = [kafka:29092]`(非 `localhost:19092`) |
-| orchestrator TriggerLaunchConsumer 订阅 | ✅ | 日志:`Subscribed to topic(s): batch.trigger.launch.v1` + 3 partitions assignment |
+| orchestrator TriggerLaunchConsumer 订阅 | ✅ | 日志:`Subscribed to topic(s): batch.trigger.launch.v1`；生产部署确认有效 consumer 数不超过分区数 |
 | 1 条 manual launch 全链路 | ✅ | trigger HTTP 200 → outbox PUBLISHED → consumer 消费 → job_instance INSERT |
 
 ### 端到端延迟实测

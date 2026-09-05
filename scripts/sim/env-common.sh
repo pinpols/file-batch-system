@@ -23,7 +23,7 @@ export PG_PLATFORM_USER="${PG_PLATFORM_USER:-${POSTGRES_USER:-batch_user}}"
 export PG_BUSINESS_DB="${PG_BUSINESS_DB:-$BUSINESS_DB_NAME}"
 # SIM 在本机同时运行基础设施、多个 Java 服务和故障注入进程。所有由阶段脚本触发的
 # restart.sh 都继承这个受限堆；调用方显式传入 JAVA_OPTS 时保持原样。
-export SIM_JAVA_OPTS="${SIM_JAVA_OPTS:--Xmx384m -XX:MaxMetaspaceSize=256m}"
+export SIM_JAVA_OPTS="${SIM_JAVA_OPTS:--Xmx384m -XX:MaxMetaspaceSize=256m ${BATCH_JVM_NETWORK_OPTS}}"
 export JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS}"
 mkdir -p "$REPORT_DIR"
 batch_require_python

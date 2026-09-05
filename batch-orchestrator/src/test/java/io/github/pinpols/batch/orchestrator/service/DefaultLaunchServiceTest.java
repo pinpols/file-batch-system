@@ -193,6 +193,12 @@ class DefaultLaunchServiceTest {
     assertThat(response.traceId()).isEqualTo("trace-001");
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
+    verify(triggerRequestMapper)
+        .updateAcceptance(
+            "t1",
+            "req-001",
+            TriggerRequestStatus.LAUNCHED.code(),
+            jobCaptor.getValue().getId());
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
     assertThat(jobCaptor.getValue().getJobDefinitionVersion()).isEqualTo(jobDefinition.version());
     Map<String, Object> rerunPolicy =
