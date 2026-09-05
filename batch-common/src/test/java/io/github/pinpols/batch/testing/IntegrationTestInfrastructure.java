@@ -57,6 +57,9 @@ final class IntegrationTestInfrastructure {
     // 单 JVM 多 Spring 上下文复用同一 PG 时,Hikari 默认 10 连接 × N 上下文易触达 PG 默认 ~100 上限 (too many clients)。
     registry.add("spring.datasource.hikari.maximum-pool-size", () -> "20");
     registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
+    // 各模块 contextLoads 都会在独立 PG 上执行完整 Flyway；V198 的并发索引迁移可能超过平台库
+    // 生产默认的 60 秒空闲事务保护。测试基础设施只放宽初始化窗口，不改变生产配置。
+    registry.add("batch.datasource.pg-session.platform.idle-in-transaction-timeout", () -> "10m");
     registry.add("spring.flyway.enabled", () -> true);
     registry.add("spring.flyway.default-schema", () -> "batch");
     registry.add("spring.flyway.schemas", () -> "batch,quartz");
