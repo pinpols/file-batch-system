@@ -84,8 +84,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
         java.time.Instant.now());
   }
 
-  private void scheduleRecovery(
-      org.quartz.TriggerKey triggerKey, org.quartz.JobKey jobKey, long originalFireTime) {
+  private void scheduleRecovery(TriggerKey triggerKey, JobKey jobKey, long originalFireTime) {
     Trigger recovery = TriggerBuilder.newTrigger()
         .withIdentity("misfire-recovery-" + UUID.randomUUID(), RECOVERY_GROUP)
         .forJob(jobKey)
