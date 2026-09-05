@@ -15,9 +15,11 @@ spring:
     password: ${BATCH_PLATFORM_DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
-      # 本地联调：降低启动时连接创建数，减少与其他模块抢连接
-      minimum-idle: 2
-      maximum-pool-size: 10
+      # 本地联调默认保持小连接池，避免多个模块同时启动时抢占 PostgreSQL 连接；
+      # 容量压测可显式设 BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE（例如 40），
+      # 与生产同名配置保持一致，不能再因为 local profile 固定为 10 而误判消费能力。
+      minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:2}
+      maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:10}
   data:
     redis:
       # 宿主机裸 jar 联调：须连 compose 映射端口；勿依赖 BATCH_REDIS_HOST=valkey（主机 DNS 常指向错误 IP）

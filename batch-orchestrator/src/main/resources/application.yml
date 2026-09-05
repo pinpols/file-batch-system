@@ -33,10 +33,6 @@ spring:
     # 不要把 baseline-version 改成最新版本号——那会跳过中间所有迁移。
     baseline-on-migrate: true
     baseline-version: 1
-    postgresql:
-      # V198 使用 CREATE INDEX CONCURRENTLY；PG 事务级 advisory lock 会持有旧快照并让并发建索引等待自身。
-      # 改为 session lock 仍保持多实例迁移互斥，同时允许非事务性索引迁移完成。
-      transactional-lock: false
   datasource:
     hikari:
       # 调度侧平台库 Hikari 连接池（调度 / 状态推进 / 查询为主）
