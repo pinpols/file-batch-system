@@ -7,13 +7,16 @@ import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobExecutionContext;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
+import org.quartz.TriggerKey;
 import org.quartz.TriggerListener;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.springframework.scheduling.TaskScheduler;
 
 /**
  * Converts a Quartz cron misfire into one business-level recovery execution.
@@ -30,6 +33,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
   static final String RECOVERY_GROUP = "batch-trigger-recovery";
 
   private final Supplier<Scheduler> schedulerSupplier;
+  private final TaskScheduler taskScheduler;
 
   @Override
   public String getName() {
@@ -69,10 +73,22 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
           trigger.getJobKey(),
           originalFireTime);
     }
+    TriggerKey recoveryTriggerKey = trigger.getKey();
+    JobKey recoveryJobKey = trigger.getJobKey();
+    long recoveryOriginalFireTime = originalFireTime.getTime();
+    // Quartz 在持有 JobStore 事务锁时同步回调 triggerMisfired。若回调内再次调用
+    // scheduleJob，会等待自己尚未提交的 QRTZ_LOCKS，原回调又因此无法返回，形成自锁。
+    // 切换到 Spring 调度线程后，回调先退出并释放 Quartz 事务；任务会在其后完成补偿注册。
+    taskScheduler.schedule(
+        () -> scheduleRecovery(recoveryTriggerKey, recoveryJobKey, recoveryOriginalFireTime),
+        java.time.Instant.now());
+  }
+
+  private void scheduleRecovery(TriggerKey triggerKey, JobKey jobKey, long originalFireTime) {
     Trigger recovery = TriggerBuilder.newTrigger()
         .withIdentity("misfire-recovery-" + UUID.randomUUID(), RECOVERY_GROUP)
-        .forJob(trigger.getJobKey())
-        .usingJobData(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME, originalFireTime.getTime())
+        .forJob(jobKey)
+        .usingJobData(QuartzLaunchJob.MISFIRE_ORIGINAL_FIRE_TIME, originalFireTime)
         .startNow()
         .withSchedule(
             SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
@@ -83,12 +99,16 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
       scheduler.scheduleJob(recovery);
       scheduler.resumeTrigger(recovery.getKey());
       log.info(
-          "scheduled Quartz misfire recovery: jobKey={}, originalFireTime={}",
-          trigger.getJobKey(),
+          "scheduled Quartz misfire recovery: triggerKey={}, jobKey={}, originalFireTime={}",
+          triggerKey,
+          jobKey,
           originalFireTime);
     } catch (SchedulerException exception) {
       log.error(
-          "failed to schedule Quartz misfire recovery: jobKey={}", trigger.getJobKey(), exception);
+          "failed to schedule Quartz misfire recovery: triggerKey={}, jobKey={}",
+          triggerKey,
+          jobKey,
+          exception);
     }
   }
 

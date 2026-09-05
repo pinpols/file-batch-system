@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,13 +34,7 @@ class BatchDaySqlMigrationsIntegrationTest {
   void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {
     resetDb();
 
-    Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz", "archive")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .load()
-        .migrate();
+    flywayConfiguration().load().migrate();
 
     JdbcTemplate jdbc = jdbc();
     try {
@@ -83,11 +79,7 @@ class BatchDaySqlMigrationsIntegrationTest {
     resetDb();
 
     // 先模拟已有库：只跑到 V29（target 设成 30 时等价于“<=29”，不要求 V30 脚本存在）
-    Flyway configured = Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz", "archive")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
+    Flyway configured = flywayConfiguration()
         // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
         .target("29")
         .load();
@@ -104,13 +96,7 @@ class BatchDaySqlMigrationsIntegrationTest {
           .isFalse();
 
       // 再全量升级到最新版（补齐 V31/V32...）
-      Flyway.configure()
-          .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-          .schemas("batch", "quartz", "archive")
-          .defaultSchema("batch")
-          .locations("classpath:db/migration")
-          .load()
-          .migrate();
+      flywayConfiguration().load().migrate();
 
       assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
       assertThat(columnExists(jdbc, "batch", "business_calendar", "cutoff_time"))
@@ -124,12 +110,7 @@ class BatchDaySqlMigrationsIntegrationTest {
       assertThat(columnExists(jdbc, "batch", "job_task", "version")).isTrue();
 
       // 幂等性：重复 migrate，不应改变 flyway_schema_history 的 applied 行数
-      Flyway fullFlyway = Flyway.configure()
-          .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-          .schemas("batch", "quartz", "archive")
-          .defaultSchema("batch")
-          .locations("classpath:db/migration")
-          .load();
+      Flyway fullFlyway = flywayConfiguration().load();
       long historyBefore = flywayHistoryCount(jdbc);
       fullFlyway.migrate();
       long historyAfter = flywayHistoryCount(jdbc);
@@ -143,12 +124,7 @@ class BatchDaySqlMigrationsIntegrationTest {
   void flywayMigrate_isIdempotent_secondRunSameAppliedSet() {
     resetDb();
 
-    Flyway flyway = Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz", "archive")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .load();
+    Flyway flyway = flywayConfiguration().load();
 
     flyway.migrate();
     List<String> applied1 = Arrays.stream(flyway.info().applied())
@@ -221,14 +197,17 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   private static void resetDb() {
-    Flyway resetFlyway = Flyway.configure()
+    Flyway resetFlyway = flywayConfiguration().cleanDisabled(false).load();
+    resetFlyway.clean();
+  }
+
+  private static FluentConfiguration flywayConfiguration() {
+    return Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .schemas("batch", "quartz", "archive")
         .defaultSchema("batch")
         .locations("classpath:db/migration")
-        .cleanDisabled(false)
-        .load();
-    resetFlyway.clean();
+        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
   }
 
   private static long flywayHistoryCount(JdbcTemplate jdbc) {

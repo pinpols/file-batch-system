@@ -124,7 +124,7 @@ flowchart LR
   }
   ```
 - **Headers**：`X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`（便于 Kafka 端日志聚合）
-- **Producer**：`KafkaTriggerEventPublisher`（acks=all + idempotence；Stage 1 同事务写 `trigger_outbox_event` PENDING；Stage 2 `TriggerOutboxRelay` 每 200ms 扫描 + ShedLock 互斥 + FOR UPDATE SKIP LOCKED；失败指数退避 max 60s）
+- **Producer**：`KafkaTriggerEventPublisher`（acks=all + idempotence；Stage 1 同事务写 `trigger_outbox_event` NEW；Stage 2 `TriggerOutboxRelay` 每 200ms 扫描，以批量 CAS 抢占后并发等待 Kafka ACK、set-based 回写 PUBLISHED；ShedLock 互斥 + FOR UPDATE SKIP LOCKED；失败指数退避 max 60s）
 - **Consumer**：`TriggerLaunchConsumer`（MANUAL_IMMEDIATE ack；409 dedup → ack 跳过；429 限流 → ack 跳过让 outbox 重发；runtime → 抛出 listener 重试）
 - **幂等保证**：consumer 重复消费同 requestId 由 `uk_job_instance_tenant_dedup` 回退，不会真正双跑
 

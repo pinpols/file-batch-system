@@ -66,6 +66,16 @@
            AND publish_status IN (#{pendingStatus1}, #{pendingStatus2})
     </update>
 
+    <select id="markPublishingBatch" resultType="java.lang.Long">
+        UPDATE batch.trigger_outbox_event
+           SET publish_status = #{publishingStatus},
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+           AND publish_status IN (#{pendingStatus1}, #{pendingStatus2})
+        RETURNING id
+    </select>
+
     <!-- R3-P0-6：与 orchestrator OutboxEventMapper.markPublished 对称加 publish_status='PUBLISHING' 守卫。
          之前缺守卫，并发场景下能把已被其它 relay 实例接管的行覆盖。 -->
     <update id="markPublished">
@@ -74,6 +84,16 @@
                published_at   = CURRENT_TIMESTAMP,
                updated_at     = CURRENT_TIMESTAMP
          WHERE id = #{id}
+           AND publish_status = #{publishingStatus}
+    </update>
+
+    <update id="markPublishedBatch">
+        UPDATE batch.trigger_outbox_event
+           SET publish_status = #{status},
+               published_at   = CURRENT_TIMESTAMP,
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
            AND publish_status = #{publishingStatus}
     </update>
 

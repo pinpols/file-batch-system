@@ -137,7 +137,11 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     decision.setPartitionStatus(PartitionStatus.CREATED.code());
     decision.setTaskStatus(TaskStatus.CREATED.code());
     decision.setRoute(route);
-    enrichFairnessScore(request, queue, priority, priorityBand, decision);
+    // 公平分数只参与 WAITING 分区的下一轮排序。首次准入的分区会立即派发，计算四组
+    // 跨分区活跃数不会改变结果，却会在高吞吐入口额外放大数据库读压力。
+    if (isWaitingRetry(request)) {
+      enrichFairnessScore(request, queue, priority, priorityBand, decision);
+    }
     return decision;
   }
 
@@ -210,6 +214,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return request.getWorkerGroup();
     }
     return queue == null ? null : queue.workerGroup();
+  }
+
+  private static boolean isWaitingRetry(ResourceSchedulingRequest request) {
+    return request != null && request.getWaitingSince() != null;
   }
 
   private void enrichFairnessScore(

@@ -8,8 +8,14 @@ spring:
     name: batch-trigger
   datasource:
     hikari:
-      # Quartz JDBC JobStore 与业务 SQL 共用此池。Hikari 的初始化 SQL 放在
-      # 公共 pg-session SQL 之后，确保 Quartz misfire 事务使用 10 分钟空闲上限。
+      # Trigger 的 HTTP 接收与 outbox relay 使用此平台业务连接池。
+      # Quartz JobStore 使用下方声明的独立小池，但二者仍连接同一平台 PostgreSQL。
+      # 默认 10 保持 Spring Boot 基线；生产扩容必须结合实例数和 PostgreSQL 连接预算调整，
+      # 不能只提高 API admission 上限而让请求长时间排在隐式默认池前。
+      maximum-pool-size: ${BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE:10}
+      connection-timeout: ${BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS:5000}
+      # Hikari 的初始化 SQL 放在公共 pg-session SQL 之后，保护 HTTP/outbox 的业务事务。
+      # Quartz 元数据事务由 JobStoreTX 自己管理，不继承此业务池的 10 分钟超时。
       connection-init-sql: "SET idle_in_transaction_session_timeout TO ${BATCH_PG_TRIGGER_IDLE_IN_TX_TIMEOUT_MS:600000}"
   config:
     # noinspection SpringBootApplicationYaml
@@ -36,12 +42,26 @@ spring:
             # 调度器实例名（便于识别）
             instanceName: BatchTriggerScheduler
           jobStore:
+            # Spring LocalDataSourceJobStore 在当前 JDBC/Hikari 组合下会留下空闲事务，
+            # 导致下一轮 QRTZ_LOCKS 获取被自己阻塞。固定使用 Quartz 自己管理提交/回滚的 JobStoreTX；
+            # 仍连接同一平台库，不是已废弃的“独立 Quartz 数据库”方案。
+            class: org.quartz.impl.jdbcjobstore.JobStoreTX
+            dataSource: quartzJobstoreDs
             # Quartz 表前缀（这里在 quartz schema 下）
             tablePrefix: quartz.QRTZ_
             # PostgreSQL 方言
             driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
             # 集群模式：多实例共同抢占/执行触发任务
             isClustered: true
+          dataSource:
+            quartzJobstoreDs:
+              driver: org.postgresql.Driver
+              provider: hikaricp
+              URL: ${spring.datasource.url}
+              user: ${spring.datasource.username}
+              password: ${spring.datasource.password}
+              # Quartz 元数据只需短事务；此池不承载 Job 执行业务 SQL。
+              maxConnections: ${BATCH_TRIGGER_QUARTZ_DB_MAX_POOL_SIZE:5}
   flyway:
     # 迁移脚本：与 orchestrator 同源（POM 复制其 db/migration 至 classpath:db/migration）
     enabled: true
@@ -56,15 +76,16 @@ spring:
     # 才能在 trigger 与 orchestrator 并行启动时不抢着抛 "non-empty schema but no history table"。
     baseline-on-migrate: true
     baseline-version: 1
-
+    postgresql:
+      # V198 使用 CREATE INDEX CONCURRENTLY；改用 session advisory lock，避免非事务迁移自等待。
+      transactional-lock: false
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
   datasource:
     pg-session:
       platform:
-        # Quartz JDBC JobStore 的 misfire recovery 可能在一次事务内等待锁/处理多条
-        # 触发器；沿用全局平台池 60s 会被 PostgreSQL 提前终止。Trigger 单独放宽，
-        # 其他模块仍保持 batch-defaults.yml 的 60s 防护。
+        # Trigger 的 HTTP/outbox 业务事务沿用全局平台池 60s 会被 PostgreSQL 提前终止时，
+        # 单独放宽至 10 分钟；Quartz 元数据事务已由独立 JobStoreTX 小池管理。
         idle-in-transaction-timeout: ${BATCH_PG_TRIGGER_IDLE_IN_TX_TIMEOUT:10m}
   startup-self-check:
     enabled: true
@@ -75,7 +96,7 @@ batch:
     quartz-standard-tables: true
     quartz-schema: quartz
   trigger:
-    # Quartz JobStore 共享主 DataSource，业务表与 QRTZ_* 同 PG 实例不同 schema。
+    # Quartz JobStore 与业务表共用同一 PG 实例、不同 schema，但使用独立 JobStoreTX 小池。
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}
@@ -88,3 +109,12 @@ batch:
       api-launch-adaptive-enabled: ${BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED:false}
       api-launch-min-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY:16}
       api-launch-slow-request-threshold-millis: ${BATCH_TRIGGER_API_LAUNCH_SLOW_REQUEST_THRESHOLD_MILLIS:1000}
+    outbox:
+      # 同批事件先异步发往 Kafka，再一次性回写 PUBLISHED；保持有界，避免 Kafka 故障时过多行停在 PUBLISHING。
+      poll-interval-millis: ${BATCH_TRIGGER_OUTBOX_POLL_INTERVAL_MILLIS:200}
+      batch-size: ${BATCH_TRIGGER_OUTBOX_BATCH_SIZE:256}
+      publishing-timeout-seconds: ${BATCH_TRIGGER_OUTBOX_PUBLISHING_TIMEOUT_SECONDS:120}
+      max-publish-attempts: ${BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_ATTEMPTS:10}
+      # 入口突发先可靠地积压在 outbox；按单进程已验证的持续执行能力限速释放，避免压垮 orchestrator / worker / PG。
+      # 当前计数在 JVM 内存；Helm 默认单 Trigger 副本，扩副本前必须下调每副本值或改为共享预算。
+      max-publish-events-per-second: ${BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND:40}

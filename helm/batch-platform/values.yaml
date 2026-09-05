@@ -202,12 +202,27 @@ trigger:
   javaOptsExtra: ""
   replicaCount: 1
   port: 18081
+  # HTTP 接收、Quartz JobStore 和 relay 共用的平台库连接预算。副本扩容时按总 PG 预算评估。
+  platformDb:
+    maxPoolSize: 10
+    connectionTimeoutMillis: 5000
+  # JobStoreTX 使用同一平台库的独立小池，防止 Quartz 元数据锁占用业务连接。
+  quartzDb:
+    maxPoolSize: 5
   runtime:
     apiLaunchMaxConcurrency: 64
     # 保持关闭，先依据 batch.trigger.api_launch 的 p95 和 429 指标完成灰度阈值确认后再开启。
     apiLaunchAdaptiveEnabled: false
     apiLaunchMinConcurrency: 16
     apiLaunchSlowRequestThresholdMillis: 1000
+  outbox:
+    # 单 trigger leader 内的有界 Kafka 异步批。提高 batch-size 会提升补偿吞吐，但 Kafka 不可达时也会增加 PUBLISHING 在途行数。
+    pollIntervalMillis: 200
+    batchSize: 256
+    publishingTimeoutSeconds: 120
+    maxPublishAttempts: 10
+    # 单 Trigger Pod 限额。默认 replicaCount=1；扩 Trigger 副本前须下调每 Pod 限额或先实现共享预算。
+    maxPublishEventsPerSecond: 40
   # Quartz misfire 由幸存节点立即补跑，trigger 自身负担轻；但要给 Quartz cluster
   # 注销节点 + Spring graceful shutdown drain in-flight 的 trigger 转发请求时间。
   gracefulShutdown:

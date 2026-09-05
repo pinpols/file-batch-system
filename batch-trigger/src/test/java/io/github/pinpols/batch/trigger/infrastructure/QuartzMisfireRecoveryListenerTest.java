@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import org.quartz.Scheduler;
 import org.quartz.Trigger;
 import org.quartz.TriggerKey;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.springframework.scheduling.TaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
 class QuartzMisfireRecoveryListenerTest {
@@ -27,6 +29,9 @@ class QuartzMisfireRecoveryListenerTest {
   @Mock
   private Trigger trigger;
 
+  @Mock
+  private TaskScheduler taskScheduler;
+
   @Test
   void shouldScheduleOneShotRecoveryWithOriginalFireTime() throws Exception {
     Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
@@ -36,7 +41,15 @@ class QuartzMisfireRecoveryListenerTest {
     when(trigger.getJobKey()).thenReturn(jobKey);
     when(trigger.getNextFireTime()).thenReturn(Date.from(originalFireTime));
 
-    new QuartzMisfireRecoveryListener(() -> scheduler).triggerMisfired(trigger);
+    QuartzMisfireRecoveryListener listener =
+        new QuartzMisfireRecoveryListener(() -> scheduler, taskScheduler);
+    listener.triggerMisfired(trigger);
+
+    // Quartz 的 misfire 回调持有 JobStore 锁；回调内不能同步重入 Scheduler。
+    verify(scheduler, never()).scheduleJob(any(Trigger.class));
+    ArgumentCaptor<Runnable> task = ArgumentCaptor.forClass(Runnable.class);
+    verify(taskScheduler).schedule(task.capture(), any(Instant.class));
+    task.getValue().run();
 
     ArgumentCaptor<Trigger> captor = ArgumentCaptor.forClass(Trigger.class);
     verify(scheduler).scheduleJob(captor.capture());
@@ -62,7 +75,12 @@ class QuartzMisfireRecoveryListenerTest {
     when(trigger.getNextFireTime()).thenReturn(null);
     when(trigger.getPreviousFireTime()).thenReturn(Date.from(previousFireTime));
 
-    new QuartzMisfireRecoveryListener(() -> scheduler).triggerMisfired(trigger);
+    QuartzMisfireRecoveryListener listener =
+        new QuartzMisfireRecoveryListener(() -> scheduler, taskScheduler);
+    listener.triggerMisfired(trigger);
+    ArgumentCaptor<Runnable> task = ArgumentCaptor.forClass(Runnable.class);
+    verify(taskScheduler).schedule(task.capture(), any(Instant.class));
+    task.getValue().run();
 
     ArgumentCaptor<Trigger> captor = ArgumentCaptor.forClass(Trigger.class);
     verify(scheduler).scheduleJob(captor.capture());
@@ -77,8 +95,9 @@ class QuartzMisfireRecoveryListenerTest {
   void shouldIgnoreNonBatchTriggerGroups() throws Exception {
     when(trigger.getKey()).thenReturn(TriggerKey.triggerKey("other", "other-group"));
 
-    new QuartzMisfireRecoveryListener(() -> scheduler).triggerMisfired(trigger);
+    new QuartzMisfireRecoveryListener(() -> scheduler, taskScheduler).triggerMisfired(trigger);
 
     verify(scheduler, never()).scheduleJob(org.mockito.ArgumentMatchers.any(Trigger.class));
+    verify(taskScheduler, never()).schedule(any(Runnable.class), any(Instant.class));
   }
 }

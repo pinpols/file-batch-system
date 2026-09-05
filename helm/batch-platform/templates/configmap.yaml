@@ -96,6 +96,14 @@ data:
   BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED: {{ (.Values.trigger.runtime).apiLaunchAdaptiveEnabled | quote }}
   BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMinConcurrency | default 16 | quote }}
   BATCH_TRIGGER_API_LAUNCH_SLOW_REQUEST_THRESHOLD_MILLIS: {{ (.Values.trigger.runtime).apiLaunchSlowRequestThresholdMillis | default 1000 | quote }}
+  BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: {{ (.Values.trigger.platformDb).maxPoolSize | default 10 | quote }}
+  BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS: {{ (.Values.trigger.platformDb).connectionTimeoutMillis | default 5000 | quote }}
+  BATCH_TRIGGER_QUARTZ_DB_MAX_POOL_SIZE: {{ (.Values.trigger.quartzDb).maxPoolSize | default 5 | quote }}
+  BATCH_TRIGGER_OUTBOX_POLL_INTERVAL_MILLIS: {{ (.Values.trigger.outbox).pollIntervalMillis | default 200 | quote }}
+  BATCH_TRIGGER_OUTBOX_BATCH_SIZE: {{ (.Values.trigger.outbox).batchSize | default 256 | quote }}
+  BATCH_TRIGGER_OUTBOX_PUBLISHING_TIMEOUT_SECONDS: {{ (.Values.trigger.outbox).publishingTimeoutSeconds | default 120 | quote }}
+  BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_ATTEMPTS: {{ (.Values.trigger.outbox).maxPublishAttempts | default 10 | quote }}
+  BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND: {{ (.Values.trigger.outbox).maxPublishEventsPerSecond | default 40 | quote }}
   BATCH_WORKER_ATOMIC_ENABLED_TYPES: {{ (.Values.workerAtomic).enabledTaskTypes | default "" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT: {{ (.Values.orchestrator.importScanner).doneFileFormat | default "MARKER" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX: {{ (.Values.orchestrator.importScanner).doneFileSuffix | default ".done" | quote }}

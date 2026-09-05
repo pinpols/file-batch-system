@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -22,6 +23,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -66,13 +68,7 @@ class BatchInsertGeneratedKeysIntegrationTest {
 
   @BeforeAll
   static void setUp() throws Exception {
-    Flyway.configure()
-        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz")
-        .defaultSchema("batch")
-        .locations("classpath:db/migration")
-        .load()
-        .migrate();
+    flywayConfiguration().load().migrate();
     dataSource = new SingleConnectionDataSource(
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     jdbc = new JdbcTemplate(dataSource);
@@ -90,6 +86,15 @@ class BatchInsertGeneratedKeysIntegrationTest {
       }
     }
     sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
+  }
+
+  private static FluentConfiguration flywayConfiguration() {
+    return Flyway.configure()
+        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .schemas("batch", "quartz")
+        .defaultSchema("batch")
+        .locations("classpath:db/migration")
+        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));
   }
 
   @AfterAll

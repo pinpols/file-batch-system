@@ -18,7 +18,8 @@ import org.springframework.kafka.core.ProducerFactory;
  * ADR-010 Stage 4: trigger 端 Kafka 生产者配置（固化无开关）。
  *
  * <p>设计:与 batch-orchestrator / batch-worker-core 保持参数一致(acks=all, idempotence-via-retry), 但 trigger
- * 流量小,无需 batching / linger 优化。
+ * 平时流量低，但 relay 在补偿或人工批量启动时会突发；发送由 relay 按批异步发起，producer 的标准批处理参数仍统一来自
+ * {@code spring.kafka.producer.properties.*}。
  *
  * <p>acks/retries/send-timeout 经 {@link TriggerKafkaProperties} 集中管理;bootstrap-servers 仍直读 Spring
  * 自带 {@code spring.kafka.bootstrap-servers} 不入 Properties(避免与 Spring KafkaProperties 重复)。

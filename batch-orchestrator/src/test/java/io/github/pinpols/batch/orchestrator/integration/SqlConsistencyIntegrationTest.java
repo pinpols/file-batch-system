@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Connection;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Tag;
@@ -45,6 +46,7 @@ class SqlConsistencyIntegrationTest {
         .schemas("batch", "quartz")
         .defaultSchema("batch")
         .locations("classpath:db/migration")
+        .configuration(Map.of("flyway.postgresql.transactional.lock", "false"))
         .load()
         .migrate();
 

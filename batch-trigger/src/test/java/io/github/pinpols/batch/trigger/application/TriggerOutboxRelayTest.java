@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +82,12 @@ class TriggerOutboxRelayTest {
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);
     when(mapper.countStalePublishing(anyString(), anyLong())).thenReturn(0L);
+    when(mapper.markPublishingBatch(anyList(), anyString(), anyString(), anyString()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    when(mapper.markPublishedBatch(anyList(), anyString(), anyString()))
+        .thenAnswer(invocation -> ((List<?>) invocation.getArgument(0)).size());
+    when(mapper.markFailed(anyLong(), anyString(), anyString(), any(), anyString()))
+        .thenReturn(1);
     // executeWithLock(Task,LockConfiguration) 返回 void → 必须用 doAnswer 而非 when
     doAnswer(inv -> {
           Runnable task = inv.getArgument(0);
@@ -104,8 +112,19 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
-    verify(publisher, never()).publish(any(), any(), any(), any());
-    verify(mapper, never()).markPublishing(anyLong(), anyString(), anyString(), anyString());
+    verify(publisher, never()).publishAsync(any(), any(), any(), any());
+    verify(mapper, never()).markPublishingBatch(anyList(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void poll_spreadsPerSecondReleaseBudgetAcrossPollingIntervals() {
+    relayProperties.setMaxPublishEventsPerSecond(40);
+    relayProperties.setPollIntervalMillis(200);
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
+
+    relay.poll();
+
+    verify(mapper).selectPending(any(), eq(8), anyString(), anyString());
   }
 
   @Test
@@ -153,21 +172,22 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(101L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(101L), anyString(), anyString(), anyString())).thenReturn(1);
-    when(publisher.publish(any(), any(), any(), any()))
-        .thenReturn(TriggerEventPublisher.PublishResult.ok());
+    when(publisher.publishAsync(any(), any(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(TriggerEventPublisher.PublishResult.ok()));
 
     relay.poll();
 
     verify(publisher)
-        .publish(
+        .publishAsync(
             eq(BatchTopics.TRIGGER_LAUNCH_V1),
             eq("tenant-a:req-1"),
             any(LaunchEnvelope.class),
             eq("trace-1"));
     verify(mapper)
-        .markPublished(
-            101L, OutboxPublishStatus.PUBLISHED.code(), OutboxPublishStatus.PUBLISHING.code());
+        .markPublishedBatch(
+            eq(List.of(101L)),
+            eq(OutboxPublishStatus.PUBLISHED.code()),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
     verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any(), anyString());
   }
 
@@ -177,9 +197,9 @@ class TriggerOutboxRelayTest {
     event.setPublishAttempt(2);
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(102L), anyString(), anyString(), anyString())).thenReturn(1);
-    when(publisher.publish(any(), any(), any(), any()))
-        .thenReturn(TriggerEventPublisher.PublishResult.fail("kafka broker not reachable"));
+    when(publisher.publishAsync(any(), any(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            TriggerEventPublisher.PublishResult.fail("kafka broker not reachable")));
 
     relay.poll();
 
@@ -190,7 +210,48 @@ class TriggerOutboxRelayTest {
             eq("kafka broker not reachable"),
             any(Instant.class),
             eq(OutboxPublishStatus.PUBLISHING.code()));
-    verify(mapper, never()).markPublished(anyLong(), anyString(), anyString());
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+  }
+
+  @Test
+  void poll_exceptionalPublishFuture_marksFailedWithoutLeavingBatchPublishing() {
+    TriggerOutboxEventEntity event = buildPendingEvent(108L, validEnvelopePayload());
+    CompletableFuture<TriggerEventPublisher.PublishResult> failed = new CompletableFuture<>();
+    failed.completeExceptionally(new IllegalStateException("broker connection reset"));
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    when(publisher.publishAsync(any(), any(), any(), any())).thenReturn(failed);
+
+    relay.poll();
+
+    verify(mapper)
+        .markFailed(
+            eq(108L),
+            eq(OutboxPublishStatus.FAILED.code()),
+            contains("future failed"),
+            any(Instant.class),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+  }
+
+  @Test
+  void poll_hungPublishFuture_isBoundedByPublishingTimeout() {
+    relayProperties.setPublishingTimeoutSeconds(1);
+    TriggerOutboxEventEntity event = buildPendingEvent(109L, validEnvelopePayload());
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    when(publisher.publishAsync(any(), any(), any(), any())).thenReturn(new CompletableFuture<>());
+
+    relay.poll();
+
+    verify(mapper)
+        .markFailed(
+            eq(109L),
+            eq(OutboxPublishStatus.FAILED.code()),
+            contains("future failed"),
+            any(Instant.class),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
   }
 
   @Test
@@ -200,9 +261,9 @@ class TriggerOutboxRelayTest {
     event.setPublishAttempt(2);
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(107L), anyString(), anyString(), anyString())).thenReturn(1);
-    when(publisher.publish(any(), any(), any(), any()))
-        .thenReturn(TriggerEventPublisher.PublishResult.fail("kafka still down"));
+    when(publisher.publishAsync(any(), any(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            TriggerEventPublisher.PublishResult.fail("kafka still down")));
 
     relay.poll();
 
@@ -213,7 +274,7 @@ class TriggerOutboxRelayTest {
             eq("kafka still down"),
             any(Instant.class),
             eq(OutboxPublishStatus.PUBLISHING.code()));
-    verify(mapper, never()).markPublished(anyLong(), anyString(), anyString());
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
   }
 
   @Test
@@ -221,7 +282,6 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(103L, "{not-json}");
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(103L), anyString(), anyString(), anyString())).thenReturn(1);
 
     relay.poll();
 
@@ -232,7 +292,7 @@ class TriggerOutboxRelayTest {
             contains("payload deserialize"),
             any(Instant.class),
             eq(OutboxPublishStatus.PUBLISHING.code()));
-    verify(publisher, never()).publish(any(), any(), any(), any());
+    verify(publisher, never()).publishAsync(any(), any(), any(), any());
   }
 
   @Test
@@ -240,12 +300,13 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(104L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(104L), anyString(), anyString(), anyString())).thenReturn(0);
+    when(mapper.markPublishingBatch(anyList(), anyString(), anyString(), anyString()))
+        .thenReturn(List.of());
 
     relay.poll();
 
-    verify(publisher, never()).publish(any(), any(), any(), any());
-    verify(mapper, never()).markPublished(anyLong(), anyString(), anyString());
+    verify(publisher, never()).publishAsync(any(), any(), any(), any());
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
     verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any(), anyString());
   }
 
@@ -255,19 +316,23 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity good = buildPendingEvent(106L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(bad, good));
-    // bad: markPublishing 抛异常模拟 DB 偶发问题
-    when(mapper.markPublishing(eq(105L), anyString(), anyString(), anyString()))
-        .thenThrow(new RuntimeException("db transient error"));
-    when(mapper.markPublishing(eq(106L), anyString(), anyString(), anyString())).thenReturn(1);
-    when(publisher.publish(any(), any(), any(), any()))
-        .thenReturn(TriggerEventPublisher.PublishResult.ok());
+    good.setRequestId("req-2");
+    // bad: Kafka send 发起阶段抛异常，不能阻断同批其它事件。
+    when(publisher.publishAsync(
+            eq(BatchTopics.TRIGGER_LAUNCH_V1), eq("tenant-a:req-1"), any(), any()))
+        .thenThrow(new RuntimeException("kafka transient error"));
+    when(publisher.publishAsync(
+            eq(BatchTopics.TRIGGER_LAUNCH_V1), eq("tenant-a:req-2"), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(TriggerEventPublisher.PublishResult.ok()));
 
     relay.poll();
 
     verify(mapper)
-        .markPublished(
-            106L, OutboxPublishStatus.PUBLISHED.code(), OutboxPublishStatus.PUBLISHING.code());
-    verify(publisher, times(1)).publish(any(), any(), any(), any());
+        .markPublishedBatch(
+            eq(List.of(106L)),
+            eq(OutboxPublishStatus.PUBLISHED.code()),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(publisher, times(2)).publishAsync(any(), any(), any(), any());
   }
 
   @Test

@@ -108,6 +108,7 @@
 | `batch.console.security.rate-limit.redis-failure-threshold` / `redis-circuit-open-seconds` | 3 / 15s | Redis 连续失败短路与冷却期（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD` / `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS` | ❌ |
 
 > **已移除开关（历史，勿再配置）**：`batch.trigger.quartz-datasource.enabled`（2026-04-25，Phase 2 半成品）、`batch.trigger.async-launch.enabled`（2026-05-02，异步路径固化）。
+> Trigger 当前固定使用同一平台库上的 Quartz `JobStoreTX` 元数据小池；这不是上述已移除的独立数据库开关，因此不提供启停项。
 >
 > **per-template / per-channel 开关不在此表**：ADR-041 的 trailer 笔数校验、控制金额对账、出站 trailer、投递后回读是模板/渠道级配置，归 [`../design/file-pipeline-design.md`](../design/file-pipeline-design.md)；本表只收全局 yml/env 开关。
 

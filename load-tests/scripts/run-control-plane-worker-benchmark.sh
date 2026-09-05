@@ -27,6 +27,9 @@ TRIGGER_READ_RPS="${TRIGGER_READ_RPS:-2.0}"
 TRIGGER_DURATION_SECONDS="${TRIGGER_DURATION_SECONDS:-120}"
 TRIGGER_JOB_CODE="${TRIGGER_JOB_CODE:-atomic_sql_demo}"
 SCHEDULING_CONSOLE_READS="${SCHEDULING_CONSOLE_READS:-false}"
+# 压测夹具写入结束后到正式计时开始前的稳定窗口。仅由容量画像传入，避免把
+# fixture 的 WAL/自动清理噪声计入 API 稳态 SLO。
+POST_PREPARE_SETTLE_SECONDS="${POST_PREPARE_SETTLE_SECONDS:-0}"
 
 ATOMIC_JOBS_CSV="${ATOMIC_JOBS_CSV:-atomic_sql_demo}"
 KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|atomic)|orchestrator-trigger-launch}"
@@ -546,6 +549,15 @@ fi
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
 source "$LOAD_DIR/target/worker-load-data/run.env"
+
+if ! [[ "$POST_PREPARE_SETTLE_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "POST_PREPARE_SETTLE_SECONDS must be a non-negative integer" >&2
+  exit 2
+fi
+if [[ "$POST_PREPARE_SETTLE_SECONDS" -gt 0 ]]; then
+  echo "==> settling ${POST_PREPARE_SETTLE_SECONDS}s after fixture preparation before measured traffic"
+  sleep "$POST_PREPARE_SETTLE_SECONDS"
+fi
 
 TOKEN="${CONSOLE_ACCESS_TOKEN:-load-test-token}"
 if [[ "$PIPELINE_MAX_POLLS" != "0" || "$SCHEDULING_CONSOLE_READS" == "true" ]]; then

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.application;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * ADR-010: trigger 端事件发布抽象。
@@ -20,13 +21,24 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 public interface TriggerEventPublisher {
 
   /**
-   * 阻塞式同步发送(返回时表示 broker 已 ack 或已失败)。relay 在锁内逐条调用,不依赖 Future。
+   * 发起异步发送。future 正常完成时表示 broker 已 ack 或已明确失败。
    *
    * @param topic Kafka topic name(envelope.envelopeVersion 决定的版本化 topic)
    * @param messageKey Kafka 分区 key,通常 {@code tenantId:requestId}
    * @param envelope 完整事件载荷
    * @param traceId 链路 trace,作为 message header 写入,便于 Kafka 端日志聚合
    * @return 发送结果(success + 失败时的简短 message,长度内 2KB 截断)
+   */
+  default CompletableFuture<PublishResult> publishAsync(
+      String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
+    return CompletableFuture.completedFuture(publish(topic, messageKey, envelope, traceId));
+  }
+
+  /**
+   * 兼容同步调用方的适配方法。
+   *
+   * <p>Relay 使用 {@link #publishAsync(String, String, LaunchEnvelope, String)}，让同一批 Kafka 请求并发在 producer
+   * 内飞行；非 Kafka 实现可以只实现本方法，默认异步适配会保持原有行为。
    */
   PublishResult publish(String topic, String messageKey, LaunchEnvelope envelope, String traceId);
 

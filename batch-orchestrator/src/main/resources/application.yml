@@ -33,6 +33,9 @@ spring:
     # 不要把 baseline-version 改成最新版本号——那会跳过中间所有迁移。
     baseline-on-migrate: true
     baseline-version: 1
+    postgresql:
+      # V198 使用 CREATE INDEX CONCURRENTLY；改用 session advisory lock，避免非事务迁移自等待。
+      transactional-lock: false
   datasource:
     hikari:
       # 调度侧平台库 Hikari 连接池（调度 / 状态推进 / 查询为主）

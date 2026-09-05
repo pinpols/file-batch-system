@@ -12,6 +12,9 @@ RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
 STORM_RPS="${STORM_RPS:-200}"
 STORM_WAIT_SECONDS="${STORM_WAIT_SECONDS:-2400}"
+# 夹具准备会集中写入业务/平台表。正式吞吐计时前等待 WAL 与自动清理回稳，避免将
+# 非业务入口负载错误归因到 trigger launch 延迟。
+STORM_POST_PREPARE_SETTLE_SECONDS="${STORM_POST_PREPARE_SETTLE_SECONDS:-30}"
 FAIRNESS_TOTAL_REQUESTS="${FAIRNESS_TOTAL_REQUESTS:-6000}"
 FAIRNESS_CONCURRENCY="${FAIRNESS_CONCURRENCY:-96}"
 # 高并发公平画像使用的共享组硬上限。默认 96 与 6000/1200s 的画像预算匹配；
@@ -44,9 +47,53 @@ CAPACITY_LOCK_DIR="$LOAD_DIR/target/.p2-capacity.lock"
 CAPACITY_LOCK_HELD=0
 mkdir -p "$LOG_DIR"
 PROFILE_RC=0
+STORM_TERMINAL_VERIFIED=0
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
+}
+
+storm_reached_terminal_state() {
+  local storm_run_id="$1"
+  local counts total terminal trigger_requests linked_terminal
+  counts="$(
+    psql_platform -Atc "
+      with scoped_instances as (
+        select id, instance_status
+        from batch.job_instance
+        where tenant_id = '${CAPACITY_TENANT_ID}'
+          and params_snapshot::text like '%${storm_run_id}%'
+      ), scoped_trigger_requests as (
+        select related_job_instance_id
+        from batch.trigger_request
+        where tenant_id = '${CAPACITY_TENANT_ID}'
+          and (
+            request_id like '%${storm_run_id}%'
+            or dedup_key like '%${storm_run_id}%'
+            or trace_id like '%${storm_run_id}%'
+          )
+      )
+      select
+        (select count(*) from scoped_instances) || '|' ||
+        (select count(*) from scoped_instances
+         where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED')) || '|' ||
+        (select count(*) from scoped_trigger_requests) || '|' ||
+        (select count(*)
+         from scoped_trigger_requests tr
+         join batch.job_instance ji on ji.id = tr.related_job_instance_id
+         where ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'));"
+  )"
+  total="${counts%%|*}"
+  counts="${counts#*|}"
+  terminal="${counts%%|*}"
+  counts="${counts#*|}"
+  trigger_requests="${counts%%|*}"
+  linked_terminal="${counts##*|}"
+  echo "10w storm terminal evidence: instances=${terminal}/${total}, trigger_requests=${linked_terminal}/${trigger_requests}" >&2
+  [[ "$total" -eq "$STORM_TOTAL_REQUESTS" \
+    && "$terminal" -eq "$total" \
+    && "$trigger_requests" -eq "$STORM_TOTAL_REQUESTS" \
+    && "$linked_terminal" -eq "$STORM_TOTAL_REQUESTS" ]]
 }
 
 assert_no_residue() {
@@ -70,7 +117,13 @@ cleanup() {
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place"
     exit "$rc"
   fi
-  if [[ "$RUN_10W_STORM" == "1" ]]; then
+  if [[ "$RUN_10W_STORM" == "1" && "$STORM_TERMINAL_VERIFIED" != "1" ]]; then
+      # 失败或被中断时，Kafka 中可能仍有 launch 消息。先删除 trigger_request 会让这些消息在
+      # orchestrator 重启后全部变成 request_not_found，并掩盖原始失败现场；保留隔离租户数据，
+      # 由人工在消费排空后执行清理。
+    echo "10w storm did not reach terminal verification; preserving RUN_ID=${RUN_ID}-10w data for investigation" >&2
+    release_capacity_lock
+  elif [[ "$RUN_10W_STORM" == "1" ]]; then
     # The Trigger consumer can create an instance after the load generator has stopped. Clear
     # trigger/outbox sources first, then let the worker cleanup wait for and remove that tail.
     if ! psql_platform -v run_id="${RUN_ID}-10w" \
@@ -81,7 +134,7 @@ cleanup() {
       rc=1
     fi
   fi
-  if [[ "$RUN_10W_STORM" == "1" && "$CAPACITY_LOCK_HELD" == "1" ]]; then
+  if [[ "$RUN_10W_STORM" == "1" && "$STORM_TERMINAL_VERIFIED" == "1" && "$CAPACITY_LOCK_HELD" == "1" ]]; then
     if ! psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
         -f "$LOAD_DIR/sql/cleanup-p2-capacity-policy.sql" >&2; then
       rc=1
@@ -108,7 +161,8 @@ cleanup() {
   if [[ "$RUN_FAIRNESS" == "1" ]] && ! assert_no_residue "$RUN_ID"; then
     rc=1
   fi
-  if [[ "$RUN_10W_STORM" == "1" ]] && ! assert_no_residue "${RUN_ID}-10w"; then
+  if [[ "$RUN_10W_STORM" == "1" && "$STORM_TERMINAL_VERIFIED" == "1" ]] \
+      && ! assert_no_residue "${RUN_ID}-10w"; then
     rc=1
   fi
   exit "$rc"
@@ -183,6 +237,7 @@ write_report_header() {
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
     echo "- Strict capacity exit: $CAPACITY_STRICT"
+    echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo
   } > "$REPORT"
 }
@@ -238,12 +293,16 @@ PY
   TRIGGER_DURATION_SECONDS="$duration" \
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
+  POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
   SKIP_AUTO_CLEANUP=1 \
     "$LOAD_DIR/scripts/run-control-plane-worker-benchmark.sh" \
     | tee "$LOG_DIR/10w-storm.log"
   local rc=${PIPESTATUS[0]}
   set -e
   echo "10w storm exit_code=${rc}" | tee "$LOG_DIR/10w-storm.exit"
+  if storm_reached_terminal_state "$storm_run_id"; then
+    STORM_TERMINAL_VERIFIED=1
+  fi
   if [[ "$rc" -ne 0 && "$CAPACITY_STRICT" == "1" ]]; then
     PROFILE_RC=1
   fi
