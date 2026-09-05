@@ -26,7 +26,7 @@
 ```markdown
 # <场景名>
 
-> 优先级 PX · 最后核对版本:YYYY-MM · 配套 chaos IT:`XxxChaosIT`(TODO/已联调)
+> 优先级 PX · 最后核对版本:YYYY-MM · 配套 chaos IT:填写仓内测试入口或明确标注需 staging 演练
 
 ## TL;DR
 一句症状 + 一行修复命令。
@@ -65,7 +65,7 @@
 - **主入口**:[`docs/runbook/incident-response.md`](../incident-response.md)
 - **系统总览**:`docs/architecture/`
 - **配套 chaos IT**(Plan #1):`batch-common/src/test/java/io/github/pinpols/batch/testing/chaos/` — 每个 P0 剧本应有对应 IT 验证恢复路径
-- **alert 名待补清单**(本仓尚未集中维护):由 ops 团队拉单维护;每篇剧本里出现的 `TODO 待 ops 补` 都是待办项
+- **告警名待补清单**:仅当 Prometheus 规则尚不存在时登记；已有指标只能写实际告警名，不能用占位名代替。
 
 ## 维护规则
 

@@ -11,8 +11,8 @@
 
 ## 怎么发现
 
-- **Prometheus alert**:TODO(待补 `BatchDayStuckSettling`,阈值 stale 行 ≥ 1 持续 5 min)
-- **Grafana**:TODO。临时查询:
+- **Prometheus alert**:当前没有专用 `BatchDayStuckSettling` 规则，不能把业务表扫描伪装成已接入告警。
+- **Grafana**:使用 Prometheus Explore 或数据库面板执行下方查询；专用规则待有稳定指标后再补:
   ```sql
   select tenant_id, calendar_code, biz_date, day_status, updated_at
     from batch.batch_day_instance

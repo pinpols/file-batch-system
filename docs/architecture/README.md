@@ -26,6 +26,7 @@
 | 16 | [architecture-truth.md](./architecture-truth.md) | 2026-04-09 架构快照（已过期，仅保留历史对照） | 审计历史判断来源 |
 | 17 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
 | 18 | [../analysis/p0-p1-governance-status-2026-09-02.md](../analysis/p0-p1-governance-status-2026-09-02.md) | P0/P1 治理状态、证据边界与复扫入口 | 上线前复核治理是否漂移 |
+| 19 | [application-governance.md](./application-governance.md) | 超时、运行时兼容、故障注入、告警、供应链五项应用治理入口 | 复核横切治理是否有代码和证据 |
 
 ## 角色路径
 

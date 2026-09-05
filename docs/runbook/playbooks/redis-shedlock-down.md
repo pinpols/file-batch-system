@@ -1,6 +1,6 @@
 # Redis 全断,ShedLock 切 jdbc fallback
 
-> 优先级 P0 · 最后核对版本:2026-05 · 配套 chaos IT:`RedisShedLockFallbackChaosIT`(TODO 与 Plan #1 联调)
+> 优先级 P0 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有 fallback 路径测试，真实 Redis 全断仍需 staging 演练
 
 ## TL;DR
 
@@ -12,7 +12,7 @@
 ## 怎么发现
 
 - **Prometheus alert**:`BatchOutboxCircuitBreakerFailOpen` 表示 outbox 熔断器因 Redis 不可达而回落到本地缓存态；`BatchRedisMemoryUsageHigh` / `BatchRedisConnectedClientsHigh` 用于容量侧信号。ShedLock 本身没有可靠的统一 acquire-failure 指标，不能把日志关键字冒充 Prometheus 告警，仍需按下方 Redis 探活与锁表检查定位。
-- **Grafana**:TODO。临时看:
+- **Grafana**:当前使用下列 Prometheus/日志查询；专用面板由目标监控环境落地:
   - `lettuce_command_completion_seconds_count{command="SET"}` 不再增长
   - orchestrator 日志中 `RedisConnectionFailureException` 出现频率
 - **日志关键字**:
