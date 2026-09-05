@@ -7,11 +7,13 @@ import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobExecutionContext;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
+import org.quartz.TriggerKey;
 import org.quartz.TriggerListener;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.scheduling.TaskScheduler;
@@ -71,8 +73,8 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
           trigger.getJobKey(),
           originalFireTime);
     }
-    var recoveryTriggerKey = trigger.getKey();
-    var recoveryJobKey = trigger.getJobKey();
+    TriggerKey recoveryTriggerKey = trigger.getKey();
+    JobKey recoveryJobKey = trigger.getJobKey();
     long recoveryOriginalFireTime = originalFireTime.getTime();
     // Quartz 在持有 JobStore 事务锁时同步回调 triggerMisfired。若回调内再次调用
     // scheduleJob，会等待自己尚未提交的 QRTZ_LOCKS，原回调又因此无法返回，形成自锁。
