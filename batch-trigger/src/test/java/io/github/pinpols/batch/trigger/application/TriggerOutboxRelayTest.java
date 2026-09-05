@@ -235,6 +235,26 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  void poll_hungPublishFuture_isBoundedByPublishingTimeout() {
+    relayProperties.setPublishingTimeoutSeconds(1);
+    TriggerOutboxEventEntity event = buildPendingEvent(109L, validEnvelopePayload());
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    when(publisher.publishAsync(any(), any(), any(), any())).thenReturn(new CompletableFuture<>());
+
+    relay.poll();
+
+    verify(mapper)
+        .markFailed(
+            eq(109L),
+            eq(OutboxPublishStatus.FAILED.code()),
+            contains("future failed"),
+            any(Instant.class),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(mapper, never()).markPublishedBatch(anyList(), anyString(), anyString());
+  }
+
+  @Test
   void poll_publisherFailureAtMaxAttempts_marksGiveUp() {
     relayProperties.setMaxPublishAttempts(3);
     TriggerOutboxEventEntity event = buildPendingEvent(107L, validEnvelopePayload());

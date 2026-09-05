@@ -352,6 +352,7 @@ public class TriggerOutboxRelay {
       CompletableFuture.allOf(
               inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new))
           // 单条 future 异常时也必须进入 flushOutcomes，否则整批卡 PUBLISHING 等 stale 回收。
+          .orTimeout(properties.getPublishingTimeoutSeconds(), TimeUnit.SECONDS)
           .exceptionally(ignored -> null)
           .join();
     }
