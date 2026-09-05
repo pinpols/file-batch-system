@@ -21,9 +21,9 @@ public class TriggerOutboxRelayProperties {
   @Min(value = 1, message = "batch.trigger.outbox.poll-interval-millis must be at least 1")
   private long pollIntervalMillis = 200L;
 
-  /** 单批最多扫多少条 outbox 记录。默认 100。 */
+  /** 单批最多扫多少条 outbox 记录。默认 256；Kafka ACK 与成功状态回写都按批处理。 */
   @Min(value = 1, message = "batch.trigger.outbox.batch-size must be at least 1")
-  private int batchSize = 100;
+  private int batchSize = 256;
 
   /** PUBLISHING 状态超时秒数,超时后回收为 NEW。默认 120。 */
   @Min(value = 1, message = "batch.trigger.outbox.publishing-timeout-seconds must be at least 1")
@@ -32,6 +32,12 @@ public class TriggerOutboxRelayProperties {
   /** 单条最大发布尝试次数(达到后标 GIVE_UP)。默认 10。 */
   @Min(value = 1, message = "batch.trigger.outbox.max-publish-attempts must be at least 1")
   private int maxPublishAttempts = 10;
+
+  /** 单个 Trigger 进程每秒最多向 Kafka 开始发布多少条事件。默认 40；0 表示关闭本地预算，仅用于受控环境。 */
+  @Min(
+      value = 0,
+      message = "batch.trigger.outbox.max-publish-events-per-second must not be negative")
+  private int maxPublishEventsPerSecond = 40;
 
   /**
    * Relay scheduler 是否在关闭时等待当前 poll 完成。

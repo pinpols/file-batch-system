@@ -2,28 +2,25 @@ package io.github.pinpols.batch.trigger.infrastructure.mq;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 /**
  * ADR-010 Stage 4: {@link TriggerEventPublisher} 的 Kafka 实现。
  *
- * <p>同步阻塞发送(返回时表示 broker 已 ack 或失败已确定),被 {@link
- * io.github.pinpols.batch.trigger.application.TriggerOutboxRelay} 在 ShedLock 内逐条调用,无需异步。
+ * <p>relay 以批为单位异步发起发送，再等该批 Kafka ACK；producer 因此可以复用其内置的请求合并与 connection in-flight
+ * 能力，而不会把每条消息的 broker RTT 串行化。
  *
  * <p>ADR-010 固化路径，无条件实例化（2026-05-02 同步 HTTP 路径已删除）。
  */
@@ -40,10 +37,11 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   private final TriggerKafkaProperties kafkaProperties;
 
   @Override
-  public PublishResult publish(
+  public CompletableFuture<PublishResult> publishAsync(
       String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
     if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
-      return PublishResult.fail("envelope or launchRequest is null");
+      return CompletableFuture.completedFuture(
+          PublishResult.fail("envelope or launchRequest is null"));
     }
     String payload;
     try {
@@ -54,7 +52,8 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           envelope.launchRequest().tenantId(),
           envelope.launchRequest().requestId(),
           ex);
-      return PublishResult.fail("serialize envelope: " + ex.getMessage());
+      return CompletableFuture.completedFuture(
+          PublishResult.fail("serialize envelope: " + ex.getMessage()));
     }
     ProducerRecord<String, String> producerRecord =
         new ProducerRecord<>(topic, messageKey, payload);
@@ -76,38 +75,10 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
             HEADER_ENVELOPE_VERSION,
             String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
     try {
-      SendResult<String, String> result = triggerKafkaTemplate
+      return triggerKafkaTemplate
           .send(producerRecord)
-          .get(kafkaProperties.getSendTimeoutSeconds(), TimeUnit.SECONDS);
-      log.debug(
-          "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
-          topic,
-          messageKey,
-          result.getRecordMetadata().partition(),
-          result.getRecordMetadata().offset());
-      return PublishResult.ok();
-    } catch (TimeoutException ex) {
-      SwallowedExceptionLogger.info(KafkaTriggerEventPublisher.class, "catch:TimeoutException", ex);
-
-      return PublishResult.fail(
-          "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
-    } catch (ExecutionException ex) {
-      Throwable cause = EmptyChecks.isNull(ex.getCause()) ? ex : ex.getCause();
-      // R2-P2-6：之前完全无日志 → 不可恢复错误（AuthorizationException / RecordTooLarge /
-      // InvalidTopic）会耗光全部 retry 直至 GIVE_UP，运维无实时信号。改为 ERROR + stack。
-      log.error(
-          "kafka publish failed (will retry until GIVE_UP): topic={} messageKey={} cause={}",
-          topic,
-          messageKey,
-          cause.getMessage(),
-          cause);
-      return PublishResult.fail("kafka send: " + cause.getMessage());
-    } catch (InterruptedException ex) {
-      SwallowedExceptionLogger.info(
-          KafkaTriggerEventPublisher.class, "catch:InterruptedException", ex);
-
-      Thread.currentThread().interrupt();
-      return PublishResult.fail("kafka send interrupted");
+          .orTimeout(kafkaProperties.getSendTimeoutSeconds(), java.util.concurrent.TimeUnit.SECONDS)
+          .handle((result, throwable) -> toPublishResult(topic, messageKey, result, throwable));
     } catch (RuntimeException ex) {
       // KafkaProducer.send() 在 ensureValidRecordSize / SerializationException 等校验失败时
       // 同步抛 RuntimeException,绕过上面 ExecutionException catch。补 broad catch 避免 outbox
@@ -119,7 +90,49 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           messageKey,
           ex.getMessage(),
           ex);
-      return PublishResult.fail("kafka send sync: " + ex.getMessage());
+      return CompletableFuture.completedFuture(
+          PublishResult.fail("kafka send sync: " + ex.getMessage()));
     }
+  }
+
+  @Override
+  public PublishResult publish(
+      String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
+    return publishAsync(topic, messageKey, envelope, traceId).join();
+  }
+
+  private PublishResult toPublishResult(
+      String topic,
+      String messageKey,
+      org.springframework.kafka.support.SendResult<String, String> result,
+      Throwable throwable) {
+    if (EmptyChecks.isNull(throwable)) {
+      log.debug(
+          "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
+          topic,
+          messageKey,
+          result.getRecordMetadata().partition(),
+          result.getRecordMetadata().offset());
+      return PublishResult.ok();
+    }
+    Throwable cause = unwrapCompletionException(throwable);
+    if (cause instanceof java.util.concurrent.TimeoutException) {
+      return PublishResult.fail(
+          "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
+    }
+    log.error(
+        "kafka publish failed (will retry until GIVE_UP): topic={} messageKey={} cause={}",
+        topic,
+        messageKey,
+        cause.getMessage(),
+        cause);
+    return PublishResult.fail("kafka send: " + cause.getMessage());
+  }
+
+  private static Throwable unwrapCompletionException(Throwable throwable) {
+    if (throwable instanceof CompletionException && EmptyChecks.isNotNull(throwable.getCause())) {
+      return throwable.getCause();
+    }
+    return throwable;
   }
 }

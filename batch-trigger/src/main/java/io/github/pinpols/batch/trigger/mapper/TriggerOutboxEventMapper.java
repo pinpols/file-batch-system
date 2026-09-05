@@ -42,11 +42,26 @@ public interface TriggerOutboxEventMapper {
       @Param("pendingStatus2") String pendingStatus2);
 
   /**
+   * 单批 CAS 抢占。返回实际从 NEW/FAILED 推进到 PUBLISHING 的 id，避免逐条 UPDATE 往返。
+   */
+  List<Long> markPublishingBatch(
+      @Param("ids") List<Long> ids,
+      @Param("publishingStatus") String publishingStatus,
+      @Param("pendingStatus1") String pendingStatus1,
+      @Param("pendingStatus2") String pendingStatus2);
+
+  /**
    * 投递成功,设置 published_at + status。只对当前仍为 PUBLISHING 的行生效(与 orchestrator OutboxEventMapper 对称的 CAS
    * 守卫),返回 0 表示行已被其它 relay 实例接管。
    */
   int markPublished(
       @Param("id") Long id,
+      @Param("status") String status,
+      @Param("publishingStatus") String publishingStatus);
+
+  /** 批量写入成功状态，保留 PUBLISHING CAS 守卫。 */
+  int markPublishedBatch(
+      @Param("ids") List<Long> ids,
       @Param("status") String status,
       @Param("publishingStatus") String publishingStatus);
 

@@ -35,6 +35,14 @@ curl --fail --silent \
 该值应按实例 Hikari 连接池、数据库预算和副本数配置，不能把各副本的值相加当作全局容量；全局业务上限仍由
 租户 quota、Kafka 和 orchestrator admission 共同决定。
 
+Trigger 的平台库池由 `BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE`（默认 `10`）和
+`BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS`（默认 `5000`）控制。入口 admission 高于连接池是允许的，
+但只能作为短暂排队；提高 admission 或副本数前，必须按 Trigger 副本数、Quartz 连接和 PostgreSQL 总连接预算一起评估。
+
+Quartz 固定使用 `JobStoreTX` 和同一平台库上的独立元数据小池
+`BATCH_TRIGGER_QUARTZ_DB_MAX_POOL_SIZE`（默认 `5`）。这不是已废弃的“Quartz 独立数据库”开关：
+业务 SQL 仍只使用平台库，分池的目的仅是让 Quartz 负责自己的提交/回滚边界，避免 QRTZ 锁事务占住业务连接。
+
 客户端收到 429 时应沿用原幂等键查询上述状态接口，按 `ACCEPTED/LAUNCHED` 决定等待还是继续，不要为同一业务
 动作生成新的幂等键。
 
@@ -64,7 +72,7 @@ curl --fail --silent \
 |---|---|---|
 | V80 migration 自动 apply | ✅ | trigger 启动期 flyway 跑过,`batch.trigger_outbox_event` 表已建 |
 | Kafka topic `batch.trigger.launch.v1` 存在 | ✅ | `kafka-topics.sh --list` 命中(由 kafka-init 默认 KAFKA_TOPICS 创建) |
-| trigger TriggerOutboxRelay bean 启动 | ✅ | 日志:`TriggerOutboxRelay 已启动:poll=200ms batch=100 backoff_max=60s` |
+| trigger TriggerOutboxRelay bean 启动 | ✅ | 日志:`TriggerOutboxRelay started: poll=200ms batch=256 release_budget=40events/s backoff_max=60s`；同批 Kafka send 异步 ACK 后 set-based 回写 |
 | trigger Kafka producer config 用容器名 | ✅ | 日志:`bootstrap.servers = [kafka:29092]`(非 `localhost:19092`) |
 | orchestrator TriggerLaunchConsumer 订阅 | ✅ | 日志:`Subscribed to topic(s): batch.trigger.launch.v1`；生产部署确认有效 consumer 数不超过分区数 |
 | 1 条 manual launch 全链路 | ✅ | trigger HTTP 200 → outbox PUBLISHED → consumer 消费 → job_instance INSERT |

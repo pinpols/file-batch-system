@@ -50,9 +50,9 @@ DefaultTriggerService.persistAndForward(...) [@Transactional]
   ├─ INSERT trigger_request (status=ACCEPTED)
   └─ INSERT trigger_outbox_event (status=NEW, payload=LaunchEnvelope JSON)
   ↓
-TriggerOutboxRelay (200ms 周期, ShedLock 互斥)
+TriggerOutboxRelay (200ms 周期, ShedLock 互斥；按每秒释放预算批量 CAS 抢占 → Kafka async ACK → 批量 PUBLISHED 回写)
   ↓
-KafkaTriggerEventPublisher.publish(topic="batch.trigger.launch.v1")
+KafkaTriggerEventPublisher.publishAsync(topic="batch.trigger.launch.v1")
   ↓
 orchestrator TriggerLaunchConsumer.consume(envelope)
   ↓
