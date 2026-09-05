@@ -12,6 +12,9 @@ RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
 STORM_RPS="${STORM_RPS:-200}"
 STORM_WAIT_SECONDS="${STORM_WAIT_SECONDS:-2400}"
+# 夹具准备会集中写入业务/平台表。正式吞吐计时前等待 WAL 与自动清理回稳，避免将
+# 非业务入口负载错误归因到 trigger launch 延迟。
+STORM_POST_PREPARE_SETTLE_SECONDS="${STORM_POST_PREPARE_SETTLE_SECONDS:-30}"
 FAIRNESS_TOTAL_REQUESTS="${FAIRNESS_TOTAL_REQUESTS:-6000}"
 FAIRNESS_CONCURRENCY="${FAIRNESS_CONCURRENCY:-96}"
 # 高并发公平画像使用的共享组硬上限。默认 96 与 6000/1200s 的画像预算匹配；
@@ -234,6 +237,7 @@ write_report_header() {
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
     echo "- Strict capacity exit: $CAPACITY_STRICT"
+    echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo
   } > "$REPORT"
 }
@@ -289,6 +293,7 @@ PY
   TRIGGER_DURATION_SECONDS="$duration" \
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
+  POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
   SKIP_AUTO_CLEANUP=1 \
     "$LOAD_DIR/scripts/run-control-plane-worker-benchmark.sh" \
     | tee "$LOG_DIR/10w-storm.log"

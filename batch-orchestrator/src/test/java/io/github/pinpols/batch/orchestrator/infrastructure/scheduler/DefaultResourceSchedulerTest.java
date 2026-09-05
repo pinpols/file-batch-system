@@ -184,6 +184,10 @@ class DefaultResourceSchedulerTest {
     assertThat(d.getRoute()).isSameAs(route);
     assertThat(d.getPartitionStatus()).isEqualTo("CREATED");
     assertThat(d.getTaskStatus()).isEqualTo("CREATED");
+    assertThat(d.getFairnessScore()).isNull();
+    verify(jobInstanceMapper, never()).countActiveByTenant(anyString());
+    verify(jobPartitionMapper, never())
+        .countActiveByTenant(anyString(), anyString(), anyString(), anyString(), anyString());
   }
 
   @Test

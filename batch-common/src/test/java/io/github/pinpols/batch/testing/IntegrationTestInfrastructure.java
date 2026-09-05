@@ -60,6 +60,8 @@ final class IntegrationTestInfrastructure {
     // 各模块 contextLoads 都会在独立 PG 上执行完整 Flyway；V198 的并发索引迁移可能超过平台库
     // 生产默认的 60 秒空闲事务保护。测试基础设施只放宽初始化窗口，不改变生产配置。
     registry.add("batch.datasource.pg-session.platform.idle-in-transaction-timeout", () -> "10m");
+    // V198 使用 CREATE INDEX CONCURRENTLY；测试上下文必须与生产 Flyway 使用同一 session lock 语义。
+    registry.add("spring.flyway.postgresql.transactional-lock", () -> false);
     registry.add("spring.flyway.enabled", () -> true);
     registry.add("spring.flyway.default-schema", () -> "batch");
     registry.add("spring.flyway.schemas", () -> "batch,quartz");
