@@ -202,6 +202,15 @@ COMPOSE_ENV_FILE=.env.test ./scripts/docker/up-apps.sh
 COMPOSE_ENV_FILE=.env.prod ./scripts/docker/up-apps.sh
 ```
 
+控制面容量压测使用独立的 Trigger `benchmark` profile，不会污染日常 `local` 配置：
+
+```bash
+COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger
+```
+
+`load-tests/scripts/run-p2-capacity-profile.sh` 会校验 profile、入口并发和 Hikari 池预算；未启用该 profile 时直接拒绝执行。
+完整环境边界见 [环境配置边界](docs/runbook/environment-profile-boundaries.md)。
+
 ### 本地联调启动
 
 首次启动或代码有变更时，先构建本地应用模块：

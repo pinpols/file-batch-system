@@ -318,6 +318,15 @@
           and ji.started_at is not null
           and jd.timeout_seconds &gt; 0
           and ji.started_at &lt; current_timestamp - (jd.timeout_seconds * interval '1 second')
+          -- RUNNING instance 只是 T2 派发完成；只有 worker 已 claim 并开始运行子任务后，
+          -- 才允许业务级硬 timeout 终止整个实例。避免高压队列等待被误判为执行超时。
+          and exists (
+              select 1
+              from batch.job_task jt
+              where jt.tenant_id = ji.tenant_id
+                and jt.job_instance_id = ji.id
+                and jt.task_status = 'RUNNING'
+          )
         order by ji.started_at asc, ji.id asc
         limit #{limit}
     </select>
@@ -332,7 +341,15 @@
           on jd.id = ji.job_definition_id
          and jd.tenant_id = ji.tenant_id
         where ji.instance_status = 'CREATED'
-          and tr.request_status = 'ACCEPTED'
+          -- T1 已提交、T2 尚未产生任何子项时，请求通常为 ACCEPTED；但 consumer 的状态
+          -- 回写和 T2 事务不是同一原子提交单元，异常窗口中也可能已是 LAUNCHED。
+          -- 零 partition/task/workflow 才是“从未实际派发”的事实判据，不能因 LAUNCHED 标签跳过恢复。
+          and (
+              tr.request_status in ('ACCEPTED', 'LAUNCHED')
+              -- 仅兼容旧版本曾把“同一 request 重投”误记为 DUPLICATE 的遗留行；
+              -- trigger_request_id 必须是当前请求自身，不能重跑另一请求的业务去重结果。
+              or (tr.request_status = 'DUPLICATE' and ji.trigger_request_id = tr.id)
+          )
           and ji.created_at &lt; #{olderThan}
           and coalesce(jd.job_type, '') &lt;&gt; 'WORKFLOW'
           and not exists (

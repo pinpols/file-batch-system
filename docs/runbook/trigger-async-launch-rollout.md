@@ -30,14 +30,24 @@ curl --fail --silent \
 ### 0.0.1 入口 admission 配置
 
 手工 `POST /api/triggers/launch` 还受每个 Trigger 实例的本地并发闸门保护：
-`BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY` 默认 `64`。拿不到许可的请求立即返回 `RATE_LIMITED`（HTTP
-429），不会进入数据库事务；Quartz 定时触发、outbox relay 和内部 scheduled launch 不受影响。
+`BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY` 默认 `8`。它是进入数据库事务的执行许可数，启动时必须不大于
+`BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE - BATCH_TRIGGER_API_LAUNCH_DB_RESERVE_CONNECTIONS`，以保留 relay、
+健康检查和管理操作的连接。许可耗尽时，最多 `BATCH_TRIGGER_API_LAUNCH_QUEUE_CAPACITY`（默认 `8`）个请求可在
+`BATCH_TRIGGER_API_LAUNCH_QUEUE_WAIT_MILLIS`（默认 `1000`）内有界等待；队列满或超时才返回 `RATE_LIMITED`（HTTP
+429），不会进入数据库事务。Quartz 定时触发、outbox relay 和内部 scheduled launch 不受影响。
 该值应按实例 Hikari 连接池、数据库预算和副本数配置，不能把各副本的值相加当作全局容量；全局业务上限仍由
 租户 quota、Kafka 和 orchestrator admission 共同决定。
 
 Trigger 的平台库池由 `BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE`（默认 `10`）和
-`BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS`（默认 `5000`）控制。入口 admission 高于连接池是允许的，
-但只能作为短暂排队；提高 admission 或副本数前，必须按 Trigger 副本数、Quartz 连接和 PostgreSQL 总连接预算一起评估。
+`BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS`（默认 `5000`）控制。短暂排队只由 admission 的显式有界队列承担，
+不允许以提高执行许可数侵占后台连接；提高许可、队列或副本数前，必须按 Trigger 副本数、Quartz 连接和 PostgreSQL
+总连接预算一起评估。
+
+本地压测不得修改 `application-local.yml` 或 `.env.local` 的常规配置。隔离容量画像使用
+`batch-trigger/src/main/resources/application-benchmark.yml`，并通过
+`COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger` 显式启用 `local,benchmark`。该 profile 的
+`32` 个入口执行许可、`40` 条连接池、`8` 条后台预留、`128` 个有界等待槽和 `15s` 等待预算，只是当前机器的
+容量画像基线，不是 Helm 生产默认值。
 
 Quartz 固定使用 `JobStoreTX` 和同一平台库上的独立元数据小池
 `BATCH_TRIGGER_QUARTZ_DB_MAX_POOL_SIZE`（默认 `5`）。这不是已废弃的“Quartz 独立数据库”开关：

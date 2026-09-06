@@ -22,8 +22,9 @@ import org.springframework.stereotype.Component;
 /**
  * Job-level timeout 回退强制器（ADR-参考 docs/archive/analysis/orchestrator-vs-industry-2026-05-03.md §2.1）。
  *
- * <p>周期扫 {@code job_instance.instance_status='RUNNING' AND now - started_at >
- * job_definition.timeout_seconds} 的实例，CAS 推到 FAILED 终态。
+ * <p>周期扫至少一个子 task 已 {@code RUNNING}，且 {@code now - job_instance.started_at >
+ * job_definition.timeout_seconds} 的实例，CAS 推到 FAILED 终态。实例的 RUNNING 表示已派发，不是 worker 已执行；
+ * 排队等待不能占用执行 timeout。
  *
  * <p>与 {@code PartitionLeaseReclaimScheduler} 互补：lease reclaim 回退 worker 心跳丢失（worker 宕机），timeout
  * enforcer 回退业务跑得太久（worker 在但任务卡住）。CAS 失败安静跳过（并发已推进）。

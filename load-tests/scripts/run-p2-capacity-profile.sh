@@ -34,9 +34,16 @@ FAIRNESS_MODE="${FAIRNESS_MODE:-trigger}"
 # allowing CI or a release checklist to turn the measured failure into a hard
 # failure without changing the profile itself.
 CAPACITY_STRICT="${CAPACITY_STRICT:-0}"
+# 容量画像验证的是入口完整性而非普通接口可用性：任何 4xx/5xx 都意味着目标请求没有进入
+# trigger_request，不能沿用通用混压画像允许 20% 错误的阈值。
+CAPACITY_MAX_ERROR_PCT="${CAPACITY_MAX_ERROR_PCT:-0.0}"
+# 容量画像衡量持续吞吐与端到端排空，不复用常规接口的 500ms 低延迟门槛。5s 是本机
+# 单节点高压下的硬上限；更严格的交互延迟仍由常规 control-plane profile 守护。
+CAPACITY_WRITE_P95_MS="${CAPACITY_WRITE_P95_MS:-5000}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
+CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
 REPORT="$LOAD_DIR/target/p2-capacity-profile-${RUN_ID}.md"
@@ -208,6 +215,34 @@ require_tooling() {
   batch_require_python
 }
 
+require_trigger_capacity_budget() {
+  if [[ "$CAPACITY_REQUIRE_TRIGGER_BUDGET" != "1" ]]; then
+    return
+  fi
+  command -v docker >/dev/null || {
+    echo "docker is required to verify the local trigger capacity budget" >&2
+    exit 2
+  }
+  local configured profiles limit pool relay budget_log
+  configured="$(docker inspect batch-trigger --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+  profiles="$(printf '%s\n' "$configured" | sed -n 's/^SPRING_PROFILES_ACTIVE=//p' | tail -1)"
+  relay="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
+  limit="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus \
+    | awk '/^batch_trigger_api_launch_admission_limit / { print int($2); exit }')"
+  pool="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus \
+    | awk '/^hikaricp_connections_max\{pool="HikariPool-1"\}/ { print int($2); exit }')"
+  budget_log="$(docker logs --tail 500 batch-trigger 2>&1 \
+    | grep -F 'trigger API admission budget validated: maxConcurrency=32 minConcurrency=8 pool=40 reservedForBackground=8' \
+    | tail -1 || true)"
+  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "40" || -z "$budget_log" ]]; then
+    echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
+    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=40" >&2
+    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing}" >&2
+    echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger" >&2
+    exit 2
+  fi
+}
+
 evict_fairness_config_cache() {
   local tenant_id
   for tenant_id in p2fa p2fb p2fc; do
@@ -236,7 +271,9 @@ write_report_header() {
     echo "- Time UTC start: ${RUN_STARTED_AT}"
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
-    echo "- Strict capacity exit: $CAPACITY_STRICT"
+    echo "- Strict capacity validation: $([[ \"$CAPACITY_STRICT\" == \"1\" ]] && echo enabled || echo disabled)"
+    echo "- Maximum failed request rate: ${CAPACITY_MAX_ERROR_PCT}%"
+    echo "- Capacity write p95 budget: ${CAPACITY_WRITE_P95_MS}ms"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo
   } > "$REPORT"
@@ -294,6 +331,8 @@ PY
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
   POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
+  WRITE_P95_MS="$CAPACITY_WRITE_P95_MS" \
+  MAX_ERROR_PCT="$CAPACITY_MAX_ERROR_PCT" \
   SKIP_AUTO_CLEANUP=1 \
     "$LOAD_DIR/scripts/run-control-plane-worker-benchmark.sh" \
     | tee "$LOG_DIR/10w-storm.log"
@@ -302,6 +341,8 @@ PY
   echo "10w storm exit_code=${rc}" | tee "$LOG_DIR/10w-storm.exit"
   if storm_reached_terminal_state "$storm_run_id"; then
     STORM_TERMINAL_VERIFIED=1
+  elif [[ "$CAPACITY_STRICT" == "1" ]]; then
+    PROFILE_RC=1
   fi
   if [[ "$rc" -ne 0 && "$CAPACITY_STRICT" == "1" ]]; then
     PROFILE_RC=1
@@ -348,6 +389,7 @@ run_fairness() {
 }
 
 require_tooling
+require_trigger_capacity_budget
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 write_report_header
 

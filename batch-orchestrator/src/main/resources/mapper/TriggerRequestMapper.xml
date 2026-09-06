@@ -139,4 +139,17 @@
           and request_status = 'ACCEPTED'
           and related_job_instance_id is null
     </update>
+
+    <!-- CREATED 恢复器已先用 job_instance.trigger_request_id = trigger_request.id 证明同源；
+         此 CAS 仅允许 ACCEPTED 或该旧缺陷留下的 DUPLICATE 推进为 LAUNCHED。 -->
+    <update id="reconcileRecoveredCreatedLaunch">
+        update batch.trigger_request
+        set request_status = 'LAUNCHED',
+            related_job_instance_id = #{jobInstanceId},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and request_id = #{requestId}
+          and request_status in ('ACCEPTED', 'DUPLICATE')
+          and (related_job_instance_id is null or related_job_instance_id = #{jobInstanceId})
+    </update>
 </mapper>

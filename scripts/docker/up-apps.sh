@@ -7,6 +7,7 @@
 #    （read-replica 默认 enabled=true，必须把 postgres-replica 一起拉起来才不会 unhealthy）。
 # 3) 可透传额外 docker compose 参数，例如：
 #    ./scripts/docker/up-apps.sh console-api
+# 4) 隔离容量压测：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger
 # =========================================================
 set -euo pipefail
 
@@ -21,6 +22,7 @@ unset _DOCKER_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+COMPOSE_BENCHMARK="${COMPOSE_BENCHMARK:-0}"
 
 # env-common 的默认值服务于宿主机脚本，因此 S3 默认指向 localhost:19000。
 # 容器启动入口只保留调用方或 env 文件显式提供的 endpoint；未显式配置时 unset，
@@ -56,10 +58,17 @@ fi
 DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
 echo "应用容器文件日志目录: ${DOCKER_LOG_DIR}（兼容 logs/docker）"
 
+compose_files=(
+  -f docker-compose.yml
+  -f docker/compose/app.yml
+)
+if [[ "$COMPOSE_BENCHMARK" == "1" ]]; then
+  compose_files+=(-f docker/compose/benchmark.yml)
+fi
+
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
-  -f docker-compose.yml \
-  -f docker/compose/app.yml \
+  "${compose_files[@]}" \
   --profile apps \
   --profile replica \
   up -d --force-recreate "$@"
