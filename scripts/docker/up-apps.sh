@@ -66,9 +66,16 @@ if [[ "$COMPOSE_BENCHMARK" == "1" ]]; then
   compose_files+=(-f docker/compose/benchmark.yml)
 fi
 
+up_args=(up -d --force-recreate)
+if [[ "$#" -gt 0 ]]; then
+  # 指定服务时只重建目标，避免为一次 profile / 镜像更新连带滚动其健康依赖。
+  # 全量启动（无位置参数）仍由 Compose 根据 depends_on 拉起完整应用栈。
+  up_args+=(--no-deps)
+fi
+
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
   "${compose_files[@]}" \
   --profile apps \
   --profile replica \
-  up -d --force-recreate "$@"
+  "${up_args[@]}" "$@"
