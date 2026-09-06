@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.loadtest.simulations;
 
 import io.github.pinpols.batch.loadtest.GatlingConfig;
+import io.gatling.javaapi.core.Assertion;
 import io.gatling.javaapi.core.ChainBuilder;
 import io.gatling.javaapi.core.PopulationBuilder;
 import io.gatling.javaapi.core.ScenarioBuilder;
@@ -109,7 +110,14 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
             // (单机~20 jobs/s 上限);仅卡错误率会"绿着已逼近瓶颈"。补全局 p95
             // 写延迟门,使容量验收在延迟侧也有硬 SLO(slo.write.p95ms,默认 500ms)。
             global().responseTime().percentile(95).lt(GatlingConfig.WRITE_P95_MS),
-            global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+            failureRateAssertion());
+  }
+
+  private static Assertion failureRateAssertion() {
+    if (GatlingConfig.MAX_ERROR_RATE_PCT <= 0.0d) {
+      return global().failedRequests().count().is(0L);
+    }
+    return global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT);
   }
 
   private static void addLaunchPopulation(

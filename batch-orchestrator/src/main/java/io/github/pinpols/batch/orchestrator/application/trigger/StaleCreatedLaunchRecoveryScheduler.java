@@ -31,8 +31,10 @@ import org.springframework.stereotype.Component;
  * launch T1/T2 拆分事务失败时的保守恢复。
  *
  * <p>DefaultLaunchService 先在 T1 提交 job_instance=CREATED,再在 T2 创建 partition/task 并标记 RUNNING。
- * 若进程在两个事务之间崩溃,实例就没有可执行的子项、Kafka lag 也始终为零。本调度器只为仍是 CREATED、 仍关联 ACCEPTED 的 trigger_request、且
- * partition/task 行数为零的非 workflow 实例补跑 T2。
+ * 若进程在两个事务之间崩溃,实例就没有可执行的子项、Kafka lag 也始终为零。本调度器只为仍是 CREATED、且
+ * partition/task 行数为零的非 workflow 实例补跑 T2。关联请求可为 ACCEPTED 或 LAUNCHED：后者可能来自
+ * consumer 状态回写与 T2 子项提交之间的异常窗口，不能据此推断作业已经实际派发。旧版本把同一 request
+ * 的 Kafka 重投误标为 DUPLICATE；仅当该请求正是实例创建者时才兼容恢复。
  */
 @Slf4j
 @Component
@@ -107,7 +109,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
     TriggerRequestEntity triggerRequest = triggerRequestMapper.selectById(
         jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
     if (EmptyChecks.isNull(triggerRequest)
-        || !TriggerRequestStatus.ACCEPTED.code().equals(triggerRequest.getRequestStatus())) {
+        || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
       return false;
     }
 
@@ -135,7 +137,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
     // 恢复记成 failed(误导监控)——trigger_request 滞留 ACCEPTED 会由 TriggerRequestLaunchReconciler
     // (ADR-010,扫"ACCEPTED 且已有 job_instance")下一轮自愈,此处降级为 WARN。
     try {
-      triggerRequestMapper.reconcileLaunched(
+      triggerRequestMapper.reconcileRecoveredCreatedLaunch(
           triggerRequest.getTenantId(), triggerRequest.getRequestId(), jobInstance.getId());
     } catch (RuntimeException ex) {
       log.warn(
@@ -149,6 +151,16 @@ public class StaleCreatedLaunchRecoveryScheduler {
     }
     counter(METRIC_RECOVERED, "tenant", jobInstance.getTenantId()).increment();
     return true;
+  }
+
+  private boolean isRecoverableRequestStatus(
+      JobInstanceEntity jobInstance, TriggerRequestEntity triggerRequest) {
+    String requestStatus = triggerRequest.getRequestStatus();
+    return TriggerRequestStatus.ACCEPTED.code().equals(requestStatus)
+        || TriggerRequestStatus.LAUNCHED.code().equals(requestStatus)
+        || (TriggerRequestStatus.DUPLICATE.code().equals(requestStatus)
+            && jobInstance.getTriggerRequestId() != null
+            && jobInstance.getTriggerRequestId().equals(triggerRequest.getId()));
   }
 
   @SuppressWarnings("unchecked")

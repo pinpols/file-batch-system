@@ -547,6 +547,37 @@ class DefaultLaunchServiceTest {
     assertThat(log.getExtraJson()).contains("tenant quota exceeded");
   }
 
+  @Test
+  void shouldNotMarkOriginalRequestDuplicateWhenKafkaRedeliversBetweenT1AndT2() {
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "IMPORT_JOB",
+        LocalDate.of(2026, Month.MARCH, 27),
+        TriggerType.API,
+        "req-redelivery",
+        "trace-redelivery",
+        Map.of());
+    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+    triggerRequest.setId(900L);
+    triggerRequest.setDedupKey("dedup-redelivery");
+    JobInstanceEntity existing = new JobInstanceEntity();
+    existing.setId(901L);
+    existing.setInstanceNo("instance-redelivery");
+    existing.setTraceId("trace-original");
+    existing.setTriggerRequestId(900L);
+    LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
+        triggerRequest, jobDefinition("BIZ_CAL"), null, existing);
+    when(launchValidationService.load(request)).thenReturn(loaded);
+
+    LaunchResponse response = service.launch(request);
+
+    assertThat(response.instanceNo()).isEqualTo("instance-redelivery");
+    assertThat(response.traceId()).isEqualTo("trace-original");
+    verify(triggerRequestMapper, never())
+        .updateAcceptance("t1", "req-redelivery", TriggerRequestStatus.DUPLICATE.code(), 901L);
+    verify(partitionDispatchService, never()).dispatch(any());
+  }
+
   private JobDefinitionEntity jobDefinition(String calendarCode) {
     return new JobDefinitionEntity(
         11L,

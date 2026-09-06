@@ -92,10 +92,13 @@ data:
   BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchIntervalMillis | default 10000 | quote }}
   BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchKickEnabled | quote }}
   BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_DELAY_MILLIS: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchKickDelayMillis | default 250 | quote }}
-  BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMaxConcurrency | default 64 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMaxConcurrency | default 8 | quote }}
   BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED: {{ (.Values.trigger.runtime).apiLaunchAdaptiveEnabled | quote }}
-  BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMinConcurrency | default 16 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: {{ (.Values.trigger.runtime).apiLaunchMinConcurrency | default 2 | quote }}
   BATCH_TRIGGER_API_LAUNCH_SLOW_REQUEST_THRESHOLD_MILLIS: {{ (.Values.trigger.runtime).apiLaunchSlowRequestThresholdMillis | default 1000 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_QUEUE_CAPACITY: {{ (.Values.trigger.runtime).apiLaunchQueueCapacity | default 8 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_QUEUE_WAIT_MILLIS: {{ (.Values.trigger.runtime).apiLaunchQueueWaitMillis | default 1000 | quote }}
+  BATCH_TRIGGER_API_LAUNCH_DB_RESERVE_CONNECTIONS: {{ (.Values.trigger.runtime).apiLaunchDbReserveConnections | default 2 | quote }}
   BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: {{ (.Values.trigger.platformDb).maxPoolSize | default 10 | quote }}
   BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS: {{ (.Values.trigger.platformDb).connectionTimeoutMillis | default 5000 | quote }}
   BATCH_TRIGGER_QUARTZ_DB_MAX_POOL_SIZE: {{ (.Values.trigger.quartzDb).maxPoolSize | default 5 | quote }}

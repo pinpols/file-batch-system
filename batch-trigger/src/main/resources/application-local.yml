@@ -59,6 +59,3 @@ batch:
     bypass-mode: true
   orchestrator:
     base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
-  trigger:
-    runtime:
-      misfire-catch-up-threshold-seconds: 60

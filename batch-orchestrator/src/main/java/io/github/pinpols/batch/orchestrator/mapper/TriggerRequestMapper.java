@@ -53,4 +53,13 @@ public interface TriggerRequestMapper {
       @Param("tenantId") String tenantId,
       @Param("requestId") String requestId,
       @Param("jobInstanceId") Long jobInstanceId);
+
+  /**
+   * CREATED 恢复器专用 CAS：只修复当前请求亲自创建、但 T2 尚未产生任何子项的实例。兼容旧版本把同一
+   * request 重投误标为 DUPLICATE 的历史记录；普通业务去重不得调用本方法。
+   */
+  int reconcileRecoveredCreatedLaunch(
+      @Param("tenantId") String tenantId,
+      @Param("requestId") String requestId,
+      @Param("jobInstanceId") Long jobInstanceId);
 }

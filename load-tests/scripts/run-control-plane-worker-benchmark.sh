@@ -18,6 +18,9 @@ WAIT_TERMINAL_MIN_INSTANCES="${WAIT_TERMINAL_MIN_INSTANCES:-1}"
 # 启用后，不能仅因已创建的子集全部终态而提前结束，必须让每个入口请求都已创建并完成实例。
 WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-0}"
 MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
+# 通用控制面画像保持 GatlingConfig 的 500ms 写入 SLO；容量画像可显式传入更宽的
+# 延迟预算，避免把“吞吐上界测量”误判为“低延迟回归”。
+WRITE_P95_MS="${WRITE_P95_MS:-500}"
 
 PROCESS_LAUNCH_RPS="${PROCESS_LAUNCH_RPS:-1.0}"
 DISPATCH_LAUNCH_RPS="${DISPATCH_LAUNCH_RPS:-1.0}"
@@ -330,6 +333,7 @@ run_mixed_pressure() {
       -Dscheduling.launch.rps="$TRIGGER_LAUNCH_RPS" \
       -Dscheduling.read.rps="$TRIGGER_READ_RPS" \
       -Dduration.seconds="$TRIGGER_DURATION_SECONDS" \
+      -Dslo.write.p95ms="$WRITE_P95_MS" \
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       --batch-mode
   ) | tee "$log_file"

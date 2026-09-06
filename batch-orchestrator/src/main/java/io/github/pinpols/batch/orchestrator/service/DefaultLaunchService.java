@@ -130,6 +130,12 @@ public class DefaultLaunchService implements LaunchService {
     if (loaded.existingInstance() == null || rerunMode) {
       return null;
     }
+    // 同一 Kafka request 的重投可能落在 T1(实例已提交)与 T2(派发尚未完成)之间。此时已有
+    // job_instance 不是新的业务去重，若改写成 DUPLICATE 会遮蔽 T2 失败并阻断 CREATED 恢复器。
+    if (isOriginalRequestReplay(loaded)) {
+      return new LaunchResponse(
+          loaded.existingInstance().getInstanceNo(), loaded.existingInstance().getTraceId());
+    }
     int updated = jobMappers.triggerRequestMapper.updateAcceptance(
         request.tenantId(),
         request.requestId(),
@@ -614,6 +620,9 @@ public class DefaultLaunchService implements LaunchService {
     if (request.triggerType() == TriggerType.RERUN) {
       throw exception;
     }
+    if (isOriginalRequestReplay(loaded, existingInstance)) {
+      return new LaunchResponse(existingInstance.getInstanceNo(), existingInstance.getTraceId());
+    }
     int updated = jobMappers.triggerRequestMapper.updateAcceptance(
         request.tenantId(),
         request.requestId(),
@@ -626,6 +635,17 @@ public class DefaultLaunchService implements LaunchService {
           request.requestId());
     }
     return new LaunchResponse(existingInstance.getInstanceNo(), existingInstance.getTraceId());
+  }
+
+  /** 判断命中的实例是否由当前 trigger_request 创建，而不是另一条同 dedup_key 的业务请求。 */
+  private boolean isOriginalRequestReplay(LaunchLoadResult loaded) {
+    return isOriginalRequestReplay(loaded, loaded.existingInstance());
+  }
+
+  private boolean isOriginalRequestReplay(
+      LaunchLoadResult loaded, JobInstanceEntity existingInstance) {
+    return loaded.triggerRequest().getId() != null
+        && loaded.triggerRequest().getId().equals(existingInstance.getTriggerRequestId());
   }
 
   record PreparedLaunch(

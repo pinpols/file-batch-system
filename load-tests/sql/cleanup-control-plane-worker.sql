@@ -21,7 +21,18 @@ WHERE tr.related_job_instance_id IS NOT NULL
     tr.request_id LIKE ('%' || :'run_id' || '%')
     OR tr.dedup_key LIKE ('%' || :'run_id' || '%')
     OR tr.trace_id LIKE ('%' || :'run_id' || '%')
-  );
+  )
+UNION
+-- launch T1 已落库而 trigger_request.related_job_instance_id 尚未回写时，实例仍通过
+-- job_instance.trigger_request_id 反向引用请求。清理必须同时覆盖该窗口，否则最终删
+-- trigger_request 会触发 FK 失败并回滚整个清理事务。
+SELECT ji.id
+FROM batch.job_instance ji
+JOIN batch.trigger_request tr
+  ON tr.id = ji.trigger_request_id
+WHERE tr.request_id LIKE ('%' || :'run_id' || '%')
+   OR tr.dedup_key LIKE ('%' || :'run_id' || '%')
+   OR tr.trace_id LIKE ('%' || :'run_id' || '%');
 
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids

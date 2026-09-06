@@ -78,9 +78,12 @@ public interface JobInstanceMapper {
   long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
 
   /**
-   * 选 RUNNING 中超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 回退）。
+   * 选至少一个子任务已进入 RUNNING，且超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 回退）。
    *
    * <p>JOIN job_definition 拿 timeout_seconds（{@code > 0} 才生效，{@code = 0} 表示无 timeout）。
+   *
+   * <p>实例进入 RUNNING 只表示已完成派发，并不代表 worker 已开始执行。排队等待由背压和 SLA 观察，不能消耗执行
+   * timeout；否则高峰队列会把尚未 claim 的任务错误终止。
    *
    * <p>与 {@code selectSlaViolationCandidates} 区别：SLA 看 {@code deadline_at /
    * expected_duration_seconds}（业务 SLA 软告警，不变更状态）；timeout 看 {@code job_definition.timeout_seconds}（硬
@@ -90,7 +93,8 @@ public interface JobInstanceMapper {
 
   /**
    * 选 launch T1 已提交但 T2 从未完成的非 workflow 实例。仅包含 CREATED、零 partition、零 task、trigger_request 仍
-   * ACCEPTED 的实例,供保守恢复调度器重驱 T2。
+   * ACCEPTED 或 LAUNCHED 的实例,以及旧版本把同一请求重投误标为 DUPLICATE 的同源实例，供保守恢复调度器
+   * 重驱 T2。请求标签不是实际派发事实；只有零子项的结构性条件才表示 T2 未完成。
    */
   List<JobInstanceEntity> selectStaleCreatedLaunchCandidates(
       @Param("olderThan") Instant olderThan, @Param("limit") int limit);
