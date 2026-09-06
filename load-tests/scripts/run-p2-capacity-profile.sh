@@ -44,6 +44,8 @@ CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
+# 仅验证 benchmark 容器预算，不创建 fixture、不获取压测锁、也不执行清理逻辑。
+PREFLIGHT_ONLY="${PREFLIGHT_ONLY:-0}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
 REPORT="$LOAD_DIR/target/p2-capacity-profile-${RUN_ID}.md"
@@ -174,8 +176,6 @@ cleanup() {
   fi
   exit "$rc"
 }
-trap cleanup EXIT
-
 acquire_fairness_lock() {
   # p2fa/p2fb/p2fc 是共享的短生命周期 fixture；并发 profile 的 cleanup 会误删另一轮数据。
   # 该锁只约束同一工作区的本地执行，CI 应为每个 job 使用独立 worktree / database。
@@ -390,8 +390,13 @@ run_fairness() {
 
 require_tooling
 require_trigger_capacity_budget
+if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
+  echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
+  exit 0
+fi
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 write_report_header
+trap cleanup EXIT
 
 if [[ "$RUN_10W_STORM" == "1" ]]; then
   run_10w_storm

@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +54,14 @@ import org.springframework.kafka.support.Acknowledgment;
 @SuppressWarnings("java:S2259")
 public abstract class AbstractTaskConsumer implements WorkerLoadProvider, ApplicationContextAware {
 
+  /**
+   * 平台端短暂不可达时，显式回退 Kafka offset 的等待时间。
+   *
+   * <p>消费者使用 {@code MANUAL_IMMEDIATE} 确认模式；仅不调用 acknowledge 不会让当前 poll 的 offset 自动回退。
+   * 使用 nack 才能保证恢复后重新投递，同时避免连接刚恢复时立即形成无间隔重试风暴。
+   */
+  private static final Duration TRANSIENT_REDELIVERY_DELAY = Duration.ofSeconds(1);
+
   /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
   protected abstract AbstractWorkerLoop workerLoop();
 
@@ -89,6 +98,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   public void consume(String payload, Acknowledgment acknowledgment) {
     if (doConsume(payload)) {
       acknowledgment.acknowledge();
+    } else {
+      acknowledgment.nack(TRANSIENT_REDELIVERY_DELAY);
     }
   }
 
@@ -106,6 +117,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   public void consumeBatch(List<String> payloads, Acknowledgment acknowledgment) {
     if (doConsumeBatch(payloads)) {
       acknowledgment.acknowledge();
+    } else {
+      acknowledgment.nack(TRANSIENT_REDELIVERY_DELAY);
     }
   }
 
@@ -222,7 +235,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
               workerConfiguration().workerType(),
               message.taskId(),
               ex.getMessage());
-          return false; // 不 commit offset，Kafka listener 重投
+          return false; // 由 consume() 显式 nack，Kafka 回退 offset 后重投
         }
         // 不可恢复 / 业务 4xx → DLQ + commit offset
         log.error(
@@ -300,7 +313,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
             workerConfiguration().workerType(),
             n,
             ex.getMessage());
-        return false; // 不提交,整批重投(已成功 partition 靠幂等去重)
+        return false; // 由 consumeBatch() 显式 nack，整批回退后重投
       }
       // 不可恢复 → 逐条进 DLQ 后提交(避免整批卡住);任一 DLQ 写失败则不提交、整批重投
       log.error(

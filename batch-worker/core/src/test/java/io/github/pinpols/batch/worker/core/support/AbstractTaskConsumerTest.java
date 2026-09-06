@@ -24,6 +24,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.reflect.Field;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,8 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.web.client.ResourceAccessException;
 
 /**
  * Tests for AbstractTaskConsumer covering: - malformed message dropped silently - worker type
@@ -226,6 +229,34 @@ class AbstractTaskConsumerTest {
     boolean result = consumer.doConsume(buildImportMessage());
 
     assertThat(result).isTrue();
+  }
+
+  @Test
+  void consume_nacksTransientOrchestratorFailureForRedelivery() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.execute(any(), any()))
+        .thenThrow(new ResourceAccessException("orchestrator temporarily unavailable"));
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
+    Acknowledgment acknowledgment = mock(Acknowledgment.class);
+
+    consumer.consume(buildImportMessage(), acknowledgment);
+
+    verify(acknowledgment).nack(Duration.ofSeconds(1));
+    verify(acknowledgment, never()).acknowledge();
+  }
+
+  @Test
+  void consumeBatch_nacksTransientOrchestratorFailureForRedelivery() {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.executeBatchDetailed(any(), anyString()))
+        .thenThrow(new ResourceAccessException("orchestrator temporarily unavailable"));
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
+    Acknowledgment acknowledgment = mock(Acknowledgment.class);
+
+    consumer.consumeBatch(List.of(buildImportMessage()), acknowledgment);
+
+    verify(acknowledgment).nack(Duration.ofSeconds(1));
+    verify(acknowledgment, never()).acknowledge();
   }
 
   @Test

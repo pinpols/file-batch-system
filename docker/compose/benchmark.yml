@@ -1,0 +1,7 @@
+# 只叠加到隔离的本地容量压测栈：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh
+# 容量参数由 batch-trigger/application-benchmark.yml 统一定义；Compose 仅选择环境，
+# 不重复保存 32/40/8、队列和等待时间，避免 profile 与 .env.local 漂移。
+services:
+  trigger:
+    environment:
+      SPRING_PROFILES_ACTIVE: local,benchmark
