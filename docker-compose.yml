@@ -55,7 +55,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres-primary-data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./deploy/docker/postgres/init:/docker-entrypoint-initdb.d:ro
       # WAL 归档卷(配合上面 archive_mode,默认关闭)。生产开 PITR 时解开,
       # 并把目标换成独立故障域(本地卷仅示例,不满足"独立盘"要求)。
       # - wal-archive:/wal-archive
@@ -97,7 +97,7 @@ services:
       - "${POSTGRES_REPLICA_PORT:-15433}:5432"
     volumes:
       - postgres-replica-data:/var/lib/postgresql/data
-      - ./docker/postgres-replica/entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
+      - ./deploy/docker/postgres-replica/entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
     networks:
       - batch-network
     depends_on:
@@ -136,7 +136,7 @@ services:
       - "${BIZ_SHARD_1_PORT:-15442}:5432"
     volumes:
       - postgres-biz-shard-1-data:/var/lib/postgresql/data
-      - ./docker/biz-shard-init:/docker-entrypoint-initdb.d:ro
+      - ./deploy/docker/biz-shard-init:/docker-entrypoint-initdb.d:ro
       - ./scripts/db/business/create_biz_tables.sql:/biz-sql/create_biz_tables.sql:ro
     networks:
       - batch-network

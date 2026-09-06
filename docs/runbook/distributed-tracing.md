@@ -12,7 +12,7 @@
 
 ```bash
 # 启动 collector + Tempo + Jaeger + Grafana（叠加 observability stack）
-docker compose -f docker-compose.yml -f docker/compose/observability.yml up -d
+docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml up -d
 
 # 启动业务模块（默认配置已指向 http://otel-collector:4318）
 ./scripts/local/start-all.sh
@@ -140,7 +140,7 @@ export OTEL_SAMPLING_PROBABILITY=0.1   # 10%
 # 重启业务模块
 ```
 
-或在 collector 侧加 tail-based sampling（修改 `docker/observability/otel-collector.yml`）。
+或在 collector 侧加 tail-based sampling（修改 `deploy/docker/observability/otel-collector.yml`）。
 
 ### 4.3 业务 trace_id 与 OTel traceId 关系
 
@@ -171,6 +171,6 @@ export OTEL_SAMPLING_PROBABILITY=0.1   # 10%
 ## 6. 相关
 
 - [ADR-013 distributed-tracing](../architecture/adr/ADR-013-distributed-tracing.md) — 决策档
-- [docker/compose/observability.yml](../../docker/compose/observability.yml) — 本地 collector + Tempo/Jaeger 编排
-- [docker/observability/otel-collector.yml](../../docker/observability/otel-collector.yml) — collector 流水线配置
+- [deploy/docker/compose/observability.yml](../../deploy/docker/compose/observability.yml) — 本地 collector + Tempo/Jaeger 编排
+- [deploy/docker/observability/otel-collector.yml](../../deploy/docker/observability/otel-collector.yml) — collector 流水线配置
 - [batch-defaults.yml `management.tracing`](../../batch-common/src/main/resources/batch-defaults.yml) — 默认值

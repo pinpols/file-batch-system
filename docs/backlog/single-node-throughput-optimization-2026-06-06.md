@@ -726,7 +726,7 @@ BATCH_WORKER_IMPORT_FETCH_SIZE=5000
 
 #### A3:PG 写参数调优
 
-**改动**(`docker/postgres/conf/postgresql.conf`,无则启动期 `-c` 注入):
+**改动**(`deploy/docker/postgres/conf/postgresql.conf`,无则启动期 `-c` 注入):
 
 ```conf
 wal_buffers = 64MB
@@ -853,7 +853,7 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 | A4 | `docker update --cpus=0 --memory=0 batch-postgres-primary`(取消限制) |
 | A5 | yml URL 去掉 `&reWriteBatchedInserts=true` + 重启 worker-import |
 
-**全局快速回滚**:`git checkout -- docker-compose.yml docker/postgres/conf/ batch-worker-*/src/main/resources/`(临时改若没 commit 时)。
+**全局快速回滚**:`git checkout -- docker-compose.yml deploy/docker/postgres/conf/ batch-worker-*/src/main/resources/`(临时改若没 commit 时)。
 
 ### 4.6 完整运行清单(checkbox,半天跑完)
 
@@ -912,7 +912,7 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 
 ### 5.3 共用配置/部署
 
-- `docker/postgres/conf/postgresql.conf`(A3 调优点;若无独立配置文件 → 走环境变量/cmdline)
+- `deploy/docker/postgres/conf/postgresql.conf`(A3 调优点;若无独立配置文件 → 走环境变量/cmdline)
 - 启动参数:`docker-compose*.yml` / `scripts/local/*.sh`(A1 / EX-A1 JVM 切换)
 
 ### 5.4 相关文档

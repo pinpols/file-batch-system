@@ -17,7 +17,7 @@
 #
 #   # 或叠加应用（app.yml 连的还是 service 名 kafka:29092，无需改应用配置）：
 #   docker compose -f docker-compose.yml -f docker-compose.kafka-ha.yml \
-#       -f docker/compose/app.yml up -d
+#       -f deploy/docker/compose/app.yml up -d
 #
 # ─── 验证（broker HA + 0 丢） ────────────────────────────────────────────────
 #   # 1) topic RF=3 且 ISR=3：

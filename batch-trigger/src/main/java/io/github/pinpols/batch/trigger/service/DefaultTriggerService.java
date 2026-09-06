@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,10 +56,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       PROCESSING}（防并发双审批），再在事务外 HTTP 转发， 成功后更新为 {@code LAUNCHED}。
  * </ul>
  *
- * <p><b>持久化与转发模式（{@link #persistAndForward}）</b>：在 {@code PROPAGATION_REQUIRES_NEW} 事务内同时写
- * trigger_request（PENDING）和 trigger_outbox_event（NEW），提交后立即标 ACCEPTED 返回； relay 周期发
- * Kafka，orchestrator 端 consumer 异步执行 launch。最终去重由 orchestrator 侧 {@code
- * uk_job_instance_tenant_dedup} 保证，trigger 层只做尽力去重。
+ * <p><b>持久化与转发模式（{@link #persistAndForward}）</b>：在一个 {@code PROPAGATION_REQUIRES_NEW}
+ * 事务内完成去重查询、以 ACCEPTED 写入 trigger_request、写入 trigger_outbox_event；提交后
+ * relay 周期发 Kafka，orchestrator 端 consumer 异步执行 launch。
+ * 最终去重由 orchestrator 侧 {@code uk_job_instance_tenant_dedup} 保证，trigger 层只做尽力去重。
  */
 @Service
 @RequiredArgsConstructor
@@ -237,47 +236,19 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
-    TriggerRequestEntity existing = insertPendingAndOutboxOrReturnExisting(launchRequest, dedupKey);
-    if (EmptyChecks.isNotNull(existing)) {
-      return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-    }
-    // CAS 守卫:前态必须仍是刚插入的 PENDING,防止覆盖被并发路径推进过的行(0 行时 reconciler 兜底,不抛异常)。
-    int accepted = triggerRequestMapper.updateRequestStatusConditional(
-        launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED", "PENDING");
-    if (accepted <= 0) {
-      log.warn(
-          "updateRequestStatusConditional(ACCEPTED) affected 0 rows; the row is no longer PENDING: tenantId={}"
-              + " requestId={}",
-          launchRequest.tenantId(),
-          launchRequest.requestId());
-    }
-    return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
-  }
-
-  /**
-   * ADR-010 异步路径:在 REQUIRES_NEW 单事务内 SELECT 去重 + INSERT trigger_request + INSERT
-   * trigger_outbox_event。两表一起提交,任何一步失败整体回滚 → 不会出现 "trigger_request 写入数据库但 outbox 缺失" 的不一致。
-   */
-  private TriggerRequestEntity insertPendingAndOutboxOrReturnExisting(
-      LaunchRequest launchRequest, String dedupKey) {
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    // R-arch-audit-2026-05-23 P1: 用 AtomicReference 替代单元素数组 holder。
-    // 数组 workaround 是 lambda effectively-final 限制的反模式，AtomicReference 语义更清晰
-    // 且无并发开销（TransactionTemplate.execute 单线程内同步执行）。
-    AtomicReference<TriggerRequestEntity> existingHolder = new AtomicReference<>();
-    tx.execute(ignored -> {
+    return tx.execute(ignored -> {
       TriggerRequestEntity existing =
           triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
       if (EmptyChecks.isNotNull(existing)) {
-        existingHolder.set(existing);
-        return null;
+        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
       }
-      triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
+      // 新请求在同一事务内完成 request + outbox 写入，中间状态对外不可见，直接落 ACCEPTED。
+      triggerRequestMapper.insert(buildAcceptedEntity(launchRequest, dedupKey));
       publishLaunchOutbox(launchRequest, dedupKey);
-      return null;
+      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
     });
-    return existingHolder.get();
   }
 
   /**
@@ -292,7 +263,7 @@ public class DefaultTriggerService implements TriggerService {
     triggerOutboxPublisher.publishRaw(r.tenantId(), r.requestId(), r.traceId(), payloadJson);
   }
 
-  private TriggerRequestEntity buildPendingEntity(LaunchRequest r, String dedupKey) {
+  private TriggerRequestEntity buildAcceptedEntity(LaunchRequest r, String dedupKey) {
     TriggerRequestEntity entity = new TriggerRequestEntity();
     entity.setTenantId(r.tenantId());
     entity.setRequestId(r.requestId());
@@ -300,7 +271,7 @@ public class DefaultTriggerService implements TriggerService {
     entity.setJobCode(r.jobCode());
     entity.setBizDate(r.bizDate());
     entity.setDedupKey(dedupKey);
-    entity.setRequestStatus("PENDING");
+    entity.setRequestStatus("ACCEPTED");
     entity.setTraceId(r.traceId());
     entity.setDryRun(r.dryRun());
     return entity;

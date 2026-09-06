@@ -23,7 +23,7 @@ for m in batch-console-api batch-trigger batch-orchestrator \
          batch-worker-import batch-worker-export batch-worker-process \
          batch-worker-dispatch batch-worker-atomic; do
   DOCKER_BUILDKIT=1 docker build \
-    --build-arg MODULE="$m" -f docker/Dockerfile.app \
+    --build-arg MODULE="$m" -f deploy/docker/Dockerfile.app \
     -t "batch-${m#batch-}:latest" --quiet .
   docker tag "${m#batch-}:latest" "batch-${m#batch-}:latest"
 done

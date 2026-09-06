@@ -18,7 +18,7 @@ FROM maven:3.9.16-eclipse-temurin-21 AS builder
 WORKDIR /workspace
 
 # aliyun mirror 避开 Maven Central 在 18081 代理下的不稳定 HTTPS
-COPY docker/settings.xml /usr/share/maven/conf/settings.xml
+COPY deploy/docker/settings.xml /usr/share/maven/conf/settings.xml
 
 # 先 COPY 所有 pom.xml 单独一层 → 仅 pom 改时才 invalidate deps cache
 COPY pom.xml ./
@@ -105,7 +105,7 @@ COPY --from=selected-layers /layers/spring-boot-loader/ /app/spring-boot-loader/
 COPY --from=selected-layers /layers/snapshot-dependencies/ /app/snapshot-dependencies/
 COPY --from=selected-layers /layers/application/ /app/application/
 
-COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY deploy/docker/entrypoint.sh /app/entrypoint.sh
 RUN app_jar="$(find /app/application -maxdepth 1 -type f -name '*-exec.jar' -print -quit)" \
     && test -n "$app_jar" \
     && ln -s "$app_jar" /app/app.jar \

@@ -72,7 +72,7 @@
     <update id="updateAcceptance">
         update batch.trigger_request
         set request_status = #{requestStatus},
-            related_job_instance_id = #{relatedJobInstanceId},
+            related_job_instance_id = #{relatedJobInstanceId,jdbcType=BIGINT},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and request_id = #{requestId}
@@ -82,7 +82,7 @@
               request_status = 'LAUNCHED'
               and #{requestStatus} = 'LAUNCHED'
               and related_job_instance_id is null
-              and #{relatedJobInstanceId} is not null
+              and #{relatedJobInstanceId,jdbcType=BIGINT} is not null
             )
           )
     </update>

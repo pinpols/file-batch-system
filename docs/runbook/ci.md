@@ -94,7 +94,7 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
 | 依赖漏洞扫描 | Trivy `fs`（vuln） | full-ci-gate | 已知 CVE；OWASP dependency-check 的 NVD 全量下载在 CI 上过慢（5 分钟超时仍下不到 1/5）且不拦门禁，2026-08 起 CI 由 trivy 覆盖，`--mode=deps` 保留本地按需使用 |
-| Dockerfile lint | Hadolint | full-ci-gate | `docker/Dockerfile.app` |
+| Dockerfile lint | Hadolint | full-ci-gate | `deploy/docker/Dockerfile.app` |
 | 文件系统安全扫描 | Trivy `fs` | full-ci-gate | CRITICAL/HIGH 漏洞 + IaC 配置 |
 | K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
 

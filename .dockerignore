@@ -29,4 +29,4 @@ examples/**/target
 examples/**/node_modules
 !batch-e2e-tests/
 !batch-e2e-tests/pom.xml
-docker/sftp/data
+deploy/docker/sftp/data

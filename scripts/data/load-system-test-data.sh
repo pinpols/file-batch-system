@@ -129,7 +129,7 @@ EOF
   mc cp "${tmp_dir}/customer-account-20260322.done" "${MINIO_ALIAS}/${MINIO_BUCKET}/ingress/import/customer-account-20260322.done" >/dev/null
 
   # ── ta/tb/tc 租户样本：与 test-full-coverage-import-suite 里 Excel channel 配置的
-  #    bucket/prefix（ta/, tb/, tc/）对齐；同时与 docker/sftp/data/{tenant}/inbound/ 下
+  #    bucket/prefix（ta/, tb/, tc/）对齐；同时与 deploy/docker/sftp/data/{tenant}/inbound/ 下
   #    的 SFTP fixture 保持同名，方便前端在 OSS 和 SFTP 两条链路之间切换验证。
   cat > "${tmp_dir}/ta-customer-profile-20260419.csv" <<'EOF'
 customerNo,customerName,customerType,level,region,updatedAt

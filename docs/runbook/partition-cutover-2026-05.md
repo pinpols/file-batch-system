@@ -43,7 +43,7 @@ docker run -d --name pg-cutover -p 15500:5432 \
     -e POSTGRES_PASSWORD=test postgres:17
 
 # 2. 装最新 schema（V1-V143）
-psql -h localhost -p 15500 -U postgres -f docker/postgres/init/000-create-business-db.sql
+psql -h localhost -p 15500 -U postgres -f deploy/docker/postgres/init/000-create-business-db.sql
 # 跑全部 Flyway migration 到 V143
 mvn -pl batch-orchestrator -am flyway:migrate \
     -Dflyway.url=jdbc:postgresql://localhost:15500/batch_platform

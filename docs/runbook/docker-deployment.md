@@ -3,8 +3,8 @@
 仓库现在提供两种 Docker 使用方式：
 
 - `docker-compose.yml`：本地基础依赖
-- `docker/compose/app.yml`：应用容器部署
-- `docker/compose/observability.yml`：可选观测栈叠加层
+- `deploy/docker/compose/app.yml`：应用容器部署
+- `deploy/docker/compose/observability.yml`：可选观测栈叠加层
 
 建议按环境选择对应的 env 文件：
 
@@ -55,7 +55,7 @@
 ## 启动观测栈
 
 ```bash
-./scripts/docker/observability/up.sh
+./scripts/deploy/docker/observability/up.sh
 ```
 
 观测栈会额外启动：
@@ -69,7 +69,7 @@
 - Loki
 - Grafana
 
-对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability/)。
+对应脚本在 [scripts/deploy/docker/observability/](../../scripts/deploy/docker/observability/)。
 
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
 业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network` 共享网络互通。
@@ -84,7 +84,7 @@
 
 ## 说明
 
-- 应用镜像使用统一的 `docker/Dockerfile.app`
+- 应用镜像使用统一的 `deploy/docker/Dockerfile.app`
 - 构建时通过 `MODULE` 参数选择模块
 - 运行时通过 `depends_on` 等待数据库、Kafka topic 初始化和 MinIO bucket 初始化完成
 - 镜像内置 `curl`，用于容器健康检查

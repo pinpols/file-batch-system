@@ -62,5 +62,5 @@ listener 时应同步核对 Kafka 并发、执行许可和执行线程池三者�
 ## 关联
 
 - 代码：`batch-worker/core/.../AbstractTaskConsumer.java`
-- 规则：`docker/observability/prometheus-batch-rules.yml`、Helm 同步副本
+- 规则：`deploy/docker/observability/prometheus-batch-rules.yml`、Helm 同步副本
 - 上一级：[`README.md`](README.md)

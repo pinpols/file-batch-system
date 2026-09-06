@@ -96,5 +96,5 @@
 
 ## 关联
 - `playbooks/pg-primary-failover.md` / `backup-and-pitr.md` / `redis-shedlock-down.md`
-- `helm/values-prod.yaml`(基础件连接地址 + Kafka broker 期望拓扑)、`docker/observability/prometheus-batch-rules.yml`(HA 告警)
+- `helm/values-prod.yaml`(基础件连接地址 + Kafka broker 期望拓扑)、`deploy/docker/observability/prometheus-batch-rules.yml`(HA 告警)
 - **Kafka broker HA**:`deploy/ha/20-kafka-strimzi.yaml`(prod CR) + `deploy/ha/README.md`(apply/验证) + `docker-compose.kafka-ha.yml`(本地 3 broker 演练 override) + `scripts/data/init-kafka-topics.sh`(RF / min.insync 可配)

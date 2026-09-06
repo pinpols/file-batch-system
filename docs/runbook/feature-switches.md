@@ -10,7 +10,7 @@
 >
 > **本文档以代码 + yml 为权威**。`rework-classification.md` Phase 2 表格用作交叉对照（已于 2026-04-25 与本文档对齐）。
 >
-> **容器透传契约**：本表登记的公共环境变量必须由 `docker/compose/app.yml` 显式透传；生产 Chart 一等开关必须由 `helm/batch-platform/templates/configmap.yaml` / `secret.yaml` 显式渲染。`feature-switch-registry.yml` 是 CI required-vars 的唯一登记源；`scripts/ci/check-config-defaults-sync.py --check` 检查 compose 默认值漂移，`scripts/ci/check-helm-env-sync.py` 检查 Helm env 漂移和缺失入口。
+> **容器透传契约**：本表登记的公共环境变量必须由 `deploy/docker/compose/app.yml` 显式透传；生产 Chart 一等开关必须由 `helm/batch-platform/templates/configmap.yaml` / `secret.yaml` 显式渲染。`feature-switch-registry.yml` 是 CI required-vars 的唯一登记源；`scripts/ci/check-config-defaults-sync.py --check` 检查 compose 默认值漂移，`scripts/ci/check-helm-env-sync.py` 检查 Helm env 漂移和缺失入口。
 
 ### 0. 最关键开关速查（按影响面）
 
@@ -227,7 +227,7 @@ Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD
 
 **默认**：
 - application.yml fallback：`true`
-- docker/compose/app.yml：`true`（`${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}`）
+- deploy/docker/compose/app.yml：`true`（`${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}`）
 - `.env.example`：`true`
 - 测试 `application-test.yml`：`false`（测试容器不起 replica）
 
@@ -368,7 +368,7 @@ docker exec batch-redis redis-cli --scan --pattern "batch:quota:*" | head
 
 > **2026-05-02 已删除**：trigger → orchestrator 异步链路（outbox + Kafka）已固化为唯一路径，开关和同步 HTTP 桥（`HttpOrchestratorTriggerAdapter`）同步删除。无需配置此参数。
 >
-> 链路详情见 `docs/architecture/system-flow-overview.md §1.4`。运维观察指标（outbox GIVE_UP 告警等）仍有效，见 `docker/observability/prometheus-batch-rules.yml`。
+> 链路详情见 `docs/architecture/system-flow-overview.md §1.4`。运维观察指标（outbox GIVE_UP 告警等）仍有效，见 `deploy/docker/observability/prometheus-batch-rules.yml`。
 
 ---
 
@@ -438,7 +438,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 |---|---|
 | 对应模块 `application.yml` | fallback 值 + 注释 |
 | 对应 `@ConfigurationProperties` 类 | Java 字段默认 + javadoc |
-| `docker/compose/app.yml` | 公共开关必须显式透传并提供与应用一致的 `:-xxx` 默认 |
+| `deploy/docker/compose/app.yml` | 公共开关必须显式透传并提供与应用一致的 `:-xxx` 默认 |
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
 | `docs/architecture/rework-classification.md` | Phase 2 表格的"开关"列 |
@@ -450,7 +450,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 | # | 待办 | 状态 |
 |---|---|---|
-| 1 | `docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 回退 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
+| 1 | `deploy/docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 回退 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
 | 2 | `rework-classification.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
 | 3 | `read-replica` 应用层 fail-open | ✅ **本次梳理前已落地**（`ReadReplicaRoutingDataSource` C-3.1：失败计数 + quarantine + micrometer 指标 + `@RouteToPrimary` 注解）；本文档 §3.1 已校准 |
 | 4 | `mq.routing` 切换灰度发布 runbook | ✅ 完成（新增 `docs/runbook/mq-topic-routing-rollout.md`） |

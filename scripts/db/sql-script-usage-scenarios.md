@@ -107,7 +107,7 @@
 
 ## 6) Docker 初始化脚本
 
-- **目录**：`docker/postgres/init/`
+- **目录**：`deploy/docker/postgres/init/`
 - **文件**：
   - `000-create-business-db.sql`
   - `001-create-schemas.sql`
@@ -133,7 +133,7 @@
 1. **生产结构变更**：只改 `batch-orchestrator/.../db/migration/`，并遵循 Flyway 版本号规则
 2. **单个测试场景数据**：放 `src/test/resources/db/testdata/`，由 `@Sql` 加载
 3. **E2E 业务表示例**：维护在 `docs/sql/business/`，由 `batch-e2e-tests` 的 `testResource` 打进测试 classpath
-4. **本地容器起库**：仅改 `docker/postgres/init/`
+4. **本地容器起库**：仅改 `deploy/docker/postgres/init/`
 5. **系统联调固定数据**：使用 `docs/sql/system-test/`
 
 ---

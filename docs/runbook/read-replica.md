@@ -179,7 +179,7 @@ console-api 的 `ReadReplicaRoutingDataSource` 不是"试一下从库失败就�
   - `batch.console.replica.replay_lag_seconds` — 当前 max(replay_lag)，-1 = 未知
   - `batch.console.replica.streaming_count` — streaming 状态 replica 数，-1 = 未知
 
-### 5.3 Prometheus 告警（4 条，`docker/observability/prometheus-batch-rules.yml`）
+### 5.3 Prometheus 告警（4 条，`deploy/docker/observability/prometheus-batch-rules.yml`）
 
 | 告警 | 表达式 | 持续 | 严重程度 |
 |---|---|---|---|
@@ -303,8 +303,8 @@ console-api 一份配置 + 改 9 个 query service 加 `readOnly=true` 就值，
 - `batch-console-api/.../config/ReadReplicaDataSourceConfiguration.java` — 路由 DataSource 配置
 - `batch-console-api/.../config/ReadReplicaProperties.java` — 配置 binding
 - `batch-console-api/src/main/resources/application.yml` `batch.console.read-replica.*` — 默认值
-- `docker/postgres-replica/entrypoint.sh` — 从库 bootstrap 脚本
-- `docker/postgres/init/003-create-replication-user.sh` — 主库初始化时建 replicator 用户
+- `deploy/docker/postgres-replica/entrypoint.sh` — 从库 bootstrap 脚本
+- `deploy/docker/postgres/init/003-create-replication-user.sh` — 主库初始化时建 replicator 用户
 
 ## 相关参考
 

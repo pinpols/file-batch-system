@@ -146,6 +146,6 @@
 
 ## 关联
 
-- 代码:`docker-compose.yml`(postgres-primary / postgres-replica),`docker/postgres-replica/entrypoint.sh`
+- 代码:`docker-compose.yml`(postgres-primary / postgres-replica),`deploy/docker/postgres-replica/entrypoint.sh`
 - 配置:`ReadReplicaRoutingDataSource`(console-api 唯一读写分离落点),`docs/runbook/read-replica.md`
 - 上一级:[`docs/runbook/incident-response.md`](../incident-response.md)

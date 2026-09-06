@@ -115,7 +115,7 @@ class QuartzLoadTestController {
 
 ## 3. 观察 Grafana
 
-在 `docker/observability/grafana-dashboard-batch-coverage.json` 加 4 个 panel（dashboard JSON 里追加 panel block）：
+在 `deploy/docker/observability/grafana-dashboard-batch-coverage.json` 加 4 个 panel（dashboard JSON 里追加 panel block）：
 
 | Panel 标题 | PromQL | 单位 | 阈值 |
 |---|---|---|---|

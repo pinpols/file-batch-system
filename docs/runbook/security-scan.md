@@ -154,7 +154,7 @@ brew install trivy
 ```
 
 ```bash
-docker build -f docker/Dockerfile.app --build-arg MODULE=batch-console-api -t batch-console-api:local .
+docker build -f deploy/docker/Dockerfile.app --build-arg MODULE=batch-console-api -t batch-console-api:local .
 trivy image batch-console-api:local
 ```
 

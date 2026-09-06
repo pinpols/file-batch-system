@@ -98,8 +98,8 @@ Console 最小管理入口已落在 `/api/console/asset-freshness-policies`:
 
 Prometheus / Alertmanager 模板已同步:
 
-- `docker/observability/prometheus-batch-rules.yml` 与 `helm/batch-platform/files/prometheus-batch-rules.yml` 含 `BatchAssetFreshnessMissing` / `BatchAssetFreshnessStale`。
-- `docker/observability/alertmanager-batch-template.yml` 按 `alert_group="freshness"` 路由到 `batch-freshness`。
+- `deploy/docker/observability/prometheus-batch-rules.yml` 与 `helm/batch-platform/files/prometheus-batch-rules.yml` 含 `BatchAssetFreshnessMissing` / `BatchAssetFreshnessStale`。
+- `deploy/docker/observability/alertmanager-batch-template.yml` 按 `alert_group="freshness"` 路由到 `batch-freshness`。
 - 这些规则只消费 `batch_alert_events_total{alert_type="ASSET_FRESHNESS_*"}`,不引入新的告警治理模型。
 
 ## 验收口径

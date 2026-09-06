@@ -1,5 +1,5 @@
 # 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
-# legacy 叠加文件；active 路径是 docker/compose/observability.yml。镜像默认值需保持一致。
+# legacy 叠加文件；active 路径是 deploy/docker/compose/observability.yml。镜像默认值需保持一致。
 # 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 services:
 
@@ -16,9 +16,9 @@ services:
     environment:
       BATCH_DEPLOY_MODE: ${BATCH_DEPLOY_MODE:-container}
     volumes:
-      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./docker/observability/prometheus-batch-rules.yml:/etc/prometheus/rules/batch.yml:ro
-      - ./docker/observability/prometheus-entrypoint.sh:/etc/prometheus/entrypoint.sh:ro
+      - ./deploy/docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/docker/observability/prometheus-batch-rules.yml:/etc/prometheus/rules/batch.yml:ro
+      - ./deploy/docker/observability/prometheus-entrypoint.sh:/etc/prometheus/entrypoint.sh:ro
       - prometheus-data:/prometheus
     ports:
       - "${PROMETHEUS_PORT:-19090}:9090"
@@ -32,7 +32,7 @@ services:
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
     volumes:
-      - ./docker/observability/alertmanager-batch-template.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/docker/observability/alertmanager-batch-template.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
       - "${ALERTMANAGER_PORT:-19093}:9093"
     networks:
@@ -58,7 +58,7 @@ services:
     command: ["-config.file=/etc/tempo/tempo.yml"]
     user: "0"  # Tempo 写 /var/tempo 需要 root；本地开发简化
     volumes:
-      - ./docker/observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - ./deploy/docker/observability/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo-data:/var/tempo
     ports:
       - "${TEMPO_HTTP_PORT:-13200}:3200"   # 查询 API（Grafana datasource 走容器内 tempo:3200）
@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yml
     volumes:
-      - ./docker/observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./deploy/docker/observability/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
     ports:
       - "${LOKI_PORT:-13100}:3100"
@@ -89,7 +89,7 @@ services:
     environment:
       DEPLOYMENT_ENVIRONMENT: local
     volumes:
-      - ./docker/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
+      - ./deploy/docker/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
     ports:
       - "${OTEL_GRPC_PORT:-4317}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"
@@ -112,8 +112,8 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
-      - ./docker/observability/grafana-provisioning:/etc/grafana/provisioning:ro
-      - ./docker/observability/grafana-dashboard-batch.json:/var/lib/grafana/dashboards/batch.json:ro
+      - ./deploy/docker/observability/grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/docker/observability/grafana-dashboard-batch.json:/var/lib/grafana/dashboards/batch.json:ro
       - grafana-data:/var/lib/grafana
     ports:
       - "${GRAFANA_PORT:-13000}:3000"
@@ -146,7 +146,7 @@ services:
       # 挂自定义 query 暴露锁等待指标(pg_lock_waits_*),供 BatchPostgresLockWaitStuck 告警。
       PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
     volumes:
-      - ./docker/observability/postgres-exporter-queries.yaml:/etc/postgres_exporter/queries.yaml:ro
+      - ./deploy/docker/observability/postgres-exporter-queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     networks:
       - batch-network
     depends_on:

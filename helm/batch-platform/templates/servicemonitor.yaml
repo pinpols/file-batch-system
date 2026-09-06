@@ -1,6 +1,6 @@
 {{/*
   R7-A6-P1: Prometheus ServiceMonitor — 让 prometheus-operator 自动 scrape 7 个 Spring Boot
-  app 的 /actuator/prometheus endpoint，替代 docker/observability/prometheus.yml 里的
+  app 的 /actuator/prometheus endpoint，替代 deploy/docker/observability/prometheus.yml 里的
   file_sd（K8s 场景下 file_sd 需要外部生成器维护 targets.json）。
 
   需要前置：集群已安装 prometheus-operator (kube-prometheus-stack)。values.yaml

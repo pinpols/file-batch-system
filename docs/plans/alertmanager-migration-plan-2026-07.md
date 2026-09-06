@@ -271,7 +271,7 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 
 **未上线 = 没有真实流量可对账,验证全部在本地/CI 完成;上线前另有一小节 checklist(§7.3)。**
 
-### 7.1 本地 docker AM 全链 smoke(observability overlay,AM v0.28.1,`docker/compose/observability.yml:27`)
+### 7.1 本地 docker AM 全链 smoke(observability overlay,AM v0.28.1,`deploy/docker/compose/observability.yml:27`)
 
 一条端到端断言链(建议做成脚本,风格对齐 `sim-harness.sh` 系列):
 1. 起全栈 + observability overlay;route 由生成器从 `alert_routing_config` 种子数据渲染,`amtool check-config` 绿;
@@ -356,7 +356,7 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 
 ## 10. AM 部署形态
 
-- **现状**:单实例 `prom/alertmanager:v0.28.1`(`docker/compose/observability.yml:27`),配置文件挂载
+- **现状**:单实例 `prom/alertmanager:v0.28.1`(`deploy/docker/compose/observability.yml:27`),配置文件挂载
   `alertmanager-batch-template.yml`,宿主端口 `19093→9093`。Prometheus 已指向 `alertmanager:9093`(`prometheus.yml:13`)。
 - **配置管理**:文件驱动 + `amtool check-config` 校验 + `POST /-/reload` 热加载;route 由 §6.4 生成器产出。
   模板里 `REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN`(`alertmanager-batch-template.yml:41`)部署时渲染真实 token

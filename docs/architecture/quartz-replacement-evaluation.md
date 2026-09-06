@@ -311,7 +311,7 @@ public class HashedWheelTriggerScheduler implements TriggerScheduler {
 
 到拐点前这 4 个指标会先动,预警窗口至少 2-4 周——足够团队排期阶段 1。
 
-Grafana panel 可加进 `docker/observability/grafana-dashboard-batch-coverage.json`。
+Grafana panel 可加进 `deploy/docker/observability/grafana-dashboard-batch-coverage.json`。
 
 ---
 

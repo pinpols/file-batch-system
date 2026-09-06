@@ -131,7 +131,7 @@
 | `outbox_event` 自动归档 | P0 | 每天清 PUBLISHED 超 7 天的，避免无限膨胀 | ✅ `scripts/db/cleanup-outbox-events.sql` |
 | `file_record` / `job_instance` 归档 | P0 | 搬到 `archive` schema，按 `biz_date` range 分表 | ✅ `scripts/db/cleanup-success-instances.sql`（30d 保留 + 8 步级联）|
 | 配置缓存 Redis pub/sub 失效广播 | P1 | 不用重启 orchestrator 就能让多实例感知 `default_params` 变更 | ✅ `ConsoleConfigCacheController`（`/api/console/ops/cache/evict-*` 6 端点）|
-| 完整观测三块板 | P0 | P99 latency / outbox 积压 / DL 量 grafana | ✅ `docker/observability/grafana-dashboard-batch-coverage.json`（6 panel）|
+| 完整观测三块板 | P0 | P99 latency / outbox 积压 / DL 量 grafana | ✅ `deploy/docker/observability/grafana-dashboard-batch-coverage.json`（6 panel）|
 | worker auto-restart | P0 | k8s liveness + readiness（解决本周观察到的 worker 闲置 8h 自动死） | ✅ `scripts/local/watchdog.sh`（本地）+ docker-compose `restart: unless-stopped`（容器）|
 
 ### Phase 2 — 百万 → 千万 — **2026-04-25 全部 5 项 scaffolding 完成 **

@@ -10,6 +10,11 @@ x-app-runtime-env: &app-runtime-env
   BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
   LANG: ${BATCH_LOCALE:-C.UTF-8}
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+  # 容器内使用 Compose 网络服务名；.env.local 中的宿主机 redis:16379 仅供裸 JVM 使用。
+  SPRING_DATA_REDIS_HOST: valkey
+  SPRING_DATA_REDIS_PORT: 6379
+  BATCH_REDIS_HOST: valkey
+  BATCH_REDIS_PORT: 6379
 
 services:
   console-api:
@@ -17,7 +22,7 @@ services:
     image: batch-console-api:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-console-api
     container_name: batch-console-api
@@ -45,7 +50,7 @@ services:
       BATCH_CONSOLE_REPLICA_URL: ${BATCH_CONSOLE_REPLICA_URL:-jdbc:postgresql://postgres-replica:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_CONSOLE_REPLICA_USER: ${BATCH_CONSOLE_REPLICA_USER:-batch_user}
       BATCH_CONSOLE_REPLICA_PASSWORD: ${BATCH_CONSOLE_REPLICA_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
-      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-valkey}
+      BATCH_REDIS_HOST: valkey
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
@@ -98,7 +103,7 @@ services:
     image: batch-trigger:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-trigger
     container_name: batch-trigger
@@ -116,6 +121,12 @@ services:
       # ADR-010 Stage 4: trigger 通过 Kafka topic batch.trigger.launch.v1 异步发布 launch 事件,
       # 容器内必须用容器网络名 kafka:29092 而非宿主机 localhost:19092。
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # 容器内必须访问 Compose 网络中的 Valkey 服务，不能使用宿主机 Redis 端口。
+      SPRING_DATA_REDIS_HOST: valkey
+      SPRING_DATA_REDIS_PORT: 6379
+      BATCH_REDIS_HOST: valkey
+      BATCH_REDIS_PORT: 6379
+      BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND: 40
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
       SERVER_PORT: 18081
       MANAGEMENT_SERVER_PORT: 18081
@@ -147,7 +158,7 @@ services:
     image: batch-orchestrator:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-orchestrator
     container_name: batch-orchestrator
@@ -166,7 +177,7 @@ services:
       BATCH_S3_SECRET_KEY: ${BATCH_S3_SECRET_KEY:?BATCH_S3_SECRET_KEY is required}
       BATCH_S3_BUCKET: ${BATCH_S3_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-valkey}
+      BATCH_REDIS_HOST: valkey
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
       SERVER_PORT: 18082
@@ -199,7 +210,7 @@ services:
     image: batch-worker-import:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-import
         MODULE_DIR: batch-worker/import
@@ -258,7 +269,7 @@ services:
     image: batch-worker-export:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-export
         MODULE_DIR: batch-worker/export
@@ -317,7 +328,7 @@ services:
     image: batch-worker-process:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-process
         MODULE_DIR: batch-worker/process
@@ -376,7 +387,7 @@ services:
     image: batch-worker-dispatch:${APP_IMAGE_TAG:-local}
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-dispatch
         MODULE_DIR: batch-worker/dispatch
