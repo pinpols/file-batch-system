@@ -43,6 +43,9 @@
         <revision>1.0.0</revision>
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
+        <!-- Tomcat 11.0.22 is flagged by the Full Gate security scan. Keep the
+             embedded servlet container on the first patched 11.x release. -->
+        <tomcat.version>11.0.25</tomcat.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <awssdk.version>2.31.78</awssdk.version>
         <testcontainers.version>2.0.5</testcontainers.version>
