@@ -122,6 +122,13 @@ switches:
     composeRequired: false
     helmRequired: true
 
+  - key: batch.trigger.outbox.adaptive-release-enabled
+    module: trigger
+    env:
+      - BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.console.ai.enabled
     module: console-api
     env:

@@ -107,6 +107,14 @@ data:
   BATCH_TRIGGER_OUTBOX_PUBLISHING_TIMEOUT_SECONDS: {{ (.Values.trigger.outbox).publishingTimeoutSeconds | default 120 | quote }}
   BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_ATTEMPTS: {{ (.Values.trigger.outbox).maxPublishAttempts | default 10 | quote }}
   BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND: {{ (.Values.trigger.outbox).maxPublishEventsPerSecond | default 40 | quote }}
+  BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED: {{ (.Values.trigger.outbox).adaptiveReleaseEnabled | quote }}
+  BATCH_TRIGGER_OUTBOX_MIN_PUBLISH_EVENTS_PER_SECOND: {{ (.Values.trigger.outbox).minPublishEventsPerSecond | default 5 | quote }}
+  BATCH_TRIGGER_OUTBOX_LAG_SOFT_THRESHOLD: {{ (.Values.trigger.outbox).lagSoftThreshold | default 1000 | quote }}
+  BATCH_TRIGGER_OUTBOX_LAG_HARD_THRESHOLD: {{ (.Values.trigger.outbox).lagHardThreshold | default 5000 | quote }}
+  BATCH_TRIGGER_OUTBOX_ADAPTIVE_INCREASE_STEP: {{ (.Values.trigger.outbox).adaptiveIncreaseStep | default 1 | quote }}
+  BATCH_TRIGGER_OUTBOX_LAG_SAMPLE_INTERVAL_MILLIS: {{ (.Values.trigger.outbox).lagSampleIntervalMillis | default 5000 | quote }}
+  BATCH_TRIGGER_OUTBOX_LAG_QUERY_TIMEOUT_MILLIS: {{ (.Values.trigger.outbox).lagQueryTimeoutMillis | default 2000 | quote }}
+  BATCH_TRIGGER_OUTBOX_CONSUMER_GROUP_ID: {{ (.Values.trigger.outbox).consumerGroupId | default "orchestrator-trigger-launch" | quote }}
   BATCH_WORKER_ATOMIC_ENABLED_TYPES: {{ (.Values.workerAtomic).enabledTaskTypes | default "" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT: {{ (.Values.orchestrator.importScanner).doneFileFormat | default "MARKER" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX: {{ (.Values.orchestrator.importScanner).doneFileSuffix | default ".done" | quote }}

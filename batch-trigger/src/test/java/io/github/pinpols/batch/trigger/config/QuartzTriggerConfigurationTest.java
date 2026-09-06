@@ -41,4 +41,18 @@ class QuartzTriggerConfigurationTest {
         .anyMatch(message -> message.contains("max-publish-attempts"))
         .anyMatch(message -> message.contains("shutdown-await-seconds"));
   }
+
+  @Test
+  void rejectsInconsistentAdaptiveReleaseConfiguration() {
+    TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
+    properties.setAdaptiveReleaseEnabled(true);
+    properties.setMaxPublishEventsPerSecond(10);
+    properties.setMinPublishEventsPerSecond(11);
+    properties.setLagSoftThreshold(500);
+    properties.setLagHardThreshold(500);
+
+    assertThat(validator.validate(properties))
+        .extracting(Object::toString)
+        .anyMatch(message -> message.contains("adaptive release thresholds are inconsistent"));
+  }
 }

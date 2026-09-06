@@ -31,6 +31,58 @@
           and request_id = #{requestId}
     </select>
 
+    <resultMap id="TriggerLaunchPersistenceContextMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchPersistenceContext">
+        <association property="triggerRequest"
+                     resultMap="TriggerRequestResultMap"
+                     columnPrefix="tr_"/>
+        <association property="existingInstance"
+                     javaType="io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity"
+                     columnPrefix="ji_"
+                     notNullColumn="id">
+            <id column="id" property="id"/>
+            <result column="trigger_request_id" property="triggerRequestId"/>
+            <result column="instance_no" property="instanceNo"/>
+            <result column="trace_id" property="traceId"/>
+        </association>
+    </resultMap>
+
+    <!-- launch 热路径只需要现有实例的 id / 来源 request / instanceNo / traceId。
+         LATERAL 保留原 selectByTenantAndDedupKey 的 latest run_attempt 语义，并避免第二次数据库往返。 -->
+    <select id="selectLaunchPersistenceContext" resultMap="TriggerLaunchPersistenceContextMap">
+        select tr.id                          as tr_id,
+               tr.tenant_id                   as tr_tenant_id,
+               tr.request_id                  as tr_request_id,
+               tr.trigger_type                as tr_trigger_type,
+               tr.job_code                    as tr_job_code,
+               tr.biz_date                    as tr_biz_date,
+               tr.dedup_key                   as tr_dedup_key,
+               tr.request_status              as tr_request_status,
+               tr.related_job_instance_id     as tr_related_job_instance_id,
+               tr.trace_id                    as tr_trace_id,
+               tr.created_at                  as tr_created_at,
+               tr.updated_at                  as tr_updated_at,
+               tr.dry_run                     as tr_dry_run,
+               ji.id                          as ji_id,
+               ji.trigger_request_id          as ji_trigger_request_id,
+               ji.instance_no                 as ji_instance_no,
+               ji.trace_id                    as ji_trace_id
+        from batch.trigger_request tr
+        left join lateral (
+            select candidate.id,
+                   candidate.trigger_request_id,
+                   candidate.instance_no,
+                   candidate.trace_id
+            from batch.job_instance candidate
+            where candidate.tenant_id = tr.tenant_id
+              and candidate.dedup_key = tr.dedup_key
+            order by candidate.run_attempt desc
+            limit 1
+        ) ji on true
+        where tr.tenant_id = #{tenantId}
+          and tr.request_id = #{requestId}
+    </select>
+
     <select id="selectByTenantAndDedupKey" resultMap="TriggerRequestResultMap">
         select *
         from batch.trigger_request

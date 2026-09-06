@@ -226,6 +226,15 @@ trigger:
     maxPublishAttempts: 10
     # 单 Trigger Pod 限额。默认 replicaCount=1；扩 Trigger 副本前须下调每 Pod 限额或先实现共享预算。
     maxPublishEventsPerSecond: 40
+    # 灰度开关：按 orchestrator trigger consumer group lag 进行 AIMD 自适应释放。
+    adaptiveReleaseEnabled: false
+    minPublishEventsPerSecond: 5
+    lagSoftThreshold: 1000
+    lagHardThreshold: 5000
+    adaptiveIncreaseStep: 1
+    lagSampleIntervalMillis: 5000
+    lagQueryTimeoutMillis: 2000
+    consumerGroupId: orchestrator-trigger-launch
   # Quartz misfire 由幸存节点立即补跑，trigger 自身负担轻；但要给 Quartz cluster
   # 注销节点 + Spring graceful shutdown drain in-flight 的 trigger 转发请求时间。
   gracefulShutdown:
