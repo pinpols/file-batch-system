@@ -45,8 +45,8 @@
         ▼
 DefaultTriggerService.persistAndForward()
         │  @Transactional 单事务内:
-        │   1) trigger_request INSERT (status=PENDING)
-        │   2) trigger_outbox_event INSERT (status=PENDING, payload=LaunchRequest JSON)
+        │   1) trigger_request INSERT (status=ACCEPTED)
+        │   2) trigger_outbox_event INSERT (status=NEW, payload=LaunchRequest JSON)
         ▼
 [事务 commit]
         │
@@ -178,7 +178,7 @@ CREATE UNIQUE INDEX uk_trigger_outbox_request_id
 
 ### C. 直接 KafkaTemplate.send
 
-**否决理由**:同 ADR-002 §备选方案 1,产生双写不一致(trigger_request commit 但 Kafka send 失败 → trigger_request 留 PENDING 永远没人重试 → 客户报"任务未触发")。
+**否决理由**:同 ADR-002 §备选方案 1,产生双写不一致(trigger_request commit 但 Kafka send 失败 → trigger_request 留 ACCEPTED 但无可靠重试来源 → 客户报"任务未触发")。
 
 ## 不变量
 

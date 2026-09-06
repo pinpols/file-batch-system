@@ -201,6 +201,25 @@ reset() {
   c_grn "== reset 完成 =="
 }
 
+# all 的 reset 必须在控制面静默时执行。应用保持运行会在 TRUNCATE CASCADE
+# 获取表锁的同时继续写 job/outbox，导致清理事务之间互相等待并产生死锁。
+# 只停止 Compose 管理的应用容器；基础设施、数据卷和配置不受影响，后续
+# ensure_core_runtime 会按原有路径恢复控制面。
+quiesce_runtime_for_reset() {
+  local compose_env="${COMPOSE_ENV_FILE:-$ROOT/.env.local}"
+  local compose_app="$ROOT/deploy/docker/compose/app.yml"
+  [[ -f "$compose_app" ]] || { c_red "  ✗ 未找到 Compose 应用文件"; return 1; }
+  local compose_args=(docker compose)
+  [[ -f "$compose_env" ]] && compose_args+=(--env-file "$compose_env")
+  compose_args+=(-f "$ROOT/docker-compose.yml" -f "$compose_app" stop
+    console-api trigger orchestrator worker-import worker-export worker-process worker-dispatch worker-atomic)
+
+  if docker info >/dev/null 2>&1 && [[ "${BATCH_DEPLOY_MODE:-container}" == "container" ]]; then
+    echo "== reset 前暂停应用写入(保留基础设施) =="
+    "${compose_args[@]}" >/dev/null
+  fi
+}
+
 # ---------------------------------------------------------
 # prereq:幂等装配先决条件
 # ---------------------------------------------------------
@@ -323,7 +342,9 @@ restart_import() {
   esac
   # 容器模式不能按 18083 查 PID；Docker 端口代理被误杀会连带终止 Docker
   # daemon。restart.sh 会检测受管容器并改用 Compose 重建指定服务。
-  if [[ "$(docker inspect -f '{{.State.Running}}' batch-worker-import 2>/dev/null || true)" == "true" ]]; then
+  local compose_service
+  compose_service="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' batch-worker-import 2>/dev/null || true)"
+  if [[ "$compose_service" == "worker-import" ]]; then
     local checkpoint_enabled=false skip_enabled=false skip_max=0 error_sink=BOTH
     if [[ "$mode" == checkpoint ]]; then
       checkpoint_enabled=true
@@ -504,6 +525,6 @@ case "${1:-}" in
   routing-sim) routing_sim ;;
   # reset 必须先于服务启动，避免旧 scheduler/worker 在清理窗口写入运行态；
   # prereq 的租户导入又依赖 console 已就绪，因此在两者之间用小堆重启并等待核心服务。
-  all)         preflight && reset && ensure_core_runtime && prereq && verify_data && sim ;;
+  all)         preflight && quiesce_runtime_for_reset && reset && ensure_core_runtime && prereq && verify_data && sim ;;
   *) echo "用法: $0 {preflight|reset|prereq|verify-data|sim|routing-sim|all}"; exit 2 ;;
 esac

@@ -12,8 +12,8 @@
 | `application-local.yml` | IDE/本机拓扑、开发旁路 | 压测吞吐、生产副本和连接池预算 |
 | `application-benchmark.yml` | 隔离容量画像的资源预算 | 生产默认、密钥、业务功能开关 |
 | `.env.local` / `.env.test` / `.env.prod` | 凭据、端口、外部服务地址和环境身份 | 代码中的性能调优默认值 |
-| `docker/compose/app.yml` | 容器网络、卷、密钥传递和服务编排 | profile 已定义的容量数字 |
-| `docker/compose/benchmark.yml` | 选择 benchmark profile | 重复的 Spring 容量参数 |
+| `deploy/docker/compose/app.yml` | 容器网络、卷、密钥传递和服务编排 | profile 已定义的容量数字 |
+| `deploy/docker/compose/benchmark.yml` | 选择 benchmark profile | 重复的 Spring 容量参数 |
 | Helm `values*.yaml` | Kubernetes 部署容量与生产运行参数 | 本机开发或压测基线 |
 
 ## 已定义环境

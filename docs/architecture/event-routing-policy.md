@@ -117,7 +117,7 @@ OutboxRetryScheduler 扫 event_outbox_retry
 | `batch.trigger.launch.kafka.queue.age` | TriggerLaunchConsumer | p95 > 30s 持续 10min；检查 consumer lag、分区数和实例数 |
 | `batch.trigger.launch.consume.duration` | TriggerLaunchConsumer | 与 queue age 联合判断是消费端处理慢还是 Kafka 排队 |
 
-详见 `docker/observability/prometheus-batch-rules.yml`。
+详见 `deploy/docker/observability/prometheus-batch-rules.yml`。
 
 ## 6. 历史演进
 

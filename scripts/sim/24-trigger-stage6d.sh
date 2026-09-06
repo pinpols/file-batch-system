@@ -52,7 +52,7 @@ restart_trigger_for_fixture() {
 echo "==> seed trigger stage6d fixtures"
 if sim_container_running batch-trigger; then
   docker compose --env-file "${COMPOSE_ENV_FILE:-.env.local}" \
-    -f docker-compose.yml -f docker/compose/app.yml --profile apps --profile replica \
+    -f docker-compose.yml -f deploy/docker/compose/app.yml --profile apps --profile replica \
     stop trigger >/dev/null
 else
   trigger_pids="$(process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" || true)"

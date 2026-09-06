@@ -355,7 +355,7 @@ DB (job_task: READY)
 | [上线就绪检查](docs/runbook/go-live-readiness.md) | 后端交付上线完整性就绪检查表 |
 | [代码量统计](docs/stats/README.md) | 统计口径说明与最新快照 |
 | [控制台侧边栏菜单树](docs/design/console-sidebar-menu-tree.md) | 前端 sidebar 分组、页面可见角色与操作权限边界 |
-| [观测栈 Docker 环境](docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
+| [观测栈 Docker 环境](deploy/docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [平台 Worker 续跑位点](docs/runbook/platform-worker-checkpoint-howto.md) | checkpoint 断点续跑的位点语义与运维说明 |
 | [设计差距审计](docs/archive/architecture/design-gap-audit-2026-04-09.md) | 当前实现与设计文档的差距分析 |

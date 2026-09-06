@@ -23,7 +23,7 @@
 ## 真实但优先级/风险权衡后暂列建议(未在本批改)
 
 - **威胁模型 C-2/I-3(retry_schedule / event_outbox_retry 的 `markXxx`/`selectById` 用全局 id 无 tenant_id)**:`MapperXmlTenantGuardArchTest` 只扫 `<if tenantId>` 可空 select 守护,**不覆盖 id-only 的 update** —— 是真盲区。但 markXxx 入参 id 来自调度器内部 `selectByQuery` 结果(非外部可控),实际越权可利用性低,属纵深防御。改动涉及 mapper 接口签名 + 调用方 + `MarkFailedParam` 多文件。**建议**:① 给这些 update 补 `AND tenant_id = #{tenantId}`(entity 手头有 tenantId,成本可控);② 扩展 ArchTest 覆盖 update/delete 的 id-only 写。
-- **并发 C-3(`persistAndForward` PENDING→ACCEPTED 非原子)**:进程在两步间崩溃,trigger_request 滞留 PENDING,而 `TriggerRequestLaunchReconciler` 只扫 ACCEPTED,无自愈。**建议**:reconciler 同时扫 PENDING+ACCEPTED(侵入最小),或把 updateStatus 并入 REQUIRES_NEW 事务。
+- **并发 C-3(`persistAndForward` PENDING→ACCEPTED 非原子)**:已治理。正常异步 launch 在同一个 `REQUIRES_NEW` 事务中以 `ACCEPTED` 直接写入 `trigger_request`，再写入 `trigger_outbox_event`；不再存在两步之间的崩溃窗口，也减少一次状态 UPDATE。历史遗留的 PENDING 仍由兼容/恢复路径按原规则处理。
 - **并发 C-2(`NAS_COPY_EXECUTOR` 静态池无 `@PreDestroy`)**:线程已 `daemon=true` 可让 JVM 退出,但 in-flight NAS 复制不保证取消。**建议**:移入 `@Component` 加 `@PreDestroy shutdown`。
 - **并发 I-1(SSE dirty publisher `clear()` 全清 → 事件风暴)**:超 1 万 key 触发全清,节流状态丢失致下轮全量推送。**建议**:改 LRU 淘汰。
 - **并发 I-4 / I-3 / 数据 I-2**:push 失败无退避日志噪音、`TICK_CACHE` ThreadLocal 契约靠人工保证、COPY 行数不匹配抛 `IllegalStateException` 不符异常契约。低优先级,可随手清理。

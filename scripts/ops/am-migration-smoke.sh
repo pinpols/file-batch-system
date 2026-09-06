@@ -23,7 +23,7 @@ REPO="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=../lib/python-runtime.sh
 source "$REPO/scripts/lib/python-runtime.sh"
 batch_require_python
-TEMPLATE="$REPO/docker/observability/alertmanager-batch-template.yml"
+TEMPLATE="$REPO/deploy/docker/observability/alertmanager-batch-template.yml"
 CONTAINER="am-migration-smoke"
 
 iso() { "$PYTHON_BIN" -c "import datetime;print(datetime.datetime.now(datetime.timezone.utc).isoformat())"; }

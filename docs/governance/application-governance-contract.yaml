@@ -32,7 +32,7 @@ controls:
     evidence:
       - docs/runbook/observability-stack.md
       - docs/runbook/playbooks/README.md
-      - docker/observability/prometheus-batch-rules.yml
+      - deploy/docker/observability/prometheus-batch-rules.yml
     live_validation: target-monitoring
   - id: supply-chain
     priority: P1

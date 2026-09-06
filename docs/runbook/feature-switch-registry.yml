@@ -2,7 +2,7 @@
 #
 # 约束：
 # - env: 该公共开关对应的环境变量；同一个开关可以登记多个变量。
-# - composeRequired: true 表示 docker/compose/app.yml 必须显式透传，防 .env 覆盖被容器忽略。
+# - composeRequired: true 表示 deploy/docker/compose/app.yml 必须显式透传，防 .env 覆盖被容器忽略。
 # - helmRequired: true 表示生产 Helm Chart 必须显式渲染，防生产开关无入口。
 # - 本文件是 CI required-vars 的唯一登记源；运维说明仍写在 feature-switches.md。
 switches:

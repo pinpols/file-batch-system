@@ -38,7 +38,7 @@ build/
 tmp/
 *.bak
 .claude/
-docker/sftp/data
+deploy/docker/sftp/data
 
 # flatten-maven-plugin output (per-module; regenerated on install — never commit)
 **/.flattened-pom.xml

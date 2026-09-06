@@ -21,8 +21,8 @@
 - `.env.local`：本地默认环境变量
 - `.env.test`：测试环境环境变量
 - `.env.prod`：生产环境模板变量
-- `docker/postgres/init/000-create-business-db.sql`：业务库与业务 schema 初始化
-- `docker/postgres/init/001-create-schemas.sql`：数据库 schema 初始化
+- `deploy/docker/postgres/init/000-create-business-db.sql`：业务库与业务 schema 初始化
+- `deploy/docker/postgres/init/001-create-schemas.sql`：数据库 schema 初始化
 - `scripts/data/init-kafka-topics.sh`：Kafka Topic 初始化
 - `scripts/data/init-minio.sh`：MinIO bucket 初始化
 - `scripts/local/build-apps.sh`：单独打包本地 Java 应用模块
@@ -180,7 +180,7 @@ docker compose down -v
 > # 基础服务
 > docker compose --env-file .env.local up -d
 > # 可观测性（Prometheus / Grafana / Jaeger / Loki）
-> docker compose -f docker/compose/observability.yml --env-file .env.local up -d
+> docker compose -f deploy/docker/compose/observability.yml --env-file .env.local up -d
 > ```
 
 ---

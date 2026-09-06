@@ -24,10 +24,10 @@ services:
     ports:
       - "${SFTP_HOST_PORT:-12222}:22"
     volumes:
-      - ./docker/sftp/users.conf:/etc/sftp/users.conf:ro
-      - ./docker/sftp/data/ta/inbound:/home/ta/inbound
-      - ./docker/sftp/data/tb/inbound:/home/tb/inbound
-      - ./docker/sftp/data/tc/inbound:/home/tc/inbound
+      - ./deploy/docker/sftp/users.conf:/etc/sftp/users.conf:ro
+      - ./deploy/docker/sftp/data/ta/inbound:/home/ta/inbound
+      - ./deploy/docker/sftp/data/tb/inbound:/home/tb/inbound
+      - ./deploy/docker/sftp/data/tc/inbound:/home/tc/inbound
     networks:
       - batch-network
     healthcheck:
@@ -48,8 +48,8 @@ services:
       MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
       MOCKSERVER_LOG_LEVEL: ${MOCKSERVER_LOG_LEVEL:-INFO}
     volumes:
-      - ./docker/mockserver/expectations.json:/config/expectations.json:ro
-      - ./docker/mockserver/HealthCheck.java:/config/HealthCheck.java:ro
+      - ./deploy/docker/mockserver/expectations.json:/config/expectations.json:ro
+      - ./deploy/docker/mockserver/HealthCheck.java:/config/HealthCheck.java:ro
     networks:
       - batch-network
     healthcheck:

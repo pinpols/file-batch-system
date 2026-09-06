@@ -1057,7 +1057,7 @@ groups:
 
       - alert: BatchPostgresLockWaitStuck
         # 真"等锁阻塞"会话数(pg_stat_activity wait_event_type='Lock'),来自自定义 query
-        # docker/observability/postgres-exporter-queries.yaml。该指标仅在异常退出 query 的部署(compose)
+        # deploy/docker/observability/postgres-exporter-queries.yaml。该指标仅在异常退出 query 的部署(compose)
         # 存在;未挂的环境此规则不 fire(由下面 LongRunningTransaction 用默认指标回退)。
         expr: pg_lock_waits_waiting_sessions > 0
         for: 5m

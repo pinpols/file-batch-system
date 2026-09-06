@@ -192,18 +192,32 @@ compose_service_for() {
   esac
 }
 
+compose_app_file() {
+  local compose_app="$ROOT/deploy/docker/compose/app.yml"
+  [[ -f "$compose_app" ]] || {
+    echo "ERROR: 未找到 Compose 应用文件($compose_app)" >&2
+    return 1
+  }
+  printf '%s\n' "$compose_app"
+}
+
 is_containerized_module() {
   local name="$1" container
   container="$(container_name_for "$name")" || return 1
   docker info >/dev/null 2>&1 || return 1
-  # docker compose 会保留 stopped / created 容器；它们不能说明当前服务由 Compose 托管。
-  # 若只按 inspect 是否存在判断，会跳过本地 JVM 的 stop/start，导致新构建的 jar 没有生效。
-  [[ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" == "true" ]]
+  # 故障注入会先 kill Compose 容器再调用本脚本恢复；此时容器是 stopped，
+  # 但 compose.service 标签仍是可靠的托管来源。仅检查 Running 会误走裸 JVM 路径，
+  # 导致 worker 永远不会被重新拉起。
+  local compose_service
+  compose_service="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' "$container" 2>/dev/null || true)"
+  [[ "$compose_service" == "$(compose_service_for "$name")" ]]
 }
 
 compose_restart_module() {
   local name="$1" service
   service="$(compose_service_for "$name")"
+  local compose_app
+  compose_app="$(compose_app_file)"
   local app_java_opts="${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}"
   if [[ -n "${JAVA_OPTS:-}" ]]; then
     app_java_opts+=" ${JAVA_OPTS}"
@@ -212,7 +226,7 @@ compose_restart_module() {
   if [[ -f "$COMPOSE_ENV_FILE" ]]; then
     compose_args+=(--env-file "$COMPOSE_ENV_FILE")
   fi
-  compose_args+=(-f docker-compose.yml -f docker/compose/app.yml --profile apps --profile replica up -d --no-deps --force-recreate "$service")
+  compose_args+=(-f "$ROOT/docker-compose.yml" -f "$compose_app" --profile apps --profile replica up -d --no-deps --force-recreate "$service")
   local compose_s3_endpoint="${BATCH_S3_ENDPOINT:-http://minio:9000}"
   # .env.local 通常为裸 JVM 保留 localhost:19000；这个地址在容器网络内
   # 一定指向当前容器自身，不能视为容器 S3 配置。

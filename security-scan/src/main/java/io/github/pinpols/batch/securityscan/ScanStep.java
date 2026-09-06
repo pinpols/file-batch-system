@@ -77,7 +77,7 @@ public enum ScanStep {
                     new ExternalCommand(
                             this,
                             "docker-build",
-                            list(options.dockerCommand(), "build", "-f", "docker/Dockerfile.app", "--build-arg", "MODULE=batch-console-api", "-t", options.imageName(), root.toString()),
+                            list(options.dockerCommand(), "build", "-f", "deploy/docker/Dockerfile.app", "--build-arg", "MODULE=batch-console-api", "-t", options.imageName(), root.toString()),
                             root
                     ),
                     new ExternalCommand(

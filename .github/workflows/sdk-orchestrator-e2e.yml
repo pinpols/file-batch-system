@@ -115,12 +115,12 @@ jobs:
           } >> .env.local
 
       - name: Use Maven Central for image build (CI runners)
-        # Dockerfile.app COPY docker/settings.xml 强制 aliyun mirror(为团队 China dev
+        # Dockerfile.app COPY deploy/docker/settings.xml 强制 aliyun mirror(为团队 China dev
         # 环境避开其 18081 代理下的 Central 不稳);但 GitHub US runner 打 aliyun 反而
         # 频繁 502 / 慢。CI 里覆盖成无 mirror 的默认 settings,走 Maven Central(GH→Central
         # 稳定且有缓存)。仅改本次 checkout 工作副本,不影响仓库提交的 dev 默认。
         # 无 <?xml?> 声明的最简 settings(根元素前的空白无害,避免 heredoc 缩进破坏声明)。
-        run: echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"></settings>' > docker/settings.xml
+        run: echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"></settings>' > deploy/docker/settings.xml
 
       - name: Boot orchestrator (owns Flyway; migrates platform schema on start)
         # orchestrator 自带 Flyway(compose 未对它 disable),启动即迁移 batch.* 全 schema。
@@ -175,5 +175,5 @@ jobs:
       - name: Tear down
         if: always()
         run: |
-          docker compose --env-file .env.local -f docker-compose.yml -f docker/compose/app.yml \
+          docker compose --env-file .env.local -f docker-compose.yml -f deploy/docker/compose/app.yml \
             --profile apps --profile replica down -v --remove-orphans || true

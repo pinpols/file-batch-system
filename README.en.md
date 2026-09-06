@@ -346,7 +346,7 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 | [Go-live readiness](docs/runbook/go-live-readiness.md) | Backend delivery completeness checklist for go-live |
 | [Code size stats](docs/stats/README.md) | Measurement methodology and latest snapshot |
 | [Console sidebar menu tree](docs/design/console-sidebar-menu-tree.md) | Frontend sidebar grouping, page-visible roles, and operation permission boundaries |
-| [Observability Docker environment](docker/observability/README.md) | Standalone startup and management for Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana |
+| [Observability Docker environment](deploy/docker/observability/README.md) | Standalone startup and management for Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana |
 | [Runtime communication](docs/architecture/runtime-module-communication.md) | Inter-module message protocols and interface specs |
 | [Worker checkpoint how-to](docs/runbook/platform-worker-checkpoint-howto.md) | Checkpoint resume semantics and operational notes |
 | [Design gap audit](docs/archive/architecture/design-gap-audit-2026-04-09.md) | Gap analysis between implementation and design docs |

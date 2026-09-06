@@ -51,7 +51,7 @@ done < <(git ls-files \
   '*pom.xml' \
   'docker/Dockerfile*' '**/Dockerfile*' \
   'helm/**/*.yaml' 'helm/**/*.yml' \
-  'docker-compose*.yml' 'docker/compose/*.yml' \
+  'docker-compose*.yml' 'deploy/docker/compose/*.yml' \
   '.github/workflows/*.yml' '.github/workflows/*.yaml' \
   '.github/actions/**/*.yml' \
   'scripts/**/*.sh' 2>/dev/null | sort -u)

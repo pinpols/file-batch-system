@@ -223,10 +223,10 @@ observability-down:
 	./scripts/docker/down-observability.sh
 
 observability-status:
-	./scripts/docker/observability/status.sh
+	./scripts/deploy/docker/observability/status.sh
 
 observability-logs:
-	./scripts/docker/observability/logs.sh
+	./scripts/deploy/docker/observability/logs.sh
 
 observability-inspect:
-	./scripts/docker/observability/inspect.sh
+	./scripts/deploy/docker/observability/inspect.sh

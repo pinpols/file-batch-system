@@ -40,10 +40,10 @@ prometheus ─ scrape /actuator/prometheus│   Loki +   │
 docker compose --env-file .env.local up -d
 
 # 叠加观测栈：prometheus + grafana + loki + tempo + jaeger + otel-collector + exporters
-docker compose -f docker-compose.yml -f docker/compose/observability.yml --env-file .env.local up -d
+docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml --env-file .env.local up -d
 
 # 起应用（traces + logs 自动经 otel-collector:4318 上报）
-docker compose -f docker-compose.yml -f docker/compose/app.yml --env-file .env.local --profile apps up -d
+docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml --env-file .env.local --profile apps up -d
 ```
 
 入口端口（宿主机）：
@@ -139,7 +139,7 @@ curl -X POST http://localhost:18081/api/triggers/launch -H "Content-Type: applic
 
 ### Loki 不收 OTLP 日志
 - Loki 3.x 默认配置的 OTLP 接收需要 `limits_config.allow_structured_metadata: true`
-  + schema v13；本仓库 `docker/observability/loki-config.yml` 已开启
+  + schema v13；本仓库 `deploy/docker/observability/loki-config.yml` 已开启
 - 如果改 image 版本要重新确认这两项
 
 ### Grafana 找不到 Tempo
@@ -166,11 +166,11 @@ Loki 同理：本地 filesystem，生产换对象存储 + 多副本。
 
 ## 相关文件
 
-- `docker/compose/observability.yml` — 观测栈 compose
-- `docker/observability/otel-collector.yml` — Collector 流水线
-- `docker/observability/tempo.yml` — Tempo 配置
-- `docker/observability/loki-config.yml` — Loki 配置（OTLP + structured metadata）
-- `docker/observability/grafana-provisioning/datasources/datasources.yml` — 数据源 + 联动
+- `deploy/docker/compose/observability.yml` — 观测栈 compose
+- `deploy/docker/observability/otel-collector.yml` — Collector 流水线
+- `deploy/docker/observability/tempo.yml` — Tempo 配置
+- `deploy/docker/observability/loki-config.yml` — Loki 配置（OTLP + structured metadata）
+- `deploy/docker/observability/grafana-provisioning/datasources/datasources.yml` — 数据源 + 联动
 - `batch-common/src/main/resources/batch-defaults.yml` `spring.tracing` / `spring.otlp` — 应用侧 OTLP 出口
 
 ---
@@ -184,7 +184,7 @@ Loki 同理：本地 filesystem，生产换对象存储 + 多副本。
 
 当前控制台、调度器和全部 worker 模块都已补齐 `micrometer-registry-prometheus`，包括 `batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker-import`、`batch-worker-export`、`batch-worker-process`、`batch-worker-dispatch`。
 
-基础设施监控已补齐 `Prometheus + Redis exporter + Kafka exporter + PostgreSQL exporter + MinIO metrics + node_exporter + cAdvisor`，对应配置见 `docker/compose/observability.yml` 和 `docs/observability/prometheus.yml`。
+基础设施监控已补齐 `Prometheus + Redis exporter + Kafka exporter + PostgreSQL exporter + MinIO metrics + node_exporter + cAdvisor`，对应配置见 `deploy/docker/compose/observability.yml` 和 `docs/observability/prometheus.yml`。
 
 Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}` 查看抓取目标和规则状态。
 
@@ -269,7 +269,7 @@ scrape_configs:
 - 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`batch_worker_checkpoint_operations_total`（续跑命中及位点持久化结果）、`batch_worker_lease_circuit_open`（当前续租熔断状态）、`batch_worker_lease_circuit_open_total`（熔断发生次数）、`batch_worker_semaphore_available`（消费背压余量）、`batch_worker_consumer_pause_total` / `batch_worker_consumer_resume_total`（真实暂停/恢复事件）、`batch_outbox_circuit_open` / `batch_outbox_circuit_failopen_total`（outbox 降级状态）、`export_file_rows_total`（导出文件行数，按 `workerType` 低基数标签）、`dispatch_receipt_total`（分发回执计数，按 `workerType` 低基数标签）、`batch_console_realtime_subscriptions_active`、`batch_console_realtime_replay_events_total`、`batch_console_realtime_replay_cursor_miss_total`、`batch_console_realtime_replay_decode_failures_total`、`batch_console_realtime_pubsub_decode_failures_total`、`batch_console_realtime_pubsub_handle_failures_total`、`hikaricp_connections_*`、`redis_connected_clients`、`redis_memory_used_bytes`、`kafka_consumergroup_lag`、`pg_up`、`pg_stat_database_numbackends`、MinIO cluster metrics、JVM 内存/线程。
 
 > `export_file_rows_total` 和 `dispatch_receipt_total` 不再使用 tenant label，避免租户数量增长导致 Prometheus 高基数；已有按 tenant 的查询和面板需迁移到业务查询或日志维度。
-- 告警与路由模板见 `docker/observability/prometheus-batch-rules.yml` 和 `docker/observability/alertmanager-batch-template.yml`。
+- 告警与路由模板见 `deploy/docker/observability/prometheus-batch-rules.yml` 和 `deploy/docker/observability/alertmanager-batch-template.yml`。
 - Redis / realtime 已补的 Prometheus 规则包括：
   - `BatchRedisMemoryUsageHigh`
   - `BatchRedisConnectedClientsHigh`
@@ -334,7 +334,7 @@ OTel Collector  ──► Jaeger   :16686（UI；宿主机映射默认同端口�
 | `batch-defaults.yml` | 新增 `management.tracing` + `management.otlp` 配置块 | 统一 OTLP 导出端点，采样率可按环境覆盖 |
 | `batch-defaults.yml` | 新增 `logging.structured.format.console` | 生产设 `ecs` 输出 JSON，本地留空 |
 | `docs/observability/otel-collector.yml` | Collector pipeline 配置 | Traces→Jaeger，Logs→Loki |
-| `docker/compose/observability.yml` | 新增 observability profile | Collector + Jaeger + Loki + Grafana |
+| `deploy/docker/compose/observability.yml` | 新增 observability profile | Collector + Jaeger + Loki + Grafana |
 | `docs/observability/grafana-provisioning/` | 数据源自动注入 | Prometheus + Loki + Jaeger |
 | `helm/batch-platform/templates/otel-collector.yaml` | K8s Deployment + Service + ConfigMap | `otelCollector.enabled=true` 时生效 |
 | `helm/batch-platform/templates/configmap.yaml` | 新增 OTEL env vars | `OTEL_EXPORTER_OTLP_ENDPOINT` 等 |
@@ -348,7 +348,7 @@ OTel Collector  ──► Jaeger   :16686（UI；宿主机映射默认同端口�
 ./scripts/docker/up-apps.sh
 
 # 2. 启动可观测性栈
-./scripts/docker/observability/up.sh
+./scripts/deploy/docker/observability/up.sh
 
 # 访问
 # Jaeger UI : http://localhost:16686

@@ -1,8 +1,8 @@
 # 部署模式 compose overlay
 # 用法:
-#   docker compose -f docker-compose.yml -f docker/compose/app.yml -f docker/compose/app.deploy.yml \
+#   docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml -f deploy/docker/compose/app.deploy.yml \
 #     --profile apps --profile replica pull
-#   docker compose -f docker-compose.yml -f docker/compose/app.yml -f docker/compose/app.deploy.yml \
+#   docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml -f deploy/docker/compose/app.deploy.yml \
 #     --profile apps --profile replica up -d --no-build
 #
 # 作用:

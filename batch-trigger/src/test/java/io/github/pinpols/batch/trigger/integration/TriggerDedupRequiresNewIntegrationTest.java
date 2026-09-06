@@ -25,8 +25,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * REQUIRES_NEW 事务边界集成测试 — Trigger 去重（ADR-010 异步路径）。
  *
- * <p>{@code DefaultTriggerService#insertPendingAndOutboxOrReturnExisting} 使用 {@code
- * PROPAGATION_REQUIRES_NEW} 在同一事务内原子写 trigger_request + trigger_outbox_event。验证：去重检查生效、两表原子写入数据库。
+ * <p>{@code DefaultTriggerService#persistAndForward} 使用 {@code PROPAGATION_REQUIRES_NEW} 在同一事务内原子写
+ * trigger_request、trigger_outbox_event 和 ACCEPTED 状态。验证：去重检查生效、相关写入原子提交。
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,

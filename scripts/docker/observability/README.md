@@ -20,18 +20,18 @@
 ## 启动方式
 
 ```bash
-./scripts/docker/observability/up.sh
+./scripts/deploy/docker/observability/up.sh
 ```
 
 默认使用 `.env.local`。如需切换环境：
 
 ```bash
-COMPOSE_ENV_FILE=.env.test ./scripts/docker/observability/up.sh
+COMPOSE_ENV_FILE=.env.test ./scripts/deploy/docker/observability/up.sh
 ```
 
 ## 说明
 
-- 这套脚本只使用 `docker/compose/observability.yml`
+- 这套脚本只使用 `deploy/docker/compose/observability.yml`
 - 观测栈通过共享的 `batch-network` 直接抓取业务容器和 exporter
 - `Prometheus` 是观测栈的一部分，不是业务运行必需项
 - 如果业务应用容器已经在跑，观测栈可以直接抓取它们的 `/actuator/prometheus`

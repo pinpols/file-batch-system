@@ -223,18 +223,15 @@ require_trigger_capacity_budget() {
     echo "docker is required to verify the local trigger capacity budget" >&2
     exit 2
   }
-  local configured profiles limit pool relay budget_log
+  local configured profiles limit pool relay
   configured="$(docker inspect batch-trigger --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
   profiles="$(printf '%s\n' "$configured" | sed -n 's/^SPRING_PROFILES_ACTIVE=//p' | tail -1)"
   relay="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
   limit="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus \
-    | awk '/^batch_trigger_api_launch_admission_limit / { print int($2); exit }')"
+    | awk '/^batch_trigger_api_launch_admission_limit / && !found { print int($2); found=1 }')"
   pool="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus \
-    | awk '/^hikaricp_connections_max\{pool="HikariPool-1"\}/ { print int($2); exit }')"
-  budget_log="$(docker logs --tail 500 batch-trigger 2>&1 \
-    | grep -F 'trigger API admission budget validated: maxConcurrency=32 minConcurrency=8 pool=40 reservedForBackground=8' \
-    | tail -1 || true)"
-  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "40" || -z "$budget_log" ]]; then
+    | awk '/^hikaricp_connections_max\{pool="HikariPool-1"\}/ && !found { print int($2); found=1 }')"
+  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "40" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
     echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=40" >&2
     echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing}" >&2

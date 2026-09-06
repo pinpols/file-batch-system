@@ -63,7 +63,7 @@
 | outbox 自动归档 | B | ❌ 不改 | ✅ 完成 | `scripts/db/cleanup-outbox-events.sql`（PUBLISHED >7d / GIVE_UP >30d 归档） |
 | file_record / job_instance 归档 | B + C | ❌ 不改业务代码（仅 DDL）| ✅ 完成 | `scripts/db/cleanup-success-instances.sql`（30d 保留窗口 + 8 步级联清理） |
 | 配置缓存 Redis pub/sub 失效 | F | ✅ 改 | ✅ 完成 | `ConsoleConfigCacheController`：6 个 ops 端点 `/api/console/ops/cache/evict-*`，DB 直改后手动失效 Redis |
-| 完整观测三块板 | A | ❌ 不改（micrometer 已就位）| ✅ 完成 | `docker/observability/grafana-dashboard-batch-coverage.json`（6 panel：outbox pending/stale/DL pending/HTTP P99/publish rate/总览） |
+| 完整观测三块板 | A | ❌ 不改（micrometer 已就位）| ✅ 完成 | `deploy/docker/observability/grafana-dashboard-batch-coverage.json`（6 panel：outbox pending/stale/DL pending/HTTP P99/publish rate/总览） |
 | worker auto-restart | A | ❌ 不改 | ✅ 完成 | `scripts/local/watchdog.sh`（macOS 闲置回收 worker 后自动拉起；docker-compose 模式 `restart: unless-stopped` 回退） |
 
 **Phase 1：5 项里只有 1 项要改代码** ✅✅✅✅✅(改) — 全部交付，详见上表

@@ -3,7 +3,7 @@
 检测 application.yml 和 docker-compose*.yml 里同一环境变量的 default 是否同步。
 
 背景：曾发生 read-replica 在 application.yml fallback=true 但
-docker/compose/app.yml 默认 :-false 的 bug，导致行为静默不一致。
+deploy/docker/compose/app.yml 默认 :-false 的 bug，导致行为静默不一致。
 本脚本作为 CI 回退，确保两边 default 永远对齐。
 
 匹配规则：
@@ -123,9 +123,9 @@ def main() -> int:
     # 扫所有 docker-compose 文件
     compose_files = [
         ROOT / "docker-compose.yml",
-        ROOT / "docker/compose/app.yml",
-        ROOT / "docker/compose/observability.yml",
-        ROOT / "docker/compose/test.yml",
+        ROOT / "deploy/docker/compose/app.yml",
+        ROOT / "deploy/docker/compose/observability.yml",
+        ROOT / "deploy/docker/compose/test.yml",
     ]
     compose_defaults = merge(*(scan_yml(p, COMPOSE_PLACEHOLDER) for p in compose_files))
     compose_references = {
