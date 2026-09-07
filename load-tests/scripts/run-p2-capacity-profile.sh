@@ -44,6 +44,9 @@ CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
+# 被测 Trigger 的 Relay 发布上限。默认守住 benchmark 基线 40；A/B 轮次必须显式声明，
+# 避免容器未按实验参数重启却仍生成错误容量结论。
+CAPACITY_EXPECT_TRIGGER_RELAY_RATE="${CAPACITY_EXPECT_TRIGGER_RELAY_RATE:-40}"
 # 设为 1 时，preflight 额外确认 Trigger 已启用 lag 自适应释放且相关指标可采集。
 # 默认 0 保持既有固定 Relay 容量画像不变。
 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE="${CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE:-0}"
@@ -241,9 +244,12 @@ require_trigger_capacity_budget() {
     | awk '/^batch_trigger_outbox_release_budget_limit / && !found { print int($2); found=1 }')"
   lag="$(printf '%s\n' "$metrics" \
     | awk '/^batch_trigger_launch_consumer_lag / && !found { print int($2); found=1 }')"
-  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "40" ]]; then
+  if [[ ",$profiles," != *,benchmark,* \
+    || "$pool" != "40" \
+    || "$limit" != "32" \
+    || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
-    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=40" >&2
+    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}" >&2
     echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing}" >&2
     echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger" >&2
     exit 2

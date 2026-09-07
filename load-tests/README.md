@@ -195,6 +195,9 @@ PREFLIGHT_ONLY=1 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE=1 \
   bash load-tests/scripts/run-p2-capacity-profile.sh
 ```
 
+Relay 上限 A/B 必须同步声明预期值。例如容器以 `80 events/s` 启动时，设置
+`CAPACITY_EXPECT_TRIGGER_RELAY_RATE=80`；未设置时仍严格校验 benchmark 基线 `40 events/s`，避免误测旧容器。
+
 - `psql`：压测准备、清理、统计 SQL 都依赖它；macOS 可用 `brew install libpq`，并把 `$(brew --prefix libpq)/bin` 加入 `PATH`。
 - `kafka-consumer-groups.sh` / `kafka-topics.sh`：Kafka lag 和 topic 初始化使用；设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`。
 - Python 3：默认优先找 `python3`，也可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 指定。
