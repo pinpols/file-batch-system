@@ -83,3 +83,61 @@ PostgreSQL 连接预算和真实 worker 组合重新取数。
 
 10w 是本机容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、
 PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
+
+## 延伸优化：第 4、6、8 项
+
+### 4. 合并事务内更新后查询
+
+已完成控制面 claim 热路径收敛：
+
+- `job_task` 的 READY → RUNNING 认领改为 `UPDATE ... RETURNING *`。成功时直接使用数据库返回的
+  新版本行，不再按主键重查；CAS 未命中时仍重读竞争者状态，保持原 409/幂等响应语义。
+- `job_partition` 的 READY → RUNNING 认领同样直接返回新行。独立 partition lifecycle 成功路径
+  少一次查询；task 与 partition 联动认领仍在同一事务内，任一 CAS 失败继续整体回滚。
+- 原有 Outbox 批量领取、批量发布结果回写和 lease renew 已使用 set-based
+  `UPDATE ... RETURNING`，本轮不重复建设。
+
+所有 SQL 继续包含 `tenant_id`、前态和 `version` 条件；没有删除终态守卫、invocation fence、
+幂等键或事务边界。真实 PostgreSQL 并发认领测试与相关单测共 42 个通过。
+
+### 6. 按任务规模选择持久化粒度
+
+新增 `batch.orchestrator.persistence-granularity.enabled`，默认 `false`。开启后，仅当 DYNAMIC/AUTO
+作业没有显式指定 `targetItemsPerPartition` 或 `targetBytesPerPartition` 时，按规模选择 partition/task
+数量：
+
+| 档位 | 默认判定 | 默认目标粒度 |
+|---|---|---|
+| compact | 不超过 10 万条或 256 MiB | 单 partition/task |
+| standard | 不超过 1000 万条或 8 GiB | 100 万条或 512 MiB/partition |
+| large | 超过 standard | 50 万条或 256 MiB/partition |
+
+该策略只调整 fan-out 数量，不省略 `job_partition`、`job_task`、step、outbox 或审计记录，因此没有
+引入第二套状态机。调用方显式目标始终优先；最终仍受现有 `min/maxPartitionCount` 和 256 上限约束。
+Compose、Helm、开关登记和运维手册已同步。规模分级与显式优先级共 22 个测试通过，feature switch、
+配置默认值、Helm env 同步和 `helm lint` 均通过。
+
+### 8. 外置 PostgreSQL 生产基线
+
+应用 Chart 继续只连接外置 PostgreSQL，不在应用 Helm 生命周期内创建或升级数据库。HA 模板补齐
+以下可标定起点：
+
+- Patroni 一主两备、PgBouncer transaction mode 与同步复制策略保持不变。
+- 4 GiB 实例基线采用 `shared_buffers=1GiB`、`work_mem=4MiB`、
+  `maintenance_work_mem=512MiB`。
+- `max_wal_size=16GiB`、`checkpoint_timeout=15min`、
+  `checkpoint_completion_target=0.9`、WAL compression，降低 10 万突发写入的 checkpoint 尖峰。
+- 增强 autovacuum worker/扫描频率并开启 `track_io_timing`，用于热表膨胀和 I/O 瓶颈诊断。
+
+新增只读预检：
+
+```bash
+PG_READINESS_URL='postgresql://user:password@host:5432/batch_platform?sslmode=require' \
+PG_EXPECTED_APP_CONNECTIONS=160 PG_CONNECTION_RESERVE=40 PG_READINESS_STRICT=1 \
+  scripts/db/check-postgres-control-plane-readiness.sh
+```
+
+检查 SQL 独立位于 `scripts/db/postgres-control-plane-readiness.sql`。本机执行已正确拒绝开发库的
+`max_wal_size=1GiB`、`checkpoint_timeout=5min`，并提示 `track_io_timing`/checksum 未开启；HA YAML
+解析、shell 语法和 ShellCheck 通过。仓库侧实现已完成，但生产完成态仍要求 DBA 在真实 writer/pooler、
+真实 IOPS 和备份故障域上执行 strict 预检、PITR 与 failover 演练。
