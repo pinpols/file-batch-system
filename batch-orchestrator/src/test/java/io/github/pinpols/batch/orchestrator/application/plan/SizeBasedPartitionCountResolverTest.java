@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
+import jakarta.validation.Validation;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,18 @@ class SizeBasedPartitionCountResolverTest {
     assertThat(resolver.resolve(
             null, Map.of("estimatedFileSizeBytes", 2L * 1024 * 1024 * 1024), ShardStrategy.AUTO))
         .isEqualTo(4);
+  }
+
+  @Test
+  void invalidTierConfigurationIsRejectedByBeanValidation() {
+    PersistenceGranularityProperties properties = new PersistenceGranularityProperties();
+    properties.setLargeTargetItems(0);
+
+    try (var factory = Validation.buildDefaultValidatorFactory()) {
+      assertThat(factory.getValidator().validate(properties))
+          .extracting(violation -> violation.getPropertyPath().toString())
+          .containsExactly("largeTargetItems");
+    }
   }
 
   private SizeBasedPartitionCountResolver resolver(boolean enabled) {

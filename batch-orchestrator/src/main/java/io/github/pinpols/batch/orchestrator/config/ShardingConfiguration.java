@@ -31,19 +31,38 @@ public class ShardingConfiguration {
   public ShardAssignmentProvider shardAssignmentProvider(
       OutboxProperties outboxProperties, StringRedisTemplate stringRedisTemplate) {
     if (outboxProperties.getShardingMode() == OutboxProperties.ShardingMode.DYNAMIC) {
+      validateDynamicSharding(outboxProperties.getSharding());
       String memberId = resolveMemberId(outboxProperties);
       Duration memberTtl = Duration.ofMillis(outboxProperties.getSharding().getMemberTtlMs());
       log.info(
-          "Outbox sharding mode=DYNAMIC, memberId={}, memberTtl={}s",
+          "Outbox sharding mode=DYNAMIC, memberId={}, membersKey={}, memberTtl={}s",
           memberId,
+          outboxProperties.getSharding().getMembersKey(),
           memberTtl.toSeconds());
-      return new RedisShardAssignmentProvider(stringRedisTemplate, memberId, memberTtl);
+      return new RedisShardAssignmentProvider(
+          stringRedisTemplate, memberId, outboxProperties.getSharding().getMembersKey(), memberTtl);
     }
     log.info(
         "Outbox sharding mode=STATIC, shardTotal={}, shardIndex={}",
         outboxProperties.getShardTotal(),
         outboxProperties.getShardIndex());
     return new StaticShardAssignmentProvider(outboxProperties);
+  }
+
+  private void validateDynamicSharding(OutboxProperties.Sharding sharding) {
+    long heartbeatMs = sharding.getHeartbeatIntervalMs();
+    long memberTtlMs = sharding.getMemberTtlMs();
+    if (heartbeatMs <= 0) {
+      throw new IllegalStateException(
+          "batch.outbox.sharding.heartbeat-interval-ms must be greater than 0");
+    }
+    if (sharding.getMembersKey() == null || sharding.getMembersKey().isBlank()) {
+      throw new IllegalStateException("batch.outbox.sharding.members-key must not be blank");
+    }
+    if (memberTtlMs <= 0 || heartbeatMs > memberTtlMs / 3) {
+      throw new IllegalStateException(
+          "batch.outbox.sharding.member-ttl-ms must be at least three times heartbeat-interval-ms");
+    }
   }
 
   private String resolveMemberId(OutboxProperties props) {

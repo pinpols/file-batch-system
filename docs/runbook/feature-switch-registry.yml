@@ -35,6 +35,22 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.outbox.sharding-mode
+    module: orchestrator
+    env:
+      - BATCH_OUTBOX_SHARDING_MODE
+      - BATCH_OUTBOX_SHARD_MEMBERS_KEY
+      - BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS
+      - BATCH_OUTBOX_SHARD_MEMBER_TTL_MS
+      - BATCH_OUTBOX_SHARD_MEMBER_ID
+    composeRequired: true
+    helmRequired: true
+    helmEnv:
+      - BATCH_OUTBOX_SHARDING_MODE
+      - BATCH_OUTBOX_SHARD_MEMBERS_KEY
+      - BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS
+      - BATCH_OUTBOX_SHARD_MEMBER_TTL_MS
+
   - key: batch.mq.routing.mode
     module: orchestrator
     env:

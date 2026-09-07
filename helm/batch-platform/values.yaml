@@ -289,6 +289,11 @@ orchestrator:
   # 会越界或重复处理，数据一致性受损。
   sharding:
     mode: "static"              # static | dynamic
+    # 留空时模板按 namespace + release 生成，避免共享 Redis 的多套部署成员串扰。
+    membersKey: ""
+    heartbeatIntervalMs: 5000
+    # 至少为 heartbeatIntervalMs 的 3 倍，避免短抖动误判成员失联。
+    memberTtlMs: 30000
   # CPU-based HPA。要求 sharding.mode=dynamic（否则不会渲染）。
   hpa:
     enabled: false

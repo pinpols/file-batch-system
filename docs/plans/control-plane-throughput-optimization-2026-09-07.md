@@ -84,7 +84,7 @@ PostgreSQL 连接预算和真实 worker 组合重新取数。
 10w 是本机容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、
 PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
 
-## 延伸优化：第 4、6、8 项
+## 延伸优化：第 4、6、7、8 项
 
 ### 4. 合并事务内更新后查询
 
@@ -116,6 +116,25 @@ PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
 引入第二套状态机。调用方显式目标始终优先；最终仍受现有 `min/maxPartitionCount` 和 256 上限约束。
 Compose、Helm、开关登记和运维手册已同步。规模分级与显式优先级共 22 个测试通过，feature switch、
 配置默认值、Helm env 同步和 `helm lint` 均通过。
+
+### 7. Orchestrator 按租户分片水平扩展
+
+现有 Outbox 查询按 `hash(tenant_id) % shardTotal` 分片，任务认领和状态回报继续依赖数据库 CAS；
+没有拆分租户状态机或削弱幂等约束。部署侧保留两种模式：
+
+- `STATIC` 默认模式使用 StatefulSet ordinal 和固定 `shardTotal`，扩缩容通过 Helm 滚动更新。
+- `DYNAMIC` 模式使用 Redis ZSET 成员租约生成确定性的 `shardTotal/shardIndex`，允许 HPA 或 KEDA
+  调整 StatefulSet 副本数。Redis 不可用或当前 Pod 不在成员集合时停止轮询，不使用过期分配继续消费。
+
+本轮补齐动态模式的生产收尾：`application.yml` 显式绑定 mode、成员键、heartbeat、TTL 和 memberId；启动时
+拒绝非正心跳或小于三个心跳周期的 TTL；Pod 正常销毁时通过 `@PreDestroy` 主动注销，异常退出继续由
+TTL 兜底。Helm 默认按 namespace/release 生成独立成员键，避免共享 Redis 的多套部署互相参与分片。
+Compose、Helm、开关登记与运维文档已同步，完整回归脚本新增 autoscale values 渲染断言，
+防止后续出现“创建了 HPA 但应用仍按 STATIC 运行”的配置漂移。
+
+边界保持不变：本项扩展的是 Orchestrator Outbox 推进能力，不会消除 PostgreSQL 写入、Kafka 分区数
+或下游 Worker 吞吐上限。生产启用前仍需在真实 Redis/StatefulSet 上执行 2→4→2 扩缩容演练，并核对
+Outbox 无重复副作用、无永久遗漏且 backlog 最终归零。
 
 ### 8. 外置 PostgreSQL 生产基线
 
