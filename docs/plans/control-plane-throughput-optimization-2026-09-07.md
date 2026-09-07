@@ -25,7 +25,8 @@ claim/report 与共享 PostgreSQL 写入竞争。继续提高 Trigger 并发或�
 - 阶段 2：代码复核完成。现有 listener 同步执行、并发固定为 6，不存在无界 in-flight；当前不增加冗余背压组件。
 - 阶段 3：代码复核完成。消费时长、Kafka queue age 与 Hikari 指标均已存在；阶段 5 直接采集并关联分析。
 - 阶段 4：完成首项语义等价优化：trigger request 与同 dedup key 最新 job instance 投影由两次查询合并为一次；真实 PostgreSQL IT 已覆盖最新 attempt 与租户条件。
-- 阶段 5：1k 与 1w 已完成；10w 待最终复验。任何一档失败先保留现场，不自动删除证据。
+- 阶段 5：1k、1w 与 10w 严格容量复验均已完成。10w 达到全终态、零请求错误、零残留；
+  自适应限流在 Kafka lag 触及软阈值后主动降速并恢复，证明保护链路生效。
 
 ## 阶段 1 参数
 
@@ -64,13 +65,21 @@ PostgreSQL 连接预算和真实 worker 组合重新取数。
 | 1w 80/s 冷启动原实现 | 80/s | 10000/10000，零错误、零残留 | 约 4m46s | 30ms | 0.393s | 13 | 7668 |
 | 1w 80/s 冷启动修复后 | 80/s | 10000/10000，零错误、零残留 | 约 3m02s | 83ms | 21.401s | 约 1000 | 2835 |
 | 1w 60/s 冷启动修复后 | 60/s | 10000/10000，零错误、零残留 | 约 3m18s | 96ms | 6.484s | 119 | 4003 |
+| 10w 严格容量复验 | 60/s | 100000/100000，零错误、零残留 | 约 33m20s | 77ms | 33.078s | 1067 | 71488 |
 
 冷启动原实现遇到未知 lag 后从 5/s 每 5 秒只恢复 1/s，提高实验上限反而放大排空时间。
 现已改为首次健康低 lag 样本直接恢复到配置上限；运行期发生高 lag 或采样故障后仍按 AIMD
 渐进恢复。80/s 会把吞吐压力转移为明显的 claim 排队，当前本机 10w 候选采用 60/s。
 
-三轮 1w 中 Trigger/Orchestrator Hikari pending 均为 0，PostgreSQL lock waiter 仅瞬时出现 1，
-应用日志无 ERROR、连接池耗尽或 429。每轮清理后 trigger request 与 job instance 残留均为 0。
+10w 遥测共采集 900 个样本。自适应发布速率在 33-60/s 之间变化；Trigger Hikari active 峰值
+22、Orchestrator Hikari active 峰值 14，两者 pending 峰值均为 0；PostgreSQL lock waiter 峰值
+为瞬时 2，WAL 增量约 8.43 GB。Atomic worker 执行 p95 为 39ms，而 task claim p95 为
+33.078s，进一步确认瓶颈位于 Trigger outbox 排空以及 Orchestrator/PostgreSQL 控制面状态写入，
+不在 worker 执行阶段。
 
-10w 仍是本机容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、
+所有轮次应用日志均无 ERROR、连接池耗尽或 429。10w 自动清理后 `trigger_request`、
+`job_instance` 与 `trigger_outbox_event` 残留均为 0。60/s 仅作为当前本机灰度候选；代码、
+`.env.local` 与部署默认值继续保持 40/s，避免把单机 A/B 参数直接带入生产。
+
+10w 是本机容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、
 PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
