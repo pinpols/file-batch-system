@@ -57,6 +57,21 @@ kubectl apply -f deploy/ha/40-minio-tenant.yaml
 
 ## 验证(真集群,逐项做完才算阶段完成)
 
+应用上线前先对 writer/pooler 后端执行只读容量预检。连接预算必须填写所有副本 Hikari 上限之和，
+不能只填单 Pod：
+
+```bash
+PG_READINESS_URL='postgresql://user:password@host:5432/batch_platform?sslmode=require' \
+PG_EXPECTED_APP_CONNECTIONS=160 \
+PG_CONNECTION_RESERVE=40 \
+PG_READINESS_STRICT=1 \
+  scripts/db/check-postgres-control-plane-readiness.sh
+```
+
+脚本检查 PG 版本、连接预算、WAL/checkpoint、autovacuum、诊断能力及六张控制面热表。SQL 位于
+`scripts/db/postgres-control-plane-readiness.sql`，不会修改数据库。托管数据库不支持 data checksum
+查询或无法开启时，应在变更单记录供应商提供的等价页校验能力；不得直接忽略 strict 失败。
+
 | 阶段 | 混沌动作 | 期望 |
 |---|---|---|
 | 1 PG | `kubectl delete pod <pg-leader>` | postgres-operator 30s 内 promote replica;app 仅少量重试 WARN、无 Connection reset 雪崩(Hikari keepalive=30s) |
