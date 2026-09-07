@@ -8,6 +8,7 @@
 - `inspect-db.sh`：数据库健康、积压和 Flyway 状态巡检。
 - `inspect-workers.sh`：worker 心跳、排空和任务占用巡检。
 - `inspect-observability.sh`：观测栈连通性巡检。
+- `inspect-dependencies.sh`：PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检，支持宿主机 CLI 和 Docker fallback。
 - `trigger-compensation.sh`：触发补偿任务。
 - `manage-trigger.sh`：通过 Trigger 管理 API 执行注册、暂停、恢复、排空和状态查询。
 
@@ -21,6 +22,9 @@
 - `heal-zombie-pipelines.sh`
 
 `sql/` 保存巡检和自愈脚本调用的 SQL 片段，`testdata/` 保存 Alertmanager 配置生成器的样例。
+
+基础依赖的故障边界和生产处置见
+[`docs/runbook/dependency-operations.md`](../../docs/runbook/dependency-operations.md)。
 
 ## Trigger 运维边界
 
