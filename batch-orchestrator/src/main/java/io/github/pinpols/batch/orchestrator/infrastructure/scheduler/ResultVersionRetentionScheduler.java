@@ -16,12 +16,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * ADR-017 §GC / 保留策略 — 周期把过期 SUPERSEDED 推到 ARCHIVED 并清空 payload_json。
+ * ADR-017 §GC / 保留策略 — 周期归档过期 SUPERSEDED，并清理已归档的 batch 热表行。
  *
  * <p>扫描入口：{@link ResultVersionMapper#selectSupersededOlderThan}（按 deactivated_at + cutoff 过滤）；
- * 每条命中行用 {@link ResultVersionMapper#archiveSuperseded} 标记 ARCHIVED 并按配置清 payload。
+ * 每条命中行用 {@link ResultVersionMapper#archiveSuperseded} 先幂等写入 archive 镜像，再标记 ARCHIVED 并按配置清 payload。
  *
- * <p>当前 Stage 5 不做"ARCHIVED 物理 DELETE"路径——保留 archivedDays 字段做未来扩展点。
+ * <p>只清理 batch 热表；archive 镜像保留给 lineage/replay 取证，并由独立 archive 生命周期治理。
  */
 @Slf4j
 @Component
@@ -46,9 +46,14 @@ public class ResultVersionRetentionScheduler {
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
-    int demoted = demoteSupersededBatch(now);
-    if (demoted > 0) {
-      log.info("result_version retention: demoted {} SUPERSEDED → ARCHIVED at {}", demoted, now);
+    int archived = demoteSupersededBatch(now);
+    int deleted = purgeArchivedBatch(now);
+    if (archived > 0 || deleted > 0) {
+      log.info(
+          "result_version retention completed: archived={}, deleted={}, at={}",
+          archived,
+          deleted,
+          now);
     }
   }
 
@@ -82,5 +87,30 @@ public class ResultVersionRetentionScheduler {
       }
     }
     return archived;
+  }
+
+  /** 删除超过 archived-days 的 batch 热表历史行；仍被 readiness 物化结果引用的行会保留。 */
+  public int purgeArchivedBatch(Instant now) {
+    Instant cutoff = now.minus(Duration.ofDays(properties.getArchivedDays()));
+    List<ResultVersionEntity> stale =
+        resultVersionMapper.selectArchivedOlderThan(cutoff, properties.getBatchSize());
+    if (stale == null || stale.isEmpty()) {
+      return 0;
+    }
+    int deleted = 0;
+    for (ResultVersionEntity row : stale) {
+      if (row == null
+          || row.id() == null
+          || row.tenantId() == null
+          || row.tenantId().isBlank()) {
+        continue;
+      }
+      int affected = RlsTenantContextHolder.runWithTenant(
+          row.tenantId(), () -> resultVersionMapper.deleteArchived(row.tenantId(), row.id()));
+      if (affected > 0) {
+        deleted++;
+      }
+    }
+    return deleted;
   }
 }

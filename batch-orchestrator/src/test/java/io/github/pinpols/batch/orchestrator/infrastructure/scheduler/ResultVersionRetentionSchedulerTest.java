@@ -40,6 +40,7 @@ class ResultVersionRetentionSchedulerTest {
     properties.setEnabled(true);
     properties.setBatchSize(500);
     properties.setSupersededDays(90);
+    properties.setArchivedDays(365);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     when(gracefulShutdown.isDraining()).thenReturn(false);
     BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
@@ -71,6 +72,29 @@ class ResultVersionRetentionSchedulerTest {
 
     assertThat(archived).isZero();
     verify(mapper, never()).archiveSuperseded(anyString(), anyLong(), any(), anyBoolean());
+  }
+
+  @Test
+  void purgesOnlyArchivedRowsReturnedByRetentionQuery() {
+    ResultVersionEntity row =
+        ResultVersionEntity.builder().id(7L).tenantId("t1").status("ARCHIVED").build();
+    when(mapper.selectArchivedOlderThan(any(), eq(500))).thenReturn(List.of(row));
+    when(mapper.deleteArchived("t1", 7L)).thenReturn(1);
+
+    int deleted = scheduler.purgeArchivedBatch(Instant.parse("2026-08-15T00:00:00Z"));
+
+    assertThat(deleted).isEqualTo(1);
+    verify(mapper).deleteArchived("t1", 7L);
+  }
+
+  @Test
+  void doesNotPurgeWhenNoArchivedRowsAreEligible() {
+    when(mapper.selectArchivedOlderThan(any(), eq(500))).thenReturn(List.of());
+
+    int deleted = scheduler.purgeArchivedBatch(Instant.now());
+
+    assertThat(deleted).isZero();
+    verify(mapper, never()).deleteArchived(anyString(), anyLong());
   }
 
   @Test

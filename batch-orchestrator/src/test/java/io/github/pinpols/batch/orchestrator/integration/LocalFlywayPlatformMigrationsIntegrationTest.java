@@ -48,6 +48,11 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               where table_schema = 'batch' and table_name = 'batch_day_instance'
               """, Long.class);
       assertThat(cnt).isEqualTo(1L);
+      Long cleanupIndex = jdbc.queryForObject("""
+              select count(*) from pg_indexes
+              where schemaname = 'batch' and indexname = 'idx_result_version_archived_cleanup'
+              """, Long.class);
+      assertThat(cleanupIndex).isEqualTo(1L);
     }
   }
 }
