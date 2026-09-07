@@ -46,6 +46,16 @@ class TriggerOutboxReleaseGovernorTest {
   }
 
   @Test
+  void firstHealthySample_restoresConfiguredLimitAfterStartupUnknownSample() {
+    properties.setAdaptiveReleaseEnabled(true);
+    sample(TriggerLaunchLagMonitor.UNKNOWN_LAG, 1L);
+    assertThat(governor.effectiveLimit()).isEqualTo(5);
+
+    sample(0L, 2L);
+    assertThat(governor.effectiveLimit()).isEqualTo(40);
+  }
+
+  @Test
   void hardLag_halvesOncePerNewSample() {
     properties.setAdaptiveReleaseEnabled(true);
     sample(500L, 1L);
@@ -76,6 +86,19 @@ class TriggerOutboxReleaseGovernorTest {
 
     sample(0L, 3L);
     assertThat(governor.effectiveLimit()).isEqualTo(24);
+  }
+
+  @Test
+  void healthySampleAfterRuntimeUnknown_recoversGradually() {
+    properties.setAdaptiveReleaseEnabled(true);
+    sample(500L, 1L);
+    assertThat(governor.effectiveLimit()).isEqualTo(20);
+
+    sample(TriggerLaunchLagMonitor.UNKNOWN_LAG, 2L);
+    assertThat(governor.effectiveLimit()).isEqualTo(5);
+
+    sample(0L, 3L);
+    assertThat(governor.effectiveLimit()).isEqualTo(7);
   }
 
   private void sample(long lag, long sequence) {

@@ -10,6 +10,7 @@ final class TriggerOutboxReleaseGovernor {
   private final TriggerLaunchLagMonitor lagMonitor;
   private long appliedSequence = Long.MIN_VALUE;
   private int effectiveLimit;
+  private boolean knownSampleReceived;
 
   TriggerOutboxReleaseGovernor(
       TriggerOutboxRelayProperties properties, TriggerLaunchLagMonitor lagMonitor) {
@@ -35,9 +36,14 @@ final class TriggerOutboxReleaseGovernor {
     if (lag == TriggerLaunchLagMonitor.UNKNOWN_LAG) {
       effectiveLimit = minimum;
     } else if (lag >= properties.getLagHardThreshold()) {
+      knownSampleReceived = true;
       effectiveLimit = Math.max(minimum, Math.floorDiv(effectiveLimit + 1, 2));
     } else if (lag >= properties.getLagSoftThreshold()) {
+      knownSampleReceived = true;
       effectiveLimit = Math.max(minimum, effectiveLimit - Math.max(1, effectiveLimit / 4));
+    } else if (!knownSampleReceived) {
+      knownSampleReceived = true;
+      effectiveLimit = configuredLimit;
     } else {
       effectiveLimit =
           Math.min(configuredLimit, effectiveLimit + properties.getAdaptiveIncreaseStep());
