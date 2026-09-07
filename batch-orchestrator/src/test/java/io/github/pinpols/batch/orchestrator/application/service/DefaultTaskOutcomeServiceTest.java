@@ -232,13 +232,20 @@ class DefaultTaskOutcomeServiceTest {
     instance.setVersion(1L);
     instance.setDryRun(false);
 
+    JobInstanceEntity progressedInstance = new JobInstanceEntity();
+    progressedInstance.setId(10L);
+    progressedInstance.setTenantId("t1");
+    progressedInstance.setInstanceStatus("RUNNING");
+    progressedInstance.setVersion(2L);
+    progressedInstance.setExpectedPartitionCount(2);
+    progressedInstance.setSuccessPartitionCount(1);
+    progressedInstance.setFailedPartitionCount(0);
+    progressedInstance.setDryRun(false);
+
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance, progressedInstance);
     when(jobTaskMapper.finishTask(any())).thenReturn(1);
-    // 非 DAG 实例走数据库单行聚合，不把全部分区状态加载到 JVM。
-    when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
-        .thenReturn(new PartitionStatusSummary(1L, 0L, 0L, 0L));
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
@@ -254,6 +261,7 @@ class DefaultTaskOutcomeServiceTest {
     service.applyTaskOutcome(command);
 
     verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
+    verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
     verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
 
     InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
@@ -290,9 +298,19 @@ class DefaultTaskOutcomeServiceTest {
     instance.setVersion(2L);
     instance.setDryRun(false);
 
+    JobInstanceEntity progressedInstance = new JobInstanceEntity();
+    progressedInstance.setId(10L);
+    progressedInstance.setTenantId("t1");
+    progressedInstance.setInstanceStatus("FAILED");
+    progressedInstance.setVersion(3L);
+    progressedInstance.setExpectedPartitionCount(1);
+    progressedInstance.setSuccessPartitionCount(1);
+    progressedInstance.setFailedPartitionCount(0);
+    progressedInstance.setDryRun(false);
+
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance, progressedInstance);
     when(jobTaskMapper.finishTask(any())).thenReturn(1);
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))

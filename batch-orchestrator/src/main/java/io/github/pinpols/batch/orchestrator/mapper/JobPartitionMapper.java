@@ -31,8 +31,8 @@ public interface JobPartitionMapper {
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   /**
-   * 普通实例的状态聚合：数据库返回单行计数，避免每次 task report 将整个实例的分区状态加载到 JVM。
-   * DAG 实例仍须使用 {@link #selectStatusRefsByInstance(String, Long)} 做节点级推进。
+   * 普通实例达到预期终态计数后的事实校验：数据库返回单行聚合，防止漂移计数推动错误终态。
+   * 中间 report 直接读取实例增量计数；DAG 实例仍须使用 {@link #selectStatusRefsByInstance(String, Long)} 做节点级推进。
    */
   PartitionStatusSummary selectStatusSummaryByInstance(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);

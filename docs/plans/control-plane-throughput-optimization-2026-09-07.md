@@ -84,7 +84,7 @@ PostgreSQL 连接预算和真实 worker 组合重新取数。
 10w 是本机容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、
 PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
 
-## 延伸优化：第 4、6、7、8 项
+## 延伸优化：第 4、5、6、7、8 项
 
 ### 4. 合并事务内更新后查询
 
@@ -99,6 +99,28 @@ PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
 
 所有 SQL 继续包含 `tenant_id`、前态和 `version` 条件；没有删除终态守卫、invocation fence、
 幂等键或事务边界。真实 PostgreSQL 并发认领测试与相关单测共 42 个通过。
+
+### 5. 实例分区计数增量 CAS
+
+普通实例的 task report 不再每次对同一实例的全部 `job_partition` 执行聚合。分区首次通过版本 CAS
+进入 `SUCCESS` 或 `FAILED` 时，使用同一条 PostgreSQL data-modifying CTE、同一事务原子更新
+`job_instance.success_partition_count/failed_partition_count`。因此普通实例的中间 report 从每次
+O(N) 聚合收敛为 O(1) 计数读取，避免大 fan-out 下形成 O(N²) 扫描量。
+
+一致性边界保持如下：
+
+- 分区的 `tenant_id + id + version + 非终态` 谓词仍是唯一推进门，Kafka/worker 重放不会重复累加。
+- 失败分区人工重试或文件重派时，在同一 SQL 中锁定旧状态、重开分区并反向扣减失败计数；非终态
+  lease reclaim 的计数增量为 0。
+- 计数达到 `expected_partition_count` 时仍执行一次真实聚合作为终态晋级闸门；计数与分区事实不一致
+  时拒绝晋级并返回状态冲突，不以缓存计数覆盖事实。
+- DAG 推进仍需 partition id 与 node assignment，因此继续使用轻量状态投影，不错误套用普通实例快路。
+- 终态实例的异常子状态修复属于低频一致性路径，收敛残留分区后按真实状态重算实例计数，可校正
+  历史漂移，不使用增量快路掩盖旧数据问题。
+
+真实 PostgreSQL 已覆盖 5 类关键场景：混合成功/失败、未完成分区、重复 report、失败分区重开后
+再次成功、终态子状态修复对历史漂移计数的校正；均为零失败、零跳过。原有实例 advisory lock、
+任务/分区 CAS、终态防复活和最终聚合校验均保留。
 
 ### 6. 按任务规模选择持久化粒度
 
