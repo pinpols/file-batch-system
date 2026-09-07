@@ -340,6 +340,17 @@ orchestrator:
     maxPoolSize: 50
   workerCache:
     enabled: true
+  persistenceGranularity:
+    # 默认关闭；只对未显式指定 targetItems/BytesPerPartition 的 DYNAMIC/AUTO 作业生效。
+    enabled: false
+    compactMaxItems: 100000
+    compactMaxBytes: 268435456
+    standardMaxItems: 10000000
+    standardMaxBytes: 8589934592
+    standardTargetItems: 1000000
+    largeTargetItems: 500000
+    standardTargetBytes: 536870912
+    largeTargetBytes: 268435456
   mqRouting:
     mode: "TENANT"
   quota:

@@ -20,6 +20,21 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.orchestrator.persistence-granularity.enabled
+    module: orchestrator
+    env:
+      - BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED
+      - BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_BYTES
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_BYTES
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES
+      - BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.mq.routing.mode
     module: orchestrator
     env:

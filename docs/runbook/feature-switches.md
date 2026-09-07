@@ -83,6 +83,7 @@
 | `batch.storage.encryption.decorator-enabled` | `true` / `false` | **false** | BATCHENC 整对象加密装饰层；开启后 presign 直传禁用、range 读退化 | P1 | `BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED` | ❌ |
 | `batch.storage.s3.auto-create-bucket` | `true` / `false` | **true** | 启动自动建桶；AWS/OSS/COS 等托管云**必须 false** | P1 | `BATCH_S3_AUTO_CREATE_BUCKET` | ❌ |
 | `batch.scheduler.worker-cache.enabled` | `true` / `false` | **true** | ONLINE worker 列表缓存（Redis 故障 fail-open 直通 DB） | P2 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` | ❌ |
+| `batch.orchestrator.persistence-granularity.enabled` | `true` / `false` | **false** | 未显式指定目标粒度的 DYNAMIC/AUTO 作业按规模选择 partition/task 数；不省略审计记录 | P1 | `BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED` | ❌ |
 | `batch.quota.snapshot.enabled` | `true` / `false` | **true** | Redis 配额状态周期快照到 PG（审计 / 降级数据源） | P2 | `BATCH_QUOTA_SNAPSHOT_ENABLED` | ❌ |
 
 ### 1.E 分片路由 / 导入扫描 / 原子任务

@@ -74,6 +74,15 @@ data:
   BATCH_CONSOLE_AI_ENABLED: {{ ((.Values.consoleApi).ai).enabled | default false | quote }}
   BATCH_CONSOLE_AI_PROVIDER: {{ ((.Values.consoleApi).ai).provider | default "anthropic" | quote }}
   BATCH_SCHEDULER_WORKER_CACHE_ENABLED: {{ (.Values.orchestrator.workerCache).enabled | default true | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED: {{ (.Values.orchestrator.persistenceGranularity).enabled | default false | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).compactMaxItems | default 100000 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_BYTES: {{ (.Values.orchestrator.persistenceGranularity).compactMaxBytes | default 268435456 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).standardMaxItems | default 10000000 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_BYTES: {{ (.Values.orchestrator.persistenceGranularity).standardMaxBytes | default 8589934592 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).standardTargetItems | default 1000000 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).largeTargetItems | default 500000 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES: {{ (.Values.orchestrator.persistenceGranularity).standardTargetBytes | default 536870912 | quote }}
+  BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES: {{ (.Values.orchestrator.persistenceGranularity).largeTargetBytes | default 268435456 | quote }}
   BATCH_MQ_ROUTING_MODE: {{ (.Values.orchestrator.mqRouting).mode | default "TENANT" | quote }}
   BATCH_QUOTA_RUNTIME_STORE: {{ (.Values.orchestrator.quota).runtimeStore | default "redis" | quote }}
   BATCH_QUOTA_REDIS_FAILURE_MODE: {{ (.Values.orchestrator.quota).redisFailureMode | default "FAIL_CLOSED" | quote }}

@@ -65,6 +65,17 @@ management:
 
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
+  orchestrator:
+    persistence-granularity:
+      enabled: ${BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED:false}
+      compact-max-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS:100000}
+      compact-max-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_BYTES:268435456}
+      standard-max-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_ITEMS:10000000}
+      standard-max-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_BYTES:8589934592}
+      standard-target-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_ITEMS:1000000}
+      large-target-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS:500000}
+      standard-target-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES:536870912}
+      large-target-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES:268435456}
   alert:
     am-emit:
       enabled: ${BATCH_ALERT_AM_EMIT_ENABLED:false}
