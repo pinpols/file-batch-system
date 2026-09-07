@@ -253,7 +253,7 @@
           and job_instance_id = #{jobInstanceId}
     </select>
 
-    <update id="claimPartition">
+    <select id="claimPartition" resultMap="JobPartitionResultMap" flushCache="true" affectData="true">
         update batch.job_partition
         set worker_code = #{workerCode},
             partition_status = #{toStatus},
@@ -267,7 +267,8 @@
           and id = #{id}
           and partition_status = #{fromStatus}
           and version = #{expectedVersion}
-    </update>
+        returning *
+    </select>
 
     <!-- R3-P1-10：current_invocation_id 改为强制条件（不再 <if> 可选）。
          之前多副本同 workerCode 部署时 invocationId=null 可让任意持有该 workerCode 的实例续他人 lease。

@@ -64,7 +64,8 @@ public interface JobPartitionMapper {
 
   JobPartitionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int claimPartition(ClaimPartitionParam param);
+  /** 以版本 CAS 认领分区并返回更新后的行；返回 {@code null} 表示 CAS 未命中。 */
+  JobPartitionEntity claimPartition(ClaimPartitionParam param);
 
   int renewLease(RenewLeaseParam param);
 
