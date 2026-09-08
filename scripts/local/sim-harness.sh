@@ -52,6 +52,7 @@ BIZ_SHARD_1_CONTAINER="${BIZ_SHARD_1_CONTAINER:-batch-postgres-biz-shard-1}"
 FIXTURE_DIR="${FIXTURE_DIR:-docs/test-data/test-full-coverage-import-suite}"
 SIM_LOG_DIR="$(log_run_dir "$ROOT" sim-harness sim-harness)"
 HARNESS_TMP_DIR="${HARNESS_TMP_DIR:-$SIM_LOG_DIR/tmp}"
+SIM_SQL_DIR="$ROOT/scripts/local/sql"
 mkdir -p "$HARNESS_TMP_DIR"
 log_link_dir "$ROOT" sim-harness "$SIM_LOG_DIR"
 
@@ -61,6 +62,20 @@ c_ylw()  { printf '\033[1;33m%s\033[0m\n' "$*"; }
 fail()   { c_red "  ✗ $*"; FAILED=1; }
 ok()     { c_grn "  ✓ $*"; }
 warn()   { c_ylw "  ! $*"; }
+
+sim_platform_sql() {
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG" psql -X -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" \
+    "$@" -f /dev/stdin < "$SIM_SQL_DIR/$sql_file"
+}
+
+sim_business_sql() {
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG" psql -X -v ON_ERROR_STOP=1 -U "$PGU" -d "$BIZ_DB" \
+    "$@" -f /dev/stdin < "$SIM_SQL_DIR/$sql_file"
+}
 
 # clean-at-START(幂等):上一轮被 kill -9 / IDE 强停时 EXIT trap 不触发,孤儿 testcontainers
 # 与 biz-shard 残留;每次开跑先自净,不用人工去 docker rm。只清残留,不碰受管 dev 栈。
@@ -173,31 +188,23 @@ reset() {
   # 平台运行态:沿用 00-reset 的平台段(它平台段是好的;失败的是 biz 段的硬编码列表)
   set -a; . ./.env.local; set +a
   # biz 数据:动态枚举 biz 现有基表(非分区子表)TRUNCATE CASCADE,避免硬编码撞缺表
-  docker exec "$PG" psql -v ON_ERROR_STOP=1 -U "$PGU" -d "$BIZ_DB" -c "
-    DO \$reset\$
-    DECLARE r record;
-    BEGIN
-      FOR r IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-               WHERE n.nspname='biz' AND c.relkind='p' -- 分区父表
-      LOOP EXECUTE format('TRUNCATE TABLE biz.%I CASCADE', r.relname); END LOOP;
-      FOR r IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-               WHERE n.nspname='biz' AND c.relkind='r'
-                 AND c.relispartition=false  -- 普通非分区基表
-      LOOP EXECUTE format('TRUNCATE TABLE biz.%I CASCADE', r.relname); END LOOP;
-    END \$reset\$;" >/dev/null && ok "biz 数据已清(动态枚举,跳过不存在的表)" || { c_red "  ✗ biz 清理失败"; return 1; }
+  if sim_business_sql reset-business-runtime.sql >/dev/null; then
+    ok "biz 数据已清(动态枚举,跳过不存在的表)"
+  else
+    c_red "  ✗ biz 清理失败"
+    return 1
+  fi
 
   # 平台运行态 truncate(job_/pipeline_/workflow_/retry/outbox/file_record 等),保留
   # *_definition/config/tenant/user/系统表。retry_schedule / worker_report_outbox 不会被
   # job_instance 的 CASCADE 一并清理；若漏清，历史 WAITING retry 会在全量 sim 期间持续抢
   # scheduler，拖慢后续场景的终态落库并造成假性超时。
-  docker exec "$PG" psql -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c "
-    DO \$reset\$
-    DECLARE r record;
-    BEGIN
-      FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='batch'
-        AND tablename ~ '^(job_instance|job_execution|pipeline_instance|pipeline_step_run|pipeline_progress|workflow_run|workflow_node_run|retry_schedule|outbox_event|event_outbox_retry|trigger_outbox_event|worker_report_outbox|file_record|file_error_record|file_channel_health|compensation_command|dead_letter_task)'
-      LOOP EXECUTE format('TRUNCATE TABLE batch.%I CASCADE', r.tablename); END LOOP;
-    END \$reset\$;" >/dev/null && ok "平台运行态已清(保留定义/配置/租户/用户/系统表)" || { c_red "  ✗ 平台运行态清理失败"; return 1; }
+  if sim_platform_sql reset-platform-runtime.sql >/dev/null; then
+    ok "平台运行态已清(保留定义/配置/租户/用户/系统表)"
+  else
+    c_red "  ✗ 平台运行态清理失败"
+    return 1
+  fi
   c_grn "== reset 完成 =="
 }
 
@@ -248,9 +255,7 @@ prereq() {
   # platform_seed 同时带有供治理页面展示的历史 retry 样例。它们不是 sim 的输入，
   # 但 WAITING 且 next_retry_at 已过期时会被真实 scheduler 反复重派，污染后续阶段的
   # Kafka/报告时序；仅清理已经过期的 WAITING 样例，保留 seed 定义和未到期运行态。
-  docker exec "$PG" psql -q -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c \
-    "DELETE FROM batch.retry_schedule WHERE retry_status = 'WAITING' AND next_retry_at < CURRENT_TIMESTAMP;" \
-    >/dev/null \
+  sim_platform_sql delete-expired-waiting-retries.sql -q >/dev/null \
     && ok "清理 platform_seed 过期 retry 样例" \
     || { c_red "  ✗ platform_seed 过期 retry 清理失败"; return 1; }
 
@@ -288,7 +293,8 @@ ensure_core_runtime() {
   done
   [[ "$unhealthy" == 0 ]] && return 0
 
-  local log="$SIM_LOG_DIR/restart-core-$(date +%Y%m%d%H%M%S).log"
+  local log
+  log="$SIM_LOG_DIR/restart-core-$(date +%Y%m%d%H%M%S).log"
   echo "  [core-runtime] unhealthy(:$p health=${code:-000}), restart core services → $log"
   JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS}" SKIP_CDS=1 \
     bash scripts/local/restart.sh trigger orchestrator console worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1
@@ -474,8 +480,13 @@ routing_sim() {
   s1u=$(grep BIZ_SHARD_URL secrets/biz-shards/shard-1.env|cut -d= -f2-|tr -d '"'); s1n=$(grep BIZ_SHARD_USERNAME secrets/biz-shards/shard-1.env|cut -d= -f2-); s1p=$(grep BIZ_SHARD_PASSWORD secrets/biz-shards/shard-1.env|cut -d= -f2-)
 
   echo "-- 2a) placement: tc -> shard-1(重启前先登记,worker 启动即可 resolve)--"
-  docker exec "$PG" psql -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" -c \
-    "INSERT INTO batch.business_tenant_placement(tenant_id,placement_key,updated_by) VALUES ('tc','shard-1','routing-sim') ON CONFLICT (tenant_id) DO UPDATE SET placement_key='shard-1'" >/dev/null && ok "tc→shard-1 已登记"
+  if sim_platform_sql upsert-business-tenant-placement.sql \
+    -v tenant_id=tc -v placement_key=shard-1 -v updated_by=routing-sim >/dev/null; then
+    ok "tc→shard-1 已登记"
+  else
+    fail "tc→shard-1 登记失败"
+    return 1
+  fi
 
   echo "-- 2b) 写 routing overlay + 重启 worker --"
   routing_overlay_clear  # 先清旧 overlay(此处不删 shard,shard-1 正在用)
@@ -496,7 +507,7 @@ routing_sim() {
   } >> .env.local
   unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
   bash scripts/local/restart.sh worker-import worker-export worker-process >"$SIM_LOG_DIR/rs-restart.log" 2>&1
-  for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && break; sleep 3; done
+  for _ in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && break; sleep 3; done
   ok "3 biz worker 已带 routing 重启"
 
   echo "-- 4) 跑导入(04-seed + 05-load)--"
@@ -509,8 +520,11 @@ routing_sim() {
   local tbl="customer_account"  # ta 写 customer;tc 写 risk_score。两边都查,任一有 tc 行即证
   local on1 on0
   for tbl in risk_score customer_account transaction; do
-    on1=$(PGPASSWORD="$s1p" docker run --rm --network "$(docker inspect "$PG" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" -e PGPASSWORD="$s1p" postgres:17 psql -h "$BIZ_SHARD_1_CONTAINER" -U "$s1n" -d "$BIZ_DB" -tAc "SELECT count(*) FROM biz.$tbl WHERE tenant_id='tc'" 2>/dev/null || echo 0)
-    on0=$(docker exec "$PG" psql -U "$PGU" -d "$BIZ_DB" -tAc "SELECT count(*) FROM biz.$tbl WHERE tenant_id='tc'" 2>/dev/null || echo 0)
+    on1=$(PGPASSWORD="$s1p" docker run --rm -i --network "$(docker inspect "$PG" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" -e PGPASSWORD="$s1p" postgres:17 \
+      psql -X -v ON_ERROR_STOP=1 -h "$BIZ_SHARD_1_CONTAINER" -U "$s1n" -d "$BIZ_DB" -tA \
+      -v table_name="$tbl" -v tenant_id=tc -f /dev/stdin < "$SIM_SQL_DIR/count-business-tenant-rows.sql" 2>/dev/null || echo 0)
+    on0=$(sim_business_sql count-business-tenant-rows.sql -tA \
+      -v table_name="$tbl" -v tenant_id=tc 2>/dev/null || echo 0)
     echo "    biz.$tbl  tc@shard-1=$on1  tc@shard-0=$on0"
   done
   c_grn "== routing-sim 完成(看上面 tc 是否落 shard-1;EXIT 自动还原单片)=="
