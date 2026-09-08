@@ -129,7 +129,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-5 SQL 边界 CI 是增量门禁，不是存量清零证明
 
-状态：**已完成门禁收紧，存量继续分批治理**。`check-sql-config-boundaries.sh` 已取消整文件放行，改为按文件登记可执行 SQL 命中行数预算；纯注释、日志展示和 HTTP curl 不计为 SQL。已把 atomic sim、运行态 reset、quiesce、ADR-046 负载探针及 CI SDK 真链路 SQL 迁入对应 `sql` 目录，并把数据库就绪探针统一复用；当前 4 个历史文件只能减少、不能增加，未登记文件预算为 0；只保存检测表达式且不执行 SQL 的门禁自身明确豁免。现有共享 SDK E2E、DR 演练及大型 sim harness SQL 仍应继续迁到专用 SQL 目录，但后续无法借历史文件白名单继续扩张。
+状态：**已完成门禁收紧，存量继续分批治理**。`check-sql-config-boundaries.sh` 已取消整文件放行，改为按文件登记可执行 SQL 命中行数预算；纯注释、日志展示和 HTTP curl 不计为 SQL。已把 atomic sim、运行态 reset、quiesce、ADR-046、CI SDK 真链路及 DR 演练 SQL 迁入对应 `sql` 目录；DR 的源库/恢复库校验复用同一查询文件，数据库标识符通过 psql `format(%I)` 处理。当前 3 个历史文件只能减少、不能增加，未登记文件预算为 0；只保存检测表达式且不执行 SQL 的门禁自身明确豁免。剩余共享 SDK E2E 与两个大型 sim harness SQL 继续分批迁移。
 
 整批量日 Dry-run 的推荐模型、阶段划分与验收矩阵见
 [`batch-day-dry-run-enhancement-plan-2026-09-08.md`](../plans/batch-day-dry-run-enhancement-plan-2026-09-08.md)。
@@ -171,7 +171,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 3. 修复分发健康退避并发 CAS，增加双线程真实数据库测试。
 4. 用语义化 CAS 取代 Worker Registry 生产路径的 `updateById`。
 5. 建立状态分类漂移门禁，再治理 Mapper 默认值和 Java 固定 SQL。
-6. ~~将 shell 整文件白名单改成只减不增基线~~（已完成）；继续逐批清理剩余 4 个历史文件。
+6. ~~将 shell 整文件白名单改成只减不增基线~~（已完成）；继续逐批清理剩余 3 个历史文件。
 
 ## 验收标准
 
