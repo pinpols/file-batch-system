@@ -9,7 +9,6 @@ cd "$ROOT"
 legacy_statement_budget() {
   case "$1" in
     scripts/ci/check-sql-config-boundaries.sh) echo exempt ;;
-    scripts/local/validate-seed-scenarios.sh) echo 21 ;;
     *) echo 0 ;;
   esac
 }

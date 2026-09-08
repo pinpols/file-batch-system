@@ -129,7 +129,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-5 SQL 边界 CI 是增量门禁，不是存量清零证明
 
-状态：**已完成门禁收紧，存量继续分批治理**。`check-sql-config-boundaries.sh` 已取消整文件放行，改为按文件登记可执行 SQL 命中行数预算；纯注释、日志展示和 HTTP curl 不计为 SQL。已把 atomic sim、运行态 reset、quiesce、ADR-046、CI/本地 SDK 真链路、sim harness 及 DR 演练 SQL 迁入对应 `sql` 目录；DR 的源库/恢复库校验复用同一查询文件，数据库标识符通过 psql `format(%I)` 处理。SDK E2E 同时消除了固定定义主键、API key 冲突后返回无效新密钥及无租户条件清理的问题。seed 场景校验的只读探针已全部参数化，顺带补齐任务错误诊断的租户条件，最后一个历史文件预算由 53 降至 21。未登记文件预算为 0；只保存检测表达式且不执行 SQL 的门禁自身明确豁免。剩余 seed 场景写入夹具继续迁移。
+状态：**原登记存量已清零，扩大扫描仍在治理**。`check-sql-config-boundaries.sh` 原登记的 atomic sim、运行态 reset、quiesce、ADR-046、CI/本地 SDK 真链路、sim harness、seed 场景校验及 DR 演练 SQL 均已迁入对应 `sql` 目录，原有预算已归零。DR 的数据库标识符通过 psql `format(%I)` 处理；SDK E2E 消除了固定定义主键、API key 冲突后返回无效新密钥及无租户条件清理的问题；seed 场景探针全部参数化，补齐任务错误诊断的租户条件，并让写入夹具在 SQL 错误时立即失败，不再假绿。进一步复核发现现门禁大小写敏感，且不能识别 `psql -tAc/-Atc` 等组合参数，`scripts/sim` 与 `load-tests` 仍有未登记的小写内联 SQL；下一阶段先修检测器并建立完整的只减不增基线，再逐目录推进到 0。
 
 整批量日 Dry-run 的推荐模型、阶段划分与验收矩阵见
 [`batch-day-dry-run-enhancement-plan-2026-09-08.md`](../plans/batch-day-dry-run-enhancement-plan-2026-09-08.md)。
@@ -171,7 +171,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 3. 修复分发健康退避并发 CAS，增加双线程真实数据库测试。
 4. 用语义化 CAS 取代 Worker Registry 生产路径的 `updateById`。
 5. 建立状态分类漂移门禁，再治理 Mapper 默认值和 Java 固定 SQL。
-6. ~~将 shell 整文件白名单改成只减不增基线~~（已完成）；继续清理最后 1 个历史文件。
+6. ~~将原登记 shell SQL 预算推进到 0~~（已完成）；扩大为大小写不敏感、识别 psql 组合参数的全仓基线并继续治理。
 
 ## 验收标准
 

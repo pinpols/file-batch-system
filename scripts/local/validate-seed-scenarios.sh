@@ -98,12 +98,6 @@ result() {
 
 section() { echo -e "\n${BLUE}== $1 ==${NC}"; }
 
-psql_q() {
-  # -tA 去掉对齐和表头;但 INSERT...RETURNING 会多输出 "INSERT 0 N" 提示行,
-  # 调用方需要时自己 head -1 或过滤
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null
-}
-
 psql_file() {
   local db="$1"; local file="$2"; shift 2
   docker exec -i "$PG_CONTAINER" psql -X -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
@@ -112,12 +106,6 @@ psql_file() {
 psql_value() {
   local db="$1"; local file="$2"; shift 2
   psql_file "$db" "$SQL_DIR/$file" -q -tA "$@" 2>/dev/null | head -1
-}
-
-# 写入用 — 仅返回 RETURNING 的首行(过滤 "INSERT 0 N" / "DELETE N" 等命令统计)
-psql_w_first() {
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null \
-    | grep -vE "^(INSERT|UPDATE|DELETE|COMMIT|ROLLBACK)" | head -1
 }
 
 # do_cleanup [probe_pattern]
@@ -307,16 +295,19 @@ if [[ -z "$finance_wf_id" ]]; then
   result skip "V84 跨租户隔离" "tenant-finance/finance_recon_flow 不在种子中,跳过"
 else
   # 探针:default-tenant 用同一 wf_def_id + 同一 node_code 应能共存
-  cleanup_sql="DELETE FROM batch.workflow_node WHERE tenant_id='$STRICT_TENANT_ID' AND workflow_definition_id=$finance_wf_id AND node_code='SEEDVAL_PROBE'"
-  psql_q "$cleanup_sql" >/dev/null
-  insert1=$(psql_w_first "INSERT INTO batch.workflow_node (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled) VALUES ('$STRICT_TENANT_ID', $finance_wf_id, 'SEEDVAL_PROBE', 'probe', 'TASK', 99, 'NONE', 0, 0, true) ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING RETURNING tenant_id")
-  insert2=$(psql_w_first "INSERT INTO batch.workflow_node (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled) VALUES ('$STRICT_TENANT_ID', $finance_wf_id, 'SEEDVAL_PROBE', 'probe', 'TASK', 99, 'NONE', 0, 0, true) ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING RETURNING tenant_id")
+  psql_file "$PG_DB" "$SQL_DIR/validate-seed-delete-workflow-node-probe.sql" -q \
+    -v tenant_id="$STRICT_TENANT_ID" -v workflow_definition_id="$finance_wf_id" >/dev/null
+  insert1=$(psql_value "$PG_DB" validate-seed-insert-workflow-node-probe.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v workflow_definition_id="$finance_wf_id")
+  insert2=$(psql_value "$PG_DB" validate-seed-insert-workflow-node-probe.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v workflow_definition_id="$finance_wf_id")
   if [[ "$insert1" == "$STRICT_TENANT_ID" && -z "$insert2" ]]; then
     result pass "V84 跨租户可共存 + 同租户唯一" "$STRICT_TENANT_ID 插入成功,重插被 ON CONFLICT 拦"
   else
     result fail "V84 隔离行为" "1st=$insert1 2nd=$insert2 (期望 $STRICT_TENANT_ID + 空)"
   fi
-  psql_q "$cleanup_sql" >/dev/null
+  psql_file "$PG_DB" "$SQL_DIR/validate-seed-delete-workflow-node-probe.sql" -q \
+    -v tenant_id="$STRICT_TENANT_ID" -v workflow_definition_id="$finance_wf_id" >/dev/null
 fi
 
 # ---------- 4. 同步 API: trigger fire happy path ----------
@@ -551,50 +542,17 @@ if [[ "$STRICT" == "1" ]]; then
   PROBE_WF_BATCH_NO="${PROBE_TAG}-WF-BATCH"
   PROBE_BIZDATE=$(date +%Y-%m-%d)
   # 先 seed 两个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在业务库)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
-    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('$STRICT_TENANT_ID', '$PROBE_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
-    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('$STRICT_TENANT_ID', '$PROBE_WF_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
+  psql_file "$BUSINESS_DB" "$SQL_DIR/validate-seed-upsert-settlement-batch.sql" -q \
+    -v tenant_id="$STRICT_TENANT_ID" -v batch_no="$PROBE_BATCH_NO" >/dev/null
+  psql_file "$BUSINESS_DB" "$SQL_DIR/validate-seed-upsert-settlement-batch.sql" -q \
+    -v tenant_id="$STRICT_TENANT_ID" -v batch_no="$PROBE_WF_BATCH_NO" >/dev/null
 
   assert_fire "EXPORT 严格 ($STRICT_TENANT_ID, settlement)" "$STRICT_TENANT_ID" "export_settlement_job" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   PROBE_WF_JOB="${PROBE_TAG}-wf-pipeline"
-  psql_q "INSERT INTO batch.workflow_definition
-      (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
-    VALUES
-      ('$STRICT_TENANT_ID', '$PROBE_WF_JOB', 'seedval pipeline workflow', 'PIPELINE', 1, true, 'strict seed workflow probe', '$PROBE_TAG', '$PROBE_TAG', now(), now())
-    ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING" >/dev/null
-  psql_q "INSERT INTO batch.workflow_node
-      (tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order,
-       retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
-    SELECT wd.tenant_id, wd.id, v.node_code, v.node_name, v.node_type, v.related_job_code, v.node_order,
-           'NONE', 0, 0, true, v.node_params::jsonb, now(), now()
-    FROM batch.workflow_definition wd,
-      (VALUES
-        ('START', 'Start', 'START', NULL::text, 0, '{\"entry\":true}'),
-        ('EXPORT_STEP', 'Export Step', 'TASK', 'export_settlement_job', 1, '{\"step\":\"export\"}'),
-        ('END', 'End', 'END', NULL::text, 2, '{\"entry\":false}')
-      ) AS v(node_code, node_name, node_type, related_job_code, node_order, node_params)
-    WHERE wd.tenant_id = '$STRICT_TENANT_ID' AND wd.workflow_code = '$PROBE_WF_JOB' AND wd.version = 1
-    ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING" >/dev/null
-  psql_q "INSERT INTO batch.workflow_edge
-      (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
-    SELECT wd.tenant_id, wd.id, v.from_node_code, v.to_node_code, v.edge_type, true, now(), now()
-    FROM batch.workflow_definition wd,
-      (VALUES
-        ('START', 'EXPORT_STEP', 'ALWAYS'),
-        ('EXPORT_STEP', 'END', 'ALWAYS')
-      ) AS v(from_node_code, to_node_code, edge_type)
-    WHERE wd.tenant_id = '$STRICT_TENANT_ID' AND wd.workflow_code = '$PROBE_WF_JOB' AND wd.version = 1
-    ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING" >/dev/null
-  psql_q "INSERT INTO batch.job_definition (
-      tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
-      queue_code, worker_group, window_code, priority, enabled, created_by, updated_by, created_at, updated_at
-    ) VALUES (
-      '$STRICT_TENANT_ID', '$PROBE_WF_JOB', 'seedval pipeline workflow', 'WORKFLOW', 'MANUAL', 'Asia/Shanghai', 'SCHEDULED',
-      'export_queue', 'EXPORT', 'always_open', 5, true, '$PROBE_TAG', '$PROBE_TAG', now(), now()
-    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true, updated_by='$PROBE_TAG', updated_at=now()" >/dev/null
+  psql_file "$PG_DB" "$SQL_DIR/validate-seed-upsert-strict-workflow.sql" -q \
+    -v tenant_id="$STRICT_TENANT_ID" -v job_code="$PROBE_WF_JOB" -v probe_tag="$PROBE_TAG" >/dev/null
 
   assert_fire "WORKFLOW PIPELINE 严格 ($STRICT_TENANT_ID)" "$STRICT_TENANT_ID" "$PROBE_WF_JOB" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_WF_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
@@ -604,24 +562,9 @@ if [[ "$STRICT" == "1" ]]; then
   # local_dispatch channel 只写 envelope JSON 到 /tmp/batch/local-dispatch, 不需源文件
   PROBE_DISPATCH_JOB="${PROBE_TAG}-dispatch"
   PROBE_FILE_CODE="${PROBE_TAG}-file"
-  psql_q "INSERT INTO batch.job_definition (
-      tenant_id, job_code, job_name, job_type, biz_type,
-      schedule_type, timezone, trigger_mode, queue_code, worker_group, window_code,
-      priority, enabled, created_at, updated_at
-    ) VALUES (
-      '$STRICT_TENANT_ID', '$PROBE_DISPATCH_JOB', 'seedval dispatch probe', 'DISPATCH', 'TEST',
-      'MANUAL', 'Asia/Shanghai', 'SCHEDULED', 'dispatch_queue', 'DISPATCH', 'always_open',
-      5, true, now(), now()
-    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true" >/dev/null
-  probe_file_id=$(psql_w_first "INSERT INTO batch.file_record (
-      tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
-      file_format_type, charset, file_size_bytes, checksum_type, checksum_value,
-      storage_type, storage_path, storage_bucket, file_status, biz_date, source_type, source_ref
-    ) VALUES (
-      '$STRICT_TENANT_ID', '$PROBE_FILE_CODE', 'TEST', 'OUTPUT', '${PROBE_TAG}-probe.txt', '${PROBE_TAG}-probe.txt',
-      'JSON', 'UTF-8', 12, 'NONE', 'noop',
-      'LOCAL', '/tmp/batch/${PROBE_TAG}-probe.txt', 'batch-dev', 'GENERATED', CURRENT_DATE, 'GENERATED', '$PROBE_TAG'
-    ) RETURNING id")
+  probe_file_id=$(psql_value "$PG_DB" validate-seed-upsert-dispatch-fixture.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v job_code="$PROBE_DISPATCH_JOB" \
+    -v file_code="$PROBE_FILE_CODE" -v probe_tag="$PROBE_TAG")
   assert_fire "DISPATCH 严格 ($STRICT_TENANT_ID, local channel)" "$STRICT_TENANT_ID" "$PROBE_DISPATCH_JOB" \
     "{\"fileId\":\"$probe_file_id\",\"channelCode\":\"local_dispatch\"}" success
 
@@ -763,17 +706,10 @@ if [[ "$ADVANCED" == "1" ]]; then
   # 上限 = 30s reconciler + 60s 下个 cron tick + 缓冲 ≈ 90-120s
   PROBE_FXR_JOB_CODE="${PROBE_TAG}-fxr"
   PROBE_FXR_TENANT="$STRICT_TENANT_ID"
-  fxr_def_id=$(psql_q "INSERT INTO batch.job_definition (
-      tenant_id, job_code, job_name, job_type, biz_type,
-      schedule_type, schedule_expr, timezone, trigger_mode,
-      enabled, created_by
-    ) VALUES (
-      '$PROBE_FXR_TENANT', '$PROBE_FXR_JOB_CODE', 'seedval cron probe', 'GENERAL', 'TEST',
-      'CRON', '0 * * * * ?', 'Asia/Shanghai', 'SCHEDULED',
-      true, 'seedval'
-    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true RETURNING id")
+  fxr_def_id=$(psql_value "$PG_DB" validate-seed-upsert-cron-job.sql \
+    -v tenant_id="$PROBE_FXR_TENANT" -v job_code="$PROBE_FXR_JOB_CODE")
   if [[ -z "$fxr_def_id" ]]; then
-      result fail "Trigger CRON 真触发" "INSERT job_definition 失败,无法验证"
+      result fail "Trigger CRON 真触发" "写入 job_definition 失败,无法验证"
   else
     fxr_baseline=$(psql_value "$PG_DB" validate-seed-count-scheduled-trigger-requests.sql \
       -v tenant_id="$PROBE_FXR_TENANT" -v job_code="$PROBE_FXR_JOB_CODE")
@@ -793,11 +729,9 @@ if [[ "$ADVANCED" == "1" ]]; then
     else
       result fail "Trigger CRON 真触发" "120s 内 trigger_request 无 SCHEDULED 新增 (baseline=$fxr_baseline), 检查 reconciler 30s + cron 周期 60s"
     fi
-    # 立即 disable + 显式删 job_definition (避免 PROBE CRON 持续 fire 污染后续 run)
-    # do_cleanup 回退也会清, 这里 explicit 减少 fire 间隔
-    psql_q "UPDATE batch.job_definition SET enabled=false WHERE id=$fxr_def_id" >/dev/null
-    psql_q "DELETE FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE'" >/dev/null
-    psql_q "DELETE FROM batch.job_definition WHERE id=$fxr_def_id" >/dev/null
+    # 立即 disable 阻止继续 fire；运行实例及父子记录交给下方依赖顺序 cleanup 清理。
+    psql_file "$PG_DB" "$SQL_DIR/validate-seed-disable-job-definition.sql" -q \
+      -v tenant_id="$PROBE_FXR_TENANT" -v job_definition_id="$fxr_def_id" >/dev/null
   fi
 fi
 
