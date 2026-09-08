@@ -5,31 +5,30 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 # 历史内联 SQL 的命中行数预算。预算只能减少，不能增加；未登记文件预算为 0。
-# 两个 CI 守护脚本仅保存检测表达式，不执行 SQL，故不计入历史债务。
+# 本 CI 守护脚本仅保存检测表达式，不执行 SQL，故不计入历史债务。
 legacy_statement_budget() {
   case "$1" in
-    scripts/ci/check-sql-config-boundaries.sh | scripts/ci/check-db-scripts-safety.sh) echo exempt ;;
+    scripts/ci/check-sql-config-boundaries.sh) echo exempt ;;
     scripts/ci/run-sdk-orchestrator-e2e.sh) echo 5 ;;
-    scripts/data/load-system-test-data.sh) echo 2 ;;
     scripts/db/backup/dr-drill.sh) echo 12 ;;
-    scripts/dev/trigger-process-demo.sh) echo 1 ;;
     scripts/lib/sdk-e2e-common.sh) echo 19 ;;
     scripts/local/adr046-batch-consume-load.sh) echo 5 ;;
-    scripts/local/analyze-replay.sh) echo 1 ;;
-    scripts/local/apply-pending-flyway-migrations.sh) echo 1 ;;
-    scripts/local/import-copy-worth-benchmark.sh) echo 2 ;;
     scripts/local/provision-biz-shard.sh) echo 2 ;;
-    scripts/local/sim-harness.sh) echo 12 ;;
-    scripts/local/start-all.sh) echo 1 ;;
-    scripts/local/validate-seed-scenarios.sh) echo 56 ;;
-    scripts/ops/heal-stuck-outbox.sh) echo 1 ;;
-    scripts/ops/heal-zombie-pipelines.sh) echo 2 ;;
+    scripts/local/sim-harness.sh) echo 11 ;;
+    scripts/local/validate-seed-scenarios.sh) echo 53 ;;
     scripts/sim/00-reset-runtime.sh) echo 4 ;;
-    scripts/sim/06-sdk-worker-verify.sh) echo 1 ;;
-    scripts/sim/07-atomic-load.sh) echo 1 ;;
-    scripts/sim/98-quiesce-schedules.sh) echo 8 ;;
+    scripts/sim/98-quiesce-schedules.sh) echo 7 ;;
     *) echo 0 ;;
   esac
+}
+
+matched_statement_count() {
+  awk -v pattern="$PATTERN" '
+    $0 ~ pattern \
+      && $0 !~ /^[[:space:]]*#/ \
+      && $0 !~ /^[[:space:]]*(echo|log|printf|curl)[[:space:]]/ { count++ }
+    END { print count + 0 }
+  ' "$1"
 }
 
 # 用 grep(coreutils,处处可用)而非 rg —— GitHub runner 不一定装 ripgrep,
@@ -40,7 +39,7 @@ while IFS= read -r file; do
   budget="$(legacy_statement_budget "$file")"
   [[ "$budget" == "exempt" ]] && continue
 
-  current="$(grep -Ec "$PATTERN" "$file" || true)"
+  current="$(matched_statement_count "$file")"
   if (( current > budget )); then
     echo "SQL/config boundary violation: $file has $current matched line(s), budget=$budget" >&2
     fail=1
