@@ -1,11 +1,11 @@
 # 历史 Shell 内联 SQL 命中数。只能随迁移减少；新文件默认预算为 0。
-load-tests/scripts/analyze-soak.sh	1
-load-tests/scripts/run-control-plane-worker-benchmark.sh	10
-load-tests/scripts/run-p2-capacity-profile.sh	3
+load-tests/scripts/analyze-soak.sh	2
+load-tests/scripts/run-control-plane-worker-benchmark.sh	18
+load-tests/scripts/run-p2-capacity-profile.sh	4
 load-tests/scripts/run-p2-process-failure-profile.sh	1
 load-tests/scripts/run-process-worker-benchmark.sh	17
-load-tests/scripts/run-worker-load-tests.sh	12
-load-tests/scripts/run-worker-stress-tests.sh	3
+load-tests/scripts/run-worker-load-tests.sh	13
+load-tests/scripts/run-worker-stress-tests.sh	4
 load-tests/scripts/sample-scheduler-backlog.sh	9
 scripts/local/health-check-infra.sh	4
 scripts/local/import-copy-worth-benchmark.sh	8

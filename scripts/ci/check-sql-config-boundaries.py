@@ -20,7 +20,7 @@ PSQL_COMMAND = re.compile(r"\bpsql\b[^#\n]*(?:^|\s)-[A-Za-z]*c(?:\s|$)", re.IGNO
 SQL_HEREDOC = re.compile(r"<<\s*['\"]?SQL['\"]?\s*$", re.IGNORECASE)
 SQL_STATEMENT = re.compile(
     r"(?:^|[\"'`])\s*(?:"
-    r"select\s+|insert\s+into\s+|update\s+[A-Za-z_$\"'{]|delete\s+from\s+|"
+    r"select(?:\s+|$)|insert\s+into\s+|update\s+[A-Za-z_$\"'{]|delete\s+from\s+|"
     r"truncate\s+(?:table\s+)?|create\s+(?:temp(?:orary)?\s+)?table\s+|"
     r"alter\s+table\s+|drop\s+table\s+|do\s+\$[A-Za-z_]*\$|"
     r"with\s+[A-Za-z_][A-Za-z0-9_]*\s+as\s*\()",

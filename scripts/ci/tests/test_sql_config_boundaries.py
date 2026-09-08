@@ -19,6 +19,7 @@ class SqlConfigBoundaryTest(unittest.TestCase):
 psql -tAc "$query"
 value=$(query "select count(*) from batch.job_instance")
 insert into batch.probe(id) values (1);
+select
 psql -v ON_ERROR_STOP=1 -f scripts/local/sql/probe.sql
 echo "select text shown to an operator"
 # select count(*) from ignored_comment
@@ -28,7 +29,7 @@ echo "select text shown to an operator"
             path.write_text(content, encoding="utf-8")
             matches = SQL_BOUNDARY.matched_lines(path)
 
-        self.assertEqual([1, 2, 3], [line_number for line_number, _ in matches])
+        self.assertEqual([1, 2, 3, 4], [line_number for line_number, _ in matches])
 
     def test_ignore_marker_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
