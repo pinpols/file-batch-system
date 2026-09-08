@@ -204,8 +204,8 @@ public class DispatchChannelHealthService {
     // P2：失败两步走。
     // 第 1 步 upsert：先占一个条目 + failures 由 COALESCE(count,0)+1 在 SQL 侧递增，
     // 首次失败（INSERT 路径）用 base probeInterval 做 placeholder。
-    // 第 2 步 recalcBackoff：按新的 failures 重算真实 next_probe_at（指数退避），
-    // 该 UPDATE 作用于同一行且只读自己的 consecutive_failures 字段，无竞争。
+    // 第 2 步 recalcBackoff：按 RETURNING 得到的 failures 重算真实 next_probe_at（指数退避），
+    // 并以 failures 作为 CAS 前态，防止旧线程覆盖更新后的更长退避或成功状态。
     Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
     DispatchHealthUpsertCommand failureCmd = DispatchHealthUpsertCommand.builder()
         .tenantId(channel.tenantId())
@@ -217,13 +217,8 @@ public class DispatchChannelHealthService {
         .probeMessage(message)
         .probeEvidence(evidence)
         .build();
-    repository.upsertFailureAndBump(failureCmd);
-    // Citus:原 recalcBackoff 在 SQL 里用 power(2, consecutive_failures) 算退避——分布式 UPDATE 的
-    // SET 禁止带列引用的(被判 STABLE)函数。改为读回真实新 count,在 Java 按等价公式算 next_probe_at
-    // 再以纯参数写回。读回用同行 findHealth(单 shard 路由,无竞争)。
-    DispatchChannelHealthSnapshot afterFailure =
-        repository.findHealth(channel.tenantId(), channel.channelCode());
-    long failures = afterFailure != null ? afterFailure.consecutiveFailures() : 1L;
+    int failures = repository.upsertFailureAndBump(failureCmd);
+    // Citus:退避公式保留在 Java，SQL 只接收纯参数；RETURNING 同时省去一次读回查询。
     Instant recalculatedNextProbeAt = computeExponentialBackoffNextProbeAt(now, failures);
     DispatchHealthUpsertCommand recalcCmd = DispatchHealthUpsertCommand.builder()
         .tenantId(channel.tenantId())
@@ -231,10 +226,8 @@ public class DispatchChannelHealthService {
         .channelType(channel.channelType())
         .now(now)
         .nextProbeAt(recalculatedNextProbeAt)
-        .probeIntervalMillis(properties.getProbeIntervalMillis())
-        .maxBackoffMillis(properties.getMaxBackoffMillis())
         .build();
-    repository.recalcBackoff(recalcCmd);
+    repository.recalcBackoff(recalcCmd, failures);
   }
 
   /**

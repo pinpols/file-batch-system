@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +16,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -53,5 +56,17 @@ class DispatchChannelHealthServiceTest {
     service.probeConfiguredChannels();
 
     verify(repository, never()).findEnabledProbeChannels(anyList(), anyInt());
+  }
+
+  @Test
+  void failureBackoffUsesReturnedCounterWithoutReadBack() {
+    when(repository.upsertFailureAndBump(any())).thenReturn(4);
+    Map<String, Object> channel =
+        Map.of("tenant_id", "tenant-a", "channel_code", "channel-a", "channel_type", "API");
+
+    service.recordDispatchOutcome(channel, false, "timeout", null);
+
+    verify(repository).recalcBackoff(any(), eq(4));
+    verify(repository, never()).findHealth("tenant-a", "channel-a");
   }
 }

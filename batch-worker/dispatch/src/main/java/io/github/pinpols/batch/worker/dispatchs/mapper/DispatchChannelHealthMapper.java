@@ -31,7 +31,7 @@ public interface DispatchChannelHealthMapper {
    */
   int upsertFailureAndBump(Map<String, Object> params);
 
-  /** P2：失败路径后置，按新的 consecutive_failures 重算 next_probe_at（指数退避）。 */
+  /** P1：仅在失败次数仍等于本次递增结果时回写退避时间，避免并发旧结果覆盖新结果。 */
   int recalcBackoff(Map<String, Object> params);
 
   long countByHealthStatus(@Param("healthStatus") String healthStatus);

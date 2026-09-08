@@ -1,8 +1,8 @@
 # SQL 与 Java 职责边界全量审计
 
 日期：2026-09-08  
-审计基线：`codex/control-plane-throughput-optimization` / `19e1d6ffa`  
-审计方式：静态全量清点 + 状态枚举对账 + 事务/并发路径复核 + SQL/配置边界守护复核。本轮未执行运行态、单元、集成或压测。
+审计基线：`feature/backend-optimization`
+审计方式：静态全量清点 + 状态枚举对账 + 事务/并发路径复核 + SQL/配置边界守护复核；整改阶段补充真实 PostgreSQL 并发与迁移集成测试。
 
 ## 验收结论
 
@@ -15,6 +15,15 @@
 3. 固定 SQL 和测试/压测 SQL 仍有分层遗留，现有 CI 白名单只能防新增，不能证明历史内容已治理完成。
 
 上线前建议修复 4 项 P1；其余工程治理可分批完成。
+
+## 整改进度
+
+| 项目 | 状态 | 2026-09-08 实施结果 |
+|---|---|---|
+| P1-1 dry-run 终态归档 | 已完成 | job/workflow 两类 dry-run 终态均纳入归档；V201 同步冷表状态约束，完整 Flyway 迁移和真实归档通过 |
+| P1-2 批量日状态口径 | 已完成 | 正式批量日显式排除 `dry_run=true`，`PAUSED` 计入在途，终态子项诊断覆盖 dry-run；修复 PostgreSQL Map 别名折叠导致 Console 统计静默为 0 |
+| P1-3 分发退避并发覆盖 | 已完成 | 失败 UPSERT 通过 `RETURNING` 返回计数，退避回写增加失败次数 CAS；8 线程真实库测试通过 |
+| P1-4 Worker 冷路径整行覆盖 | 待实施 | 下一整改批次改为按租户、worker 与期望状态推进的语义化 CAS |
 
 ## 扫描清单
 
@@ -32,6 +41,8 @@
 
 ### P1-1 归档终态集合遗漏 dry-run，数据会永久滞留热表
 
+状态：**已修复**。
+
 `SuccessInstanceArchiveMapper.selectArchivableInstanceIds` 只包含 `SUCCESS/PARTIAL_FAILED/FAILED/CANCELLED/TERMINATED`，遗漏已经写入 `job_instance` 的 `SUCCESS_DRY_RUN/FAILED_DRY_RUN`。这两种状态有 `finished_at`，但永远不会进入归档候选，长期演练会持续膨胀热表。
 
 位置：`batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml:10`
@@ -39,6 +50,8 @@
 整改：归档候选使用完整终态集合，并补真实 PostgreSQL 集成测试，分别证明两个 dry-run 终态可复制到冷表并从热表删除。归档判断本身继续留在 SQL。
 
 ### P1-2 批量日统计状态口径已漂移，分项与总数不守恒
+
+状态：**已修复**。产品口径确定为 dry-run 不进入正式批量日统计、结算、补跑与 SLA；独立整批演练能力按专项设计后续实施。
 
 以下统计仍使用引入 dry-run/暂停前的旧集合：
 
@@ -64,6 +77,8 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P1-3 分发渠道退避的三段读写存在并发覆盖
 
+状态：**已修复**。
+
 失败路径当前执行：原子递增失败次数 -> 查询当前次数 -> Java 计算退避 -> 无条件写 `next_probe_at`。注释声称“无竞争”，但并发失败下旧线程可能按较小次数计算后，在新线程之后覆盖更长退避，造成渠道过早 half-open。
 
 位置：`batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java:207`
@@ -71,6 +86,8 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 整改：让递增语句返回本次 `consecutive_failures`，Java 仅计算时间；回写增加 `WHERE consecutive_failures = :expectedFailures` CAS。CAS 失败表示已有更新的失败结果，不能覆盖。若 Citus 支持等价纯参数 CTE，可合并成单次往返；不要改成普通 Java 锁，Java 锁无法覆盖多实例。
 
 ### P1-4 Worker 冷路径整行覆盖可使状态回退
+
+状态：**待实施**。
 
 `WorkerRegistryMapper.updateById` 只按全局 `id` 更新，并整行覆盖 status、心跳和 drain 字段。`warmup/startDrain/updateStatus` 都采用“查询快照 -> Java 改 record -> updateById”；并发 decommission、heartbeat 或 drain 时，旧快照可能复活/回退新状态。该语句还被租户守护白名单豁免，防御纵深不足。
 

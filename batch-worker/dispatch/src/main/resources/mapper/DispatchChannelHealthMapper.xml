@@ -68,7 +68,7 @@
       COALESCE(...) + 1 递增，消除"Java 侧读-改-写"的 lost-update；health_status 按 threshold
       动态判定 UNHEALTHY / DEGRADED。next_probe_at 按新的 failures 指数退避由调用方先行计算。
     -->
-    <insert id="upsertFailureAndBump" parameterType="map">
+    <select id="upsertFailureAndBump" parameterType="map" resultType="int" affectData="true">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
             last_probe_at, last_success_at, last_failure_at, next_probe_at,
@@ -93,12 +93,12 @@
             probe_message        = excluded.probe_message,
             probe_evidence       = excluded.probe_evidence,
             updated_at           = excluded.updated_at
-    </insert>
+        returning consecutive_failures
+    </select>
 
     <!--
-      P2：失败 upsert 完成后，用真实的新 count 重算 next_probe_at 并写回。
-      这一步单行 UPDATE 无竞争（只读本行的 consecutive_failures 作为输入），
-      backoff 计算公式和 Java 侧一致（probeInterval × 2^(failures-1)，上限 maxBackoff）。
+      P1：失败 upsert 完成后，用 RETURNING 的新 count 重算 next_probe_at 并写回。
+      expectedFailures 是 CAS 前态，旧线程不能覆盖更新后的更长退避，失败后紧随的成功也不会被复活。
     -->
     <!--
       Citus:分布式表 UPDATE 的 SET 里禁止"带列引用的(被判 STABLE 的)函数表达式"
@@ -112,6 +112,7 @@
                updated_at    = #{now}
          where tenant_id   = #{tenantId}
            and channel_code = #{channelCode}
+           and consecutive_failures = #{expectedFailures}
     </update>
 
     <select id="countByHealthStatus" resultType="long">
