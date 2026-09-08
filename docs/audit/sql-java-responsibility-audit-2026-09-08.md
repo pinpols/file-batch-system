@@ -129,7 +129,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-5 SQL 边界 CI 是增量门禁，不是存量清零证明
 
-状态：**原登记存量已清零，扩大扫描已建立真实基线**。`check-sql-config-boundaries.sh` 原登记的 atomic sim、运行态 reset、quiesce、ADR-046、CI/本地 SDK 真链路、sim harness、seed 场景校验及 DR 演练 SQL 均已迁入对应 `sql` 目录。DR 的数据库标识符通过 psql `format(%I)` 处理；SDK E2E 消除了固定定义主键、API key 冲突后返回无效新密钥及无租户条件清理的问题；seed 场景探针全部参数化，补齐任务错误诊断的租户条件，并让写入夹具在 SQL 错误时立即失败，不再假绿。进一步复核确认旧门禁大小写敏感且漏识别 `psql -tAc/-Atc` 及首行仅有 `select` 的多行语句，现已改为 Python 扫描器，覆盖 SQL heredoc、引号内 SQL 和嵌入式 Python/Java SQL；`sql-inline-baseline.tsv` 登记真实存量 41 个文件、305 个命中，当前值必须与基线精确相等，PR 相对 `GUARD_BASE` 只能下调，后续逐目录推进到 0。
+状态：**原登记存量已清零，扩大扫描已建立真实基线**。`check-sql-config-boundaries.sh` 原登记的 atomic sim、运行态 reset、quiesce、ADR-046、CI/本地 SDK 真链路、sim harness、seed 场景校验及 DR 演练 SQL 均已迁入对应 `sql` 目录。DR 的数据库标识符通过 psql `format(%I)` 处理；SDK E2E 消除了固定定义主键、API key 冲突后返回无效新密钥及无租户条件清理的问题；seed 场景探针全部参数化，补齐任务错误诊断的租户条件，并让写入夹具在 SQL 错误时立即失败，不再假绿。进一步复核确认旧门禁大小写敏感且漏识别 `psql -tAc/-Atc` 及首行仅有 `select` 的多行语句，现已改为 Python 扫描器，覆盖 SQL heredoc、引号内 SQL 和嵌入式 Python/Java SQL；真实基线已从 41 个文件、305 个命中降至 36 个文件、294 个命中，当前值必须与基线精确相等，PR 相对 `GUARD_BASE` 只能下调，后续逐目录推进到 0。
 
 整批量日 Dry-run 的推荐模型、阶段划分与验收矩阵见
 [`batch-day-dry-run-enhancement-plan-2026-09-08.md`](../plans/batch-day-dry-run-enhancement-plan-2026-09-08.md)。

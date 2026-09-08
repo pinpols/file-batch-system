@@ -315,8 +315,8 @@ ensure_worker_registrations() {
   local group count
   for group in "${groups[@]}"; do
     for _ in $(seq 1 45); do
-      count=$(docker exec "$PG" psql -U "$PGU" -d "$PLAT_DB" -tAc \
-        "select count(*) from batch.worker_registry where worker_group='${group}' and status='ONLINE' and heartbeat_at >= current_timestamp - interval '90 seconds'" \
+      count=$(sim_platform_sql count-recent-online-workers.sql -q -tA \
+        -v worker_group="$group" -v heartbeat_window_seconds=90 \
         2>/dev/null | tr -d '[:space:]' || true)
       if [[ "${count:-0}" =~ ^[1-9][0-9]*$ ]]; then
         break
