@@ -46,52 +46,11 @@
             version, created_at, updated_at, dry_run
         ) values (
             #{tenantId}, #{calendarCode}, #{bizDate},
-            <choose>
-                <when test="dayStatus != null">#{dayStatus}</when>
-                <otherwise>'OPEN'</otherwise>
-            </choose>,
-            <choose>
-                <when test="openAt != null">#{openAt}</when>
-                <otherwise>current_timestamp</otherwise>
-            </choose>,
+            #{dayStatus}, #{openAt},
             #{cutoffAt}, #{settledAt}, #{slaDeadlineAt},
-            <choose>
-                <when test="lateCount != null">#{lateCount}</when>
-                <otherwise>0</otherwise>
-            </choose>,
-            <choose>
-                <when test="catchupCount != null">#{catchupCount}</when>
-                <otherwise>0</otherwise>
-            </choose>,
-            <choose>
-                <when test="timezoneSnapshot != null">#{timezoneSnapshot}</when>
-                <otherwise>'UTC'</otherwise>
-            </choose>,
-            <choose>
-                <when test="dstPolicySnapshot != null">#{dstPolicySnapshot}</when>
-                <otherwise>'gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET'</otherwise>
-            </choose>,
-            <choose>
-                <when test="frozen != null">#{frozen}</when>
-                <otherwise>false</otherwise>
-            </choose>,
+            #{lateCount}, #{catchupCount}, #{timezoneSnapshot}, #{dstPolicySnapshot}, #{frozen},
             #{operationReason}, #{operatedBy}, #{operatedAt},
-            <choose>
-                <when test="version != null">#{version}</when>
-                <otherwise>0</otherwise>
-            </choose>,
-            <choose>
-                <when test="createdAt != null">#{createdAt}</when>
-                <otherwise>current_timestamp</otherwise>
-            </choose>,
-            <choose>
-                <when test="updatedAt != null">#{updatedAt}</when>
-                <otherwise>current_timestamp</otherwise>
-            </choose>,
-            <choose>
-                <when test="dryRun != null">#{dryRun}</when>
-                <otherwise>false</otherwise>
-            </choose>
+            #{version}, #{createdAt}, #{updatedAt}, #{dryRun}
         )
         on conflict (tenant_id, calendar_code, biz_date) do nothing
     </insert>

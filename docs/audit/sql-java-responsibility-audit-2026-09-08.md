@@ -109,9 +109,9 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-2 Mapper 中业务默认值过多，存在三份默认值漂移
 
-`JobDefinitionMapper`、`BatchWindowMapper`、`BusinessCalendarMapper`、`WorkflowNodeMapper`、`TenantQuotaPolicyMapper`、`WorkerRegistryMapper`、`BatchDayInstanceMapper` 等在 XML `<choose>` 中保存默认策略；同一默认值还存在于 Java 和 DDL。
+状态：**已完成生产写路径收敛**。复核当前 Mapper 后，历史提及的定义类 Mapper 已不再包含 `<otherwise>` 产品默认值；剩余集中在 `WorkerRegistryMapper.insert` 和 `BatchDayInstanceMapper.insert`。两处现已改为绑定完整对象：Worker 默认并发 10 由 `WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT` 明确提供，批量日三个创建路径显式提供状态、计数、时区/DST 快照、版本和 `dryRun=false`。DDL DEFAULT 继续作为绕过应用写入时的最后防线。
 
-建议由 Java command factory 完成产品默认值，数据库 DEFAULT 作为最终防线，Mapper 只绑定完整对象。必须保留的 DB 时间和版本初值可以继续由 SQL/DDL生成。优先治理具有业务语义的时区、DST、窗口动作、重试策略、优先级和并发上限，不必机械删除所有 `coalesce`。
+更新语句中的 `coalesce(入参, 原值)` 属于局部字段更新语义，不是创建默认值，本轮保留；数据库时间和 DDL DEFAULT 也继续保留。这样 Java 是产品策略权威，Mapper 只绑定完整对象，同时数据库仍有独立安全兜底。
 
 ### P2-3 固定 SQL 仍嵌在非持久化组件
 

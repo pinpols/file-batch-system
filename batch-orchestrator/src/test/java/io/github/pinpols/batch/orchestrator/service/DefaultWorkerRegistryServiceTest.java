@@ -225,8 +225,12 @@ class DefaultWorkerRegistryServiceTest {
 
     WorkerRegistryEntity result = service.register(dto(null));
 
-    verify(mapper).insert(any());
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+    verify(mapper).insert(captor.capture());
     verify(mapper, never()).updateRegistrationIfCurrent(any(), anyString());
+    assertThat(captor.getValue().maxConcurrent())
+        .isEqualTo(WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT);
     assertThat(result).isNotNull();
   }
 

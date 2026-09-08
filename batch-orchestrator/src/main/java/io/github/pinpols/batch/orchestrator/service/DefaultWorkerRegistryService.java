@@ -88,7 +88,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           newStatus,
           heartbeatAt,
           newLoad,
-          null, // maxConcurrent: 走 DB DEFAULT 10 (V87)
+          WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT,
           null,
           null,
           request.hostName(),

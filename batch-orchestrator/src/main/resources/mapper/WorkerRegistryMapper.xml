@@ -206,22 +206,7 @@
             #{tenantId}, #{workerCode}, #{workerGroup},
             cast(#{capabilityTags.value} as jsonb),
             #{resourceTag},
-            <choose>
-                <when test="status != null">#{status}</when>
-                <otherwise>'ONLINE'</otherwise>
-            </choose>,
-            <choose>
-                <when test="heartbeatAt != null">#{heartbeatAt}</when>
-                <otherwise>current_timestamp</otherwise>
-            </choose>,
-            <choose>
-                <when test="currentLoad != null">#{currentLoad}</when>
-                <otherwise>0</otherwise>
-            </choose>,
-            <choose>
-                <when test="maxConcurrent != null">#{maxConcurrent}</when>
-                <otherwise>10</otherwise>
-            </choose>,
+            #{status}, #{heartbeatAt}, #{currentLoad}, #{maxConcurrent},
             #{drainStartedAt}, #{drainDeadlineAt},
             #{hostName}, #{hostIp}, #{processId}, #{buildId}, #{sdkVersion},
             current_timestamp, current_timestamp

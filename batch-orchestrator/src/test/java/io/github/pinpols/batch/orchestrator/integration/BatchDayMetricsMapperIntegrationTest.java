@@ -3,10 +3,14 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceMetrics;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,11 +24,16 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final JdbcTemplate jdbcTemplate;
   private final JobInstanceMapper mapper;
+  private final BatchDayInstanceMapper batchDayInstanceMapper;
 
   @Autowired
-  BatchDayMetricsMapperIntegrationTest(JdbcTemplate jdbcTemplate, JobInstanceMapper mapper) {
+  BatchDayMetricsMapperIntegrationTest(
+      JdbcTemplate jdbcTemplate,
+      JobInstanceMapper mapper,
+      BatchDayInstanceMapper batchDayInstanceMapper) {
     this.jdbcTemplate = jdbcTemplate;
     this.mapper = mapper;
+    this.batchDayInstanceMapper = batchDayInstanceMapper;
   }
 
   @Test
@@ -73,6 +82,46 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         .isOne();
     assertThat(mapper.countNonTerminalByJobGroupAndBizDate(tenantId, jobGroupCode, bizDate))
         .isOne();
+  }
+
+  @Test
+  void batchDayInsertPersistsJavaProvidedDefaults() {
+    String tenantId = unique("tenant");
+    String calendarCode = unique("calendar");
+    LocalDate bizDate = LocalDate.of(2026, 9, 9);
+    Instant now = Instant.parse("2026-09-09T00:00:00Z");
+    BatchDayInstanceEntity entity = BatchDayInstanceEntity.builder()
+        .tenantId(tenantId)
+        .calendarCode(calendarCode)
+        .bizDate(bizDate)
+        .dayStatus("OPEN")
+        .openAt(now)
+        .lateCount(0)
+        .catchupCount(0)
+        .timezoneSnapshot("Asia/Shanghai")
+        .dstPolicySnapshot("gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET")
+        .frozen(false)
+        .version(0L)
+        .createdAt(now)
+        .updatedAt(now)
+        .dryRun(false)
+        .build();
+
+    assertThat(batchDayInstanceMapper.insert(entity)).isOne();
+
+    Map<String, Object> stored = jdbcTemplate.queryForMap("""
+        select day_status, late_count, catchup_count, timezone_snapshot, frozen, version, dry_run
+          from batch.batch_day_instance
+         where tenant_id = ? and calendar_code = ? and biz_date = ?
+        """, tenantId, calendarCode, bizDate);
+    assertThat(stored)
+        .containsEntry("day_status", "OPEN")
+        .containsEntry("late_count", 0)
+        .containsEntry("catchup_count", 0)
+        .containsEntry("timezone_snapshot", "Asia/Shanghai")
+        .containsEntry("frozen", false)
+        .containsEntry("version", 0L)
+        .containsEntry("dry_run", false);
   }
 
   private Long insertJobDefinition(
