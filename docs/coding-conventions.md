@@ -281,7 +281,7 @@ SQL 和配置不能随意混进 shell / service 代码。按以下边界执行�
 允许例外：
 
 - 动态 SQL 引擎本身需要在 Java 中生成 SQL，但必须集中在 builder / validator / executor，不能散落到业务 service。
-- 历史脚本 SQL 命中行数预算由 `scripts/ci/check-sql-config-boundaries.sh` 管理，只允许减少，不允许新增文件或提高预算；迁出内联 SQL 后必须同步下调或删除预算。
+- 历史脚本 SQL 命中基线保存在 `scripts/ci/sql-inline-baseline.tsv`，由 `scripts/ci/check-sql-config-boundaries.sh` 校验。扫描大小写不敏感，并识别 `psql -c/-tAc/-Atc`、SQL heredoc 及嵌入式 Python/Java SQL；基线只允许减少，不允许新增文件或提高计数，迁出内联 SQL 后必须同步下调或删除对应行。
 
 ---
 
