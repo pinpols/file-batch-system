@@ -15,7 +15,6 @@ legacy_statement_budget() {
     scripts/local/adr046-batch-consume-load.sh) echo 5 ;;
     scripts/local/sim-harness.sh) echo 11 ;;
     scripts/local/validate-seed-scenarios.sh) echo 53 ;;
-    scripts/sim/00-reset-runtime.sh) echo 4 ;;
     scripts/sim/98-quiesce-schedules.sh) echo 7 ;;
     *) echo 0 ;;
   esac
