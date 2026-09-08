@@ -336,10 +336,10 @@ public class FileGovernanceRepository {
     return toLong(params.get("id"));
   }
 
-  public int markStaleRunningPipelineInstancesFailed(
+  public List<Long> markStaleRunningPipelineInstancesFailed(
       String tenantId, long staleSeconds, int limit) {
     if (!Texts.hasText(tenantId) || staleSeconds <= 0 || limit <= 0) {
-      return 0;
+      return List.of();
     }
     return fileGovernanceMapper.markStaleRunningPipelineInstancesFailed(params(
         KEY_TENANT_ID,
@@ -364,16 +364,18 @@ public class FileGovernanceRepository {
   @Transactional
   public StaleSweepResult markStaleRunningPipelinesAndStepsFailed(
       String tenantId, long staleSeconds, int limit) {
-    int failedPipelines = markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
-    if (failedPipelines <= 0) {
+    List<Long> failedPipelineIds =
+        markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
+    if (failedPipelineIds.isEmpty()) {
       return new StaleSweepResult(0, 0);
     }
-    int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, staleSeconds);
-    return new StaleSweepResult(failedPipelines, failedSteps);
+    int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, failedPipelineIds);
+    return new StaleSweepResult(failedPipelineIds.size(), failedSteps);
   }
 
-  public int markRunningPipelineStepsFailedForInstances(String tenantId, long staleSeconds) {
-    if (!Texts.hasText(tenantId) || staleSeconds <= 0) {
+  public int markRunningPipelineStepsFailedForInstances(
+      String tenantId, List<Long> pipelineInstanceIds) {
+    if (!Texts.hasText(tenantId) || pipelineInstanceIds == null || pipelineInstanceIds.isEmpty()) {
       return 0;
     }
     return fileGovernanceMapper.markRunningPipelineStepsFailedForInstances(params(
@@ -393,8 +395,8 @@ public class FileGovernanceRepository {
         "PIPELINE_STALE_RUNNING",
         "errorMessage",
         "pipeline was marked FAILED by stale running sweep",
-        "staleSeconds",
-        staleSeconds));
+        "pipelineInstanceIds",
+        pipelineInstanceIds));
   }
 
   /**
