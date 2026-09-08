@@ -28,9 +28,7 @@ scripts/sim/21-atomic-stage5c.sh	4
 scripts/sim/22-trigger-stage6c.sh	12
 scripts/sim/23-import-stage2d.sh	8
 scripts/sim/24-trigger-stage6d.sh	20
-scripts/sim/25-import-stage2e-checkpoint-crash.sh	2
 scripts/sim/26-bundle-import.sh	11
-scripts/sim/27-batch-claim-consume.sh	2
 scripts/sim/28-import-mainline.sh	7
 scripts/sim/dr-drill-fleet-crash.sh	7
 scripts/sim/dr-drill-pitr.sh	9
