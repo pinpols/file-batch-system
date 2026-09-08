@@ -334,14 +334,15 @@ if [[ -n "$CHANGED_FLYWAY" ]]; then
   # archive 镜像守护(批表必须有 archive 镜像)
   for f in $CHANGED_FLYWAY; do
     [[ -f "$f" ]] || continue
-    # 检测是否包含批表 DDL(CREATE / ALTER TABLE batch.* 或不带 schema 前缀的)
-    if grep -qiE "CREATE TABLE\s+(batch\.)?[a-z_]+|ALTER TABLE\s+(batch\.)?[a-z_]+" "$f" 2>/dev/null; then
+    # 只对显式 batch schema 的表结构变更提示；同一 migration 已同步 archive 时无需另找文件。
+    if grep -qiE "(CREATE|ALTER)[[:space:]]+TABLE[[:space:]]+batch\." "$f" 2>/dev/null; then
       version=$(basename "$f" | grep -oE "V[0-9]+" | head -1)
       # 找对应 archive migration
       arch_mig=$(find . -path "*archive*migration*${version}__*" -not -path "*/target/*" 2>/dev/null | head -1)
-      if [[ -z "$arch_mig" ]]; then
+      if ! grep -qiE "(CREATE|ALTER)[[:space:]]+TABLE[[:space:]]+archive\." "$f" 2>/dev/null \
+          && [[ -z "$arch_mig" ]]; then
         warn "  $version 含批表 DDL,但未找到 archive 镜像 migration(CLAUDE.md「archive 冷表对齐」红线)"
-        warn "  请人工确认是否需要补 archive 镜像(`ArchiveSchemaDriftCheck` 启动期会拦截)"
+        warn "  请人工确认是否需要补 archive 镜像(ArchiveSchemaDriftCheck 启动期会拦截)"
       fi
     fi
   done
