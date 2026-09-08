@@ -110,6 +110,9 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 `check-sql-config-boundaries.sh` 当前通过，但整文件白名单覆盖 50 余项。实际仍有压测报告 SQL、sim reset/quiesce SQL、SDK E2E seed/断言 SQL等内联内容。建议把白名单改成“语句级基线 + 只减不增”，分批迁到 `load-tests/sql`、`scripts/*/sql` 和 `docs/test-data`；避免整文件白名单让后续新增 SQL 继续被放行。
 
+整批量日 Dry-run 的推荐模型、阶段划分与验收矩阵见
+[`batch-day-dry-run-enhancement-plan-2026-09-08.md`](../plans/batch-day-dry-run-enhancement-plan-2026-09-08.md)。
+
 ### P3 可维护性整理
 
 - `BatchDayInstanceMapper.updateWithCas` 可补 `tenant_id`，移除语句级豁免；虽然全局 id + version 已降低可利用性，但实体本身已有 tenantId。
