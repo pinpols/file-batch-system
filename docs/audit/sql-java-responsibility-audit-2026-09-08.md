@@ -129,7 +129,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-5 SQL 边界 CI 是增量门禁，不是存量清零证明
 
-`check-sql-config-boundaries.sh` 当前通过，但整文件白名单覆盖 50 余项。实际仍有压测报告 SQL、sim reset/quiesce SQL、SDK E2E seed/断言 SQL等内联内容。建议把白名单改成“语句级基线 + 只减不增”，分批迁到 `load-tests/sql`、`scripts/*/sql` 和 `docs/test-data`；避免整文件白名单让后续新增 SQL 继续被放行。
+状态：**已完成门禁收紧，存量继续分批治理**。`check-sql-config-boundaries.sh` 已取消整文件放行，改为按文件登记 SQL 命中行数预算：19 个历史文件只能减少、不能增加，未登记文件预算为 0；两个只保存检测表达式且不执行 SQL 的 CI 守护脚本明确豁免。现有压测探针、sim reset/quiesce、SDK E2E seed/断言 SQL 仍应继续迁到 `load-tests/sql`、`scripts/*/sql` 和 `docs/test-data`，但后续无法借历史文件白名单继续扩张。
 
 整批量日 Dry-run 的推荐模型、阶段划分与验收矩阵见
 [`batch-day-dry-run-enhancement-plan-2026-09-08.md`](../plans/batch-day-dry-run-enhancement-plan-2026-09-08.md)。
@@ -171,7 +171,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 3. 修复分发健康退避并发 CAS，增加双线程真实数据库测试。
 4. 用语义化 CAS 取代 Worker Registry 生产路径的 `updateById`。
 5. 建立状态分类漂移门禁，再治理 Mapper 默认值和 Java 固定 SQL。
-6. 将 shell 整文件白名单改成只减不增基线，逐批清理剩余 27 个候选文件。
+6. ~~将 shell 整文件白名单改成只减不增基线~~（已完成）；继续逐批清理剩余 19 个历史文件。
 
 ## 验收标准
 

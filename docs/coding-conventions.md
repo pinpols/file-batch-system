@@ -281,7 +281,7 @@ SQL 和配置不能随意混进 shell / service 代码。按以下边界执行�
 允许例外：
 
 - 动态 SQL 引擎本身需要在 Java 中生成 SQL，但必须集中在 builder / validator / executor，不能散落到业务 service。
-- 历史脚本白名单由 `scripts/ci/check-sql-config-boundaries.sh` 管理；新增白名单必须说明理由和迁移计划。
+- 历史脚本 SQL 命中行数预算由 `scripts/ci/check-sql-config-boundaries.sh` 管理，只允许减少，不允许新增文件或提高预算；迁出内联 SQL 后必须同步下调或删除预算。
 
 ---
 
