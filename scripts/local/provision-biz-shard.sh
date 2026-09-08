@@ -68,7 +68,7 @@ for _ in $(seq 1 40); do
       && docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$BUSINESS_DB" >/dev/null 2>&1 \
       && docker exec -i "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
         -tA -v ON_ERROR_STOP=1 \
-        -f /dev/stdin < "$LOCAL_SQL_DIR/check-biz-shard-ready.sql" >/dev/null 2>&1; then
+        -f /dev/stdin < "$LOCAL_SQL_DIR/check-database-ready.sql" >/dev/null 2>&1; then
     ready=1; break
   fi
   sleep 2

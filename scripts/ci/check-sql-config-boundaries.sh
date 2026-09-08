@@ -12,7 +12,6 @@ legacy_statement_budget() {
     scripts/ci/run-sdk-orchestrator-e2e.sh) echo 5 ;;
     scripts/db/backup/dr-drill.sh) echo 12 ;;
     scripts/lib/sdk-e2e-common.sh) echo 19 ;;
-    scripts/local/adr046-batch-consume-load.sh) echo 5 ;;
     scripts/local/sim-harness.sh) echo 11 ;;
     scripts/local/validate-seed-scenarios.sh) echo 53 ;;
     *) echo 0 ;;
