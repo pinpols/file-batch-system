@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -27,6 +31,15 @@ public enum JobInstanceStatus implements DictEnum {
   private final String code;
   private final String label;
 
+  private static final Set<String> TERMINAL_CODES =
+      codes(status -> status.lifecycle().terminal());
+  private static final Set<String> ACTIVE_CODES =
+      codes(status -> !status.lifecycle().terminal());
+  private static final Set<String> SUCCESS_CODES =
+      codes(status -> status.lifecycle() == BatchLifecycleStatus.SUCCESS);
+  private static final Set<String> UNSUCCESSFUL_TERMINAL_CODES = codes(status ->
+      status.lifecycle().terminal() && status.lifecycle() != BatchLifecycleStatus.SUCCESS);
+
   /** 投影到公共生命周期状态。PARTIAL_FAILED / FAILED_DRY_RUN 归类为 FAILED, SUCCESS_DRY_RUN 归类为 SUCCESS 终态。 */
   public BatchLifecycleStatus lifecycle() {
     return switch (this) {
@@ -48,6 +61,26 @@ public enum JobInstanceStatus implements DictEnum {
     return this == SUCCESS_DRY_RUN || this == FAILED_DRY_RUN;
   }
 
+  /** 所有不可再迁移的实例状态码。集合由生命周期投影派生，新增枚举值时自动参与分类。 */
+  public static Set<String> terminalCodes() {
+    return TERMINAL_CODES;
+  }
+
+  /** 所有仍可推进的实例状态码，包含可逆 PAUSED。 */
+  public static Set<String> activeCodes() {
+    return ACTIVE_CODES;
+  }
+
+  /** 业务成功终态，包含 dry-run 成功。 */
+  public static Set<String> successCodes() {
+    return SUCCESS_CODES;
+  }
+
+  /** 非成功终态，包含失败、部分失败、取消、终止及 dry-run 失败。 */
+  public static Set<String> unsuccessfulTerminalCodes() {
+    return UNSUCCESSFUL_TERMINAL_CODES;
+  }
+
   /**
    * R4-Flyway-2 / S1-5：从 code 字符串解析为枚举；未知 code 返回 {@code null}（不抛）。
    *
@@ -57,5 +90,12 @@ public enum JobInstanceStatus implements DictEnum {
    */
   public static JobInstanceStatus fromCodeOrNull(String code) {
     return DictEnum.fromCode(JobInstanceStatus.class, code);
+  }
+
+  private static Set<String> codes(Predicate<JobInstanceStatus> predicate) {
+    return Arrays.stream(values())
+        .filter(predicate)
+        .map(JobInstanceStatus::code)
+        .collect(Collectors.toUnmodifiableSet());
   }
 }

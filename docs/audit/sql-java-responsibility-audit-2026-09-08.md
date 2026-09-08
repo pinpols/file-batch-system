@@ -103,9 +103,9 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-1 建立状态分类唯一事实源
 
-`JobInstanceStatus` 已有 `lifecycle()`，orchestrator 又有 `LifecycleStatusCatalog`，但 Console、归档、诊断、通知和压测 SQL仍各自复制字符串集合。`CapacityProfileMapper` 已包含 dry-run，其他 Mapper 未同步，证明人工同步不可持续。
+状态：**已完成核心契约**。`JobInstanceStatus` 现根据 `lifecycle()` 自动派生终态、活跃态、成功终态和非成功终态集合，`LifecycleStatusCatalog` 直接复用，不再维护第二份 Java 字符串集合；分类测试保证每个枚举值恰好归入终态或活跃态。关键批量日门禁 SQL 增加契约测试，新增状态未同步时直接失败。
 
-建议新增状态分类契约：由 Java 枚举生成 `terminal/success/failure/nonTerminal` 参数集合，或为报表查询提供受控公共 SQL fragment；再加测试扫描关键 Mapper 的分类覆盖。不要把聚合结果拉到 Java 后逐行统计。
+治理同时发现并修复真实缺陷：SAME_JOB / SAME_JOB_GROUP 前日门禁原来遗漏 `PARTIAL_FAILED`、`SUCCESS_DRY_RUN`、`FAILED_DRY_RUN` 三个终态，会把已结束实例永久计作未完成。两条 SQL 已对齐完整终态，真实 PostgreSQL 测试验证三个终态放行、`PAUSED` 仍阻塞。报表 SQL 继续保留各自明确的 dry-run 隔离口径，不把聚合结果拉到 Java 后逐行统计。
 
 ### P2-2 Mapper 中业务默认值过多，存在三份默认值漂移
 

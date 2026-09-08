@@ -32,13 +32,14 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 8);
-    Long definitionId = insertJobDefinition(tenantId, calendarCode);
+    String jobCode = unique("job");
+    Long definitionId = insertJobDefinition(tenantId, calendarCode, jobCode, null);
 
-    insertJobInstance(tenantId, definitionId, bizDate, "SUCCESS", false);
-    insertJobInstance(tenantId, definitionId, bizDate, "FAILED", false);
-    insertJobInstance(tenantId, definitionId, bizDate, "PAUSED", false);
-    insertJobInstance(tenantId, definitionId, bizDate, "SUCCESS_DRY_RUN", true);
-    insertJobInstance(tenantId, definitionId, bizDate, "FAILED_DRY_RUN", true);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "SUCCESS", false);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "FAILED", false);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "PAUSED", false);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "SUCCESS_DRY_RUN", true);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "FAILED_DRY_RUN", true);
 
     BatchDayInstanceMetrics metrics = mapper.selectBatchDayMetrics(tenantId, calendarCode, bizDate);
 
@@ -48,27 +49,62 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(metrics.getActiveCount()).isEqualTo(1);
   }
 
-  private Long insertJobDefinition(String tenantId, String calendarCode) {
-    return jdbcTemplate.queryForObject("""
+  @Test
+  void batchDayGateTreatsEveryLifecycleTerminalStatusAsComplete() {
+    String tenantId = unique("tenant");
+    String calendarCode = unique("calendar");
+    String jobCode = unique("gate-job");
+    String jobGroupCode = unique("group");
+    LocalDate bizDate = LocalDate.of(2026, 9, 7);
+    Long definitionId = insertJobDefinition(tenantId, calendarCode, jobCode, jobGroupCode);
+
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "PARTIAL_FAILED", false);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "SUCCESS_DRY_RUN", true);
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "FAILED_DRY_RUN", true);
+
+    assertThat(mapper.countNonTerminalByJobCodeAndBizDate(tenantId, jobCode, bizDate))
+        .isZero();
+    assertThat(mapper.countNonTerminalByJobGroupAndBizDate(tenantId, jobGroupCode, bizDate))
+        .isZero();
+
+    insertJobInstance(tenantId, definitionId, jobCode, bizDate, "PAUSED", false);
+
+    assertThat(mapper.countNonTerminalByJobCodeAndBizDate(tenantId, jobCode, bizDate))
+        .isOne();
+    assertThat(mapper.countNonTerminalByJobGroupAndBizDate(tenantId, jobGroupCode, bizDate))
+        .isOne();
+  }
+
+  private Long insertJobDefinition(
+      String tenantId, String calendarCode, String jobCode, String jobGroupCode) {
+    return jdbcTemplate.queryForObject(
+        """
         insert into batch.job_definition(
-          tenant_id, job_code, job_name, job_type, schedule_type, timezone, calendar_code
-        ) values (?, ?, 'Batch Day Metrics Test', 'GENERAL', 'MANUAL', 'Asia/Shanghai', ?)
+          tenant_id, job_code, job_name, job_type, schedule_type, timezone, calendar_code,
+          job_group_code
+        ) values (?, ?, 'Batch Day Metrics Test', 'GENERAL', 'MANUAL', 'Asia/Shanghai', ?, ?)
         returning id
-        """, Long.class, tenantId, unique("job"), calendarCode);
+        """, Long.class, tenantId, jobCode, calendarCode, jobGroupCode);
   }
 
   private void insertJobInstance(
-      String tenantId, Long definitionId, LocalDate bizDate, String status, boolean dryRun) {
+      String tenantId,
+      Long definitionId,
+      String jobCode,
+      LocalDate bizDate,
+      String status,
+      boolean dryRun) {
     jdbcTemplate.update(
         """
         insert into batch.job_instance(
           tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
           instance_status, priority, dedup_key, expected_partition_count,
           success_partition_count, failed_partition_count, trace_id, dry_run
-        ) values (?, ?, 'METRICS_JOB', ?, ?, 'MANUAL', ?, 5, ?, 0, 0, 0, ?, ?)
+        ) values (?, ?, ?, ?, ?, 'MANUAL', ?, 5, ?, 0, 0, 0, ?, ?)
         """,
         tenantId,
         definitionId,
+        jobCode,
         unique("instance"),
         bizDate,
         status,

@@ -652,7 +652,7 @@
     <!--
       BatchDayGateService SAME_JOB scope:
         判断 (tenant, jobCode, prevBizDate) 是否仍有未到达终态的 job_instance。
-        终态 = SUCCESS / FAILED / CANCELLED / TERMINATED;非终态需要等待。
+        终态 = LifecycleStatusCatalog.JOB_INSTANCE_TERMINAL_STATES;非终态需要等待。
         FAILED 是否允许放行由调用方决定(REJECT_IF_PREVIOUS_OPEN 不允许 / WAIT_PREVIOUS_DAY 也等待)。
     -->
     <select id="countNonTerminalByJobCodeAndBizDate" resultType="int">
@@ -661,7 +661,10 @@
          where tenant_id = #{tenantId}
            and job_code = #{jobCode}
            and biz_date = #{bizDate}
-           and instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
+           and instance_status not in (
+               'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
+               'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
+           )
     </select>
 
     <!--
@@ -678,7 +681,10 @@
          where ji.tenant_id = #{tenantId}
            and jd.job_group_code = #{jobGroupCode}
            and ji.biz_date = #{bizDate}
-           and ji.instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
+           and ji.instance_status not in (
+               'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
+               'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
+           )
     </select>
 
     <!--
