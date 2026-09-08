@@ -16,7 +16,8 @@ import org.apache.ibatis.annotations.Param;
  *   <li>{@link #insert(BatchDayInstanceEntity)} 用 {@code ON CONFLICT (tenant_id, calendar_code,
  *       biz_date) DO NOTHING}：并发首次创建只一行写入数据库；caller 拿不到 id 也无所谓，下一轮 {@link
  *       #selectByTenantCalendarBizDate} 自然读到。
- *   <li>{@link #updateWithCas(BatchDayInstanceEntity)} 走 {@code WHERE id=? AND version=?} CAS：返回值 0
+ *   <li>{@link #updateWithCas(BatchDayInstanceEntity)} 走 {@code WHERE tenant_id=? AND id=? AND version=?}
+ *       CAS：返回值 0
  *       视为乐观锁冲突，调用方应抛 {@code OptimisticLockingFailureException} 保留 SDJ 时代行为。
  * </ul>
  */
@@ -30,7 +31,7 @@ public interface BatchDayInstanceMapper {
   int insert(BatchDayInstanceEntity entity);
 
   /**
-   * CAS 更新：必须 id + version 都匹配才生效。{@code SET version = version + 1}。
+   * CAS 更新：必须 tenantId + id + version 都匹配才生效。{@code SET version = version + 1}。
    *
    * @return 影响行数；0 表示 version 冲突 → 调用方抛 {@code OptimisticLockingFailureException}
    */

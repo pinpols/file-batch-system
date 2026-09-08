@@ -136,7 +136,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P3 可维护性整理
 
-- `BatchDayInstanceMapper.updateWithCas` 可补 `tenant_id`，移除语句级豁免；虽然全局 id + version 已降低可利用性，但实体本身已有 tenantId。
+- `BatchDayInstanceMapper.updateWithCas` 已补 `tenant_id` 条件并移除语句级豁免；CAS 现同时校验 tenantId、全局 id 与 version。
 - 文件治理 stale sweep 的 `interval '5 minutes'` 在同一事务内不会漏掉本轮刚更新行，因此不是当前 bug；可改为具名 lookback 参数以消除隐藏策略。
 - `ShedLockProviderFactory` 的 DDL 只在 local/dev `auto-create=true` 下使用，生产默认 false，现状可接受；生产继续以 Flyway 为权威。
 - Console SLA 默认排除 dry-run 与 ADR-026“默认指标隔离”一致，不应因为统一终态集合而盲目纳入。
