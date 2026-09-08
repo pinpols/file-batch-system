@@ -69,6 +69,7 @@ ADVANCED="${ADVANCED:-0}"
 PRE_CLEANUP="${PRE_CLEANUP:-1}"   # 1=跑前先全清 seedval-* 历史残留(默认)
 STRICT="${STRICT:-0}"             # 1=§7 用 default-tenant 严格 SUCCESS 验证
 STRICT_TENANT_ID="${STRICT_TENANT_ID:-$BATCH_DEFAULT_TENANT_ID}"
+SQL_DIR="$ROOT/scripts/local/sql"
 
 # 探针标识 — 默认带时间戳便于日志区分 run, 但清理走 'seedval-%' 全 sweep 不漏历史
 PROBE_TAG="${PROBE_TAG:-seedval-$(date +%s)}"
@@ -105,7 +106,12 @@ psql_q() {
 
 psql_file() {
   local db="$1"; local file="$2"; shift 2
-  docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
+  docker exec -i "$PG_CONTAINER" psql -X -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
+}
+
+psql_value() {
+  local db="$1"; local file="$2"; shift 2
+  psql_file "$db" "$SQL_DIR/$file" -q -tA "$@" 2>/dev/null | head -1
 }
 
 # 写入用 — 仅返回 RETURNING 的首行(过滤 "INSERT 0 N" / "DELETE N" 等命令统计)
@@ -166,7 +172,7 @@ else
   exit 1
 fi
 
-if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1; then
+if psql_file "$PG_DB" "$SQL_DIR/check-database-ready.sql" -q >/dev/null 2>&1; then
   result pass "postgres 可达" "$PG_CONTAINER"
 else
   result fail "postgres 可达" "$PG_CONTAINER 容器不存在或拒绝连接"
@@ -199,10 +205,12 @@ fi
 
 # ---------- 0.4. PRE_CLEANUP — 跑前清所有 seedval-* 历史残留(避免污染) ----------
 if [[ "$PRE_CLEANUP" == "1" ]]; then
-  pre_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN'")
+  pre_cnt=$(psql_value "$PG_DB" validate-seed-count-trigger-probes.sql \
+    -v pattern="$SWEEP_PATTERN" -v include_job_code=false)
   if [[ "$pre_cnt" -gt 0 ]]; then
     do_cleanup "$SWEEP_PATTERN"
-    after_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN'")
+    after_cnt=$(psql_value "$PG_DB" validate-seed-count-trigger-probes.sql \
+      -v pattern="$SWEEP_PATTERN" -v include_job_code=false)
     result pass "PRE_CLEANUP" "扫 $pre_cnt 行历史 seedval-* trigger_request, 清理后剩 $after_cnt 行"
   else
     result pass "PRE_CLEANUP" "无历史残留, 跳过"
@@ -234,7 +242,7 @@ fi
 section "1. Schema 落地(V82-V85)"
 
 for v in 82 83 84 85; do
-  ok=$(psql_q "SELECT success FROM batch.flyway_schema_history WHERE version='$v'")
+  ok=$(psql_value "$PG_DB" validate-seed-select-flyway-success.sql -v version="$v")
   if [[ "$ok" == "t" ]]; then
     result pass "V$v migration" "applied success=t"
   else
@@ -243,7 +251,8 @@ for v in 82 83 84 85; do
 done
 
 # V82 约束类型
-v82_def=$(psql_q "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='batch.job_step_instance'::regclass AND conname='uk_job_step_instance_task'")
+v82_def=$(psql_value "$PG_DB" validate-seed-select-constraint-definition.sql \
+  -v relation_name=batch.job_step_instance -v constraint_name=uk_job_step_instance_task)
 if [[ "$v82_def" == "UNIQUE (tenant_id, job_task_id)" ]]; then
   result pass "V82 约束定义" "$v82_def"
 else
@@ -251,7 +260,8 @@ else
 fi
 
 # V83 类型
-v83_type=$(psql_q "SELECT contype FROM pg_constraint WHERE conrelid='batch.trigger_outbox_event'::regclass AND conname='uk_trigger_outbox_event_tenant_request'")
+v83_type=$(psql_value "$PG_DB" validate-seed-select-constraint-type.sql \
+  -v relation_name=batch.trigger_outbox_event -v constraint_name=uk_trigger_outbox_event_tenant_request)
 if [[ "$v83_type" == "u" ]]; then
   result pass "V83 是 CONSTRAINT" "(原 V80 是 INDEX, V83 已升级)"
 else
@@ -260,7 +270,8 @@ fi
 
 # V84/V85 列存在
 for tbl in workflow_node workflow_edge; do
-  has_col=$(psql_q "SELECT count(*) FROM information_schema.columns WHERE table_schema='batch' AND table_name='$tbl' AND column_name='tenant_id'")
+  has_col=$(psql_value "$PG_DB" validate-seed-count-column.sql \
+    -v table_schema=batch -v table_name="$tbl" -v column_name=tenant_id)
   if [[ "$has_col" == "1" ]]; then
     result pass "$tbl.tenant_id 列存在" "V8x 已 backfill"
   else
@@ -271,14 +282,15 @@ done
 # ---------- 2. 种子数据基线 ----------
 section "2. 种子数据基线"
 
-job_count=$(psql_q "SELECT count(*) FROM batch.job_definition WHERE tenant_id IN ('$STRICT_TENANT_ID','tenant-finance')")
+job_count=$(psql_value "$PG_DB" validate-seed-count-job-definition-baseline.sql \
+  -v tenant_id="$STRICT_TENANT_ID" -v secondary_tenant_id=tenant-finance)
 if [[ "$job_count" -ge 3 ]]; then
   result pass "job_definition 基线" "$job_count 行(default-tenant + tenant-finance)"
 else
   result fail "job_definition 基线" "仅 $job_count 行,期望 >=3,LOAD_SEED=1 强制重载"
 fi
 
-wf_node_count=$(psql_q "SELECT count(*) FROM batch.workflow_node WHERE tenant_id='tenant-finance'")
+wf_node_count=$(psql_value "$PG_DB" validate-seed-count-workflow-nodes.sql -v tenant_id=tenant-finance)
 if [[ "$wf_node_count" -ge 4 ]]; then
   result pass "workflow_node 基线" "$wf_node_count 行(tenant-finance/finance_recon_flow)"
 else
@@ -289,7 +301,8 @@ fi
 section "3. V84 多租隔离行为(workflow_node)"
 
 # 取 finance 那行作"基准"node_code
-finance_wf_id=$(psql_q "SELECT id FROM batch.workflow_definition WHERE tenant_id='tenant-finance' AND workflow_code='finance_recon_flow' LIMIT 1")
+finance_wf_id=$(psql_value "$PG_DB" validate-seed-select-workflow-definition-id.sql \
+  -v tenant_id=tenant-finance -v workflow_code=finance_recon_flow)
 if [[ -z "$finance_wf_id" ]]; then
   result skip "V84 跨租户隔离" "tenant-finance/finance_recon_flow 不在种子中,跳过"
 else
@@ -321,8 +334,10 @@ else
 fi
 
 # 立刻验 trigger_request + trigger_outbox_event 写入(用 request_id 定位)
-got_req=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
-got_outbox=$(psql_q "SELECT count(*) FROM batch.trigger_outbox_event WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
+got_req=$(psql_value "$PG_DB" validate-seed-count-trigger-request.sql \
+  -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
+got_outbox=$(psql_value "$PG_DB" validate-seed-count-trigger-outbox.sql \
+  -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
 if [[ "$got_req" == "1" && "$got_outbox" == "1" ]]; then
   result pass "同事务双写" "trigger_request=1 trigger_outbox_event=1"
 else
@@ -335,7 +350,8 @@ section "5. ADR-010 异步链路: outbox → Kafka → orchestrator → job_inst
 elapsed=0
 launched_id=""
 while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
-  launched_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID' AND request_status='LAUNCHED'")
+  launched_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
   if [[ -n "$launched_id" ]]; then
     break
   fi
@@ -344,11 +360,14 @@ while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
 done
 
 if [[ -n "$launched_id" ]]; then
-  outbox_status=$(psql_q "SELECT publish_status FROM batch.trigger_outbox_event WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
+  outbox_status=$(psql_value "$PG_DB" validate-seed-select-trigger-outbox-status.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
   result pass "TriggerOutboxRelay 推 LAUNCHED" "${elapsed}s, job_instance_id=$launched_id, outbox=$outbox_status"
 else
-  outbox_state=$(psql_q "SELECT publish_status||'/attempt='||publish_attempt FROM batch.trigger_outbox_event WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
-  req_state=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
+  outbox_state=$(psql_value "$PG_DB" validate-seed-select-trigger-outbox-state.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
+  req_state=$(psql_value "$PG_DB" validate-seed-select-trigger-request-status.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v request_id="$REQUEST_ID")
   result fail "TriggerOutboxRelay 推 LAUNCHED" "${AWAIT_TIMEOUT}s 未推到; trigger_request=$req_state outbox=$outbox_state(local profile lazy=true 会卡这一步,docker 应通)"
 fi
 
@@ -403,7 +422,8 @@ sleep 1
 http_post "/api/triggers/launch" \
   "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $DEDUP_REQ_ID" "X-Request-Id: $DEDUP_REQ_ID" >/dev/null
-dedup_count=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$DEDUP_REQ_ID'")
+dedup_count=$(psql_value "$PG_DB" validate-seed-count-trigger-request.sql \
+  -v tenant_id="$STRICT_TENANT_ID" -v request_id="$DEDUP_REQ_ID")
 if [[ "$dedup_count" == "1" ]]; then
   result pass "幂等键重发去重" "2 次 fire 仅 1 行 trigger_request"
 else
@@ -419,7 +439,8 @@ http_code=$(http_post "/api/triggers/launch" \
 # 查 job_definition 找不到会拒绝;trigger_request 应停在 ACCEPTED 不进 LAUNCHED
 if [[ "$http_code" == "200" ]]; then
   sleep 8  # 等 relay + orch 消费
-  cross_status=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$CROSS_REQ_ID'")
+  cross_status=$(psql_value "$PG_DB" validate-seed-select-trigger-request-status.sql \
+    -v tenant_id="$STRICT_TENANT_ID" -v request_id="$CROSS_REQ_ID")
   case "$cross_status" in
     REJECTED|FAILED|GIVE_UP|ACCEPTED)
       result pass "跨租户 jobCode → 后端拒绝" "trigger HTTP 200(异步设计) + trigger_request=$cross_status(未推 LAUNCHED)" ;;
@@ -455,12 +476,15 @@ fire_and_await() {
 
   local elapsed=0 job_id=""
   while [[ $elapsed -lt $timeout ]]; do
-    job_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='$tenant' AND request_id='$req_id' AND request_status='LAUNCHED'")
+    job_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
+      -v tenant_id="$tenant" -v request_id="$req_id")
     [[ -n "$job_id" ]] && break
     sleep 1; elapsed=$((elapsed+1))
   done
   if [[ -z "$job_id" ]]; then
-    local req_status; req_status=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='$tenant' AND request_id='$req_id'")
+    local req_status
+    req_status=$(psql_value "$PG_DB" validate-seed-select-trigger-request-status.sql \
+      -v tenant_id="$tenant" -v request_id="$req_id")
     LAST_FIRE_DETAIL="${timeout}s 未推 LAUNCHED, trigger_request=$req_status"
     return 1
   fi
@@ -468,15 +492,20 @@ fire_and_await() {
   # 等 instance 推到终态(SUCCESS / FAILED / PARTIAL_FAILED / TERMINATED / CANCELLED)
   local instance_status=""
   while [[ $elapsed -lt $timeout ]]; do
-    instance_status=$(psql_q "SELECT instance_status FROM batch.job_instance WHERE id=$job_id")
+    instance_status=$(psql_value "$PG_DB" validate-seed-select-job-instance-status.sql \
+      -v tenant_id="$tenant" -v instance_id="$job_id")
     case "$instance_status" in
       SUCCESS|FAILED|PARTIAL_FAILED|TERMINATED|CANCELLED) break ;;
     esac
     sleep 2; elapsed=$((elapsed+2))
   done
 
-  local task_status; task_status=$(psql_q "SELECT string_agg(DISTINCT task_status, ',') FROM batch.job_task WHERE tenant_id='$tenant' AND job_instance_id=$job_id")
-  local err; err=$(psql_q "SELECT string_agg(DISTINCT coalesce(error_code,'') || ':' || coalesce(error_message,''), ' | ') FROM batch.job_task WHERE job_instance_id=$job_id AND error_code IS NOT NULL")
+  local task_status
+  task_status=$(psql_value "$PG_DB" validate-seed-select-job-task-statuses.sql \
+    -v tenant_id="$tenant" -v instance_id="$job_id")
+  local err
+  err=$(psql_value "$PG_DB" validate-seed-select-job-task-errors.sql \
+    -v tenant_id="$tenant" -v instance_id="$job_id")
   LAST_FIRE_DETAIL="job_id=$job_id instance=$instance_status tasks=${task_status:-none} err=${err:-none} (${elapsed}s)"
   case "$instance_status" in
     SUCCESS) return 0 ;;                         # 严格 happy
@@ -639,16 +668,20 @@ wait
 elapsed=0
 ta_id=""; tb_id=""
 while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
-  [[ -z "$ta_id" ]] && ta_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='ta' AND request_id='$REQ_TA' AND request_status='LAUNCHED'")
-  [[ -z "$tb_id" ]] && tb_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='tb' AND request_id='$REQ_TB' AND request_status='LAUNCHED'")
+  [[ -z "$ta_id" ]] && ta_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
+    -v tenant_id=ta -v request_id="$REQ_TA")
+  [[ -z "$tb_id" ]] && tb_id=$(psql_value "$PG_DB" select-launched-job-instance-id.sql \
+    -v tenant_id=tb -v request_id="$REQ_TB")
   [[ -n "$ta_id" && -n "$tb_id" ]] && break
   sleep 1; elapsed=$((elapsed+1))
 done
 
 if [[ -n "$ta_id" && -n "$tb_id" ]]; then
   # 关键断言:两个 job_instance 各自 tenant_id 隔离
-  ta_tenant=$(psql_q "SELECT tenant_id FROM batch.job_instance WHERE id=$ta_id")
-  tb_tenant=$(psql_q "SELECT tenant_id FROM batch.job_instance WHERE id=$tb_id")
+  ta_tenant=$(psql_value "$PG_DB" validate-seed-select-job-instance-tenant.sql \
+    -v instance_id="$ta_id")
+  tb_tenant=$(psql_value "$PG_DB" validate-seed-select-job-instance-tenant.sql \
+    -v instance_id="$tb_id")
   if [[ "$ta_tenant" == "ta" && "$tb_tenant" == "tb" ]]; then
     result pass "多租并发 → 隔离" "ta job_id=$ta_id (tenant=$ta_tenant) + tb job_id=$tb_id (tenant=$tb_tenant) (${elapsed}s)"
   else
@@ -742,13 +775,15 @@ if [[ "$ADVANCED" == "1" ]]; then
   if [[ -z "$fxr_def_id" ]]; then
       result fail "Trigger CRON 真触发" "INSERT job_definition 失败,无法验证"
   else
-    fxr_baseline=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE' AND trigger_type='SCHEDULED'")
+    fxr_baseline=$(psql_value "$PG_DB" validate-seed-count-scheduled-trigger-requests.sql \
+      -v tenant_id="$PROBE_FXR_TENANT" -v job_code="$PROBE_FXR_JOB_CODE")
     fxr_start=$(date +%s)
     # TriggerReconciler 最多 30s + 一个 fire 周期 60s + 缓冲 ≈ 90-120s
     fxr_deadline=$(( fxr_start + 120 ))
     fxr_fired=0
     while [[ $(date +%s) -lt $fxr_deadline ]]; do
-      fxr_fired=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE' AND trigger_type='SCHEDULED'")
+      fxr_fired=$(psql_value "$PG_DB" validate-seed-count-scheduled-trigger-requests.sql \
+        -v tenant_id="$PROBE_FXR_TENANT" -v job_code="$PROBE_FXR_JOB_CODE")
       if [[ "$fxr_fired" -gt "$fxr_baseline" ]]; then break; fi
       sleep 5
     done
@@ -769,12 +804,12 @@ fi
 # ---------- 11. 清理探针(POST cleanup, 全 seedval-* sweep) ----------
 section "11. 探针清理(post + EXIT trap 双保险)"
 
-before_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN' OR job_code LIKE '$SWEEP_PATTERN'")
 do_cleanup "$SWEEP_PATTERN"
 sleep 8
 do_cleanup "$SWEEP_PATTERN"
-after_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN' OR job_code LIKE '$SWEEP_PATTERN'")
-job_def_left=$(psql_q "SELECT count(*) FROM batch.job_definition WHERE job_code LIKE '$SWEEP_PATTERN'")
+after_cnt=$(psql_value "$PG_DB" validate-seed-count-trigger-probes.sql \
+  -v pattern="$SWEEP_PATTERN" -v include_job_code=true)
+job_def_left=$(psql_value "$PG_DB" validate-seed-count-job-definition-probes.sql -v pattern="$SWEEP_PATTERN")
 # PASS 标准:PROBE job_definition 必须为 0。Quartz JobStore 由下一轮 reconciler 异步注销，
 # 因此删除定义后短时间内可能仍有已取得的 fire，允许少量 trigger_request 残留。
 if [[ "$job_def_left" == "0" && "$after_cnt" -le 15 ]]; then
