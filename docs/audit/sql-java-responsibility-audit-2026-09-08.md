@@ -115,9 +115,9 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-3 固定 SQL 仍嵌在非持久化组件
 
-状态：**部分完成**。`ConsolePipelineProgressDirtyPublisher` 的固定查询与结果映射已迁入 MyBatis Mapper，publisher 只保留调度、游标、节流和事件发布；新增真实 PostgreSQL 测试覆盖聚合时间、可空关联实例及租户复合关联。`AdminTestDataCleanupRepository` 的级联 SQL 仍待迁移。
+状态：**已修复**。`ConsolePipelineProgressDirtyPublisher` 的固定查询与结果映射已迁入 MyBatis Mapper，publisher 只保留调度、游标、节流和事件发布；新增真实 PostgreSQL 测试覆盖聚合时间、可空关联实例及租户复合关联。
 
-`AdminTestDataCleanupRepository` 虽符合“repository 可承载 SQL”的现行规范，但 300 余行级联字符串难以随 FK/表演进，适合迁到 Mapper XML 或 SQL resource，Java 保留事务编排和删除结果汇总。
+`AdminTestDataCleanupRepository` 原有 300 余行级联 SQL 字符串已迁入专用 MyBatis Mapper XML。删除目标由 Java 枚举封闭，不使用动态表名或 `${}`；repository 只保留保护租户校验、FK 依赖顺序和删除结果汇总。prefix 与精确租户两种模式均有真实 PostgreSQL 全分支执行测试。
 
 ### P2-4 Misfire 过期策略隐藏在 SQL
 

@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper">
+
+    <sql id="JobInstancesByPrefix">
+        select id from batch.job_instance
+         where job_code like #{prefixLike} escape '\'
+    </sql>
+
+    <delete id="cleanupByPrefixTarget">
+        <choose>
+            <when test="target == 'WORKFLOW_NODE_RUN'">
+                delete from batch.workflow_node_run
+                 where workflow_run_id in (
+                    select id from batch.workflow_run
+                     where workflow_definition_id in (
+                        select id from batch.workflow_definition
+                         where workflow_code like #{prefixLike} escape '\'
+                     )
+                        or related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 )
+            </when>
+            <when test="target == 'WORKFLOW_RUN'">
+                delete from batch.workflow_run
+                 where workflow_definition_id in (
+                    select id from batch.workflow_definition
+                     where workflow_code like #{prefixLike} escape '\'
+                 )
+                    or related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'COMPENSATION_COMMAND'">
+                delete from batch.compensation_command
+                 where related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'APPROVAL_COMMAND'">
+                delete from batch.approval_command
+                 where target_type = 'JOB_INSTANCE'
+                   and target_id like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'PIPELINE_INSTANCE'">
+                delete from batch.pipeline_instance
+                 where related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'JOB_EXECUTION_LOG'">
+                delete from batch.job_execution_log
+                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'JOB_STEP_INSTANCE'">
+                delete from batch.job_step_instance
+                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'JOB_TASK'">
+                delete from batch.job_task
+                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'JOB_PARTITION'">
+                delete from batch.job_partition
+                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'CLEAR_JOB_INSTANCE_PARENT'">
+                update batch.job_instance set parent_instance_id = null
+                 where parent_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
+            <when test="target == 'JOB_INSTANCE'">
+                delete from batch.job_instance
+                 where job_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'WORKFLOW_NODE'">
+                delete from batch.workflow_node
+                 where workflow_definition_id in (
+                    select id from batch.workflow_definition
+                     where workflow_code like #{prefixLike} escape '\'
+                 )
+            </when>
+            <when test="target == 'WORKFLOW_EDGE'">
+                delete from batch.workflow_edge
+                 where workflow_definition_id in (
+                    select id from batch.workflow_definition
+                     where workflow_code like #{prefixLike} escape '\'
+                 )
+            </when>
+            <when test="target == 'WORKFLOW_DEFINITION'">
+                delete from batch.workflow_definition
+                 where workflow_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'JOB_DEFINITION'">
+                delete from batch.job_definition
+                 where job_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'FILE_CHANNEL_CONFIG'">
+                delete from batch.file_channel_config
+                 where channel_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'FILE_TEMPLATE_CONFIG'">
+                delete from batch.file_template_config
+                 where template_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'API_KEY'">
+                delete from batch.api_key
+                 where key_name like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'ALERT_ROUTING_CONFIG'">
+                delete from batch.alert_routing_config
+                 where route_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'TENANT_QUOTA_POLICY'">
+                delete from batch.tenant_quota_policy
+                 where policy_code like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'CONSOLE_USER_ACCOUNT'">
+                delete from batch.console_user_account
+                 where username like #{prefixLike} escape '\'
+                    or username like #{operatorPrefixLike} escape '\'
+            </when>
+            <when test="target == 'ARCHIVE_POLICY'">
+                delete from batch.archive_policy
+                 where tenant_id like #{prefixLike} escape '\'
+            </when>
+            <when test="target == 'TENANT'">
+                delete from batch.tenant
+                 where tenant_id like #{prefixLike} escape '\'
+            </when>
+            <otherwise>select 1 where false</otherwise>
+        </choose>
+    </delete>
+
+    <delete id="cleanupByTenantIdsTarget">
+        <choose>
+            <when test="target == 'WORKFLOW_NODE_RUN'">
+                delete from batch.workflow_node_run
+                 where workflow_run_id in (
+                    select id from batch.workflow_run where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                 )
+            </when>
+            <when test="target == 'WORKFLOW_RUN'">
+                delete from batch.workflow_run where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'PIPELINE_STEP_RUN'">
+                delete from batch.pipeline_step_run
+                 where pipeline_instance_id in (
+                    select id from batch.pipeline_instance where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                 )
+            </when>
+            <when test="target == 'PIPELINE_INSTANCE'">
+                delete from batch.pipeline_instance where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'JOB_TASK'">
+                delete from batch.job_task where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'JOB_STEP_INSTANCE'">
+                delete from batch.job_step_instance where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'JOB_PARTITION'">
+                delete from batch.job_partition where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'CLEAR_JOB_INSTANCE_PARENT'">
+                update batch.job_instance set parent_instance_id = null
+                 where parent_instance_id in (
+                    select id from batch.job_instance where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                 )
+            </when>
+            <when test="target == 'JOB_INSTANCE'">
+                delete from batch.job_instance where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'APPROVAL_COMMAND'">
+                delete from batch.approval_command where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'FILE_ERROR_RECORD'">
+                delete from batch.file_error_record where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'FILE_DISPATCH_RECORD'">
+                delete from batch.file_dispatch_record where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'FILE_RECORD'">
+                delete from batch.file_record where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'WORKFLOW_EDGE'">
+                delete from batch.workflow_edge
+                 where workflow_definition_id in (
+                    select id from batch.workflow_definition where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                 )
+            </when>
+            <when test="target == 'WORKFLOW_NODE'">
+                delete from batch.workflow_node
+                 where workflow_definition_id in (
+                    select id from batch.workflow_definition where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                 )
+            </when>
+            <when test="target == 'WORKFLOW_DEFINITION'">
+                delete from batch.workflow_definition where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'PIPELINE_STEP_DEFINITION'">
+                delete from batch.pipeline_step_definition
+                 where pipeline_definition_id in (
+                    select id from batch.pipeline_definition where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                 )
+            </when>
+            <when test="target == 'PIPELINE_DEFINITION'">
+                delete from batch.pipeline_definition where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'JOB_DEFINITION'">
+                delete from batch.job_definition where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'FILE_CHANNEL_CONFIG'">
+                delete from batch.file_channel_config where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'FILE_TEMPLATE_CONFIG'">
+                delete from batch.file_template_config where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'ARCHIVE_POLICY'">
+                delete from batch.archive_policy where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'CONSOLE_USER_ACCOUNT'">
+                delete from batch.console_user_account where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'TENANT'">
+                delete from batch.tenant where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <otherwise>select 1 where false</otherwise>
+        </choose>
+    </delete>
+
+</mapper>
