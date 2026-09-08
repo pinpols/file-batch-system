@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -225,7 +226,7 @@ class DefaultWorkerRegistryServiceTest {
     WorkerRegistryEntity result = service.register(dto(null));
 
     verify(mapper).insert(any());
-    verify(mapper, never()).updateById(any());
+    verify(mapper, never()).updateRegistrationIfCurrent(any(), anyString());
     assertThat(result).isNotNull();
   }
 
@@ -337,7 +338,7 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
-  @DisplayName("register: 已存在 worker(同 workerCode) → updateById,不抛错(重启重连场景)")
+  @DisplayName("register: 已存在 worker(同 workerCode) → 状态 CAS 更新,不抛错(重启重连场景)")
   void registerExistingWorkerUpdates() {
     when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(
@@ -346,7 +347,7 @@ class DefaultWorkerRegistryServiceTest {
 
     service.register(dto(null));
 
-    verify(mapper).updateById(any());
+    verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.OFFLINE.code()));
     verify(mapper, never()).insert(any());
   }
 
@@ -362,7 +363,7 @@ class DefaultWorkerRegistryServiceTest {
 
     service.register(dto(null));
 
-    verify(mapper).updateById(any());
+    verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.DRAINING.code()));
   }
 
   // ===== register: 租户级最低 SDK 版本门禁 (opt-in) =====
@@ -537,7 +538,7 @@ class DefaultWorkerRegistryServiceTest {
 
     service.register(dto(null));
 
-    verify(mapper).updateById(any());
+    verify(mapper).updateRegistrationIfCurrent(any(), eq(WorkerRegistryStatus.ONLINE.code()));
     verify(mapper, never()).countByTenant(anyString());
   }
 
@@ -563,7 +564,8 @@ class DefaultWorkerRegistryServiceTest {
     assertThat(service.updateStatus("ta", "missing", WorkerRegistryStatus.OFFLINE.code()))
         .isNull();
     verify(mapper, never()).insert(any());
-    verify(mapper, never()).updateById(any());
+    verify(mapper, never())
+        .updateStatusIfCurrent(anyString(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -573,9 +575,14 @@ class DefaultWorkerRegistryServiceTest {
         .thenReturn(
             entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
             entityWithStatus(WorkerRegistryStatus.OFFLINE.code()));
+    when(mapper.updateStatusIfCurrent(
+            "ta", "w1", WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code()))
+        .thenReturn(1);
 
     service.deactivate("ta", "w1");
 
-    verify(mapper, times(1)).updateById(any());
+    verify(mapper, times(1))
+        .updateStatusIfCurrent(
+            "ta", "w1", WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code());
   }
 }

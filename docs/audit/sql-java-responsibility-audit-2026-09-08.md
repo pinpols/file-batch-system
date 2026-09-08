@@ -23,7 +23,7 @@
 | P1-1 dry-run 终态归档 | 已完成 | job/workflow 两类 dry-run 终态均纳入归档；V201 同步冷表状态约束，完整 Flyway 迁移和真实归档通过 |
 | P1-2 批量日状态口径 | 已完成 | 正式批量日显式排除 `dry_run=true`，`PAUSED` 计入在途，终态子项诊断覆盖 dry-run；修复 PostgreSQL Map 别名折叠导致 Console 统计静默为 0 |
 | P1-3 分发退避并发覆盖 | 已完成 | 失败 UPSERT 通过 `RETURNING` 返回计数，退避回写增加失败次数 CAS；8 线程真实库测试通过 |
-| P1-4 Worker 冷路径整行覆盖 | 待实施 | 下一整改批次改为按租户、worker 与期望状态推进的语义化 CAS |
+| P1-4 Worker 冷路径整行覆盖 | 已完成 | register/status/drain/warmup 均改为按租户、worker 与期望状态推进的语义化 CAS；生产 `updateById` 调用归零 |
 
 ## 扫描清单
 
@@ -87,7 +87,7 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P1-4 Worker 冷路径整行覆盖可使状态回退
 
-状态：**待实施**。
+状态：**已修复**。通用 `updateById` 仅保留给集成测试夹具，生产路径均使用带租户与状态前态的语义化更新；并发旧 ONLINE 快照无法覆盖 DRAINING 的真实 PostgreSQL 用例已通过。
 
 `WorkerRegistryMapper.updateById` 只按全局 `id` 更新，并整行覆盖 status、心跳和 drain 字段。`warmup/startDrain/updateStatus` 都采用“查询快照 -> Java 改 record -> updateById”；并发 decommission、heartbeat 或 drain 时，旧快照可能复活/回退新状态。该语句还被租户守护白名单豁免，防御纵深不足。
 
