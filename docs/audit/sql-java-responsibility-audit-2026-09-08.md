@@ -115,9 +115,13 @@ SQL 继续负责集合聚合；状态分类应由公共 catalog 传参或受静�
 
 ### P2-3 固定 SQL 仍嵌在非持久化组件
 
-`ConsolePipelineProgressDirtyPublisher` 同时承担定时器、游标、限流、SQL、ResultSet 映射和事件发布。应把固定查询抽到 Mapper/repository，publisher 只保留调度与发布。`AdminTestDataCleanupRepository` 虽符合“repository 可承载 SQL”的现行规范，但 300 余行级联字符串难以随 FK/表演进，适合迁到 Mapper XML 或 SQL resource，Java 保留事务编排和删除结果汇总。
+状态：**部分完成**。`ConsolePipelineProgressDirtyPublisher` 的固定查询与结果映射已迁入 MyBatis Mapper，publisher 只保留调度、游标、节流和事件发布；新增真实 PostgreSQL 测试覆盖聚合时间、可空关联实例及租户复合关联。`AdminTestDataCleanupRepository` 的级联 SQL 仍待迁移。
+
+`AdminTestDataCleanupRepository` 虽符合“repository 可承载 SQL”的现行规范，但 300 余行级联字符串难以随 FK/表演进，适合迁到 Mapper XML 或 SQL resource，Java 保留事务编排和删除结果汇总。
 
 ### P2-4 Misfire 过期策略隐藏在 SQL
+
+状态：**已修复**。新增 `batch.trigger.runtime.misfire-pending-retention-days`（默认 7 天），由 Java 计算 `expiresAt`，Mapper 只持久化参数；Spring、Compose 与 Helm 配置入口已同步。
 
 `TriggerMisfirePendingMapper.insertPending` 固定 `now() + interval '7 days'`。这是保留/审批产品策略，不是数据库不变量，应由配置生成 `expiresAt` 后绑定；DB 只保存结果。否则不同环境无法调整，文档和配置扫描也看不到该开关。
 

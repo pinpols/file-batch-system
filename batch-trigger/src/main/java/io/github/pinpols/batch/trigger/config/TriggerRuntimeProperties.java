@@ -14,6 +14,11 @@ public class TriggerRuntimeProperties {
 
   private long misfireCatchUpThresholdSeconds = 60L;
 
+  /** 人工审批 misfire 记录的保留天数，超期后由扫描任务转为 EXPIRED。 */
+  @Min(1)
+  @Max(3650)
+  private int misfirePendingRetentionDays = 7;
+
   private long readinessWindowSeconds = 7200L;
 
   private long readinessRecheckIntervalSeconds = 30L;

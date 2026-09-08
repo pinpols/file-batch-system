@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
@@ -27,6 +28,7 @@ import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.CalendarHolidayRule;
 import io.github.pinpols.batch.trigger.support.TriggerCalendarConfig;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -74,6 +76,7 @@ public class DefaultTriggerService implements TriggerService {
   private final TenantStatusMapper tenantStatusMapper;
   private final PlatformTransactionManager transactionManager;
   private final UpstreamReadinessChecker upstreamReadinessChecker;
+  private final TriggerRuntimeProperties triggerRuntimeProperties;
 
   private record PendingApprovalTarget(
       TriggerRequestEntity request, Long pendingId, boolean approvePending) {}
@@ -309,6 +312,8 @@ public class DefaultTriggerService implements TriggerService {
     pending.setTenantId(command.descriptor().getTenantId());
     pending.setJobCode(command.descriptor().getJobCode());
     pending.setScheduledFireTime(command.fireTime());
+    pending.setExpiresAt(BatchDateTimeSupport.utcNow()
+        .plus(Duration.ofDays(triggerRuntimeProperties.getMisfirePendingRetentionDays())));
     try {
       triggerMisfirePendingMapper.insertPending(pending);
     } catch (DuplicateKeyException dup) {

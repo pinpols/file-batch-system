@@ -210,6 +210,7 @@ trigger:
   quartzDb:
     maxPoolSize: 5
   runtime:
+    misfirePendingRetentionDays: 7
     # 默认平台池 10，保留 2 条给 relay/管理路径；应用启动期强制校验此预算。
     apiLaunchMaxConcurrency: 8
     apiLaunchAdaptiveEnabled: false

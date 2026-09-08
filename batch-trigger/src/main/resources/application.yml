@@ -100,6 +100,8 @@ batch:
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}
+      # 人工审批 misfire 的保留期；到期后状态转为 EXPIRED。
+      misfire-pending-retention-days: ${BATCH_TRIGGER_MISFIRE_PENDING_RETENTION_DAYS:7}
       # 上游未就绪时使用 Quartz one-shot trigger 重检，期间固定原始 fire 时间，避免 bizDate 漂移。
       readiness-window-seconds: ${BATCH_TRIGGER_READINESS_WINDOW_SECONDS:7200}
       readiness-recheck-interval-seconds: ${BATCH_TRIGGER_READINESS_RECHECK_INTERVAL_SECONDS:30}

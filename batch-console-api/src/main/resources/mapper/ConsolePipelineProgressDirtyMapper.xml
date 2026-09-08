@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper">
+
+    <resultMap id="PipelineProgressDirtyResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg column="related_job_instance_id" javaType="java.lang.Long"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectUpdatedSince" resultMap="PipelineProgressDirtyResultMap">
+        select pr.tenant_id,
+               pr.pipeline_instance_id,
+               pi.related_job_instance_id,
+               max(pr.updated_at) as updated_at
+          from batch.pipeline_progress pr
+          join batch.pipeline_instance pi
+            on pi.tenant_id = pr.tenant_id
+           and pi.id = pr.pipeline_instance_id
+         where pr.updated_at &gt;= #{since}
+         group by pr.tenant_id, pr.pipeline_instance_id, pi.related_job_instance_id
+         order by max(pr.updated_at) asc
+         limit #{limit}
+    </select>
+
+</mapper>

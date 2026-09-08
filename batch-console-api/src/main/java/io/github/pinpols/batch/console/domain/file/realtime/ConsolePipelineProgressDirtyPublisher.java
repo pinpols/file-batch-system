@@ -1,12 +1,11 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
 import io.github.pinpols.batch.console.domain.file.web.response.ConsolePipelineProgressDirtyEventResponse;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -22,8 +21,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,20 +42,7 @@ public class ConsolePipelineProgressDirtyPublisher {
   private static final String EVENT_TYPE = "pipeline-progress-dirty";
   private static final String REASON_STEP_PROGRESS = "STEP_PROGRESS";
   private static final int MAX_TRACKED_KEYS = 10_000;
-  private static final String DIRTY_QUERY = "select pr.tenant_id,"
-      + " pr.pipeline_instance_id,"
-      + " pi.related_job_instance_id,"
-      + " max(pr.updated_at) as updated_at"
-      + " from batch.pipeline_progress pr"
-      + " join batch.pipeline_instance pi"
-      + "   on pi.tenant_id = pr.tenant_id"
-      + "  and pi.id = pr.pipeline_instance_id"
-      + " where pr.updated_at >= :since"
-      + " group by pr.tenant_id, pr.pipeline_instance_id, pi.related_job_instance_id"
-      + " order by max(pr.updated_at) asc"
-      + " limit :limit";
-
-  private final NamedParameterJdbcTemplate jdbc;
+  private final ConsolePipelineProgressDirtyMapper dirtyMapper;
   private final ConsoleRealtimeEventPort eventPublisher;
 
   private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -142,19 +126,14 @@ public class ConsolePipelineProgressDirtyPublisher {
 
   void pollOnce() {
     Instant since = lastSeen.minusMillis(lookbackOverlapMillis);
-    List<DirtyProgressRow> rows = jdbc.query(
-        DIRTY_QUERY,
-        new MapSqlParameterSource()
-            .addValue("since", Timestamp.from(since))
-            .addValue("limit", batchSize),
-        this::mapDirtyProgressRow);
+    List<PipelineProgressDirtyView> rows = dirtyMapper.selectUpdatedSince(since, batchSize);
     if (rows.isEmpty()) {
       return;
     }
 
     Instant maxSeen = lastSeen;
     Instant now = Instant.now();
-    for (DirtyProgressRow row : rows) {
+    for (PipelineProgressDirtyView row : rows) {
       if (row.updatedAt().isAfter(maxSeen)) {
         maxSeen = row.updatedAt();
       }
@@ -166,15 +145,7 @@ public class ConsolePipelineProgressDirtyPublisher {
     pruneTrackedKeysIfNeeded();
   }
 
-  private DirtyProgressRow mapDirtyProgressRow(ResultSet rs, int rowNum) throws SQLException {
-    return new DirtyProgressRow(
-        rs.getString("tenant_id"),
-        rs.getLong("pipeline_instance_id"),
-        nullableLong(rs, "related_job_instance_id"),
-        rs.getTimestamp("updated_at").toInstant());
-  }
-
-  private boolean shouldPublish(DirtyProgressRow row, Instant now) {
+  private boolean shouldPublish(PipelineProgressDirtyView row, Instant now) {
     String key = row.tenantId() + "|" + row.pipelineInstanceId();
     Instant lastPublishedUpdate = lastPublishedUpdateByPipeline.get(key);
     if (lastPublishedUpdate != null && !row.updatedAt().isAfter(lastPublishedUpdate)) {
@@ -189,7 +160,7 @@ public class ConsolePipelineProgressDirtyPublisher {
     return true;
   }
 
-  private void publish(DirtyProgressRow row) {
+  private void publish(PipelineProgressDirtyView row) {
     ConsolePipelineProgressDirtyEventResponse payload =
         new ConsolePipelineProgressDirtyEventResponse(
             row.tenantId(),
@@ -209,12 +180,4 @@ public class ConsolePipelineProgressDirtyPublisher {
     lastPublishedUpdateByPipeline.clear();
     lastEmittedAtByPipeline.clear();
   }
-
-  private static Long nullableLong(ResultSet rs, String column) throws SQLException {
-    long value = rs.getLong(column);
-    return rs.wasNull() ? null : value;
-  }
-
-  private record DirtyProgressRow(
-      String tenantId, Long pipelineInstanceId, Long jobInstanceId, Instant updatedAt) {}
 }
