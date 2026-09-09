@@ -16,6 +16,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+SIM_SQL_DIR="$ROOT/scripts/sim/sql"
+export SIM_SQL_DIR
 
 SIM_STAGE_NAME="trigger-stage6d"
 # shellcheck source=env-common.sh
@@ -88,11 +90,13 @@ done
   echo "❌ trigger fixture 后启动健康检查失败，详见 $REPORT_DIR/trigger-restart.log" >&2
   exit 1
 }
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6d.log"
 import json, os, subprocess, sys, time, urllib.request
+from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -103,13 +107,16 @@ OUTBOX_COUNT = int(os.environ["OUTBOX_COUNT"])
 START_TS = os.environ["START_TS"].strip()
 API_JOB = "TA_PROCESS_STAGE4_EMPTY_SUCCESS"
 CRON_JOB = "TA_TRIGGER_STAGE6C_SCHEDULED"
+SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
-def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
+def query_file(sql_file, variables=None, tuples=False):
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    return subprocess.run(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True, capture_output=True, text=True)
 
 def psql_file(path, *vars):
     args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1"]
@@ -119,11 +126,8 @@ def psql_file(path, *vars):
     with open(path, "rb") as fh:
         return subprocess.run(args, check=True, stdin=fh)
 
-def scalar(sql):
-    out = psql(sql, tuples=True)
-    if out.returncode != 0:
-        print(out.stderr, flush=True)
-        raise RuntimeError("psql failed")
+def scalar(sql_file, variables=None):
+    out = query_file(sql_file, variables, tuples=True)
     return (out.stdout or "").strip()
 
 def launch(request_id, batch_key):
@@ -167,11 +171,11 @@ def manage(action, job_code):
         if resp.status != 200:
             raise RuntimeError(f"trigger management {action} failed")
 
-def wait_int(label, sql, predicate, timeout=180, interval=2):
+def wait_int(label, sql_file, variables, predicate, timeout=180, interval=2):
     deadline = time.time() + timeout
     last = 0
     while time.time() < deadline:
-        raw = scalar(sql) or "0"
+        raw = scalar(sql_file, variables) or "0"
         last = int(raw)
         if predicate(last):
             print(f"  [{label}] {last}", flush=True)
@@ -182,10 +186,8 @@ def wait_int(label, sql, predicate, timeout=180, interval=2):
 print("==> high-frequency cron fire", flush=True)
 scheduled_before = wait_int(
     "cron-fire",
-    "select count(*) from batch.trigger_request "
-    f"where tenant_id='ta' and job_code='{CRON_JOB}' "
-    "and trigger_type='SCHEDULED' "
-    f"and created_at >= '{START_TS}'",
+    "count-trigger-stage6c-scheduled.sql",
+    {"tenant_id": "ta", "start_ts": START_TS},
     lambda v: v >= 1,
     timeout=120,
 )
@@ -193,19 +195,10 @@ scheduled_before = wait_int(
 print("==> pause and resume scheduled trigger", flush=True)
 manage("pause", CRON_JOB)
 psql_file("docs/test-data/sim-stage6d-trigger-pause.sql", ("job_code", CRON_JOB))
-paused_count = int(scalar(
-    "select count(*) from batch.trigger_request "
-    f"where tenant_id='ta' and job_code='{CRON_JOB}' "
-    "and trigger_type='SCHEDULED' "
-    f"and created_at >= '{START_TS}'"
-) or "0")
+scheduled_vars = {"tenant_id": "ta", "start_ts": START_TS}
+paused_count = int(scalar("count-trigger-stage6c-scheduled.sql", scheduled_vars) or "0")
 time.sleep(6)
-paused_after = int(scalar(
-    "select count(*) from batch.trigger_request "
-    f"where tenant_id='ta' and job_code='{CRON_JOB}' "
-    "and trigger_type='SCHEDULED' "
-    f"and created_at >= '{START_TS}'"
-) or "0")
+paused_after = int(scalar("count-trigger-stage6c-scheduled.sql", scheduled_vars) or "0")
 print(f"  [paused-stable] {paused_count}->{paused_after}", flush=True)
 if paused_after != paused_count:
     raise RuntimeError("scheduled trigger fired while paused")
@@ -214,10 +207,8 @@ psql_file("docs/test-data/sim-stage6d-trigger-resume.sql", ("job_code", CRON_JOB
 manage("register", CRON_JOB)
 resumed_count = wait_int(
     "resume-fire",
-    "select count(*) from batch.trigger_request "
-    f"where tenant_id='ta' and job_code='{CRON_JOB}' "
-    "and trigger_type='SCHEDULED' "
-    f"and created_at >= '{START_TS}'",
+    "count-trigger-stage6c-scheduled.sql",
+    scheduled_vars,
     lambda v: v >= paused_count + 1,
     timeout=180,
 )
@@ -225,28 +216,19 @@ resumed_count = wait_int(
 print("==> misfire pending + catch-up replay", flush=True)
 wait_int(
     "quartz-misfire-registered",
-    "select count(*) from quartz.qrtz_triggers "
-    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'",
+    "count-trigger-stage6c-quartz-misfire.sql",
+    {},
     lambda v: v >= 1,
     timeout=90,
 )
-psql(
-    "update quartz.qrtz_triggers "
-    "set next_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
-    "prev_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
-    "trigger_state='WAITING' "
-    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'"
-)
+query_file("update-trigger-stage6d-quartz-misfire.sql")
 misfire_source = "quartz"
-misfire_pending_sql = (
-    "select count(*) from batch.trigger_misfire_pending "
-    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    f"and status='PENDING' and created_at >= '{START_TS}'"
-)
+misfire_vars = {"tenant_id": "ta", "start_ts": START_TS}
 try:
     misfire_count = wait_int(
         "misfire-pending",
-        misfire_pending_sql,
+        "count-trigger-stage6d-pending.sql",
+        misfire_vars,
         lambda v: v >= 1,
         timeout=90,
     )
@@ -264,17 +246,12 @@ except TimeoutError:
     )
     misfire_count = wait_int(
         "misfire-pending",
-        misfire_pending_sql,
+        "count-trigger-stage6d-pending.sql",
+        misfire_vars,
         lambda v: v >= 1,
         timeout=30,
     )
-pending_link = scalar(
-    "select id || '|' || coalesce(catch_up_request_id::text,'') "
-    "from batch.trigger_misfire_pending "
-    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    f"and status='PENDING' and created_at >= '{START_TS}' "
-    "order by id desc limit 1"
-)
+pending_link = scalar("select-trigger-stage6d-pending-link.sql", misfire_vars)
 pending_id, linked_request_id = pending_link.split("|", 1)
 if not linked_request_id:
     raise RuntimeError(f"misfire pending not linked to catch-up request: pending={pending_id}")
@@ -298,10 +275,7 @@ with urllib.request.urlopen(req, timeout=30) as resp:
 deadline = time.time() + 120
 replay_status = ""
 while time.time() < deadline:
-    replay_status = scalar(
-        "select request_status || '|' || coalesce(related_job_instance_id::text,'') "
-        f"from batch.trigger_request where tenant_id='ta' and id={linked_request_id}"
-    )
+    replay_status = scalar("select-trigger-stage6d-replay-status.sql", {"tenant_id": "ta", "request_id": linked_request_id})
     if replay_status.startswith("LAUNCHED|") and replay_status != "LAUNCHED|":
         break
     time.sleep(2)
@@ -315,15 +289,12 @@ launch(dedup_id, BATCH + "-dedup")
 launch(dedup_id, BATCH + "-dedup")
 dedup_summary = wait_int(
     "dedup-instance",
-    "select count(distinct related_job_instance_id) "
-    f"from batch.trigger_request where tenant_id='ta' and request_id='{dedup_id}'",
+    "count-trigger-stage6d-dedup-instances.sql",
+    {"tenant_id": "ta", "request_id": dedup_id},
     lambda v: v == 1,
     timeout=90,
 )
-dedup_rows = int(scalar(
-    "select count(*) from batch.trigger_request "
-    f"where tenant_id='ta' and request_id='{dedup_id}'"
-) or "0")
+dedup_rows = int(scalar("count-trigger-stage6d-dedup-rows.sql", {"tenant_id": "ta", "request_id": dedup_id}) or "0")
 if dedup_rows != 1 or dedup_summary != 1:
     raise RuntimeError(f"dedup failed: rows={dedup_rows}, instances={dedup_summary}")
 
@@ -332,24 +303,23 @@ for i in range(OUTBOX_COUNT):
     launch(f"{BATCH}-outbox-{i:03d}", f"{BATCH}-outbox-{i:03d}")
 wait_int(
     "outbox-created",
-    "select count(*) from batch.trigger_outbox_event "
-    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%'",
+    "count-trigger-stage6d-outbox.sql",
+    {"tenant_id": "ta", "request_prefix": BATCH + "-outbox-"},
     lambda v: v >= OUTBOX_COUNT,
     timeout=90,
 )
 psql_file("docs/test-data/sim-stage6d-trigger-outbox-retry.sql", ("request_prefix", BATCH + "-outbox-"))
 outbox_published = wait_int(
     "outbox-published",
-    "select count(*) from batch.trigger_outbox_event "
-    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%' "
-    "and publish_status='PUBLISHED'",
+    "count-trigger-stage6d-outbox-published.sql",
+    {"tenant_id": "ta", "request_prefix": BATCH + "-outbox-"},
     lambda v: v >= OUTBOX_COUNT,
     timeout=180,
 )
 outbox_instances = wait_int(
     "outbox-launched",
-    "select count(distinct related_job_instance_id) from batch.trigger_request "
-    f"where tenant_id='ta' and request_id like '{BATCH}-outbox-%'",
+    "count-trigger-stage6d-outbox-instances.sql",
+    {"tenant_id": "ta", "request_prefix": BATCH + "-outbox-"},
     lambda v: v >= OUTBOX_COUNT,
     timeout=180,
 )
@@ -361,43 +331,19 @@ for i in range(STORM_COUNT):
     launch(f"{BATCH}-storm-{i:03d}", f"{BATCH}-storm-{i:03d}")
 terminal_count = wait_int(
     "storm-terminal",
-    "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance ji on ji.id=tr.related_job_instance_id "
-    f"where tr.tenant_id='ta' and tr.request_id like '{BATCH}-storm-%' "
-    "and ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')",
+    "count-trigger-stage6d-storm-terminal.sql",
+    {"tenant_id": "ta", "request_prefix": BATCH + "-storm-"},
     lambda v: v >= STORM_COUNT,
     timeout=240,
 )
 
-pending_outbox = int(scalar(
-    "select count(*) from batch.trigger_outbox_event "
-    f"where tenant_id='ta' and request_id like '{BATCH}%' "
-    "and publish_status in ('NEW','FAILED','PUBLISHING')"
-) or "0")
-non_terminal = int(scalar(
-    "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance ji on ji.id=tr.related_job_instance_id "
-    f"where tr.tenant_id='ta' and tr.request_id like '{BATCH}%' "
-    "and ji.instance_status not in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')"
-) or "0")
+batch_vars = {"tenant_id": "ta", "request_prefix": BATCH}
+pending_outbox = int(scalar("count-trigger-stage6d-pending-outbox.sql", batch_vars) or "0")
+non_terminal = int(scalar("count-trigger-stage6d-non-terminal.sql", batch_vars) or "0")
 
 print("\n-- trigger_stage6d_status --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select trigger_type, request_status, count(*) "
-    "from batch.trigger_request "
-    f"where tenant_id='ta' and request_id like '{BATCH}%' "
-    "group by trigger_type, request_status order by trigger_type, request_status"
-], check=False)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select publish_status, count(*) "
-    "from batch.trigger_outbox_event "
-    f"where tenant_id='ta' and request_id like '{BATCH}%' "
-    "group by publish_status order by publish_status"
-], check=False)
+print(query_file("select-trigger-stage6d-request-status.sql", batch_vars).stdout, end="")
+print(query_file("select-trigger-stage6d-outbox-status.sql", batch_vars).stdout, end="")
 
 summary = (
     f"cron_before={scheduled_before}|pause={paused_count}->{paused_after}|resume={resumed_count}|"
