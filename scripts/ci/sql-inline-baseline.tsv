@@ -3,7 +3,6 @@ load-tests/scripts/run-control-plane-worker-benchmark.sh	18
 load-tests/scripts/run-process-worker-benchmark.sh	17
 load-tests/scripts/run-worker-load-tests.sh	13
 load-tests/scripts/sample-scheduler-backlog.sh	9
-scripts/local/import-copy-worth-benchmark.sh	8
 scripts/local/strict-verify.sh	13
 scripts/sim/06-verify.sh	12
 scripts/sim/09-export-stage3.sh	9
