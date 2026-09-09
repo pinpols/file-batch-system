@@ -23,6 +23,7 @@ SIM_STAGE_NAME="import-stage2c"
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
+SQL_DIR="$ROOT/scripts/sim/sql"
 
 __RESTARTED_IMPORT_WITH_CHECKPOINT_DISABLED=0
 wait_import_worker() {
@@ -68,9 +69,6 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO-replace" \
   -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-stale.sql >/dev/null
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
-export START_TS
-
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2c.log"
 import json, os, subprocess, sys, time, urllib.request
 
@@ -78,7 +76,7 @@ BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
-START_TS = os.environ["START_TS"].strip()
+SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 request_ids = []
 
 def xml_payload(rows):
@@ -95,12 +93,21 @@ def xml_payload(rows):
   </customer>""")
     return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<customers>\n" + "\n".join(items) + "\n</customers>\n"
 
-def psql(db, sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-P", "pager=off"]
+def psql(db, sql_file, variables=None, tuples=False, capture_output=True):
+    args = [
+        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
+        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
+        "-d", db, "-P", "pager=off",
+    ]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
+        return subprocess.run(
+            args, check=True, capture_output=capture_output,
+            text=True, input=sql.read())
 
 def launch(label, job, template, content, batch_no):
     rid = f"sim-stage2c-{label}-{int(time.time()*1000)%100000000}"
@@ -141,13 +148,9 @@ def launch(label, job, template, content, batch_no):
 def wait_for(job, rid, expected="SUCCESS"):
     deadline = time.time() + 180
     while time.time() < deadline:
-        out = psql(os.environ["PLATFORM_DB"], (
-            "select coalesce(i.instance_status,'') "
-            "from batch.trigger_request tr "
-            "left join batch.job_instance i on i.id = tr.related_job_instance_id "
-            f"where tr.tenant_id='ta' and tr.request_id='{rid}' and tr.job_code='{job}' "
-            "order by tr.created_at desc limit 1"
-        ), tuples=True)
+        out = psql(
+            os.environ["PLATFORM_DB"], "select-request-job-status.sql",
+            {"tenant_id": "ta", "request_id": rid, "job_code": job}, tuples=True)
         status = (out.stdout or "").strip()
         if status in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
             marker = "✓" if status == expected else "✗"
@@ -217,44 +220,30 @@ rid = launch("replace", "TA_IMPORT_STAGE2C_REPLACE", "TA_IMPORT_STAGE2C_REPLACE_
 wait_for("TA_IMPORT_STAGE2C_REPLACE", rid)
 
 print("\n-- job_status --", flush=True)
-request_list = ",".join("'" + rid + "'" for rid in request_ids)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select i.id,i.job_code,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
-    "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id = i.id "
-    f"where tr.request_id in ({request_list}) order by i.created_at,i.id,t.id"
-], check=False)
+psql(
+    os.environ["PLATFORM_DB"], "select-stage2c-import-status.sql",
+    {"tenant_id": "ta", "request_ids": ",".join(request_ids)}, capture_output=False)
 
 print("\n-- import_stage2c_rows --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c",
-    "select source_batch_no, customer_no, count(*) as rows, max(customer_name) as max_name "
-    "from biz.import_stage2c_customer where tenant_id='ta' and source_batch_no like '" + BATCH + "%' "
-    "group by source_batch_no, customer_no order by source_batch_no, customer_no"
-], check=False)
+psql(
+    os.environ["BUSINESS_DB"], "select-stage2c-import-rows.sql",
+    {"tenant_id": "ta", "batch_no": BATCH}, capture_output=False)
 
-append_check = (psql(os.environ["BUSINESS_DB"], (
-    "select count(*) from biz.import_stage2c_customer "
-    f"where tenant_id='ta' and source_batch_no='{BATCH}-append' and customer_no='S2CAPP000001'"
-), tuples=True).stdout or "").strip()
-upsert_check = (psql(os.environ["BUSINESS_DB"], (
-    "select count(*) || '|' || coalesce(max(customer_name),'') || '|' || coalesce(max(status),'') "
-    "from biz.customer_account where tenant_id='ta' and customer_no='S2CUPS000001'"
-), tuples=True).stdout or "").strip()
-replace_check = (psql(os.environ["BUSINESS_DB"], (
-    "select count(*) || '|' || count(*) filter (where customer_no='S2CREPSTALE') "
-    "from biz.import_stage2c_customer "
-    f"where tenant_id='ta' and source_batch_no='{BATCH}-replace'"
-), tuples=True).stdout or "").strip()
+common_variables = {"tenant_id": "ta", "batch_no": BATCH}
+append_check = (psql(
+    os.environ["BUSINESS_DB"], "count-stage2c-appended-rows.sql",
+    common_variables, tuples=True).stdout or "").strip()
+upsert_check = (psql(
+    os.environ["BUSINESS_DB"], "select-stage2c-upsert-assertion.sql",
+    {"tenant_id": "ta"}, tuples=True).stdout or "").strip()
+replace_check = (psql(
+    os.environ["BUSINESS_DB"], "select-stage2c-replace-assertion.sql",
+    common_variables, tuples=True).stdout or "").strip()
 summary = f"{append_check}|{upsert_check}|{replace_check}"
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "2|1|Stage2c Upsert Updated|INACTIVE|2|0":
     print("❌ Import Stage2c assertion failed, expected 2|1|Stage2c Upsert Updated|INACTIVE|2|0", flush=True)
     sys.exit(1)
 
-print(f"\n==> Stage 2c import matrix PASS: batchNo={BATCH} startTs={START_TS}", flush=True)
+print(f"\n==> Stage 2c import matrix PASS: batchNo={BATCH}", flush=True)
 PY
