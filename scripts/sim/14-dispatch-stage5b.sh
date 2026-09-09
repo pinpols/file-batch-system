@@ -46,7 +46,7 @@ FILE_ID="$(docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PL
   -t -A -f /dev/stdin < docs/test-data/sim-stage5-dispatch-file.sql | tail -1)"
 export FILE_ID
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" \
-  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql" | tr -d '[:space:]')"
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5b.log"

@@ -20,13 +20,15 @@ SIM_STAGE_NAME="import-stage2"
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
+SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> apply bootstrap(XML/FIXED_WIDTH runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
   -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2.log"
@@ -37,6 +39,23 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
+SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
+
+def psql(db, sql_file, variables=None, tuples=False, capture_output=True):
+    args = [
+        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
+        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
+        "-d", db, "-P", "pager=off",
+    ]
+    if tuples:
+        args += ["-t", "-A"]
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
+        return subprocess.run(
+            args, check=True, capture_output=capture_output,
+            text=True, input=sql.read())
 
 def fixed_row(customer_no, name, status):
     fields = [
@@ -158,53 +177,31 @@ print("==> wait worker terminal states", flush=True)
 deadline = time.time() + 120
 expected_jobs = len(SCENARIOS)
 while time.time() < deadline:
-    sql = (
-        "select count(*) from batch.job_instance "
-        f"where tenant_id='ta' and created_at >= '{START_TS}' "
-        "and job_code in ('TA_IMPORT_CUSTOMER_XML','TA_IMPORT_CUSTOMER_FIXED') "
-        "and instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')"
+    out = psql(
+        os.environ["PLATFORM_DB"],
+        "count-terminal-import-instances.sql",
+        {"tenant_id": "ta", "start_ts": START_TS},
+        tuples=True,
     )
-    out = subprocess.run([
-        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ["PLATFORM_DB"], "-t", "-A", "-c", sql
-    ], capture_output=True, text=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= expected_jobs:
         break
     time.sleep(3)
 
 queries = {
-    "job_status": (
-        "select i.id,i.job_code,i.instance_status,t.task_status,t.error_code,"
-        "left(coalesce(t.error_message,''),160) as error_message "
-        "from batch.job_instance i left join batch.job_task t on t.job_instance_id=i.id "
-        f"where i.tenant_id='ta' and i.created_at >= '{START_TS}' "
-        "and i.job_code in ('TA_IMPORT_CUSTOMER_XML','TA_IMPORT_CUSTOMER_FIXED') "
-        "order by i.created_at,i.id"
-    ),
-    "file_status": (
-        "select id,biz_type,file_status,file_format_type,file_size_bytes,created_at "
-        "from batch.file_record "
-        f"where tenant_id='ta' and created_at >= '{START_TS}' "
-        "and biz_type in ('TA_IMPORT_CUSTOMER_XML','TA_IMPORT_CUSTOMER_FIXED') "
-        "order by created_at"
-    ),
+    "job_status": "select-import-instance-status.sql",
+    "file_status": "select-import-file-status.sql",
 }
-for title, sql in queries.items():
+for title, sql_file in queries.items():
     print(f"\n-- {title} --", flush=True)
-    subprocess.run([
-        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", sql
-    ], check=False)
+    psql(
+        os.environ["PLATFORM_DB"], sql_file,
+        {"tenant_id": "ta", "start_ts": START_TS}, capture_output=False)
 
 print("\n-- business counts --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c",
-    "select tenant_id, count(*) filter (where customer_no like 'S2XML%') as xml_rows, "
-    "count(*) filter (where customer_no like 'S2FIX%') as fixed_rows "
-    "from biz.customer_account where tenant_id='ta' group by tenant_id"
-], check=False)
+psql(
+    os.environ["BUSINESS_DB"], "select-stage2-import-business-counts.sql",
+    {"tenant_id": "ta"}, capture_output=False)
 
 print(f"\n==> Stage 2 import scenario submitted: batchNo={BATCH} startTs={START_TS}", flush=True)
 PY
