@@ -8,7 +8,6 @@ scripts/local/strict-verify.sh	13
 scripts/sim/06-verify.sh	12
 scripts/sim/09-export-stage3.sh	9
 scripts/sim/10-process-stage4.sh	9
-scripts/sim/12-export-stage3b.sh	7
 scripts/sim/17-import-stage2c.sh	7
 scripts/sim/18-export-stage3c.sh	13
 scripts/sim/19-process-stage4c.sh	9
