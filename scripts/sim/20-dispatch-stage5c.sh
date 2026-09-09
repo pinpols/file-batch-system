@@ -27,6 +27,7 @@ export STORAGE_PATH="$SOURCE_DIR/$BATCH_NO.json"
 mkdir -p "$REPORT_DIR" "$SOURCE_DIR" /tmp/batch/stage5c-local /tmp/batch/stage5c-nas
 
 batch_require_python
+SQL_DIR="$ROOT/scripts/sim/sql"
 
 cat > "$STORAGE_PATH" <<JSON
 {"batchNo":"$BATCH_NO","scenario":"dispatch-stage5c","bizDate":"$BIZ_DATE"}
@@ -43,7 +44,8 @@ FILE_ID="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" -v storage_path="$STORAGE_PATH" \
   -t -A -f /dev/stdin < docs/test-data/sim-stage5c-dispatch-file.sql | tail -1)"
 export FILE_ID
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql" | tr -d '[:space:]')"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5c.log"
@@ -58,13 +60,23 @@ START_TS = os.environ["START_TS"].strip()
 JOB = "TB_DISPATCH_STAGE5C_CHANNELS"
 CHANNELS = ["tb_stage5c_local", "tb_stage5c_nas", "tb_stage5c_sftp"]
 request_ids = {}
+SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
-def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
+def psql(sql_file, variables=None, tuples=False, capture_output=True):
+    args = [
+        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
+        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
+        "-d", os.environ["PLATFORM_DB"], "-P", "pager=off",
+    ]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
+        return subprocess.run(
+            args, check=True, capture_output=capture_output,
+            text=True, input=sql.read())
 
 def launch(channel):
     rid = f"sim-stage5c-{channel}-{int(time.time()*1000)%100000000}"
@@ -107,12 +119,9 @@ for channel in CHANNELS:
 
 deadline = time.time() + 180
 while time.time() < deadline:
-    req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
     out = psql(
-        "select count(*) from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
-        f"where tr.tenant_id='tb' and tr.request_id in ({req_list}) "
-        "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
+        "count-terminal-request-instances.sql",
+        {"tenant_id": "tb", "request_ids": ",".join(request_ids.values())},
         tuples=True,
     )
     done = int((out.stdout or "0").strip() or "0")
@@ -121,45 +130,25 @@ while time.time() < deadline:
     time.sleep(3)
 
 print("\n-- instance_status --", flush=True)
-req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
-instance_sql = (
-    "select tr.request_id,i.id,i.instance_status,t.task_status,t.error_code "
-    "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id=tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id=i.id "
-    f"where tr.tenant_id='tb' and tr.request_id in ({req_list}) "
-    "order by tr.request_id,t.id"
-)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", instance_sql
-], check=False)
+request_variables = {
+    "tenant_id": "tb",
+    "request_ids": ",".join(request_ids.values()),
+}
+psql("select-request-task-status-details.sql", request_variables, capture_output=False)
 
 print("\n-- dispatch_records --", flush=True)
-dispatch_sql = (
-    "select channel_code,dispatch_status,receipt_status,dispatch_attempt,error_code,"
-    "coalesce(error_message,'') "
-    "from batch.file_dispatch_record "
-    f"where tenant_id='tb' and file_id={FILE_ID} "
-    "order by channel_code"
-)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", dispatch_sql
-], check=False)
+dispatch_variables = {"tenant_id": "tb", "file_id": FILE_ID}
+psql("select-dispatch-record-details.sql", dispatch_variables, capture_output=False)
 
 status_out = psql(
-    "select channel_code || ':' || dispatch_status || ':' || receipt_status "
-    "from batch.file_dispatch_record "
-    f"where tenant_id='tb' and file_id={FILE_ID} "
-    "order by channel_code",
+    "select-dispatch-status-summary.sql",
+    dispatch_variables,
     tuples=True,
 )
 status_summary = ",".join([line for line in (status_out.stdout or "").splitlines() if line.strip()])
 success_out = psql(
-    "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance i on i.id=tr.related_job_instance_id "
-    f"where tr.tenant_id='tb' and tr.request_id in ({req_list}) and i.instance_status='SUCCESS'",
+    "count-successful-request-instances.sql",
+    request_variables,
     tuples=True,
 )
 success_count = int((success_out.stdout or "0").strip() or "0")

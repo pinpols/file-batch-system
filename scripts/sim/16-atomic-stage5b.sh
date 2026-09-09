@@ -85,7 +85,7 @@ for job in JOBS:
 deadline = time.time() + 150
 while time.time() < deadline:
     out = psql(
-        "count-terminal-atomic-requests.sql",
+        "count-terminal-request-instances.sql",
         {"tenant_id": TENANT, "request_ids": ",".join(request_ids.values())},
         tuples=True,
     )
