@@ -27,6 +27,9 @@
 # ============================================================================
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SQL_DIR="$ROOT/scripts/sim/sql"
+
 PG_CONTAINER="${PG_CONTAINER:?需设置 PG_CONTAINER}"
 POSTGRES_USER="${POSTGRES_USER:-batch}"
 PG_PLATFORM_DB="${PG_PLATFORM_DB:-batch_platform}"
@@ -39,16 +42,19 @@ POLL_S="${POLL_S:-5}"
 command -v docker >/dev/null 2>&1 || { echo "需要 docker" >&2; exit 2; }
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 psql_platform() {
-  docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" -tAc "$1"
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file"
 }
 
 # ---- 1) 选恢复目标时间点 T0,快照 T0 前已提交集合 S0(count + 指纹)-------
-RESTORE_TARGET_TIME="$(psql_platform "select now()::timestamptz;")"
+RESTORE_TARGET_TIME="$(psql_platform select-current-timestamp.sql)"
 export RESTORE_TARGET_TIME
 log "恢复目标时间点 T0 = $RESTORE_TARGET_TIME"
 
-S0_COUNT="$(psql_platform "select count(*) from batch.job_instance where created_at <= '$RESTORE_TARGET_TIME'::timestamptz;")"
-S0_FINGERPRINT="$(psql_platform "select coalesce(md5(string_agg(tenant_id||'/'||dedup_key||'/'||run_attempt, ',' order by id)), 'EMPTY') from batch.job_instance where created_at <= '$RESTORE_TARGET_TIME'::timestamptz;")"
+S0_COUNT="$(psql_platform dr-count-instances-through-time.sql -v target_time="$RESTORE_TARGET_TIME")"
+S0_FINGERPRINT="$(psql_platform dr-fingerprint-instances-through-time.sql -v target_time="$RESTORE_TARGET_TIME")"
 log "S0(T0 前已提交 job_instance):count=$S0_COUNT fp=$S0_FINGERPRINT"
 if [ "${S0_COUNT:-0}" -lt 1 ]; then
   echo "T0 前没有已提交数据可验;先起载荷(05-load.sh 等)再演练" >&2
@@ -58,7 +64,7 @@ fi
 # ---- 2) 等 T0 之后新数据 S1 产生(由外部 sim/load 持续运行)--------------
 log "等待 T0 之后新增载荷 ${S1_DWELL_S}s(恢复到 T0 后应不存在,证明恢复点精确)"
 sleep "$S1_DWELL_S"
-S1_AFTER="$(psql_platform "select count(*) from batch.job_instance where created_at > '$RESTORE_TARGET_TIME'::timestamptz;")"
+S1_AFTER="$(psql_platform dr-count-instances-after-time.sql -v target_time="$RESTORE_TARGET_TIME")"
 log "S1(T0 之后新增)=$S1_AFTER"
 
 # ---- 3) 触发恢复(计 RTO)------------------------------------------------
@@ -69,7 +75,7 @@ if ! bash -c "$RESTORE_CMD"; then
 fi
 log "等待数据库恢复就绪(≤ ${READY_TIMEOUT_S}s)"
 ready_deadline=$(( restore_start + READY_TIMEOUT_S ))
-until psql_platform "select 1;" >/dev/null 2>&1; do
+until psql_platform select-one.sql >/dev/null 2>&1; do
   [ "$(date +%s)" -ge "$ready_deadline" ] && { echo "恢复后数据库超时未就绪" >&2; exit 1; }
   sleep "$POLL_S"
 done
@@ -78,8 +84,8 @@ log "恢复就绪,RTO = ${RTO_S}s(预算 ${RTO_BUDGET_S}s)"
 
 # ---- 4) 断言:RPO(S0 不丢)+ RTO(≤ 预算)+ 一致性 ----------------------
 fail=0
-S0_COUNT_AFTER="$(psql_platform "select count(*) from batch.job_instance where created_at <= '$RESTORE_TARGET_TIME'::timestamptz;")"
-S0_FP_AFTER="$(psql_platform "select coalesce(md5(string_agg(tenant_id||'/'||dedup_key||'/'||run_attempt, ',' order by id)), 'EMPTY') from batch.job_instance where created_at <= '$RESTORE_TARGET_TIME'::timestamptz;")"
+S0_COUNT_AFTER="$(psql_platform dr-count-instances-through-time.sql -v target_time="$RESTORE_TARGET_TIME")"
+S0_FP_AFTER="$(psql_platform dr-fingerprint-instances-through-time.sql -v target_time="$RESTORE_TARGET_TIME")"
 
 if [ "$S0_FP_AFTER" = "$S0_FINGERPRINT" ] && [ "${S0_COUNT_AFTER:-0}" -ge "${S0_COUNT:-0}" ]; then
   log "RPO 通过:T0 前已提交数据完整存活(count $S0_COUNT->$S0_COUNT_AFTER,指纹一致)"
@@ -94,7 +100,7 @@ else
   echo "RTO 超预算:${RTO_S}s > ${RTO_BUDGET_S}s" >&2; fail=1
 fi
 
-dup="$(psql_platform "select count(*) from (select tenant_id, dedup_key, run_attempt from batch.job_instance group by 1,2,3 having count(*)>1) d;")"
+dup="$(psql_platform dr-count-duplicate-instances.sql)"
 if [ "${dup:-0}" -eq 0 ]; then log "恢复后无重复 job_instance";
 else echo "恢复后出现重复 job_instance:$dup 组" >&2; fail=1; fi
 
