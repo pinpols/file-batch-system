@@ -2,7 +2,6 @@
 load-tests/scripts/run-control-plane-worker-benchmark.sh	18
 load-tests/scripts/run-process-worker-benchmark.sh	17
 load-tests/scripts/run-worker-load-tests.sh	13
-load-tests/scripts/sample-scheduler-backlog.sh	9
 scripts/local/strict-verify.sh	13
 scripts/sim/06-verify.sh	12
 scripts/sim/09-export-stage3.sh	9
@@ -10,6 +9,5 @@ scripts/sim/10-process-stage4.sh	9
 scripts/sim/18-export-stage3c.sh	13
 scripts/sim/19-process-stage4c.sh	9
 scripts/sim/22-trigger-stage6c.sh	12
-scripts/sim/23-import-stage2d.sh	8
 scripts/sim/24-trigger-stage6d.sh	20
 scripts/sim/26-bundle-import.sh	11
