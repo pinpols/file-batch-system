@@ -72,31 +72,9 @@ storm_reached_terminal_state() {
   local storm_run_id="$1"
   local counts total terminal trigger_requests linked_terminal
   counts="$(
-    psql_platform -Atc "
-      with scoped_instances as (
-        select id, instance_status
-        from batch.job_instance
-        where tenant_id = '${CAPACITY_TENANT_ID}'
-          and params_snapshot::text like '%${storm_run_id}%'
-      ), scoped_trigger_requests as (
-        select related_job_instance_id
-        from batch.trigger_request
-        where tenant_id = '${CAPACITY_TENANT_ID}'
-          and (
-            request_id like '%${storm_run_id}%'
-            or dedup_key like '%${storm_run_id}%'
-            or trace_id like '%${storm_run_id}%'
-          )
-      )
-      select
-        (select count(*) from scoped_instances) || '|' ||
-        (select count(*) from scoped_instances
-         where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED')) || '|' ||
-        (select count(*) from scoped_trigger_requests) || '|' ||
-        (select count(*)
-         from scoped_trigger_requests tr
-         join batch.job_instance ji on ji.id = tr.related_job_instance_id
-         where ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'));"
+    psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+      -v storm_run_id="$storm_run_id" \
+      -f "$LOAD_DIR/sql/p2-storm-terminal-counts.sql"
   )"
   total="${counts%%|*}"
   counts="${counts#*|}"
