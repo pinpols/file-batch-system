@@ -48,7 +48,7 @@ KEY_NAME="${KEY_NAME:-sdk-verify-$(date +%s)}"
 KEY_PREFIX_PURGE="sdk-verify"
 JAR="$REPO_ROOT/examples/self-hosted-sdk/sample-tenant-worker-java/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PSQL=(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc)
+SQL_DIR="$REPO_ROOT/scripts/sim/sql"
 REG_TIMEOUT="${REG_TIMEOUT:-45}"
 # sample-tenant-worker 注册的 7 个 taskType(对应 5 基类 + echo/sleep)
 EXPECTED_TASKTYPES="echo sleep sample_import_echo sample_export_echo sample_process_echo sample_dispatch_echo sample_atomic_echo"
@@ -61,6 +61,13 @@ note()  { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 ok()    { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 bad()   { printf '  \033[31m✗\033[0m %s\n' "$*"; FAILS=$((FAILS+1)); }
 info()  { printf '  · %s\n' "$*"; }
+
+psql_file() {
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file"
+}
 
 cleanup() {
   if [[ -n "$WORKER_PID" ]] && kill -0 "$WORKER_PID" 2>/dev/null; then
@@ -78,7 +85,7 @@ trap cleanup EXIT
 note "0. 预检:运行栈"
 curl -sf -m 5 "$CONSOLE/actuator/health" -o /dev/null && ok "console-api $CONSOLE UP" || { bad "console-api DOWN"; exit 1; }
 curl -sf -m 5 "$ORCH/actuator/health" -o /dev/null && ok "orchestrator $ORCH UP" || { bad "orchestrator DOWN"; exit 1; }
-"${PSQL[@]}" "select 1" >/dev/null 2>&1 && ok "postgres($PG_CONTAINER) 可达" || { bad "postgres 不可达"; exit 1; }
+psql_file select-one.sql >/dev/null 2>&1 && ok "postgres($PG_CONTAINER) 可达" || { bad "postgres 不可达"; exit 1; }
 batch_parse_host_port "$KAFKA"
 if [[ -n "$BATCH_PARSED_PORT" ]] && (exec 3<>"/dev/tcp/${BATCH_PARSED_HOST}/${BATCH_PARSED_PORT}") 2>/dev/null; then
   ok "kafka $KAFKA 端口开"
@@ -146,7 +153,7 @@ note "5. 等注册(≤${REG_TIMEOUT}s)"
 registered=0
 for ((i=0;i<REG_TIMEOUT;i++)); do
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then bad "worker 进程提前退出,日志尾部:"; tail -15 "$WORKER_LOG"; exit 1; fi
-  st=$("${PSQL[@]}" "select status from batch.worker_registry where tenant_id='$TENANT' and worker_code='$WORKER_CODE' limit 1;" 2>/dev/null)
+  st=$(psql_file select-worker-status.sql -v tenant_id="$TENANT" -v worker_code="$WORKER_CODE" 2>/dev/null)
   if [[ "$st" == "ONLINE" ]]; then registered=1; ok "worker_registry: $WORKER_CODE = ONLINE"; break; fi
   sleep 1
 done
@@ -155,9 +162,9 @@ done
 # ---- 6. 断言:5 类 taskType 上报 ----
 note "6. taskType 上报(5 基类 + echo/sleep)"
 # 6a. descriptor 上报(import 重写了 descriptor() → custom_task_type_registry)
-desc=$("${PSQL[@]}" "select code from batch.custom_task_type_registry where tenant_id='$TENANT' and code like 'sample_%';" 2>/dev/null)
+desc=$(psql_file select-sample-task-types.sql -v tenant_id="$TENANT" 2>/dev/null)
 # 6b. worker 注册的 capability_tags(全部 taskType)
-caps=$("${PSQL[@]}" "select capability_tags from batch.worker_registry where tenant_id='$TENANT' and worker_code='$WORKER_CODE' limit 1;" 2>/dev/null)
+caps=$(psql_file select-worker-capabilities.sql -v tenant_id="$TENANT" -v worker_code="$WORKER_CODE" 2>/dev/null)
 info "custom_task_type_registry(descriptor): $(echo "$desc" | tr '\n' ' ')"
 info "worker capability_tags: $caps"
 for tt in $EXPECTED_TASKTYPES; do
@@ -195,7 +202,8 @@ if [[ "${PHASE2_DISPATCH:-1}" == "1" ]]; then
     # 7c. 轮询 job_instance 终态(≤60s)
     final=""
     for ((i=0;i<60;i++)); do
-      final=$("${PSQL[@]}" "select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id where tr.tenant_id='$TENANT' and tr.request_id='$RID' order by tr.created_at desc limit 1;" 2>/dev/null)
+      final=$(psql_file select-request-instance-status-only.sql \
+        -v tenant_id="$TENANT" -v request_id="$RID" 2>/dev/null)
       [[ "$final" =~ ^(SUCCESS|FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED)$ ]] && break
       sleep 1
     done
@@ -211,7 +219,8 @@ if [[ "${PHASE2_DISPATCH:-1}" == "1" ]]; then
       bad "worker 日志无 'ATOMIC base handler taskId='(派单未到达 / 未路由到 handler —— #544 类回归信号)"
     fi
     # 7e. 断言 job_task 落 SUCCESS 且由我方 worker claim(组门禁定向投递生效)
-    task_row=$("${PSQL[@]}" "select t.task_status||'|'||coalesce(t.assigned_worker_code,'') from batch.job_instance i join batch.job_task t on t.job_instance_id=i.id join batch.trigger_request tr on tr.related_job_instance_id=i.id where tr.tenant_id='$TENANT' and tr.request_id='$RID' limit 1;" 2>/dev/null)
+    task_row=$(psql_file select-request-task-assignment.sql \
+      -v tenant_id="$TENANT" -v request_id="$RID" 2>/dev/null)
     if [[ "$task_row" == "SUCCESS|$WORKER_CODE" ]]; then
       ok "job_task SUCCESS 且 assigned_worker=$WORKER_CODE(worker_group 门禁定向投递)"
     elif [[ "$task_row" == SUCCESS\|* ]]; then
