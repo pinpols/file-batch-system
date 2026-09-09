@@ -4,8 +4,6 @@ load-tests/scripts/run-process-worker-benchmark.sh	17
 load-tests/scripts/run-worker-load-tests.sh	13
 scripts/local/strict-verify.sh	13
 scripts/sim/06-verify.sh	12
-scripts/sim/09-export-stage3.sh	9
-scripts/sim/10-process-stage4.sh	9
 scripts/sim/18-export-stage3c.sh	13
 scripts/sim/19-process-stage4c.sh	9
 scripts/sim/22-trigger-stage6c.sh	12
