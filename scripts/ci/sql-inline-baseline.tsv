@@ -2,7 +2,6 @@
 load-tests/scripts/run-control-plane-worker-benchmark.sh	18
 load-tests/scripts/run-process-worker-benchmark.sh	17
 load-tests/scripts/run-worker-load-tests.sh	13
-scripts/sim/06-verify.sh	12
 scripts/sim/22-trigger-stage6c.sh	12
 scripts/sim/24-trigger-stage6d.sh	20
 scripts/sim/26-bundle-import.sh	11
