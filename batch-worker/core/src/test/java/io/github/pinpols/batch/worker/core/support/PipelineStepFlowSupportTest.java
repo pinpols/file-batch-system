@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,14 +64,11 @@ class PipelineStepFlowSupportTest {
     PipelineStepDefinition current = step("S1");
     PipelineStepDefinition withoutCode = step(null);
     assertThat(PipelineStepFlowSupport.resolveNextStep(
-            current,
-            true,
-            java.util.Arrays.asList(withoutCode, current, step("S2")),
-            new HashMap<>()))
+            current, true, Arrays.asList(withoutCode, current, step("S2")), new HashMap<>()))
         .extracting(PipelineStepDefinition::stepCode)
         .isEqualTo("S2");
     assertThat(PipelineStepFlowSupport.resolveNextStep(
-            current, true, java.util.Arrays.asList(null, current, step("S2")), new HashMap<>()))
+            current, true, Arrays.asList(null, current, step("S2")), new HashMap<>()))
         .extracting(PipelineStepDefinition::stepCode)
         .isEqualTo("S2");
   }

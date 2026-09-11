@@ -88,12 +88,12 @@
 | **FE-2** | ADR-018 跨日 DAG Console UI | `ConsoleWorkflowNodeResponse.crossDayDependencies` 已返回 |
 | **FE-3** | ADR-020 批次日重放 Console UI + ALL/ALL_FAILED/SUBSET E2E | 5 个 `/api/console/ops/batch-day-replay/sessions...` 端点已开放 |
 
-### 横切关注点（未做）⏳
+### 横切关注点（历史编号，已完成）✅
 
 | ID | 主题 |
 |---|---|
-| **CC-1** | CI lint 守护：step plugin 必经 DryRunGuard |
-| **CC-2** | audit + metric label 加 dry_run 维度 |
+| ~~**CC-1**~~ | CI lint 守护：step plugin 必经 DryRunGuard | ✅ |
+| ~~**CC-2**~~ | audit + metric label 加 dry_run 维度 | ✅ |
 
 > **状态校准（2026-09-11）**：CC-1/CC-2 已完成。证据为 `batch-worker-core` 的
 > `DryRunGuardConventionTest`、`batch-common` 的 `BatchMetricsNames.TAG_DRY_RUN` 及相关审计字段。
@@ -210,7 +210,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ID | 主题 | 代码位置 | 备注 |
 |---|---|---|---|
 | **DEP-1** | `HttpOrchestratorTriggerAdapter` 物删 | batch-trigger:HttpOrchestratorTriggerAdapter.java:27 | 同 ADR10-S7-removal |
-| **DEP-2** | `BatchSecurityProperties.testingOpen` 物删 | batch-common:BatchSecurityProperties.java:45,51 | since=2026-04-19，1 minor 后移除 |
+| ~~**DEP-2**~~ | `BatchSecurityProperties.testingOpen` 物删 | batch-common:BatchSecurityProperties.java:45,51 | ✅ 已完成；代码与配置键已物理删除，保留历史记录 |
 | ~~**DEP-3**~~ | `ConsoleAlertRoutingExcelController` 4 处旧端点物删 | batch-console-api | ✅ 2026-05-01 物删 + OpenAPI 同步 |
 | ~~**DEP-4**~~ | `ConsoleFileTemplateExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |
 | ~~**DEP-5**~~ | `ConsoleResourceQueueExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |

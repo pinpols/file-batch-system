@@ -17,6 +17,9 @@ WAIT_TERMINAL_MIN_INSTANCES="${WAIT_TERMINAL_MIN_INSTANCES:-1}"
 # 仅对经 Trigger API 注入的容量画像启用。默认 0 保持其它混合画像原有的最小实例等待语义。
 # 启用后，不能仅因已创建的子集全部终态而提前结束，必须让每个入口请求都已创建并完成实例。
 WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-0}"
+# 容量画像允许 admission 先拒绝部分请求时，按实际已持久化的 trigger_request 等待收敛；
+# 仍要求关联请求数量连续稳定，避免异步入口尚未落库时过早结束。
+WAIT_TERMINAL_ALLOW_PARTIAL="${WAIT_TERMINAL_ALLOW_PARTIAL:-0}"
 MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
 # 通用控制面画像保持 GatlingConfig 的 500ms 写入 SLO；容量画像可显式传入更宽的
 # 延迟预算，避免把“吞吐上界测量”误判为“低延迟回归”。
@@ -39,6 +42,7 @@ KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|a
 KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
 KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
 BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
+PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
 
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
@@ -46,8 +50,18 @@ export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CLEANUP_ONLY="${CLEANUP_ONLY:-0}"
+PG_SAMPLER_PID=""
+stop_pg_pressure_sampler() {
+  if [[ -n "$PG_SAMPLER_PID" ]] && kill -0 "$PG_SAMPLER_PID" 2>/dev/null; then
+    kill "$PG_SAMPLER_PID" 2>/dev/null || true
+    wait "$PG_SAMPLER_PID" 2>/dev/null || true
+  fi
+  PG_SAMPLER_PID=""
+}
+
 on_exit_cleanup() {
   local rc=$?
+  stop_pg_pressure_sampler
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place for inspection"
     exit "$rc"
@@ -132,9 +146,64 @@ kafka_lag_snapshot() {
   echo "kafka lag unavailable: kafka-consumer-groups.sh not found in container or host"
 }
 
+pg_pressure_snapshot() {
+  local output_file="$1"
+  psql_platform -P pager=off -F ' | ' -A -c "
+    select 'sampled_at' as metric, clock_timestamp()::text as value
+    union all
+    select 'database_size_bytes', pg_database_size(current_database())::text
+    union all
+    select 'active_connections', count(*) filter (where state = 'active')::text
+      from pg_stat_activity
+      where datname = current_database()
+    union all
+    select 'waiting_connections', count(*) filter (where wait_event is not null)::text
+      from pg_stat_activity
+      where datname = current_database()
+    union all
+    select 'lock_waiters', count(*)::text
+      from pg_stat_activity
+      where datname = current_database()
+        and wait_event_type = 'Lock'
+    union all
+    select 'xact_commit', xact_commit::text
+      from pg_stat_database
+      where datname = current_database()
+    union all
+    select 'xact_rollback', xact_rollback::text
+      from pg_stat_database
+      where datname = current_database()
+    union all
+    select 'wal_bytes', coalesce(wal_bytes, 0)::text
+      from pg_stat_wal;" > "$output_file"
+}
+
+pg_pressure_sampler() {
+  local output_file="$1"
+  : > "$output_file"
+  printf '%s\n' "sampled_at|database_size_bytes|active_connections|waiting_connections|lock_waiters|xact_commit|xact_rollback|wal_bytes" \
+    >> "$output_file"
+  while true; do
+    psql_platform -At -F '|' -c "
+      select clock_timestamp()::text,
+             pg_database_size(current_database()),
+             count(*) filter (where state = 'active'),
+             count(*) filter (where wait_event is not null),
+             count(*) filter (where wait_event_type = 'Lock'),
+             (select xact_commit from pg_stat_database where datname = current_database()),
+             (select xact_rollback from pg_stat_database where datname = current_database()),
+             coalesce((select wal_bytes from pg_stat_wal), 0)
+      from pg_stat_activity
+      where datname = current_database();" >> "$output_file" 2>/dev/null || true
+    sleep "$PG_SAMPLE_INTERVAL_SECONDS"
+  done
+}
+
 wait_run_terminal() {
   local label="$1"
   local elapsed=0
+  local previous_trigger_requests=-1
+  local stable_trigger_requests=0
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts total terminal trigger_requests linked_terminal
     counts="$(
@@ -147,12 +216,24 @@ wait_run_terminal() {
     counts="${counts#*|}"
     trigger_requests="${counts%%|*}"
     linked_terminal="${counts##*|}"
-    if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 ]]; then
+    if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 && "$WAIT_TERMINAL_ALLOW_PARTIAL" != "1" ]]; then
       if [[ "$total" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
           && "$terminal" -eq "$total" \
           && "$trigger_requests" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
           && "$linked_terminal" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" ]]; then
         echo "==> ${label}: trigger end-to-end terminal ${linked_terminal}/${trigger_requests}"
+        return 0
+      fi
+    elif [[ "$WAIT_TERMINAL_ALLOW_PARTIAL" == "1" && "$trigger_requests" -gt 0 \
+        && "$total" -eq "$terminal" && "$linked_terminal" -eq "$trigger_requests" ]]; then
+      if [[ "$trigger_requests" -eq "$previous_trigger_requests" ]]; then
+        stable_trigger_requests=$((stable_trigger_requests + 1))
+      else
+        previous_trigger_requests="$trigger_requests"
+        stable_trigger_requests=0
+      fi
+      if [[ "$stable_trigger_requests" -ge 2 ]]; then
+        echo "==> ${label}: partial trigger end-to-end terminal ${linked_terminal}/${trigger_requests}"
         return 0
       fi
     elif [[ "$total" -ge "$WAIT_TERMINAL_MIN_INSTANCES" && "$terminal" -eq "$total" ]]; then
@@ -391,6 +472,25 @@ write_report() {
     cat "$LOG_DIR/kafka-lag-after.txt"
     echo '```'
     echo
+    echo "## PostgreSQL Pressure Snapshot"
+    echo
+    echo "- Snapshot is taken before traffic and after terminal-state collection, before cleanup."
+    echo "- During-traffic samples: ${LOG_DIR}/pg-pressure-samples.csv (interval=${PG_SAMPLE_INTERVAL_SECONDS}s)."
+    echo
+    echo '```text'
+    echo "--- before ---"
+    cat "$LOG_DIR/pg-pressure-before.txt"
+    echo
+    echo "--- after ---"
+    cat "$LOG_DIR/pg-pressure-after.txt"
+    echo '```'
+    echo
+    echo "## PostgreSQL Pressure Samples"
+    echo
+    echo '```text'
+    tail -n 20 "$LOG_DIR/pg-pressure-samples.csv"
+    echo '```'
+    echo
     if [[ -f "$LOG_DIR/trigger-scheduler-backlog.csv" ]]; then
       echo "## Trigger Backlog Samples"
       echo
@@ -432,6 +532,11 @@ if [[ "$POST_PREPARE_SETTLE_SECONDS" -gt 0 ]]; then
   sleep "$POST_PREPARE_SETTLE_SECONDS"
 fi
 
+if ! [[ "$PG_SAMPLE_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "PG_SAMPLE_INTERVAL_SECONDS must be a positive integer" >&2
+  exit 2
+fi
+
 TOKEN="${CONSOLE_ACCESS_TOKEN:-load-test-token}"
 if [[ "$PIPELINE_MAX_POLLS" != "0" || "$SCHEDULING_CONSOLE_READS" == "true" ]]; then
   TOKEN="$(login_token)"
@@ -452,6 +557,9 @@ write_params "$PARAM_DIR/trigger.params.json" "trigger"
 
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 kafka_lag_snapshot > "$LOG_DIR/kafka-lag-before.txt"
+pg_pressure_snapshot "$LOG_DIR/pg-pressure-before.txt"
+pg_pressure_sampler "$LOG_DIR/pg-pressure-samples.csv" &
+PG_SAMPLER_PID=$!
 
 case "$CONTROL_PLANE_MODE" in
   sequential)
@@ -491,6 +599,8 @@ case "$CONTROL_PLANE_MODE" in
 esac
 
 kafka_lag_snapshot > "$LOG_DIR/kafka-lag-after.txt"
+stop_pg_pressure_sampler
+pg_pressure_snapshot "$LOG_DIR/pg-pressure-after.txt"
 write_report
 
 echo "Control-plane worker benchmark report written: $REPORT"

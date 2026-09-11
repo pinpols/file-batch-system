@@ -1,5 +1,27 @@
 # 控制面热路径优化核验（2026-08-25）
 
+### 2026-09-11 压测口径收口
+
+现有 `run-control-plane-worker-benchmark.sh` 与 `run-p2-capacity-profile.sh` 已统一使用同一套控制面画像入口。
+10w 子画像会显式继承 `PG_SAMPLE_INTERVAL_SECONDS`，并在流量期间持续记录：数据库大小、活跃/等待连接、锁等待、
+事务提交与回滚、WAL 字节数。报告同时保留流量前后快照和采样文件，便于区分入口、Relay、Worker 回报与终态回写阶段的压力。
+
+本次只完善压测证据采集，不修改 Orchestrator 状态机或 `report-batch` 事务语义；新的 1w/10w 结果须使用该入口重新留档，
+不得与旧报告的不同配额、并发和超时口径直接比较。代码静态验证已通过；本节不宣称已完成新的 10w 运行。
+
+### 控制面容量计划落地矩阵
+
+| 阶段 | 当前状态 | 证据 / 约束 |
+|---|---|---|
+| 统一 10w 压测入口 | ✅ 已落 | `run-p2-capacity-profile.sh` 复用 `run-control-plane-worker-benchmark.sh`，统一请求、终态和清理口径 |
+| PG profiling | ✅ 采集能力已落 | 流量前后快照 + 期间 CSV；新结果必须保留样本文件 |
+| Orchestrator 批量写入 | ✅ 已落 | `BatchInsertChunks` 已用于分区、任务和步骤实例；report-batch 仍逐项事务，避免未经证据改坏幂等语义 |
+| 1w / 10w 对比复测 | 🟡 待按新口径重跑 | 旧报告可作历史基线，不能与新采样结果混表 |
+| 多实例压测 | 🟡 待同构环境取证 | 本地 Docker 基础设施可以验证功能；生产容量需多 Orchestrator/Worker 实例和真实连接池预算 |
+| 反压闭环 | ✅ 机制已落，需持续取证 | admission、QUEUE_DEFER、Kafka lag、outbox backlog 和终态收敛均有脚本/指标 |
+| 数据归档与恢复演练 | ✅ 脚本与 runbook 已落 | 真实 PITR、独立故障域和 RTO/RPO 仍属于 staging/运维执行证据 |
+| Console 运维闭环 | ✅ 后端能力已落 | diagnosis、retry/replay/cancel/resume 等受控入口已有；前端联调结果单独留档 |
+
 ## 本轮结论
 
 本轮针对实例聚合、任务领取、结果写入和历史表生命周期完成代码核验，并落地一个低风险优化：

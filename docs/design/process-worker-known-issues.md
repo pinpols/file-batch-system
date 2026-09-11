@@ -21,9 +21,9 @@ PROCESS Worker 的 happy path 已跑通：配置 `pipeline_step_definition.impl_
 本轮 hardening 状态（2026-04-28）：
 
 - 已修：P0-2 / P0-3 / P0-4 / P1-1 / P1-2 / P1-3 / P1-4 / P1-5 / P1-6 / P1-7 / P2-4 / P2-5 / **P2-3**。
-- 已缓解：P0-1 已把 `batch.process_staging` 纳入业务库初始化脚本；平台 Flyway 中的历史 V75 表保留兼容,后续仍建议补真双库 E2E。
+- 已完成：P0-1 已把 `batch.process_staging` 纳入业务库初始化脚本；平台 Flyway 中的历史 V75 表保留兼容。公共 IT 基类已使用独立的 `batch_platform` / `batch_business` PostgreSQL 容器，`BatchWorkerProcessApplicationIntegrationTest` 进一步断言两个数据源的数据库不同且业务库可见 staging 表。
 - 已文档化:**P2-1 / P2-2 / P2-7**(`system-flow-overview.md` §7.9.8 给出 writeMode 重跑表 / JSONB 类型矩阵 / 自定义 plugin SPI 边界与示例)。
-- 未修：P2-6(优先级 topic,业务驱动型留观察)/ 双库 E2E 待补。
+- 未修：P2-6(优先级 topic,业务驱动型留观察)。双库 E2E 已完成，不再作为待补项。
 
 ## 1. P0 — 必须先修
 
@@ -34,7 +34,7 @@ PROCESS Worker 的 happy path 已跑通：配置 `pipeline_step_definition.impl_
 - V75 在 `db/migration/V75__add_process_staging_table.sql` 创建 `batch.process_staging`，这是平台 Flyway migration 路径。
 - `SqlTransformComputePlugin` 只注入 `processBusinessDataSource`，`COMPUTE / VALIDATE / COMMIT / FEEDBACK` 全部通过业务库连接执行 `batch.process_staging` SQL。
 - `batch-defaults.yml` 默认把业务库指向 `batch_business`，平台库指向 `batch_platform`。
-- E2E 的 `E2eProcessWorkerDataSourceConfiguration` 把 `processPlatformDataSource` 和 `processBusinessDataSource` 都指向同一个 Testcontainers datasource，掩盖了真实双库部署问题。
+- 当前公共 IT 基类分别使用 `batch_platform` 和 `batch_business` 容器；完整 E2E 通过 `e2eBusinessDataSource` 接入独立业务库，应用集成测试对物理数据库隔离做显式断言。历史上曾存在同库测试配置，已不再作为当前验证基线。
 - `runtime-module-communication.md` 目前还写着 PROCESS 通过平台库访问 `process_staging`，而代码不是这样。
 
 **影响**
@@ -56,7 +56,7 @@ relation "batch.process_staging" does not exist
 **验收**
 
 - 已完成：`scripts/db/business/create_biz_tables.sql` 现在会在业务库创建 `batch.process_staging` 及隔离索引，和 `processBusinessDataSource` 的实际访问路径一致。
-- 待补：真双库 E2E 仍未落地；`db/migration/V75__add_process_staging_table.sql` 作为历史兼容仍会在平台库创建同名表，不再作为 PROCESS 运行依赖。
+- 已完成：真双库 E2E 已落地；`db/migration/V75__add_process_staging_table.sql` 作为历史兼容仍会在平台库创建同名表，但不再作为 PROCESS 运行依赖。测试同时确认业务库存在 `batch.process_staging`，避免把历史兼容表误当成运行依赖。
 
 ### P0-2. staging 读写只按 `batch_key` 过滤，缺少 tenant/target 约束
 
@@ -339,7 +339,7 @@ PROCESS 只有一个 dispatch topic。大 SQL 加工可能堵住小而急的补�
 
 必须补的测试：
 
-1. 双库 E2E：platform/business 分离，确认 staging DDL 与 datasource 设计一致。
+1. ~~双库 E2E：platform/business 分离，确认 staging DDL 与 datasource 设计一致。~~ 已完成，证据见 `BatchWorkerProcessApplicationIntegrationTest#platformAndBusinessDataSourcesArePhysicallySeparated`。
 2. tenant 隔离测试：相同 batchKey、不同 tenant/target 的 staging 不会串读/串删。
 3. watermark 一致性测试：source 在 staging 后新增更高 watermark，不应推进到新增行。
 4. console Excel validator 测试：`sqlTransformCompute` 是合法 PROCESS COMPUTE plugin。
@@ -355,7 +355,7 @@ PROCESS 只有一个 dispatch topic。大 SQL 加工可能堵住小而急的补�
 
 - 解决 P0-1 staging 数据库归属。
 - 修正 `runtime-module-communication.md`、`system-flow-overview.md` 中与实际 datasource 不一致的描述。
-- 补双库 E2E。
+- ~~补双库 E2E。~~ 已完成，后续只需随数据源配置变更维护该断言。
 
 验收：真实 platform/business 分离测试通过。
 

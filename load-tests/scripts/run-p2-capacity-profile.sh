@@ -40,6 +40,7 @@ CAPACITY_MAX_ERROR_PCT="${CAPACITY_MAX_ERROR_PCT:-0.0}"
 # 容量画像衡量持续吞吐与端到端排空，不复用常规接口的 500ms 低延迟门槛。5s 是本机
 # 单节点高压下的硬上限；更严格的交互延迟仍由常规 control-plane profile 守护。
 CAPACITY_WRITE_P95_MS="${CAPACITY_WRITE_P95_MS:-5000}"
+PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
@@ -283,6 +284,7 @@ write_report_header() {
     echo "- Strict capacity validation: $([[ \"$CAPACITY_STRICT\" == \"1\" ]] && echo enabled || echo disabled)"
     echo "- Maximum failed request rate: ${CAPACITY_MAX_ERROR_PCT}%"
     echo "- Capacity write p95 budget: ${CAPACITY_WRITE_P95_MS}ms"
+    echo "- PostgreSQL pressure sample interval: ${PG_SAMPLE_INTERVAL_SECONDS}s"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo "- Trigger adaptive release expected: $([[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]] && echo enabled || echo disabled)"
     echo
@@ -340,8 +342,10 @@ PY
   TRIGGER_DURATION_SECONDS="$duration" \
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
+  WAIT_TERMINAL_ALLOW_PARTIAL=1 \
   POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
   WRITE_P95_MS="$CAPACITY_WRITE_P95_MS" \
+  PG_SAMPLE_INTERVAL_SECONDS="$PG_SAMPLE_INTERVAL_SECONDS" \
   MAX_ERROR_PCT="$CAPACITY_MAX_ERROR_PCT" \
   SKIP_AUTO_CLEANUP=1 \
     "$LOAD_DIR/scripts/run-control-plane-worker-benchmark.sh" \
