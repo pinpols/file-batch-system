@@ -143,7 +143,10 @@
         select count(distinct ji.id)
           from batch.job_instance ji
          where ji.tenant_id = #{tenantId}
-           and ji.instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED')
+           and ji.instance_status in (
+               'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
+               'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
+           )
            and (
              exists (
                select 1

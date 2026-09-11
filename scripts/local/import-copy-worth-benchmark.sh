@@ -48,12 +48,14 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.Duration;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Locale;
 import org.postgresql.PGConnection;
 import org.postgresql.copy.CopyManager;
 
 public class ImportCopyWorthBenchmark {
-  private static final String TARGET = "biz.import_copy_worth_bench";
+  private static final Path SQL_DIR = Path.of(System.getenv("BENCH_SQL_DIR"));
 
   public static void main(String[] args) throws Exception {
     int rows = Integer.parseInt(System.getenv().getOrDefault("ROWS", "100000"));
@@ -89,7 +91,7 @@ public class ImportCopyWorthBenchmark {
 
       if (!keepTable) {
         try (Statement st = conn.createStatement()) {
-          st.execute("drop table if exists " + TARGET);
+          st.execute(sql("drop-table.sql"));
         }
         conn.commit();
       }
@@ -98,28 +100,17 @@ public class ImportCopyWorthBenchmark {
 
   private static void setup(Connection conn, int extraIndexes) throws Exception {
     try (Statement st = conn.createStatement()) {
-      st.execute("create schema if not exists biz");
-      st.execute("drop table if exists " + TARGET);
-      st.execute("""
-          create table %s (
-            tenant_id text not null,
-            row_key text not null,
-            c01 text, c02 text, c03 text, c04 text, c05 text,
-            c06 text, c07 text, c08 text, c09 text, c10 text,
-            c11 text, c12 text, c13 text, c14 text, c15 text,
-            clong1 text, clong2 text,
-            n01 numeric(18,2), n02 numeric(18,2), n03 numeric(18,2), n04 numeric(18,2), n05 numeric(18,2),
-            primary key (tenant_id, row_key)
-          )
-          """.formatted(TARGET));
+      st.execute(sql("create-schema.sql"));
+      st.execute(sql("drop-table.sql"));
+      st.execute(sql("create-table.sql"));
       if (extraIndexes >= 1) {
-        st.execute("create index import_copy_worth_bench_c01_idx on " + TARGET + " (c01)");
+        st.execute(sql("create-index-c01.sql"));
       }
       if (extraIndexes >= 2) {
-        st.execute("create index import_copy_worth_bench_c02_n01_idx on " + TARGET + " (c02, n01)");
+        st.execute(sql("create-index-c02-n01.sql"));
       }
       if (extraIndexes >= 3) {
-        st.execute("create index import_copy_worth_bench_c03_c04_idx on " + TARGET + " (c03, c04)");
+        st.execute(sql("create-index-c03-c04.sql"));
       }
       if (extraIndexes > 3) {
         throw new IllegalArgumentException("EXTRA_INDEXES supports 0..3");
@@ -130,17 +121,7 @@ public class ImportCopyWorthBenchmark {
 
   private static Result runBatchUpsert(Connection conn, int rows, int batchSize) throws Exception {
     truncate(conn);
-    String sql = """
-        insert into %s (
-          tenant_id,row_key,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,clong1,clong2,n01,n02,n03,n04,n05
-        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        on conflict (tenant_id,row_key) do update set
-          c01=excluded.c01,c02=excluded.c02,c03=excluded.c03,c04=excluded.c04,c05=excluded.c05,
-          c06=excluded.c06,c07=excluded.c07,c08=excluded.c08,c09=excluded.c09,c10=excluded.c10,
-          c11=excluded.c11,c12=excluded.c12,c13=excluded.c13,c14=excluded.c14,c15=excluded.c15,
-          clong1=excluded.clong1,clong2=excluded.clong2,
-          n01=excluded.n01,n02=excluded.n02,n03=excluded.n03,n04=excluded.n04,n05=excluded.n05
-        """.formatted(TARGET);
+    String sql = sql("batch-upsert.sql");
     long t0 = System.nanoTime();
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       int pending = 0;
@@ -164,33 +145,17 @@ public class ImportCopyWorthBenchmark {
   private static Result runCopyThenMerge(Connection conn, int rows) throws Exception {
     truncate(conn);
     try (Statement st = conn.createStatement()) {
-      st.execute("create temp table import_copy_stage (like " + TARGET + " including defaults) on commit drop");
+      st.execute(sql("create-stage-table.sql"));
     }
     CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
-    String copySql = """
-        copy import_copy_stage (
-          tenant_id,row_key,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,clong1,clong2,n01,n02,n03,n04,n05
-        ) from stdin with (format csv)
-        """;
+    String copySql = sql("copy-stage.sql");
     long copyT0 = System.nanoTime();
     try (Reader reader = new CsvRowsReader(rows)) {
       copyManager.copyIn(copySql, reader);
     }
     double copySeconds = secondsSince(copyT0);
 
-    String mergeSql = """
-        insert into %s (
-          tenant_id,row_key,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,clong1,clong2,n01,n02,n03,n04,n05
-        )
-        select tenant_id,row_key,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,clong1,clong2,n01,n02,n03,n04,n05
-        from import_copy_stage
-        on conflict (tenant_id,row_key) do update set
-          c01=excluded.c01,c02=excluded.c02,c03=excluded.c03,c04=excluded.c04,c05=excluded.c05,
-          c06=excluded.c06,c07=excluded.c07,c08=excluded.c08,c09=excluded.c09,c10=excluded.c10,
-          c11=excluded.c11,c12=excluded.c12,c13=excluded.c13,c14=excluded.c14,c15=excluded.c15,
-          clong1=excluded.clong1,clong2=excluded.clong2,
-          n01=excluded.n01,n02=excluded.n02,n03=excluded.n03,n04=excluded.n04,n05=excluded.n05
-        """.formatted(TARGET);
+    String mergeSql = sql("merge-stage.sql");
     long mergeT0 = System.nanoTime();
     try (Statement st = conn.createStatement()) {
       st.executeUpdate(mergeSql);
@@ -203,11 +168,7 @@ public class ImportCopyWorthBenchmark {
   private static Result runCopyDirectReplace(Connection conn, int rows) throws Exception {
     truncate(conn);
     CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
-    String copySql = """
-        copy %s (
-          tenant_id,row_key,c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,clong1,clong2,n01,n02,n03,n04,n05
-        ) from stdin with (format csv)
-        """.formatted(TARGET);
+    String copySql = sql("copy-target.sql");
     long t0 = System.nanoTime();
     try (Reader reader = new CsvRowsReader(rows)) {
       copyManager.copyIn(copySql, reader);
@@ -218,7 +179,7 @@ public class ImportCopyWorthBenchmark {
 
   private static void truncate(Connection conn) throws Exception {
     try (Statement st = conn.createStatement()) {
-      st.execute("truncate " + TARGET);
+      st.execute(sql("truncate-table.sql"));
     }
     conn.commit();
   }
@@ -235,6 +196,10 @@ public class ImportCopyWorthBenchmark {
     for (int n = 1; n <= 5; n++) {
       ps.setBigDecimal(p++, BigDecimal.valueOf((i % 1000) + n, 2));
     }
+  }
+
+  private static String sql(String name) throws Exception {
+    return Files.readString(SQL_DIR.resolve(name));
   }
 
   private static String csvLine(int i) {
@@ -328,4 +293,5 @@ DB_URL="$DB_URL" \
 DB_USER="$DB_USER" \
 DB_PASSWORD="$DB_PASSWORD" \
 KEEP_BENCH_TABLE="$KEEP_BENCH_TABLE" \
+BENCH_SQL_DIR="$ROOT/scripts/local/sql/import-copy-benchmark" \
 java -Xms256m -Xmx1g -cp "$PG_JAR:$TMP_DIR" ImportCopyWorthBenchmark

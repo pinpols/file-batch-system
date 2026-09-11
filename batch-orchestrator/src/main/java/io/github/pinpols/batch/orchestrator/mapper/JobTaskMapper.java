@@ -60,7 +60,12 @@ public interface JobTaskMapper {
 
   int updateStatus(UpdateTaskStatusParam param);
 
-  int assignWorker(AssignWorkerParam param);
+  /**
+   * 以版本 CAS 认领任务，并直接返回更新后的行。返回 {@code null} 表示状态、版本或归属条件未命中。
+   *
+   * <p>使用 {@code UPDATE ... RETURNING} 避免认领成功后再次按主键查询；CAS 谓词与原认领语句一致。
+   */
+  JobTaskEntity assignWorker(AssignWorkerParam param);
 
   int resetForRetry(
       @Param("tenantId") String tenantId,

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.processes.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,5 +58,24 @@ class ComputeStepTest {
 
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes()).containsEntry("processedCount", 0);
+  }
+
+  @Test
+  void dryRunSkipsComputeAndValidatePluginSideEffects() {
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    ProcessJobContext context = new ProcessJobContext();
+    context.setResolvedPlugin(plugin);
+    context.getAttributes().put("dryRun", true);
+
+    ProcessStageResult computeResult = new ComputeStep().execute(context);
+    ProcessStageResult validateResult = new ValidateStep().execute(context);
+
+    assertThat(computeResult.success()).isTrue();
+    assertThat(validateResult.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry("processedCount", 0)
+        .containsEntry("dryRunSkipped", "PROCESS_STAGING_WRITE");
+    verify(plugin, never()).compute(any());
+    verify(plugin, never()).validate(any());
   }
 }

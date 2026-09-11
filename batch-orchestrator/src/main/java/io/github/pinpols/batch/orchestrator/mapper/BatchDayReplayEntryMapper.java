@@ -21,8 +21,28 @@ public interface BatchDayReplayEntryMapper {
 
   List<BatchDayReplayEntryEntity> selectBySessionAndStatus(
       @Param("sessionId") Long sessionId,
+      @Param("tenantId") String tenantId,
       @Param("status") String status,
       @Param("limit") int limit);
+
+  /** V202 前测试桩兼容入口；生产调用必须传 tenantId。 */
+  default List<BatchDayReplayEntryEntity> selectBySessionAndStatus(
+      Long sessionId, String status, int limit) {
+    return selectBySessionAndStatus(sessionId, null, status, limit);
+  }
+
+  /** PENDING → RUNNING 原子抢占；返回 1 才允许创建实例。 */
+  int claimPending(
+      @Param("id") Long id,
+      @Param("tenantId") String tenantId,
+      @Param("sessionId") Long sessionId,
+      @Param("now") Instant now);
+
+  /** 回收启动前崩溃留下的 RUNNING entry；已绑定 rerun instance 的行绝不回收。 */
+  int resetStaleUnboundRunning(
+      @Param("sessionId") Long sessionId,
+      @Param("cutoff") Instant cutoff,
+      @Param("now") Instant now);
 
   /** 根据 rerun_instance_id 反查（terminal 回填用）。 */
   BatchDayReplayEntryEntity selectByRerunInstanceId(

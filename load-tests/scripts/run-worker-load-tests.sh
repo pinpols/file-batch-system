@@ -80,6 +80,14 @@ mkdir -p "$LOG_DIR"
 
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+psql_platform() {
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
+}
+
+psql_business() {
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 "$@"
+}
+
 run_one() {
   local label="$1"
   local job_code="$2"
@@ -114,13 +122,8 @@ run_one() {
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts
     counts="$(
-      psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -Atc "
-        select count(*) || '|' ||
-               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
-        from batch.job_instance
-        where tenant_id = '${LOAD_TEST_TENANT_ID}'
-          and job_code = '${job_code}'
-          and params_snapshot::text like '%${RUN_ID}%';"
+      psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
+        -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
     )"
     local total="${counts%%|*}"
     local terminal="${counts##*|}"
@@ -142,14 +145,6 @@ run_one process lt_process_sql_job "$PROCESS_PARAMS"
 
 RUN_FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-psql_platform() {
-  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
-}
-
-psql_business() {
-  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 "$@"
-}
-
 {
   echo "# Worker Load Test Report - ${RUN_ID}"
   echo
@@ -163,74 +158,24 @@ psql_business() {
   echo "## Instance Completion"
   echo
   echo '```text'
-  psql_platform -P pager=off -F ' | ' -A -c "
-    with scoped as (
-      select job_code, instance_status, created_at, finished_at
-      from batch.job_instance
-      where tenant_id = '${LOAD_TEST_TENANT_ID}'
-        and job_code in ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
-        and params_snapshot::text like '%${RUN_ID}%'
-    ),
-    agg as (
-      select
-        job_code,
-        count(*) as total,
-        count(*) filter (where instance_status = 'SUCCESS') as success,
-        count(*) filter (where instance_status = 'FAILED') as failed,
-        count(*) filter (where instance_status not in ('SUCCESS','FAILED','CANCELLED','TERMINATED','PARTIAL_FAILED')) as non_terminal,
-        round(avg(extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as avg_seconds,
-        round(percentile_cont(0.95) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p95_seconds
-      from scoped
-      group by job_code
-    )
-    select * from agg order by job_code;"
+  psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
+    -f "$LOAD_DIR/sql/worker-instance-completion.sql"
   echo '```'
   echo
   echo "## Business Throughput Counters"
   echo
   echo '```text'
-  psql_business -P pager=off -F ' | ' -A -c "
-    select 'import_loaded_rows' as metric, count(*)::text as value
-    from biz.customer_account
-    where tenant_id = '${LOAD_TEST_TENANT_ID}'
-      and customer_name like 'Load Test Customer ${RUN_ID} %'
-    union all
-    select 'export_source_rows', count(*)::text
-    from biz.settlement_detail
-    where tenant_id = '${LOAD_TEST_TENANT_ID}' and settlement_no like '${RUN_ID}-SET-%'
-    union all
-    select 'process_source_rows', count(*)::text
-    from biz.process_order_event
-    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ACCOUNT_PREFIX}-ACCT-%'
-    union all
-    select 'process_target_rows', count(*)::text
-    from biz.process_account_summary
-    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ACCOUNT_PREFIX}-ACCT-%';"
-  psql_platform -P pager=off -F ' | ' -A -c "
-    select 'dispatch_records' as metric, count(*)::text as value
-    from batch.file_dispatch_record fdr
-    join batch.file_record fr on fr.id = fdr.file_id
-    where fr.tenant_id = '${LOAD_TEST_TENANT_ID}' and fr.metadata_json::text like '%${RUN_ID}%'
-    union all
-    select 'dispatch_files_dispatched', count(*)::text
-    from batch.file_record
-    where tenant_id = '${LOAD_TEST_TENANT_ID}'
-      and metadata_json::text like '%${RUN_ID}%'
-      and file_status = 'DISPATCHED';"
+  psql_business -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" -v account_prefix="$RUN_ACCOUNT_PREFIX" \
+    -f "$LOAD_DIR/sql/worker-business-throughput.sql"
+  psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
+    -f "$LOAD_DIR/sql/worker-dispatch-counters.sql"
   echo '```'
   echo
   echo "## Task Status"
   echo
   echo '```text'
-  psql_platform -P pager=off -F ' | ' -A -c "
-    select ji.job_code, jt.task_type, jt.task_status, count(*) as count
-    from batch.job_instance ji
-    join batch.job_task jt on jt.job_instance_id = ji.id
-    where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
-      and ji.params_snapshot::text like '%${RUN_ID}%'
-      and ji.job_code in ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
-    group by ji.job_code, jt.task_type, jt.task_status
-    order by ji.job_code, jt.task_type, jt.task_status;"
+  psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
+    -f "$LOAD_DIR/sql/worker-task-status.sql"
   echo '```'
 } > "$REPORT"
 

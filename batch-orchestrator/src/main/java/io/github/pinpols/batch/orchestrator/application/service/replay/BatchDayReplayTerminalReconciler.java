@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
+import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -85,7 +86,7 @@ public class BatchDayReplayTerminalReconciler {
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
-    String entryStatus = mapInstanceTerminalToEntryStatus(instanceStatus);
+    String entryStatus = mapInstanceTerminalToEntryStatus(session, instanceStatus);
     entryMapper.updateStatus(entry.id(), entryStatus, jobInstanceId, null, null, null, now, now);
     advanceSessionCounts(session, now);
   }
@@ -141,16 +142,31 @@ public class BatchDayReplayTerminalReconciler {
    * SUCCESS / PARTIAL_FAILED → entry SUCCEEDED；FAILED / CANCELLED / TERMINATED → entry
    * FAILED；其余意外状态保留 RUNNING（极少见，下次再来）。
    */
-  private String mapInstanceTerminalToEntryStatus(String instanceStatus) {
-    if (JobInstanceStatus.SUCCESS.code().equals(instanceStatus)
-        || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus)) {
+  private String mapInstanceTerminalToEntryStatus(
+      BatchDayReplaySessionEntity session, String instanceStatus) {
+    boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode());
+    if (dryRun && JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(instanceStatus)) {
       return ENTRY_SUCCEEDED;
     }
-    if (JobInstanceStatus.FAILED.code().equals(instanceStatus)
-        || JobInstanceStatus.CANCELLED.code().equals(instanceStatus)
-        || JobInstanceStatus.TERMINATED.code().equals(instanceStatus)) {
+    if (dryRun && JobInstanceStatus.FAILED_DRY_RUN.code().equals(instanceStatus)) {
       return ENTRY_FAILED;
     }
+    if (!dryRun
+        && (JobInstanceStatus.SUCCESS.code().equals(instanceStatus)
+            || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))) {
+      return ENTRY_SUCCEEDED;
+    }
+    if (!dryRun
+        && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
+            || JobInstanceStatus.CANCELLED.code().equals(instanceStatus)
+            || JobInstanceStatus.TERMINATED.code().equals(instanceStatus))) {
+      return ENTRY_FAILED;
+    }
+    log.error(
+        "replay terminal mode mismatch: sessionId={}, executionMode={}, instanceStatus={}",
+        session.id(),
+        session.executionMode(),
+        instanceStatus);
     return ENTRY_RUNNING;
   }
 

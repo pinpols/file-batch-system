@@ -109,8 +109,8 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
         .toStatus(PartitionStatus.RUNNING.code())
         .expectedVersion(existingPartition.getVersion())
         .build();
-    int updated = jobPartitionMapper.claimPartition(claimPartitionParam);
-    return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
+    JobPartitionEntity claimed = jobPartitionMapper.claimPartition(claimPartitionParam);
+    return EmptyChecks.isNotNull(claimed) ? claimed : existingPartition;
   }
 
   @Override

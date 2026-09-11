@@ -6,6 +6,15 @@
 # - helmRequired: true 表示生产 Helm Chart 必须显式渲染，防生产开关无入口。
 # - 本文件是 CI required-vars 的唯一登记源；运维说明仍写在 feature-switches.md。
 switches:
+  - key: batch.replay.dry-run.enabled
+    module: orchestrator
+    env:
+      - BATCH_REPLAY_DRY_RUN_ENABLED
+      - BATCH_REPLAY_DRY_RUN_MAX_ACTIVE_ENTRIES
+      - BATCH_REPLAY_DRY_RUN_RETENTION_DAYS
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.console.read-replica.enabled
     module: console-api
     env:
@@ -19,6 +28,37 @@ switches:
       - BATCH_SCHEDULER_WORKER_CACHE_ENABLED
     composeRequired: true
     helmRequired: true
+
+  - key: batch.orchestrator.persistence-granularity.enabled
+    module: orchestrator
+    env:
+      - BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED
+      - BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_BYTES
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_BYTES
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS
+      - BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES
+      - BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.outbox.sharding-mode
+    module: orchestrator
+    env:
+      - BATCH_OUTBOX_SHARDING_MODE
+      - BATCH_OUTBOX_SHARD_MEMBERS_KEY
+      - BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS
+      - BATCH_OUTBOX_SHARD_MEMBER_TTL_MS
+      - BATCH_OUTBOX_SHARD_MEMBER_ID
+    composeRequired: true
+    helmRequired: true
+    helmEnv:
+      - BATCH_OUTBOX_SHARDING_MODE
+      - BATCH_OUTBOX_SHARD_MEMBERS_KEY
+      - BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS
+      - BATCH_OUTBOX_SHARD_MEMBER_TTL_MS
 
   - key: batch.mq.routing.mode
     module: orchestrator
@@ -120,6 +160,13 @@ switches:
     env:
       - BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED
     composeRequired: false
+    helmRequired: true
+
+  - key: batch.trigger.outbox.adaptive-release-enabled
+    module: trigger
+    env:
+      - BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED
+    composeRequired: true
     helmRequired: true
 
   - key: batch.console.ai.enabled

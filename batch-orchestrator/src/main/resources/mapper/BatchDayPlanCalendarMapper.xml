@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper">
+
+    <!-- 日历级规则优先于组级规则；无显式规则时按普通工作日处理。 -->
+    <select id="selectEffectiveDayType" resultType="java.lang.String">
+        select coalesce((
+            select h.day_type
+            from batch.business_calendar c
+            join batch.calendar_holiday h
+              on h.tenant_id = c.tenant_id
+             and h.biz_date = #{bizDate}
+             and (
+                 (h.scope = 'CALENDAR' and h.calendar_id = c.id)
+                 or (h.scope = 'GROUP' and h.group_code = c.group_code)
+             )
+            where c.tenant_id = #{tenantId}
+              and c.calendar_code = #{calendarCode}
+              and c.enabled = true
+            order by case h.scope when 'CALENDAR' then 0 else 1 end
+            limit 1
+        ), 'WORKDAY')
+    </select>
+</mapper>

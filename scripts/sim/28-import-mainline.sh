@@ -22,8 +22,6 @@ source "$ROOT/scripts/sim/env-common.sh"
 batch_require_python
 
 export ROWS="${ROWS:-5}"
-export START_TS
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-mainline.log"
 import json
@@ -42,6 +40,7 @@ PGU = os.environ.get("POSTGRES_USER", "batch_user")
 PLATFORM_DB = os.environ["PLATFORM_DB"]
 BUSINESS_DB = os.environ["BUSINESS_DB"]
 ROWS = int(os.environ.get("ROWS", "5"))
+SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
 TOKEN = "".join(ch for ch in BATCH if ch.isalnum())[-14:]
 
@@ -89,29 +88,17 @@ TERMINAL = {"SUCCESS", "FAILED", "COMPENSATED", "CANCELLED", "TERMINATED", "REJE
 REQUEST_IDS = []
 
 
-def run_cmd(db, sql):
-    result = subprocess.run(
-        [
-            "docker",
-            "exec",
-            "-i",
-            PG,
-            "psql",
-            "-U",
-            PGU,
-            "-d",
-            db,
-            "-tA",
-            "-P",
-            "pager=off",
-        ],
-        input=sql,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip())
+def run_sql_file(db, sql_file, variables=None):
+    args = [
+        "docker", "exec", "-i", PG, "psql", "-X", "-v", "ON_ERROR_STOP=1",
+        "-U", PGU, "-d", db, "-tA", "-P", "pager=off",
+    ]
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
+        result = subprocess.run(
+            args, input=sql.read(), text=True, capture_output=True, check=True)
     return result.stdout.strip()
 
 
@@ -155,16 +142,12 @@ def launch(tenant, job, template_code, header, row_builder):
 
 
 def wait_instances():
-    request_list = ",".join("'" + request_id + "'" for request_id in REQUEST_IDS)
-    status_sql = f"""
-select tenant_id || '/' || job_code || '|' || instance_status || '|' || id || '|' || instance_no
-from batch.job_instance
-where dedup_key in ({request_list})
-order by tenant_id, job_code;
-"""
+    variables = {"request_ids": ",".join(REQUEST_IDS)}
     last_rows = []
     for _ in range(90):
-        rows = [line for line in run_cmd(PLATFORM_DB, status_sql).splitlines() if line]
+        rows = [line for line in run_sql_file(
+            PLATFORM_DB, "select-import-mainline-instance-status.sql", variables
+        ).splitlines() if line]
         if rows != last_rows:
             print("status:", flush=True)
             for row in rows:
@@ -178,22 +161,9 @@ order by tenant_id, job_code;
 
 
 def assert_business_counts():
-    counts = run_cmd(
-        BUSINESS_DB,
-        f"""
-select 'ta.customer_account|' || count(*)
-from biz.customer_account
-where tenant_id='ta' and customer_no like 'C{TOKEN}%'
-union all
-select 'tb.transaction|' || count(*)
-from biz.transaction
-where tenant_id='tb' and txn_date='{BIZ}' and remark like 'sim-mainline-{BATCH}-%'
-union all
-select 'tc.risk_score|' || count(*)
-from biz.risk_score
-where tenant_id='tc' and score_date='{BIZ}' and entity_id like 'E{TOKEN}%';
-""",
-    )
+    counts = run_sql_file(
+        BUSINESS_DB, "select-import-mainline-business-counts.sql",
+        {"token": TOKEN, "biz_date": BIZ, "batch_no": BATCH})
     print("business_counts:")
     print(counts)
     actual = dict(line.split("|", 1) for line in counts.splitlines() if line)
@@ -207,20 +177,9 @@ where tenant_id='tc' and score_date='{BIZ}' and entity_id like 'E{TOKEN}%';
 
 
 def print_task_rows():
-    request_list = ",".join("'" + request_id + "'" for request_id in REQUEST_IDS)
-    rows = run_cmd(
-        PLATFORM_DB,
-        f"""
-select coalesce(tenant_id,'') || '/' || coalesce(task_type,'') || '/'
-    || coalesce(task_status,'') || '/' || coalesce(error_code,'') || '/'
-    || left(coalesce(error_message,''),160)
-from batch.job_task
-where job_instance_id in (
-    select id from batch.job_instance where dedup_key in ({request_list})
-)
-order by id;
-""",
-    )
+    rows = run_sql_file(
+        PLATFORM_DB, "select-import-mainline-task-status.sql",
+        {"request_ids": ",".join(REQUEST_IDS)})
     print("task_rows:")
     print(rows)
 

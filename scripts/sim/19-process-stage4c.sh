@@ -13,6 +13,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+SIM_SQL_DIR="$ROOT/scripts/sim/sql"
+export SIM_SQL_DIR
 
 SIM_STAGE_NAME="process-stage4c"
 # shellcheck source=env-common.sh
@@ -29,11 +31,13 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 \
   -f /dev/stdin < docs/test-data/sim-stage4c-process-platform.sql >/dev/null
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4c.log"
 import json, os, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
+from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
 ORCH = os.environ["ORCH_BASE"]
@@ -41,13 +45,16 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
+SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
-def psql(db, sql, tuples=False):
-    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-P", "pager=off"]
+def psql_file(db, sql_file, variables=None, tuples=False):
+    args = ["docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-X", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    return subprocess.run(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True, capture_output=True, text=True)
 
 def launch(job, label, params):
     rid = f"sim-stage4c-{label}-{int(time.time()*1000)%100000000}"
@@ -82,11 +89,7 @@ def launch(job, label, params):
 def wait_instance(rid, expected, timeout=240):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        out = psql(os.environ["PLATFORM_DB"], (
-            "select i.id || '|' || coalesce(i.instance_status,'') "
-            "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
-            f"where tr.tenant_id='ta' and tr.request_id='{rid}' order by tr.created_at desc limit 1"
-        ), tuples=True)
+        out = psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-instance.sql", {"tenant_id": "ta", "request_id": rid}, tuples=True)
         value = (out.stdout or "").strip()
         if value:
             iid, status = value.split("|", 1)
@@ -107,34 +110,16 @@ rid_shard = launch("TA_PROCESS_STAGE4_SHARDED", "sharded", {
 shard_instance = wait_instance(rid_shard, "SUCCESS")
 
 print("\n-- sharded_task_status --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select p.partition_no,p.partition_status,t.task_status,p.output_summary "
-    "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
-    f"where p.job_instance_id={shard_instance} order by p.partition_no"
-], check=False)
+platform_vars = {"tenant_id": "ta", "instance_id": shard_instance}
+print(psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-task-status.sql", platform_vars).stdout, end="")
 
 print("\n-- sharded_target --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c",
-    "select count(*) as rows, sum(total_amount) as amount, sum(event_count) as events, max(high_water_mark) as hwm "
-    "from biz.process_stage4_target where tenant_id='ta' and scenario='SHARDED' and biz_date='" + BIZ + "'"
-], check=False)
+business_vars = {"tenant_id": "ta", "biz_date": BIZ}
+target = psql_file(os.environ["BUSINESS_DB"], "select-process-stage4c-target-summary.sql", business_vars)
+print(target.stdout, end="")
 
-shard_check = (psql(os.environ["BUSINESS_DB"], (
-    "select count(*) || '|' || coalesce(sum(total_amount),0) || '|' || "
-    "coalesce(sum(event_count),0) || '|' || coalesce(max(high_water_mark),0) "
-    "from biz.process_stage4_target "
-    f"where tenant_id='ta' and scenario='SHARDED' and biz_date='{BIZ}'"
-), tuples=True).stdout or "").strip()
-task_check = (psql(os.environ["PLATFORM_DB"], (
-    "select count(*) filter (where t.task_status='SUCCESS') || '|' || "
-    "count(*) filter (where p.partition_status='SUCCESS') "
-    "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
-    f"where p.job_instance_id={shard_instance}"
-), tuples=True).stdout or "").strip()
+shard_check = (psql_file(os.environ["BUSINESS_DB"], "select-process-stage4c-target-check.sql", business_vars, tuples=True).stdout or "").strip()
+task_check = (psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-task-check.sql", platform_vars, tuples=True).stdout or "").strip()
 
 print("==> launch cancel profile", flush=True)
 rid_cancel = launch("TA_PROCESS_STAGE4_CANCEL", "cancel", {
@@ -147,15 +132,7 @@ cancel_instance = None
 cancel_partition = None
 deadline = time.time() + 30
 while time.time() < deadline:
-    out = psql(os.environ["PLATFORM_DB"], (
-        "select i.id || '|' || p.id || '|' || coalesce(t.task_status,'') "
-        "from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
-        "join batch.job_partition p on p.job_instance_id=i.id "
-        "join batch.job_task t on t.job_partition_id=p.id "
-        f"where tr.tenant_id='ta' and tr.request_id='{rid_cancel}' "
-        "order by t.id desc limit 1"
-    ), tuples=True)
+    out = psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-cancel-task.sql", {"tenant_id": "ta", "request_id": rid_cancel}, tuples=True)
     value = (out.stdout or "").strip()
     if value:
         iid, pid, status = value.split("|", 2)
@@ -187,27 +164,14 @@ print(f"  [cancel] instance={cancel_instance} http={cancel_http} body={cancel_bo
 deadline = time.time() + 90
 cancel_status = ""
 while time.time() < deadline:
-    out = psql(os.environ["PLATFORM_DB"], (
-        "select i.instance_status || '|' || p.partition_status || '|' || t.task_status "
-        "from batch.job_instance i "
-        "join batch.job_partition p on p.job_instance_id=i.id "
-        "join batch.job_task t on t.job_partition_id=p.id "
-        f"where i.id={cancel_instance} order by t.id desc limit 1"
-    ), tuples=True)
+    out = psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-cancel-status-value.sql", {"tenant_id": "ta", "instance_id": cancel_instance}, tuples=True)
     cancel_status = (out.stdout or "").strip()
     if cancel_status and not any(x in cancel_status for x in ("RUNNING", "READY", "CREATED")):
         break
     time.sleep(3)
 
 print("\n-- cancel_status --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select i.id,i.instance_status,p.partition_status,t.task_status,t.cancel_requested,t.error_code "
-    "from batch.job_instance i join batch.job_partition p on p.job_instance_id=i.id "
-    "join batch.job_task t on t.job_partition_id=p.id "
-    f"where i.id={cancel_instance}"
-], check=False)
+print(psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-cancel-status.sql", {"tenant_id": "ta", "instance_id": cancel_instance}).stdout, end="")
 
 summary = f"{task_check}|{shard_check}|{cancel_status}"
 print(f"\n-- assertion_summary --\n{summary}", flush=True)

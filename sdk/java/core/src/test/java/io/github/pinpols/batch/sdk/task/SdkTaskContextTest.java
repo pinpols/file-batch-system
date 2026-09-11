@@ -68,6 +68,17 @@ class SdkTaskContextTest {
   }
 
   @Test
+  void dryRunPrefersRuntimeAttributeAndSupportsLegacyParameter() {
+    SdkTaskContext runtime = new SdkTaskContext(
+        "t1", "job-1", "ti-1", 42L, "w1", Map.of("dryRun", false), Map.of("dryRun", true));
+    SdkTaskContext legacy =
+        new SdkTaskContext("t1", "job-1", "ti-1", 43L, "w1", Map.of("dryRun", "true"), Map.of());
+
+    assertThat(runtime.isDryRun()).isTrue();
+    assertThat(legacy.isDryRun()).isTrue();
+  }
+
+  @Test
   void reportProgressWritesLatestSnapshot() {
     ProgressReporter reporter = new ProgressReporter();
     SdkTaskContext ctx = new SdkTaskContext(

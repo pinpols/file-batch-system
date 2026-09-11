@@ -7,28 +7,28 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2217 |
+| 生产 Java 源文件 | 2230 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2045 |
-| 含 Map 的源文件 | 442 |
+| `Map<String, Object>` 出现次数 | 2048 |
+| 含 Map 的源文件 | 444 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 211 |
-| 含 suppression 的源文件 | 161 |
+| `@SuppressWarnings` | 214 |
+| 含 suppression 的源文件 | 163 |
 | `@Configuration` 类 | 47 |
-| 大于等于 700 行的源文件 | 8 |
-| `PMD.ExcessiveParameterList` 显式例外 | 26 |
+| 大于等于 700 行的源文件 | 9 |
+| `PMD.ExcessiveParameterList` 显式例外 | 30 |
 
 ## 模块源文件
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 293 |
-| `batch-console-api` | 868 |
-| `batch-orchestrator` | 521 |
-| `batch-trigger` | 67 |
+| `batch-common` | 296 |
+| `batch-console-api` | 870 |
+| `batch-orchestrator` | 526 |
+| `batch-trigger` | 69 |
 | `batch-worker` | 369 |
-| `sdk` | 90 |
+| `sdk` | 91 |
 | `security-scan` | 9 |
 
 ## CGLIB 自注入
@@ -42,6 +42,7 @@
 |---|---:|
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1106 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 819 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 775 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 765 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |
@@ -70,7 +71,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/lineage/LineageEvidenceService.java` | `L31: public Map<String, Object> evidenceForResultVersion`<br>`L44: public Map<String, Object> evidenceForEffective` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/PartitionDispatchService.java` | `L51: public Map<String, Object> effectiveParams` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java` | `L268: public Map<String, Object> nodeOutput`<br>`L273: public Map<String, Object> workflowRunFields`<br>`L302: public Map<String, Object> nodeOutput`<br>`L307: public Map<String, Object> workflowRunFields`<br>`L330: public static Map<String, Object> parsePayloadMap` |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` | `L70: public Map<String, Object> loadFileRecord`<br>`L79: public Map<String, Object> loadTemplateSecurityForFile`<br>`L124: public Map<String, Object> loadLatestDispatchRecord`<br>`L193: public List<Map<String, Object>> selectArrivalGovernanceCandidates`<br>`L200: public List<Map<String, Object>> selectArrivalGroupSummaries`<br>`L206: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L210: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L238: public List<Map<String, Object>> selectArrivalDelaySamples`<br>`L273: public List<Map<String, Object>> selectProcessingDelaySamples`<br>`L472: public Map<String, Object> operationDetail` |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` | `L71: public Map<String, Object> loadFileRecord`<br>`L80: public Map<String, Object> loadTemplateSecurityForFile`<br>`L125: public Map<String, Object> loadLatestDispatchRecord`<br>`L194: public List<Map<String, Object>> selectArrivalGovernanceCandidates`<br>`L201: public List<Map<String, Object>> selectArrivalGroupSummaries`<br>`L207: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L211: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L239: public List<Map<String, Object>> selectArrivalDelaySamples`<br>`L274: public List<Map<String, Object>> selectProcessingDelaySamples`<br>`L475: public Map<String, Object> operationDetail` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mybatis/MapJsonbTypeHandler.java` | `L36: public Map<String, Object> getNullableResult`<br>`L42: public Map<String, Object> getNullableResult`<br>`L47: public Map<String, Object> getNullableResult` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/FileGovernanceMetricsCacheService.java` | `L33: public Map<String, Object> load`<br>`L57: public Map<String, Object> compute` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRuntimeRepository.java` | `L32: public Map<String, Object> loadFileRecord`<br>`L41: public Map<String, Object> loadFileRecordByStoragePath`<br>`L46: public Map<String, Object> loadLatestTemplateConfig`<br>`L51: public Map<String, Object> loadChannelConfig`<br>`L104: public Map<String, Object> loadLatestSucceededStepOutputSummary`<br>`L155: public List<Map<String, Object>> loadFileErrorRecords` |
@@ -101,8 +102,11 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/mapper/ConsoleApiKeyMapper.java` | 1 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java` | 1 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/command/CompensationSubmitCommand.java` | 1 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplaySubmitCommand.java` | 1 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/command/CompensationSubmitCommand.java` | 2 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayInstanceEntity.java` | 1 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplayEntryEntity.java` | 1 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplaySessionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java` | 1 |

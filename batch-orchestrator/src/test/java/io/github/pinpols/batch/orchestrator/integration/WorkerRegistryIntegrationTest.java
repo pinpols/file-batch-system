@@ -40,17 +40,34 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldTransitionToDrainingStatus() {
     WorkerRegistryEntity worker = onlineWorker("t1", "worker-it-drain", "DEFAULT");
-    worker = workerRegistryMapper.saveLikeSdj(worker);
-
-    Instant now = BatchDateTimeSupport.utcNow();
-    worker = worker.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(300), now);
     workerRegistryMapper.saveLikeSdj(worker);
+
+    int updated = workerRegistryMapper.startDrainIfCurrent(
+        "t1", "worker-it-drain", WorkerRegistryStatus.ONLINE.code(), 300);
 
     WorkerRegistryEntity found =
         workerRegistryMapper.selectByTenantAndWorkerCode("t1", "worker-it-drain");
+    assertThat(updated).isEqualTo(1);
     assertThat(found.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
     assertThat(found.drainStartedAt()).isNotNull();
     assertThat(found.drainDeadlineAt()).isNotNull();
+  }
+
+  @Test
+  void staleStatusUpdateCannotOverwriteDrainingState() {
+    String workerCode = "worker-it-cas-" + BatchDateTimeSupport.utcEpochMillis();
+    workerRegistryMapper.saveLikeSdj(onlineWorker("t1", workerCode, "DEFAULT"));
+    assertThat(workerRegistryMapper.startDrainIfCurrent(
+            "t1", workerCode, WorkerRegistryStatus.ONLINE.code(), 300))
+        .isEqualTo(1);
+
+    int staleUpdate = workerRegistryMapper.updateStatusIfCurrent(
+        "t1", workerCode, WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.OFFLINE.code());
+
+    assertThat(staleUpdate).isZero();
+    assertThat(
+            workerRegistryMapper.selectByTenantAndWorkerCode("t1", workerCode).status())
+        .isEqualTo(WorkerRegistryStatus.DRAINING.code());
   }
 
   @Test

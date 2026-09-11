@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosti
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,6 +102,22 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
     assertThat(countForStatus(rowsB, "NEW")).isEqualTo(1L);
   }
 
+  @Test
+  @DisplayName("终态父子一致性诊断覆盖 dry-run 成功与失败终态")
+  void terminalChildDiagnosticIncludesDryRunTerminalStates() {
+    String tenantId = "ta-dry-run-" + System.nanoTime();
+    long successId = insertJobInstanceWithActivePartition(tenantId, "SUCCESS_DRY_RUN");
+    long failedId = insertJobInstanceWithActivePartition(tenantId, "FAILED_DRY_RUN");
+
+    assertThat(mapper.countTerminalInstancesWithActiveChildren(tenantId)).isEqualTo(2L);
+
+    jdbcTemplate.update(
+        "delete from batch.job_partition where tenant_id = ? and job_instance_id in (?, ?)",
+        tenantId,
+        successId,
+        failedId);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private long nextTaskId() {
@@ -125,6 +142,41 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
            publish_status, created_at, updated_at)
         VALUES (?, ?, ?, 'TASK_EVENT', ?, '{}'::jsonb, ?, now(), now())
         """, tenantId, aggregateType, aggregateId, eventKey, status);
+  }
+
+  private long insertJobInstanceWithActivePartition(String tenantId, String status) {
+    String suffix = UUID.randomUUID().toString();
+    String jobCode = "DIAG-" + suffix;
+    Long definitionId = jdbcTemplate.queryForObject("""
+            insert into batch.job_definition(
+              tenant_id, job_code, job_name, job_type, schedule_type, timezone
+            ) values (?, ?, 'Diagnostic Test', 'GENERAL', 'MANUAL', 'Asia/Shanghai')
+            returning id
+            """, Long.class, tenantId, jobCode);
+    Long instanceId = jdbcTemplate.queryForObject(
+        """
+            insert into batch.job_instance(
+              tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+              instance_status, priority, dedup_key, expected_partition_count,
+              success_partition_count, failed_partition_count, trace_id, dry_run
+            ) values (?, ?, ?, ?, current_date, 'MANUAL', ?, 5, ?, 1, 0, 0, ?, true)
+            returning id
+            """,
+        Long.class,
+        tenantId,
+        definitionId,
+        jobCode,
+        "INST-" + suffix,
+        status,
+        "DEDUP-" + suffix,
+        "TRACE-" + suffix);
+    jdbcTemplate.update("""
+        insert into batch.job_partition(
+          tenant_id, job_instance_id, partition_no, partition_status, business_key,
+          idempotency_key, dry_run
+        ) values (?, ?, 1, 'RUNNING', ?, ?, true)
+        """, tenantId, instanceId, "BIZ-" + suffix, "IDEM-" + suffix);
+    return instanceId;
   }
 
   private static long countForStatus(List<Map<String, Object>> rows, String status) {

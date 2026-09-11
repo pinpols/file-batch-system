@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -113,6 +114,32 @@ class DefaultWorkerSelectorTest {
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue("report"), 5);
+
+    assertThat(route.getAvailable()).isFalse();
+  }
+
+  @Test
+  void dryRunRequestOnlySelectsWorkerWithExplicitCapability() {
+    WorkerRegistryEntity unsafe = worker("w-unsafe", null, new JsonbString("[\"PROCESS\"]"));
+    WorkerRegistryEntity safe =
+        worker("w-safe", null, new JsonbString("[\"PROCESS\", \"dry-run-safe\"]"));
+    stubCandidates(List.of(unsafe, safe));
+    ResourceSchedulingRequest request = request();
+    request.setRequiredCapability(WorkerCapabilities.DRY_RUN_SAFE);
+
+    WorkerRouteModel route = selector.select(request, queue(null), 5);
+
+    assertThat(route.getAvailable()).isTrue();
+    assertThat(route.getWorkerCode()).isEqualTo("w-safe");
+  }
+
+  @Test
+  void dryRunRequestFailsClosedWhenCapabilityIsMissing() {
+    stubCandidates(List.of(worker("w-unsafe", null, new JsonbString("[\"PROCESS\"]"))));
+    ResourceSchedulingRequest request = request();
+    request.setRequiredCapability(WorkerCapabilities.DRY_RUN_SAFE);
+
+    WorkerRouteModel route = selector.select(request, queue(null), 5);
 
     assertThat(route.getAvailable()).isFalse();
   }

@@ -17,9 +17,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchPersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import java.time.LocalDate;
 import java.time.Month;
@@ -49,16 +49,12 @@ class DefaultLaunchValidationServiceTest {
   @Mock
   private OrchestratorConfigCacheService configCacheService;
 
-  @Mock
-  private JobInstanceMapper jobInstanceMapper;
-
   private DefaultLaunchValidationService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new DefaultLaunchValidationService(
-        triggerRequestMapper, configCacheService, jobInstanceMapper);
+    service = new DefaultLaunchValidationService(triggerRequestMapper, configCacheService);
   }
 
   private LaunchRequest validRequest() {
@@ -78,7 +74,7 @@ class DefaultLaunchValidationServiceTest {
     LaunchRequest bad = new LaunchRequest(
         null, "j", LocalDate.now(), TriggerType.SCHEDULED, "req", "trace", Map.of());
     assertThatThrownBy(() -> service.load(bad)).isInstanceOf(BizException.class);
-    verify(triggerRequestMapper, never()).selectByTenantAndRequestId(anyString(), anyString());
+    verify(triggerRequestMapper, never()).selectLaunchPersistenceContext(anyString(), anyString());
   }
 
   @Test
@@ -109,7 +105,7 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
   void rejectsWhenTriggerRequestMissing() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001")).thenReturn(null);
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001")).thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req))
         .isInstanceOf(BizException.class)
@@ -123,8 +119,8 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("job_definition 缺失 → trigger_request 打 REJECTED + 抛 NOT_FOUND")
   void rejects_when_jobDefinition_missing_and_marks_rejected() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001"))
-        .thenReturn(triggerRequestEntity());
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+        .thenReturn(persistenceContext(triggerRequestEntity(), null));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(null);
 
     assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
@@ -136,8 +132,8 @@ class DefaultLaunchValidationServiceTest {
   @DisplayName("WORKFLOW 类型缺 workflow_definition → trigger_request 打 REJECTED + 抛 NOT_FOUND")
   void rejectsWhenWorkflowTypeMissingWorkflowDef() {
     LaunchRequest req = validRequest();
-    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001"))
-        .thenReturn(triggerRequestEntity());
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+        .thenReturn(persistenceContext(triggerRequestEntity(), null));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok"))
         .thenReturn(jobDefinitionEntity(JobType.WORKFLOW.code()));
     when(configCacheService.findEnabledWorkflowDefinition("ta", "job_ok")).thenReturn(null);
@@ -154,9 +150,9 @@ class DefaultLaunchValidationServiceTest {
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.GENERAL.code());
 
-    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001")).thenReturn(trig);
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+        .thenReturn(persistenceContext(trig, null));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
-    when(jobInstanceMapper.selectByTenantAndDedupKey(eq("ta"), anyString())).thenReturn(null);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);
     assertThat(result.triggerRequest()).isSameAs(trig);
@@ -176,10 +172,10 @@ class DefaultLaunchValidationServiceTest {
         new WorkflowDefinitionEntity(1L, "ta", "job_ok", "wf-name", "DAG", 1, true);
     JobInstanceEntity existing = new JobInstanceEntity();
 
-    when(triggerRequestMapper.selectByTenantAndRequestId("ta", "req-001")).thenReturn(trig);
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+        .thenReturn(persistenceContext(trig, existing));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
     when(configCacheService.findEnabledWorkflowDefinition("ta", "job_ok")).thenReturn(wf);
-    when(jobInstanceMapper.selectByTenantAndDedupKey(eq("ta"), anyString())).thenReturn(existing);
 
     LaunchValidationService.LaunchLoadResult result = service.load(req);
     assertThat(result.workflowDefinition()).isSameAs(wf);
@@ -192,6 +188,14 @@ class DefaultLaunchValidationServiceTest {
     entity.setRequestId("req-001");
     entity.setDedupKey("dedup-1");
     return entity;
+  }
+
+  private TriggerLaunchPersistenceContext persistenceContext(
+      TriggerRequestEntity triggerRequest, JobInstanceEntity existingInstance) {
+    TriggerLaunchPersistenceContext context = new TriggerLaunchPersistenceContext();
+    context.setTriggerRequest(triggerRequest);
+    context.setExistingInstance(existingInstance);
+    return context;
   }
 
   private JobDefinitionEntity jobDefinitionEntity(String jobType) {

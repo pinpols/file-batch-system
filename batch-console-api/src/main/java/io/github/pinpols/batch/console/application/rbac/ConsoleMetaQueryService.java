@@ -6,6 +6,8 @@ import io.github.pinpols.batch.common.enums.AlertSeverity;
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ApprovalType;
+import io.github.pinpols.batch.common.enums.BatchDayReplayCandidateSource;
+import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.enums.BatchType;
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
@@ -283,6 +285,8 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("approvalType", ApprovalType.class));
     list.add(new EnumReg<>("configStatus", ConfigLifecycleStatus.class));
     list.add(new EnumReg<>("batchDayReplayScope", BatchDayReplayScope.class));
+    list.add(new EnumReg<>("batchDayReplayCandidateSource", BatchDayReplayCandidateSource.class));
+    list.add(new EnumReg<>("batchDayReplayExecutionMode", BatchDayReplayExecutionMode.class));
     list.add(new EnumReg<>("resultVersionPolicy", ResultVersionPolicy.class));
     list.add(new EnumReg<>("configVersionPolicy", ConfigVersionPolicy.class));
     list.add(new EnumReg<>("triggerRequestStatus", TriggerRequestStatus.class));

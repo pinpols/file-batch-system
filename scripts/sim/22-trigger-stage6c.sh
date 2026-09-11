@@ -15,6 +15,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+SIM_SQL_DIR="$ROOT/scripts/sim/sql"
+export SIM_SQL_DIR
 
 SIM_STAGE_NAME="trigger-stage6c"
 # shellcheck source=env-common.sh
@@ -24,6 +26,19 @@ source "$ROOT/scripts/lib/process.sh"
 export STORM_COUNT="${STORM_COUNT:-60}"
 
 batch_require_python
+
+cleanup_trigger_fixtures() {
+  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -f /dev/stdin \
+    < "$SIM_SQL_DIR/disable-trigger-stage6c-jobs.sql" >/dev/null 2>&1 || true
+  for job_code in TA_TRIGGER_STAGE6C_SCHEDULED TA_TRIGGER_STAGE6C_MISFIRE; do
+    curl -s -m 5 -X POST \
+      "$TRIGGER_BASE/api/triggers/management/unregister?tenantId=ta&jobCode=$job_code" \
+      -H "X-Tenant-Id: ta" -H "X-Internal-Secret: $INTERNAL_SECRET" \
+      -o /dev/null 2>/dev/null || true
+  done
+}
+trap cleanup_trigger_fixtures EXIT
 
 restart_trigger_for_fixture() {
   if [[ "${SIM_TRIGGER_RESTART_MODE:-restart}" == "screen" ]]; then
@@ -91,11 +106,13 @@ done
   exit 1
 }
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6c.log"
 import json, os, subprocess, sys, time, urllib.request
+from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -103,13 +120,16 @@ BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 STORM_COUNT = int(os.environ["STORM_COUNT"])
 START_TS = os.environ["START_TS"].strip()
+SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
-def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
+def psql_file(sql_file, variables=None, tuples=False):
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    return subprocess.run(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True, capture_output=True, text=True)
 
 def launch(request_id, batch_key):
     body = {
@@ -137,10 +157,10 @@ def launch(request_id, batch_key):
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {request_id}")
 
-def wait_count(label, sql, expected, timeout=150):
+def wait_count(label, sql_file, variables, expected, timeout=150):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        out = psql(sql, tuples=True)
+        out = psql_file(sql_file, variables, tuples=True)
         value = int((out.stdout or "0").strip() or "0")
         if value >= expected:
             print(f"  [{label}] {value} >= {expected}", flush=True)
@@ -148,49 +168,35 @@ def wait_count(label, sql, expected, timeout=150):
         time.sleep(3)
     raise TimeoutError(f"timeout waiting {label}")
 
-def read_count(sql):
-    out = psql(sql, tuples=True)
+def read_count(sql_file, variables):
+    out = psql_file(sql_file, variables, tuples=True)
     return int((out.stdout or "0").strip() or "0")
 
 print("==> wait Quartz scheduled + misfire", flush=True)
 wait_count(
     "quartz-misfire-registered",
-    "select count(*) from quartz.qrtz_triggers "
-    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'",
+    "count-trigger-stage6c-quartz-misfire.sql",
+    {},
     1,
 )
-psql(
-    "update quartz.qrtz_triggers "
-    "set next_fire_time=(extract(epoch from now() - interval '120 seconds') * 1000)::bigint, "
-    "trigger_state='WAITING' "
-    "where trigger_group='batch-trigger' and trigger_name='ta:TA_TRIGGER_STAGE6C_MISFIRE'"
-)
+psql_file("update-trigger-stage6c-quartz-misfire.sql")
+common_vars = {"tenant_id": "ta", "start_ts": START_TS}
 scheduled_count = wait_count(
     "scheduled",
-    "select count(*) from batch.trigger_request "
-    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_SCHEDULED' "
-    "and trigger_type='SCHEDULED' and created_at >= '" + START_TS + "'",
+    "count-trigger-stage6c-scheduled.sql",
+    common_vars,
     1,
-)
-pending_sql = (
-    "select count(*) from batch.trigger_misfire_pending "
-    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    "and status='PENDING'"
 )
 misfire_count = 0
 deadline = time.time() + 45
 while time.time() < deadline:
-    misfire_count = read_count(pending_sql)
+    misfire_count = read_count("count-trigger-stage6c-pending.sql", {"tenant_id": "ta"})
     if misfire_count >= 1:
         print(f"  [misfire-pending] {misfire_count} >= 1", flush=True)
         break
     time.sleep(3)
 if misfire_count < 1:
-    misfire_success = read_count(
-        "select count(*) from batch.job_instance "
-        "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-        "and instance_status='SUCCESS' and created_at >= '" + START_TS + "'"
-    )
+    misfire_success = read_count("count-trigger-stage6c-misfire-success.sql", common_vars)
     print(
         "  [misfire-pending] 0; observed successful runtime fire count="
         + str(misfire_success),
@@ -201,12 +207,7 @@ if misfire_count < 1:
 
 print("==> approve replay request", flush=True)
 replay_id = BATCH + "-replay"
-pending_id = (psql(
-    "select id from batch.trigger_misfire_pending "
-    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    "and status='PENDING' order by id desc limit 1",
-    tuples=True,
-).stdout or "").strip()
+pending_id = (psql_file("select-trigger-stage6c-pending-id.sql", {"tenant_id": "ta"}, tuples=True).stdout or "").strip()
 req = urllib.request.Request(
     f"{BASE}/api/triggers/catch-up/approve",
     data=json.dumps({
@@ -234,11 +235,7 @@ with urllib.request.urlopen(req, timeout=30) as resp:
 deadline = time.time() + 120
 replay_status = ""
 while time.time() < deadline:
-    out = psql(
-        "select request_status || '|' || coalesce(related_job_instance_id::text,'') "
-        f"from batch.trigger_request where tenant_id='ta' and request_id='{replay_id}'",
-        tuples=True,
-    )
+    out = psql_file("select-trigger-stage6c-replay-status.sql", {"tenant_id": "ta", "request_id": replay_id}, tuples=True)
     replay_status = (out.stdout or "").strip()
     if replay_status.startswith("LAUNCHED|") and replay_status != "LAUNCHED|":
         break
@@ -256,41 +253,19 @@ print("  [storm launch] all accepted", flush=True)
 
 deadline = time.time() + 240
 while time.time() < deadline:
-    out = psql(
-        "select count(*) from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
-        "where tr.tenant_id='ta' and tr.request_id like '" + BATCH + "-storm-%' "
-        "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
-        tuples=True,
-    )
+    out = psql_file("count-trigger-stage6c-storm-terminal.sql", {"tenant_id": "ta", "batch_prefix": BATCH}, tuples=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= STORM_COUNT:
         break
     time.sleep(3)
 
 print("\n-- trigger_stage6c_status --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select trigger_type,job_code,request_status,count(*) "
-    "from batch.trigger_request "
-    "where tenant_id='ta' and (request_id like '" + BATCH + "%' or created_at >= '" + START_TS + "') "
-    "group by trigger_type,job_code,request_status order by trigger_type,job_code,request_status"
-], check=False)
+report_vars = {"tenant_id": "ta", "batch_prefix": BATCH, "start_ts": START_TS}
+print(psql_file("select-trigger-stage6c-status.sql", report_vars).stdout, end="")
 
-storm_success = int((psql(
-    "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance i on i.id=tr.related_job_instance_id "
-    "where tr.tenant_id='ta' and tr.request_id like '" + BATCH + "-storm-%' "
-    "and i.instance_status='SUCCESS'",
-    tuples=True,
-).stdout or "0").strip() or "0")
+storm_success = int((psql_file("count-trigger-stage6c-storm-success.sql", {"tenant_id": "ta", "batch_prefix": BATCH}, tuples=True).stdout or "0").strip() or "0")
 
-misfire_success = read_count(
-    "select count(*) from batch.job_instance "
-    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
-    "and instance_status='SUCCESS' and created_at >= '" + START_TS + "'"
-)
+misfire_success = read_count("count-trigger-stage6c-misfire-success.sql", common_vars)
 summary = (
     f"scheduled={scheduled_count}|misfirePending={misfire_count}|"
     f"misfireSuccess={misfire_success}|replay={replay_status}|storm={storm_success}/{STORM_COUNT}"

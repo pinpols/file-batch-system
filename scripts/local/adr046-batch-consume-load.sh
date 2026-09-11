@@ -41,8 +41,10 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh
+# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/lib/env-common.sh"
 batch_load_default_env
+SQL_DIR="$ROOT/scripts/local/sql"
 
 TRIGGER_PORT="${TRIGGER_PORT:-${TRIGGER_BASE_URL##*:}}"
 ORCH_PORT="${ORCH_PORT:-${ORCHESTRATOR_BASE_URL##*:}}"
@@ -64,7 +66,11 @@ fail() { echo -e "${RED}🔴 FAIL${NC} $*"; }
 skip() { echo -e "${YELLOW}🟡 SKIP${NC} $*"; exit 2; }
 
 psql_q() {
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null | tr -d '[:space:]'
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" \
+    -tA -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$SQL_DIR/$sql_file" 2>/dev/null \
+    | tr -d '[:space:]'
 }
 
 # 抓 orchestrator 暴露的 micrometer 指标(prometheus 文本格式)。
@@ -79,7 +85,8 @@ scrape() {
 say "前置探活: orchestrator :$ORCH_PORT / PG $PG_CONTAINER"
 curl -sS --max-time 5 "http://localhost:${ORCH_PORT}/actuator/health" >/dev/null 2>&1 \
   || skip "orchestrator :$ORCH_PORT 不可达 —— 需先起全栈(flag 开)"
-docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1 \
+docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 \
+  -f /dev/stdin < "$SQL_DIR/check-database-ready.sql" >/dev/null 2>&1 \
   || skip "PG $PG_CONTAINER 不可达"
 
 # claim-batch 指标存在性 = orchestrator 侧 batch 路径可观测(2.4)。
@@ -111,7 +118,8 @@ fi
 # 拿到 job_instance_id
 JI_ID=""; elapsed=0
 while [[ $elapsed -lt 30 ]]; do
-  JI_ID=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='$TENANT_ID' AND request_id='$REQUEST_ID' AND request_status='LAUNCHED'")
+  JI_ID=$(psql_q select-launched-job-instance-id.sql \
+    -v tenant_id="$TENANT_ID" -v request_id="$REQUEST_ID")
   [[ -n "$JI_ID" ]] && break
   sleep 1; elapsed=$((elapsed+1))
 done
@@ -122,12 +130,12 @@ say "job_instance_id=$JI_ID"
 say "等 partition 终态(超时 ${AWAIT_TIMEOUT}s)..."
 elapsed=0; total=0; succ=0; running=0
 while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
-  total=$(psql_q "SELECT count(*) FROM batch.job_partition WHERE job_instance_id=$JI_ID")
-  running=$(psql_q "SELECT count(*) FROM batch.job_partition WHERE job_instance_id=$JI_ID AND partition_status NOT IN ('SUCCESS','FAILED','SKIPPED','CANCELLED')")
+  total=$(psql_q count-job-partitions.sql -v job_instance_id="$JI_ID")
+  running=$(psql_q count-active-job-partitions.sql -v job_instance_id="$JI_ID")
   [[ "$total" -gt 0 && "$running" == "0" ]] && break
   sleep 2; elapsed=$((elapsed+2))
 done
-succ=$(psql_q "SELECT count(*) FROM batch.job_partition WHERE job_instance_id=$JI_ID AND partition_status='SUCCESS'")
+succ=$(psql_q count-successful-job-partitions.sql -v job_instance_id="$JI_ID")
 say "partitions: total=$total success=$succ still-running=$running (${elapsed}s)"
 
 if [[ "${total:-0}" -lt "$EXPECT_MIN_PARTITIONS" ]]; then

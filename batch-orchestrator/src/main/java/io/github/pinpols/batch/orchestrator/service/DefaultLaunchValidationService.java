@@ -9,9 +9,9 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchPersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +33,6 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
 
   private final TriggerRequestMapper triggerRequestMapper;
   private final OrchestratorConfigCacheService configCacheService;
-  private final JobInstanceMapper jobInstanceMapper;
 
   /**
    * 注意副作用：job/workflow 定义缺失时，本方法会把 trigger_request 状态更新为 REJECTED 后再抛 {@code
@@ -43,12 +42,14 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
   public LaunchLoadResult load(LaunchRequest request) {
     validate(request);
 
-    TriggerRequestEntity triggerRequest =
-        triggerRequestMapper.selectByTenantAndRequestId(request.tenantId(), request.requestId());
-    if (triggerRequest == null) {
+    TriggerLaunchPersistenceContext persistenceContext =
+        triggerRequestMapper.selectLaunchPersistenceContext(
+            request.tenantId(), request.requestId());
+    if (persistenceContext == null || persistenceContext.getTriggerRequest() == null) {
       throw BizException.of(
           ResultCode.NOT_FOUND, "error.trigger.request_not_found", request.requestId());
     }
+    TriggerRequestEntity triggerRequest = persistenceContext.getTriggerRequest();
 
     JobDefinitionEntity jobDefinition =
         configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
@@ -78,8 +79,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       }
     }
 
-    JobInstanceEntity existingInstance = jobInstanceMapper.selectByTenantAndDedupKey(
-        request.tenantId(), triggerRequest.getDedupKey());
+    JobInstanceEntity existingInstance = persistenceContext.getExistingInstance();
 
     return new LaunchLoadResult(
         triggerRequest, jobDefinition, workflowDefinition, existingInstance);

@@ -106,7 +106,7 @@ WITH src AS (
 ),
 jobs(job_code, job_name, calendar_code) AS (
   VALUES
-    ('TA_TRIGGER_STAGE6C_SCHEDULED', 'Stage6c scheduled trigger process', 'default-calendar'),
+    ('TA_TRIGGER_STAGE6C_SCHEDULED', 'Stage6c scheduled trigger process', 'default_calendar'),
     ('TA_TRIGGER_STAGE6C_MISFIRE', 'Stage6c manual misfire trigger process', 'stage6c_manual_catchup')
 )
 INSERT INTO batch.job_definition (

@@ -112,7 +112,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (!eval.claimable()) {
       return current;
     }
-    int updated = jobTaskMapper.assignWorker(AssignWorkerParam.builder()
+    JobTaskEntity claimedTask = jobTaskMapper.assignWorker(AssignWorkerParam.builder()
         .tenantId(tenantId)
         .id(taskId)
         .assignedWorkerCode(workerCode)
@@ -120,7 +120,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         .readyStatus(TaskStatus.READY.code())
         .expectedVersion(current.getVersion())
         .build());
-    if (updated <= 0) {
+    if (EmptyChecks.isNull(claimedTask)) {
       return jobTaskMapper.selectById(tenantId, taskId);
     }
     if (EmptyChecks.isNotNull(current.getJobPartitionId())) {
@@ -145,7 +145,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_claim_conflict");
     }
-    return jobTaskMapper.selectById(tenantId, taskId);
+    return claimedTask;
   }
 
   @Override
@@ -501,19 +501,23 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (EmptyChecks.isNull(partition)) {
       return 0;
     }
-    int claimed = tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
-    if (claimed > 0) {
-      return claimed;
+    JobPartitionEntity claimed =
+        tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
+    if (EmptyChecks.isNotNull(claimed)) {
+      return 1;
     }
     partition = jobPartitionMapper.selectById(tenantId, partitionId);
     if (EmptyChecks.isNull(partition)
         || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())) {
       return 0;
     }
-    return tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
+    return EmptyChecks.isNotNull(
+            tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition))
+        ? 1
+        : 0;
   }
 
-  private int tryClaimPartitionLeaseOnce(
+  private JobPartitionEntity tryClaimPartitionLeaseOnce(
       String tenantId, Long partitionId, String workerCode, JobPartitionEntity partition) {
     String invocationId = IdGenerator.newInvocationId();
     Instant invocationStartedAt = BatchDateTimeSupport.utcNow();

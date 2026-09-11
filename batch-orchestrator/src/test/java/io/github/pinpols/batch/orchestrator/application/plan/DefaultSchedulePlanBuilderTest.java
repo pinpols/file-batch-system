@@ -10,6 +10,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -35,7 +36,7 @@ class DefaultSchedulePlanBuilderTest {
     List<PartitionCountResolver> resolvers = List.of(
         new BundlePartitionCountResolver(),
         new ExplicitPartitionCountResolver(),
-        new SizeBasedPartitionCountResolver(),
+        new SizeBasedPartitionCountResolver(new PersistenceGranularityProperties()),
         new RuntimeBasedPartitionCountResolver(),
         new WorkerBasedPartitionCountResolver(workerRegistryMapper));
     builder = new DefaultSchedulePlanBuilder(configCacheService, resolvers);
