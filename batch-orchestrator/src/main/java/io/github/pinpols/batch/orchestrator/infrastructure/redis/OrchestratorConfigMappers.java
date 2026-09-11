@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * <p>这些 mapper 共同服务于同一个配置缓存边界，集中注入可以避免缓存服务随配置类型增加而持续扩大构造器，同时不额外引入只做转发的服务层。
  */
 @Component
-record OrchestratorConfigMappers(
+public record OrchestratorConfigMappers(
     JobDefinitionMapper jobDefinition,
     WorkflowDefinitionMapper workflowDefinition,
     BusinessCalendarMapper businessCalendar,

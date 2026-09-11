@@ -16,4 +16,9 @@ class DryRunSchedulingPriorityTest {
   void formalTaskKeepsConfiguredPriority() {
     assertThat(DryRunSchedulingPriority.resolve(false, 3)).isEqualTo(3);
   }
+
+  @Test
+  void formalTaskKeepsAbsentPriorityWithoutUnboxing() {
+    assertThat(DryRunSchedulingPriority.resolve(false, null)).isNull();
+  }
 }

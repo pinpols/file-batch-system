@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigMappers;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.orchestrator.mapper.*;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -35,6 +36,7 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   @Import({
     BatchClockConfig.class,
     OrchestratorRedisSupport.class,
+    OrchestratorConfigMappers.class,
     OrchestratorConfigCacheService.class
   })
   static class TestApplication {}

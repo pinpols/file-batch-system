@@ -8,6 +8,9 @@ public final class DryRunSchedulingPriority {
   private DryRunSchedulingPriority() {}
 
   public static Integer resolve(boolean dryRun, Integer formalPriority) {
-    return dryRun ? LOWEST_TASK_PRIORITY : formalPriority;
+    if (dryRun) {
+      return LOWEST_TASK_PRIORITY;
+    }
+    return formalPriority;
   }
 }
