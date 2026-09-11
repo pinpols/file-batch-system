@@ -11,18 +11,6 @@ import (
 	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
-func TestDryRunCapabilityRequiresExplicitOptIn(t *testing.T) {
-	regular := (Config{CapabilityTags: []string{"PROCESS"}}).withDefaults()
-	safe := (Config{CapabilityTags: []string{"PROCESS"}, DryRunSafe: true}).withDefaults()
-
-	if len(regular.CapabilityTags) != 1 {
-		t.Fatalf("regular capabilities = %v", regular.CapabilityTags)
-	}
-	if len(safe.CapabilityTags) != 2 || safe.CapabilityTags[1] != DryRunSafeCapability {
-		t.Fatalf("safe capabilities = %v", safe.CapabilityTags)
-	}
-}
-
 func testConfig() Config {
 	return Config{
 		WorkerCode:         "w1",

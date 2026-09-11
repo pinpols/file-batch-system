@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
@@ -175,59 +174,6 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 1L, "JOB", 1L, null);
 
     verify(sessionMapper, never()).selectById(anyString(), anyLong());
-  }
-
-  @Test
-  void dryRunSessionAcceptsOnlyDryRunTerminalStatus() {
-    BatchDayReplaySessionEntity dryRunSession = session(60L, "RUNNING", 1).toBuilder()
-        .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
-        .build();
-    when(sessionMapper.selectById("t1", 60L)).thenReturn(dryRunSession);
-    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
-        .id(61L)
-        .sessionId(60L)
-        .tenantId("t1")
-        .jobCode("JOB_DRY")
-        .status("RUNNING")
-        .build();
-    when(entryMapper.selectBySessionId(60L)).thenReturn(List.of(entry));
-    when(entryMapper.countBySessionAndStatus(60L, ENTRY_SUCCEEDED)).thenReturn(1L);
-    when(entryMapper.countBySessionAndStatus(60L, ENTRY_FAILED)).thenReturn(0L);
-    when(entryMapper.countBySessionAndStatus(60L, "PENDING")).thenReturn(0L);
-    when(entryMapper.countBySessionAndStatus(60L, "RUNNING")).thenReturn(0L);
-
-    reconciler.reconcileOnTerminal(
-        "t1", 60L, "JOB_DRY", 6001L, JobInstanceStatus.SUCCESS_DRY_RUN.code());
-
-    verify(entryMapper)
-        .updateStatus(eq(61L), eq(ENTRY_SUCCEEDED), eq(6001L), any(), any(), any(), any(), any());
-  }
-
-  @Test
-  void dryRunSessionRejectsNormalSuccessAsModeMismatch() {
-    BatchDayReplaySessionEntity dryRunSession = session(70L, "RUNNING", 1).toBuilder()
-        .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
-        .build();
-    when(sessionMapper.selectById("t1", 70L)).thenReturn(dryRunSession);
-    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
-        .id(71L)
-        .sessionId(70L)
-        .tenantId("t1")
-        .jobCode("JOB_DRY")
-        .status("RUNNING")
-        .build();
-    when(entryMapper.selectBySessionId(70L)).thenReturn(List.of(entry));
-    when(entryMapper.countBySessionAndStatus(70L, ENTRY_SUCCEEDED)).thenReturn(0L);
-    when(entryMapper.countBySessionAndStatus(70L, ENTRY_FAILED)).thenReturn(0L);
-    when(entryMapper.countBySessionAndStatus(70L, "PENDING")).thenReturn(0L);
-    when(entryMapper.countBySessionAndStatus(70L, "RUNNING")).thenReturn(1L);
-
-    reconciler.reconcileOnTerminal("t1", 70L, "JOB_DRY", 7001L, JobInstanceStatus.SUCCESS.code());
-
-    verify(entryMapper)
-        .updateStatus(eq(71L), eq("RUNNING"), eq(7001L), any(), any(), any(), any(), any());
-    verify(sessionMapper, never())
-        .updateStatus(eq("t1"), eq(70L), anyString(), anyList(), any(), any(), any(), any());
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

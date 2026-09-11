@@ -15,7 +15,6 @@ import io.github.pinpols.batch.common.enums.FileCompressType;
 import io.github.pinpols.batch.common.enums.FileEncryptType;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.FileTemplateType;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import java.util.List;
@@ -165,8 +164,7 @@ public final class FileTemplateExcelRowParser {
   private static void extractBasicFields(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
     builder
-        .templateCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, "template_code", 128, issues)))
+        .templateCode(requireText(values, "template_code", 128, issues))
         .templateName(requireText(values, "template_name", 256, issues))
         .templateType(requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, 32, issues))
         .bizType(optionalText(values, "biz_type", 64, issues))

@@ -23,8 +23,8 @@ MINIO_SK="${MINIO_SK:-$MINIO_ROOT_PASSWORD}"
 echo "==> 1/2 应用 biz.* 业务表($BUSINESS_DB 业务库)"
 docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" \
   < scripts/db/business/create_biz_tables.sql > /tmp/init-biz-tables.log 2>&1
-applied=$(docker exec -i "$PG_CONTAINER" psql -X -U "$PG_USER" -d "$BUSINESS_DB" \
-  -v ON_ERROR_STOP=1 -q -tA -f /dev/stdin < scripts/local/sql/count-biz-schema-tables.sql)
+applied=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
+  "select count(*) from pg_tables where schemaname='biz'")
 echo "  biz schema 现有 $applied 张表"
 
 echo "==> 2/2 MinIO bucket / prefix 准备"

@@ -28,6 +28,56 @@ def is_production_java(path: str) -> bool:
     return path.endswith(".java") and "/src/main/java/" in f"/{path}"
 
 
+def is_pure_merge_revert(base: str | None) -> bool:
+    """Do not treat restored pre-merge lines as additions in a pure merge revert."""
+    if not base:
+        return False
+    try:
+        base_revision = subprocess.run(
+            ["git", "rev-parse", "--verify", base],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        head_parents = subprocess.run(
+            ["git", "rev-list", "--parents", "-n1", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.split()
+
+        # pull_request checkouts normally point at a synthetic merge commit.
+        candidates = ["HEAD"]
+        if len(head_parents) == 3:
+            candidates = head_parents[1:]
+    except subprocess.CalledProcessError:
+        return False
+
+    for candidate in candidates:
+        try:
+            candidate_parents = subprocess.run(
+                ["git", "rev-list", "--parents", "-n1", candidate],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.split()
+            subject = subprocess.run(
+                ["git", "log", "-1", "--format=%s", candidate],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            continue
+        if (
+            len(candidate_parents) == 2
+            and candidate_parents[1] == base_revision
+            and subject.startswith('Revert "Merge ')
+        ):
+            return True
+    return False
+
+
 def added_lines(base: str | None) -> list[tuple[str, int, str]]:
     command = ["git", "diff", "--unified=0"]
     if base:
@@ -65,6 +115,10 @@ def main() -> int:
         help="比较 base...HEAD；不传时检查 HEAD 到当前工作树的改动",
     )
     args = parser.parse_args()
+
+    if is_pure_merge_revert(args.base):
+        print("EmptyChecks guard passed: pure merge revert does not add production code.")
+        return 0
 
     violations = []
     for path, line_no, source in added_lines(args.base):

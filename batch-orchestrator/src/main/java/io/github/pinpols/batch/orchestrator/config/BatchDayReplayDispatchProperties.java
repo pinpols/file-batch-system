@@ -19,7 +19,4 @@ public class BatchDayReplayDispatchProperties {
 
   /** 单 session 单轮处理 PENDING entries 的上限（rate-limit）。 */
   private int entryBatchSize = 50;
-
-  /** 未绑定实例的 RUNNING entry 超过该时长后允许回收，避免启动窗口崩溃造成永久卡住。 */
-  private long claimTimeoutMillis = 300_000L;
 }

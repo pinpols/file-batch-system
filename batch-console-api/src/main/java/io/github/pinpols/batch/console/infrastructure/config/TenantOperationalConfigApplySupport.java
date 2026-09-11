@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -41,14 +40,13 @@ final class TenantOperationalConfigApplySupport {
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
 
   Map<String, Object> findResourceQueue(String tenantId, ResourceQueueSpec spec) {
-    return resourceQueueMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
+    return resourceQueueMapper.selectByUniqueKey(tenantId, spec.getQueueCode());
   }
 
   void upsertResourceQueue(String tenantId, ResourceQueueSpec spec, String operator) {
     ResourceQueueUpsertParam param = new ResourceQueueUpsertParam();
     param.setTenantId(tenantId);
-    param.setQueueCode(CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
+    param.setQueueCode(spec.getQueueCode());
     param.setQueueName(spec.getQueueName());
     param.setQueueType(spec.getQueueType());
     param.setMaxRunningJobs(spec.getMaxRunningJobs());
@@ -66,14 +64,13 @@ final class TenantOperationalConfigApplySupport {
   }
 
   Map<String, Object> findBatchWindow(String tenantId, BatchWindowSpec spec) {
-    return batchWindowMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()));
+    return batchWindowMapper.selectByUniqueKey(tenantId, spec.getWindowCode());
   }
 
   void upsertBatchWindow(String tenantId, BatchWindowSpec spec) {
     BatchWindowUpsertParam param = new BatchWindowUpsertParam();
     param.setTenantId(tenantId);
-    param.setWindowCode(CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()));
+    param.setWindowCode(spec.getWindowCode());
     param.setWindowName(spec.getWindowName());
     param.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
     param.setStartTime(spec.getStartTime());
@@ -88,15 +85,14 @@ final class TenantOperationalConfigApplySupport {
 
   Map<String, Object> findBusinessCalendar(String tenantId, BusinessCalendarSpec spec) {
     return businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()));
+        tenantId, spec.getCalendarCode());
   }
 
   void upsertBusinessCalendar(
       String tenantId, BusinessCalendarSpec spec, String operator, Long existingId) {
     BusinessCalendarUpsertParam param = new BusinessCalendarUpsertParam();
     param.setTenantId(tenantId);
-    String calendarCode = CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode());
-    param.setCalendarCode(calendarCode);
+    param.setCalendarCode(spec.getCalendarCode());
     param.setCalendarName(spec.getCalendarName());
     param.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
     param.setHolidayRollRule(spec.getHolidayRollRule());
@@ -110,8 +106,8 @@ final class TenantOperationalConfigApplySupport {
     if (spec.getHolidays() == null || spec.getHolidays().isEmpty()) {
       return;
     }
-    Map<String, Object> saved =
-        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+    Map<String, Object> saved = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+        tenantId, spec.getCalendarCode());
     if (saved == null) {
       return;
     }
@@ -132,14 +128,13 @@ final class TenantOperationalConfigApplySupport {
   }
 
   Map<String, Object> findQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
-    return tenantQuotaPolicyMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getPolicyCode()));
+    return tenantQuotaPolicyMapper.selectByUniqueKey(tenantId, spec.getPolicyCode());
   }
 
   void upsertQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
     TenantQuotaPolicyUpsertParam param = TenantQuotaPolicyUpsertParam.builder()
         .tenantId(tenantId)
-        .policyCode(CodeNormalizer.toConfigFormOrNull(spec.getPolicyCode()))
+        .policyCode(spec.getPolicyCode())
         .maxRunningJobsPerTenant(spec.getMaxRunningJobsPerTenant())
         .maxPartitionsPerTenant(spec.getMaxPartitionsPerTenant())
         .maxQpsPerTenant(spec.getMaxQpsPerTenant())
@@ -151,14 +146,13 @@ final class TenantOperationalConfigApplySupport {
   }
 
   Map<String, Object> findAlertRouting(String tenantId, AlertRoutingSpec spec) {
-    return alertRoutingConfigMapper.selectByUniqueKey(
-        tenantId, CodeNormalizer.toConfigFormOrNull(spec.getRouteCode()));
+    return alertRoutingConfigMapper.selectByUniqueKey(tenantId, spec.getRouteCode());
   }
 
   void upsertAlertRouting(String tenantId, AlertRoutingSpec spec, String operator) {
     AlertRoutingConfigUpsertParam param = new AlertRoutingConfigUpsertParam();
     param.setTenantId(tenantId);
-    param.setRouteCode(CodeNormalizer.toConfigFormOrNull(spec.getRouteCode()));
+    param.setRouteCode(spec.getRouteCode());
     param.setRouteName(spec.getRouteName());
     param.setTeam(spec.getTeam());
     param.setAlertGroup(spec.getAlertGroup());

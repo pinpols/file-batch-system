@@ -1,8 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.enums.BatchDayReplayCandidateSource;
-import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
@@ -10,35 +7,22 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
-import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
-import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
-import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
-import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -48,12 +32,11 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * ADR-020 / ADR-026 批量日重放与整日 dry-run 后端入口。
+ * ADR-020 §决策 §实施分阶段 Stages 3 + 6 — 批量日维度重放后端入口。
  *
  * <p>覆盖能力：
  *
@@ -65,7 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
  *       ResultVersionPromoteService#promote} 不创建新 instance。
  * </ul>
  *
- * <p>历史实例与调度计划两类候选都先物化为 entry，再由 dispatcher 驱动；dry-run 强制使用隔离结果策略。
+ * <p>不在本 Stage 范围：dispatcher（Stage 4）/ terminal 回填（Stage 5）。其它 scope 的 entry 当前停在 PENDING，等 Stage 4
+ * 落地后由 dispatcher 驱动 rerun。
  */
 @Slf4j
 @Service
@@ -88,12 +72,6 @@ public class BatchDayReplayService {
   private final ResultVersionMapper resultVersionMapper;
   private final ResultVersionPromoteService promoteService;
   private final BatchDateTimeSupport dateTimeSupport;
-  private final BatchDayDryRunProperties dryRunProperties;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final SchedulePlanBuilder schedulePlanBuilder;
-  private final BatchDayPlanCalendarMapper planCalendarMapper;
-  private final DisasterDayOverrideMapper disasterDayOverrideMapper;
-  private final BatchTimezoneProvider timezoneProvider;
 
   /**
    * 提交 replay session：写聚合 + 物化 entries。同 (tenant, calendarCode, bizDate) 已存在 active session 则拒绝。
@@ -104,9 +82,6 @@ public class BatchDayReplayService {
     Instant now = dateTimeSupport.nowInstant();
 
     String scope = normalizeScope(command.scope());
-    String executionMode = normalizeExecutionMode(command.executionMode());
-    String candidateSource = normalizeCandidateSource(command.candidateSource());
-    validateModeContract(scope, executionMode, candidateSource, true);
     String initialStatus = command.autoApprove() ? STATUS_RUNNING : STATUS_PENDING_APPROVAL;
 
     // 物化 entries
@@ -114,17 +89,15 @@ public class BatchDayReplayService {
     if (entries.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.no_candidates");
     }
-    enforceDryRunCapacity(executionMode, entries.size());
 
     BatchDayReplaySessionEntity session = BatchDayReplaySessionEntity.builder()
         .tenantId(command.tenantId())
         .calendarCode(command.calendarCode())
         .bizDate(command.bizDate())
         .scope(scope)
-        .executionMode(executionMode)
-        .candidateSource(candidateSource)
         .scopePayload(buildScopePayload(command, scope))
-        .resultPolicy(resolveResultPolicy(command, executionMode))
+        .resultPolicy(
+            defaultIfBlank(command.resultPolicy(), ResultVersionPolicy.CREATE_NEW_VERSION.code()))
         .configVersionPolicy(defaultIfBlank(
             command.configVersionPolicy(), ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code()))
         .configVersion(command.configVersion())
@@ -165,13 +138,11 @@ public class BatchDayReplayService {
 
     log.info(
         "batch_day_replay submitted: tenantId={}, calendarCode={}, bizDate={}, scope={},"
-            + " executionMode={}, candidateSource={}, sessionId={}, entries={}, status={}",
+            + " sessionId={}, entries={}, status={}",
         command.tenantId(),
         command.calendarCode(),
         command.bizDate(),
         scope,
-        executionMode,
-        candidateSource,
         sessionId,
         entries.size(),
         initialStatus);
@@ -184,11 +155,9 @@ public class BatchDayReplayService {
     validateCommand(command);
     Instant now = dateTimeSupport.nowInstant();
     String scope = normalizeScope(command.scope());
-    String executionMode = normalizeExecutionMode(command.executionMode());
-    String candidateSource = normalizeCandidateSource(command.candidateSource());
-    validateModeContract(scope, executionMode, candidateSource, false);
     List<BatchDayReplayEntryEntity> entries = materializeEntries(command, scope, now);
-    String resultPolicy = resolveResultPolicy(command, executionMode);
+    String resultPolicy =
+        defaultIfBlank(command.resultPolicy(), ResultVersionPolicy.CREATE_NEW_VERSION.code());
     String configVersionPolicy = defaultIfBlank(
         command.configVersionPolicy(), ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code());
     Map<Long, String> versionBusinessKeys = loadVersionBusinessKeys(command, scope);
@@ -208,8 +177,6 @@ public class BatchDayReplayService {
         command.calendarCode(),
         command.bizDate(),
         scope,
-        executionMode,
-        candidateSource,
         resultPolicy,
         configVersionPolicy,
         command.configVersion(),
@@ -229,13 +196,11 @@ public class BatchDayReplayService {
 
   /** 查询 replay entry 进度列表；Controller 只负责 HTTP 参数，查询约束留在应用层。 */
   @Transactional(readOnly = true)
-  public List<BatchDayReplayEntryEntity> listEntries(
-      String tenantId, Long sessionId, String status, int limit) {
-    if (!Texts.hasText(tenantId) || sessionId == null || limit <= 0) {
+  public List<BatchDayReplayEntryEntity> listEntries(Long sessionId, String status, int limit) {
+    if (sessionId == null || limit <= 0) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
     }
-    loadOrThrow(tenantId, sessionId);
-    return entryMapper.selectBySessionAndStatus(sessionId, tenantId, status, limit);
+    return entryMapper.selectBySessionAndStatus(sessionId, status, limit);
   }
 
   /** PENDING_APPROVAL → RUNNING；记录 approver。 */
@@ -303,7 +268,7 @@ public class BatchDayReplayService {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.not_running");
     }
     List<BatchDayReplayEntryEntity> entries =
-        entryMapper.selectBySessionAndStatus(sessionId, tenantId, ENTRY_PENDING, Integer.MAX_VALUE);
+        entryMapper.selectBySessionAndStatus(sessionId, ENTRY_PENDING, Integer.MAX_VALUE);
     if (entries == null) {
       entries = List.of();
     }
@@ -375,77 +340,8 @@ public class BatchDayReplayService {
     return upper;
   }
 
-  private String normalizeExecutionMode(String value) {
-    String normalized = defaultIfBlank(value, BatchDayReplayExecutionMode.REPLAY.code())
-        .trim()
-        .toUpperCase(Locale.ROOT);
-    if (BatchDayReplayExecutionMode.fromCodeOrNull(normalized) == null) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_execution_mode");
-    }
-    return normalized;
-  }
-
-  private String normalizeCandidateSource(String value) {
-    String normalized = defaultIfBlank(
-            value, BatchDayReplayCandidateSource.EXISTING_INSTANCES.code())
-        .trim()
-        .toUpperCase(Locale.ROOT);
-    if (BatchDayReplayCandidateSource.fromCodeOrNull(normalized) == null) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_candidate_source");
-    }
-    return normalized;
-  }
-
-  private void validateModeContract(
-      String scope, String executionMode, String candidateSource, boolean requireEnabled) {
-    boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(executionMode);
-    if (!dryRun
-        && !BatchDayReplayCandidateSource.EXISTING_INSTANCES.code().equals(candidateSource)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.schedule_plan_requires_dry_run");
-    }
-    if (!dryRun) {
-      return;
-    }
-    if (requireEnabled && !dryRunProperties.isEnabled()) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.batch_day_replay.dry_run_disabled");
-    }
-    if (BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.dry_run_outputs_only_forbidden");
-    }
-  }
-
-  private void enforceDryRunCapacity(String executionMode, int entryCount) {
-    if (!BatchDayReplayExecutionMode.DRY_RUN.code().equals(executionMode)) {
-      return;
-    }
-    int limit = Math.max(1, dryRunProperties.getMaxActiveEntries());
-    if (entryCount > limit) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.batch_day_replay.dry_run_capacity_exceeded",
-          entryCount,
-          limit);
-    }
-  }
-
-  private String resolveResultPolicy(BatchDayReplaySubmitCommand command, String executionMode) {
-    if (BatchDayReplayExecutionMode.DRY_RUN.code().equals(executionMode)) {
-      return ResultVersionPolicy.DRY_RUN_ONLY.code();
-    }
-    return defaultIfBlank(command.resultPolicy(), ResultVersionPolicy.CREATE_NEW_VERSION.code());
-  }
-
   private List<BatchDayReplayEntryEntity> materializeEntries(
       BatchDayReplaySubmitCommand command, String scope, Instant now) {
-    if (BatchDayReplayCandidateSource.SCHEDULE_PLAN
-        .code()
-        .equals(normalizeCandidateSource(command.candidateSource()))) {
-      return materializeSchedulePlanEntries(command, scope, now);
-    }
     BatchDayReplayScope scopeType = BatchDayReplayScope.fromCodeOrNull(scope);
     if (scopeType == BatchDayReplayScope.OUTPUTS_ONLY) {
       return materializeOutputsOnlyEntries(command, now);
@@ -493,127 +389,6 @@ public class BatchDayReplayService {
           .build());
     }
     return entries;
-  }
-
-  private List<BatchDayReplayEntryEntity> materializeSchedulePlanEntries(
-      BatchDayReplaySubmitCommand command, String scope, Instant now) {
-    BatchDayReplayScope scopeType = BatchDayReplayScope.fromCodeOrNull(scope);
-    if (scopeType == BatchDayReplayScope.ALL_FAILED
-        || scopeType == BatchDayReplayScope.OUTPUTS_ONLY) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.schedule_plan_scope_invalid");
-    }
-    List<String> requestedCodes = scopeType == BatchDayReplayScope.SUBSET_JOB_CODES
-        ? normalizeRequestedJobCodes(command.jobCodes())
-        : List.of();
-    if (isCalendarBlocked(command, now)) {
-      return List.of();
-    }
-    List<JobDefinitionEntity> definitions =
-        jobDefinitionMapper.selectByTenantAndEnabled(command.tenantId(), true);
-    if (EmptyChecks.isEmpty(definitions)) {
-      return List.of();
-    }
-    List<BatchDayReplayEntryEntity> entries = new ArrayList<>();
-    for (JobDefinitionEntity definition : definitions) {
-      if (!isSchedulePlanCandidate(
-          definition, command.calendarCode(), command.bizDate(), requestedCodes)) {
-        continue;
-      }
-      SchedulePlan plan = schedulePlanBuilder.build(new SchedulePlanCommand(
-          command.tenantId(), definition.jobCode(), command.bizDate().toString(), Map.of()));
-      entries.add(BatchDayReplayEntryEntity.builder()
-          .tenantId(command.tenantId())
-          .jobCode(definition.jobCode())
-          .planSnapshot(buildPlanSnapshot(definition, plan, command.bizDate()))
-          .status(ENTRY_PENDING)
-          .createdAt(now)
-          .updatedAt(now)
-          .build());
-    }
-    if (scopeType == BatchDayReplayScope.SUBSET_JOB_CODES
-        && entries.size() != requestedCodes.size()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.schedule_plan_jobs_unavailable");
-    }
-    return entries;
-  }
-
-  private List<String> normalizeRequestedJobCodes(List<String> jobCodes) {
-    if (EmptyChecks.isEmpty(jobCodes)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
-    }
-    return jobCodes.stream().filter(Texts::hasText).map(String::trim).distinct().toList();
-  }
-
-  private boolean isSchedulePlanCandidate(
-      JobDefinitionEntity definition,
-      String calendarCode,
-      LocalDate bizDate,
-      List<String> requestedCodes) {
-    if (definition == null
-        || !Texts.hasText(definition.jobCode())
-        || !calendarCode.equals(definition.calendarCode())) {
-      return false;
-    }
-    if (EmptyChecks.isNotEmpty(requestedCodes) && !requestedCodes.contains(definition.jobCode())) {
-      return false;
-    }
-    if (ScheduleType.MANUAL.code().equalsIgnoreCase(definition.scheduleType())) {
-      return false;
-    }
-    if (!ScheduleType.CRON.code().equalsIgnoreCase(definition.scheduleType())) {
-      return true;
-    }
-    if (!Texts.hasText(definition.scheduleExpr())) {
-      return false;
-    }
-    try {
-      ZoneId zone = timezoneProvider.resolveOrDefault(definition.timezone());
-      ZonedDateTime dayStart = bizDate.atStartOfDay(zone);
-      ZonedDateTime next =
-          CronExpression.parse(definition.scheduleExpr()).next(dayStart.minusNanos(1));
-      return next != null && next.isBefore(bizDate.plusDays(1).atStartOfDay(zone));
-    } catch (RuntimeException invalidSchedule) {
-      log.warn(
-          "skip invalid schedule-plan candidate: tenantId={}, jobCode={}, scheduleExpr={}, msg={}",
-          definition.tenantId(),
-          definition.jobCode(),
-          definition.scheduleExpr(),
-          invalidSchedule.getMessage());
-      return false;
-    }
-  }
-
-  private boolean isCalendarBlocked(BatchDayReplaySubmitCommand command, Instant now) {
-    if (disasterDayOverrideMapper.selectActiveByCalendarBizDate(
-            command.tenantId(), command.calendarCode(), command.bizDate(), now)
-        != null) {
-      return true;
-    }
-    return "HOLIDAY"
-        .equalsIgnoreCase(planCalendarMapper.selectEffectiveDayType(
-            command.tenantId(), command.calendarCode(), command.bizDate()));
-  }
-
-  private String buildPlanSnapshot(
-      JobDefinitionEntity definition, SchedulePlan plan, LocalDate bizDate) {
-    Map<String, Object> snapshot = new LinkedHashMap<>();
-    snapshot.put("schemaVersion", "batch-day-dry-run-plan-v1");
-    snapshot.put("jobDefinitionId", definition.id());
-    snapshot.put("jobDefinitionVersion", definition.version());
-    snapshot.put("jobCode", definition.jobCode());
-    snapshot.put("bizDate", bizDate.toString());
-    snapshot.put("scheduleType", definition.scheduleType());
-    snapshot.put("scheduleExpr", definition.scheduleExpr());
-    snapshot.put("timezone", definition.timezone());
-    snapshot.put("queueCode", plan.getQueueCode());
-    snapshot.put("workerGroup", plan.getWorkerGroup());
-    snapshot.put("workerType", plan.getDefaultWorkerType());
-    snapshot.put("partitionCount", plan.getPartitionCount());
-    snapshot.put("defaultParams", definition.defaultParams());
-    return JsonUtils.toJson(snapshot);
   }
 
   private List<BatchDayReplayEntryEntity> materializeOutputsOnlyEntries(
@@ -686,7 +461,7 @@ public class BatchDayReplayService {
       Map<Long, String> versionBusinessKeys) {
     String action = BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
         ? "PROMOTE_RESULT_VERSION"
-        : entry.sourceInstanceId() == null ? "LAUNCH_SCHEDULE_PLAN" : "RERUN_INSTANCE";
+        : "RERUN_INSTANCE";
     String businessKey = BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
         ? versionBusinessKeys.getOrDefault(entry.resultVersionId(), "")
         : "job:" + entry.jobCode() + ":" + command.bizDate();

@@ -40,7 +40,6 @@ mkdir -p "$OUT_DIR"
 RAW="$OUT_DIR/raw.tsv"
 SUMMARY="$OUT_DIR/summary.tsv"
 REPORT="$OUT_DIR/pg-write-parameter-matrix.md"
-SQL_DIR="$ROOT/scripts/local/sql"
 
 BASE_JDBC="${DB_URL:-jdbc:postgresql://$(batch_format_host_port "$PGHOST" "$PGPORT")/${BUSINESS_DB}?reWriteBatchedInserts=true}"
 
@@ -53,31 +52,25 @@ psql_business() {
 }
 
 sql_value() {
-  local sql_file="$1"
-  shift
-  psql_business -tA "$@" -f "$SQL_DIR/$sql_file"
+  psql_business -Atc "$1"
 }
 
-ORIGINAL_CHECKPOINT_TIMEOUT="$(sql_value show-checkpoint-timeout.sql)"
-ORIGINAL_MAX_WAL_SIZE="$(sql_value show-max-wal-size.sql)"
+ORIGINAL_CHECKPOINT_TIMEOUT="$(sql_value "show checkpoint_timeout")"
+ORIGINAL_MAX_WAL_SIZE="$(sql_value "show max_wal_size")"
 
 restore_pg_settings() {
-  psql_platform -q -v setting_value="$ORIGINAL_CHECKPOINT_TIMEOUT" \
-    -f "$SQL_DIR/set-checkpoint-timeout.sql" >/dev/null || true
-  psql_platform -q -v setting_value="$ORIGINAL_MAX_WAL_SIZE" \
-    -f "$SQL_DIR/set-max-wal-size.sql" >/dev/null || true
-  psql_platform -q -f "$SQL_DIR/reload-postgres-config.sql" >/dev/null || true
+  psql_platform -qAtc "alter system set checkpoint_timeout = '${ORIGINAL_CHECKPOINT_TIMEOUT}';" >/dev/null || true
+  psql_platform -qAtc "alter system set max_wal_size = '${ORIGINAL_MAX_WAL_SIZE}';" >/dev/null || true
+  psql_platform -qAtc "select pg_reload_conf();" >/dev/null || true
 }
 trap restore_pg_settings EXIT
 
 set_pg_settings() {
   local checkpoint_timeout="$1"
   local max_wal_size="$2"
-  psql_platform -q -v setting_value="$checkpoint_timeout" \
-    -f "$SQL_DIR/set-checkpoint-timeout.sql" >/dev/null
-  psql_platform -q -v setting_value="$max_wal_size" \
-    -f "$SQL_DIR/set-max-wal-size.sql" >/dev/null
-  psql_platform -q -f "$SQL_DIR/reload-postgres-config.sql" >/dev/null
+  psql_platform -qAtc "alter system set checkpoint_timeout = '${checkpoint_timeout}';" >/dev/null
+  psql_platform -qAtc "alter system set max_wal_size = '${max_wal_size}';" >/dev/null
+  psql_platform -qAtc "select pg_reload_conf();" >/dev/null
   sleep 1
 }
 
@@ -108,15 +101,14 @@ run_case() {
 
   for repeat in $(seq 1 "$REPEATS"); do
     local before_lsn after_lsn wal_bytes db_bytes log_file
-    before_lsn="$(sql_value select-current-wal-lsn.sql)"
+    before_lsn="$(sql_value "select pg_current_wal_lsn()")"
     log_file="$OUT_DIR/${case_name}-${repeat}.log"
     ROWS="$ROWS" BATCH_SIZE="$BATCH_SIZE" EXTRA_INDEXES="$extra_indexes" DB_URL="$url" \
       DB_USER="$PGUSER" DB_PASSWORD="$PGPASSWORD" \
       bash scripts/local/import-copy-worth-benchmark.sh > "$log_file"
-    after_lsn="$(sql_value select-current-wal-lsn.sql)"
-    wal_bytes="$(sql_value select-wal-lsn-difference.sql \
-      -v after_lsn="$after_lsn" -v before_lsn="$before_lsn")"
-    db_bytes="$(sql_value select-current-database-size.sql)"
+    after_lsn="$(sql_value "select pg_current_wal_lsn()")"
+    wal_bytes="$(sql_value "select pg_wal_lsn_diff('${after_lsn}', '${before_lsn}')::bigint")"
+    db_bytes="$(sql_value "select pg_database_size(current_database())")"
 
     local batch_s batch_rps copy_s copy_rps direct_s direct_rps copy_speedup direct_speedup
     batch_s="$(awk -F'[ =]' '/^batch_upsert_total=/{gsub(/s$/, "", $2); print $2}' "$log_file")"
@@ -129,8 +121,8 @@ run_case() {
     direct_speedup="$(awk -F'[ =]' '/^copy_direct_replace_total=/{gsub(/x$/, "", $7); print $7}' "$log_file")"
 
     local effective_checkpoint effective_max_wal
-    effective_checkpoint="$(sql_value show-checkpoint-timeout.sql)"
-    effective_max_wal="$(sql_value show-max-wal-size.sql)"
+    effective_checkpoint="$(sql_value "show checkpoint_timeout")"
+    effective_max_wal="$(sql_value "show max_wal_size")"
 
     echo -e "${RUN_ID}\t${case_name}\t${repeat}\t${ROWS}\t${BATCH_SIZE}\t${extra_indexes}\t${effective_checkpoint}\t${effective_max_wal}\t${sync}\t${work_mem}\t${maintenance_work_mem}\t${wal_bytes}\t${db_bytes}\t${batch_s}\t${batch_rps}\t${copy_s}\t${copy_rps}\t${direct_s}\t${direct_rps}\t${copy_speedup}\t${direct_speedup}" | tee -a "$RAW"
   done

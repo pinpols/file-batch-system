@@ -8,9 +8,6 @@
 /// (wire-protocol §A).
 pub const SUPPORTED_SCHEMA_VERSIONS: &[&str] = &["v1", "v2"];
 
-/// Worker opt-in capability required before the platform dispatches dry-run tasks.
-pub const DRY_RUN_SAFE_CAPABILITY: &str = "dry-run-safe";
-
 /// `worker_runtime_states`: worker FSM states.
 pub const WORKER_RUNTIME_STATES: &[&str] = &["NORMAL", "DEGRADED", "PAUSED", "DRAINING"];
 

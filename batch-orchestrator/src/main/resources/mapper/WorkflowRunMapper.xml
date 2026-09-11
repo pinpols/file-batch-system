@@ -120,13 +120,11 @@
         limit #{limit}
     </select>
 
-    <!-- P3-3 archive 自动化：选正式执行与 dry-run 终结态，按 id asc 防 missed delete -->
+    <!-- P3-3 archive 自动化：选终结态 + finished_at 早于 cutoff 的 workflow_run id，按 id asc 防 missed delete -->
     <select id="selectArchivableIds" resultType="java.lang.Long">
         select id
         from batch.workflow_run
-        where run_status in (
-            'SUCCESS', 'FAILED', 'TERMINATED', 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
-        )
+        where run_status in ('SUCCESS','FAILED','TERMINATED')
           and finished_at is not null
           and finished_at &lt; #{cutoff}
         order by id asc

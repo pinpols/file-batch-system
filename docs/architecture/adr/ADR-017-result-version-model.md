@@ -157,7 +157,7 @@ batch.result-version.retention.scan-cron         = "0 30 3 * * *"
 
 1. 同一 `(tenant_id, business_key)` 内最多 1 行 `status=EFFECTIVE` —— DB 部分唯一索引保证；
 2. `effective_at` 单调推进，旧 EFFECTIVE 必须先 SUPERSEDED 才能让出；切换在同事务里完成；
-3. ARCHIVED 行的 `payload_json` 可为 NULL。进入 archive 镜像后，batch 热表中的历史行可按 `archived-days` 清理；`archive.result_version_archive` 中的 `id` / `version_no` / `business_key` 作为审计证据保留，不由热表清理任务删除；
+3. ARCHIVED 行的 `payload_json` 可为 NULL，但 `id` / `version_no` / `business_key` 永不删（审计需要）；
 4. `result_version.job_instance_id` 永远引用 SUCCESS / PARTIAL_SUCCESS 终态实例，不引用 RUNNING；
 5. worker 不直接写 result_version，永远只通过 orchestrator —— 维持单一状态主机。
 

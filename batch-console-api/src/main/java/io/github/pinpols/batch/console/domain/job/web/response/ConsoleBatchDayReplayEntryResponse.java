@@ -15,6 +15,5 @@ public record ConsoleBatchDayReplayEntryResponse(
     Instant startedAt,
     Instant finishedAt,
     Long resultVersionId,
-    String planSnapshot,
     Instant createdAt,
     Instant updatedAt) {}

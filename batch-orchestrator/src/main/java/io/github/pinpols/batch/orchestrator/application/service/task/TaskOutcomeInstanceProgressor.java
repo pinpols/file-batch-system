@@ -71,41 +71,29 @@ public final class TaskOutcomeInstanceProgressor {
     WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
         command.tenantId(), jobInstance.getId());
     boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
-    JobInstanceEntity freshInstance =
-        jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstance.getId());
-    JobInstanceEntity progressInstance =
-        EmptyChecks.isNotNull(freshInstance) ? freshInstance : jobInstance;
     List<PartitionStatusRef> statusRefs = dagInstance
         ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
             command.tenantId(), task.getJobInstanceId())
         : List.of();
-    long totalPartitionCount = dagInstance
-        ? statusRefs.size()
-        : Optional.ofNullable(progressInstance.getExpectedPartitionCount()).orElse(0);
+    PartitionStatusSummary statusSummary = dagInstance
+        ? null
+        : jobMappers.jobPartitionMapper.selectStatusSummaryByInstance(
+            command.tenantId(), task.getJobInstanceId());
+    long totalPartitionCount =
+        dagInstance ? statusRefs.size() : statusSummary == null ? 0L : statusSummary.totalCount();
     long successCount = dagInstance
         ? statusRefs.stream()
             .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
             .count()
-        : Optional.ofNullable(progressInstance.getSuccessPartitionCount()).orElse(0);
+        : statusSummary == null ? 0L : statusSummary.successCount();
     long failedCount = dagInstance
         ? statusRefs.stream()
             .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
             .count()
-        : Optional.ofNullable(progressInstance.getFailedPartitionCount()).orElse(0);
+        : statusSummary == null ? 0L : statusSummary.failedCount();
     long finishedPartitionCount = successCount + failedCount;
     boolean allPartitionsFinished =
         totalPartitionCount > 0 && finishedPartitionCount == totalPartitionCount;
-    PartitionStatusSummary terminalVerification = null;
-    if (!dagInstance && allPartitionsFinished) {
-      terminalVerification = jobMappers.jobPartitionMapper.selectStatusSummaryByInstance(
-          command.tenantId(), task.getJobInstanceId());
-      if (terminalVerification == null
-          || terminalVerification.totalCount() != totalPartitionCount
-          || terminalVerification.successCount() != successCount
-          || terminalVerification.failedCount() != failedCount) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
-      }
-    }
     String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
     List<NodePartitionAssignment> nodeAssignments = dagInstance
         ? jobMappers.jobTaskMapper.selectNodeAssignmentsByInstance(
@@ -143,6 +131,8 @@ public final class TaskOutcomeInstanceProgressor {
     boolean dagContinues =
         EmptyChecks.isNotNull(workflowRun) && EmptyChecks.isNotEmpty(activeNodes);
     boolean jobFullyComplete = allPartitionsFinished && !dagContinues;
+    JobInstanceEntity freshInstance =
+        jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstance.getId());
     if (EmptyChecks.isNotNull(freshInstance)) {
       jobInstance.setVersion(freshInstance.getVersion());
       jobInstance.setInstanceStatus(freshInstance.getInstanceStatus());
@@ -200,9 +190,7 @@ public final class TaskOutcomeInstanceProgressor {
                 successCount,
                 dagInstance
                     ? TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs)
-                    : terminalVerification == null
-                        ? failedCount
-                        : terminalVerification.broadFailedCount(),
+                    : statusSummary == null ? 0L : statusSummary.broadFailedCount(),
                 command))
             .finishedAt(jobFullyComplete ? finishedAt : null)
             .failureClass(instanceFailureClass)

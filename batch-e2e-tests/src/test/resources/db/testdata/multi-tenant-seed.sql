@@ -169,7 +169,7 @@ INSERT INTO batch.business_calendar
    enabled, created_at, updated_at)
 VALUES
   -- ta 零售: 跳过节假日，自动补跑
-  ('ta', 'ta_default_calendar', 'TA Default Calendar', 'Asia/Shanghai',
+  ('ta', 'ta-default-calendar', 'TA Default Calendar', 'Asia/Shanghai',
    'NEXT_WORKDAY', 'AUTO', 3,
    true, now(), now()),
   -- tb 金融: 跳过节假日，人工审批补跑（合规要求）

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
-import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
@@ -18,10 +17,6 @@ public class ValidateStep implements ProcessStageStep {
 
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
-    if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
-        .isDryRun()) {
-      return ProcessStageResult.success(stage());
-    }
     ProcessComputePlugin plugin = context.getResolvedPlugin();
     if (EmptyChecks.isNull(plugin)) {
       return ProcessStageResult.success(stage());

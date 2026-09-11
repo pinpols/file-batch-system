@@ -59,7 +59,6 @@
 | `batch.resource-scheduler.default-exceeded-strategy` | `QUEUE_DEFER` / `REJECT` | **QUEUE_DEFER** | 超配额租户的默认策略（REJECT 为旧行为，可回退） | P1 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY` | ❌ |
 | `batch.resource-scheduler.waiting-dispatch-kick-enabled` | `true` / `false` | **true** | task 终态提交后合并唤醒 WAITING 分区；关闭后只保留周期扫描 | P1 | `BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED` | ✅ |
 | `batch.trigger.runtime.api-launch-adaptive-enabled` | `true` / `false` | **false** | Trigger 手工 launch 的 AIMD 本地准入；慢请求减半、正常请求逐步恢复，需先完成灰度压测 | P1 | `BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED` | ✅ |
-| `batch.trigger.outbox.adaptive-release-enabled` | `true` / `false` | **false** | 根据 orchestrator trigger consumer group lag 对 Relay 发布速率做 AIMD 调节；采样失败降到最小速率 | P1 | `BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED` | ✅ |
 | `batch.worker.lease.renew-batch-max-items` | 正整数 | **256** | 单次 renew-batch HTTP 最多携带任务数，超出自动拆单 | P2 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS` | ❌ |
 
 ### 1.C 安全
@@ -69,7 +68,6 @@
 | `batch.security.bypass-mode` | `true` / `false` | **false** | 安全旁路（认证/脱敏/加解密/审批/渠道校验全放宽）；**仅本地/E2E**，生产 profile 拒绝 true | **P0** | `BATCH_SECURITY_BYPASS_MODE` | ✅ |
 | `batch.request-signing.enabled` | `true` / `false` | **false** | 内部写请求 HMAC 签名+ts+nonce 防重放；灰度先升 SDK 再开服务端 | P1 | `BATCH_REQUEST_SIGNING_ENABLED` | ✅ |
 | `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级固定窗口限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` | ✅ |
-| `batch.replay.dry-run.enabled` | `true` / `false` | **false** | 整批量日无副作用演练；开启前必须完成五类 Worker 隔离验收 | P1 | `BATCH_REPLAY_DRY_RUN_ENABLED` | ❌ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
 | `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
 | `batch.console.captcha.provider` | `none` / `selfhosted` / `tencent` / `aliyun` | **none** | 登录验证码实现；任一时刻只装一个；tencent/aliyun 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
@@ -84,8 +82,6 @@
 | `batch.storage.encryption.decorator-enabled` | `true` / `false` | **false** | BATCHENC 整对象加密装饰层；开启后 presign 直传禁用、range 读退化 | P1 | `BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED` | ❌ |
 | `batch.storage.s3.auto-create-bucket` | `true` / `false` | **true** | 启动自动建桶；AWS/OSS/COS 等托管云**必须 false** | P1 | `BATCH_S3_AUTO_CREATE_BUCKET` | ❌ |
 | `batch.scheduler.worker-cache.enabled` | `true` / `false` | **true** | ONLINE worker 列表缓存（Redis 故障 fail-open 直通 DB） | P2 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` | ❌ |
-| `batch.orchestrator.persistence-granularity.enabled` | `true` / `false` | **false** | 未显式指定目标粒度的 DYNAMIC/AUTO 作业按规模选择 partition/task 数；不省略审计记录 | P1 | `BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED` | ❌ |
-| `batch.outbox.sharding-mode` | `STATIC` / `DYNAMIC` | **STATIC** | Orchestrator Outbox 静态分片或 Redis 成员租约动态重排；启用 HPA/KEDA 前必须为 DYNAMIC | P1 | `BATCH_OUTBOX_SHARDING_MODE` | ✅（配置校验、成员注销、Helm 渲染） |
 | `batch.quota.snapshot.enabled` | `true` / `false` | **true** | Redis 配额状态周期快照到 PG（审计 / 降级数据源） | P2 | `BATCH_QUOTA_SNAPSHOT_ENABLED` | ❌ |
 
 ### 1.E 分片路由 / 导入扫描 / 原子任务

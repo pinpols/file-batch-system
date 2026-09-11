@@ -27,7 +27,7 @@
             detected_at, status, expires_at, created_at, updated_at
         ) values (
             #{tenantId}, #{jobCode}, #{scheduledFireTime},
-            now(), 'PENDING', #{expiresAt}, now(), now()
+            now(), 'PENDING', now() + interval '7 days', now(), now()
         )
     </insert>
 

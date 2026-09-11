@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,9 +32,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 @Slf4j
 public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
 
+  private static final String MEMBERS_KEY = "batch:orchestrator:members";
+
   private final StringRedisTemplate redis;
   private final String memberId;
-  private final String membersKey;
   private final Duration memberTtl;
 
   /** 缓存上次成功读到的 assignment，Redis 异常时回退用。 */
@@ -49,20 +48,15 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   /**
    * @param redis Spring Data Redis StringRedisTemplate（和 ShedLock / 其它业务共用连接）
    * @param memberId 当前 Pod 的稳定标识（推荐 K8s POD_NAME；单副本也可用主机名）
-   * @param membersKey 当前部署独占的 Redis 成员集合键
    * @param memberTtl 心跳超期时长，超过该时长未心跳的成员视为死亡并清出列表（推荐 30s）
    */
   public RedisShardAssignmentProvider(
-      StringRedisTemplate redis, String memberId, String membersKey, Duration memberTtl) {
+      StringRedisTemplate redis, String memberId, Duration memberTtl) {
     if (memberId == null || memberId.isBlank()) {
       throw new IllegalArgumentException("memberId must not be blank");
     }
-    if (EmptyChecks.isBlank(membersKey)) {
-      throw new IllegalArgumentException("membersKey must not be blank");
-    }
     this.redis = redis;
     this.memberId = memberId;
-    this.membersKey = membersKey;
     this.memberTtl = memberTtl;
   }
 
@@ -73,7 +67,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   @PostConstruct
   void selfCheckOnStartup() {
     try {
-      redis.opsForZSet().add(membersKey, memberId, BatchDateTimeSupport.utcEpochMillis());
+      redis.opsForZSet().add(MEMBERS_KEY, memberId, BatchDateTimeSupport.utcEpochMillis());
       coordinationHealthy.set(true);
       log.info("RedisShardAssignmentProvider startup heartbeat OK: member={}", memberId);
     } catch (RuntimeException ex) {
@@ -94,7 +88,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   @Scheduled(fixedDelayString = "${batch.outbox.sharding.heartbeat-interval-ms:5000}")
   public void heartbeat() {
     try {
-      redis.opsForZSet().add(membersKey, memberId, BatchDateTimeSupport.utcEpochMillis());
+      redis.opsForZSet().add(MEMBERS_KEY, memberId, BatchDateTimeSupport.utcEpochMillis());
       coordinationHealthy.set(true);
     } catch (RuntimeException ex) {
       coordinationHealthy.set(false);
@@ -103,11 +97,10 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   }
 
   /** 优雅退出时移除自己，加速其他 Pod 感知（不强制——即使不调，下次 evict 阶段 TTL 会兜）。 */
-  @PreDestroy
   public void leave() {
     coordinationHealthy.set(false);
     try {
-      redis.opsForZSet().remove(membersKey, memberId);
+      redis.opsForZSet().remove(MEMBERS_KEY, memberId);
     } catch (RuntimeException ex) {
       log.warn("Shard coordinator leave failed: member={}, err={}", memberId, ex.toString());
     }
@@ -118,10 +111,10 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     try {
       long cutoff = BatchDateTimeSupport.utcEpochMillis() - memberTtl.toMillis();
       // 清死成员
-      redis.opsForZSet().removeRangeByScore(membersKey, 0, cutoff);
+      redis.opsForZSet().removeRangeByScore(MEMBERS_KEY, 0, cutoff);
       // 取活成员（按 score 升序 = 按心跳时间升序，但我们要确定性顺序，所以 toArray 后字典序排）
       Set<ZSetOperations.TypedTuple<String>> tuples =
-          redis.opsForZSet().rangeWithScores(membersKey, 0, -1);
+          redis.opsForZSet().rangeWithScores(MEMBERS_KEY, 0, -1);
       if (tuples == null || tuples.isEmpty()) {
         // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
         coordinationHealthy.set(false);

@@ -18,7 +18,6 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
@@ -31,7 +30,6 @@ import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
@@ -80,7 +78,6 @@ class DefaultTriggerServiceTest {
   void setUp() {
     lenient().when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
     lenient().when(tenantStatusMapper.selectStatus(any())).thenReturn("ACTIVE");
-    TriggerRuntimeProperties runtimeProperties = new TriggerRuntimeProperties();
     service = new DefaultTriggerService(
         launchAdapterService,
         triggerRequestMapper,
@@ -89,8 +86,7 @@ class DefaultTriggerServiceTest {
         businessCalendarMapper,
         tenantStatusMapper,
         transactionManager,
-        upstreamReadinessChecker,
-        runtimeProperties);
+        upstreamReadinessChecker);
   }
 
   @Test
@@ -354,7 +350,6 @@ class DefaultTriggerServiceTest {
         .insert(any());
     doAnswer(invocation -> {
           TriggerMisfirePendingEntity entity = invocation.getArgument(0);
-          assertThat(entity.getExpiresAt()).isAfter(Instant.now().plus(Duration.ofDays(6)));
           entity.setId(901L);
           return 1;
         })

@@ -23,7 +23,6 @@ TRG="${TRIGGER_BASE_URL}"
 SECRET="${BATCH_INTERNAL_SECRET}"
 DEPENDENCY_WAIT="${DEPENDENCY_WAIT:-180}"
 LAST_REQUEST_ID=""
-SQL_DIR="$ROOT/scripts/sim-4day/sql"
 
 # archetype 原型:retail(类 ta) / bank(类 tb) / risk(类 tc)
 arche() { case "$1" in ta|t04|t07|t10) echo retail;; tb|t05|t08) echo bank;; tc|t06|t09) echo risk;; *) echo retail;; esac; }
@@ -40,12 +39,11 @@ launch() { # 参数:tenant job bizDate paramsJson
 }
 
 wait_request_success() {
-  local tenant_id="$1" request_id="$2" deadline status instance_status task_failed task_non_success
+  local request_id="$1" deadline status instance_status task_failed task_non_success
   deadline=$(( $(date +%s) + DEPENDENCY_WAIT ))
   while true; do
-    status=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-      -tA -v ON_ERROR_STOP=1 -v tenant_id="$tenant_id" -v request_id="$request_id" \
-      -f /dev/stdin < "$SQL_DIR/select-request-execution-status.sql" 2>/dev/null || true)
+    status=$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+      "select coalesce(i.instance_status,'') || '|' || coalesce((select count(*) from batch.job_task t where t.job_instance_id=i.id and t.task_status in ('FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')),0) || '|' || coalesce((select count(*) from batch.job_task t where t.job_instance_id=i.id and t.task_status <> 'SUCCESS'),0) from batch.trigger_request r left join batch.job_instance i on i.id=r.related_job_instance_id where r.request_id='$request_id' limit 1" 2>/dev/null || true)
     IFS='|' read -r instance_status task_failed task_non_success <<<"$status"
     if [[ "$instance_status" == "SUCCESS" && "$task_non_success" == "0" ]]; then
       return 0
@@ -64,7 +62,7 @@ wait_request_success() {
 
 launch_and_wait() {
   launch "$@" || return 1
-  wait_request_success "$1" "$LAST_REQUEST_ID"
+  wait_request_success "$LAST_REQUEST_ID"
 }
 
 import_content() { # 参数:tenant tpl header rowgen
@@ -83,9 +81,8 @@ dispatch_latest() { # 参数:tenant job bizDate channelCode
     TC_DISPATCH_REVIEW) export_job=TC_EXPORT_RISK_ALERT ;;
     *) printf 'x'; return 1 ;;
   esac
-  fid=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-    -tA -v ON_ERROR_STOP=1 -v tenant_id="$t" -v biz_date="$bd" -v export_job="$export_job" \
-    -f /dev/stdin < "$SQL_DIR/select-latest-generated-file.sql" 2>/dev/null)
+  fid=$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+    "select id from batch.file_record where tenant_id='$t' and biz_date='$bd' and file_status='GENERATED' and file_size_bytes > 0 and storage_path like 'outbound/$export_job/%' order by id desc limit 1" 2>/dev/null)
   if [ -n "$fid" ]; then launch_and_wait "$t" "$job" "$BD" "{\"fileId\":$fid,\"channelCode\":\"$ch\"}"; else printf 'x'; return 1; fi
 }
 

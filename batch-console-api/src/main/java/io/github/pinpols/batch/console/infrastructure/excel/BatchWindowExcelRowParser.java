@@ -10,7 +10,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingl
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.OutOfWindowAction;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpsertParam;
 import java.util.List;
@@ -36,8 +35,7 @@ public final class BatchWindowExcelRowParser {
     return WindowRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .windowCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, "window_code", 128, issues)))
+        .windowCode(requireText(values, "window_code", 128, issues))
         .windowName(requireText(values, "window_name", 256, issues))
         .timezone(requireText(values, "timezone", 64, issues))
         .startTime(requireTime(values, "start_time", issues))

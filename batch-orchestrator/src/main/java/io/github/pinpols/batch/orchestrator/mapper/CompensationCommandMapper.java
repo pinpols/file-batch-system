@@ -11,9 +11,6 @@ public interface CompensationCommandMapper {
 
   CompensationCommandEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  CompensationCommandEntity selectByCommandNo(
-      @Param("tenantId") String tenantId, @Param("commandNo") String commandNo);
-
   int updateStatus(UpdateCompensationStatusParam param);
 
   int countRunningByTarget(

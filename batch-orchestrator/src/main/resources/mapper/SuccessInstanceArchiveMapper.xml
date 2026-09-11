@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper">
 
-    <!-- 选所有终态 instance id（含正式执行与 dry-run 终态）
+    <!-- 选所有终态 instance id（SUCCESS / PARTIAL_FAILED / FAILED / CANCELLED / TERMINATED）
          且 finished_at 早于 cutoff（按 id asc 防 missed delete，带 limit）。
          2026-04-26 V5-P3-3 扩展状态集：原仅 SUCCESS/PARTIAL_FAILED 导致 FAILED/CANCELLED
          在主表无限堆积（实测 1224 FAILED + 24 CANCELLED 噪音）。所有终态进 archive 冷表，
@@ -10,10 +10,7 @@
     <select id="selectArchivableInstanceIds" resultType="java.lang.Long">
         select id
         from batch.job_instance
-        where instance_status in (
-            'SUCCESS', 'PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED',
-            'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
-        )
+        where instance_status in ('SUCCESS','PARTIAL_FAILED','FAILED','CANCELLED','TERMINATED')
           and finished_at is not null
           and finished_at &lt; #{cutoff}
         order by id asc

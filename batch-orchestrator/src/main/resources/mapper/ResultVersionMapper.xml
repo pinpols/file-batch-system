@@ -172,64 +172,14 @@
     </update>
 
     <update id="archiveSuperseded">
-        with archived as (
-            insert into archive.result_version_archive (
-                id,
-                tenant_id,
-                business_key,
-                version_no,
-                job_instance_id,
-                status,
-                effective_at,
-                deactivated_at,
-                payload_storage,
-                payload_json,
-                payload_ref,
-                generated_at,
-                generated_by,
-                promotion_policy,
-                approval_id,
-                created_at,
-                updated_at,
-                dq_gate_status
-            )
-            select
-                id,
-                tenant_id,
-                business_key,
-                version_no,
-                job_instance_id,
-                'ARCHIVED',
-                effective_at,
-                deactivated_at,
-                payload_storage,
-                payload_json,
-                payload_ref,
-                generated_at,
-                generated_by,
-                promotion_policy,
-                approval_id,
-                created_at,
-                #{now},
-                dq_gate_status
-            from batch.result_version
-            where tenant_id = #{tenantId}
-              and id = #{id}
-              and status = 'SUPERSEDED'
-            on conflict (id) do update set
-                status = excluded.status,
-                payload_json = excluded.payload_json,
-                updated_at = excluded.updated_at
-            returning id
-        )
         update batch.result_version
-        set status = 'ARCHIVED',
-            updated_at = #{now}
+        set status      = 'ARCHIVED',
+            updated_at  = #{now}
             <if test="clearPayload">
             , payload_json = null
             </if>
         where tenant_id = #{tenantId}
-          and id in (select id from archived)
+          and id = #{id}
           and status = 'SUPERSEDED'
     </update>
 
@@ -242,72 +192,5 @@
         order by deactivated_at asc, id asc
         limit #{limit}
     </select>
-
-    <select id="selectArchivedOlderThan" resultMap="ResultVersionResultMap">
-        select *
-        from batch.result_version
-        where status = 'ARCHIVED'
-          and updated_at &lt; #{cutoff}
-        order by updated_at asc, id asc
-        limit #{limit}
-    </select>
-
-    <select id="selectDryRunOlderThan" resultMap="ResultVersionResultMap">
-        select *
-        from batch.result_version
-        where status = 'DRY_RUN'
-          and generated_at &lt; #{cutoff}
-        order by generated_at asc, id asc
-        limit #{limit}
-    </select>
-
-    <delete id="archiveAndDeleteDryRun">
-        with archived as (
-            insert into archive.result_version_archive (
-                id, tenant_id, business_key, version_no, job_instance_id, status,
-                effective_at, deactivated_at, payload_storage, payload_json, payload_ref,
-                generated_at, generated_by, promotion_policy, approval_id, created_at,
-                updated_at, dq_gate_status
-            )
-            select
-                id, tenant_id, business_key, version_no, job_instance_id, status,
-                effective_at, deactivated_at, payload_storage, payload_json, payload_ref,
-                generated_at, generated_by, promotion_policy, approval_id, created_at,
-                #{archivedAt}, dq_gate_status
-            from batch.result_version
-            where tenant_id = #{tenantId}
-              and id = #{id}
-              and status = 'DRY_RUN'
-            on conflict (id) do update set
-                status = excluded.status,
-                payload_json = excluded.payload_json,
-                payload_ref = excluded.payload_ref,
-                updated_at = excluded.updated_at
-            returning id
-        )
-        delete from batch.result_version rv
-        where rv.tenant_id = #{tenantId}
-          and rv.id in (select id from archived)
-          and rv.status = 'DRY_RUN'
-          and not exists (
-              select 1
-              from batch.asset_partition ap
-              where ap.tenant_id = rv.tenant_id
-                and ap.result_version_id = rv.id
-          )
-    </delete>
-
-    <delete id="deleteArchived">
-        delete from batch.result_version rv
-        where rv.tenant_id = #{tenantId}
-          and rv.id = #{id}
-          and rv.status = 'ARCHIVED'
-          and not exists (
-              select 1
-              from batch.asset_partition ap
-              where ap.tenant_id = rv.tenant_id
-                and ap.result_version_id = rv.id
-          )
-    </delete>
 
 </mapper>

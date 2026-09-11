@@ -65,17 +65,6 @@ management:
 
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
-  orchestrator:
-    persistence-granularity:
-      enabled: ${BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED:false}
-      compact-max-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS:100000}
-      compact-max-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_BYTES:268435456}
-      standard-max-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_ITEMS:10000000}
-      standard-max-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_MAX_BYTES:8589934592}
-      standard-target-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_ITEMS:1000000}
-      large-target-items: ${BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS:500000}
-      standard-target-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES:536870912}
-      large-target-bytes: ${BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES:268435456}
   alert:
     am-emit:
       enabled: ${BATCH_ALERT_AM_EMIT_ENABLED:false}
@@ -162,13 +151,6 @@ batch:
     # 多副本部署时，每个 Pod 须设置不同的 BATCH_OUTBOX_SHARD_INDEX（0 到 shardTotal-1）
     shard-total: ${BATCH_OUTBOX_SHARD_TOTAL:1}
     shard-index: ${BATCH_OUTBOX_SHARD_INDEX:0}
-    # dynamic 通过 Redis 成员租约在扩缩容时重排；默认 static 保持现有部署语义。
-    sharding-mode: ${BATCH_OUTBOX_SHARDING_MODE:static}
-    sharding:
-      members-key: ${BATCH_OUTBOX_SHARD_MEMBERS_KEY:batch:orchestrator:members}
-      heartbeat-interval-ms: ${BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS:5000}
-      member-ttl-ms: ${BATCH_OUTBOX_SHARD_MEMBER_TTL_MS:30000}
-      member-id: ${BATCH_OUTBOX_SHARD_MEMBER_ID:}
   worker:
     drain:
       # Worker drain 默认超时（秒）

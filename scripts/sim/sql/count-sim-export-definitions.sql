@@ -1,2 +1,0 @@
-SELECT count(*) FROM batch.job_definition
-WHERE job_code IN ('TA_EXPORT_REPORT', 'TB_EXPORT_STATEMENT', 'TC_EXPORT_RISK_ALERT');

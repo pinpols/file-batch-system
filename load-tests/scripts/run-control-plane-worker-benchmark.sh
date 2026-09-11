@@ -138,8 +138,31 @@ wait_run_terminal() {
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts total terminal trigger_requests linked_terminal
     counts="$(
-      psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-        -f "$LOAD_DIR/sql/control-run-terminal-counts.sql"
+      psql_platform -Atc "
+        with scoped_instances as (
+          select id, instance_status
+          from batch.job_instance
+          where tenant_id = '${LOAD_TEST_TENANT_ID}'
+            and params_snapshot::text like '%${RUN_ID}%'
+        ), scoped_trigger_requests as (
+          select related_job_instance_id
+          from batch.trigger_request
+          where tenant_id = '${LOAD_TEST_TENANT_ID}'
+            and (
+              request_id like '%${RUN_ID}%'
+              or dedup_key like '%${RUN_ID}%'
+              or trace_id like '%${RUN_ID}%'
+            )
+        )
+        select
+          (select count(*) from scoped_instances) || '|' ||
+          (select count(*) from scoped_instances
+           where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED')) || '|' ||
+          (select count(*) from scoped_trigger_requests) || '|' ||
+          (select count(*)
+           from scoped_trigger_requests tr
+           join batch.job_instance ji on ji.id = tr.related_job_instance_id
+           where ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'));"
     )"
     total="${counts%%|*}"
     counts="${counts#*|}"
@@ -200,8 +223,13 @@ run_pipeline_completion() {
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts
     counts="$(
-      psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
-        -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
+      psql_platform -Atc "
+        select count(*) || '|' ||
+               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
+        from batch.job_instance
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
+          and job_code = '${job_code}'
+          and params_snapshot::text like '%${RUN_ID}%';"
     )"
     local total="${counts%%|*}"
     local terminal="${counts##*|}"
@@ -343,43 +371,146 @@ write_report() {
     echo "## Instance Completion"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/control-instance-completion.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      with ji_with_module as (
+        select
+          coalesce(
+            params_snapshot #>> '{requestParams,metadata,benchmarkModule}',
+            params_snapshot #>> '{effectiveParams,metadata,benchmarkModule}',
+            case
+              when job_code = 'lt_process_sql_job' then 'process'
+              when job_code = 'lt_dispatch_local_job' then 'dispatch'
+              else 'unknown'
+            end
+          ) as benchmark_module,
+          *
+        from batch.job_instance
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
+          and params_snapshot::text like '%${RUN_ID}%'
+      )
+      select
+        benchmark_module,
+        job_code,
+        count(*) as total,
+        count(*) filter (where instance_status = 'SUCCESS') as success,
+        count(*) filter (where instance_status = 'FAILED') as failed,
+        count(*) filter (where instance_status not in ('SUCCESS','FAILED','CANCELLED','TERMINATED','PARTIAL_FAILED')) as non_terminal,
+        round(avg(extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as avg_seconds,
+        round(percentile_cont(0.95) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p95_seconds
+      from ji_with_module
+      group by benchmark_module, job_code
+      order by benchmark_module, job_code;"
     echo '```'
     echo
     echo "## Task Latency"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/control-task-latency.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      with ji_with_module as (
+        select
+          coalesce(
+            params_snapshot #>> '{requestParams,metadata,benchmarkModule}',
+            params_snapshot #>> '{effectiveParams,metadata,benchmarkModule}',
+            case
+              when job_code = 'lt_process_sql_job' then 'process'
+              when job_code = 'lt_dispatch_local_job' then 'dispatch'
+              else 'unknown'
+            end
+          ) as benchmark_module,
+          *
+        from batch.job_instance
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
+          and params_snapshot::text like '%${RUN_ID}%'
+      )
+      select
+        ji.benchmark_module,
+        ji.job_code,
+        jt.task_type,
+        count(*) as tasks,
+        count(*) filter (where jt.task_status = 'SUCCESS') as success,
+        count(*) filter (where jt.task_status = 'FAILED') as failed,
+        round(avg(extract(epoch from (jt.started_at - jt.created_at))) filter (where jt.started_at is not null)::numeric, 3) as avg_claim_delay_s,
+        round(percentile_cont(0.95) within group (order by extract(epoch from (jt.started_at - jt.created_at))) filter (where jt.started_at is not null)::numeric, 3) as p95_claim_delay_s,
+        round(avg(extract(epoch from (jt.finished_at - jt.started_at))) filter (where jt.finished_at is not null and jt.started_at is not null)::numeric, 3) as avg_exec_s,
+        round(percentile_cont(0.95) within group (order by extract(epoch from (jt.finished_at - jt.started_at))) filter (where jt.finished_at is not null and jt.started_at is not null)::numeric, 3) as p95_exec_s
+      from ji_with_module ji
+      join batch.job_task jt on jt.job_instance_id = ji.id
+      group by ji.benchmark_module, ji.job_code, jt.task_type
+      order by ji.benchmark_module, ji.job_code, jt.task_type;"
     echo '```'
     echo
     echo "## Stage Duration"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/control-stage-duration.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      with ji_with_module as (
+        select
+          coalesce(
+            params_snapshot #>> '{requestParams,metadata,benchmarkModule}',
+            params_snapshot #>> '{effectiveParams,metadata,benchmarkModule}',
+            case
+              when job_code = 'lt_process_sql_job' then 'process'
+              when job_code = 'lt_dispatch_local_job' then 'dispatch'
+              else 'unknown'
+            end
+          ) as benchmark_module,
+          *
+        from batch.job_instance
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
+          and params_snapshot::text like '%${RUN_ID}%'
+      )
+      select
+        ji.benchmark_module,
+        ji.job_code,
+        psr.stage_code,
+        count(*) as runs,
+        round(avg(psr.duration_ms)::numeric, 1) as avg_ms,
+        round(percentile_cont(0.95) within group (order by psr.duration_ms)::numeric, 1) as p95_ms,
+        max(psr.duration_ms) as max_ms
+      from ji_with_module ji
+      join batch.pipeline_instance pi on pi.related_job_instance_id = ji.id
+      join batch.pipeline_step_run psr on psr.pipeline_instance_id = pi.id
+      group by ji.benchmark_module, ji.job_code, psr.stage_code
+      order by ji.benchmark_module, ji.job_code, psr.stage_code;"
     echo '```'
     echo
     echo "## Worker Load"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" \
-      -f "$LOAD_DIR/sql/control-worker-load.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      select worker_group, worker_code, status, current_load, max_concurrent,
+             round(extract(epoch from (clock_timestamp() - heartbeat_at))::numeric, 1) as heartbeat_age_s
+      from batch.worker_registry
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
+        and worker_group in ('PROCESS','DISPATCH','ATOMIC')
+      order by worker_group, worker_code;"
     echo '```'
     echo
     echo "## Process Staging"
     echo
     echo '```text'
-    psql_business -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/control-process-staging.sql"
+    psql_business -P pager=off -F ' | ' -A -c "
+      select
+        'process_staging_rows' as metric,
+        count(*)::text as value
+      from batch.process_staging
+      where batch_key like '%${RUN_ID}%'
+      union all
+      select 'process_staging_table_size',
+             pg_size_pretty(pg_total_relation_size('batch.process_staging'));"
     echo '```'
     echo
     echo "## Dispatch Counters"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/control-dispatch-counters.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      select dispatch_status, count(*) as count
+      from batch.file_dispatch_record fdr
+      join batch.file_record fr on fr.id = fdr.file_id
+      where fr.tenant_id = '${LOAD_TEST_TENANT_ID}'
+        and fr.metadata_json::text like '%${RUN_ID}%'
+      group by dispatch_status
+      order by dispatch_status;"
     echo '```'
     echo
     echo "## Kafka Lag Snapshot"

@@ -63,7 +63,6 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     rejectOutdatedSdkVersion(request);
     WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
-    String expectedStatus = registry == null ? null : registry.status();
     String newStatus = resolveIncomingStatus(
         request, WorkerRegistryStatus.ONLINE.code(), registry == null ? null : registry.status());
     Instant heartbeatAt = firstHeartbeat();
@@ -88,7 +87,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           newStatus,
           heartbeatAt,
           newLoad,
-          WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT,
+          null, // maxConcurrent: 走 DB DEFAULT 10 (V87)
           null,
           null,
           request.hostName(),
@@ -108,7 +107,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
               request.buildId(),
               request.sdkVersion());
     }
-    WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
+    WorkerRegistryEntity saved = persist(registry);
     // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
     // console "我的 Worker" 页过滤。幂等。
     if ("sdk-self-hosted".equals(request.workerGroup())) {
@@ -296,12 +295,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return null;
     }
     String newStatus = resolveIncomingStatus(null, status, registry.status());
-    int updated = workerRegistryMapper.updateStatusIfCurrent(
-        tenantId, workerCode, registry.status(), newStatus);
-    if (updated == 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
-    }
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+    registry = registry.withStatus(newStatus, BatchDateTimeSupport.utcNow());
+    return persist(registry);
   }
 
   /**
@@ -314,14 +309,14 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   }
 
   /**
-   * 首次注册走幂等 insert；重注册以读取到的状态作为 CAS 前态刷新运行信息，避免覆盖并发 drain/decommission。
+   * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
+   * 防 UV 并发）；否则按 id 全字段 updateById。返回最新 DB 行（重新 selectByTenantAndWorkerCode 拿到带 id 的快照）。
    */
-  private WorkerRegistryEntity persistRegistration(
-      WorkerRegistryEntity registry, String expectedStatus) {
+  private WorkerRegistryEntity persist(WorkerRegistryEntity registry) {
     if (registry.id() == null) {
       workerRegistryMapper.insert(registry);
     } else {
-      workerRegistryMapper.updateRegistrationIfCurrent(registry, expectedStatus);
+      workerRegistryMapper.updateById(registry);
     }
     return workerRegistryMapper.selectByTenantAndWorkerCode(
         registry.tenantId(), registry.workerCode());

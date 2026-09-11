@@ -18,7 +18,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOAK_LOG_DIR="${SOAK_LOG_DIR:-$ROOT_DIR/logs/soak}"
 SOAK_RUN_ID="${SOAK_RUN_ID:-soak-unknown}"
 REPORT="$SOAK_LOG_DIR/soak-report-${SOAK_RUN_ID}.md"
-SQL_DIR="$ROOT_DIR/load-tests/sql"
 
 export PGPASSWORD
 
@@ -39,7 +38,7 @@ echo "==> analyze-soak: 生成 $REPORT"
   echo "## 1. 内存(Heap / Eden / Old / Metaspace)"
   echo
   shopt -s nullglob
-  jfrs=("$SOAK_LOG_DIR"/jvm-"${SOAK_RUN_ID}"-*.jfr)
+  jfrs=("$SOAK_LOG_DIR"/jvm-${SOAK_RUN_ID}-*.jfr)
   if (( ${#jfrs[@]} == 0 )); then
     echo "_(no JFR file found,跳过;若 JVM 启动参数已注入应在运行结束/duration 到期后产出)_"
   else
@@ -97,15 +96,31 @@ echo "==> analyze-soak: 生成 $REPORT"
   # === 5. 业务 ===
   echo "## 5. 业务(job_instance 完成数 + 延迟)"
   echo '```text'
-  psql_q -v run_id="$SOAK_RUN_ID" -f "$SQL_DIR/analyze-soak-job-latency.sql"
+  psql_q -c "
+    select
+      job_code,
+      count(*) as total,
+      count(*) filter (where instance_status='SUCCESS') as success,
+      round(avg(extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as avg_s,
+      round(percentile_cont(0.50) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p50_s,
+      round(percentile_cont(0.95) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p95_s,
+      round(percentile_cont(0.99) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p99_s
+    from batch.job_instance
+    where params_snapshot::text like '%${SOAK_RUN_ID}%'
+    group by job_code
+    order by job_code;"
   echo '```'
   echo
 
   # === 6. 跨日 ===
   echo "## 6. 跨日(batch_day_instance 状态翻转)"
   echo '```text'
-  psql_q -f "$SQL_DIR/analyze-soak-batch-days.sql" 2>/dev/null \
-    || echo "(batch_day_instance 不存在或无数据)"
+  psql_q -c "
+    select tenant_id, biz_date, status, created_at, updated_at
+    from batch.batch_day_instance
+    where updated_at >= now() - interval '36 hours'
+    order by biz_date, updated_at
+    limit 50;" 2>/dev/null || echo "(batch_day_instance 不存在或无数据)"
   echo '```'
   echo
   echo "> 跨日时间偏移仅在本地 soak 显式设置 \`-Dbatch.testing.clock-offset\` 时生效；生产默认使用 UTC。"

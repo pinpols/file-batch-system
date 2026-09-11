@@ -44,12 +44,6 @@ CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
-# 被测 Trigger 的 Relay 发布上限。默认守住 benchmark 基线 40；A/B 轮次必须显式声明，
-# 避免容器未按实验参数重启却仍生成错误容量结论。
-CAPACITY_EXPECT_TRIGGER_RELAY_RATE="${CAPACITY_EXPECT_TRIGGER_RELAY_RATE:-40}"
-# 设为 1 时，preflight 额外确认 Trigger 已启用 lag 自适应释放且相关指标可采集。
-# 默认 0 保持既有固定 Relay 容量画像不变。
-CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE="${CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE:-0}"
 # 仅验证 benchmark 容器预算，不创建 fixture、不获取压测锁、也不执行清理逻辑。
 PREFLIGHT_ONLY="${PREFLIGHT_ONLY:-0}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
@@ -72,9 +66,31 @@ storm_reached_terminal_state() {
   local storm_run_id="$1"
   local counts total terminal trigger_requests linked_terminal
   counts="$(
-    psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
-      -v storm_run_id="$storm_run_id" \
-      -f "$LOAD_DIR/sql/p2-storm-terminal-counts.sql"
+    psql_platform -Atc "
+      with scoped_instances as (
+        select id, instance_status
+        from batch.job_instance
+        where tenant_id = '${CAPACITY_TENANT_ID}'
+          and params_snapshot::text like '%${storm_run_id}%'
+      ), scoped_trigger_requests as (
+        select related_job_instance_id
+        from batch.trigger_request
+        where tenant_id = '${CAPACITY_TENANT_ID}'
+          and (
+            request_id like '%${storm_run_id}%'
+            or dedup_key like '%${storm_run_id}%'
+            or trace_id like '%${storm_run_id}%'
+          )
+      )
+      select
+        (select count(*) from scoped_instances) || '|' ||
+        (select count(*) from scoped_instances
+         where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED')) || '|' ||
+        (select count(*) from scoped_trigger_requests) || '|' ||
+        (select count(*)
+         from scoped_trigger_requests tr
+         join batch.job_instance ji on ji.id = tr.related_job_instance_id
+         where ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'));"
   )"
   total="${counts%%|*}"
   counts="${counts#*|}"
@@ -207,47 +223,19 @@ require_trigger_capacity_budget() {
     echo "docker is required to verify the local trigger capacity budget" >&2
     exit 2
   }
-  local configured profiles limit pool relay adaptive minimum metrics effective lag
+  local configured profiles limit pool relay
   configured="$(docker inspect batch-trigger --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
   profiles="$(printf '%s\n' "$configured" | sed -n 's/^SPRING_PROFILES_ACTIVE=//p' | tail -1)"
   relay="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
-  adaptive="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED=//p' | tail -1)"
-  minimum="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MIN_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
-  metrics="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus)"
-  limit="$(printf '%s\n' "$metrics" \
+  limit="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus \
     | awk '/^batch_trigger_api_launch_admission_limit / && !found { print int($2); found=1 }')"
-  pool="$(printf '%s\n' "$metrics" \
+  pool="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus \
     | awk '/^hikaricp_connections_max\{pool="HikariPool-1"\}/ && !found { print int($2); found=1 }')"
-  effective="$(printf '%s\n' "$metrics" \
-    | awk '/^batch_trigger_outbox_release_budget_limit / && !found { print int($2); found=1 }')"
-  lag="$(printf '%s\n' "$metrics" \
-    | awk '/^batch_trigger_launch_consumer_lag / && !found { print int($2); found=1 }')"
-  if [[ ",$profiles," != *,benchmark,* \
-    || "$pool" != "40" \
-    || "$limit" != "32" \
-    || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" ]]; then
+  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "40" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
-    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}" >&2
+    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=40" >&2
     echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing}" >&2
     echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger" >&2
-    exit 2
-  fi
-  if [[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]]; then
-    if [[ "$adaptive" != "true" \
-      || ! "$minimum" =~ ^[1-9][0-9]*$ \
-      || ! "$effective" =~ ^[1-9][0-9]*$ \
-      || ! "$lag" =~ ^-?[0-9]+$ \
-      || "$effective" -lt "$minimum" \
-      || "$effective" -gt "$relay" ]]; then
-      echo "trigger adaptive release is not active or its metrics are invalid:" >&2
-      echo "  required: adaptive=true, min <= effective <= max, lag metric present" >&2
-      echo "  actual: adaptive=${adaptive:-missing} min=${minimum:-missing} effective=${effective:-missing} max=${relay:-missing} lag=${lag:-missing}" >&2
-      echo "  restart with BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED=true" >&2
-      exit 2
-    fi
-  elif [[ "$adaptive" == "true" ]]; then
-    echo "trigger adaptive release is enabled but CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE is not 1" >&2
-    echo "set CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE=1 to make the measured mode explicit" >&2
     exit 2
   fi
 }
@@ -284,7 +272,6 @@ write_report_header() {
     echo "- Maximum failed request rate: ${CAPACITY_MAX_ERROR_PCT}%"
     echo "- Capacity write p95 budget: ${CAPACITY_WRITE_P95_MS}ms"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
-    echo "- Trigger adaptive release expected: $([[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]] && echo enabled || echo disabled)"
     echo
   } > "$REPORT"
 }

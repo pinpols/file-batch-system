@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.util.Map;
 import org.springframework.core.annotation.Order;
@@ -11,12 +10,6 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(2)
 public class SizeBasedPartitionCountResolver implements PartitionCountResolver {
-
-  private final PersistenceGranularityProperties granularity;
-
-  public SizeBasedPartitionCountResolver(PersistenceGranularityProperties granularity) {
-    this.granularity = granularity;
-  }
 
   @Override
   public int resolve(
@@ -36,10 +29,6 @@ public class SizeBasedPartitionCountResolver implements PartitionCountResolver {
       return ceilDiv(estimatedItems, targetItemsPerPartition);
     }
 
-    if (estimatedItems > 0 && granularity.isEnabled()) {
-      return resolveItemsByTier(estimatedItems);
-    }
-
     long estimatedBytes = PartitionCountResolverSupport.firstPositiveLong(
         SizeBasedPartitionCountResolver.class,
         params.get("estimatedFileSizeBytes"),
@@ -52,34 +41,7 @@ public class SizeBasedPartitionCountResolver implements PartitionCountResolver {
     if (estimatedBytes > 0 && targetBytesPerPartition > 0) {
       return ceilDiv(estimatedBytes, targetBytesPerPartition);
     }
-    if (estimatedBytes > 0 && granularity.isEnabled()) {
-      return resolveBytesByTier(estimatedBytes);
-    }
     return 0;
-  }
-
-  private int resolveItemsByTier(long estimatedItems) {
-    if (estimatedItems <= positive(granularity.getCompactMaxItems())) {
-      return 1;
-    }
-    long target = estimatedItems <= positive(granularity.getStandardMaxItems())
-        ? positive(granularity.getStandardTargetItems())
-        : positive(granularity.getLargeTargetItems());
-    return ceilDiv(estimatedItems, target);
-  }
-
-  private int resolveBytesByTier(long estimatedBytes) {
-    if (estimatedBytes <= positive(granularity.getCompactMaxBytes())) {
-      return 1;
-    }
-    long target = estimatedBytes <= positive(granularity.getStandardMaxBytes())
-        ? positive(granularity.getStandardTargetBytes())
-        : positive(granularity.getLargeTargetBytes());
-    return ceilDiv(estimatedBytes, target);
-  }
-
-  private long positive(long value) {
-    return Math.max(1L, value);
   }
 
   private int ceilDiv(long dividend, long divisor) {

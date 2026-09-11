@@ -16,13 +16,10 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$ROOT" || exit 1
-# shellcheck disable=SC2034 # env-common.sh 读取该阶段名。
+cd "$ROOT"
 SIM_STAGE_NAME="reset-runtime"
 # shellcheck source=env-common.sh
-# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/sim/env-common.sh"
-SQL_DIR="$ROOT/scripts/sim/sql"
 
 PG_PLAT_C="${PG_PLATFORM_CONTAINER:-$PG_CONTAINER}"
 PG_PLAT_U="${PG_PLATFORM_USER:-$POSTGRES_USER}"
@@ -47,12 +44,23 @@ BIZ_TABLES="biz.customer_account, biz.transaction, biz.risk_score, biz.risk_aler
 
 echo "==> reset 平台运行态(${PG_PLAT_C}/${PG_PLAT_D})"
 docker exec -i "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$PG_PLAT_D" -v ON_ERROR_STOP=1 \
-  -v reset_tables="$PLAT_TABLES" -f /dev/stdin < "$SQL_DIR/reset-platform-runtime.sql"
+  -v reset_tables="$PLAT_TABLES" <<'SQL'
+SET citus.multi_shard_modify_mode TO 'sequential';
+SELECT format('TRUNCATE TABLE %s CASCADE', to_regclass(btrim(table_name)))
+FROM unnest(string_to_array(:'reset_tables', ',')) AS tables(table_name)
+WHERE to_regclass(btrim(table_name)) IS NOT NULL
+\gexec
+SQL
 plat_rc=$?
 
 echo "==> reset biz 业务数据(${PG_BIZ_C}/${PG_BIZ_D})"
 docker exec -i "$PG_BIZ_C" psql -U "$PG_BIZ_U" -d "$PG_BIZ_D" -v ON_ERROR_STOP=1 \
-  -v reset_tables="$BIZ_TABLES" -f /dev/stdin < "$SQL_DIR/reset-business-runtime.sql"
+  -v reset_tables="$BIZ_TABLES" <<'SQL'
+SELECT format('TRUNCATE TABLE %s CASCADE', to_regclass(btrim(table_name)))
+FROM unnest(string_to_array(:'reset_tables', ',')) AS tables(table_name)
+WHERE to_regclass(btrim(table_name)) IS NOT NULL
+\gexec
+SQL
 biz_rc=$?
 
 if [[ $plat_rc -eq 0 && $biz_rc -eq 0 ]]; then

@@ -207,8 +207,8 @@ public interface JobInstanceMapper {
    * 同一 (tenantId, jobCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的 SAME_JOB
    * scope 用此 判断"前一日同 job 是否已完结"。
    *
-   * <p>非终态: CREATED / WAITING / READY / RUNNING / PAUSED。终态集合以 LifecycleStatusCatalog 为准；失败状态是否允许放行由调用方根据
-   * batch_day_instance.day_status 决定。
+   * <p>非终态: CREATED / WAITING / READY / RUNNING / PARTIAL_FAILED。 终态(允许放行): SUCCESS / FAILED /
+   * CANCELLED / TERMINATED — 失败状态由调用方决定是否仍允许放行(与 batch_day_instance.day_status 同语义)。
    */
   int countNonTerminalByJobCodeAndBizDate(
       @Param("tenantId") String tenantId,

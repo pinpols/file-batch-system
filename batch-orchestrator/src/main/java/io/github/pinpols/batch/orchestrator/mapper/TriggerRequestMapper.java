@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchPersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
 import java.time.Instant;
 import java.util.List;
@@ -11,16 +10,9 @@ public interface TriggerRequestMapper {
 
   int insert(TriggerRequestEntity entity);
 
-  /** replay 恢复路径使用：稳定 requestId 并发重试时只允许首个请求落库。 */
-  int insertIfAbsent(TriggerRequestEntity entity);
-
   TriggerRequestEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   TriggerRequestEntity selectByTenantAndRequestId(
-      @Param("tenantId") String tenantId, @Param("requestId") String requestId);
-
-  /** 一次数据库往返加载 trigger request 及同 dedup key 的最新实例轻量投影。 */
-  TriggerLaunchPersistenceContext selectLaunchPersistenceContext(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
   TriggerRequestEntity selectByTenantAndDedupKey(

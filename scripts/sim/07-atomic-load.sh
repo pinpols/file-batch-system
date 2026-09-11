@@ -23,12 +23,10 @@ fi
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$ROOT" || exit 1
+cd "$ROOT"
 
-# shellcheck disable=SC2034 # env-common.sh 读取该阶段名。
 SIM_STAGE_NAME="atomic-load"
 # shellcheck source=env-common.sh
-# shellcheck disable=SC1091 # CI 从仓库根执行，ShellCheck 不展开运行时绝对路径。
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
@@ -44,7 +42,6 @@ ATOMIC_JOBS=(atomic_shell_demo atomic_sql_demo atomic_stored_proc_demo)
 
 total=0; succ=0
 REQUEST_IDS=()
-SQL_DIR="$ROOT/scripts/sim/sql"
 # biz_date_for_round() 已抽到 scripts/sim/env-common.sh(共享 helper),此处直接调用。
 
 echo "==> 原子任务负载:${ROUNDS} 轮 × ${#ATOMIC_JOBS[@]} job(tenant=${ATOMIC_TENANT}, startBizDate=${BIZ_DATE})"
@@ -78,25 +75,23 @@ ELAPSED=$(( $(date +%s) - START ))
 echo "==> 完成:触发 ${succ}/${total} 成功,用时 ${ELAPSED}s"
 [[ "$succ" -eq "$total" ]] || { echo "!! 有触发失败,检查 atomic worker 是否在跑 + 执行器是否 enable"; exit 1; }
 
-request_ids_csv="$(IFS=,; echo "${REQUEST_IDS[*]}")"
+in_requests="$(printf "'%s'," "${REQUEST_IDS[@]}")"
+in_requests="${in_requests%,}"
 deadline=$((SECONDS + 180))
 while (( SECONDS < deadline )); do
-  non_terminal="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-    -tA -v ON_ERROR_STOP=1 -v tenant_id="$ATOMIC_TENANT" -v request_ids_csv="$request_ids_csv" \
-    -f /dev/stdin < "$SQL_DIR/atomic-load-non-terminal-count.sql" \
+  non_terminal="$(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+    "select count(*) from batch.trigger_request tr left join batch.job_instance i on i.id=tr.related_job_instance_id where tr.tenant_id='${ATOMIC_TENANT}' and tr.request_id in (${in_requests}) and coalesce(i.instance_status,'') not in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')" \
     | tr -d '[:space:]')"
   [[ "$non_terminal" == "0" ]] && break
   sleep 2
 done
 
 echo "==> atomic 终态汇总"
-docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -P pager=off -v ON_ERROR_STOP=1 -v tenant_id="$ATOMIC_TENANT" \
-  -v request_ids_csv="$request_ids_csv" -f /dev/stdin < "$SQL_DIR/atomic-load-summary.sql"
+docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -P pager=off -c \
+  "select i.job_code, i.instance_status, t.task_status, t.error_code, left(coalesce(t.error_message,''),120) as error_message from batch.trigger_request tr left join batch.job_instance i on i.id=tr.related_job_instance_id left join batch.job_task t on t.job_instance_id=i.id where tr.tenant_id='${ATOMIC_TENANT}' and tr.request_id in (${in_requests}) order by tr.created_at, i.job_code"
 
-bad_count="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -tA -v ON_ERROR_STOP=1 -v tenant_id="$ATOMIC_TENANT" -v request_ids_csv="$request_ids_csv" \
-  -f /dev/stdin < "$SQL_DIR/atomic-load-failed-count.sql" \
+bad_count="$(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
+  "select count(*) from batch.trigger_request tr left join batch.job_instance i on i.id=tr.related_job_instance_id left join batch.job_task t on t.job_instance_id=i.id where tr.tenant_id='${ATOMIC_TENANT}' and tr.request_id in (${in_requests}) and (i.instance_status <> 'SUCCESS' or coalesce(t.task_status,'') <> 'SUCCESS')" \
   | tr -d '[:space:]')"
 [[ "$bad_count" == "0" ]] || { echo "!! atomic 终态存在失败/未完成: bad_count=$bad_count"; exit 1; }
 echo "==> atomic 执行终态 PASS"

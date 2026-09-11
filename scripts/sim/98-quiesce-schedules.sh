@@ -31,19 +31,34 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$ROOT" || exit 1
+cd "$ROOT"
 # shellcheck source=env-common.sh
-# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/sim/env-common.sh" 2>/dev/null || true
-SQL_FILE="$ROOT/scripts/sim/sql/quiesce-schedules.sql"
 
 PG_C="${PG_PLATFORM_CONTAINER:-batch-postgres-primary}"
 PG_U="${PG_PLATFORM_USER:-batch_user}"
 PG_D="${PG_PLATFORM_DB:-batch_platform}"
 
 echo "==> 静默自动 fire 的定时触发 + 清已解决死信(${PG_C}/${PG_D})"
-docker exec -i "$PG_C" psql -U "$PG_U" -d "$PG_D" -v ON_ERROR_STOP=1 \
-  -f /dev/stdin < "$SQL_FILE"
+docker exec -i "$PG_C" psql -U "$PG_U" -d "$PG_D" -v ON_ERROR_STOP=1 <<'SQL'
+\echo '-- 1/2 CRON/FIXED_RATE → MANUAL(保留 expr / enabled;stage6c 等自我重置不受影响)'
+WITH q AS (
+  UPDATE batch.job_definition
+     SET schedule_type = 'MANUAL'
+   WHERE schedule_type IN ('CRON', 'FIXED_RATE')
+  RETURNING 1)
+SELECT count(*) AS quiesced_schedules FROM q;
+
+\echo '-- 2/2 清空 dead_letter_task(sim 负向用例残留:SUCCESS 历史 + 确定性失败的重试 churn)'
+WITH d AS (DELETE FROM batch.dead_letter_task RETURNING 1)
+SELECT count(*) AS purged_dead_letters FROM d;
+
+\echo '-- 残留核对:仍自动 fire 的定时 应为 0;死信 应为 0'
+SELECT 'still_auto_fire' AS check, count(*) AS n
+  FROM batch.job_definition WHERE schedule_type IN ('CRON', 'FIXED_RATE')
+UNION ALL
+SELECT 'remaining_dead_letters', count(*) FROM batch.dead_letter_task;
+SQL
 rc=$?
 
 if [[ $rc -eq 0 ]]; then

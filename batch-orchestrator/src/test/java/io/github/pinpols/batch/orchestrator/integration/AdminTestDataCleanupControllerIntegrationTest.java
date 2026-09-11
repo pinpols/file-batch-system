@@ -109,26 +109,4 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
             NEIGHBOR))
         .isEqualTo(1);
   }
-
-  @Test
-  void exactTenantCleanupExecutesEveryMappedDeletionTarget() {
-    String tenantId = "itcleanup_" + System.nanoTime();
-
-    Map<String, Integer> response = restClient
-        .delete()
-        .uri("/internal/admin/test-data/by-ids?ids=" + tenantId)
-        .retrieve()
-        .body(new ParameterizedTypeReference<>() {});
-
-    assertThat(response)
-        .containsKeys(
-            "workflow_node_run",
-            "pipeline_step_run",
-            "job_instance",
-            "file_record",
-            "pipeline_definition",
-            "tenant")
-        .doesNotContainKey("clear_job_instance_parent");
-    assertThat(response.values()).containsOnly(0);
-  }
 }

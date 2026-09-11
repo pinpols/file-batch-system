@@ -60,9 +60,6 @@ class TriggerOutboxRelayTest {
   @Mock
   private LockingTaskExecutor lockingTaskExecutor;
 
-  @Mock
-  private TriggerLaunchLagMonitor lagMonitor;
-
   private TriggerOutboxRelay relay;
   private TriggerOutboxRelayProperties relayProperties;
   private ThreadPoolTaskScheduler scheduler;
@@ -80,9 +77,7 @@ class TriggerOutboxRelayTest {
         lockingTaskExecutor,
         new SimpleMeterRegistry(),
         relayProperties,
-        lagMonitor,
         scheduler);
-    when(lagMonitor.current()).thenReturn(new TriggerLaunchLagMonitor.LagSnapshot(0L, 1L));
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);

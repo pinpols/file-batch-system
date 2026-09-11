@@ -148,12 +148,12 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity claimed = task(100L, 2L, TaskStatus.RUNNING.code());
     claimed.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial, claimed);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.DECOMMISSIONED.code(), "PROCESS"));
     when(workerRegistryMapper.selectByTenantAndWorkerCode("default-tenant", "w1"))
         .thenReturn(worker("default-tenant", "w1", WorkerRegistryStatus.ONLINE.code(), "PROCESS"));
-    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
+    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(1);
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
 
@@ -188,7 +188,7 @@ class DefaultTaskAssignmentServiceTest {
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial, refreshed);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), null));
-    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(null);
+    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(0);
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
     assertThat(result).isSameAs(refreshed);

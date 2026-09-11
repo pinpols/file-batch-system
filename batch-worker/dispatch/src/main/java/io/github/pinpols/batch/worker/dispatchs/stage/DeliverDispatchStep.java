@@ -83,15 +83,6 @@ public class DeliverDispatchStep implements DispatchStageStep {
           "file or channel context missing",
           ERROR_OBJECT_MAPPER);
     }
-    DryRunGuard guard = DryRunGuard.fromAttributes(attrs);
-    if (guard.isDryRun()) {
-      DispatchResult dryRunResult = DispatchResult.success(
-          "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false);
-      DispatchInvocationSupport.propagateIdentifiers(context, dryRunResult);
-      attrs.put("dispatchRecord", dispatchPayload);
-      attrs.put("dryRunSkipped", "DISPATCH_EXTERNAL_DELIVERY");
-      return DispatchStageResult.success(stage());
-    }
     Map<String, Object> latestRecord = fileDispatchRepository.loadLatestDispatchRecord(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
     if (latestRecord.isEmpty()) {
@@ -118,8 +109,17 @@ public class DeliverDispatchStep implements DispatchStageStep {
       fileDispatchRepository.incrementAttempt(
           context.getTenantId(), fileId, dispatchPayload.channelCode());
     }
-    DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
-        dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
+    // ADR-026: 演练模式下不真发外部投递，伪造一个"成功 + dry-run"的 DispatchResult，
+    // 让后续 markSent / file_dispatch_record 状态推进按演练通道走。
+    DryRunGuard guard = DryRunGuard.fromAttributes(attrs);
+    DispatchResult dispatchResult = guard.callOrSkip(
+        "dispatch.deliver",
+        () -> DispatchInvocationSupport.invokeAndRecordIdentifiers(
+            dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload),
+        DispatchResult.success(
+            "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false));
+    // dry-run 分支直接拿到 fake 结果，没经过 helper 的 propagate，这里补一次（真实路径会重复设置但等价）。
+    DispatchInvocationSupport.propagateIdentifiers(context, dispatchResult);
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
     fileMetadata.put("channelCode", dispatchPayload.channelCode());
     if (dispatchResult.externalRequestId() != null) {

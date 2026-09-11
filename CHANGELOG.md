@@ -14,7 +14,6 @@
 
 ### Added
 
-- **整批量日 Dry-run**：批量日重放 session 支持历史实例与调度计划两类演练候选，完整透传 dry-run、计划快照、独立幂等键和 Worker capability；Console、OpenAPI、五语言 SDK、Compose/Helm 开关同步完成，默认关闭。
 - **Spring Boot 运行时治理**：补充启动失败诊断（FailureAnalyzer）、配置边界校验、自动装配条件测试、生命周期 phase、readiness/drain 状态和脱敏 `batchruntime` 诊断端点；Feature Switch registry 成为配置登记与 CI 校验入口。
 - **控制面可观测性**：新增执行时间线读模型与 trace snapshot `timeline`，补齐 Redis 限流连续失败短路、Worker lease 熔断状态、消费背压 pause/resume、outbox/限流/租约告警及对应运维文档。
 - **工程化对照与上线计划**：补充 Spring Boot 工程化计划、BFS 与 Kubernetes/Spring Batch/Kafka Connect/Quartz 等系统的能力对照表和上线前验证边界。
@@ -31,7 +30,6 @@
 
 ### Fixed
 
-- 修复 replay service 手写兼容构造导致 Spring 无法创建 Bean、V202 候选约束遗漏 `OUTPUTS_ONLY` 形态及未 VALIDATE、DryRunGuard 架构测试扫描旧目录造成假绿；补齐 DRY_RUN 结果 7 天后先归档再清理的执行链，并禁止 Dispatch 演练写投递记录或推进正式文件状态。
 - 修复文件接收/分发完整性检查、存储边界和下游异常路径，避免低报 size、越界读取和不完整文件继续流转。
 - 修复 retry schedule 状态推进、HA 协调失败路径、Pipeline 定义越权写入和 SDK worker direct-dispatch topic 漂移。
 - 修复 Rust SDK `quinn-proto` 安全依赖、Go SDK 依赖、E2E pipeline fixture 以及多个本地 Sim/验收环境问题。

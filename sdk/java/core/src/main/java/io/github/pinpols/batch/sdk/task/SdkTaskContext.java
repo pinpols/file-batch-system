@@ -163,16 +163,6 @@ public record SdkTaskContext(
     return cancellation.isCancelled();
   }
 
-  /** 本次任务是否为无业务副作用演练；平台属性优先，兼容旧调用方放在 parameters 的标记。 */
-  public boolean isDryRun() {
-    return booleanAttribute(runtimeAttributes.get("dryRun"))
-        || booleanAttribute(parameters.get("dryRun"));
-  }
-
-  private static boolean booleanAttribute(Object value) {
-    return Boolean.TRUE.equals(value) || value instanceof String text && Boolean.parseBoolean(text);
-  }
-
   /**
    * 上报进度 / checkpoint 快照 —— 下一次 lease 续租 tick 会把最新快照作为 {@code details} 捎给平台,落 job_task 供 console
    * 任务详情读取。「最新值覆盖」语义:频繁调用只保留最近一次,不积压。

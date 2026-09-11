@@ -22,12 +22,9 @@ source "$ROOT/scripts/sim/env-common.sh"
 export BATCH_KEY="${BATCH_KEY:-$BATCH_NO-jsonb-idempotent}"
 
 batch_require_python
-SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> preflight process stage4 job"
-if [[ "$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -tA -v ON_ERROR_STOP=1 -v tenant_id=ta -v job_code=TA_PROCESS_STAGE4_JSONB \
-  -f /dev/stdin < "$SQL_DIR/count-enabled-job-definition.sql")" != "1" ]]; then
+if [[ "$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select count(*) from batch.job_definition where tenant_id='ta' and job_code='TA_PROCESS_STAGE4_JSONB' and enabled=true")" != "1" ]]; then
   echo "❌ missing TA_PROCESS_STAGE4_JSONB fixture; run scripts/sim/10-process-stage4.sh once or apply its fixture" >&2
   exit 1
 fi
@@ -40,6 +37,9 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_key="$BATCH_KEY" \
   -f /dev/stdin < docs/test-data/sim-stage4b-process-stale-staging.sql >/dev/null
 
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+export START_TS
+
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4b.log"
 import json, os, subprocess, sys, time, urllib.request
 
@@ -48,26 +48,16 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 BATCH_KEY = os.environ["BATCH_KEY"]
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
 def run(cmd, **kwargs):
     return subprocess.run(cmd, check=False, capture_output=True, text=True, **kwargs)
 
-def psql(db, sql_file, variables=None, tuples=False, capture_output=True):
-    args = [
-        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
-        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
-        "-d", db, "-P", "pager=off",
-    ]
+def psql(db, sql, tuples=False):
+    args = ["docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    for key, value in (variables or {}).items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        return subprocess.run(
-            args, check=True, capture_output=capture_output,
-            text=True, input=sql.read())
+    args += ["-c", sql]
+    return run(args)
 
 def launch(label):
     rid = f"sim-stage4b-{label}-{int(time.time()*1000)%100000000}"
@@ -106,9 +96,13 @@ def launch(label):
 def wait_success(rid):
     deadline = time.time() + 150
     while time.time() < deadline:
-        out = psql(
-            os.environ["PLATFORM_DB"], "select-request-instance-status-only.sql",
-            {"tenant_id": "ta", "request_id": rid}, tuples=True)
+        out = psql(os.environ["PLATFORM_DB"], (
+            "select coalesce(i.instance_status,'') "
+            "from batch.trigger_request tr "
+            "left join batch.job_instance i on i.id=tr.related_job_instance_id "
+            f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
+            "order by tr.created_at desc limit 1"
+        ), tuples=True)
         status = (out.stdout or "").strip()
         if status in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
             print(f"  [result] {rid} {status}", flush=True)
@@ -131,23 +125,43 @@ rid2 = launch("rerun")
 wait_success(rid2)
 
 print("\n-- target_rows --", flush=True)
-target_variables = {"tenant_id": "ta", "biz_date": BIZ}
-psql(
-    os.environ["BUSINESS_DB"], "select-process-stage4b-target.sql",
-    target_variables, capture_output=False)
+target_sql = (
+    "select scenario,account_id,total_amount,event_count,high_water_mark "
+    "from biz.process_stage4_target "
+    "where tenant_id='ta' and scenario='JSONB' and biz_date='" + BIZ + "' "
+    "order by account_id"
+)
+subprocess.run([
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c", target_sql
+], check=False)
 
 print("\n-- staging_leftover --", flush=True)
-staging_variables = {"tenant_id": "ta", "batch_key": BATCH_KEY}
-psql(
-    os.environ["BUSINESS_DB"], "count-process-stage4b-staging.sql",
-    staging_variables, capture_output=False)
+staging_sql = (
+    "select count(*) from batch.process_staging "
+    f"where tenant_id='ta' and batch_key='{BATCH_KEY}' "
+    "and target_schema='biz' and target_table='process_stage4_target'"
+)
+subprocess.run([
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ["BUSINESS_DB"], "-P", "pager=off", "-c", staging_sql
+], check=False)
 
-target_out = psql(
-    os.environ["BUSINESS_DB"], "select-process-stage4b-assertion.sql",
-    target_variables, tuples=True)
-staging_out = psql(
-    os.environ["BUSINESS_DB"], "count-process-stage4b-staging.sql",
-    staging_variables, tuples=True)
+target_assert_sql = (
+    "select count(*) || '|' || "
+    "coalesce(sum(total_amount),0) || '|' || "
+    "coalesce(sum(event_count),0) || '|' || "
+    "coalesce(max(high_water_mark),0) "
+    "from biz.process_stage4_target "
+    "where tenant_id='ta' and scenario='JSONB' and biz_date='" + BIZ + "'"
+)
+staging_assert_sql = (
+    "select count(*) from batch.process_staging "
+    f"where tenant_id='ta' and batch_key='{BATCH_KEY}' "
+    "and target_schema='biz' and target_table='process_stage4_target'"
+)
+target_out = psql(os.environ["BUSINESS_DB"], target_assert_sql, tuples=True)
+staging_out = psql(os.environ["BUSINESS_DB"], staging_assert_sql, tuples=True)
 summary = (target_out.stdout or "").strip() + "|" + (staging_out.stdout or "").strip()
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "2|400.00|3|203|0":

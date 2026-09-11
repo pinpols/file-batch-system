@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,10 +57,11 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     int seconds = timeoutSeconds != null && timeoutSeconds > 0
         ? timeoutSeconds
         : workerDrainProperties.getDefaultTimeoutSeconds();
-    int updated =
-        workerRegistryMapper.startDrainIfCurrent(tenantId, workerCode, registry.status(), seconds);
-    rejectConcurrentUpdate(updated);
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+    Instant now = BatchDateTimeSupport.utcNow();
+    registry = registry.withDrain(
+        WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
+    workerRegistryMapper.updateById(registry);
+    return registry;
   }
 
   @Override
@@ -97,9 +100,10 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
       return registry;
     }
-    int updated = workerRegistryMapper.warmupIfOffline(tenantId, workerCode);
-    rejectConcurrentUpdate(updated);
-    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+    registry =
+        registry.withStatus(WorkerRegistryStatus.ONLINE.code(), BatchDateTimeSupport.utcNow());
+    workerRegistryMapper.updateById(registry);
+    return registry;
   }
 
   @Override
@@ -160,11 +164,5 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
   private void validateTenant(String tenantId) {
     Guard.requireText(tenantId, "tenantId is required");
-  }
-
-  private void rejectConcurrentUpdate(int updated) {
-    if (updated == 0) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
-    }
   }
 }

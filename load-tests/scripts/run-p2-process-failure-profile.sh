@@ -166,8 +166,7 @@ terminate_active_process_backend() {
     local pid
     pid="$(psql_business -At -f "$LOAD_DIR/sql/p2-active-process-copy-backend.sql" | head -1)"
     if [[ "$pid" =~ ^[0-9]+$ ]]; then
-      psql_business -At -v backend_pid="$pid" \
-        -f "$LOAD_DIR/sql/p2-terminate-backend.sql" > "$LOG_DIR/pg-terminate-${pid}.txt"
+      psql_business -Atc "select pg_terminate_backend(${pid})" > "$LOG_DIR/pg-terminate-${pid}.txt"
       printf '%s\n' "$pid"
       return 0
     fi
@@ -230,6 +229,7 @@ write_report() {
 }
 
 require_tooling
+RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "==> prepare process load data RUN_ID=${RUN_ID}, rows=${PROCESS_SOURCE_ROWS}"
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090

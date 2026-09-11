@@ -20,7 +20,6 @@ SIM_STAGE_NAME="export-stage3b"
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
-SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> apply bootstrap + stage3b fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
@@ -34,6 +33,9 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" \
   -f /dev/stdin < docs/test-data/sim-stage3b-export-source.sql >/dev/null
 
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+export START_TS
+
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3b.log"
 import json, os, subprocess, sys, time, urllib.request
 
@@ -41,23 +43,17 @@ BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
+START_TS = os.environ["START_TS"].strip()
 
-def psql(db, sql_file, variables=None, tuples=False, capture_output=True):
+def psql(db, sql, tuples=False):
     args = [
-        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
-        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
-        "-d", db, "-P", "pager=off",
+        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+        "-d", db, "-P", "pager=off"
     ]
     if tuples:
         args += ["-t", "-A"]
-    for key, value in (variables or {}).items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        return subprocess.run(
-            args, check=True, capture_output=capture_output,
-            text=True, input=sql.read())
+    args += ["-c", sql]
+    return subprocess.run(args, check=False, capture_output=True, text=True)
 
 rid = f"sim-stage3b-keyset4-{int(time.time()*1000)%100000000}"
 body = {
@@ -95,9 +91,13 @@ with urllib.request.urlopen(req, timeout=30) as resp:
 deadline = time.time() + 180
 instance_id = None
 while time.time() < deadline:
-    out = psql(
-        os.environ["PLATFORM_DB"], "select-request-instance-status.sql",
-        {"tenant_id": "ta", "request_id": rid}, tuples=True)
+    out = psql(os.environ["PLATFORM_DB"], (
+        "select i.id || '|' || i.instance_status "
+        "from batch.trigger_request tr "
+        "join batch.job_instance i on i.id = tr.related_job_instance_id "
+        f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
+        "order by tr.created_at desc limit 1"
+    ), tuples=True)
     value = (out.stdout or "").strip()
     if value:
         iid, status = value.split("|", 1)
@@ -112,24 +112,52 @@ if not instance_id:
     raise TimeoutError("timeout waiting export stage3b")
 
 print("\n-- task_status --", flush=True)
-query_variables = {"tenant_id": "ta", "instance_id": instance_id, "batch_no": BATCH}
-psql(
-    os.environ["PLATFORM_DB"], "select-export-partition-task-status.sql",
-    query_variables, capture_output=False)
+task_sql = (
+    "select p.partition_no,p.partition_status,t.task_status,t.error_code,"
+    "left(coalesce(t.error_message,''),160) as error_message "
+    "from batch.job_partition p "
+    "left join batch.job_task t on t.job_partition_id=p.id "
+    f"where p.job_instance_id={instance_id} "
+    "order by p.partition_no,t.id"
+)
+subprocess.run([
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", task_sql
+], check=False)
 
 print("\n-- file_records --", flush=True)
-psql(
-    os.environ["PLATFORM_DB"], "select-export-file-records.sql",
-    query_variables, capture_output=False)
+file_sql = (
+    "select file_name,file_status,file_size_bytes,metadata_json->>'recordCount' as record_count,"
+    "storage_path "
+    "from batch.file_record "
+    f"where tenant_id='ta' and source_ref='{BATCH}' and source_type='GENERATED' "
+    "order by file_name"
+)
+subprocess.run([
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", file_sql
+], check=False)
 
-out = psql(
-    os.environ["PLATFORM_DB"], "select-export-stage3b-assertion.sql",
-    query_variables, tuples=True)
+check_sql = (
+    "with tasks as ("
+    f"select count(*) filter (where t.task_status='SUCCESS') as success_tasks "
+    "from batch.job_task t join batch.job_partition p on p.id=t.job_partition_id "
+    f"where p.job_instance_id={instance_id}"
+    "), files as ("
+    "select count(*) as file_count, "
+    "count(*) filter (where file_name ~ '_p[1-4]of4\\.json$') as tagged_files, "
+    "coalesce(sum((metadata_json->>'recordCount')::int),0) as exported_rows "
+    "from batch.file_record "
+    f"where tenant_id='ta' and source_ref='{BATCH}' and source_type='GENERATED'"
+    ") select success_tasks, file_count, tagged_files, exported_rows "
+    "from tasks cross join files"
+)
+out = psql(os.environ["PLATFORM_DB"], check_sql, tuples=True)
 summary = (out.stdout or "").strip()
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "4|4|4|40":
     print("❌ Export Stage3b assertion failed, expected 4|4|4|40", flush=True)
     sys.exit(1)
 
-print(f"\n==> Stage 3b export scenario PASS: batchNo={BATCH} instance={instance_id}", flush=True)
+print(f"\n==> Stage 3b export scenario PASS: batchNo={BATCH} instance={instance_id} startTs={START_TS}", flush=True)
 PY

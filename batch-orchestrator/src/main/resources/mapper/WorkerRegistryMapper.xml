@@ -206,7 +206,22 @@
             #{tenantId}, #{workerCode}, #{workerGroup},
             cast(#{capabilityTags.value} as jsonb),
             #{resourceTag},
-            #{status}, #{heartbeatAt}, #{currentLoad}, #{maxConcurrent},
+            <choose>
+                <when test="status != null">#{status}</when>
+                <otherwise>'ONLINE'</otherwise>
+            </choose>,
+            <choose>
+                <when test="heartbeatAt != null">#{heartbeatAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            <choose>
+                <when test="currentLoad != null">#{currentLoad}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            <choose>
+                <when test="maxConcurrent != null">#{maxConcurrent}</when>
+                <otherwise>10</otherwise>
+            </choose>,
             #{drainStartedAt}, #{drainDeadlineAt},
             #{hostName}, #{hostIp}, #{processId}, #{buildId}, #{sdkVersion},
             current_timestamp, current_timestamp
@@ -225,64 +240,6 @@
            and is_self_hosted = false
     </update>
 
-    <!-- 重注册允许沿用既有转移语义，但必须以读取到的状态为 CAS 前态，不能覆盖并发排空或下线。 -->
-    <update id="updateRegistrationIfCurrent">
-        update batch.worker_registry
-           set worker_group       = #{worker.workerGroup},
-               capability_tags    = cast(#{worker.capabilityTags.value} as jsonb),
-               resource_tag       = #{worker.resourceTag},
-               status             = #{worker.status},
-               heartbeat_at       = current_timestamp,
-               current_load       = #{worker.currentLoad},
-               max_concurrent     = coalesce(#{worker.maxConcurrent}, max_concurrent),
-               drain_started_at   = #{worker.drainStartedAt},
-               drain_deadline_at  = #{worker.drainDeadlineAt},
-               host_name          = coalesce(#{worker.hostName}, host_name),
-               host_ip            = coalesce(#{worker.hostIp}, host_ip),
-               process_id         = coalesce(#{worker.processId}, process_id),
-               build_id           = coalesce(#{worker.buildId}, build_id),
-               sdk_version        = coalesce(#{worker.sdkVersion}, sdk_version),
-               updated_at         = current_timestamp
-         where tenant_id = #{worker.tenantId}
-           and worker_code = #{worker.workerCode}
-           and status = #{expectedStatus}
-    </update>
-
-    <update id="updateStatusIfCurrent">
-        update batch.worker_registry
-           set status       = #{nextStatus},
-               heartbeat_at = current_timestamp,
-               updated_at   = current_timestamp
-         where tenant_id = #{tenantId}
-           and worker_code = #{workerCode}
-           and status = #{expectedStatus}
-    </update>
-
-    <update id="startDrainIfCurrent">
-        update batch.worker_registry
-           set status            = 'DRAINING',
-               heartbeat_at      = current_timestamp,
-               drain_started_at  = current_timestamp,
-               drain_deadline_at = current_timestamp + (#{timeoutSeconds} * interval '1 second'),
-               updated_at        = current_timestamp
-         where tenant_id = #{tenantId}
-           and worker_code = #{workerCode}
-           and status = #{expectedStatus}
-    </update>
-
-    <update id="warmupIfOffline">
-        update batch.worker_registry
-           set status            = 'ONLINE',
-               heartbeat_at      = current_timestamp,
-               drain_started_at  = null,
-               drain_deadline_at = null,
-               updated_at        = current_timestamp
-         where tenant_id = #{tenantId}
-           and worker_code = #{workerCode}
-           and status = 'OFFLINE'
-    </update>
-
-    <!-- 仅供集成测试夹具保存快照；生产代码禁止使用。 -->
     <update id="updateById"
             parameterType="io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         update batch.worker_registry

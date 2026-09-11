@@ -11836,7 +11836,7 @@ components:
       required: [bizDateFrom, bizDateTo]
     BatchDayReplaySubmitRequest:
       type: object
-      description: ADR-020 批次日重放或 ADR-026 整批量日演练提交命令
+      description: ADR-020 批次日重放提交命令
       properties:
         tenantId:        { type: string, description: '可省略；由 JWT 经 ConsoleTenantGuard 解析后强制覆盖' }
         calendarCode:    { type: string, maxLength: 128 }
@@ -11844,14 +11844,6 @@ components:
         scope:
           type: string
           enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
-        executionMode:
-          type: string
-          enum: [REPLAY, DRY_RUN]
-          default: REPLAY
-        candidateSource:
-          type: string
-          enum: [EXISTING_INSTANCES, SCHEDULE_PLAN]
-          default: EXISTING_INSTANCES
         jobCodes:
           type: array
           items: { type: string }
@@ -11862,8 +11854,8 @@ components:
           description: 仅 OUTPUTS_ONLY scope 必填，要 promote 的 result_version id 列表
         resultPolicy:
           type: string
-          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE, DRY_RUN_ONLY]
-          description: 缺省 CREATE_NEW_VERSION；DRY_RUN 时服务端强制为 DRY_RUN_ONLY
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+          description: 缺省 CREATE_NEW_VERSION
         configVersionPolicy:
           type: string
           enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
@@ -11884,12 +11876,6 @@ components:
         scope:
           type: string
           enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
-        executionMode:
-          type: string
-          enum: [REPLAY, DRY_RUN]
-        candidateSource:
-          type: string
-          enum: [EXISTING_INSTANCES, SCHEDULE_PLAN]
         resultPolicy:
           type: string
           enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
@@ -11917,7 +11903,7 @@ components:
         warnings:
           type: array
           items: { type: string }
-      required: [tenantId, calendarCode, bizDate, scope, executionMode, candidateSource, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
+      required: [tenantId, calendarCode, bizDate, scope, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
     BatchDayReplayPreviewEntry:
       type: object
       properties:
@@ -11926,7 +11912,7 @@ components:
         resultVersionId: { type: integer, format: int64, nullable: true }
         action:
           type: string
-          enum: [RERUN_INSTANCE, PROMOTE_RESULT_VERSION, LAUNCH_SCHEDULE_PLAN]
+          enum: [RERUN_INSTANCE, PROMOTE_RESULT_VERSION]
         businessKey: { type: string }
       required: [jobCode, action, businessKey]
     BatchDayReplayResultVersionImpact:
@@ -16727,15 +16713,13 @@ components:
     BatchDayReplaySession:
       type: object
       description: ADR-020 批次日重放 session 投影（console 透传 orchestrator 实体）。
-      required: [id, tenantId, calendarCode, bizDate, scope, executionMode, candidateSource, status]
+      required: [id, tenantId, calendarCode, bizDate, scope, status]
       properties:
         id: { type: integer, format: int64 }
         tenantId: { type: string }
         calendarCode: { type: string }
         bizDate: { type: string, format: date }
         scope: { type: string }
-        executionMode: { type: string, enum: [REPLAY, DRY_RUN] }
-        candidateSource: { type: string, enum: [EXISTING_INSTANCES, SCHEDULE_PLAN] }
         scopePayload: { type: string, nullable: true }
         resultPolicy: { type: string, nullable: true }
         configVersionPolicy: { type: string, nullable: true }
@@ -16776,10 +16760,6 @@ components:
         startedAt: { type: string, format: date-time, nullable: true }
         finishedAt: { type: string, format: date-time, nullable: true }
         resultVersionId: { type: integer, format: int64, nullable: true }
-        planSnapshot:
-          type: string
-          nullable: true
-          description: SCHEDULE_PLAN 候选的不可变 JSON 计划快照
         createdAt: { type: string, format: date-time, nullable: true }
         updatedAt: { type: string, format: date-time, nullable: true }
     CommonResponseBatchDayReplayEntryList:

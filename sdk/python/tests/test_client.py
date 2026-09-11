@@ -130,16 +130,6 @@ def test_register_handler_rejects_duplicate() -> None:
         client.register_handler(_StubHandler("import"))
 
 
-def test_dry_run_capability_requires_explicit_opt_in() -> None:
-    regular = BatchPlatformClient(_cfg(), http=_http_mock())
-    regular.register_handler(_StubHandler("import"))
-    safe = BatchPlatformClient(_cfg().model_copy(update={"dry_run_safe": True}), http=_http_mock())
-    safe.register_handler(_StubHandler("import"))
-
-    assert regular._build_register_body()["capabilityTags"] == ["import"]
-    assert safe._build_register_body()["capabilityTags"] == ["dry-run-safe", "import"]
-
-
 async def test_start_without_handlers_raises() -> None:
     client = BatchPlatformClient(_cfg(), http=_http_mock())
 

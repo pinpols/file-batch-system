@@ -14,7 +14,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -105,8 +104,7 @@ public class BatchPlatformClient {
     body.put("status", "RUNNING");
     body.put("heartbeatAt", Instant.now().toString());
     body.put("currentLoad", 0);
-    List<String> capabilityTags = capabilityTags();
-    body.put("capabilityTags", capabilityTags);
+    body.put("capabilityTags", List.copyOf(handlers.keySet()));
     // SDK-P5-3 运行指纹:host/pid 尽力采集,buildId 由租户 config 注入,sdkVersion 读 jar manifest;
     // 全部尽力而为(null 字段由 NON_NULL 序列化策略略过,平台列可空)。
     putIfPresent(body, "hostName", WorkerFingerprint.hostName());
@@ -140,21 +138,13 @@ public class BatchPlatformClient {
         WorkerFingerprint.hostName(),
         WorkerFingerprint.hostIp(),
         WorkerFingerprint.processId(),
-        capabilityTags,
+        List.copyOf(handlers.keySet()),
         config.getBuildId());
     this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher, identity);
     this.heartbeatScheduler.start();
     this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
     this.leaseRenewalScheduler.start();
     started = true;
-  }
-
-  List<String> capabilityTags() {
-    LinkedHashSet<String> tags = new LinkedHashSet<>(handlers.keySet());
-    if (config.isDryRunSafe()) {
-      tags.add(SdkWorkerCapabilities.DRY_RUN_SAFE);
-    }
-    return List.copyOf(tags);
   }
 
   /**

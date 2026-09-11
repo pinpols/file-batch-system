@@ -97,8 +97,6 @@ pub struct TaskContext {
     pub partition_invocation_id: Option<String>,
     /// `runtimeAttributes.traceId` passthrough (OTel link), empty if absent.
     pub trace_id: String,
-    /// Whether business side effects must be suppressed for this task.
-    pub dry_run: bool,
     /// Effective task config / business parameters (claim response snapshot).
     pub parameters: BTreeMap<String, String>,
     pub cancellation: CancellationSignal,
@@ -131,7 +129,6 @@ impl TaskContext {
             task_type: task_type.to_string(),
             partition_invocation_id: None,
             trace_id: String::new(),
-            dry_run: false,
             parameters: BTreeMap::new(),
             cancellation: CancellationSignal::new(),
             progress: Box::new(NoopProgressReporter),
@@ -140,17 +137,6 @@ impl TaskContext {
             self_report: false,
             commit_counter: Arc::new(AtomicU64::new(0)),
         }
-    }
-
-    /// Builder-style: mark this context as a dry-run execution.
-    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
-        self.dry_run = dry_run;
-        self
-    }
-
-    /// True when the handler must validate only and suppress side effects.
-    pub fn is_dry_run(&self) -> bool {
-        self.dry_run
     }
 
     /// Builder-style: attach the `partitionInvocationId` so the lease lifecycle
@@ -673,11 +659,5 @@ mod tests {
         let stopped = map_stopped_result(Err(SdkTaskStopped::at(bp("id", 42))));
         assert_eq!(stopped.error_code, "CANCELLED");
         assert!(!stopped.is_success());
-    }
-
-    #[test]
-    fn dry_run_flag_is_explicit() {
-        let ctx = TaskContext::new("t1", "tenant-a", "import").with_dry_run(true);
-        assert!(ctx.is_dry_run());
     }
 }

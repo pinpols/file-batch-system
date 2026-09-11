@@ -12,9 +12,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 # shellcheck source=../lib/env-common.sh
-# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/lib/env-common.sh"
-LOCAL_SQL_DIR="$ROOT/scripts/local/sql"
 
 KEY="${1:-}"
 PORT="${2:-}"
@@ -66,17 +64,14 @@ for _ in $(seq 1 40); do
   # 正式服务 exec 为容器 PID 1 后再做真实查询，避免首次 provision 的关闭窗口竞态。
   if docker exec "$CONTAINER" sh -c 'test "$(head -n 1 "$PGDATA/postmaster.pid" 2>/dev/null)" = "1"' \
       && docker exec "$CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$BUSINESS_DB" >/dev/null 2>&1 \
-      && docker exec -i "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
-        -tA -v ON_ERROR_STOP=1 \
-        -f /dev/stdin < "$LOCAL_SQL_DIR/check-database-ready.sql" >/dev/null 2>&1; then
+      && docker exec "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" -tAc 'SELECT 1' >/dev/null 2>&1; then
     ready=1; break
   fi
   sleep 2
 done
 [ "${ready:-0}" = 1 ] || { echo "    ✗ 未就绪"; docker logs --tail 30 "$CONTAINER"; exit 1; }
-n_tables="$(docker exec -i "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
-  -tA -v ON_ERROR_STOP=1 \
-  -f /dev/stdin < "$LOCAL_SQL_DIR/count-biz-schema-tables.sql")"
+n_tables="$(docker exec "$CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" -tAc \
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema='biz'")"
 echo "    就绪;biz 表数=$n_tables"
 
 echo "==> [${KEY}] 3/5 角色+授权+RLS(rls-phase-a,幂等)"

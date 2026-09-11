@@ -43,22 +43,14 @@ REQUIRE_BATCH_CLAIM = os.environ.get("REQUIRE_BATCH_CLAIM", "true").lower() == "
 PG = os.environ.get("PG_CONTAINER", "batch-postgres-primary")
 PGU = os.environ.get("POSTGRES_USER", "batch_user")
 PLAT = os.environ["PLATFORM_DB"]
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
 if not 2 <= PARTITION_COUNT <= 256:
     raise ValueError("PARTITION_COUNT must be within 2..256")
 
-def psql(sql_file, variables):
-    args = [
-        "docker", "exec", "-i", PG, "psql", "-X", "-v", "ON_ERROR_STOP=1",
-        "-U", PGU, "-d", PLAT, "-tA", "-P", "pager=off",
-    ]
-    for key, value in variables.items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        out = subprocess.run(
-            args, check=True, capture_output=True, text=True, input=sql.read())
+def psql(sql):
+    out = subprocess.run(
+        ["docker", "exec", PG, "psql", "-U", PGU, "-d", PLAT, "-tA", "-P", "pager=off", "-c", sql],
+        check=False, capture_output=True, text=True)
     return (out.stdout or "").strip()
 
 def scrape(metric):
@@ -91,9 +83,9 @@ def wait_instance(rid, expected, timeout=240):
     deadline = time.time() + timeout
     while time.time() < deadline:
         value = psql(
-            "select-request-instance-status.sql",
-            {"tenant_id": "ta", "request_id": rid},
-        )
+            "select i.id || '|' || coalesce(i.instance_status,'') "
+            "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+            f"where tr.tenant_id='ta' and tr.request_id='{rid}' order by tr.created_at desc limit 1")
         if value:
             iid, status = value.split("|", 1)
             if status in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
@@ -104,9 +96,8 @@ def wait_instance(rid, expected, timeout=240):
 
 def partition_counts(instance_id):
     value = psql(
-        "select-instance-partition-counts.sql",
-        {"tenant_id": "ta", "instance_id": instance_id},
-    )
+        "select count(*) || '|' || count(*) filter (where partition_status = 'SUCCESS') "
+        f"from batch.job_partition where tenant_id='ta' and job_instance_id={instance_id}")
     if not value:
         raise RuntimeError(f"missing partitions for instance {instance_id}")
     total, success = value.split("|", 1)

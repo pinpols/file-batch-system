@@ -13,7 +13,7 @@ INSERT INTO batch.job_definition (
 ) VALUES (
   'default-tenant', :'job_code', 'Process Demo Aggregate', 'PROCESS', 'DEMO',
   'MANUAL', NULL, 'Asia/Shanghai', 5, 'process_queue', 'PROCESS',
-  'default_calendar', 'always_open', 'MANUAL', FALSE, 'NONE', 'NONE', 0, 600,
+  'default-calendar', 'always_open', 'MANUAL', FALSE, 'NONE', 'NONE', 0, 600,
   'com.example.ProcessDemoHandler',
   jsonb_build_object('type','object'), jsonb_build_object(),
   1, TRUE, 'PROCESS demo for metric verification', 'system', 'system', now(), now()

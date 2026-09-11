@@ -23,8 +23,6 @@ import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 @ExtendWith(MockitoExtension.class)
 class RedisShardAssignmentProviderTest {
 
-  private static final String MEMBERS_KEY = "batch:test:orchestrator:members";
-
   @Mock
   private StringRedisTemplate redis;
 
@@ -33,25 +31,14 @@ class RedisShardAssignmentProviderTest {
 
   private RedisShardAssignmentProvider provider(String memberId) {
     when(redis.opsForZSet()).thenReturn(zset);
-    return new RedisShardAssignmentProvider(redis, memberId, MEMBERS_KEY, Duration.ofSeconds(30));
+    return new RedisShardAssignmentProvider(redis, memberId, Duration.ofSeconds(30));
   }
 
   @Test
   void heartbeatWritesScoreWithMemberId() {
     RedisShardAssignmentProvider p = provider("orch-0");
     p.heartbeat();
-    verify(zset).add(eq(MEMBERS_KEY), eq("orch-0"), anyDouble());
-  }
-
-  @Test
-  void leaveRemovesMemberAndStopsFurtherPolling() {
-    RedisShardAssignmentProvider p = provider("orch-0");
-    p.heartbeat();
-
-    p.leave();
-
-    verify(zset).remove(MEMBERS_KEY, "orch-0");
-    assertThat(p.canPoll()).isFalse();
+    verify(zset).add(eq("batch:orchestrator:members"), eq("orch-0"), anyDouble());
   }
 
   @Test
@@ -143,6 +130,7 @@ class RedisShardAssignmentProviderTest {
     p.current();
 
     // 验证先调 removeRangeByScore 清理超期成员，再调 rangeWithScores
-    verify(zset, times(1)).removeRangeByScore(eq(MEMBERS_KEY), eq(0D), anyDouble());
+    verify(zset, times(1))
+        .removeRangeByScore(eq("batch:orchestrator:members"), eq(0D), anyDouble());
   }
 }

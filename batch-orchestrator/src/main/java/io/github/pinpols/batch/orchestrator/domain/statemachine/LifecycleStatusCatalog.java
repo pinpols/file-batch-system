@@ -7,7 +7,14 @@ import java.util.stream.Collectors;
 /** Shared lifecycle status catalog used by state transitions and outcome policies. */
 public final class LifecycleStatusCatalog {
 
-  public static final Set<String> JOB_INSTANCE_TERMINAL_STATES = JobInstanceStatus.terminalCodes();
+  public static final Set<String> JOB_INSTANCE_TERMINAL_STATES = Set.of(
+      JobInstanceStatus.SUCCESS.code(),
+      JobInstanceStatus.FAILED.code(),
+      JobInstanceStatus.PARTIAL_FAILED.code(),
+      JobInstanceStatus.CANCELLED.code(),
+      JobInstanceStatus.TERMINATED.code(),
+      JobInstanceStatus.SUCCESS_DRY_RUN.code(),
+      JobInstanceStatus.FAILED_DRY_RUN.code());
 
   private LifecycleStatusCatalog() {}
 

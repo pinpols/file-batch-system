@@ -6,9 +6,6 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
-### 2026-09-11
-- **ADR-020/026 实现状态校准**：整批量日 dry-run 已基于 replay session/entry 落地，不扩展正式 batch-day 唯一身份；明确控制面 Outbox 保留、业务副作用 Outbox 禁止，功能默认关闭且须经 staging 零副作用验收后启用。
-
 ### 2026-08-03
 - **ADR-033 调度器边界校正**：明确 Hashed Wheel 方案已撤回，当前生产调度基线为 Quartz；只有达到明确的容量或时序门槛才重新评估时间轮。若重新评估，时间轮核心必须采用成熟开源实现（例如 Netty `HashedWheelTimer`），不得在 BFS 内自行实现核心调度算法；BFS 只负责业务语义适配、持久化、幂等、租户隔离、故障转移和可观测性。
 - **Controller 响应边界澄清**：`CommonResponse<T>` 仅约束 `batch-console-api` 对外 Console REST API；服务间 `/internal/**` 保留登记的 DTO / Map 协议，避免文档规则误导内部接口改包络。

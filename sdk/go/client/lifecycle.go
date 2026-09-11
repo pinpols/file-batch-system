@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -22,8 +21,6 @@ type Config struct {
 	BuildID        string
 	SDKVersion     string
 	CapabilityTags []string
-	// DryRunSafe 仅在 handler 已完整隔离 dry-run 外部副作用时开启。
-	DryRunSafe bool
 	// RegisterAttributes is the fingerprint attribute map sent at register time.
 	// It is scanned by SensitiveValidator (§1.8) before send.
 	RegisterAttributes map[string]any
@@ -36,9 +33,6 @@ type Config struct {
 }
 
 func (c Config) withDefaults() Config {
-	if c.DryRunSafe {
-		c.CapabilityTags = appendCapability(c.CapabilityTags, DryRunSafeCapability)
-	}
 	if c.MaxConcurrentTasks <= 0 {
 		c.MaxConcurrentTasks = 1
 	}
@@ -52,18 +46,6 @@ func (c Config) withDefaults() Config {
 		c.StopTimeout = 30 * time.Second
 	}
 	return c
-}
-
-// DryRunSafeCapability is required by the platform before dispatching dry-run tasks.
-const DryRunSafeCapability = "dry-run-safe"
-
-func appendCapability(tags []string, capability string) []string {
-	for _, tag := range tags {
-		if tag == capability {
-			return tags
-		}
-	}
-	return append(tags, capability)
 }
 
 // Worker wires the runtime engine: FSM + transport + consumer + schedulers +
@@ -323,7 +305,6 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 			TaskID:          msg.TaskID,
 			EffectiveConfig: claim.EffectiveConfig,
 			TraceID:         claim.TraceID,
-			DryRun:          dryRunAttribute(msg.RuntimeAttributes, claim.EffectiveConfig),
 			Cancellation:    sig,
 			Progress:        NoopProgressReporter{},
 		}
@@ -338,22 +319,6 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 	// commit (the task is durably owned via the lease; the async report lands
 	// independently of the Kafka offset).
 	return true
-}
-
-func dryRunAttribute(runtimeAttributes, parameters map[string]any) bool {
-	for _, source := range []map[string]any{runtimeAttributes, parameters} {
-		switch value := source["dryRun"].(type) {
-		case bool:
-			if value {
-				return true
-			}
-		case string:
-			if strings.EqualFold(value, "true") {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // stoppedResult maps an SdkTaskStopped sentinel to a CANCELLED terminal result

@@ -35,9 +35,6 @@ public record WorkerRegistryEntity(
     String buildId,
     String sdkVersion) {
 
-  /** Worker 未声明容量时的平台默认并发；DDL 的同值 DEFAULT 仅作为数据库最后防线。 */
-  public static final int DEFAULT_MAX_CONCURRENT = 10;
-
   /**
    * 兼容构造器：不带运行指纹（hostName/hostIp/processId/buildId/sdkVersion），全置 null。 缓存重建 / 选择器 /
    * 测试等不关心指纹的路径沿用此入口，避免大面积改 canonical 调用点。

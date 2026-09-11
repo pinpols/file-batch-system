@@ -100,8 +100,6 @@ batch:
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}
-      # 人工审批 misfire 的保留期；到期后状态转为 EXPIRED。
-      misfire-pending-retention-days: ${BATCH_TRIGGER_MISFIRE_PENDING_RETENTION_DAYS:7}
       # 上游未就绪时使用 Quartz one-shot trigger 重检，期间固定原始 fire 时间，避免 bizDate 漂移。
       readiness-window-seconds: ${BATCH_TRIGGER_READINESS_WINDOW_SECONDS:7200}
       readiness-recheck-interval-seconds: ${BATCH_TRIGGER_READINESS_RECHECK_INTERVAL_SECONDS:30}
@@ -124,11 +122,3 @@ batch:
       # 入口突发先可靠地积压在 outbox；按单进程已验证的持续执行能力限速释放，避免压垮 orchestrator / worker / PG。
       # 当前计数在 JVM 内存；Helm 默认单 Trigger 副本，扩副本前必须下调每副本值或改为共享预算。
       max-publish-events-per-second: ${BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND:40}
-      adaptive-release-enabled: ${BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED:false}
-      min-publish-events-per-second: ${BATCH_TRIGGER_OUTBOX_MIN_PUBLISH_EVENTS_PER_SECOND:5}
-      lag-soft-threshold: ${BATCH_TRIGGER_OUTBOX_LAG_SOFT_THRESHOLD:1000}
-      lag-hard-threshold: ${BATCH_TRIGGER_OUTBOX_LAG_HARD_THRESHOLD:5000}
-      adaptive-increase-step: ${BATCH_TRIGGER_OUTBOX_ADAPTIVE_INCREASE_STEP:1}
-      lag-sample-interval-millis: ${BATCH_TRIGGER_OUTBOX_LAG_SAMPLE_INTERVAL_MILLIS:5000}
-      lag-query-timeout-millis: ${BATCH_TRIGGER_OUTBOX_LAG_QUERY_TIMEOUT_MILLIS:2000}
-      consumer-group-id: ${BATCH_TRIGGER_OUTBOX_CONSUMER_GROUP_ID:orchestrator-trigger-launch}

@@ -111,18 +111,4 @@ class BatchPlatformClientStartTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("already started");
   }
-
-  @Test
-  void dryRunCapabilityRequiresExplicitOptIn() {
-    BatchPlatformClient defaultClient =
-        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
-    BatchPlatformClient safeClient = BatchPlatformClient.builder(
-            cfg().toBuilder().dryRunSafe(true).build())
-        .register(stub("type-a"))
-        .build();
-
-    assertThat(defaultClient.capabilityTags()).containsExactly("type-a");
-    assertThat(safeClient.capabilityTags())
-        .containsExactly("type-a", SdkWorkerCapabilities.DRY_RUN_SAFE);
-  }
 }

@@ -342,8 +342,7 @@
         )
     </insert>
 
-    <select id="markStaleRunningPipelineInstancesFailed" resultType="long"
-            flushCache="true" affectData="true">
+    <update id="markStaleRunningPipelineInstancesFailed">
         update batch.pipeline_instance pi
         set run_status = #{failedStatus},
             current_stage = coalesce(pi.current_stage, 'STALE_SWEEP'),
@@ -359,8 +358,7 @@
             order by started_at asc
             limit #{limit}
         )
-        returning pi.id
-    </select>
+    </update>
 
     <update id="markRunningPipelineStepsFailedForInstances">
         update batch.pipeline_step_run psr
@@ -379,11 +377,9 @@
               where pi.id = psr.pipeline_instance_id
                 and pi.tenant_id = #{tenantId}
                 and pi.run_status = #{failedPipelineStatus}
-                and pi.id in
-                <foreach collection="pipelineInstanceIds" item="pipelineInstanceId"
-                         open="(" separator="," close=")">
-                    #{pipelineInstanceId}
-                </foreach>
+                and pi.finished_at &gt;= current_timestamp - interval '5 minutes'
+                and pi.started_at is not null
+                and pi.started_at &lt; current_timestamp - (#{staleSeconds} * interval '1 second')
           )
     </update>
 </mapper>

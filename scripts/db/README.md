@@ -21,12 +21,6 @@
 4. 压测种子数据走 [load-test-seed/README.md](./load-test-seed/README.md)。
 5. 备份恢复演练走 [backup/README.md](./backup/README.md)。
 6. 分区迁移演练走 [partition-migration/README.md](./partition-migration/README.md)。
-7. 外置 PostgreSQL 上线前运行 `check-postgres-control-plane-readiness.sh`；生产设置
-   `PG_READINESS_STRICT=1`，完整参数见 [deploy/ha/README.md](../../deploy/ha/README.md)。
-
-预检 SQL 独立保存在 `postgres-control-plane-readiness.sql`，便于 DBA 先审 SQL 再执行。
-`PG_EXPECTED_APP_CONNECTIONS` 应填写所有应用副本 Hikari 上限总和，`PG_CONNECTION_RESERVE`
-用于预留运维、迁移和复制连接。
 
 ## 参考文档
 

@@ -104,7 +104,6 @@ class BatchDayOpenSchedulerTest {
     verify(batchDayInstanceMapper).insert(captor.capture());
     BatchDayInstanceEntity opened = captor.getValue();
     assertThat(opened.dayStatus()).isEqualTo("OPEN");
-    assertThat(opened.dryRun()).isFalse();
     assertThat(opened.bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 5));
     assertThat(opened.timezoneSnapshot()).isEqualTo("Asia/Shanghai");
     assertThat(opened.cutoffAt()).isEqualTo(Instant.parse("2026-05-05T22:00:00Z"));

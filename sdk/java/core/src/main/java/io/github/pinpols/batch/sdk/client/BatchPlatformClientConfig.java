@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.sdk.client;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,12 +56,6 @@ public class BatchPlatformClientConfig {
    * worker_registry.build_id,运维可据此区分同一 SDK 版本下不同业务构建。<b>不要放敏感信息</b>(会写入数据库并对运维可见)。
    */
   String buildId;
-
-  /**
-   * 是否声明当前自托管 Worker 已完整实现 dry-run 副作用隔离。默认关闭；只有 handler 在 dry-run 下不会写外部系统时才能开启。
-   */
-  @Default
-  boolean dryRunSafe = false;
 
   /** HTTP 调用超时(connect + read)。默认 10s。 */
   @Default
@@ -187,11 +180,6 @@ public class BatchPlatformClientConfig {
         .kafkaSecurityProtocol(env.apply(prefix + "KAFKA_SECURITY_PROTOCOL"))
         .kafkaSaslMechanism(env.apply(prefix + "KAFKA_SASL_MECHANISM"))
         .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
-
-    String dryRunSafe = env.apply(prefix + "DRY_RUN_SAFE");
-    if (!EmptyChecks.isBlank(dryRunSafe)) {
-      builder.dryRunSafe(parseBoolean(dryRunSafe.trim()));
-    }
 
     String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
     if (maxConcurrent != null && !maxConcurrent.isBlank()) {
