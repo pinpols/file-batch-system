@@ -32,6 +32,7 @@
 | 14 | [stats/](./stats/) | 规模统计 | LoC / 文档体量统计 |
 | 15 | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
 | 16 | [verifications/](./verifications/) | 验证记录 | 实测 / drill / go-live evidence |
+| 17 | [standards/document-governance.md](./standards/document-governance.md) | 文档状态、待办和归档治理 | 文档复扫与状态校准 |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
 | — | [spike/](./spike/) | Spike 实验记录 | 临时技术验证 |
 
@@ -55,3 +56,5 @@
 - **规范变更日志**：改 CLAUDE.md 已有规范条款，必须追加 `changelog.md`
 - **Feature / Bug / 运维事件不进 CLAUDE.md**：以 git commit + 对应模块文档（`architecture/*` / `runbook/*` / `analysis/*`）为权威
 - **archive/ 只读**：归档文件不再维护，新内容写到主干目录
+- **待办唯一入口**：当前待办以 [`analysis/todo-master.md`](./analysis/todo-master.md) 为准；`archive/` 中的待办只代表历史时点
+- **文档状态治理**：详见 [`standards/document-governance.md`](./standards/document-governance.md)

@@ -1,5 +1,7 @@
 # PROCESS Worker 已知问题与下一步计划
 
+> 文档性质：2026-04-28 的问题快照。本文保留当时的风险分析和决策证据；其中“未修 / 待补”不自动代表当前代码仍有问题，当前有效状态以最新验证记录和 [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。
+
 > 评估日期：2026-04-28。范围：`batch-worker-process` 的 WAP+bookends 五段链路（`PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK`）、内置 `sqlTransformCompute`、`batch.process_staging`、PROCESS E2E 与 console 配置入口。
 >
 > 与 [`batch-classification-and-gaps.md`](./batch-classification-and-gaps.md) §4.5 的分工：§4.5 说明已落地能力；本文记录落地后的漏洞、bug、设计缺陷和下一步修复计划。每个修复合入后应在本文对应条目标记状态，并同步修正文档中已不准确的流程描述。

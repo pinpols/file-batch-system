@@ -1,19 +1,37 @@
-# TODO Master · 全仓待办整合
+# TODO Master · 当前待办唯一索引
 
-> 整合范围：`docs/` 全部 md（analysis / runbook / architecture / design / compliance / changelog）+ 代码 `TODO` / `FIXME` / `@Deprecated forRemoval` 注解
-> 维护规则见底部
+> 核查日期：2026-09-11。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
+
+> 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
 
 ---
 
 ## 一、状态总览
 
-| 状态 | 计数 | 主要主题 |
-|---|---:|---|
-| ✅ **完成** | 62+ | 含 ADR-009/010/011 全栈 / EXCEL-GODCLASS 6/7 / WEBHOOK-DURABILITY / IDEMPOTENCY 三层 / FQN 全清 / Prometheus 告警 / NOISE 治理 / X-Console-Token 物删 / 12 旧 Excel 端点物删 + OpenAPI 同步 / Query factory + 守护测试 / POSITIONAL-ARGS v4 闭环；以及第 1 阶段 P0（ADR-012 / ADR-023 / ADR-025）+ 第 2 阶段 P1（ADR-021 / ADR-022 / ADR-026） |
-| 🟡 **半成** | 3 | ADR-010 Stage 6/7 灰度（灰度门禁未到）· ADR-009 Stage 4 业务方触发 · WF-design-1/2 字段先决条件未就位 |
-| ⏳ **待做** | 9 | 前端待办（ADR-018/020/026 Console UI）/ 横切（CI lint dry-run + audit/metric label）/ Quartz staging 7 项（🔒 ops/DBA/BIZ/staging）/ LIC-2 SBOM（🔒 ops 部分） |
-| 🟡 **暂缓** | 6 | ADR-024 冷热分层 / ADR-027 资源亲和 / **ADR-033 Quartz→Wheel(2026-05-21 立项)** / ADR-022 v0.2 history 表 / LIC-2 SBOM / CI flaky × 2(`@Disabled`)— 触发条件未达,priority-scope §5 守红线 |
-| ❌ **不做** | 4 | V5-P2-1 / V5-P2-9 / V5-NEW-1 / V5-NEW-2（理由见各项）|
+本表不再维护“完成 X 项”的汇总数字。数字会随历史快照、重复计划和外部验证状态变化而失真；当前判断以每条事项的状态、证据和最后核查日期为准。
+
+| 状态 | 当前口径 |
+|---|---|
+| ✅ **完成** | 有代码、测试、门禁或验证记录支撑；完成项不再重复列入待办 |
+| ⏳ **当前待做** | 本地仍有明确交付物，且没有被更新文档或决策替代 |
+| 🔒 **外部阻塞** | 本地材料已准备，等待 staging、运维、DBA、业务方或外部凭据 |
+| 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
+| ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
+
+### 当前核查边界（2026-09-11）
+
+以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
+
+| 主题 | 当前归类 | 权威来源 |
+|---|---|---|
+| staging 真实恢复、容量、发布与回滚留档 | 🔒 外部阻塞 | [`full-project-test-plan.md`](../testing/full-project-test-plan.md) |
+| 生产 PG/Kafka/Redis HA、PITR 和真实故障演练 | 🔒 外部阻塞 | [`ha-readiness.md`](../runbook/ha-readiness.md) |
+| 前端 dry-run、跨日 DAG、批次日 replay 页面 | ⏳ 当前待做（前端仓） | 本表 §二 FE-1/2/3 |
+| CI dry-run guard、dry-run 审计与指标维度 | ✅ 已完成 | `DryRunGuardConventionTest`、`TAG_DRY_RUN` 及 worker/plugin 守护已落地 |
+| Quartz 彻底迁移、冷热分层、资源亲和 | 🟡 暂缓 | 对应 ADR 的触发条件 |
+
+其余来源文档中的“未完成 / TODO / 缺口”必须按 [`document-governance.md`](../standards/document-governance.md) 复核后，才能加入当前待办。
 
 ### 🟡 暂缓清单(2026-05-21 集中索引)
 
@@ -76,6 +94,10 @@
 |---|---|
 | **CC-1** | CI lint 守护：step plugin 必经 DryRunGuard |
 | **CC-2** | audit + metric label 加 dry_run 维度 |
+
+> **状态校准（2026-09-11）**：CC-1/CC-2 已完成。证据为 `batch-worker-core` 的
+> `DryRunGuardConventionTest`、`batch-common` 的 `BatchMetricsNames.TAG_DRY_RUN` 及相关审计字段。
+> 本表保留编号用于追溯，不再作为当前待办。
 
 ---
 
@@ -193,11 +215,11 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ~~**DEP-4**~~ | `ConsoleFileTemplateExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |
 | ~~**DEP-5**~~ | `ConsoleResourceQueueExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |
 
-### K. 代码内 follow-up · P3
+### K. 代码内 follow-up · P3 · ✅ 已完成
 
 | ID | 主题 | 代码位置 |
 |---|---|---|
-| **EXT-1** | V5-P2-4-ext: JOB / BATCH compensation happy-path | `DefaultCompensationServiceTest.java:167`（`// TODO V5-P2-4-ext`） |
+| ~~**EXT-1**~~ | V5-P2-4-ext: JOB / BATCH compensation happy-path | ✅ `DefaultCompensationServiceTest` 已覆盖 JOB/BATCH submit happy-path（约 269-328 行）；原 TODO 索引已过期 |
 
 ### L. 历史一次性失败修复 · P3 · ✅
 
@@ -314,7 +336,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | 校验项 | 命令 | 说明 |
 |---|---|---|
 | Query record 工厂数 | `for f in $(find docs/query/*.java); do grep -c 'public static.*\bof' $f; done` | 已闭环，详见 §五 Query Record 工厂段 |
-| 代码 TODO 总数 | `rg '\b(TODO\|FIXME\|XXX\|HACK)\b' --glob '*.java'` | 1 处（`DefaultCompensationServiceTest:167` V5-P2-4-ext，详见 §三-K）|
+| 代码 TODO 总数 | `rg '\b(TODO\|FIXME\|XXX\|HACK)\b' --glob '*.java'` | 当前应重新扫描；旧的 `DefaultCompensationServiceTest:167` V5-P2-4-ext 已由现有 happy-path 测试覆盖 |
 | `@Deprecated forRemoval=true` | `rg 'forRemoval' --glob '*.java'` | 5 类（HttpOrchestratorTriggerAdapter / BatchSecurityProperties / 3 个 ExcelController），后 3 个已物删 |
 | 多 null 占位 inline new（≥2 null）| `rg -nU --multiline 'new \w+\([^)]*null[^)]*null[^)]*\)' --glob '*.java'` | POSITIONAL-ARGS v4 闭环后回归 0；新增由守护测试拦截 |
 

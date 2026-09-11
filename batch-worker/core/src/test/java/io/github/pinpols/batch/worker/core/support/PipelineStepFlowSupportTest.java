@@ -58,6 +58,23 @@ class PipelineStepFlowSupportTest {
     assertThat(attrs).doesNotContainKey(PipelineRuntimeKeys.PIPELINE_NEXT_STEP_CODE);
   }
 
+  @Test
+  void shouldIgnoreNullStepsAndStepsWithoutCode() {
+    PipelineStepDefinition current = step("S1");
+    PipelineStepDefinition withoutCode = step(null);
+    assertThat(PipelineStepFlowSupport.resolveNextStep(
+            current,
+            true,
+            java.util.Arrays.asList(withoutCode, current, step("S2")),
+            new HashMap<>()))
+        .extracting(PipelineStepDefinition::stepCode)
+        .isEqualTo("S2");
+    assertThat(PipelineStepFlowSupport.resolveNextStep(
+            current, true, java.util.Arrays.asList(null, current, step("S2")), new HashMap<>()))
+        .extracting(PipelineStepDefinition::stepCode)
+        .isEqualTo("S2");
+  }
+
   private static PipelineStepDefinition step(String code) {
     return new PipelineStepDefinition(
         1L, 1L, code, code, code, 1, "noop", Map.of(), 60, "FIXED", 0, true);
