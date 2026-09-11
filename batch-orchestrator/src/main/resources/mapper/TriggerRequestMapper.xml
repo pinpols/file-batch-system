@@ -118,6 +118,22 @@
         )
     </insert>
 
+    <insert id="insertIfAbsent"
+            parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity">
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
+            request_status, trace_id, dry_run
+        ) values (
+            #{tenantId}, #{requestId}, #{triggerType}, #{jobCode}, #{bizDate}, #{dedupKey},
+            #{requestStatus}, #{traceId},
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
+            </choose>
+        )
+        on conflict (tenant_id, request_id) do nothing
+    </insert>
+
     <!-- 守卫:调用点覆盖 ACCEPTED/WAITING(含 batch-day 门闩重投场景,前态可为二者之一)多种前态写入
          LAUNCHED/REJECTED/WAITING/DUPLICATE,故不能锁死单一前态。已终态禁止回退/覆写;唯一例外是 catch-up
          审批已先标 LAUNCHED 但尚未关联实例时,orchestrator consumer 可原位补写一次 jobInstanceId。 -->

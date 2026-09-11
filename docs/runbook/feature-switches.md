@@ -69,6 +69,7 @@
 | `batch.security.bypass-mode` | `true` / `false` | **false** | 安全旁路（认证/脱敏/加解密/审批/渠道校验全放宽）；**仅本地/E2E**，生产 profile 拒绝 true | **P0** | `BATCH_SECURITY_BYPASS_MODE` | ✅ |
 | `batch.request-signing.enabled` | `true` / `false` | **false** | 内部写请求 HMAC 签名+ts+nonce 防重放；灰度先升 SDK 再开服务端 | P1 | `BATCH_REQUEST_SIGNING_ENABLED` | ✅ |
 | `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级固定窗口限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` | ✅ |
+| `batch.replay.dry-run.enabled` | `true` / `false` | **false** | 整批量日无副作用演练；开启前必须完成五类 Worker 隔离验收 | P1 | `BATCH_REPLAY_DRY_RUN_ENABLED` | ❌ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
 | `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
 | `batch.console.captcha.provider` | `none` / `selfhosted` / `tencent` / `aliyun` | **none** | 登录验证码实现；任一时刻只装一个；tencent/aliyun 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |

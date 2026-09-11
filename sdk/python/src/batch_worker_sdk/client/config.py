@@ -66,6 +66,8 @@ class BatchPlatformClientConfig(BaseModel):
     api_key: str | None = None
     build_id: str | None = None
     sdk_version: str = __version__
+    # 仅当所有 handler 均已在 dry-run 下隔离外部副作用时显式开启。
+    dry_run_safe: bool = False
 
     # ─── 请求签名(方案 A,opt-in) ────────────────────────────────────
     # 开启后,写请求(POST/PUT/PATCH/DELETE)附带 ``X-Batch-Timestamp /

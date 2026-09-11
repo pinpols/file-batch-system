@@ -6,6 +6,15 @@
 # - helmRequired: true 表示生产 Helm Chart 必须显式渲染，防生产开关无入口。
 # - 本文件是 CI required-vars 的唯一登记源；运维说明仍写在 feature-switches.md。
 switches:
+  - key: batch.replay.dry-run.enabled
+    module: orchestrator
+    env:
+      - BATCH_REPLAY_DRY_RUN_ENABLED
+      - BATCH_REPLAY_DRY_RUN_MAX_ACTIVE_ENTRIES
+      - BATCH_REPLAY_DRY_RUN_RETENTION_DAYS
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.console.read-replica.enabled
     module: console-api
     env:

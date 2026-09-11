@@ -88,6 +88,9 @@ data:
   BATCH_QUOTA_REDIS_FAILURE_MODE: {{ (.Values.orchestrator.quota).redisFailureMode | default "FAIL_CLOSED" | quote }}
   BATCH_QUOTA_BACKEND_CUTOVER_ID: {{ (.Values.orchestrator.quota).backendCutoverId | default "" | quote }}
   BATCH_QUOTA_SNAPSHOT_ENABLED: {{ (.Values.orchestrator.quota).snapshotEnabled | default true | quote }}
+  BATCH_REPLAY_DRY_RUN_ENABLED: {{ (.Values.orchestrator.replayDryRun).enabled | default false | quote }}
+  BATCH_REPLAY_DRY_RUN_MAX_ACTIVE_ENTRIES: {{ (.Values.orchestrator.replayDryRun).maxActiveEntries | default 200 | quote }}
+  BATCH_REPLAY_DRY_RUN_RETENTION_DAYS: {{ (.Values.orchestrator.replayDryRun).retentionDays | default 7 | quote }}
   BATCH_WORKER_REPORT_OUTBOX_ENABLED: {{ (.Values.orchestrator.workerReportOutbox).enabled | default false | quote }}
   BATCH_WORKER_REPORT_OUTBOX_STORAGE: {{ (.Values.orchestrator.workerReportOutbox).storage | default "PLATFORM_PG" | quote }}
   BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID: {{ (.Values.orchestrator.workerReportOutbox).cutoverId | default "" | quote }}

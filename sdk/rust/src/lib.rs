@@ -23,7 +23,8 @@ pub mod kafka;
 
 // Re-exports for ergonomic top-level use, mirroring the TS `index.ts` surface.
 pub use constants::{
-    SENSITIVE_KEYWORDS, SUPPORTED_SCHEMA_VERSIONS, TASK_STATUSES, WORKER_RUNTIME_STATES,
+    DRY_RUN_SAFE_CAPABILITY, SENSITIVE_KEYWORDS, SUPPORTED_SCHEMA_VERSIONS, TASK_STATUSES,
+    WORKER_RUNTIME_STATES,
 };
 pub use decide::{
     apply_heartbeat_directive, apply_renew, classify_http, classify_schema_version,

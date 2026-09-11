@@ -53,7 +53,8 @@ class PlatformHttpClientTest {
     server.createContext("/internal/workers/register", ex -> {
       seenAuth.set(ex.getRequestHeaders().getFirst("X-Batch-Api-Key"));
       seenTenant.set(ex.getRequestHeaders().getFirst("X-Batch-Tenant-Id"));
-      byte[] body = "{\"id\":123,\"tenantId\":\"tx\",\"workerCode\":\"w-1\",\"status\":\"ONLINE\"}"
+      byte[] body = ("{\"id\":123,\"tenantId\":\"tx\",\"workerCode\":\"w-1\",\"status\":\"ONLINE\","
+              + "\"workerGroup\":\"sdk-self-hosted\",\"futureField\":true}")
           .getBytes(StandardCharsets.UTF_8);
       ex.getResponseHeaders().add("Content-Type", "application/json");
       ex.sendResponseHeaders(200, body.length);

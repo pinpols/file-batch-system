@@ -273,6 +273,10 @@ orchestrator:
   # 代价:吞吐 -10% 换调度延迟稳定。详见 docs/runbook/jvm-tuning-and-profiling.md §1.2
   javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"
   replicaCount: 2
+  replayDryRun:
+    enabled: false
+    maxActiveEntries: 200
+    retentionDays: 7
   triggerConsumer:
     # 每个 Pod 的 Kafka listener 数。topic 至少为 replicaCount × concurrency（默认 2 × 6 = 12）。
     concurrency: 6

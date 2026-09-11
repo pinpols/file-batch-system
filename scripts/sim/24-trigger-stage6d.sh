@@ -29,6 +29,19 @@ export OUTBOX_COUNT="${OUTBOX_COUNT:-12}"
 
 batch_require_python
 
+cleanup_trigger_fixtures() {
+  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -f /dev/stdin \
+    < "$SIM_SQL_DIR/disable-trigger-stage6c-jobs.sql" >/dev/null 2>&1 || true
+  for job_code in TA_TRIGGER_STAGE6C_SCHEDULED TA_TRIGGER_STAGE6C_MISFIRE; do
+    curl -s -m 5 -X POST \
+      "$TRIGGER_BASE/api/triggers/management/unregister?tenantId=ta&jobCode=$job_code" \
+      -H "X-Tenant-Id: ta" -H "X-Internal-Secret: $INTERNAL_SECRET" \
+      -o /dev/null 2>/dev/null || true
+  done
+}
+trap cleanup_trigger_fixtures EXIT
+
 restart_trigger_for_fixture() {
   if [[ "${SIM_TRIGGER_RESTART_MODE:-restart}" == "screen" ]]; then
     screen -S bfs-trigger -X quit >/dev/null 2>&1 || true
@@ -110,7 +123,7 @@ CRON_JOB = "TA_TRIGGER_STAGE6C_SCHEDULED"
 SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
 def query_file(sql_file, variables=None, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     for key, value in (variables or {}).items():

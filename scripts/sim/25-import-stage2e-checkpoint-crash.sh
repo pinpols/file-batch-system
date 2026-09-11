@@ -92,7 +92,7 @@ def sh(args, check=False):
 
 def psql(db, sql_file, variables=None, tuples=False):
     args = [
-        "docker", "exec", os.environ["PG_CONTAINER"], "psql",
+        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql",
         "-X", "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
         "-d", db, "-P", "pager=off",
     ]

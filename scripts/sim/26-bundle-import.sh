@@ -77,7 +77,7 @@ def sh(args, **kw):
 
 
 def psql_file(db, sql_file, variables=None, tuples=True):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql",
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql",
             "-X", "-U", os.environ["POSTGRES_USER"], "-d", db,
             "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:

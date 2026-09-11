@@ -11,6 +11,9 @@ public interface TriggerRequestMapper {
 
   int insert(TriggerRequestEntity entity);
 
+  /** replay 恢复路径使用：稳定 requestId 并发重试时只允许首个请求落库。 */
+  int insertIfAbsent(TriggerRequestEntity entity);
+
   TriggerRequestEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   TriggerRequestEntity selectByTenantAndRequestId(

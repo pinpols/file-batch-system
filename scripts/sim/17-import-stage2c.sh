@@ -63,6 +63,13 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-business.sql >/dev/null
+# import_stage2c_customer 是运行期创建的租户表；必须在恢复/重启 import worker 前
+# 纳入 RLS closed-world，避免测试残留使下一次启动失败。
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+  -v ON_ERROR_STOP=1 \
+  -v writer_password="$POSTGRES_PASSWORD" \
+  -v admin_password="$POSTGRES_PASSWORD" \
+  -f /dev/stdin < scripts/db/business/rls-phase-a.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-fixtures.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \

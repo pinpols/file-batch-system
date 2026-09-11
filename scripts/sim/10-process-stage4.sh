@@ -28,6 +28,14 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage4-process-business-fixtures.sql >/dev/null
 
+# Stage fixture 会动态创建带 tenant_id 的业务表。建表后立即补齐 RLS，确保本阶段
+# 执行期间或后续阶段重启 worker 时不会触发 closed-world fail-fast。
+docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
+  -v ON_ERROR_STOP=1 \
+  -v writer_password="$POSTGRES_PASSWORD" \
+  -v admin_password="$POSTGRES_PASSWORD" \
+  -f /dev/stdin < scripts/db/business/rls-phase-a.sql >/dev/null
+
 echo "==> seed process platform jobs"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
@@ -61,7 +69,7 @@ SCENARIOS = [
 
 def psql_file(db, sql_file, variables=None, tuples=False):
     args = [
-        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
+        "docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
         "-X", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db,
         "-v", "ON_ERROR_STOP=1", "-P", "pager=off",
     ]

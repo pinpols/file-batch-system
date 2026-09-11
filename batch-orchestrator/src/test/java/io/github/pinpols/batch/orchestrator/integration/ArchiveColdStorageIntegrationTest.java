@@ -29,7 +29,8 @@ import org.springframework.test.context.TestPropertySource;
       "batch.result-version.retention.enabled=false",
       "batch.result-version.retention.superseded-days=1",
       "batch.result-version.retention.archived-days=1",
-      "batch.result-version.retention.batch-size=10"
+      "batch.result-version.retention.batch-size=10",
+      "batch.replay.dry-run.retention-days=1"
     })
 class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
 
@@ -157,6 +158,22 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     assertThat(count("batch.result_version", resultVersionId)).isEqualTo(1);
   }
 
+  @Test
+  void dryRunResultRetentionArchivesBeforeDeletingHotRow() {
+    String tenantId = unique("tenant");
+    Long definitionId = insertJobDefinition(tenantId);
+    Long instanceId = insertOldSuccessInstance(tenantId, definitionId);
+    Long resultVersionId = insertOldDryRunResultVersion(tenantId, instanceId, "dry-run-rv");
+
+    int archived = resultVersionRetentionScheduler.archiveDryRunBatch(Instant.now());
+
+    assertThat(archived).isEqualTo(1);
+    assertThat(count("batch.result_version", resultVersionId)).isZero();
+    assertThat(count("archive.result_version_archive", resultVersionId)).isEqualTo(1);
+    assertThat(status("archive.result_version_archive", resultVersionId)).isEqualTo("DRY_RUN");
+    assertThat(payload("archive.result_version_archive", resultVersionId)).contains("dry-run-rv");
+  }
+
   private Long insertOldSupersededResultVersion(String tenantId, Long instanceId, String marker) {
     return jdbcTemplate.queryForObject(
         """
@@ -164,6 +181,23 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
           tenant_id, business_key, version_no, job_instance_id, status,
           deactivated_at, payload_storage, payload_json, generated_at, created_at, updated_at
         ) values (?, ?, 1, ?, 'SUPERSEDED', now() - interval '2 days', 'INLINE_JSON', ?::jsonb,
+                  now() - interval '2 days', now() - interval '2 days', now() - interval '2 days')
+        returning id
+        """,
+        Long.class,
+        tenantId,
+        unique("business-key"),
+        instanceId,
+        "{\"marker\":\"" + marker + "\"}");
+  }
+
+  private Long insertOldDryRunResultVersion(String tenantId, Long instanceId, String marker) {
+    return jdbcTemplate.queryForObject(
+        """
+        insert into batch.result_version(
+          tenant_id, business_key, version_no, job_instance_id, status,
+          payload_storage, payload_json, generated_at, created_at, updated_at
+        ) values (?, ?, 1, ?, 'DRY_RUN', 'INLINE_JSON', ?::jsonb,
                   now() - interval '2 days', now() - interval '2 days', now() - interval '2 days')
         returning id
         """,

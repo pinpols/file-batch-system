@@ -1,7 +1,7 @@
 # 整批量日 Dry-run 增强设计与实施计划
 
 日期：2026-09-08
-状态：Proposed，暂不阻断 v1.0 上线
+状态：Implemented（代码与本地自动化验证完成；生产启用前仍需 staging 零副作用验收）
 关联：ADR-020（批量日重放）、ADR-026（Dry-run）、ADR-017（结果版本）、ADR-018（跨日依赖）
 
 ## 1. 决策摘要
@@ -376,3 +376,22 @@ batch:
 5. 控制面 Outbox 正常工作，业务副作用 Outbox 被禁止。
 6. 1,000 entry E2E 和三类崩溃恢复测试通过。
 7. OpenAPI、Console 类型、运维手册、告警与功能开关登记同步完成。
+
+## 17. 2026-09-11 实施结果
+
+已完成：
+
+- V202 session/entry 扩展、archive 镜像、CHECK 约束及 dry-run retention 部分索引；
+- 历史实例与 `SCHEDULE_PLAN` 两种候选物化，计划快照、确定性 request/dedup key、claim CAS 和超时回收；
+- dry-run 不创建正式 `batch_day_instance`，结果只写 `DRY_RUN`，终态仅接受
+  `SUCCESS_DRY_RUN/FAILED_DRY_RUN`；
+- 五类内置 Worker capability fail-close，Java/Go/Python/TypeScript SDK 显式 opt-in；Rust 暂只提供协议常量，不宣称尚不存在的注册生命周期；
+- Process 插件副作用短路，五类 Worker 静态守护修正为真实目录扫描并覆盖 Atomic executor；
+- Dispatch 在创建投递记录、推进文件状态和调用远端渠道之前统一短路，演练仅回填内存态计划结果；
+- Console 模式/候选来源交互、OpenAPI 和生成类型完成；配置默认值、Compose、Helm 与 Feature Switch registry 对齐；
+- `DRY_RUN` result_version 按独立 7 天窗口原子归档到冷表后清理热表。
+
+本地验证证据见
+[`batch-day-dry-run-verification-2026-09-11.md`](../verifications/batch-day-dry-run-verification-2026-09-11.md)。
+第 16 节第 3、6 项中的“真实外部依赖零副作用”和“1,000-entry 三类崩溃恢复”属于环境验收，
+不能由单元测试或静态扫描替代；开关保持默认关闭，完成 staging 验收后才允许生产开启。

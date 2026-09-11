@@ -50,7 +50,7 @@ if not 2 <= PARTITION_COUNT <= 256:
 
 def psql(sql_file, variables):
     args = [
-        "docker", "exec", PG, "psql", "-X", "-v", "ON_ERROR_STOP=1",
+        "docker", "exec", "-i", PG, "psql", "-X", "-v", "ON_ERROR_STOP=1",
         "-U", PGU, "-d", PLAT, "-tA", "-P", "pager=off",
     ]
     for key, value in variables.items():

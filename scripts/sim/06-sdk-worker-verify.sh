@@ -11,7 +11,7 @@
 # 退出 0=全部通过,非 0=有断言失败。结束时自动停 worker(deactivate + kill)。
 #
 # 依赖:本地 docker 栈在跑(console 18080 / orchestrator 18082 / kafka 19092 / pg);
-#       admin/admin123 种子账号;mvn + java(构建 sample jar,缺则自动构建)。
+#       admin/admin123 种子账号;mvn + java(从当前源码干净构建 sample jar)。
 #
 # 用法:
 #   bash scripts/sim/06-sdk-worker-verify.sh
@@ -50,6 +50,7 @@ JAR="$REPO_ROOT/examples/self-hosted-sdk/sample-tenant-worker-java/target/sample
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 SQL_DIR="$REPO_ROOT/scripts/sim/sql"
 REG_TIMEOUT="${REG_TIMEOUT:-45}"
+CONSUMER_READY_TIMEOUT="${CONSUMER_READY_TIMEOUT:-30}"
 # sample-tenant-worker 注册的 7 个 taskType(对应 5 基类 + echo/sleep)
 EXPECTED_TASKTYPES="echo sleep sample_import_echo sample_export_echo sample_process_echo sample_dispatch_echo sample_atomic_echo"
 
@@ -116,14 +117,12 @@ RAW_KEY=$(echo "$created" | grep -oE '"rawKey":"[^"]+"' | head -1 | sed 's/"rawK
 [[ -z "$RAW_KEY" ]] && RAW_KEY=$(echo "$created" | grep -oE '"apiKey":"[^"]+"' | head -1 | sed 's/.*"//;s/"//')
 [[ -n "$RAW_KEY" ]] && ok "API key 已建(scopes=*)" || { bad "未取到 rawKey: $(echo "$created" | head -c 200)"; exit 1; }
 
-# ---- 3. 构建 sample worker(缺 jar 才建)----
+# ---- 3. 从当前源码干净构建 sample worker ----
 note "3. sample-tenant-worker jar"
-if [[ -f "$JAR" ]]; then ok "jar 已存在($(basename "$JAR"))"; else
-  info "jar 缺失,构建中(mvn install)..."
-  (cd "$REPO_ROOT" && mvn -q -pl sdk/java/core -am install -DskipTests && \
-     mvn -q install -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
-    && ok "构建完成" || { bad "构建失败"; exit 1; }
-fi
+info "安装当前 reactor SDK,并清理示例旧依赖后重新打包..."
+(cd "$REPO_ROOT" && mvn -q -pl sdk/java/core -am install -DskipTests && \
+   mvn -q clean package -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
+  && ok "构建完成($(basename "$JAR"))" || { bad "构建失败"; exit 1; }
 
 # ---- 4. 起 worker(后台,指向本地栈)----
 note "4. 启动 sample worker → 本地栈"
@@ -170,6 +169,30 @@ info "worker capability_tags: $caps"
 for tt in $EXPECTED_TASKTYPES; do
   if echo "$caps $desc" | grep -qw "$tt"; then ok "taskType 上报: $tt"; else bad "taskType 缺失: $tt"; fi
 done
+
+# register 返回 ONLINE 早于 Kafka consumer 完成分区分配。新 consumer group 使用 latest 时，若在
+# 分区分配前立即 launch，首条消息可能成为 offset reset 的末端而被跳过。真派单前显式等待消费端
+# ready，避免把启动时序竞争误判成 SDK 路由失败。
+note "6a. 等 Kafka consumer 分区就绪(≤${CONSUMER_READY_TIMEOUT}s)"
+consumer_ready=0
+for ((i=0;i<CONSUMER_READY_TIMEOUT;i++)); do
+  if ! kill -0 "$WORKER_PID" 2>/dev/null; then
+    bad "worker 在 Kafka consumer 就绪前退出,日志尾部:"
+    tail -20 "$WORKER_LOG"
+    exit 1
+  fi
+  if grep -q "kafka partitions assigned:.*${DISPATCH_NODE_TOPIC}" "$WORKER_LOG"; then
+    consumer_ready=1
+    ok "Kafka consumer 已分配 direct-dispatch partition"
+    break
+  fi
+  sleep 1
+done
+[[ "$consumer_ready" == "1" ]] || {
+  bad "Kafka consumer 分区分配超时,日志尾部:"
+  tail -20 "$WORKER_LOG"
+  exit 1
+}
 
 # ---- 7. Phase 2:dispatch-execute 腿(真链路:launch ATOMIC → Kafka → 自托管 worker 执行 → REPORT → SUCCESS)----
 # 把任务真派给自托管 SDK worker 跑通,作为 #544 workerType→handler 路由键反序列化 P0 的运行期对照

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.config.ResultVersionRetentionProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -30,6 +31,7 @@ class ResultVersionRetentionSchedulerTest {
 
   private ResultVersionMapper mapper;
   private ResultVersionRetentionProperties properties;
+  private BatchDayDryRunProperties dryRunProperties;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private ResultVersionRetentionScheduler scheduler;
 
@@ -41,12 +43,14 @@ class ResultVersionRetentionSchedulerTest {
     properties.setBatchSize(500);
     properties.setSupersededDays(90);
     properties.setArchivedDays(365);
+    dryRunProperties = new BatchDayDryRunProperties();
+    dryRunProperties.setRetentionDays(7);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     when(gracefulShutdown.isDraining()).thenReturn(false);
     BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
         Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    scheduler =
-        new ResultVersionRetentionScheduler(mapper, properties, gracefulShutdown, dateTimeSupport);
+    scheduler = new ResultVersionRetentionScheduler(
+        mapper, properties, dryRunProperties, gracefulShutdown, dateTimeSupport);
   }
 
   @Test
@@ -95,6 +99,20 @@ class ResultVersionRetentionSchedulerTest {
 
     assertThat(deleted).isZero();
     verify(mapper, never()).deleteArchived(anyString(), anyLong());
+  }
+
+  @Test
+  void archivesDryRunRowsAfterIndependentRetentionWindow() {
+    ResultVersionEntity row =
+        ResultVersionEntity.builder().id(8L).tenantId("t1").status("DRY_RUN").build();
+    when(mapper.selectDryRunOlderThan(any(), eq(500))).thenReturn(List.of(row));
+    when(mapper.archiveAndDeleteDryRun(eq("t1"), eq(8L), any())).thenReturn(1);
+
+    int archived = scheduler.archiveDryRunBatch(Instant.parse("2026-08-15T00:00:00Z"));
+
+    assertThat(archived).isEqualTo(1);
+    verify(mapper).selectDryRunOlderThan(eq(Instant.parse("2026-08-08T00:00:00Z")), eq(500));
+    verify(mapper).archiveAndDeleteDryRun(eq("t1"), eq(8L), any());
   }
 
   @Test

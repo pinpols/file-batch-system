@@ -22,7 +22,7 @@ INSERT INTO batch.job_definition (
 )
 SELECT 'ta', m.job_code, m.job_name, 'PROCESS', 'PROCESS_STAGE4',
        'MANUAL', null, 'Asia/Shanghai', 5, 'process_queue', 'PROCESS',
-       'default-calendar', 'always_open', 'API', false, 'NONE',
+       'default_calendar', 'always_open', 'API', false, 'NONE',
        'NONE', 0, 600, null, '{}'::jsonb, '{}'::jsonb, 1,
        true, m.description, 'sim-e2e', 'sim-e2e', 'FULL',
        'INHERIT', null

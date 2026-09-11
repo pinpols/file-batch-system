@@ -48,7 +48,7 @@ START_TS = os.environ["START_TS"].strip()
 SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
 def psql_file(sql_file, variables=None, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     for key, value in (variables or {}).items():

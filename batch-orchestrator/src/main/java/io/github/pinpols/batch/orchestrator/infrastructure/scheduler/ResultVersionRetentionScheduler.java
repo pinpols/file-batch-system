@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.config.ResultVersionRetentionProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -30,6 +31,7 @@ public class ResultVersionRetentionScheduler {
 
   private final ResultVersionMapper resultVersionMapper;
   private final ResultVersionRetentionProperties properties;
+  private final BatchDayDryRunProperties dryRunProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchDateTimeSupport dateTimeSupport;
 
@@ -48,11 +50,13 @@ public class ResultVersionRetentionScheduler {
     Instant now = dateTimeSupport.nowInstant();
     int archived = demoteSupersededBatch(now);
     int deleted = purgeArchivedBatch(now);
-    if (archived > 0 || deleted > 0) {
+    int dryRunArchived = archiveDryRunBatch(now);
+    if (archived > 0 || deleted > 0 || dryRunArchived > 0) {
       log.info(
-          "result_version retention completed: archived={}, deleted={}, at={}",
+          "result_version retention completed: archived={}, deleted={}, dryRunArchived={}, at={}",
           archived,
           deleted,
+          dryRunArchived,
           now);
     }
   }
@@ -112,5 +116,32 @@ public class ResultVersionRetentionScheduler {
       }
     }
     return deleted;
+  }
+
+  /** 超过独立保留期的 DRY_RUN 结果先归档后从热表删除。 */
+  public int archiveDryRunBatch(Instant now) {
+    int retentionDays = Math.max(1, dryRunProperties.getRetentionDays());
+    Instant cutoff = now.minus(Duration.ofDays(retentionDays));
+    List<ResultVersionEntity> stale =
+        resultVersionMapper.selectDryRunOlderThan(cutoff, properties.getBatchSize());
+    if (stale == null || stale.isEmpty()) {
+      return 0;
+    }
+    int archived = 0;
+    for (ResultVersionEntity row : stale) {
+      if (row == null
+          || row.id() == null
+          || row.tenantId() == null
+          || row.tenantId().isBlank()) {
+        continue;
+      }
+      int affected = RlsTenantContextHolder.runWithTenant(
+          row.tenantId(),
+          () -> resultVersionMapper.archiveAndDeleteDryRun(row.tenantId(), row.id(), now));
+      if (affected > 0) {
+        archived++;
+      }
+    }
+    return archived;
   }
 }

@@ -73,6 +73,8 @@ export interface TaskContext {
   readonly effectiveConfig: Record<string, unknown>;
   /** runtimeAttributes.traceId for OTel correlation (may be empty). */
   readonly traceId: string;
+  /** True when the handler must validate only and suppress business side effects. */
+  readonly isDryRun?: boolean;
   readonly cancellation: CancellationSignal;
   readonly progress: ProgressReporter;
   /**

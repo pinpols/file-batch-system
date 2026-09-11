@@ -17,6 +17,7 @@
             <arg    column="started_at"          javaType="java.time.Instant"/>
             <arg    column="finished_at"         javaType="java.time.Instant"/>
             <arg    column="result_version_id"   javaType="java.lang.Long"/>
+            <arg    column="plan_snapshot"       javaType="java.lang.String"/>
             <arg    column="created_at"          javaType="java.time.Instant"/>
             <arg    column="updated_at"          javaType="java.time.Instant"/>
         </constructor>
@@ -26,11 +27,12 @@
             parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
         insert into batch.batch_day_replay_entry (
             session_id, tenant_id, job_code, source_instance_id, rerun_instance_id,
-            status, failure_reason, started_at, finished_at, result_version_id,
+            status, failure_reason, started_at, finished_at, result_version_id, plan_snapshot,
             created_at, updated_at
         ) values (
             #{sessionId}, #{tenantId}, #{jobCode}, #{sourceInstanceId}, #{rerunInstanceId},
             #{status}, #{failureReason}, #{startedAt}, #{finishedAt}, #{resultVersionId},
+            #{planSnapshot,jdbcType=VARCHAR}::jsonb,
             #{createdAt}, #{updatedAt}
         )
         on conflict do nothing
@@ -39,13 +41,14 @@
     <insert id="insertBatch" parameterType="java.util.List">
         insert into batch.batch_day_replay_entry (
             session_id, tenant_id, job_code, source_instance_id, rerun_instance_id,
-            status, failure_reason, started_at, finished_at, result_version_id,
+            status, failure_reason, started_at, finished_at, result_version_id, plan_snapshot,
             created_at, updated_at
         ) values
         <foreach collection="records" item="r" separator=",">
             (
                 #{r.sessionId}, #{r.tenantId}, #{r.jobCode}, #{r.sourceInstanceId}, #{r.rerunInstanceId},
                 #{r.status}, #{r.failureReason}, #{r.startedAt}, #{r.finishedAt}, #{r.resultVersionId},
+                #{r.planSnapshot,jdbcType=VARCHAR}::jsonb,
                 #{r.createdAt}, #{r.updatedAt}
             )
         </foreach>
@@ -60,10 +63,35 @@
 
     <select id="selectBySessionAndStatus" resultMap="ReplayEntryResultMap">
         select * from batch.batch_day_replay_entry
-        where session_id = #{sessionId} and status = #{status}
+        where session_id = #{sessionId}
+          and tenant_id = #{tenantId}
+          and status = #{status}
         order by id asc
         limit #{limit}
     </select>
+
+    <update id="claimPending">
+        update batch.batch_day_replay_entry
+        set status = 'RUNNING',
+            started_at = #{now},
+            updated_at = #{now}
+        where id = #{id}
+          and tenant_id = #{tenantId}
+          and session_id = #{sessionId}
+          and status = 'PENDING'
+    </update>
+
+    <update id="resetStaleUnboundRunning">
+        update batch.batch_day_replay_entry
+        set status = 'PENDING',
+            started_at = null,
+            failure_reason = null,
+            updated_at = #{now}
+        where session_id = #{sessionId}
+          and status = 'RUNNING'
+          and rerun_instance_id is null
+          and started_at &lt; #{cutoff}
+    </update>
 
     <select id="selectByRerunInstanceId" resultMap="ReplayEntryResultMap">
         select * from batch.batch_day_replay_entry

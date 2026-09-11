@@ -29,6 +29,7 @@ SQL_STATEMENT = re.compile(
 SQL_CONSTRUCTOR = re.compile(r"\bjsonb_build_(?:object|array)\s*\(", re.IGNORECASE)
 IGNORED_COMMAND = re.compile(r"^\s*(?:#|echo\b|printf\b|log\b|curl\b)")
 IGNORE_MARKER = "sql-boundary: ignore"
+DOCKER_EXEC_PREFIX = re.compile(r'["\']docker["\']\s*,\s*["\']exec["\']\s*,')
 
 
 def shell_files() -> list[Path]:
@@ -52,6 +53,35 @@ def current_inventory() -> dict[str, list[tuple[int, str]]]:
     inventory: dict[str, list[tuple[int, str]]] = {}
     for path in shell_files():
         matches = matched_lines(path)
+        if matches:
+            inventory[path.relative_to(ROOT).as_posix()] = matches
+    return inventory
+
+
+def unsafe_psql_transport_lines(path: Path) -> list[tuple[int, str]]:
+    """检测嵌入式 Python 中漏掉 ``docker exec -i`` 的 psql 调用。"""
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    matches: list[tuple[int, str]] = []
+    for index, line in enumerate(lines):
+        prefix = DOCKER_EXEC_PREFIX.search(line)
+        if prefix is None:
+            continue
+        command = " ".join(lines[index : index + 8])
+        first_argument = command[prefix.end() :].lstrip()
+        if re.match(r'["\']-i["\']\s*,', first_argument):
+            continue
+        list_end = command.find("]")
+        if list_end >= 0:
+            command = command[:list_end]
+        if re.search(r'["\']psql["\']', command):
+            matches.append((index + 1, line.strip()))
+    return matches
+
+
+def unsafe_psql_transport_inventory() -> dict[str, list[tuple[int, str]]]:
+    inventory: dict[str, list[tuple[int, str]]] = {}
+    for path in shell_files():
+        matches = unsafe_psql_transport_lines(path)
         if matches:
             inventory[path.relative_to(ROOT).as_posix()] = matches
     return inventory
@@ -106,6 +136,15 @@ def print_inventory(inventory: dict[str, list[tuple[int, str]]]) -> None:
 
 def check(inventory: dict[str, list[tuple[int, str]]], baseline: dict[str, int]) -> int:
     failed = False
+    for path, matches in unsafe_psql_transport_inventory().items():
+        failed = True
+        print(
+            f"SQL transport violation: {path} uses docker exec psql without -i",
+            file=sys.stderr,
+        )
+        for line_number, line in matches:
+            print(f"  {line_number}: {line}", file=sys.stderr)
+
     for path in sorted(set(inventory) | set(baseline)):
         matches = inventory.get(path, [])
         current = len(matches)

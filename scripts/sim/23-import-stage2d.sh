@@ -78,7 +78,7 @@ SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
 def psql_file(db, sql_file, variables=None, tuples=False):
     args = [
-        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
+        "docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
         "-X", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db,
         "-v", "ON_ERROR_STOP=1", "-P", "pager=off",
     ]

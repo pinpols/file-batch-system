@@ -57,6 +57,12 @@ public class BatchPlatformClientConfig {
    */
   String buildId;
 
+  /**
+   * 是否声明当前自托管 Worker 已完整实现 dry-run 副作用隔离。默认关闭；只有 handler 在 dry-run 下不会写外部系统时才能开启。
+   */
+  @Default
+  boolean dryRunSafe = false;
+
   /** HTTP 调用超时(connect + read)。默认 10s。 */
   @Default
   Duration httpTimeout = Duration.ofSeconds(10);
@@ -180,6 +186,11 @@ public class BatchPlatformClientConfig {
         .kafkaSecurityProtocol(env.apply(prefix + "KAFKA_SECURITY_PROTOCOL"))
         .kafkaSaslMechanism(env.apply(prefix + "KAFKA_SASL_MECHANISM"))
         .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
+
+    String dryRunSafe = env.apply(prefix + "DRY_RUN_SAFE");
+    if (dryRunSafe != null && !dryRunSafe.isBlank()) {
+      builder.dryRunSafe(parseBoolean(dryRunSafe.trim()));
+    }
 
     String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
     if (maxConcurrent != null && !maxConcurrent.isBlank()) {

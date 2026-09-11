@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -22,6 +23,27 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class StoreStepTest {
+
+  @Test
+  void execute_dryRunComputesChecksumWithoutUploadingOrEncrypting() throws Exception {
+    S3ExportStorage storage = mock(S3ExportStorage.class);
+    BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
+    Path generated = Files.createTempFile("export-dry-run-", ".json");
+    Files.writeString(generated, "{\"dryRun\":true}");
+    ExportJobContext context = new ExportJobContext();
+    context.getAttributes().put("dryRun", true);
+    context.getAttributes().put("generatedFilePath", generated.toString());
+
+    var result = new StoreStep(storage, crypto).execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry("objectName", "dry-run/no-upload")
+        .containsEntry("exportStoreCommitted", Boolean.TRUE)
+        .containsEntry("checksumType", "SHA-256");
+    verifyNoInteractions(storage, crypto);
+    Files.deleteIfExists(generated);
+  }
 
   @Test
   void execute_returnsInvalid_whenGeneratedFilePathMissing() {

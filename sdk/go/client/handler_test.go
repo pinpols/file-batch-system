@@ -32,6 +32,15 @@ func TestCancellationSignal_ParentPropagates(t *testing.T) {
 	}
 }
 
+func TestTaskContext_IsDryRun(t *testing.T) {
+	if !(&TaskContext{DryRun: true}).IsDryRun() {
+		t.Fatal("expected dry-run context")
+	}
+	if (*TaskContext)(nil).IsDryRun() {
+		t.Fatal("nil context must not be dry-run")
+	}
+}
+
 // A cooperative handler stops on cancellation.
 func TestHandler_CooperativeCancel(t *testing.T) {
 	sig := NewCancellationSignal(context.Background())

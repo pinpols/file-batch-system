@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -44,21 +45,29 @@ class DryRunGuardConventionTest {
   /** 副作用（写业务表 / 外部投递 / file_record 注册等）必须用 DryRunGuard 短路的 plugin。 */
   private static final Set<String> SIDE_EFFECTING_GUARDED = Set.of(
       // batch-worker-import: 写 biz 表 / 完成审计
-      "batch-worker-import/.*/stage/LoadStep.java",
-      "batch-worker-import/.*/stage/FeedbackStep.java",
+      "batch-worker/import/.*/stage/LoadStep.java",
+      "batch-worker/import/.*/stage/FeedbackStep.java",
       // batch-worker-export: 上传 MinIO / 注册 file_record / 完成 / 投递审计
-      "batch-worker-export/.*/stage/StoreStep.java",
-      "batch-worker-export/.*/stage/RegisterStep.java",
-      "batch-worker-export/.*/stage/CompleteStep.java",
+      "batch-worker/export/.*/stage/StoreStep.java",
+      "batch-worker/export/.*/stage/RegisterStep.java",
+      "batch-worker/export/.*/stage/CompleteStep.java",
       // batch-worker-process: COMMIT 写 biz 表 / FEEDBACK 写审计
-      "batch-worker-process/.*/stage/CommitStep.java",
-      "batch-worker-process/.*/stage/FeedbackStep.java",
+      "batch-worker/process/.*/stage/ComputeStep.java",
+      "batch-worker/process/.*/stage/ValidateStep.java",
+      "batch-worker/process/.*/stage/CommitStep.java",
+      "batch-worker/process/.*/stage/FeedbackStep.java",
       // batch-worker-dispatch: 5 类外部投递 / 收据 / 补偿 / 重试 / 完成
-      "batch-worker-dispatch/.*/stage/DeliverDispatchStep.java",
-      "batch-worker-dispatch/.*/stage/CompensateDispatchStep.java",
-      "batch-worker-dispatch/.*/stage/RetryDispatchStep.java",
-      "batch-worker-dispatch/.*/stage/AckDispatchStep.java",
-      "batch-worker-dispatch/.*/stage/CompleteDispatchStep.java");
+      "batch-worker/dispatch/.*/stage/DeliverDispatchStep.java",
+      "batch-worker/dispatch/.*/stage/CompensateDispatchStep.java",
+      "batch-worker/dispatch/.*/stage/RetryDispatchStep.java",
+      "batch-worker/dispatch/.*/stage/AckDispatchStep.java",
+      "batch-worker/dispatch/.*/stage/CompleteDispatchStep.java",
+      // batch-worker-atomic: executor 自己在外部调用前按 TaskContext.isDryRun() fail-close
+      "batch-worker/atomic/.*/http/HttpTaskExecutor.java",
+      "batch-worker/atomic/.*/shell/ShellTaskExecutor.java",
+      "batch-worker/atomic/.*/spark/SparkSubmitTaskExecutor.java",
+      "batch-worker/atomic/.*/sql/SqlTaskExecutor.java",
+      "batch-worker/atomic/.*/storedproc/StoredProcTaskExecutor.java");
 
   /**
    * 只读 DB / 内存计算 / 本地临时文件 plugin。dry-run 模式下原样跑不污染业务也不投递外部，无需 guard。
@@ -67,23 +76,21 @@ class DryRunGuardConventionTest {
    */
   private static final Set<String> READ_ONLY_OR_LOCAL = Set.of(
       // batch-worker-import: 拉文件 / 解密 / 解析 / 校验都是文件->内存，未触达 biz 表
-      "batch-worker-import/.*/stage/ReceiveStep.java",
-      "batch-worker-import/.*/stage/PreprocessStep.java",
-      "batch-worker-import/.*/stage/ParseStep.java",
-      "batch-worker-import/.*/stage/ValidateStep.java",
-      "batch-worker-import/.*/stage/ImportStageStep.java",
+      "batch-worker/import/.*/stage/ReceiveStep.java",
+      "batch-worker/import/.*/stage/PreprocessStep.java",
+      "batch-worker/import/.*/stage/ParseStep.java",
+      "batch-worker/import/.*/stage/ValidateStep.java",
+      "batch-worker/import/.*/stage/ImportStageStep.java",
       // batch-worker-export: PREPARE 只读 plugin 注册 / GENERATE 写本地 tmp，无对外 IO
-      "batch-worker-export/.*/stage/PrepareStep.java",
-      "batch-worker-export/.*/stage/GenerateStep.java",
-      "batch-worker-export/.*/stage/ExportStageStep.java",
-      // batch-worker-process: PREPARE / COMPUTE / VALIDATE 都在 staging 中间态，由 COMMIT 守门
-      "batch-worker-process/.*/stage/PrepareStep.java",
-      "batch-worker-process/.*/stage/ComputeStep.java",
-      "batch-worker-process/.*/stage/ValidateStep.java",
-      "batch-worker-process/.*/stage/ProcessStageStep.java",
+      "batch-worker/export/.*/stage/PrepareStep.java",
+      "batch-worker/export/.*/stage/GenerateStep.java",
+      "batch-worker/export/.*/stage/ExportStageStep.java",
+      // batch-worker-process: PREPARE 只解析配置，不写 staging
+      "batch-worker/process/.*/stage/PrepareStep.java",
+      "batch-worker/process/.*/stage/ProcessStageStep.java",
       // batch-worker-dispatch: PREPARE 是 channel 配置组装 + biz file 元信息读取
-      "batch-worker-dispatch/.*/stage/PrepareDispatchStep.java",
-      "batch-worker-dispatch/.*/stage/DispatchStageStep.java");
+      "batch-worker/dispatch/.*/stage/PrepareDispatchStep.java",
+      "batch-worker/dispatch/.*/stage/DispatchStageStep.java");
 
   /**
    * READ_ONLY_OR_LOCAL plugin 出现以下符号 = 强烈怀疑引入了副作用,需要重新分类到 {@link #SIDE_EFFECTING_GUARDED} 并补
@@ -112,17 +119,18 @@ class DryRunGuardConventionTest {
 
   @Test
   void everyStepPluginMustBeClassified() throws IOException {
-    Path repoRoot = Path.of(".").toAbsolutePath().normalize().getParent();
+    Path repoRoot = locateRepositoryRoot();
     List<String> unclassified = new ArrayList<>();
     List<String> guardedButMissingImport = new ArrayList<>();
     List<String> readOnlyButHasGuard = new ArrayList<>();
     List<String> readOnlyButSmellsLikeWrite = new ArrayList<>();
 
     for (String workerModule : List.of(
-        "batch-worker-import",
-        "batch-worker-export",
-        "batch-worker-process",
-        "batch-worker-dispatch")) {
+        "batch-worker/import",
+        "batch-worker/export",
+        "batch-worker/process",
+        "batch-worker/dispatch",
+        "batch-worker/atomic")) {
       Path stageDir = repoRoot.resolve(workerModule).resolve("src/main/java");
       if (!Files.exists(stageDir)) {
         continue;
@@ -130,7 +138,7 @@ class DryRunGuardConventionTest {
       try (Stream<Path> files = Files.walk(stageDir)) {
         files
             .filter(Files::isRegularFile)
-            .filter(p -> p.getFileName().toString().endsWith("Step.java"))
+            .filter(DryRunGuardConventionTest::isDryRunBoundaryClass)
             .forEach(stepFile -> {
               String relative =
                   repoRoot.relativize(stepFile).toString().replace(java.io.File.separatorChar, '/');
@@ -143,10 +151,12 @@ class DryRunGuardConventionTest {
               String content = readFileSafe(stepFile);
               // SIDE_EFFECTING_GUARDED 三种合法接入姿势：isDryRun() 整体短路 / callOrSkip
               // 包裹返回值 / runUnlessDryRun 包裹无返回副作用。任一即合规。
-              boolean usesGuard = content.contains("DryRunGuard")
-                  && (content.contains(".isDryRun()")
-                      || content.contains(".callOrSkip(")
-                      || content.contains(".runUnlessDryRun("));
+              boolean usesGuard = (content.contains("DryRunGuard")
+                      && (content.contains(".isDryRun()")
+                          || content.contains(".callOrSkip(")
+                          || content.contains(".runUnlessDryRun(")))
+                  || (relative.startsWith("batch-worker/atomic/")
+                      && content.contains("ctx.isDryRun()"));
               if (inGuarded && !usesGuard) {
                 guardedButMissingImport.add(relative
                     + " — 缺 DryRunGuard 接入（execute() 必须用 isDryRun() 短路 /"
@@ -200,6 +210,30 @@ class DryRunGuardConventionTest {
             %s
             """, String.join("\n", readOnlyButSmellsLikeWrite))
         .isEmpty();
+  }
+
+  private static boolean isDryRunBoundaryClass(Path path) {
+    String fileName = path.getFileName().toString();
+    if (fileName.endsWith("Step.java")) {
+      return true;
+    }
+    return path.toString().replace(File.separatorChar, '/').contains("/atomic/")
+        && fileName.endsWith("TaskExecutor.java")
+        && !"AbstractBatchTaskExecutor.java".equals(fileName);
+  }
+
+  private static Path locateRepositoryRoot() {
+    Path candidate = Path.of(System.getProperty("maven.multiModuleProjectDirectory", "."))
+        .toAbsolutePath()
+        .normalize();
+    while (candidate != null) {
+      if (Files.isDirectory(candidate.resolve("batch-worker"))
+          && Files.isRegularFile(candidate.resolve("pom.xml"))) {
+        return candidate;
+      }
+      candidate = candidate.getParent();
+    }
+    throw new IllegalStateException("cannot locate repository root");
   }
 
   private static String readFileSafe(Path file) {
