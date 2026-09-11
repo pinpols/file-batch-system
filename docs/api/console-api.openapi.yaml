@@ -11866,8 +11866,8 @@ components:
           description: 缺省 CREATE_NEW_VERSION；DRY_RUN 时服务端强制为 DRY_RUN_ONLY
         configVersionPolicy:
           type: string
-          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
-          description: 缺省 USE_ORIGINAL_CONFIG
+          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+          description: 缺省 USE_ORIGINAL_CONFIG；后两个旧值仅用于入站兼容，服务端分别归一为 USE_LATEST_CONFIG、USE_SPECIFIED_VERSION
         configVersion:   { type: integer, format: int32 }
         reason:          { type: string }
         requestedBy:     { type: string }

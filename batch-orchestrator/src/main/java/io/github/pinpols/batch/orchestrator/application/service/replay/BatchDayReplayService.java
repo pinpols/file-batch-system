@@ -106,6 +106,8 @@ public class BatchDayReplayService {
     String scope = normalizeScope(command.scope());
     String executionMode = normalizeExecutionMode(command.executionMode());
     String candidateSource = normalizeCandidateSource(command.candidateSource());
+    String configVersionPolicy =
+        normalizeConfigVersionPolicy(command.configVersionPolicy(), command.configVersion());
     validateModeContract(scope, executionMode, candidateSource, true);
     String initialStatus = command.autoApprove() ? STATUS_RUNNING : STATUS_PENDING_APPROVAL;
 
@@ -125,8 +127,7 @@ public class BatchDayReplayService {
         .candidateSource(candidateSource)
         .scopePayload(buildScopePayload(command, scope))
         .resultPolicy(resolveResultPolicy(command, executionMode))
-        .configVersionPolicy(defaultIfBlank(
-            command.configVersionPolicy(), ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code()))
+        .configVersionPolicy(configVersionPolicy)
         .configVersion(command.configVersion())
         .reason(command.reason())
         .status(initialStatus)
@@ -186,11 +187,11 @@ public class BatchDayReplayService {
     String scope = normalizeScope(command.scope());
     String executionMode = normalizeExecutionMode(command.executionMode());
     String candidateSource = normalizeCandidateSource(command.candidateSource());
+    String configVersionPolicy =
+        normalizeConfigVersionPolicy(command.configVersionPolicy(), command.configVersion());
     validateModeContract(scope, executionMode, candidateSource, false);
     List<BatchDayReplayEntryEntity> entries = materializeEntries(command, scope, now);
     String resultPolicy = resolveResultPolicy(command, executionMode);
-    String configVersionPolicy = defaultIfBlank(
-        command.configVersionPolicy(), ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code());
     Map<Long, String> versionBusinessKeys = loadVersionBusinessKeys(command, scope);
     List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries = entries.stream()
         .map(entry -> toPreviewEntry(command, scope, entry, versionBusinessKeys))
@@ -396,6 +397,17 @@ public class BatchDayReplayService {
           ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_candidate_source");
     }
     return normalized;
+  }
+
+  private String normalizeConfigVersionPolicy(String value, Integer configVersion) {
+    String requested = defaultIfBlank(value, ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code());
+    ConfigVersionPolicy policy = ConfigVersionPolicy.fromCodeOrNull(requested);
+    if (EmptyChecks.isNull(policy)
+        || (policy == ConfigVersionPolicy.USE_SPECIFIED_VERSION
+            && EmptyChecks.isNull(configVersion))) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
+    }
+    return policy.code();
   }
 
   private void validateModeContract(
