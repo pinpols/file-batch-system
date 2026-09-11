@@ -148,34 +148,8 @@ kafka_lag_snapshot() {
 
 pg_pressure_snapshot() {
   local output_file="$1"
-  psql_platform -P pager=off -F ' | ' -A -c "
-    select 'sampled_at' as metric, clock_timestamp()::text as value
-    union all
-    select 'database_size_bytes', pg_database_size(current_database())::text
-    union all
-    select 'active_connections', count(*) filter (where state = 'active')::text
-      from pg_stat_activity
-      where datname = current_database()
-    union all
-    select 'waiting_connections', count(*) filter (where wait_event is not null)::text
-      from pg_stat_activity
-      where datname = current_database()
-    union all
-    select 'lock_waiters', count(*)::text
-      from pg_stat_activity
-      where datname = current_database()
-        and wait_event_type = 'Lock'
-    union all
-    select 'xact_commit', xact_commit::text
-      from pg_stat_database
-      where datname = current_database()
-    union all
-    select 'xact_rollback', xact_rollback::text
-      from pg_stat_database
-      where datname = current_database()
-    union all
-    select 'wal_bytes', coalesce(wal_bytes, 0)::text
-      from pg_stat_wal;" > "$output_file"
+  psql_platform -P pager=off -F ' | ' -A \
+    -f "$LOAD_DIR/sql/control-pg-pressure-snapshot.sql" > "$output_file"
 }
 
 pg_pressure_sampler() {
@@ -184,17 +158,8 @@ pg_pressure_sampler() {
   printf '%s\n' "sampled_at|database_size_bytes|active_connections|waiting_connections|lock_waiters|xact_commit|xact_rollback|wal_bytes" \
     >> "$output_file"
   while true; do
-    psql_platform -At -F '|' -c "
-      select clock_timestamp()::text,
-             pg_database_size(current_database()),
-             count(*) filter (where state = 'active'),
-             count(*) filter (where wait_event is not null),
-             count(*) filter (where wait_event_type = 'Lock'),
-             (select xact_commit from pg_stat_database where datname = current_database()),
-             (select xact_rollback from pg_stat_database where datname = current_database()),
-             coalesce((select wal_bytes from pg_stat_wal), 0)
-      from pg_stat_activity
-      where datname = current_database();" >> "$output_file" 2>/dev/null || true
+    psql_platform -At -F '|' \
+      -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" >> "$output_file" 2>/dev/null || true
     sleep "$PG_SAMPLE_INTERVAL_SECONDS"
   done
 }

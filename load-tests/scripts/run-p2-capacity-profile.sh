@@ -262,13 +262,10 @@ require_trigger_capacity_budget() {
       --bootstrap-server kafka:29092 \
       --describe --topic "batch.task.dispatch.atomic.node.${CAPACITY_ATOMIC_WORKER_CODE}" 2>/dev/null \
     | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
-  atomic_registered_max_concurrent="$(psql_platform -Atc "
-      select max_concurrent
-      from batch.worker_registry
-      where worker_code = '${CAPACITY_ATOMIC_WORKER_CODE}'
-        and status = 'ONLINE'
-      order by heartbeat_at desc
-      limit 1;")"
+  atomic_registered_max_concurrent="$(
+    psql_platform -At -v worker_code="$CAPACITY_ATOMIC_WORKER_CODE" \
+      -f "$LOAD_DIR/sql/p2-online-worker-capacity.sql"
+  )"
   limit="$(printf '%s\n' "$metrics" \
     | awk '/^batch_trigger_api_launch_admission_limit / && !found { print int($2); found=1 }')"
   pool="$(printf '%s\n' "$metrics" \
