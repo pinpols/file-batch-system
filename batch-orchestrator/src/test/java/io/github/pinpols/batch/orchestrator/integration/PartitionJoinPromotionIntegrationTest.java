@@ -7,8 +7,6 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -33,9 +31,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestConstructor;
 
 /**
  * 多分片 fan-out / partition-join「晋级闸门」的最高风险正确性属性(真 PG)。
@@ -57,42 +55,31 @@ import org.springframework.test.context.TestConstructor;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  private final LaunchService launchService;
-  private final TaskExecutionService taskExecutionService;
-  private final RetryGovernanceService retryGovernanceService;
-  private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final JobPartitionMapper jobPartitionMapper;
-  private final JobTaskMapper jobTaskMapper;
-  private final JdbcTemplate jdbcTemplate;
-  private final WorkerRegistryCache workerRegistryCache;
+  @Autowired
+  private LaunchService launchService;
 
-  PartitionJoinPromotionIntegrationTest(
-      LaunchService launchService,
-      TaskExecutionService taskExecutionService,
-      RetryGovernanceService retryGovernanceService,
-      JobInstanceTerminalChildStateReconciler terminalChildStateReconciler,
-      JobInstanceMapper jobInstanceMapper,
-      JobPartitionMapper jobPartitionMapper,
-      JobTaskMapper jobTaskMapper,
-      JdbcTemplate jdbcTemplate,
-      WorkerRegistryCache workerRegistryCache) {
-    this.launchService = launchService;
-    this.taskExecutionService = taskExecutionService;
-    this.retryGovernanceService = retryGovernanceService;
-    this.terminalChildStateReconciler = terminalChildStateReconciler;
-    this.jobInstanceMapper = jobInstanceMapper;
-    this.jobPartitionMapper = jobPartitionMapper;
-    this.jobTaskMapper = jobTaskMapper;
-    this.jdbcTemplate = jdbcTemplate;
-    this.workerRegistryCache = workerRegistryCache;
-  }
+  @Autowired
+  private TaskExecutionService taskExecutionService;
+
+  @Autowired
+  private JobInstanceMapper jobInstanceMapper;
+
+  @Autowired
+  private JobPartitionMapper jobPartitionMapper;
+
+  @Autowired
+  private JobTaskMapper jobTaskMapper;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private WorkerRegistryCache workerRegistryCache;
 
   @BeforeEach
   void refreshWorkers() {
@@ -192,64 +179,6 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         TENANT,
         fannedOut.instanceId());
     assertThat(resultVersionRows).isEqualTo(1L);
-  }
-
-  @Test
-  @DisplayName("失败分片重开后回退失败计数，再次成功时恢复实例终态")
-  void retryFailedShard_rebalancesIncrementalCounters() {
-    FannedOutInstance fannedOut = launchBundle(2);
-    List<Shard> shards = claimAllShards(fannedOut);
-    Shard successfulShard = shards.get(0);
-    Shard failedShard = shards.get(1);
-
-    reportOutcome(successfulShard, true);
-    reportOutcome(failedShard, false);
-
-    assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(1);
-    assertThat(failedPartitionCount(fannedOut.instanceId())).isEqualTo(1);
-    assertThat(jobInstanceMapper.selectById(TENANT, fannedOut.instanceId()).getInstanceStatus())
-        .isEqualTo(JobInstanceStatus.PARTIAL_FAILED.code());
-
-    retryGovernanceService.retryPartition(
-        TENANT,
-        failedShard.partitionId(),
-        TENANT + ":it-partition-retry:" + failedShard.partitionId());
-
-    assertThat(partitionStatus(failedShard)).isEqualTo(PartitionStatus.READY.code());
-    assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(1);
-    assertThat(failedPartitionCount(fannedOut.instanceId())).isZero();
-
-    taskExecutionService.assignWorker(
-        TENANT, failedShard.taskId(), fannedOut.seed().workerCode());
-    reportOutcome(failedShard, true);
-
-    JobInstanceEntity recovered = jobInstanceMapper.selectById(TENANT, fannedOut.instanceId());
-    assertThat(recovered.getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
-    assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(2);
-    assertThat(failedPartitionCount(fannedOut.instanceId())).isZero();
-  }
-
-  @Test
-  @DisplayName("终态子分区修复同步校正实例计数")
-  void terminalChildReconcile_repairsInstanceCounters() {
-    FannedOutInstance fannedOut = launchBundle(2);
-
-    jdbcTemplate.update(
-        "update batch.job_instance set success_partition_count = 7,"
-            + " failed_partition_count = 9 where tenant_id = ? and id = ?",
-        TENANT,
-        fannedOut.instanceId());
-
-    terminalChildStateReconciler.reconcile(
-        TENANT, fannedOut.instanceId(), JobInstanceStatus.FAILED.code());
-
-    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(TENANT, fannedOut.instanceId(), null, null));
-    assertThat(partitions)
-        .extracting(JobPartitionEntity::getPartitionStatus)
-        .containsOnly(PartitionStatus.FAILED.code());
-    assertThat(successPartitionCount(fannedOut.instanceId())).isZero();
-    assertThat(failedPartitionCount(fannedOut.instanceId())).isEqualTo(2);
   }
 
   // ---- helpers（复用 LaunchIntegrationFixture + WorkerClaim/TaskBatch 的 claim-report 范式）----

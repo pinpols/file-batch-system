@@ -86,7 +86,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
     String workerGroup = CodeNormalizer.toUpperOrNull(resolveWorkerGroup(request, queue));
     List<WorkerRegistryEntity> candidates = findCandidates(request.getTenantId(), workerGroup);
-    WorkerRegistryEntity selected = pickBest(candidates, queue, request.getRequiredCapability());
+    WorkerRegistryEntity selected = pickBest(candidates, queue);
 
     // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
     // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
@@ -96,8 +96,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         && Texts.hasText(fallbackTenant)
         && !fallbackTenant.equals(request.getTenantId())) {
       List<WorkerRegistryEntity> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
-      WorkerRegistryEntity fallbackSelected =
-          pickBest(fallbackCandidates, queue, request.getRequiredCapability());
+      WorkerRegistryEntity fallbackSelected = pickBest(fallbackCandidates, queue);
       if (fallbackSelected != null) {
         log.info(
             "worker selection fell back to shared tenant: tenantId={}, fallbackTenant={},"
@@ -157,11 +156,9 @@ public class DefaultWorkerSelector implements WorkerSelector {
   }
 
   private WorkerRegistryEntity pickBest(
-      List<WorkerRegistryEntity> candidates, ResourceQueueEntity queue, String requiredCapability) {
+      List<WorkerRegistryEntity> candidates, ResourceQueueEntity queue) {
     return candidates.stream()
         .filter(candidate -> matchesResourceTag(candidate, queue))
-        .filter(candidate -> !Texts.hasText(requiredCapability)
-            || capabilityTagsContain(candidate.capabilityTags(), requiredCapability))
         // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
         // (默认 max_concurrent=10; 全 group 满则 partition 退化 WAITING)
         .filter(DefaultWorkerSelector::hasCapacity)

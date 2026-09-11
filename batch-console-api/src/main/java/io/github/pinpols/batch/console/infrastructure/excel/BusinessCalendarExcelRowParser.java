@@ -19,7 +19,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.HolidayRollRule;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertParam;
 import java.time.LocalDate;
@@ -46,8 +45,7 @@ public final class BusinessCalendarExcelRowParser {
     return CalendarRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .calendarCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, COL_CALENDAR_CODE, 128, issues)))
+        .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
         .calendarName(requireText(values, COL_CALENDAR_NAME, 256, issues))
         .timezone(requireText(values, COL_TIMEZONE, 64, issues))
         .holidayRollRule(

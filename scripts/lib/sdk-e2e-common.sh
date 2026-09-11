@@ -35,22 +35,15 @@ export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
 
 # repo root (库在 scripts/lib/)
 SDK_E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SDK_E2E_SQL_DIR="$SDK_E2E_ROOT/scripts/lib/sql"
 
 # 只引入公共地址格式化和 PostgreSQL 客户端入口，不重读环境文件；入口脚本
 # 已经定义的环境变量必须保持优先级。
 export BATCH_ENV_COMMON_HELPERS_ONLY=1
 # shellcheck source=env-common.sh
-# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$SDK_E2E_ROOT/scripts/lib/env-common.sh"
 KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
 
-sdk_e2e_q_file() {
-  local sql_file="$1"
-  shift
-  psql -X -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
-    -v ON_ERROR_STOP=1 -tA "$@" -f "$SDK_E2E_SQL_DIR/$sql_file" 2>/dev/null
-}
+sdk_e2e_q()   { psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tA -c "$1" 2>/dev/null; }
 sdk_e2e_say() { printf '\n=== %s ===\n' "$*"; }
 sdk_e2e_pass(){ printf '✅ %s\n' "$*"; }
 sdk_e2e_fail(){ printf '❌ %s\n' "$*"; }
@@ -106,8 +99,7 @@ sdk_e2e_kafka_topics() {
 sdk_e2e_check_stack() {
   curl -fsS "${ORCH_URL}/actuator/health" 2>/dev/null | grep -q '"status":"UP"' || { sdk_e2e_fail "orchestrator not UP at ${ORCH_URL}"; return 1; }
   curl -fsS "${TRIGGER_URL}/actuator/health" 2>/dev/null | grep -q '"status":"UP"' || { sdk_e2e_fail "trigger not UP at ${TRIGGER_URL}"; return 1; }
-  sdk_e2e_q_file check-database-ready.sql >/dev/null \
-    || { sdk_e2e_fail "postgres not reachable ${PGHOST}:${PGPORT}"; return 1; }
+  sdk_e2e_q "SELECT 1" >/dev/null || { sdk_e2e_fail "postgres not reachable ${PGHOST}:${PGPORT}"; return 1; }
   sdk_e2e_kafka_topics --list >/dev/null 2>&1 || { sdk_e2e_fail "kafka not reachable"; return 1; }
   sdk_e2e_pass "stack reachable"
 }
@@ -117,17 +109,18 @@ sdk_e2e_check_stack() {
 sdk_e2e_seed_api_key() {
   local name="$1" raw pfx hsh
   raw="cikey$(openssl rand -hex 20)"; pfx="${raw:0:8}"; hsh="$(sdk_e2e_sha256 "$raw")"
-  sdk_e2e_q_file upsert-api-key.sql \
-    -v tenant_id="$TENANT" -v key_name="$name" -v key_prefix="$pfx" -v key_hash="$hsh" >/dev/null
+  sdk_e2e_q "INSERT INTO batch.api_key(tenant_id,key_name,key_prefix,key_hash,key_hash_algo,scopes,enabled,created_at)
+             VALUES('${TENANT}','${name}','${pfx}','${hsh}','sha256','*',true,now()) ON CONFLICT DO NOTHING" >/dev/null
   printf '%s' "$raw"
 }
 
 # 建一个 worker_group=sdk-self-hosted 的 echo job(clone atomic_shell_demo)。
 sdk_e2e_ensure_echo_job() {
-  sdk_e2e_q_file upsert-echo-job.sql \
-    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" >/dev/null
-  [[ "$(sdk_e2e_q_file count-echo-job.sql \
-    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE")" == "1" ]]
+  sdk_e2e_q "DELETE FROM batch.job_definition WHERE job_code='${SDK_E2E_JOB_CODE}';
+    INSERT INTO batch.job_definition (id,tenant_id,job_code,job_name,job_type,biz_type,schedule_type,schedule_expr,timezone,priority,queue_code,worker_group,calendar_code,window_code,trigger_mode,dag_enabled,shard_strategy,retry_policy,retry_max_count,timeout_seconds,execution_handler,param_schema,default_params,version,enabled,description,created_by,updated_by,created_at,updated_at,execution_mode)
+    SELECT 990009,tenant_id,'${SDK_E2E_JOB_CODE}','SDK e2e echo',job_type,biz_type,schedule_type,schedule_expr,timezone,priority,queue_code,'sdk-self-hosted',calendar_code,window_code,trigger_mode,dag_enabled,shard_strategy,retry_policy,retry_max_count,timeout_seconds,execution_handler,param_schema,jsonb_build_object('taskType','echo'),version,true,'sdk-e2e','system','system',now(),now(),execution_mode
+    FROM batch.job_definition WHERE job_code='atomic_shell_demo'" >/dev/null
+  [[ "$(sdk_e2e_q "SELECT count(*) FROM batch.job_definition WHERE job_code='${SDK_E2E_JOB_CODE}'")" == "1" ]]
 }
 
 # pre-create worker 的 node-direct 派单 topic(SDK 消费 *.node.<workerCode>)。
@@ -196,7 +189,7 @@ sdk_e2e_assert_register() {
   local wc="$1" pid="$2" logf="$3"
   for _ in $(seq 1 40); do
     kill -0 "$pid" 2>/dev/null || { sdk_e2e_fail "worker exited early"; tail -15 "$logf"; return 1; }
-    [[ "$(sdk_e2e_q_file count-worker.sql -v tenant_id="$TENANT" -v worker_code="$wc")" == "1" ]] && return 0
+    [[ "$(sdk_e2e_q "SELECT count(*) FROM batch.worker_registry WHERE tenant_id='${TENANT}' AND worker_code='${wc}'")" == "1" ]] && return 0
     sleep 3
   done
   return 1
@@ -212,36 +205,38 @@ sdk_e2e_run_chain() {
     -d "{\"tenantId\":\"${TENANT}\",\"jobCode\":\"${SDK_E2E_JOB_CODE}\",\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null \
     || { sdk_e2e_fail "launch call failed"; return 1; }
   for _ in $(seq 1 40); do
-    inst="$(sdk_e2e_q_file select-latest-job-instance-id.sql \
-      -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE")"
+    inst="$(sdk_e2e_q "SELECT id FROM batch.job_instance WHERE job_code='${SDK_E2E_JOB_CODE}' ORDER BY id DESC LIMIT 1")"
     [[ -n "$inst" ]] && break; sleep 1
   done
   [[ -n "$inst" ]] || { sdk_e2e_fail "no job_instance created"; return 1; }
   for _ in $(seq 1 40); do
     grep -qiE "echo handler|executing|claim" "$logf" && STAGE_DISPATCH=1 && STAGE_EXECUTE=1
     grep -qiE "report" "$logf" && ! grep -qiE "report failed|report.*5[0-9][0-9]|report.*error" "$logf" && STAGE_REPORT=1
-    st="$(sdk_e2e_q_file select-job-instance-status.sql \
-      -v tenant_id="$TENANT" -v instance_id="$inst")"
+    st="$(sdk_e2e_q "SELECT instance_status FROM batch.job_instance WHERE id=${inst}")"
     case "$st" in
       SUCCESS|COMPLETED|SUCCEEDED) STAGE_DISPATCH=1; STAGE_EXECUTE=1; STAGE_REPORT=1; STAGE_TERMINAL=1; break ;;
       FAILED|CANCELLED) break ;;
     esac
     sleep 3
   done
-  if [[ $STAGE_DISPATCH == 1 ]]; then sdk_e2e_pass "dispatch+claim reached worker"; else sdk_e2e_fail "task never reached worker"; fi
-  if [[ $STAGE_EXECUTE == 1 ]]; then sdk_e2e_pass "handler executed"; else sdk_e2e_fail "handler did not execute"; fi
-  if [[ $STAGE_REPORT == 1 ]]; then sdk_e2e_pass "report accepted"; else sdk_e2e_fail "report stage failed"; fi
-  if [[ $STAGE_TERMINAL == 1 ]]; then
-    sdk_e2e_pass "job terminal SUCCESS"
-  else
-    sdk_e2e_fail "job not terminal-success (status=${st:-?})"
-  fi
+  [[ $STAGE_DISPATCH == 1 ]] && sdk_e2e_pass "dispatch+claim reached worker" || sdk_e2e_fail "task never reached worker"
+  [[ $STAGE_EXECUTE  == 1 ]] && sdk_e2e_pass "handler executed" || sdk_e2e_fail "handler did not execute"
+  [[ $STAGE_REPORT   == 1 ]] && sdk_e2e_pass "report accepted" || sdk_e2e_fail "report stage failed"
+  [[ $STAGE_TERMINAL == 1 ]] && sdk_e2e_pass "job terminal SUCCESS" || sdk_e2e_fail "job not terminal-success (status=${st:-?})"
 }
 
 # 清理探针数据(job/worker/key/topic)。
 sdk_e2e_cleanup() {
   local wc="$1"
-  sdk_e2e_q_file cleanup-sdk-e2e.sql \
-    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" -v worker_code="$wc" >/dev/null
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -q >/dev/null 2>&1 <<SQL
+UPDATE batch.job_instance SET instance_status='CANCELLED' WHERE job_code='${SDK_E2E_JOB_CODE}' AND instance_status='RUNNING';
+DELETE FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM batch.job_instance WHERE job_code='${SDK_E2E_JOB_CODE}');
+DELETE FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM batch.job_instance WHERE job_code='${SDK_E2E_JOB_CODE}');
+DELETE FROM batch.job_instance WHERE job_code='${SDK_E2E_JOB_CODE}';
+DELETE FROM batch.job_definition WHERE job_code='${SDK_E2E_JOB_CODE}';
+DELETE FROM batch.worker_registry WHERE worker_code='${wc}';
+DELETE FROM batch.api_key WHERE key_name='${wc}';
+DELETE FROM batch.trigger_request WHERE job_code='${SDK_E2E_JOB_CODE}';
+SQL
   sdk_e2e_kafka_topics --delete --topic "batch.task.dispatch.atomic.node.${wc}" 2>/dev/null
 }

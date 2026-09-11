@@ -102,7 +102,7 @@ BEGIN
 
   -- 当前契约使用连字符日历编码；兼容历史 fixture 中的下划线写法，避免触发时找不到日历。
   UPDATE batch.job_definition
-     SET calendar_code = 'default_calendar'
+     SET calendar_code = 'default-calendar'
    WHERE tenant_id = p_dst
      AND calendar_code = 'default_calendar';
 

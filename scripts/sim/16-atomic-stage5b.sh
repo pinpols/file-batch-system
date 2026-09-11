@@ -30,7 +30,6 @@ TENANT = os.environ["BATCH_DEFAULT_TENANT_ID"]
 PG_CONTAINER = os.environ["PG_CONTAINER"]
 PG_USER = os.environ["POSTGRES_USER"]
 PLATFORM_DB = os.environ["PLATFORM_DB"]
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 JOBS = ["atomic_shell_demo", "atomic_sql_demo", "atomic_stored_proc_demo"]
 request_ids = {}
 
@@ -63,30 +62,24 @@ def launch(job):
             print(text[:500], flush=True)
             sys.exit(1)
 
-def psql(sql_file, variables=None, tuples=False, capture_output=True):
-    args = [
-        "docker", "exec", "-i", PG_CONTAINER, "psql", "-X",
-        "-v", "ON_ERROR_STOP=1", "-U", PG_USER, "-d", PLATFORM_DB,
-        "-P", "pager=off",
-    ]
+def psql(sql, tuples=False):
+    args = ["docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PLATFORM_DB, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    for key, value in (variables or {}).items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        return subprocess.run(
-            args, check=True, capture_output=capture_output,
-            text=True, input=sql.read())
+    args += ["-c", sql]
+    return subprocess.run(args, check=False, capture_output=True, text=True)
 
 for job in JOBS:
     launch(job)
 
 deadline = time.time() + 150
 while time.time() < deadline:
+    req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
     out = psql(
-        "count-terminal-request-instances.sql",
-        {"tenant_id": TENANT, "request_ids": ",".join(request_ids.values())},
+        "select count(*) from batch.trigger_request tr "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
+        "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
         tuples=True,
     )
     done = int((out.stdout or "0").strip() or "0")
@@ -95,15 +88,23 @@ while time.time() < deadline:
     time.sleep(3)
 
 print("\n-- atomic_status --", flush=True)
-query_variables = {
-    "tenant_id": TENANT,
-    "request_ids": ",".join(request_ids.values()),
-}
-psql("select-atomic-request-task-status.sql", query_variables, capture_output=False)
+req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
+status_sql = (
+    "select i.job_code,i.instance_status,t.task_status,t.error_code "
+    "from batch.trigger_request tr "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id "
+    "left join batch.job_task t on t.job_instance_id=i.id "
+    f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
+    "order by i.job_code"
+)
+subprocess.run([
+    "docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER,
+    "-d", PLATFORM_DB, "-P", "pager=off", "-c", status_sql
+], check=False)
 
 out = psql(
-    "count-successful-atomic-requests.sql",
-    query_variables,
+    "select count(*) from (" + status_sql + ") s "
+    "where instance_status='SUCCESS' and task_status='SUCCESS'",
     tuples=True,
 )
 success = int((out.stdout or "0").strip() or "0")

@@ -522,10 +522,7 @@
     <select id="countTerminalInstancesWithActiveChildren" resultType="long">
         select count(distinct ji.id)
           from batch.job_instance ji
-         where ji.instance_status in (
-             'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
-             'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
-         )
+         where ji.instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED')
            and (
              exists (
                select 1
@@ -546,16 +543,15 @@
 
     <select id="selectBatchDayMetrics" resultType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceMetrics">
         select
-            count(1) as "totalCount",
-            coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED') then 1 else 0 end), 0) as "activeCount",
-            coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as "successCount",
-            coalesce(sum(case when ji.instance_status in ('PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as "failedCount"
+            count(1) as total_count,
+            coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as active_count,
+            coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as success_count,
+            coalesce(sum(case when ji.instance_status in ('PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failed_count
         from batch.job_instance ji
                  join batch.job_definition jd on jd.id = ji.job_definition_id
         where ji.tenant_id = #{tenantId}
           and jd.calendar_code = #{calendarCode}
           and ji.biz_date = #{bizDate}
-          and ji.dry_run = false
     </select>
 
     <select id="selectBatchDayCatchUpCandidates" resultMap="JobInstanceResultMap">
@@ -652,7 +648,7 @@
     <!--
       BatchDayGateService SAME_JOB scope:
         判断 (tenant, jobCode, prevBizDate) 是否仍有未到达终态的 job_instance。
-        终态 = LifecycleStatusCatalog.JOB_INSTANCE_TERMINAL_STATES;非终态需要等待。
+        终态 = SUCCESS / FAILED / CANCELLED / TERMINATED;非终态需要等待。
         FAILED 是否允许放行由调用方决定(REJECT_IF_PREVIOUS_OPEN 不允许 / WAIT_PREVIOUS_DAY 也等待)。
     -->
     <select id="countNonTerminalByJobCodeAndBizDate" resultType="int">
@@ -661,10 +657,7 @@
          where tenant_id = #{tenantId}
            and job_code = #{jobCode}
            and biz_date = #{bizDate}
-           and instance_status not in (
-               'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
-               'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
-           )
+           and instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
     </select>
 
     <!--
@@ -681,10 +674,7 @@
          where ji.tenant_id = #{tenantId}
            and jd.job_group_code = #{jobGroupCode}
            and ji.biz_date = #{bizDate}
-           and ji.instance_status not in (
-               'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED',
-               'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
-           )
+           and ji.instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
     </select>
 
     <!--

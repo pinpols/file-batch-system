@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -75,14 +76,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldSetDrainingStatusWithDefaultTimeout() {
     WorkerRegistryEntity registry = onlineWorker("t1", "w1");
-    var now = BatchDateTimeSupport.utcNow();
-    WorkerRegistryEntity draining =
-        registry.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(300), now);
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
-        .thenReturn(registry, draining);
-    when(workerRegistryMapper.startDrainIfCurrent(
-            "t1", "w1", WorkerRegistryStatus.ONLINE.code(), 300))
-        .thenReturn(1);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+    when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
     WorkerRegistryEntity result = service.startDrain("t1", "w1", null);
 
@@ -95,24 +90,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldUseCustomTimeoutWhenProvided() {
     WorkerRegistryEntity registry = onlineWorker("t1", "w1");
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
-        .thenReturn(registry, registry);
-    when(workerRegistryMapper.startDrainIfCurrent(
-            "t1", "w1", WorkerRegistryStatus.ONLINE.code(), 120))
-        .thenReturn(1);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+    when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
     service.startDrain("t1", "w1", 120);
 
-    verify(workerRegistryMapper)
-        .startDrainIfCurrent("t1", "w1", WorkerRegistryStatus.ONLINE.code(), 120);
-  }
-
-  @Test
-  void startDrainRejectsConcurrentStatusChange() {
-    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
-
-    assertThatThrownBy(() -> service.startDrain("t1", "w1", 120)).isInstanceOf(BizException.class);
+    verify(workerRegistryMapper).updateById(any());
   }
 
   // ── forceOffline ─────────────────────────────────────────────────────────
@@ -276,23 +259,13 @@ class DefaultWorkerDrainGovernanceServiceTest {
   void warmup_flipsOfflineToOnline() {
     WorkerRegistryEntity registry = onlineWorker("t1", "w1")
         .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
-    WorkerRegistryEntity online = onlineWorker("t1", "w1");
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry, online);
-    when(workerRegistryMapper.warmupIfOffline("t1", "w1")).thenReturn(1);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+    when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
     WorkerRegistryEntity result = service.warmup("t1", "w1");
 
     assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
-    verify(workerRegistryMapper).warmupIfOffline("t1", "w1");
-  }
-
-  @Test
-  void warmupRejectsConcurrentStatusChange() {
-    WorkerRegistryEntity registry = onlineWorker("t1", "w1")
-        .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
-    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
-
-    assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
+    verify(workerRegistryMapper).updateById(any());
   }
 
   @Test
@@ -303,7 +276,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     WorkerRegistryEntity result = service.warmup("t1", "w1");
 
     assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
-    verify(workerRegistryMapper, never()).warmupIfOffline(anyString(), anyString());
+    verify(workerRegistryMapper, never()).updateById(any());
   }
 
   @Test
@@ -313,7 +286,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
-    verify(workerRegistryMapper, never()).warmupIfOffline(anyString(), anyString());
+    verify(workerRegistryMapper, never()).updateById(any());
   }
 
   @Test
@@ -323,7 +296,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
-    verify(workerRegistryMapper, never()).warmupIfOffline(anyString(), anyString());
+    verify(workerRegistryMapper, never()).updateById(any());
   }
 
   @Test

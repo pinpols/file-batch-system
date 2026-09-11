@@ -91,9 +91,6 @@ public class OutboxProperties {
   /** Sharding 协调子配置（DYNAMIC 模式下生效）。 */
   @Data
   public static class Sharding {
-    /** Redis 成员集合键；共享 Redis 的不同部署必须使用不同值。 */
-    private String membersKey = "batch:orchestrator:members";
-
     /** 心跳间隔（毫秒），每个 Pod 按此频率把自己写进 Redis 存活集合。 */
     private long heartbeatIntervalMs = 5000L;
 

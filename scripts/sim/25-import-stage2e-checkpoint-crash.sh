@@ -84,26 +84,20 @@ MINIO_CONTAINER = os.environ.get("MINIO_CONTAINER", os.environ.get("MINIO_CONTAI
 MINIO_BUCKET = os.environ["BATCH_S3_BUCKET"]
 MINIO_ACCESS_KEY = os.environ["BATCH_S3_ACCESS_KEY"]
 MINIO_SECRET_KEY = os.environ["BATCH_S3_SECRET_KEY"]
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 print(f"  [config] expectedRows={EXPECTED_ROWS} minMarker={MIN_MARKER}", flush=True)
 
 def sh(args, check=False):
     return subprocess.run(args, check=check, capture_output=True, text=True)
 
-def psql(db, sql_file, variables=None, tuples=False):
+def psql(db, sql, tuples=False):
     args = [
-        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql",
-        "-X", "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
-        "-d", db, "-P", "pager=off",
+        "docker", "exec", os.environ["PG_CONTAINER"], "psql",
+        "-U", os.environ["POSTGRES_USER"], "-d", db, "-P", "pager=off",
     ]
     if tuples:
         args += ["-t", "-A", "-F", "\x1f"]
-    for key, value in (variables or {}).items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        return subprocess.run(
-            args, check=True, capture_output=True, text=True, input=sql.read())
+    args += ["-c", sql]
+    return sh(args)
 
 def xml_payload(rows):
     body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<customers>"]
@@ -174,12 +168,27 @@ def launch():
     return rid
 
 def state_row(rid):
-    out = (psql(
-        os.environ["PG_PLATFORM_DB"],
-        "checkpoint-request-state.sql",
-        {"tenant_id": "ta", "request_id": rid},
-        tuples=True,
-    ).stdout or "").rstrip("\n")
+    sql = (
+        "select coalesce(i.id::text,''), coalesce(p.id::text,''), "
+        "coalesce(pi.id::text,''), coalesce(pp.position_marker,'0'), "
+        "coalesce(pp.processed_count::text,'0'), coalesce(pp.completed::text,'false'), "
+        "coalesce(i.instance_status,''), coalesce(p.partition_status,''), "
+        "coalesce(tr.request_status,''), coalesce(oe.publish_status,''), "
+        "left(coalesce(oe.last_error,''), 180), coalesce(t.task_status,''), "
+        "coalesce(p.lease_expire_at::text,'') "
+        "from batch.trigger_request tr "
+        "left join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "left join batch.job_partition p on p.job_instance_id=i.id "
+        "left join batch.job_task t on t.job_partition_id=p.id "
+        "left join batch.pipeline_instance pi on pi.related_job_instance_id=i.id "
+        "left join batch.pipeline_progress pp on pp.pipeline_instance_id=pi.id and pp.stage='LOAD' "
+        " and pp.updated_at >= tr.created_at "
+        "left join batch.trigger_outbox_event oe on oe.tenant_id=tr.tenant_id "
+        " and oe.request_id=tr.request_id "
+        f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
+        "order by oe.id desc nulls last, p.id desc limit 1"
+    )
+    out = (psql(os.environ["PG_PLATFORM_DB"], sql, tuples=True).stdout or "").rstrip("\n")
     if not out:
         return None
     parts = out.split("\x1f")
@@ -312,12 +321,10 @@ if crash_mode == "FAILED":
 restart_worker()
 final = wait_success(rid)
 
-count = (psql(
-    os.environ["PG_BUSINESS_DB"],
-    "count-checkpoint-customer-rows.sql",
-    {"tenant_id": "ta", "customer_no_pattern": "S2ECKPT%"},
-    tuples=True,
-).stdout or "").strip()
+count = (psql(os.environ["PG_BUSINESS_DB"], (
+    "select count(*) from biz.customer_account "
+    "where tenant_id='ta' and customer_no like 'S2ECKPT%'"
+), tuples=True).stdout or "").strip()
 
 if int(count) != EXPECTED_ROWS:
     raise RuntimeError(f"business row count mismatch: {count} != {EXPECTED_ROWS}")

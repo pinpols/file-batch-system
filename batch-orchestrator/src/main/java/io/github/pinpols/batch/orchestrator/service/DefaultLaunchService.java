@@ -346,10 +346,8 @@ public class DefaultLaunchService implements LaunchService {
           + ", runAttempt="
           + jobInstance.getRunAttempt());
     }
-    if (!Boolean.TRUE.equals(request.dryRun())) {
-      launchBatchDayService.upsertBatchDayInstance(
-          request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
-    }
+    launchBatchDayService.upsertBatchDayInstance(
+        request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 
     Instant startedAt = BatchDateTimeSupport.utcNow();
     if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {

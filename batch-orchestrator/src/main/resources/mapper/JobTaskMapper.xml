@@ -267,7 +267,7 @@
           and version = #{expectedVersion}
     </update>
 
-    <select id="assignWorker" resultMap="JobTaskResultMap" flushCache="true" affectData="true">
+    <update id="assignWorker">
         update batch.job_task
         set assigned_worker_code = #{assignedWorkerCode},
             task_status = #{taskStatus},
@@ -279,8 +279,7 @@
           and task_status = #{readyStatus}
           and (assigned_worker_code is null or assigned_worker_code = #{assignedWorkerCode})
           and version = #{expectedVersion}
-        returning *
-    </select>
+    </update>
 
     <update id="resetForRetry">
         update batch.job_task

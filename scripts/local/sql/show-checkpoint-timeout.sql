@@ -1,1 +1,0 @@
-SHOW checkpoint_timeout;

@@ -11,7 +11,6 @@ public class ResourceSchedulingRequest {
   private String queueCode;
   private String workerGroup;
   private String workerType;
-  private String requiredCapability;
   private String windowCode;
   private Integer priority;
   private int requestedPartitionCount = 1;

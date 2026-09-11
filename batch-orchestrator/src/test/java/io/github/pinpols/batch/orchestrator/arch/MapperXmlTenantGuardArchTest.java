@@ -41,7 +41,8 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         // 认证路径:按刚认证通过的 key 自身 id 更新(只能触及自己那把 key,非 IDOR)
         "ApiKeyAuthMapper#touchLastUsedAt",
         "ApiKeyAuthMapper#upgradeHashIfLegacy",
-        // replay/quota 内部乐观锁状态机:按全局 id + version CAS,非用户可达
+        // orchestrator 内部乐观锁状态机:按全局 id + version CAS,非用户可达
+        "BatchDayInstanceMapper#updateWithCas",
         "BatchDayReplayEntryMapper#updateStatus",
         "QuotaRuntimeStateMapper#updateWithCas",
         // 跨租后台 reaper:按状态/时间全表扫僵尸行,加 tenant 谓词会破坏(by-design 跨租)

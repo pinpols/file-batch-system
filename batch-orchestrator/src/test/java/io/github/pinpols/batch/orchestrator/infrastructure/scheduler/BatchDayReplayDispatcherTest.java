@@ -14,8 +14,6 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.enums.BatchDayReplayCandidateSource;
-import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
@@ -26,7 +24,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionE
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -43,7 +40,6 @@ class BatchDayReplayDispatcherTest {
   private BatchDayReplaySessionMapper sessionMapper;
   private BatchDayReplayEntryMapper entryMapper;
   private CompensationService compensationService;
-  private CompensationCommandMapper compensationCommandMapper;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private BatchDayReplayDispatchProperties properties;
   private BatchDayReplayDispatcher dispatcher;
@@ -53,7 +49,6 @@ class BatchDayReplayDispatcherTest {
     sessionMapper = mock(BatchDayReplaySessionMapper.class);
     entryMapper = mock(BatchDayReplayEntryMapper.class);
     compensationService = mock(CompensationService.class);
-    compensationCommandMapper = mock(CompensationCommandMapper.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     when(gracefulShutdown.isDraining()).thenReturn(false);
     properties = new BatchDayReplayDispatchProperties();
@@ -65,8 +60,7 @@ class BatchDayReplayDispatcherTest {
     dispatcher = new BatchDayReplayDispatcher(
         sessionMapper,
         entryMapper,
-        new BatchDayReplayEntryExecutor(
-            entryMapper, compensationCommandMapper, compensationService, dateTimeSupport),
+        new BatchDayReplayEntryExecutor(entryMapper, compensationService, dateTimeSupport),
         properties,
         gracefulShutdown);
   }
@@ -89,8 +83,7 @@ class BatchDayReplayDispatcherTest {
   void noRunningSessionsIsNoop() {
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of());
     dispatcher.scheduledDispatch();
-    verify(entryMapper, never())
-        .selectBySessionAndStatus(anyLong(), anyString(), anyString(), anyInt());
+    verify(entryMapper, never()).selectBySessionAndStatus(anyLong(), anyString(), anyInt());
   }
 
   @Test
@@ -99,8 +92,7 @@ class BatchDayReplayDispatcherTest {
         sessionAt(7L, BatchDayReplayScope.OUTPUTS_ONLY.code(), "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(outputs));
     dispatcher.scheduledDispatch();
-    verify(entryMapper, never())
-        .selectBySessionAndStatus(anyLong(), anyString(), anyString(), anyInt());
+    verify(entryMapper, never()).selectBySessionAndStatus(anyLong(), anyString(), anyInt());
     verify(compensationService, never()).submit(any());
   }
 
@@ -125,8 +117,7 @@ class BatchDayReplayDispatcherTest {
         .sourceInstanceId(102L)
         .status("PENDING")
         .build();
-    when(entryMapper.selectBySessionAndStatus(8L, "t1", "PENDING", 20)).thenReturn(List.of(e1, e2));
-    when(entryMapper.claimPending(anyLong(), eq("t1"), eq(8L), any())).thenReturn(1);
+    when(entryMapper.selectBySessionAndStatus(8L, "PENDING", 20)).thenReturn(List.of(e1, e2));
     when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-OK");
 
     dispatcher.scheduledDispatch();
@@ -139,7 +130,8 @@ class BatchDayReplayDispatcherTest {
     assertThat(captor.getAllValues())
         .allSatisfy(cmd ->
             assertThat(cmd.resultPolicy()).isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
-    verify(entryMapper, times(2)).claimPending(anyLong(), eq("t1"), eq(8L), any());
+    verify(entryMapper, times(2))
+        .updateStatus(anyLong(), eq("RUNNING"), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -155,8 +147,7 @@ class BatchDayReplayDispatcherTest {
         .sourceInstanceId(101L)
         .status("PENDING")
         .build();
-    when(entryMapper.selectBySessionAndStatus(9L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
-    when(entryMapper.claimPending(eq(1L), eq("t1"), eq(9L), any())).thenReturn(1);
+    when(entryMapper.selectBySessionAndStatus(9L, "PENDING", 20)).thenReturn(List.of(entry));
     when(compensationService.submit(any(CompensationSubmitCommand.class)))
         .thenThrow(new RuntimeException("compensation backpressure"));
 
@@ -167,52 +158,11 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void schedulePlanDryRunUsesFrozenSnapshotAndDryRunMode() {
-    BatchDayReplaySessionEntity session =
-        sessionAt(10L, "ALL", "RUNNING", "DRY_RUN_ONLY").toBuilder()
-            .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
-            .candidateSource(BatchDayReplayCandidateSource.SCHEDULE_PLAN.code())
-            .build();
-    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
-    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
-        .id(3L)
-        .sessionId(10L)
-        .tenantId("t1")
-        .jobCode("JOB_PLAN")
-        .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
-        .status("PENDING")
-        .build();
-    when(entryMapper.selectBySessionAndStatus(10L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
-    when(entryMapper.claimPending(eq(3L), eq("t1"), eq(10L), any())).thenReturn(1);
-    when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
-
-    dispatcher.scheduledDispatch();
-
-    ArgumentCaptor<CompensationSubmitCommand> captor =
-        ArgumentCaptor.forClass(CompensationSubmitCommand.class);
-    verify(compensationService).submit(captor.capture());
-    CompensationSubmitCommand command = captor.getValue();
-    assertThat(command.compensationType()).isEqualTo("BATCH");
-    assertThat(command.dryRun()).isTrue();
-    assertThat(command.configVersion()).isEqualTo(12);
-    assertThat(command.launchParams()).containsEntry("region", "cn");
-    assertThat(command.replayEntryId()).isEqualTo(3L);
-  }
-
-  @Test
   void eachEntryUsesRequiresNewTransaction() throws Exception {
     Method dispatch = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
         "dispatch", BatchDayReplaySessionEntity.class, BatchDayReplayEntryEntity.class);
 
     assertThat(dispatch.getAnnotation(Transactional.class).propagation())
-        .isEqualTo(Propagation.REQUIRES_NEW);
-
-    Method markFailed = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
-        "markFailed",
-        BatchDayReplaySessionEntity.class,
-        BatchDayReplayEntryEntity.class,
-        Exception.class);
-    assertThat(markFailed.getAnnotation(Transactional.class).propagation())
         .isEqualTo(Propagation.REQUIRES_NEW);
   }
 

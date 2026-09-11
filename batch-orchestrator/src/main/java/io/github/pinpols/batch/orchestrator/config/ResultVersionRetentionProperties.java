@@ -20,6 +20,6 @@ public class ResultVersionRetentionProperties {
   /** SUPERSEDED 超过此天数 → ARCHIVED；payload_json 同时清空（释放 JSONB 体积）。 */
   private int supersededDays = 90;
 
-  /** ARCHIVED 在 batch 热表保留此天数；archive 镜像不由该任务删除。 */
+  /** ARCHIVED 物理删除目前留 placeholder；当前先保留行，未来可加 archivedDays + 物理 DELETE。 */
   private int archivedDays = 365;
 }

@@ -32,7 +32,7 @@ final class DispatchInvocationSupport {
 
   /**
    * 执行真实派发：构造 DispatchCommand 调 gateway，把 externalRequestId / receiptCode / receiptStatus 写回
-   * context。dry-run 场景由调用方在任何持久化之前短路，不进入本方法。
+   * context。dryRun 场景由调用方在外层决定是否使用伪造结果（通过 DryRunGuard.callOrSkip）。
    *
    * @return gateway 返回的派发结果
    */

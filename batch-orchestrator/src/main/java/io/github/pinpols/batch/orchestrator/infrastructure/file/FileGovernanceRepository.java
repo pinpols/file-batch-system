@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.FileDispatchRunStatus;
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
@@ -337,10 +336,10 @@ public class FileGovernanceRepository {
     return toLong(params.get("id"));
   }
 
-  public List<Long> markStaleRunningPipelineInstancesFailed(
+  public int markStaleRunningPipelineInstancesFailed(
       String tenantId, long staleSeconds, int limit) {
     if (!Texts.hasText(tenantId) || staleSeconds <= 0 || limit <= 0) {
-      return List.of();
+      return 0;
     }
     return fileGovernanceMapper.markStaleRunningPipelineInstancesFailed(params(
         KEY_TENANT_ID,
@@ -365,18 +364,16 @@ public class FileGovernanceRepository {
   @Transactional
   public StaleSweepResult markStaleRunningPipelinesAndStepsFailed(
       String tenantId, long staleSeconds, int limit) {
-    List<Long> failedPipelineIds =
-        markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
-    if (EmptyChecks.isEmpty(failedPipelineIds)) {
+    int failedPipelines = markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
+    if (failedPipelines <= 0) {
       return new StaleSweepResult(0, 0);
     }
-    int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, failedPipelineIds);
-    return new StaleSweepResult(failedPipelineIds.size(), failedSteps);
+    int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, staleSeconds);
+    return new StaleSweepResult(failedPipelines, failedSteps);
   }
 
-  public int markRunningPipelineStepsFailedForInstances(
-      String tenantId, List<Long> pipelineInstanceIds) {
-    if (!Texts.hasText(tenantId) || EmptyChecks.isEmpty(pipelineInstanceIds)) {
+  public int markRunningPipelineStepsFailedForInstances(String tenantId, long staleSeconds) {
+    if (!Texts.hasText(tenantId) || staleSeconds <= 0) {
       return 0;
     }
     return fileGovernanceMapper.markRunningPipelineStepsFailedForInstances(params(
@@ -396,8 +393,8 @@ public class FileGovernanceRepository {
         "PIPELINE_STALE_RUNNING",
         "errorMessage",
         "pipeline was marked FAILED by stale running sweep",
-        "pipelineInstanceIds",
-        pipelineInstanceIds));
+        "staleSeconds",
+        staleSeconds));
   }
 
   /**

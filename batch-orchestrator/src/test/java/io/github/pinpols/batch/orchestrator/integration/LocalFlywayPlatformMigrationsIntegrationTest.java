@@ -48,33 +48,6 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               where table_schema = 'batch' and table_name = 'batch_day_instance'
               """, Long.class);
       assertThat(cnt).isEqualTo(1L);
-      Long cleanupIndex = jdbc.queryForObject("""
-              select count(*) from pg_indexes
-              where schemaname = 'batch' and indexname = 'idx_result_version_archived_cleanup'
-              """, Long.class);
-      assertThat(cleanupIndex).isEqualTo(1L);
-      String activeWorkflowIndex = jdbc.queryForObject("""
-              select indexdef from pg_indexes
-              where schemaname = 'batch' and indexname = 'uk_workflow_run_active'
-              """, String.class);
-      assertThat(activeWorkflowIndex).contains("dry_run");
-      assertThat(constraintDefinition(jdbc, "job_instance_archive", "ck_job_instance_status"))
-          .contains("SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
-      assertThat(constraintDefinition(jdbc, "workflow_run_archive", "ck_workflow_run_status"))
-          .contains("SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
     }
-  }
-
-  private static String constraintDefinition(
-      JdbcTemplate jdbc, String tableName, String constraintName) {
-    return jdbc.queryForObject("""
-        select pg_get_constraintdef(c.oid)
-          from pg_constraint c
-          join pg_class t on t.oid = c.conrelid
-          join pg_namespace n on n.oid = t.relnamespace
-         where n.nspname = 'archive'
-           and t.relname = ?
-           and c.conname = ?
-        """, String.class, tableName, constraintName);
   }
 }

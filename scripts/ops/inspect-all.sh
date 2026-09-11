@@ -8,7 +8,6 @@
 #   1. inspect-observability.sh  — 服务 health / Prometheus 指标 / Kafka lag
 #   2. inspect-db.sh             — Flyway / 告警事件 / 长期停滞作业 / Outbox / 死信 / 重试积压
 #   3. inspect-workers.sh        — Worker 排空超时 / 心跳失联 / 孤儿任务
-#   4. inspect-dependencies.sh   — PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检
 #
 # 使用方法：
 #   # 最小配置（DB 巡检 + 服务巡检）
@@ -26,7 +25,6 @@
 #   BATCH_INSPECT_SKIP_OBSERVABILITY=true bash scripts/ops/inspect-all.sh
 #   BATCH_INSPECT_SKIP_DB=true           bash scripts/ops/inspect-all.sh
 #   BATCH_INSPECT_SKIP_WORKERS=true      bash scripts/ops/inspect-all.sh
-#   BATCH_INSPECT_SKIP_DEPENDENCIES=true bash scripts/ops/inspect-all.sh
 #
 # 输出格式：
 #   每个脚本的输出以 banner 分隔，最后打印汇总表。
@@ -37,7 +35,6 @@ set -uo pipefail
 BATCH_INSPECT_SKIP_OBSERVABILITY="${BATCH_INSPECT_SKIP_OBSERVABILITY:-false}"
 BATCH_INSPECT_SKIP_DB="${BATCH_INSPECT_SKIP_DB:-false}"
 BATCH_INSPECT_SKIP_WORKERS="${BATCH_INSPECT_SKIP_WORKERS:-false}"
-BATCH_INSPECT_SKIP_DEPENDENCIES="${BATCH_INSPECT_SKIP_DEPENDENCIES:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -89,15 +86,11 @@ run_script "inspect-workers" \
   "${SCRIPT_DIR}/inspect-workers.sh" \
   "${BATCH_INSPECT_SKIP_WORKERS}"
 
-run_script "inspect-dependencies" \
-  "${SCRIPT_DIR}/inspect-dependencies.sh" \
-  "${BATCH_INSPECT_SKIP_DEPENDENCIES}"
-
 # ── 汇总 ───────────────────────────────────────────────────────────────────
 banner "INSPECTION SUMMARY"
 printf '%-30s  %s\n' "Script" "Result"
 printf '%s\n' "$(printf -- '-%.0s' {1..45})"
-for name in "inspect-observability" "inspect-db" "inspect-workers" "inspect-dependencies"; do
+for name in "inspect-observability" "inspect-db" "inspect-workers"; do
   result="${script_results[${name}]:-UNKNOWN}"
   printf '%-30s  %s\n' "${name}" "${result}"
 done

@@ -1,19 +1,9 @@
 # ADR-020 · 批量日维度重放（batch_day_replay_session）
 
-- **Status**: Implemented（V110-V202；重放与整批量日 dry-run 共用 session/entry）
+- **Status**: Accepted（Stage 2 schema 已落 V110；后续 Stage 3-8 按本 ADR 排期）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
 - **Related**: ADR-017（result_version，本 ADR 强依赖；版本路由全部走它）/ ADR-018（跨日 DAG，重放下游联动）/ §14.3.2（设计层缺口）/ `RerunRequest`（已有单 instance 重跑入口）
-
-## 2026-09-11 实现校准
-
-- V202 为 session 增加 `execution_mode`、`candidate_source`，为 entry 增加不可变
-  `plan_snapshot`，并同步 archive 镜像与数据库 CHECK；
-- `EXISTING_INSTANCES` 支持正式重放和 dry-run，`SCHEDULE_PLAN` 仅允许 dry-run；
-- entry claim 使用 CAS，未绑定实例的超时 RUNNING entry 可回收，确定性 request/dedup key 防止崩溃窗口重复创建；
-- dry-run 强制 `DRY_RUN_ONLY`，禁止 `OUTPUTS_ONLY` 和结果晋升；
-- Console、OpenAPI 与前端页面已展示模式、候选来源和计划快照；功能由
-  `batch.replay.dry-run.enabled=false` 默认关闭。
 
 ## 背景
 

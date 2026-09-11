@@ -211,7 +211,7 @@ class BatchPlatformClient:
                 self._http,
                 self._dispatcher,
                 worker_group=_WORKER_GROUP,
-                capability_tags=self._capability_tags(),
+                capability_tags=sorted(self._handlers.keys()),
             )
             self._lease = LeaseRenewalScheduler(self._config, self._http, self._dispatcher)
 
@@ -261,7 +261,7 @@ class BatchPlatformClient:
             "status": "RUNNING",
             "heartbeatAt": _utc_now_iso(),
             "currentLoad": 0,
-            "capabilityTags": self._capability_tags(),
+            "capabilityTags": sorted(self._handlers.keys()),
             "sdkVersion": self._config.sdk_version,
             # SDK-#536 register-time protocol-version gate: advertise the SDK's
             # current major (last of SCHEMA_VERSIONS_SUPPORTED) so the platform
@@ -290,15 +290,6 @@ class BatchPlatformClient:
         if descriptors:
             body["taskTypes"] = descriptors
         return body
-
-    def _capability_tags(self) -> list[str]:
-        """返回注册和心跳共用的稳定能力集合。"""
-        from batch_worker_sdk.constants import DRY_RUN_SAFE_CAPABILITY  # noqa: PLC0415
-
-        tags = set(self._handlers.keys())
-        if self._config.dry_run_safe:
-            tags.add(DRY_RUN_SAFE_CAPABILITY)
-        return sorted(tags)
 
     def _build_dispatcher(self) -> DispatcherLike:
         """构造 dispatcher;测试可通过 ``dispatcher_factory`` 注入,避免依赖默认实现。"""

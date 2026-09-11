@@ -20,22 +20,17 @@ SIM_STAGE_NAME="dispatch-stage5b"
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
-SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> seed dispatch stage5b job/channel fixture"
 docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage5b-dispatch-fixtures.sql >/dev/null
 
 echo "==> preflight dispatch stage5 job/channel"
-if [[ "$(docker exec -i "$PG_CONTAINER" psql -X -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" \
-  -tA -v ON_ERROR_STOP=1 -v tenant_id=tb -v job_code=TB_DISPATCH_STAGE5_FAIL_ONCE \
-  -f /dev/stdin < "$SQL_DIR/count-enabled-job-definition.sql" | tr -d '[:space:]')" != "1" ]]; then
+if [[ "$(docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" -tAc "select count(*) from batch.job_definition where tenant_id='tb' and job_code='TB_DISPATCH_STAGE5_FAIL_ONCE' and enabled=true")" != "1" ]]; then
   echo "❌ missing TB_DISPATCH_STAGE5_FAIL_ONCE fixture" >&2
   exit 1
 fi
-if [[ "$(docker exec -i "$PG_CONTAINER" psql -X -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" \
-  -tA -v ON_ERROR_STOP=1 -v tenant_id=tb -v channel_code=tb_api_fail \
-  -f /dev/stdin < "$SQL_DIR/count-enabled-file-channel.sql" | tr -d '[:space:]')" != "1" ]]; then
+if [[ "$(docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" -tAc "select count(*) from batch.file_channel_config where tenant_id='tb' and channel_code='tb_api_fail' and enabled=true")" != "1" ]]; then
   echo "❌ missing tb_api_fail channel fixture" >&2
   exit 1
 fi
@@ -45,8 +40,7 @@ FILE_ID="$(docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PL
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -t -A -f /dev/stdin < docs/test-data/sim-stage5-dispatch-file.sql | tail -1)"
 export FILE_ID
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" \
-  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$PG_PLATFORM_USER" -d "$PG_PLATFORM_DB" -tAc "select now()")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5b.log"
@@ -57,7 +51,6 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 FILE_ID = os.environ["FILE_ID"].strip()
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
 rid = f"sim-stage5b-dispatch-{int(time.time()*1000)%100000000}"
 body = {
@@ -92,28 +85,21 @@ with urllib.request.urlopen(req, timeout=30) as resp:
         print(text[:500], flush=True)
         sys.exit(1)
 
-def psql(sql_file, variables=None, tuples=False, capture_output=True):
-    args = [
-        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
-        "-v", "ON_ERROR_STOP=1", "-U", os.environ["PG_PLATFORM_USER"],
-        "-d", os.environ["PG_PLATFORM_DB"], "-P", "pager=off",
-    ]
+def psql(sql, tuples=False):
+    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["PG_PLATFORM_USER"], "-d", os.environ["PG_PLATFORM_DB"], "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    for key, value in (variables or {}).items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        return subprocess.run(
-            args, check=True, capture_output=capture_output,
-            text=True, input=sql.read())
+    args += ["-c", sql]
+    return subprocess.run(args, check=False, capture_output=True, text=True)
 
 deadline = time.time() + 150
 instance_id = None
 while time.time() < deadline:
     out = psql(
-        "select-request-instance-status.sql",
-        {"tenant_id": "tb", "request_id": rid},
+        "select i.id || '|' || coalesce(i.instance_status,'') "
+        "from batch.trigger_request tr "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        f"where tr.tenant_id='tb' and tr.request_id='{rid}' order by tr.created_at desc limit 1",
         tuples=True,
     )
     value = (out.stdout or "").strip()
@@ -130,17 +116,26 @@ if not instance_id:
     raise TimeoutError("timeout waiting dispatch stage5b")
 
 print("\n-- dispatch_status --", flush=True)
-query_variables = {
-    "tenant_id": "tb",
-    "instance_id": instance_id,
-    "file_id": FILE_ID,
-    "channel_code": "tb_api_fail",
-}
-psql("select-dispatch-failure-details.sql", query_variables, capture_output=False)
+subprocess.run([
+    "docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["PG_PLATFORM_USER"],
+    "-d", os.environ["PG_PLATFORM_DB"], "-P", "pager=off", "-c",
+    "select i.instance_status,p.partition_status,t.task_status,t.error_code,"
+    "d.dispatch_status,d.error_code as dispatch_error "
+    "from batch.job_instance i "
+    "left join batch.job_partition p on p.job_instance_id=i.id "
+    "left join batch.job_task t on t.job_partition_id=p.id "
+    "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
+    "where i.id=" + instance_id
+], check=False)
 
 out = psql(
-    "select-dispatch-failure-summary.sql",
-    query_variables,
+    "select i.instance_status || '|' || p.partition_status || '|' || t.task_status || '|' || "
+    "coalesce(d.dispatch_status,'') "
+    "from batch.job_instance i "
+    "join batch.job_partition p on p.job_instance_id=i.id "
+    "join batch.job_task t on t.job_partition_id=p.id "
+    "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
+    "where i.id=" + instance_id,
     tuples=True,
 )
 summary = (out.stdout or "").strip()

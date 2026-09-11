@@ -112,16 +112,41 @@ docker_stats_snapshot() {
 pg_stat_snapshot() {
   {
     echo "## pg_stat_database"
-    psql_business -P pager=off -F ' | ' -A -f "$LOAD_DIR/sql/process-pg-stat-database.sql"
+    psql_business -P pager=off -F ' | ' -A -c "
+      select datname, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned,
+             tup_fetched, tup_inserted, tup_updated, tup_deleted, temp_bytes
+      from pg_stat_database
+      where datname = current_database();"
     echo
     echo "## pg_stat_wal"
-    psql_business -P pager=off -F ' | ' -A -f "$LOAD_DIR/sql/process-pg-stat-wal.sql" 2>/dev/null || echo "pg_stat_wal unavailable"
+    psql_business -P pager=off -F ' | ' -A -c "
+      select wal_records, wal_fpi, pg_size_pretty(wal_bytes) as wal_bytes
+      from pg_stat_wal;" 2>/dev/null || echo "pg_stat_wal unavailable"
     echo
     echo "## relation_sizes"
-    psql_business -P pager=off -F ' | ' -A -f "$LOAD_DIR/sql/process-relation-sizes.sql"
+    psql_business -P pager=off -F ' | ' -A -c "
+      select rel,
+             pg_size_pretty(pg_total_relation_size(rel::regclass)) as total_size,
+             pg_size_pretty(pg_relation_size(rel::regclass)) as heap_size
+      from (values
+        ('biz.process_order_event'),
+        ('batch.process_staging'),
+        ('biz.process_account_summary'),
+        ('biz.process_event_copy')
+      ) v(rel);"
     echo
     echo "## table_stats"
-    psql_business -P pager=off -F ' | ' -A -f "$LOAD_DIR/sql/process-table-stats.sql"
+    psql_business -P pager=off -F ' | ' -A -c "
+      select schemaname, relname, n_live_tup, n_dead_tup, seq_scan, seq_tup_read,
+             idx_scan, n_tup_ins, n_tup_upd, n_tup_del, vacuum_count, autovacuum_count
+      from pg_stat_user_tables
+      where (schemaname, relname) in (
+        ('biz','process_order_event'),
+        ('batch','process_staging'),
+        ('biz','process_account_summary'),
+        ('biz','process_event_copy')
+      )
+      order by schemaname, relname;"
   }
 }
 
@@ -133,8 +158,13 @@ wait_job_terminal() {
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts total terminal
     counts="$(
-      psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
-        -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
+      psql_platform -Atc "
+        select count(*) || '|' ||
+               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
+        from batch.job_instance
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
+          and job_code = '${job_code}'
+          and params_snapshot::text like '%${RUN_ID}%';"
     )"
     total="${counts%%|*}"
     terminal="${counts##*|}"
@@ -158,8 +188,12 @@ run_process_job() {
   local baseline_total expected_total
 
   baseline_total="$(
-    psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/process-run-count.sql"
+    psql_platform -Atc "
+      select count(*)
+      from batch.job_instance
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
+        and job_code = '${job_code}'
+        and params_snapshot::text like '%${RUN_ID}%';"
   )"
   expected_total=$((baseline_total + users))
 
@@ -214,33 +248,110 @@ write_report() {
     echo "## Instance Completion"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/process-instance-completion.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      select job_code,
+             count(*) as total,
+             count(*) filter (where instance_status = 'SUCCESS') as success,
+             count(*) filter (where instance_status = 'FAILED') as failed,
+             count(*) filter (where instance_status not in ('SUCCESS','FAILED','CANCELLED','TERMINATED','PARTIAL_FAILED')) as non_terminal,
+             round(avg(extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as avg_seconds,
+             round(percentile_cont(0.95) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p95_seconds
+      from batch.job_instance
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
+        and job_code in ('lt_process_sql_job','lt_process_copy_job')
+        and params_snapshot::text like '%${RUN_ID}%'
+      group by job_code
+      order by job_code;"
     echo '```'
     echo
     echo "## Stage Duration"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/process-stage-duration.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      select ji.job_code,
+             psr.stage_code,
+             count(*) as runs,
+             round(avg(psr.duration_ms)::numeric, 1) as avg_ms,
+             round(percentile_cont(0.95) within group (order by psr.duration_ms)::numeric, 1) as p95_ms,
+             max(psr.duration_ms) as max_ms
+      from batch.job_instance ji
+      join batch.pipeline_instance pi on pi.related_job_instance_id = ji.id
+      join batch.pipeline_step_run psr on psr.pipeline_instance_id = pi.id
+      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
+        and ji.job_code in ('lt_process_sql_job','lt_process_copy_job')
+        and ji.params_snapshot::text like '%${RUN_ID}%'
+      group by ji.job_code, psr.stage_code
+      order by ji.job_code, psr.stage_code;"
     echo '```'
     echo
     echo "## Rows And Throughput"
     echo
     echo '```text'
-    psql_business -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/process-business-rows.sql"
+    psql_business -P pager=off -F ' | ' -A -c "
+      select 'source_rows' as metric, count(*)::text as value
+      from biz.process_order_event
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
+      union all
+      select 'source_distinct_accounts', count(distinct account_id)::text
+      from biz.process_order_event
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
+      union all
+      select 'aggregate_target_rows', count(*)::text
+      from biz.process_account_summary
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
+      union all
+      select 'copy_target_rows', count(*)::text
+      from biz.process_event_copy
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
+      union all
+      select 'staging_live_rows', count(*)::text
+      from batch.process_staging
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and batch_key like '%${RUN_ID}%';"
     echo
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -v account_count="$PROCESS_ACCOUNT_COUNT" -v source_rows="$PROCESS_SOURCE_ROWS" \
-      -f "$LOAD_DIR/sql/process-throughput.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      with stage as (
+        select ji.job_code,
+               psr.stage_code,
+               avg(psr.duration_ms) / 1000.0 as avg_seconds
+        from batch.job_instance ji
+        join batch.pipeline_instance pi on pi.related_job_instance_id = ji.id
+        join batch.pipeline_step_run psr on psr.pipeline_instance_id = pi.id
+        where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
+          and ji.job_code in ('lt_process_sql_job','lt_process_copy_job')
+          and ji.params_snapshot::text like '%${RUN_ID}%'
+          and psr.stage_code in ('COMPUTE','COMMIT')
+        group by ji.job_code, psr.stage_code
+      )
+      select job_code,
+             stage_code,
+             round(avg_seconds::numeric, 3) as avg_seconds,
+             case
+               when job_code = 'lt_process_sql_job' and stage_code = 'COMMIT'
+                 then round((${PROCESS_ACCOUNT_COUNT} / nullif(avg_seconds, 0))::numeric, 1)
+               else round((${PROCESS_SOURCE_ROWS} / nullif(avg_seconds, 0))::numeric, 1)
+             end as estimated_rows_per_second
+      from stage
+      order by job_code, stage_code;"
     echo '```'
     echo
     echo "## Task Latency"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
-      -f "$LOAD_DIR/sql/process-task-latency.sql"
+    psql_platform -P pager=off -F ' | ' -A -c "
+      select ji.job_code,
+             jt.task_status,
+             count(*) as tasks,
+             round(avg(extract(epoch from (jt.started_at - jt.created_at))) filter (where jt.started_at is not null)::numeric, 3) as avg_claim_delay_s,
+             round(percentile_cont(0.95) within group (order by extract(epoch from (jt.started_at - jt.created_at))) filter (where jt.started_at is not null)::numeric, 3) as p95_claim_delay_s,
+             round(avg(extract(epoch from (jt.finished_at - jt.started_at))) filter (where jt.finished_at is not null and jt.started_at is not null)::numeric, 3) as avg_exec_s,
+             round(percentile_cont(0.95) within group (order by extract(epoch from (jt.finished_at - jt.started_at))) filter (where jt.finished_at is not null and jt.started_at is not null)::numeric, 3) as p95_exec_s
+      from batch.job_instance ji
+      join batch.job_task jt on jt.job_instance_id = ji.id
+      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
+        and ji.job_code in ('lt_process_sql_job','lt_process_copy_job')
+        and ji.params_snapshot::text like '%${RUN_ID}%'
+      group by ji.job_code, jt.task_status
+      order by ji.job_code, jt.task_status;"
     echo '```'
     echo
     echo "## PG Snapshot Before"

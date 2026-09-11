@@ -33,27 +33,17 @@ TENANT = os.environ["BATCH_DEFAULT_TENANT_ID"]
 PG_CONTAINER = os.environ["PG_CONTAINER"]
 PG_USER = os.environ["POSTGRES_USER"]
 PLATFORM_DB = os.environ["PLATFORM_DB"]
-SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 PARAMS_FILE = "docs/test-data/sim-stage5c-atomic-params.json"
 
 with open(PARAMS_FILE, "r", encoding="utf-8") as fh:
     ATOMIC_PARAMS = json.load(fh)
 
-def psql(sql_file, variables=None, tuples=False, capture_output=True):
-    args = [
-        "docker", "exec", "-i", PG_CONTAINER, "psql", "-X",
-        "-v", "ON_ERROR_STOP=1", "-U", PG_USER, "-d", PLATFORM_DB,
-        "-P", "pager=off",
-    ]
+def psql(sql, tuples=False):
+    args = ["docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PLATFORM_DB, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A", "-F", "\x1f"]
-    for key, value in (variables or {}).items():
-        args += ["-v", f"{key}={value}"]
-    args += ["-f", "/dev/stdin"]
-    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
-        return subprocess.run(
-            args, check=True, capture_output=capture_output,
-            text=True, input=sql.read())
+    args += ["-c", sql]
+    return subprocess.run(args, check=False, capture_output=True, text=True)
 
 def post_json(url, body, timeout=30):
     req = urllib.request.Request(
@@ -90,8 +80,9 @@ def launch(job, label, params):
 
 def instance_for_request(rid):
     out = psql(
-        "select-request-instance-status.sql",
-        {"tenant_id": TENANT, "request_id": rid},
+        "select i.id || '|' || coalesce(i.instance_status,'') "
+        "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+        f"where tr.tenant_id='{TENANT}' and tr.request_id='{rid}' order by tr.created_at desc limit 1",
         tuples=True,
     )
     value = (out.stdout or "").strip()
@@ -113,8 +104,12 @@ def wait_running_task(rid, timeout=30):
     deadline = time.time() + timeout
     while time.time() < deadline:
         out = psql(
-            "select-running-atomic-task.sql",
-            {"tenant_id": TENANT, "request_id": rid},
+            "select i.id || '|' || t.id || '|' || t.task_status "
+            "from batch.trigger_request tr "
+            "join batch.job_instance i on i.id=tr.related_job_instance_id "
+            "join batch.job_task t on t.job_instance_id=i.id "
+            f"where tr.tenant_id='{TENANT}' and tr.request_id='{rid}' "
+            "order by t.id desc limit 1",
             tuples=True,
         )
         value = (out.stdout or "").strip()
@@ -154,23 +149,26 @@ except urllib.error.HTTPError as ex:
 _, cancel_status = wait_terminal(rid_cancel, timeout=90)
 
 print("\n-- atomic_stage5c_status --", flush=True)
-psql(
-    "select-atomic-request-status-details.sql",
-    {
-        "tenant_id": TENANT,
-        "request_ids": ",".join([rid_http, rid_timeout, rid_cancel]),
-    },
-    capture_output=False,
+req_list = ",".join("'" + rid + "'" for rid in [rid_http, rid_timeout, rid_cancel])
+status_sql = (
+    "select tr.request_id,i.job_code,i.instance_status,t.id as task_id,t.task_status,"
+    "t.cancel_requested,t.error_code,t.failure_class,t.result_summary "
+    "from batch.trigger_request tr "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id "
+    "left join batch.job_task t on t.job_instance_id=i.id "
+    f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
+    "order by tr.request_id,t.id"
 )
+subprocess.run([
+    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", status_sql
+], check=False)
 
 out = psql(
-    "select-atomic-assertion-summary.sql",
-    {
-        "tenant_id": TENANT,
-        "http_request_id": rid_http,
-        "timeout_request_id": rid_timeout,
-        "cancel_request_id": rid_cancel,
-    },
+    "select "
+    f"(select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id where tr.request_id='{rid_http}'), "
+    f"(select i.instance_status || ':' || coalesce(t.error_code,'') || ':' || coalesce(t.failure_class,'') from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_timeout}' order by t.id desc limit 1), "
+    f"(select i.instance_status || ':' || t.task_status || ':' || t.cancel_requested::text from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_cancel}' order by t.id desc limit 1)",
     tuples=True,
 )
 summary = (out.stdout or "").strip()

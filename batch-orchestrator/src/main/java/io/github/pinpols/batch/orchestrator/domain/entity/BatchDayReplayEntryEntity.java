@@ -17,40 +17,5 @@ public record BatchDayReplayEntryEntity(
     Instant startedAt,
     Instant finishedAt,
     Long resultVersionId,
-    String planSnapshot,
     Instant createdAt,
-    Instant updatedAt) {
-
-  /** V202 前的兼容构造器：历史 entry 没有计划快照。 */
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public BatchDayReplayEntryEntity(
-      Long id,
-      Long sessionId,
-      String tenantId,
-      String jobCode,
-      Long sourceInstanceId,
-      Long rerunInstanceId,
-      String status,
-      String failureReason,
-      Instant startedAt,
-      Instant finishedAt,
-      Long resultVersionId,
-      Instant createdAt,
-      Instant updatedAt) {
-    this(
-        id,
-        sessionId,
-        tenantId,
-        jobCode,
-        sourceInstanceId,
-        rerunInstanceId,
-        status,
-        failureReason,
-        startedAt,
-        finishedAt,
-        resultVersionId,
-        null,
-        createdAt,
-        updatedAt);
-  }
-}
+    Instant updatedAt) {}

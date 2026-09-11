@@ -28,7 +28,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- 独立 reactor 无法继承根 POM，版本需与根 reactor <revision> 对齐。 -->
-    <batch-sdk.version>1.0.0</batch-sdk.version>
+    <batch-sdk.version>1.3.0-SNAPSHOT</batch-sdk.version>
   </properties>
 
   <dependencies>

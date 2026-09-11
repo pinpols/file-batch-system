@@ -11,7 +11,7 @@
 # 退出 0=全部通过,非 0=有断言失败。结束时自动停 worker(deactivate + kill)。
 #
 # 依赖:本地 docker 栈在跑(console 18080 / orchestrator 18082 / kafka 19092 / pg);
-#       admin/admin123 种子账号;mvn + java(从当前源码干净构建 sample jar)。
+#       admin/admin123 种子账号;mvn + java(构建 sample jar,缺则自动构建)。
 #
 # 用法:
 #   bash scripts/sim/06-sdk-worker-verify.sh
@@ -48,9 +48,8 @@ KEY_NAME="${KEY_NAME:-sdk-verify-$(date +%s)}"
 KEY_PREFIX_PURGE="sdk-verify"
 JAR="$REPO_ROOT/examples/self-hosted-sdk/sample-tenant-worker-java/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-SQL_DIR="$REPO_ROOT/scripts/sim/sql"
+PSQL=(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc)
 REG_TIMEOUT="${REG_TIMEOUT:-45}"
-CONSUMER_READY_TIMEOUT="${CONSUMER_READY_TIMEOUT:-30}"
 # sample-tenant-worker 注册的 7 个 taskType(对应 5 基类 + echo/sleep)
 EXPECTED_TASKTYPES="echo sleep sample_import_echo sample_export_echo sample_process_echo sample_dispatch_echo sample_atomic_echo"
 
@@ -62,13 +61,6 @@ note()  { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 ok()    { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 bad()   { printf '  \033[31m✗\033[0m %s\n' "$*"; FAILS=$((FAILS+1)); }
 info()  { printf '  · %s\n' "$*"; }
-
-psql_file() {
-  local sql_file="$1"
-  shift
-  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-    -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file"
-}
 
 cleanup() {
   if [[ -n "$WORKER_PID" ]] && kill -0 "$WORKER_PID" 2>/dev/null; then
@@ -86,7 +78,7 @@ trap cleanup EXIT
 note "0. 预检:运行栈"
 curl -sf -m 5 "$CONSOLE/actuator/health" -o /dev/null && ok "console-api $CONSOLE UP" || { bad "console-api DOWN"; exit 1; }
 curl -sf -m 5 "$ORCH/actuator/health" -o /dev/null && ok "orchestrator $ORCH UP" || { bad "orchestrator DOWN"; exit 1; }
-psql_file select-one.sql >/dev/null 2>&1 && ok "postgres($PG_CONTAINER) 可达" || { bad "postgres 不可达"; exit 1; }
+"${PSQL[@]}" "select 1" >/dev/null 2>&1 && ok "postgres($PG_CONTAINER) 可达" || { bad "postgres 不可达"; exit 1; }
 batch_parse_host_port "$KAFKA"
 if [[ -n "$BATCH_PARSED_PORT" ]] && (exec 3<>"/dev/tcp/${BATCH_PARSED_HOST}/${BATCH_PARSED_PORT}") 2>/dev/null; then
   ok "kafka $KAFKA 端口开"
@@ -117,12 +109,14 @@ RAW_KEY=$(echo "$created" | grep -oE '"rawKey":"[^"]+"' | head -1 | sed 's/"rawK
 [[ -z "$RAW_KEY" ]] && RAW_KEY=$(echo "$created" | grep -oE '"apiKey":"[^"]+"' | head -1 | sed 's/.*"//;s/"//')
 [[ -n "$RAW_KEY" ]] && ok "API key 已建(scopes=*)" || { bad "未取到 rawKey: $(echo "$created" | head -c 200)"; exit 1; }
 
-# ---- 3. 从当前源码干净构建 sample worker ----
+# ---- 3. 构建 sample worker(缺 jar 才建)----
 note "3. sample-tenant-worker jar"
-info "安装当前 reactor SDK,并清理示例旧依赖后重新打包..."
-(cd "$REPO_ROOT" && mvn -q -pl sdk/java/core -am install -DskipTests && \
-   mvn -q clean package -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
-  && ok "构建完成($(basename "$JAR"))" || { bad "构建失败"; exit 1; }
+if [[ -f "$JAR" ]]; then ok "jar 已存在($(basename "$JAR"))"; else
+  info "jar 缺失,构建中(mvn install)..."
+  (cd "$REPO_ROOT" && mvn -q -pl sdk/java/core -am install -DskipTests && \
+     mvn -q install -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
+    && ok "构建完成" || { bad "构建失败"; exit 1; }
+fi
 
 # ---- 4. 起 worker(后台,指向本地栈)----
 note "4. 启动 sample worker → 本地栈"
@@ -152,7 +146,7 @@ note "5. 等注册(≤${REG_TIMEOUT}s)"
 registered=0
 for ((i=0;i<REG_TIMEOUT;i++)); do
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then bad "worker 进程提前退出,日志尾部:"; tail -15 "$WORKER_LOG"; exit 1; fi
-  st=$(psql_file select-worker-status.sql -v tenant_id="$TENANT" -v worker_code="$WORKER_CODE" 2>/dev/null)
+  st=$("${PSQL[@]}" "select status from batch.worker_registry where tenant_id='$TENANT' and worker_code='$WORKER_CODE' limit 1;" 2>/dev/null)
   if [[ "$st" == "ONLINE" ]]; then registered=1; ok "worker_registry: $WORKER_CODE = ONLINE"; break; fi
   sleep 1
 done
@@ -161,38 +155,14 @@ done
 # ---- 6. 断言:5 类 taskType 上报 ----
 note "6. taskType 上报(5 基类 + echo/sleep)"
 # 6a. descriptor 上报(import 重写了 descriptor() → custom_task_type_registry)
-desc=$(psql_file select-sample-task-types.sql -v tenant_id="$TENANT" 2>/dev/null)
+desc=$("${PSQL[@]}" "select code from batch.custom_task_type_registry where tenant_id='$TENANT' and code like 'sample_%';" 2>/dev/null)
 # 6b. worker 注册的 capability_tags(全部 taskType)
-caps=$(psql_file select-worker-capabilities.sql -v tenant_id="$TENANT" -v worker_code="$WORKER_CODE" 2>/dev/null)
+caps=$("${PSQL[@]}" "select capability_tags from batch.worker_registry where tenant_id='$TENANT' and worker_code='$WORKER_CODE' limit 1;" 2>/dev/null)
 info "custom_task_type_registry(descriptor): $(echo "$desc" | tr '\n' ' ')"
 info "worker capability_tags: $caps"
 for tt in $EXPECTED_TASKTYPES; do
   if echo "$caps $desc" | grep -qw "$tt"; then ok "taskType 上报: $tt"; else bad "taskType 缺失: $tt"; fi
 done
-
-# register 返回 ONLINE 早于 Kafka consumer 完成分区分配。新 consumer group 使用 latest 时，若在
-# 分区分配前立即 launch，首条消息可能成为 offset reset 的末端而被跳过。真派单前显式等待消费端
-# ready，避免把启动时序竞争误判成 SDK 路由失败。
-note "6a. 等 Kafka consumer 分区就绪(≤${CONSUMER_READY_TIMEOUT}s)"
-consumer_ready=0
-for ((i=0;i<CONSUMER_READY_TIMEOUT;i++)); do
-  if ! kill -0 "$WORKER_PID" 2>/dev/null; then
-    bad "worker 在 Kafka consumer 就绪前退出,日志尾部:"
-    tail -20 "$WORKER_LOG"
-    exit 1
-  fi
-  if grep -q "kafka partitions assigned:.*${DISPATCH_NODE_TOPIC}" "$WORKER_LOG"; then
-    consumer_ready=1
-    ok "Kafka consumer 已分配 direct-dispatch partition"
-    break
-  fi
-  sleep 1
-done
-[[ "$consumer_ready" == "1" ]] || {
-  bad "Kafka consumer 分区分配超时,日志尾部:"
-  tail -20 "$WORKER_LOG"
-  exit 1
-}
 
 # ---- 7. Phase 2:dispatch-execute 腿(真链路:launch ATOMIC → Kafka → 自托管 worker 执行 → REPORT → SUCCESS)----
 # 把任务真派给自托管 SDK worker 跑通,作为 #544 workerType→handler 路由键反序列化 P0 的运行期对照
@@ -225,8 +195,7 @@ if [[ "${PHASE2_DISPATCH:-1}" == "1" ]]; then
     # 7c. 轮询 job_instance 终态(≤60s)
     final=""
     for ((i=0;i<60;i++)); do
-      final=$(psql_file select-request-instance-status-only.sql \
-        -v tenant_id="$TENANT" -v request_id="$RID" 2>/dev/null)
+      final=$("${PSQL[@]}" "select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id where tr.tenant_id='$TENANT' and tr.request_id='$RID' order by tr.created_at desc limit 1;" 2>/dev/null)
       [[ "$final" =~ ^(SUCCESS|FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED)$ ]] && break
       sleep 1
     done
@@ -242,8 +211,7 @@ if [[ "${PHASE2_DISPATCH:-1}" == "1" ]]; then
       bad "worker 日志无 'ATOMIC base handler taskId='(派单未到达 / 未路由到 handler —— #544 类回归信号)"
     fi
     # 7e. 断言 job_task 落 SUCCESS 且由我方 worker claim(组门禁定向投递生效)
-    task_row=$(psql_file select-request-task-assignment.sql \
-      -v tenant_id="$TENANT" -v request_id="$RID" 2>/dev/null)
+    task_row=$("${PSQL[@]}" "select t.task_status||'|'||coalesce(t.assigned_worker_code,'') from batch.job_instance i join batch.job_task t on t.job_instance_id=i.id join batch.trigger_request tr on tr.related_job_instance_id=i.id where tr.tenant_id='$TENANT' and tr.request_id='$RID' limit 1;" 2>/dev/null)
     if [[ "$task_row" == "SUCCESS|$WORKER_CODE" ]]; then
       ok "job_task SUCCESS 且 assigned_worker=$WORKER_CODE(worker_group 门禁定向投递)"
     elif [[ "$task_row" == SUCCESS\|* ]]; then

@@ -8,11 +8,7 @@ import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthService;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelHealthSnapshot;
-import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -69,34 +65,6 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
     assertThat(snapshot.lastFailureAt()).isNotNull();
     assertThat(snapshot.probeMessage()).isEqualTo("timeout");
     assertThat(snapshot.healthStatus()).isEqualTo("DEGRADED");
-  }
-
-  @Test
-  void concurrentFailuresShouldKeepLatestExponentialBackoff() throws Exception {
-    int concurrency = 8;
-    Map<String, Object> channelConfig = channelConfig("t1", "ch-concurrent", "API");
-    CountDownLatch ready = new CountDownLatch(concurrency);
-    CountDownLatch start = new CountDownLatch(1);
-    try (var executor = Executors.newFixedThreadPool(concurrency)) {
-      for (int i = 0; i < concurrency; i++) {
-        executor.submit(() -> {
-          ready.countDown();
-          start.await();
-          healthService.recordDispatchOutcome(channelConfig, false, "timeout", null);
-          return null;
-        });
-      }
-      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
-      start.countDown();
-      executor.shutdown();
-      assertThat(executor.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
-    }
-
-    DispatchChannelHealthSnapshot snapshot = healthRepository.findHealth("t1", "ch-concurrent");
-    assertThat(snapshot).isNotNull();
-    assertThat(snapshot.consecutiveFailures()).isEqualTo(concurrency);
-    assertThat(Duration.between(snapshot.lastFailureAt(), snapshot.nextProbeAt()))
-        .isGreaterThanOrEqualTo(Duration.ofMinutes(14));
   }
 
   @Test

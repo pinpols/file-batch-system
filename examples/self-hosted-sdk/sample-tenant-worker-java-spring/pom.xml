@@ -39,7 +39,7 @@
   <properties>
     <java.version>25</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <batch-sdk.version>1.0.0</batch-sdk.version>
+    <batch-sdk.version>1.1.0-SNAPSHOT</batch-sdk.version>
   </properties>
 
   <dependencies>

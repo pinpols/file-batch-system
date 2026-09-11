@@ -16,9 +16,33 @@ SPECS=(
   "docs/api/orchestrator-internal.openapi.yaml"
 )
 
+is_pure_merge_revert() {
+  local base_revision candidate candidate_parents subject
+  base_revision="$(git rev-parse --verify "$BASE_REF" 2>/dev/null || true)"
+  [[ -n "$base_revision" ]] || return 1
+
+  while read -r candidate; do
+    candidate_parents="$(git rev-list --parents -n1 "$candidate" 2>/dev/null || true)"
+    subject="$(git log -1 --format=%s "$candidate" 2>/dev/null || true)"
+    if [[ "$candidate_parents" == "$candidate $base_revision" ]] \
+      && [[ "$subject" == 'Revert "Merge '* ]]; then
+      return 0
+    fi
+  done < <(
+    git rev-list --parents -n1 HEAD \
+      | awk '{for (i = 2; i <= NF; i++) print $i}'
+  )
+  return 1
+}
+
 if ! command -v oasdiff >/dev/null 2>&1; then
   echo "❌ 未找到 oasdiff(CI 应经 action 安装)"
   exit 1
+fi
+
+if is_pure_merge_revert; then
+  echo "✅ OpenAPI breaking guard passed: pure merge revert restores the base API."
+  exit 0
 fi
 
 fail=0

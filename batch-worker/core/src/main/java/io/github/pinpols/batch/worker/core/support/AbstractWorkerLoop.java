@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
@@ -19,7 +18,6 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -141,10 +139,7 @@ public abstract class AbstractWorkerLoop {
       OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
       workerRegistration.setRegisteredAt(now);
       workerRegistration.setLastHeartbeatAt(now);
-      workerRegistration.setCapabilityTags(
-          Stream.concat(cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
-              .distinct()
-              .toList());
+      workerRegistration.setCapabilityTags(cfg.capabilityTags());
       WorkerRegistration startedRegistration = workerRuntimeFacade.start(workerRegistration);
       registration.set(startedRegistration);
       started.set(true);

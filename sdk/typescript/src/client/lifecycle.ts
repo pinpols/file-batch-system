@@ -43,19 +43,6 @@ import {
 } from "./checkpoint.ts";
 import { SensitiveDataValidator } from "./sensitive.ts";
 import { ErrorCode } from "../protocol.ts";
-
-function dryRunAttribute(
-  runtimeAttributes: Record<string, unknown> | undefined,
-  parameters: Record<string, unknown> | undefined,
-): boolean {
-  for (const source of [runtimeAttributes, parameters]) {
-    const value = source?.dryRun;
-    if (value === true || (typeof value === "string" && value.toLowerCase() === "true")) {
-      return true;
-    }
-  }
-  return false;
-}
 import { SUPPORTED_SCHEMA_VERSIONS } from "../constants.ts";
 
 let unhandledRejectionInstalled = false;
@@ -81,8 +68,6 @@ export interface WorkerConfig {
    * committed. Omitted / empty → serve all (no routing filter).
    */
   workerTypes?: readonly string[];
-  /** 仅当 handler 在 dry-run 下不会产生外部副作用时显式开启。 */
-  dryRunSafe?: boolean;
   registerBody?: Record<string, unknown>;
   buildHeartbeatBody?: () => Record<string, unknown>;
   buildRenewBody?: (taskId: string) => Record<string, unknown>;
@@ -142,7 +127,6 @@ export class WorkerLifecycle {
     this.#validator = deps.validator ?? new SensitiveDataValidator();
     this.#checkpointFactory = deps.checkpointFactory ?? (() => new InMemorySdkCheckpoint());
     this.#resumeOptions = deps.resumeOptions;
-    const capabilityTags = this.#capabilityTags();
 
     this.#heartbeat = new HeartbeatScheduler(
       this.#transport,
@@ -157,7 +141,6 @@ export class WorkerLifecycle {
             status: this.#draining ? "DRAINING" : "RUNNING",
             heartbeatAt: new Date().toISOString(),
             currentLoad: this.#inFlight.size,
-            capabilityTags,
           })),
         setFsm: (s) => this.#setFsm(s),
         applyKafka: (a) => this.#applyKafka(a),
@@ -258,7 +241,6 @@ export class WorkerLifecycle {
       workerGroup: "sdk-self-hosted",
       status: "RUNNING",
       heartbeatAt: new Date().toISOString(),
-      capabilityTags: this.#capabilityTags(),
       // #536 register-time protocol-version gate: advertise the SDK's current
       // major (last of SUPPORTED_SCHEMA_VERSIONS). Register only — heartbeat null.
       protocolVersion: SUPPORTED_SCHEMA_VERSIONS[SUPPORTED_SCHEMA_VERSIONS.length - 1],
@@ -275,12 +257,6 @@ export class WorkerLifecycle {
 
     // subscribe last so no message arrives before schedulers are live
     await this.#consumer.start((r: ConsumerRecord) => this.#onRecord(r));
-  }
-
-  #capabilityTags(): string[] {
-    const tags = new Set(this.#cfg.workerTypes ?? []);
-    if (this.#cfg.dryRunSafe === true) tags.add("dry-run-safe");
-    return [...tags].sort();
   }
 
   async #onRecord(record: ConsumerRecord): Promise<MessageDisposition> {
@@ -350,7 +326,6 @@ export class WorkerLifecycle {
           taskId: msg.taskId,
           effectiveConfig: claim.effectiveConfig ?? {},
           traceId: claim.traceId ?? (msg.runtimeAttributes?.traceId as string | undefined) ?? "",
-          isDryRun: dryRunAttribute(msg.runtimeAttributes, claim.effectiveConfig),
           cancellation,
           progress,
           checkpoint: () => resume.checkpoint(),

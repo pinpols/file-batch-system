@@ -176,10 +176,10 @@ public class LaunchBatchDayService {
         .timezoneSnapshot(ctx.timezoneSnapshot())
         .dstPolicySnapshot(ctx.dstPolicySnapshot())
         .frozen(false)
+        // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；null 也可，xml 兜 0
         .version(0L)
         .createdAt(ctx.now())
         .updatedAt(ctx.now())
-        .dryRun(false)
         .build();
     batchDayInstanceMapper.insert(newDay);
     BatchDayAuditLogParam auditLog = BatchDayAuditLogParam.builder()

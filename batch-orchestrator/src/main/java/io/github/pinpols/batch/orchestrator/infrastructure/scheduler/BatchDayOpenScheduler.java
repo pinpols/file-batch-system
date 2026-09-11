@@ -147,7 +147,6 @@ public class BatchDayOpenScheduler {
         .version(0L)
         .createdAt(now)
         .updatedAt(now)
-        .dryRun(false)
         .build();
     int rows = batchDayInstanceMapper.insert(toInsert);
     if (rows <= 0) {
@@ -232,7 +231,6 @@ public class BatchDayOpenScheduler {
           .version(0L)
           .createdAt(now)
           .updatedAt(now)
-          .dryRun(false)
           .build();
       int rows = batchDayInstanceMapper.insert(skipped);
       if (rows > 0) {

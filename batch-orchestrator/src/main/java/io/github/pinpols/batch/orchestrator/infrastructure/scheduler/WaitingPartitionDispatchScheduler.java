@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -248,8 +247,6 @@ public class WaitingPartitionDispatchScheduler {
             ? jobInstance.getWorkerGroup()
             : partition.getWorkerGroup());
     request.setWorkerType(task.getTaskType());
-    request.setRequiredCapability(
-        Boolean.TRUE.equals(partition.getDryRun()) ? WorkerCapabilities.DRY_RUN_SAFE : null);
     request.setPriority(jobInstance.getPriority());
     request.setRequestedPartitionCount(1);
     // 本轮 schedule 只负责给候选排序；executeDispatch 会在 REQUIRES_NEW 事务内重新取得公平组锁并校验。

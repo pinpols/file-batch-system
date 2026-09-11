@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,7 +9,6 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
-import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertParam;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
@@ -39,14 +39,12 @@ class TenantOperationalConfigApplySupportTest {
     spec.setCalendarCode("cn-settlement");
     spec.setCalendarName("CN Settlement");
     spec.setHolidays(List.of("2026-01-01", "2026-02-17"));
-    when(calendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "cn_settlement"))
+    when(calendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "cn-settlement"))
         .thenReturn(Map.of("id", 91L));
 
     support.upsertBusinessCalendar("tenant-a", spec, "admin", 91L);
 
-    ArgumentCaptor<BusinessCalendarUpsertParam> calendar = ArgumentCaptor.captor();
-    verify(calendarMapper).upsertBusinessCalendar(calendar.capture());
-    assertThat(calendar.getValue().getCalendarCode()).isEqualTo("cn_settlement");
+    verify(calendarMapper).upsertBusinessCalendar(any());
     verify(holidayMapper).deleteByCalendarId(91L);
     ArgumentCaptor<List<Map<String, Object>>> rows = ArgumentCaptor.captor();
     verify(holidayMapper).batchInsert(rows.capture());

@@ -210,7 +210,6 @@ trigger:
   quartzDb:
     maxPoolSize: 5
   runtime:
-    misfirePendingRetentionDays: 7
     # 默认平台池 10，保留 2 条给 relay/管理路径；应用启动期强制校验此预算。
     apiLaunchMaxConcurrency: 8
     apiLaunchAdaptiveEnabled: false
@@ -227,15 +226,6 @@ trigger:
     maxPublishAttempts: 10
     # 单 Trigger Pod 限额。默认 replicaCount=1；扩 Trigger 副本前须下调每 Pod 限额或先实现共享预算。
     maxPublishEventsPerSecond: 40
-    # 灰度开关：按 orchestrator trigger consumer group lag 进行 AIMD 自适应释放。
-    adaptiveReleaseEnabled: false
-    minPublishEventsPerSecond: 5
-    lagSoftThreshold: 1000
-    lagHardThreshold: 5000
-    adaptiveIncreaseStep: 1
-    lagSampleIntervalMillis: 5000
-    lagQueryTimeoutMillis: 2000
-    consumerGroupId: orchestrator-trigger-launch
   # Quartz misfire 由幸存节点立即补跑，trigger 自身负担轻；但要给 Quartz cluster
   # 注销节点 + Spring graceful shutdown drain in-flight 的 trigger 转发请求时间。
   gracefulShutdown:
@@ -273,10 +263,6 @@ orchestrator:
   # 代价:吞吐 -10% 换调度延迟稳定。详见 docs/runbook/jvm-tuning-and-profiling.md §1.2
   javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"
   replicaCount: 2
-  replayDryRun:
-    enabled: false
-    maxActiveEntries: 200
-    retentionDays: 7
   triggerConsumer:
     # 每个 Pod 的 Kafka listener 数。topic 至少为 replicaCount × concurrency（默认 2 × 6 = 12）。
     concurrency: 6
@@ -294,11 +280,6 @@ orchestrator:
   # 会越界或重复处理，数据一致性受损。
   sharding:
     mode: "static"              # static | dynamic
-    # 留空时模板按 namespace + release 生成，避免共享 Redis 的多套部署成员串扰。
-    membersKey: ""
-    heartbeatIntervalMs: 5000
-    # 至少为 heartbeatIntervalMs 的 3 倍，避免短抖动误判成员失联。
-    memberTtlMs: 30000
   # CPU-based HPA。要求 sharding.mode=dynamic（否则不会渲染）。
   hpa:
     enabled: false
@@ -350,17 +331,6 @@ orchestrator:
     maxPoolSize: 50
   workerCache:
     enabled: true
-  persistenceGranularity:
-    # 默认关闭；只对未显式指定 targetItems/BytesPerPartition 的 DYNAMIC/AUTO 作业生效。
-    enabled: false
-    compactMaxItems: 100000
-    compactMaxBytes: 268435456
-    standardMaxItems: 10000000
-    standardMaxBytes: 8589934592
-    standardTargetItems: 1000000
-    largeTargetItems: 500000
-    standardTargetBytes: 536870912
-    largeTargetBytes: 268435456
   mqRouting:
     mode: "TENANT"
   quota:

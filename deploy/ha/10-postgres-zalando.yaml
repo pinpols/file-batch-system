@@ -14,22 +14,8 @@ spec:
   postgresql:
     version: "17"
     parameters:
-      # 10 万控制面容量基线。最终值仍须按磁盘 IOPS、实例内存和应用连接预算压测标定。
-      max_connections: "400"             # 应用池峰值 + 运维/复制预留；前置 PgBouncer 限制连接扇出
-      shared_buffers: "1GB"               # 当前 4Gi 内存 limit 的 25%
-      effective_cache_size: "3GB"
-      work_mem: "4MB"                     # 按单算子/并发分配，禁止按连接池总量直接放大
-      maintenance_work_mem: "512MB"
-      wal_level: "replica"
-      wal_compression: "on"
-      min_wal_size: "4GB"
-      max_wal_size: "16GB"
-      checkpoint_timeout: "15min"
-      checkpoint_completion_target: "0.9"
-      autovacuum: "on"
-      autovacuum_max_workers: "6"
-      autovacuum_naptime: "15s"
-      track_io_timing: "on"
+      # 与本仓 batch-defaults / Citus 前瞻一致的关键参数
+      max_connections: "400"             # 配合 worker max_connections ≥ PgBouncer ≥ app 池峰值和
       # 上 Citus 时由 operator 注入 citus.* GUC;单机阶段无需
   # 主备:1 主 + 2 备(故障域散开,见 podAntiAffinity)
   numberOfInstances: 3
