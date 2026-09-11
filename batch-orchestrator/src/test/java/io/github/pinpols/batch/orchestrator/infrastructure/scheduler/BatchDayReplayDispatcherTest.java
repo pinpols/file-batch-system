@@ -206,6 +206,14 @@ class BatchDayReplayDispatcherTest {
 
     assertThat(dispatch.getAnnotation(Transactional.class).propagation())
         .isEqualTo(Propagation.REQUIRES_NEW);
+
+    Method markFailed = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
+        "markFailed",
+        BatchDayReplaySessionEntity.class,
+        BatchDayReplayEntryEntity.class,
+        Exception.class);
+    assertThat(markFailed.getAnnotation(Transactional.class).propagation())
+        .isEqualTo(Propagation.REQUIRES_NEW);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

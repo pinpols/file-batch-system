@@ -118,12 +118,18 @@ public class BatchDayReplayDispatcher {
       try {
         entryExecutor.dispatch(session, entry);
       } catch (Exception entryFailure) {
-        log.warn(
-            "batch_day_replay dispatch entry error: sessionId={}, entryId={}, jobCode={}, msg={}",
-            session.id(),
-            entry.id(),
-            entry.jobCode(),
-            entryFailure.getMessage());
+        try {
+          entryExecutor.markFailed(session, entry, entryFailure);
+        } catch (Exception markFailure) {
+          log.error(
+              "batch_day_replay entry failure could not be persisted: sessionId={}, entryId={},"
+                  + " jobCode={}, dispatchMsg={}, markMsg={}",
+              session.id(),
+              entry.id(),
+              entry.jobCode(),
+              entryFailure.getMessage(),
+              markFailure.getMessage());
+        }
       }
     }
   }

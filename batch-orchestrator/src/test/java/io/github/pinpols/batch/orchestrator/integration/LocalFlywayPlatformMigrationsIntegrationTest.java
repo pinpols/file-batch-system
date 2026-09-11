@@ -53,6 +53,11 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               where schemaname = 'batch' and indexname = 'idx_result_version_archived_cleanup'
               """, Long.class);
       assertThat(cleanupIndex).isEqualTo(1L);
+      String activeWorkflowIndex = jdbc.queryForObject("""
+              select indexdef from pg_indexes
+              where schemaname = 'batch' and indexname = 'uk_workflow_run_active'
+              """, String.class);
+      assertThat(activeWorkflowIndex).contains("dry_run");
       assertThat(constraintDefinition(jdbc, "job_instance_archive", "ck_job_instance_status"))
           .contains("SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
       assertThat(constraintDefinition(jdbc, "workflow_run_archive", "ck_workflow_run_status"))
