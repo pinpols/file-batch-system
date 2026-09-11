@@ -21,6 +21,7 @@
 |---|---|---|
 | 05 | [docker-deployment.md](./docker-deployment.md) | Docker 部署基线（compose / 单机） |
 | 06 | [base-services-deployment.md](./base-services-deployment.md) | Postgres / Kafka / MinIO / Redis 基础依赖部署 |
+| 06a | [dependency-operations.md](./dependency-operations.md) | PostgreSQL / Kafka / Valkey / MinIO 日常巡检、故障边界和恢复入口 |
 | 07 | [local-development.md](./local-development.md) | 本地开发环境与联调说明 |
 | 08 | [orchestrator-statefulset-migration.md](./orchestrator-statefulset-migration.md) | orchestrator 从 Deployment 迁到 StatefulSet |
 | 09 | [rolling-upgrade-workers.md](./rolling-upgrade-workers.md) | Worker 滚动升级（Kafka rebalance 安全姿势） |

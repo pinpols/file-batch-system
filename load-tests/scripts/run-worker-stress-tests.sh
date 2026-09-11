@@ -110,14 +110,9 @@ run_one() {
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts
     counts="$(
-      psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -Atc "
-        select count(*) || '|' ||
-               count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
-        from batch.job_instance
-        where tenant_id = '${LOAD_TEST_TENANT_ID}'
-          and job_code = '${job_code}'
-          and params_snapshot::text like '%${RUN_ID}%'
-          and params_snapshot::text like '%\"stressUsers\": ${users}%';"
+      psql_platform -tA -v tenant_id="$LOAD_TEST_TENANT_ID" \
+        -v job_code="$job_code" -v run_id="$RUN_ID" -v stress_users="$users" \
+        -f "$LOAD_DIR/sql/worker-stress-terminal-counts.sql"
     )"
     local total="${counts%%|*}"
     local terminal="${counts##*|}"
@@ -168,33 +163,15 @@ for users in "${STEPS[@]}"; do
     echo "## Step users=${users}"
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -c "
-      select
-        ji.job_code,
-        count(*) as total,
-        count(*) filter (where ji.instance_status = 'SUCCESS') as success,
-        count(*) filter (where ji.instance_status <> 'SUCCESS') as not_success,
-        round(avg(extract(epoch from (ji.finished_at - ji.created_at))) filter (where ji.finished_at is not null)::numeric, 3) as avg_seconds,
-        round(percentile_cont(0.95) within group (order by extract(epoch from (ji.finished_at - ji.created_at))) filter (where ji.finished_at is not null)::numeric, 3) as p95_seconds
-      from batch.job_instance ji
-      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
-        and ji.job_code in ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
-        and ji.params_snapshot::text like '%${RUN_ID}%'
-        and ji.params_snapshot::text like '%\"stressUsers\": ${users}%'
-      group by ji.job_code
-      order by ji.job_code;"
+    psql_platform -P pager=off -F ' | ' -A \
+      -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" -v stress_users="$users" \
+      -f "$LOAD_DIR/sql/worker-stress-instance-summary.sql"
     echo '```'
     echo
     echo '```text'
-    psql_platform -P pager=off -F ' | ' -A -c "
-      select ji.job_code, jt.task_type, jt.task_status, coalesce(jt.error_code,'') as error_code, count(*) as count
-      from batch.job_instance ji
-      join batch.job_task jt on jt.job_instance_id = ji.id
-      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
-        and ji.params_snapshot::text like '%${RUN_ID}%'
-        and ji.params_snapshot::text like '%\"stressUsers\": ${users}%'
-      group by ji.job_code, jt.task_type, jt.task_status, jt.error_code
-      order by ji.job_code, jt.task_type, jt.task_status, jt.error_code;"
+    psql_platform -P pager=off -F ' | ' -A \
+      -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" -v stress_users="$users" \
+      -f "$LOAD_DIR/sql/worker-stress-task-summary.sql"
     echo '```'
     echo
   } >> "$REPORT"

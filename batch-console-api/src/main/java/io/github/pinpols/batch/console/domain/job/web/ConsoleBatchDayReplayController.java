@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayRe
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayPreviewResponse;
 import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -46,6 +47,10 @@ public class ConsoleBatchDayReplayController {
   // 防止跨租户提交；同时通过 @Idempotent 拦截重复请求。
   @PostMapping("/sessions")
   @Idempotent
+  @AuditAction(
+      action = "batchDayReplay.submit",
+      aggregateType = "batch_day_replay_session",
+      targetTenantParam = "#command.tenantId")
   public CommonResponse<ConsoleBatchDayReplaySessionResponse> submit(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
@@ -74,6 +79,12 @@ public class ConsoleBatchDayReplayController {
 
   @PostMapping("/sessions/{sessionId}/approve")
   @Idempotent
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(
+      action = "batchDayReplay.approve",
+      aggregateType = "batch_day_replay_session",
+      aggregateId = "#sessionId",
+      targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleBatchDayReplaySessionResponse> approve(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("sessionId") Long sessionId,
@@ -95,6 +106,11 @@ public class ConsoleBatchDayReplayController {
 
   @PostMapping("/sessions/{sessionId}/cancel")
   @Idempotent
+  @AuditAction(
+      action = "batchDayReplay.cancel",
+      aggregateType = "batch_day_replay_session",
+      aggregateId = "#sessionId",
+      targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleBatchDayReplaySessionResponse> cancel(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("sessionId") Long sessionId,

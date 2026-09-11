@@ -74,6 +74,7 @@ public class TriggerOutboxRelay {
   private final TriggerOutboxRelayProperties properties;
   private final ThreadPoolTaskScheduler scheduler;
   private final TriggerOutboxReleaseBudget releaseBudget;
+  private final TriggerOutboxReleaseGovernor releaseGovernor;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong pendingEvents = new AtomicLong();
@@ -90,6 +91,7 @@ public class TriggerOutboxRelay {
       LockingTaskExecutor lockingTaskExecutor,
       MeterRegistry meterRegistry,
       TriggerOutboxRelayProperties properties,
+      TriggerLaunchLagMonitor lagMonitor,
       @Qualifier("triggerOutboxRelayScheduler") ThreadPoolTaskScheduler scheduler) {
     this.mapper = mapper;
     this.publisher = publisher;
@@ -97,7 +99,12 @@ public class TriggerOutboxRelay {
     this.meterRegistry = meterRegistry;
     this.properties = properties;
     this.scheduler = scheduler;
-    this.releaseBudget = new TriggerOutboxReleaseBudget(properties);
+    this.releaseGovernor = new TriggerOutboxReleaseGovernor(properties, lagMonitor);
+    this.releaseBudget = new TriggerOutboxReleaseBudget(
+        properties,
+        releaseGovernor::effectiveLimit,
+        () -> System.currentTimeMillis() / 1_000L,
+        System::nanoTime);
   }
 
   // R3-P1-3：单条 outbox 事件 NEW→PUBLISHED 端到端延迟分位，按 result tag (ok/fail) 拆分。
@@ -136,8 +143,8 @@ public class TriggerOutboxRelay {
         TriggerOutboxReleaseBudget::reservedInCurrentWindow);
     meterRegistry.gauge(
         "batch.trigger.outbox.release_budget.limit",
-        properties,
-        TriggerOutboxRelayProperties::getMaxPublishEventsPerSecond);
+        releaseGovernor,
+        TriggerOutboxReleaseGovernor::effectiveLimit);
     publishLatencyOk = io.micrometer.core.instrument.Timer.builder(
             "batch.trigger.outbox.publish.latency")
         .description("trigger_outbox publishOne latency (single event)")

@@ -65,8 +65,9 @@ public class BatchDayReplayController {
   @GetMapping("/sessions/{sessionId}/entries")
   public CommonResponse<List<BatchDayReplayEntryEntity>> entries(
       @PathVariable("sessionId") Long sessionId,
+      @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
-    return CommonResponse.success(replayService.listEntries(sessionId, status, limit));
+    return CommonResponse.success(replayService.listEntries(tenantId, sessionId, status, limit));
   }
 }

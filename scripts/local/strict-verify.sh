@@ -42,6 +42,7 @@ for arg in "$@"; do
 done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SQL_DIR="$ROOT/scripts/local/sql"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
 # shellcheck source=scripts/lib/process.sh
@@ -63,7 +64,10 @@ fi
 PASS=0 FAIL=0
 
 psql_q() {
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG_CONTAINER" psql -X -U "$PG_USER" -d "$PG_DB" \
+    -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file" 2>/dev/null
 }
 
 pass() { printf " ${GREEN}🟢 PASS${RST}  %s — %s\n" "$1" "$2"; PASS=$((PASS+1)); }
@@ -135,7 +139,7 @@ hdr "1. cursor vs offset 翻页一致性"
 # 仍在写则 SKIP(这是「sim 未静默」的环境条件,不是数据缺陷)——先跑 sim 收尾
 # scripts/sim/98-quiesce-schedules.sh 静默后再验即稳定。
 GUARD_SKIP=""
-_ji_fingerprint() { psql_q "select coalesce(max(id),0)||'/'||count(*) from batch.job_instance;"; }
+_ji_fingerprint() { psql_q strict-job-instance-fingerprint.sql; }
 _quiesced=0
 for _try in 1 2 3 4 5; do
   _s1=$(_ji_fingerprint); sleep 3; _s2=$(_ji_fingerprint)
@@ -144,20 +148,20 @@ for _try in 1 2 3 4 5; do
 done
 [[ "$_quiesced" == "1" ]] || GUARD_SKIP="job_instance 仍在并发写入(sim 未静默)— 先跑 scripts/sim/98-quiesce-schedules.sh 再验,避免翻页假失败"
 
-TENANT=$(psql_q "select tenant_id from batch.job_instance group by tenant_id order by count(*) desc limit 1;")
-TOTAL=$(psql_q "select count(*) from batch.job_instance where tenant_id='$TENANT';")
+TENANT=$(psql_q strict-dominant-tenant.sql)
+TOTAL=$(psql_q strict-count-tenant-instances.sql -v tenant_id="$TENANT")
 if [[ -n "$GUARD_SKIP" ]] || [[ -z "$TOTAL" ]] || [[ "$TOTAL" -lt 3 ]]; then
   skip "cursor 翻页验证" "${GUARD_SKIP:-最大租户 '$TENANT' 行数 $TOTAL < 3}"
 else
   PAGE_SIZE=5
-  offset_ids=$(psql_q "select string_agg(id::text, ',' order by id desc) from (select id from batch.job_instance where tenant_id='$TENANT' order by id desc limit 1000) t;")
+  offset_ids=$(psql_q strict-offset-instance-ids.sql -v tenant_id="$TENANT")
   cursor_acc=""
   last_id=""
   for batch_i in $(seq 1 200); do
     if [[ -z "$last_id" ]]; then
-      batch_ids=$(psql_q "select string_agg(id::text, ',' order by id desc) from (select id from batch.job_instance where tenant_id='$TENANT' order by id desc limit $PAGE_SIZE) t;")
+      batch_ids=$(psql_q strict-cursor-instance-ids.sql -v tenant_id="$TENANT" -v last_id= -v page_size="$PAGE_SIZE")
     else
-      batch_ids=$(psql_q "select string_agg(id::text, ',' order by id desc) from (select id from batch.job_instance where tenant_id='$TENANT' and id < $last_id order by id desc limit $PAGE_SIZE) t;")
+      batch_ids=$(psql_q strict-cursor-instance-ids.sql -v tenant_id="$TENANT" -v last_id="$last_id" -v page_size="$PAGE_SIZE")
     fi
     [[ -z "$batch_ids" ]] && break
     cursor_acc="${cursor_acc}${cursor_acc:+,}${batch_ids}"
@@ -220,13 +224,13 @@ done
 # ───────────────────────────────────────────────────────────
 hdr "3. 审计落表"
 
-AUDIT_TOTAL=$(psql_q "select count(*) from batch.console_operation_audit;")
+AUDIT_TOTAL=$(psql_q strict-count-audits.sql)
 if [[ "$AUDIT_TOTAL" -gt 0 ]]; then
-  RECENT=$(psql_q "select action, tenant_id, trace_id, result from batch.console_operation_audit order by id desc limit 3;")
+  RECENT=$(psql_q strict-recent-audits.sql)
   pass "console_operation_audit 表有 $AUDIT_TOTAL 行" "最近 3 行: $(echo "$RECENT" | head -c 120)..."
 
   # 验证 trace_id 非空率
-  TRACED=$(psql_q "select count(*) from batch.console_operation_audit where trace_id is not null and trace_id != '';")
+  TRACED=$(psql_q strict-count-traced-audits.sql)
   PCT=$((TRACED * 100 / AUDIT_TOTAL))
   [[ "$PCT" -ge 80 ]] \
     && pass "trace_id 串得起来" "$TRACED/$AUDIT_TOTAL ($PCT%)" \
@@ -370,7 +374,7 @@ fi
 # ───────────────────────────────────────────────────────────
 hdr "7. 原子任务配置真实数据(ADR-029)"
 
-ATOMIC_JOBS=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC';")
+ATOMIC_JOBS=$(psql_q strict-count-atomic-jobs.sql)
 if [[ -z "$ATOMIC_JOBS" || "$ATOMIC_JOBS" -eq 0 ]]; then
   skip "原子任务配置验证" "未发现 job_type='ATOMIC' 的 job 定义(原子任务未 seed / 未启用)"
 else
@@ -378,15 +382,14 @@ else
   # stored_proc/http 读 default_params.taskType 选执行器)的 ATOMIC job。路由到
   # 【自托管 SDK worker】(worker_group='sdk-self-hosted')的 ATOMIC job 由租户自带
   # handler 按 workerType()='ATOMIC' 分发,不读 default_params.taskType,故豁免。
-  BUILTIN="and lower(coalesce(worker_group,'')) <> 'sdk-self-hosted'"
   # 7.1 内置执行器原子任务的 default_params 必须携带 taskType(执行器子类型协议)
-  MISSING_TT=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC' and (default_params->>'taskType') is null $BUILTIN;")
+  MISSING_TT=$(psql_q strict-count-atomic-missing-task-type.sql)
   [[ "$MISSING_TT" == "0" ]] \
     && pass "原子任务 job default_params 均含 taskType" "$ATOMIC_JOBS 个原子任务 job(内置执行器口径)" \
     || fail "原子任务 job 缺 taskType" "$MISSING_TT 个内置执行器原子任务 job 的 default_params 无 taskType"
 
   # 7.2 taskType 必须在已知执行器白名单内(shell/sql/stored_proc/http)
-  BAD_TT=$(psql_q "select count(*) from batch.job_definition where job_type='ATOMIC' and (default_params->>'taskType') not in ('shell','sql','stored_proc','http') $BUILTIN;")
+  BAD_TT=$(psql_q strict-count-atomic-invalid-task-type.sql)
   [[ "$BAD_TT" == "0" ]] \
     && pass "原子任务 taskType 均在执行器白名单" "shell/sql/stored_proc/http" \
     || fail "原子任务 taskType 越界" "$BAD_TT 个原子任务 job 的 taskType 不在 {shell,sql,stored_proc,http}"

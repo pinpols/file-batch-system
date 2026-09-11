@@ -20,14 +20,18 @@ source "$ROOT/scripts/sim/env-common.sh"
 export STORM_COUNT="${STORM_COUNT:-30}"
 
 batch_require_python
+SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> preflight trigger stage6 job"
-if [[ "$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select count(*) from batch.job_definition where tenant_id='ta' and job_code='TA_PROCESS_STAGE4_EMPTY_SUCCESS' and enabled=true")" != "1" ]]; then
+if [[ "$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -tA -v ON_ERROR_STOP=1 -v tenant_id=ta -v job_code=TA_PROCESS_STAGE4_EMPTY_SUCCESS \
+  -f /dev/stdin < "$SQL_DIR/count-enabled-job-definition.sql")" != "1" ]]; then
   echo "❌ missing TA_PROCESS_STAGE4_EMPTY_SUCCESS fixture; run scripts/sim/10-process-stage4.sh once or apply its fixture" >&2
   exit 1
 fi
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6b.log"
@@ -40,6 +44,7 @@ BATCH = os.environ["BATCH_NO"]
 STORM_COUNT = int(os.environ["STORM_COUNT"])
 START_TS = os.environ["START_TS"].strip()
 JOB = "TA_PROCESS_STAGE4_EMPTY_SUCCESS"
+SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
 def launch(request_id, batch_key):
     body = {
@@ -72,12 +77,21 @@ def launch(request_id, batch_key):
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {request_id}")
 
-def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
+def psql(sql_file, variables=None, tuples=False, capture_output=True):
+    args = [
+        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
+        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
+        "-d", os.environ["PLATFORM_DB"], "-P", "pager=off",
+    ]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
+        return subprocess.run(
+            args, check=True, capture_output=capture_output,
+            text=True, input=sql.read())
 
 dedup_id = f"sim-stage6b-dedup-{int(time.time()*1000)%100000000}"
 print("==> dedup launch same requestId twice", flush=True)
@@ -95,9 +109,8 @@ print("  [launch] all accepted", flush=True)
 deadline = time.time() + 240
 while time.time() < deadline:
     out = psql(
-        "select count(*) from batch.job_instance "
-        f"where tenant_id='ta' and job_code='{JOB}' and created_at >= '{START_TS}' "
-        "and instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
+        "count-terminal-job-instances.sql",
+        {"tenant_id": "ta", "job_code": JOB, "start_ts": START_TS},
         tuples=True,
     )
     done = int((out.stdout or "0").strip() or "0")
@@ -106,32 +119,17 @@ while time.time() < deadline:
     time.sleep(3)
 
 print("\n-- dedup_check --", flush=True)
-dedup_sql = (
-    "select count(*) as trigger_rows, count(distinct related_job_instance_id) as instances "
-    f"from batch.trigger_request where tenant_id='ta' and request_id='{dedup_id}'"
-)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", dedup_sql
-], check=False)
+dedup_variables = {"tenant_id": "ta", "request_id": dedup_id}
+psql("select-trigger-request-dedup-counts.sql", dedup_variables, capture_output=False)
 
 print("\n-- storm_status --", flush=True)
-storm_sql = (
-    "select instance_status,count(*) "
-    "from batch.job_instance "
-    f"where tenant_id='ta' and job_code='{JOB}' and created_at >= '{START_TS}' "
-    "group by instance_status order by instance_status"
-)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c", storm_sql
-], check=False)
+storm_variables = {"tenant_id": "ta", "job_code": JOB, "start_ts": START_TS}
+psql("select-job-instance-status-counts.sql", storm_variables, capture_output=False)
 
-dedup_out = psql(dedup_sql.replace(" as trigger_rows", "").replace(" as instances", ""), tuples=True)
+dedup_out = psql("select-trigger-request-dedup-counts.sql", dedup_variables, tuples=True)
 storm_out = psql(
-    "select count(*) from batch.job_instance "
-    f"where tenant_id='ta' and job_code='{JOB}' and created_at >= '{START_TS}' "
-    "and instance_status='SUCCESS'",
+    "count-successful-job-instances.sql",
+    storm_variables,
     tuples=True,
 )
 dedup_summary = (dedup_out.stdout or "").strip().replace("|", "|")

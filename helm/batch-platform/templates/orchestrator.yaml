@@ -79,6 +79,12 @@ spec:
             # 分片模式：static=env 给 SHARD_TOTAL；dynamic=应用启动时走 Redis 注册
             - name: BATCH_OUTBOX_SHARDING_MODE
               value: {{ default "static" $svc.sharding.mode | quote }}
+            - name: BATCH_OUTBOX_SHARD_MEMBERS_KEY
+              value: {{ default (printf "batch:%s:%s:orchestrator:members" .Release.Namespace .Release.Name) $svc.sharding.membersKey | quote }}
+            - name: BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS
+              value: {{ default 5000 $svc.sharding.heartbeatIntervalMs | quote }}
+            - name: BATCH_OUTBOX_SHARD_MEMBER_TTL_MS
+              value: {{ default 30000 $svc.sharding.memberTtlMs | quote }}
             {{- if not $dynamic }}
             # static 模式专用：Outbox 分片总数 = replicaCount；扩缩容走 helm upgrade
             - name: BATCH_OUTBOX_SHARD_TOTAL

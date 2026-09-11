@@ -48,6 +48,7 @@ ROWS   = int(os.environ.get("ROWS", "5"))
 ONLY   = os.environ.get("ONLY", "").strip()
 CLEAN  = os.environ.get("CLEAN_SIM_OUTPUTS", "true").lower() == "true"
 BUCKET = os.environ.get("MINIO_BUCKET", "batch-dev")
+SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
 # ── IMPORT 规格:job -> (template, [列], 行生成器) ────────────────────────────
 def cust_row(i): return f"CUST-{i:06d},客户{i},PERSONAL,ID{i:09d},138{i:08d},u{i}@sim.com,ACTIVE"
@@ -97,9 +98,23 @@ def minio_cmd(*args):
         "sh", *args,
     ])
 
-def sql_value(sql):
-    out = run_cmd(["docker","exec",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ["PLATFORM_DB"], "-t", "-A", "-c", sql])
+def run_sql_file(sql_file, variables=None, tuples=False):
+    args = [
+        "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X",
+        "-v", "ON_ERROR_STOP=1", "-U", os.environ["POSTGRES_USER"],
+        "-d", os.environ["PLATFORM_DB"],
+    ]
+    if tuples:
+        args += ["-t", "-A"]
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    with open(os.path.join(SQL_DIR, sql_file), encoding="utf-8") as sql:
+        return subprocess.run(
+            args, check=True, capture_output=True, text=True, input=sql.read())
+
+def sql_value(sql_file, variables=None):
+    out = run_sql_file(sql_file, variables, tuples=True)
     return out.stdout.strip()
 
 def cleanup_outputs():
@@ -107,27 +122,11 @@ def cleanup_outputs():
     biz_types = [b for t in tenants for b in EXPORT_BIZ_TYPES.get(t, [])]
     if not biz_types:
         return
-    in_tenants = ",".join("'" + t + "'" for t in tenants)
-    in_biz = ",".join("'" + b + "'" for b in biz_types)
-    sql = f"""
-    with target_files as (
-      select id from batch.file_record
-       where tenant_id in ({in_tenants})
-         and file_category = 'OUTPUT'
-         and source_type = 'GENERATED'
-         and biz_type in ({in_biz})
-         and source_ref = '{BATCH}'
-    )
-    delete from batch.file_dispatch_record where file_id in (select id from target_files);
-    delete from batch.file_record
-     where tenant_id in ({in_tenants})
-       and file_category = 'OUTPUT'
-       and source_type = 'GENERATED'
-       and biz_type in ({in_biz})
-       and source_ref = '{BATCH}';
-    """
-    run_cmd(["docker","exec","-i",os.environ.get("PG_CONTAINER", "batch-postgres-primary"),"psql","-U",os.environ.get("POSTGRES_USER", "batch_user"),
-        "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1"], sql)
+    run_sql_file("cleanup-sim-output-files.sql", {
+        "tenant_ids": ",".join(tenants),
+        "biz_types": ",".join(biz_types),
+        "batch_no": BATCH,
+    })
     for biz in biz_types:
         result = minio_cmd("rm", "--recursive", "--force",
             f"local/{BUCKET}/outbound/{biz}/{BIZ}/{BATCH}")
@@ -181,12 +180,10 @@ for t in TENANTS:
 
 # DISPATCH 依赖已存在文件:等 EXPORT 写入数据库后,取该租户最近一个 file_record id 当 fileId
 def latest_file_id(tenant):
-    sql = (f"select id from batch.file_record where tenant_id='{tenant}' "
-           f"and file_category='OUTPUT' and source_type='GENERATED' "
-           f"and source_ref='{BATCH}' "
-           f"and file_status in ('GENERATED','DISPATCHED') "
-           f"order by created_at desc limit 1")
-    v = sql_value(sql)
+    v = sql_value("select-latest-sim-output-file.sql", {
+        "tenant_id": tenant,
+        "batch_no": BATCH,
+    })
     return v if v.isdigit() else None
 
 def wait_latest_file_id(tenant, timeout=int(os.environ.get("SIM_EXPORT_WAIT_SECONDS", "180"))):
@@ -201,10 +198,11 @@ def wait_latest_file_id(tenant, timeout=int(os.environ.get("SIM_EXPORT_WAIT_SECO
 def wait_dispatch_done(tenant, file_id, channel, timeout=90):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        status = sql_value(
-            "select coalesce(dispatch_status,'') from batch.file_dispatch_record "
-            f"where tenant_id='{tenant}' and file_id={file_id} and channel_code='{channel}' "
-            "order by created_at desc limit 1")
+        status = sql_value("select-file-dispatch-status.sql", {
+            "tenant_id": tenant,
+            "file_id": file_id,
+            "channel_code": channel,
+        })
         if status in ("ACKED", "SENT", "COMPENSATED", "FAILED"):
             return status
         time.sleep(2)

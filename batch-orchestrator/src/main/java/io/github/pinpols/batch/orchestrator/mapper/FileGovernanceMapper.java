@@ -53,7 +53,7 @@ public interface FileGovernanceMapper {
 
   int insertFileAuditLog(Map<String, Object> params);
 
-  int markStaleRunningPipelineInstancesFailed(Map<String, Object> params);
+  List<Long> markStaleRunningPipelineInstancesFailed(Map<String, Object> params);
 
   int markRunningPipelineStepsFailedForInstances(Map<String, Object> params);
 }

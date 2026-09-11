@@ -20,6 +20,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+SIM_SQL_DIR="$ROOT/scripts/sim/sql"
+export SIM_SQL_DIR
 
 SIM_STAGE_NAME="bundle-import"
 # shellcheck source=env-common.sh
@@ -51,6 +53,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from pathlib import Path
 
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ.get("BATCH_NO", "")
@@ -64,6 +67,7 @@ TEMPLATE = "TA_IMPORT_CUSTOMER_TPL"
 GROUP = f"bundle-import-{RUN}"
 TRIGGER_BASE = os.environ["TRIGGER_BASE"]
 INTERNAL_SECRET = os.environ["INTERNAL_SECRET"]
+SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
 CSV_HEADER = "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status\n"
 
@@ -72,13 +76,16 @@ def sh(args, **kw):
     return subprocess.run(args, capture_output=True, text=True, **kw)
 
 
-def psql(db, sql, tuples=True):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql",
-            "-U", os.environ["POSTGRES_USER"], "-d", db, "-P", "pager=off"]
+def psql_file(db, sql_file, variables=None, tuples=True):
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql",
+            "-X", "-U", os.environ["POSTGRES_USER"], "-d", db,
+            "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A", "-F", "\x1f"]
-    args += ["-c", sql]
-    return sh(args)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    return sh(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True)
 
 
 def launch(job_code, params):
@@ -112,9 +119,8 @@ def launch(job_code, params):
 def wait_instance(job_code, after_id=0, timeout=180):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        r = psql(os.environ["PG_PLATFORM_DB"],
-                 "select id from batch.job_instance where tenant_id='ta' and job_code='%s'"
-                 " and id > %d order by id desc limit 1" % (job_code, after_id))
+        r = psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-instance-after.sql",
+                      {"tenant_id": "ta", "job_code": job_code, "after_id": after_id})
         val = r.stdout.strip()
         if val:
             return int(val)
@@ -123,21 +129,16 @@ def wait_instance(job_code, after_id=0, timeout=180):
 
 
 def read_partitions(instance_id):
-    r = psql(os.environ["PG_PLATFORM_DB"],
-             "select partition_no, coalesce(source_file_id::text,''),"
-             " coalesce(template_code,''), coalesce(target_ref,'')"
-             " from batch.job_partition where tenant_id='ta' and job_instance_id=%d"
-             " order by partition_no" % instance_id)
+    r = psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-partitions.sql",
+                  {"tenant_id": "ta", "instance_id": instance_id})
     return [ln.split("\x1f") for ln in r.stdout.strip().splitlines() if ln]
 
 
 def wait_partitions_terminal(instance_id, timeout=180):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        r = psql(os.environ["PG_PLATFORM_DB"],
-                 "select count(*) filter (where partition_status in ('SUCCESS','SUCCEEDED')),"
-                 " count(*) filter (where partition_status like '%FAIL%'), count(*)"
-                 " from batch.job_partition where tenant_id='ta' and job_instance_id=%d" % instance_id)
+        r = psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-partition-terminal-summary.sql",
+                      {"tenant_id": "ta", "instance_id": instance_id})
         ok, failed, total = (r.stdout.strip().split("\x1f") + ["0", "0", "0"])[:3]
         if int(total) > 0 and int(ok) + int(failed) >= int(total):
             return int(ok), int(failed), int(total)
@@ -147,37 +148,14 @@ def wait_partitions_terminal(instance_id, timeout=180):
 
 def insert_generated_file(file_code):
     path = f"/tmp/{file_code}-{RUN}.json"
-    r = psql(os.environ["PG_PLATFORM_DB"],
-             """
-             insert into batch.file_record (
-               tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
-               file_ext, file_format_type, charset, mime_type, file_size_bytes, checksum_type,
-               storage_type, storage_path, source_type, file_status, biz_date, trace_id
-             ) values (
-               'ta', '%s', 'OUTPUT', 'OUTPUT', '%s.json', '%s.json',
-               'json', 'JSON', 'UTF-8', 'application/json', 32, 'NONE',
-               'LOCAL', '%s', 'SYSTEM', 'GENERATED', date '%s', 'sim-bundle-dispatch'
-             ) returning id
-             """ % (file_code, file_code, file_code, path, BIZ))
+    r = psql_file(os.environ["PG_PLATFORM_DB"], "insert-bundle-generated-file.sql",
+                  {"tenant_id": "ta", "file_code": file_code, "storage_path": path, "biz_date": BIZ})
     return int(r.stdout.strip())
 
 
 def seed_export_rows():
-    psql(os.environ["PG_BUSINESS_DB"],
-         """
-         insert into biz.customer_account (
-           tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no,
-           email, status, source_file_name, source_batch_no, source_trace_id, created_by, updated_by
-         ) values
-           ('ta', 'EXP-BUNDLE-%s-1', 'Bundle Export 1', 'ENTERPRISE', 'BNDLEXP1',
-            '13910000001', 'bundle-exp1@example.com', 'ACTIVE', 'bundle', '%s', 'sim', 'sim', 'sim'),
-           ('ta', 'EXP-BUNDLE-%s-2', 'Bundle Export 2', 'ENTERPRISE', 'BNDLEXP2',
-            '13910000002', 'bundle-exp2@example.com', 'ACTIVE', 'bundle', '%s', 'sim', 'sim', 'sim')
-         on conflict (tenant_id, customer_no) do update
-         set customer_name = excluded.customer_name,
-             status = excluded.status,
-             updated_by = excluded.updated_by
-         """ % (RUN, BATCH or RUN, RUN, BATCH or RUN))
+    psql_file(os.environ["PG_BUSINESS_DB"], "upsert-bundle-export-customers.sql",
+              {"tenant_id": "ta", "run_id": RUN, "batch_no": BATCH or RUN})
 
 
 def csv_rows(prefix, n):
@@ -222,6 +200,8 @@ manifest = {
     ],
 }
 
+before_import = int(psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-max-instance-id.sql",
+                              {"tenant_id": "ta"}).stdout.strip())
 mc_init()
 prefix = f"ingress/ta"
 upload(f"{prefix}/{f1}", data1)
@@ -230,17 +210,7 @@ upload(f"{prefix}/{GROUP}.batch.json", json.dumps(manifest, ensure_ascii=False))
 
 # 2) 轮询:扫描器登记 → 到达组满足完整性条件 → BUNDLE_IMPORT launch → 分区展开
 print(f"==> 等待 scanner→到达组→BUNDLE_IMPORT launch(group={GROUP})")
-instance_id = None
-deadline = time.time() + 180
-while time.time() < deadline:
-    r = psql(os.environ["PG_PLATFORM_DB"],
-             "select id from batch.job_instance where tenant_id='ta' and job_code='%s'"
-             " order by id desc limit 1" % JOB_CODE)
-    val = r.stdout.strip()
-    if val:
-        instance_id = int(val)
-        break
-    time.sleep(5)
+instance_id = wait_instance(JOB_CODE, before_import)
 
 if instance_id is None:
     print("❌ FAIL:超时未见 TA_BUNDLE_IMPORT job_instance(检查 scanner batch-manifest/arrival 配置是否开启)")
@@ -248,32 +218,17 @@ if instance_id is None:
 print(f"  ✓ bundle launched, job_instance id={instance_id}")
 
 # 3) 断言分区数 + 绑定
-r = psql(os.environ["PG_PLATFORM_DB"],
-         "select partition_no, source_file_id, template_code from batch.job_partition"
-         " where tenant_id='ta' and job_instance_id=%d order by partition_no" % instance_id)
-parts = [ln for ln in r.stdout.strip().splitlines() if ln]
+parts = read_partitions(instance_id)
 print(f"  partitions: {parts}")
 assert len(parts) == 2, f"期望 2 个 partition,实得 {len(parts)}"
-for ln in parts:
-    cols = ln.split("\x1f")
-    assert cols[1], f"partition 缺 source_file_id: {ln}"
-    assert cols[2] == TEMPLATE, f"partition template_code 不符: {ln}"
+for cols in parts:
+    assert cols[1], f"partition 缺 source_file_id: {cols}"
+    assert cols[2] == TEMPLATE, f"partition template_code 不符: {cols}"
 print("  ✓ 2 个绑定异构 partition(各带 source_file_id + template_code)")
 
 # 4) 终态 + 业务行(worker 真跑时)
 print("==> 等待 partition 达终态")
-final = None
-deadline = time.time() + 180
-while time.time() < deadline:
-    r = psql(os.environ["PG_PLATFORM_DB"],
-             "select count(*) filter (where partition_status in ('SUCCESS','SUCCEEDED')),"
-             " count(*) filter (where partition_status like '%FAIL%'), count(*)"
-             " from batch.job_partition where tenant_id='ta' and job_instance_id=%d" % instance_id)
-    ok, failed, total = (r.stdout.strip().split("\x1f") + ["0", "0", "0"])[:3]
-    if int(ok) + int(failed) >= int(total) and int(total) > 0:
-        final = (int(ok), int(failed), int(total))
-        break
-    time.sleep(5)
+final = wait_partitions_terminal(instance_id)
 
 if final is None:
     print("⚠️ partition 未在限时内达终态(worker 可能未执行——本机 JDK25 worker hang 即此现象)。"
@@ -281,8 +236,8 @@ if final is None:
 else:
     ok, failed, total = final
     print(f"  partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
-    rows = psql(os.environ["PG_BUSINESS_DB"],
-                "select count(*) from biz.customer_account where customer_no like 'BNDL%'").stdout.strip()
+    rows = psql_file(os.environ["PG_BUSINESS_DB"], "count-bundle-import-customers.sql",
+                     {"tenant_id": "ta"}).stdout.strip()
     print(f"  biz.customer_account BNDL* 行数:{rows}")
     assert failed == 0, f"有 {failed} 个分区失败"
     assert ok == total, "并非全部分区成功"
@@ -291,8 +246,8 @@ else:
 # 5) BUNDLE_EXPORT:通过 trigger API 直接发束 launch,验证真实 launch 展开 export 绑定。
 print("==> 验证 BUNDLE_EXPORT launch→partition 绑定")
 seed_export_rows()
-before = int(psql(os.environ["PG_PLATFORM_DB"],
-                  "select coalesce(max(id),0) from batch.job_instance where tenant_id='ta'").stdout.strip())
+before = int(psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-max-instance-id.sql",
+                       {"tenant_id": "ta"}).stdout.strip())
 launch("TA_BUNDLE_EXPORT", {
     "batchNo": BATCH or RUN,
     "bizDate": BIZ,
@@ -320,8 +275,8 @@ if export_final is not None:
 print("==> 验证 BUNDLE_DISPATCH launch→partition 绑定")
 file1 = insert_generated_file(f"bundle-dispatch-a-{RUN}")
 file2 = insert_generated_file(f"bundle-dispatch-b-{RUN}")
-before = int(psql(os.environ["PG_PLATFORM_DB"],
-                  "select coalesce(max(id),0) from batch.job_instance where tenant_id='ta'").stdout.strip())
+before = int(psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-max-instance-id.sql",
+                       {"tenant_id": "ta"}).stdout.strip())
 launch("TA_BUNDLE_DISPATCH", {
     "receiptCode": f"R-BUNDLE-{RUN}",
     "ackRequired": False,

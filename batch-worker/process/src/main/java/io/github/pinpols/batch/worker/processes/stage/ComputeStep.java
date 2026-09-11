@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -24,6 +25,12 @@ public class ComputeStep implements ProcessStageStep {
 
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
+    if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
+        .isDryRun()) {
+      context.getAttributes().put("processedCount", 0);
+      context.getAttributes().put("dryRunSkipped", "PROCESS_STAGING_WRITE");
+      return ProcessStageResult.success(stage());
+    }
     ProcessComputePlugin plugin = context.getResolvedPlugin();
     if (EmptyChecks.isNull(plugin)) {
       // 没有 plugin 配置时仍允许走通(便于开箱跑通骨架),但写一个 0 行的 processedCount 占位。

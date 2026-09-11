@@ -13,6 +13,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+SIM_SQL_DIR="$ROOT/scripts/sim/sql"
+export SIM_SQL_DIR
 
 SIM_STAGE_NAME="export-stage3c"
 # shellcheck source=env-common.sh
@@ -30,24 +32,29 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" \
   -f /dev/stdin < docs/test-data/sim-stage3c-export-source.sql >/dev/null
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3c.log"
 import json, os, subprocess, sys, time, urllib.request
+from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
+SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
-def psql(sql, tuples=False):
-    args = ["docker", "exec", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-P", "pager=off"]
+def psql_file(sql_file, variables=None, tuples=False):
+    args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-X", "-U", os.environ["POSTGRES_USER"], "-d", os.environ["PLATFORM_DB"], "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    return subprocess.run(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True, capture_output=True, text=True)
 
 def launch(tenant, job, rid, params):
     body = {
@@ -105,85 +112,29 @@ launch("tc", "TC_EXPORT_RISK_ALERT", rid_tc, {
 
 deadline = time.time() + 240
 while time.time() < deadline:
-    out = psql(
-        "select count(*) from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
-        f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') "
-        "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
-        tuples=True,
-    )
+    request_vars = {"request_ids": f"{rid_ta},{rid_tb},{rid_tc}"}
+    out = psql_file("count-export-stage3c-terminal.sql", request_vars, tuples=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= 3:
         break
     time.sleep(3)
 
 print("\n-- job_status --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select tr.tenant_id,tr.request_id,i.id,i.job_code,i.instance_status,i.expected_partition_count "
-    "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
-    f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') order by tr.tenant_id,i.id"
-], check=False)
+print(psql_file("select-export-stage3c-job-status.sql", request_vars).stdout, end="")
 
 print("\n-- ta_partition_status --", flush=True)
-ta_instance = (psql(
-    "select i.id from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
-    f"where tr.tenant_id='ta' and tr.request_id='{rid_ta}' order by tr.created_at desc limit 1",
-    tuples=True,
-).stdout or "").strip()
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select p.partition_no,p.partition_status,t.task_status,t.error_code "
-    "from batch.job_partition p left join batch.job_task t on t.job_partition_id=p.id "
-    f"where p.job_instance_id={ta_instance} order by p.partition_no"
-], check=False)
+ta_instance = (psql_file("select-export-stage3c-instance.sql", {"tenant_id": "ta", "request_id": rid_ta}, tuples=True).stdout or "").strip()
+ta_vars = {"tenant_id": "ta", "instance_id": ta_instance, "source_ref": BATCH + "-ta8"}
+print(psql_file("select-export-stage3c-partition-status.sql", ta_vars).stdout, end="")
 
 print("\n-- file_records --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select tenant_id,source_ref,file_format_type,file_status,count(*) as files,"
-    "coalesce(sum((metadata_json->>'recordCount')::int),0) as rows "
-    "from batch.file_record "
-    f"where source_ref in ('{BATCH}-ta8','{BATCH}-tb','{BATCH}-tc') and source_type='GENERATED' "
-    "group by tenant_id,source_ref,file_format_type,file_status order by tenant_id,source_ref,file_format_type"
-], check=False)
+source_vars = {"source_refs": f"{BATCH}-ta8,{BATCH}-tb,{BATCH}-tc"}
+print(psql_file("select-export-stage3c-file-records.sql", source_vars).stdout, end="")
 
-dedup = (psql(
-    "select count(*) || '|' || count(distinct related_job_instance_id) "
-    f"from batch.trigger_request where tenant_id='ta' and request_id='{rid_ta}'",
-    tuples=True,
-).stdout or "").strip()
-ta_check = (psql(
-    "with tasks as ("
-    "select count(*) filter (where t.task_status='SUCCESS') as success_tasks "
-    "from batch.job_task t join batch.job_partition p on p.id=t.job_partition_id "
-    f"where p.job_instance_id={ta_instance}"
-    "), files as ("
-    "select count(*) as file_count, "
-    "count(*) filter (where file_name ~ '_p[1-8]of8\\.json$') as tagged_files, "
-    "coalesce(sum((metadata_json->>'recordCount')::int),0) as exported_rows "
-    "from batch.file_record "
-    f"where tenant_id='ta' and source_ref='{BATCH}-ta8' and source_type='GENERATED'"
-    ") select success_tasks || '|' || file_count || '|' || tagged_files || '|' || exported_rows from tasks cross join files",
-    tuples=True,
-).stdout or "").strip()
-tenant_check = (psql(
-    "select count(*) from ("
-    "select tenant_id,source_ref from batch.file_record "
-    f"where source_ref in ('{BATCH}-ta8','{BATCH}-tb','{BATCH}-tc') "
-    "and source_type='GENERATED' and file_status='GENERATED' "
-    "group by tenant_id,source_ref"
-    ") s",
-    tuples=True,
-).stdout or "").strip()
-status_check = (psql(
-    "select count(*) from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
-    f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') and i.instance_status='SUCCESS'",
-    tuples=True,
-).stdout or "").strip()
+dedup = (psql_file("select-export-stage3c-dedup-check.sql", {"tenant_id": "ta", "request_id": rid_ta}, tuples=True).stdout or "").strip()
+ta_check = (psql_file("select-export-stage3c-shard-check.sql", ta_vars, tuples=True).stdout or "").strip()
+tenant_check = (psql_file("count-export-stage3c-tenant-files.sql", source_vars, tuples=True).stdout or "").strip()
+status_check = (psql_file("count-export-stage3c-success.sql", request_vars, tuples=True).stdout or "").strip()
 summary = f"{dedup}|{ta_check}|{tenant_check}|{status_check}"
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "1|1|8|8|8|80|3|3":

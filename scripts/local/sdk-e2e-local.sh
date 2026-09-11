@@ -20,6 +20,7 @@ set -uo pipefail
 LANG_ID="${1:?usage: sdk-e2e-local.sh <go|python|typescript>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/sdk-e2e-common.sh
+# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/lib/sdk-e2e-common.sh"
 
 WC="sdk-e2e-${LANG_ID}-$$"
@@ -49,7 +50,13 @@ WORKER_PID="$(sdk_e2e_start_worker "$LANG_ID" "$WC" "$RAW" "$WORKER_LOG")" || ex
 
 sdk_e2e_say "4a. register (real API-key auth → worker_registry)"
 STAGE_REGISTER=0
-sdk_e2e_assert_register "$WC" "$WORKER_PID" "$WORKER_LOG" && { STAGE_REGISTER=1; sdk_e2e_pass "registered"; } || { sdk_e2e_fail "did not register"; exit 1; }
+if sdk_e2e_assert_register "$WC" "$WORKER_PID" "$WORKER_LOG"; then
+  STAGE_REGISTER=1
+  sdk_e2e_pass "registered"
+else
+  sdk_e2e_fail "did not register"
+  exit 1
+fi
 
 sdk_e2e_say "4b. launch + dispatch + claim + execute + report + terminal"
 sdk_e2e_run_chain "$RAW" "$WORKER_LOG"

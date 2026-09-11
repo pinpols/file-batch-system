@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
+import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 
@@ -15,6 +16,7 @@ public final class SchedulePlanSupport {
     request.setQueueCode(plan.getQueueCode());
     request.setWorkerGroup(plan.getWorkerGroup());
     request.setWorkerType(plan.getDefaultWorkerType());
+    request.setRequiredCapability(plan.isDryRun() ? WorkerCapabilities.DRY_RUN_SAFE : null);
     request.setWindowCode(plan.getWindowCode());
     request.setPriority(plan.getPriority());
     request.setRequestedPartitionCount(

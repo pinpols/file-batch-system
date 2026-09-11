@@ -11,7 +11,7 @@
 --   - worker_group='sdk-self-hosted' —— 与 SDK register 的 workerGroup 一致。平台自带
 --     atomic-node-1 在组 ATOMIC,isWorkerClaimable 组门禁(partition.worker_group 非空时只有
 --     同组 worker 能 CLAIM)→ 平台 worker 抢不到,只我方 SDK worker claim。确定性投递。
---   - 复用 default-tenant 既有 atomic 基础设施(atomic_queue / default-calendar / always_open),
+--   - 复用 default-tenant 既有 atomic 基础设施(atomic_queue / default_calendar / always_open),
 --     fixture 只加这一行 job_definition,零额外依赖。
 --   - 幂等:ON CONFLICT (id) DO NOTHING,可重复跑。
 --
@@ -24,7 +24,7 @@ INSERT INTO batch.job_definition (
     created_by, updated_by, created_at, updated_at
 ) VALUES
     (90061, 'default-tenant', 'SDK_VERIFY_DISPATCH_ECHO', 'SDK Verify Dispatch Echo', 'ATOMIC', 'GENERAL',
-     'MANUAL', NULL, 'Asia/Shanghai', 5, 'atomic_queue', 'sdk-self-hosted', 'default-calendar', 'always_open',
+     'MANUAL', NULL, 'Asia/Shanghai', 5, 'atomic_queue', 'sdk-self-hosted', 'default_calendar', 'always_open',
      'MANUAL', FALSE, 'STATIC', 'EXPONENTIAL', 0, 300, NULL, jsonb_build_object('type', 'object'),
      jsonb_build_object('note', 'sim06 dispatch-execute leg', 'value', 'hello-from-sim06'),
      1, TRUE, 'sim06 自托管 SDK worker dispatch-execute 验证(ATOMIC 路由 → worker_group=sdk-self-hosted)',

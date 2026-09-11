@@ -24,6 +24,7 @@ set -uo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 for envf in "$REPO_ROOT/.env.local" "$REPO_ROOT/.env.example"; do
+  # shellcheck disable=SC1090 # 按优先级加载仓库环境文件，路径在运行时确定。
   [[ -f "$envf" ]] && { set -a; . "$envf"; set +a; break; }
 done
 
@@ -33,6 +34,7 @@ PG_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
 PLATFORM_DB=${POSTGRES_DB:-batch_platform}
 BUSINESS_DB=${BUSINESS_DB_NAME:-batch_business}
 RLS_SQL="$REPO_ROOT/scripts/db/business/rls-phase-a.sql"
+DR_SQL_DIR="$REPO_ROOT/scripts/db/backup/sql"
 
 MODE=safe          # safe | in-place
 KEEP=0
@@ -61,12 +63,23 @@ INDB_DIR="/tmp/dr-drill-$TS"
 fails=0
 checks=()
 
-# psql -tA(无表头/无对齐),进容器跑;$1=库 $2=SQL
-q() { docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
-        psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
-# 任意 psql(建库/删库等),连默认库
-adm() { docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
-        psql -U "$PG_USER" -d postgres -tAc "$1"; }
+# psql -tA(无表头/无对齐),进容器执行版本化 SQL 文件。
+q_file() {
+  local database="$1" sql_file="$2"
+  shift 2
+  docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
+    psql -U "$PG_USER" -d "$database" -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin \
+    < "$DR_SQL_DIR/$sql_file" 2>/dev/null
+}
+
+# 建库/删库等管理语句固定连接 postgres 库。
+adm_file() {
+  local sql_file="$1"
+  shift
+  docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
+    psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin \
+    < "$DR_SQL_DIR/$sql_file"
+}
 
 check() { # $1=名称 $2=期望 $3=实际
   if [[ "$2" == "$3" ]]; then
@@ -82,17 +95,17 @@ echo "${BOLD}== 本地灾备演练 ($MODE 模式) ==${RESET}"
 if ! docker exec "$PG_CONTAINER" pg_isready -U "$PG_USER" >/dev/null 2>&1; then
   echo "${RED}前置失败:$PG_CONTAINER 不可用(docker compose up?)${RESET}"; exit 1
 fi
-HAS_BUSINESS=$([[ -n "$(adm "SELECT 1 FROM pg_database WHERE datname='$BUSINESS_DB'")" ]] && echo 1 || echo 0)
+HAS_BUSINESS=$([[ -n "$(adm_file database-exists.sql -v database_name="$BUSINESS_DB")" ]] && echo 1 || echo 0)
 
 # ---- 1. 事故前快照(§2.3 比对基线)----
 echo "${BLUE}[1/5] 采集事故前快照...${RESET}"
-SNAP_JOB=$(q "$PLATFORM_DB" "SELECT count(*) FROM batch.job_instance")
-SNAP_OUTBOX=$(q "$PLATFORM_DB" "SELECT count(*) FROM batch.outbox_event")
-SNAP_FLYWAY=$(q "$PLATFORM_DB" "SELECT max(version) FROM batch.flyway_schema_history WHERE success")
+SNAP_JOB=$(q_file "$PLATFORM_DB" count-job-instances.sql)
+SNAP_OUTBOX=$(q_file "$PLATFORM_DB" count-outbox-events.sql)
+SNAP_FLYWAY=$(q_file "$PLATFORM_DB" select-flyway-version.sql)
 SNAP_BIZ=0; SNAP_POLICIES=0
 if [[ "$HAS_BUSINESS" == "1" ]]; then
-  SNAP_BIZ=$(q "$BUSINESS_DB" "SELECT count(*) FROM biz.customer_account")
-  SNAP_POLICIES=$(q "$BUSINESS_DB" "SELECT count(*) FROM pg_policies WHERE schemaname='biz'")
+  SNAP_BIZ=$(q_file "$BUSINESS_DB" count-customer-accounts.sql)
+  SNAP_POLICIES=$(q_file "$BUSINESS_DB" count-biz-policies.sql)
 fi
 echo "  job_instance=$SNAP_JOB outbox_event=$SNAP_OUTBOX flyway=$SNAP_FLYWAY biz.customer_account=$SNAP_BIZ policies=$SNAP_POLICIES"
 
@@ -121,14 +134,19 @@ if [[ "$MODE" == "in-place" ]]; then
   fi
   echo "${YELLOW}[3/5] 模拟灾难:DROP + 重建现有库(真实 RTO 演练)...${RESET}"
   TGT_PLATFORM="$PLATFORM_DB"; TGT_BUSINESS="$BUSINESS_DB"
-  adm "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('$PLATFORM_DB','$BUSINESS_DB') AND pid<>pg_backend_pid()" >/dev/null
-  adm "DROP DATABASE IF EXISTS $PLATFORM_DB" >/dev/null; adm "CREATE DATABASE $PLATFORM_DB" >/dev/null
-  if [[ "$HAS_BUSINESS" == "1" ]]; then adm "DROP DATABASE IF EXISTS $BUSINESS_DB" >/dev/null; adm "CREATE DATABASE $BUSINESS_DB" >/dev/null; fi
+  adm_file terminate-database-connections.sql \
+    -v platform_database="$PLATFORM_DB" -v business_database="$BUSINESS_DB" >/dev/null
+  adm_file recreate-database.sql -v database_name="$PLATFORM_DB" >/dev/null
+  if [[ "$HAS_BUSINESS" == "1" ]]; then
+    adm_file recreate-database.sql -v database_name="$BUSINESS_DB" >/dev/null
+  fi
 else
   echo "${BLUE}[3/5] 恢复到旁路库 *_dr(不动现有数据)...${RESET}"
   TGT_PLATFORM="${PLATFORM_DB}_dr"; TGT_BUSINESS="${BUSINESS_DB}_dr"
-  adm "DROP DATABASE IF EXISTS $TGT_PLATFORM" >/dev/null; adm "CREATE DATABASE $TGT_PLATFORM" >/dev/null
-  if [[ "$HAS_BUSINESS" == "1" ]]; then adm "DROP DATABASE IF EXISTS $TGT_BUSINESS" >/dev/null; adm "CREATE DATABASE $TGT_BUSINESS" >/dev/null; fi
+  adm_file recreate-database.sql -v database_name="$TGT_PLATFORM" >/dev/null
+  if [[ "$HAS_BUSINESS" == "1" ]]; then
+    adm_file recreate-database.sql -v database_name="$TGT_BUSINESS" >/dev/null
+  fi
 fi
 
 # ---- 4. 恢复(§2.1)+ 量 RTO ----
@@ -165,22 +183,23 @@ RTO=$(( $(date +%s) - T0 ))
 
 # ---- 5. 校验(§2.3 清单)----
 echo "${BLUE}[5/5] 校验恢复结果(§2.3)...${RESET}"
-check "job_instance 行数" "$SNAP_JOB"     "$(q "$TGT_PLATFORM" "SELECT count(*) FROM batch.job_instance")"
-check "outbox_event 行数" "$SNAP_OUTBOX"  "$(q "$TGT_PLATFORM" "SELECT count(*) FROM batch.outbox_event")"
-check "Flyway 最高版本"   "$SNAP_FLYWAY"  "$(q "$TGT_PLATFORM" "SELECT max(version) FROM batch.flyway_schema_history WHERE success")"
+check "job_instance 行数" "$SNAP_JOB" "$(q_file "$TGT_PLATFORM" count-job-instances.sql)"
+check "outbox_event 行数" "$SNAP_OUTBOX" "$(q_file "$TGT_PLATFORM" count-outbox-events.sql)"
+check "Flyway 最高版本" "$SNAP_FLYWAY" "$(q_file "$TGT_PLATFORM" select-flyway-version.sql)"
 if [[ "$HAS_BUSINESS" == "1" ]]; then
-  check "biz.customer_account 行数" "$SNAP_BIZ" "$(q "$TGT_BUSINESS" "SELECT count(*) FROM biz.customer_account")"
+  check "biz.customer_account 行数" "$SNAP_BIZ" "$(q_file "$TGT_BUSINESS" count-customer-accounts.sql)"
   # RLS policy 校验对齐"事故前快照"(恢复后==恢复前),而非硬编码阈值;
   # 另做一个 >0 的下限回退(防恢复后 RLS 整个丢失也算"匹配 0")。
-  check "biz RLS policy 数(对齐基线)" "$SNAP_POLICIES" "$(q "$TGT_BUSINESS" "SELECT count(*) FROM pg_policies WHERE schemaname='biz'")"
+  check "biz RLS policy 数(对齐基线)" "$SNAP_POLICIES" "$(q_file "$TGT_BUSINESS" count-biz-policies.sql)"
   if [[ "${SNAP_POLICIES:-0}" -le 0 ]]; then
     checks+=("  ${YELLOW}⚠${RESET} 基线 biz policy=0 —— 源库 RLS 未启用?恢复无从比对"); fi
 fi
 
 # ---- 清理 ----
 if [[ "$MODE" == "safe" && "$KEEP" != "1" ]]; then
-  adm "DROP DATABASE IF EXISTS $TGT_PLATFORM" >/dev/null
-  [[ "$HAS_BUSINESS" == "1" ]] && adm "DROP DATABASE IF EXISTS $TGT_BUSINESS" >/dev/null
+  adm_file drop-database.sql -v database_name="$TGT_PLATFORM" >/dev/null
+  [[ "$HAS_BUSINESS" == "1" ]] \
+    && adm_file drop-database.sql -v database_name="$TGT_BUSINESS" >/dev/null
 fi
 docker exec "$PG_CONTAINER" rm -rf "$INDB_DIR" 2>/dev/null || true
 

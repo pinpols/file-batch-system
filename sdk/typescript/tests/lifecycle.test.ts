@@ -20,7 +20,12 @@ const baseConfig = {
 
 test("lifecycle: start registers, starts schedulers, then runs claim→execute→report", async () => {
   const platform = new FakePlatform({ claim: { effectiveConfig: { k: "v" }, traceId: "trace-1" } });
-  platform.feedMessages({ taskId: "task-1", tenantId: "tenant-A", schemaVersion: "v1" });
+  platform.feedMessages({
+    taskId: "task-1",
+    tenantId: "tenant-A",
+    schemaVersion: "v1",
+    runtimeAttributes: { dryRun: true },
+  });
 
   let seenCtx: TaskContext | undefined;
   const handler: TaskHandler = {
@@ -56,8 +61,33 @@ test("lifecycle: start registers, starts schedulers, then runs claim→execute�
   assert.equal(body.resultSummary, "ok");
   assert.equal(seenCtx?.effectiveConfig.k, "v");
   assert.equal(seenCtx?.traceId, "trace-1");
+  assert.equal(seenCtx?.isDryRun, true);
 
   await lc.stop(200);
+});
+
+test("lifecycle: dry-run-safe capability requires explicit opt-in", async () => {
+  const platform = new FakePlatform({ claim: { effectiveConfig: {} } });
+  const lifecycle = new WorkerLifecycle({
+    config: {
+      ...baseConfig,
+      workerTypes: ["PROCESS"],
+      dryRunSafe: true,
+    },
+    transport: platform.transport,
+    consumer: platform.consumer,
+    handler: { execute: async () => taskSuccess() },
+    logger: silentLogger,
+    installSignalHandlers: false,
+  });
+
+  await lifecycle.start();
+  const register = platform.transport.calls.find((call) => call.op === "register");
+  assert.deepEqual((register?.args[0] as Record<string, unknown>).capabilityTags, [
+    "PROCESS",
+    "dry-run-safe",
+  ]);
+  await lifecycle.stop(200);
 });
 
 test("lifecycle: claim + report mint fresh ts-<uuid> keys (never fixed claim-/report-{id})", async () => {

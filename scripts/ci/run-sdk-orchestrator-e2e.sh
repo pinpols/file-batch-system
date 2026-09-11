@@ -29,9 +29,11 @@ set -euo pipefail
 LANG_ID="${1:?usage: run-sdk-orchestrator-e2e.sh <go|python|java|typescript|rust>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+SQL_DIR="$ROOT/scripts/ci/sql"
 
 export BATCH_ENV_COMMON_HELPERS_ONLY=1
 # shellcheck source=../lib/env-common.sh
+# shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/lib/env-common.sh"
 
 # ── 连接参数(宿主映射端口,与 .env.local 对齐)────────────────────────────
@@ -52,12 +54,16 @@ KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-loca
 WORKER_CODE="ci-e2e-${LANG_ID}-$$"
 WORKER_LOG="/tmp/sdk-e2e-worker-${LANG_ID}.log"
 
-psqlp() {
+psqlp_file() {
+  local sql_file="$1"
+  shift
   if command -v psql >/dev/null 2>&1; then
-    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -tA "$@"
+    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+      -v ON_ERROR_STOP=1 -tA "$@" -f "$SQL_DIR/$sql_file"
   else
-    docker exec -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER" \
-      psql -h localhost -p 5432 -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -tA "$@"
+    docker exec -i -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER" \
+      psql -h localhost -p 5432 -U "$PGUSER" -d "$PGDATABASE" \
+      -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file"
   fi
 }
 
@@ -66,9 +72,9 @@ dump_diagnostics() {
   echo "::group::diagnostics (worker log: ${WORKER_LOG})"
   echo "----- sample worker log (tail) -----"; tail -n 80 "$WORKER_LOG" 2>/dev/null || echo "(no worker log)"
   echo "----- worker_registry rows for tenant=${TENANT} -----"
-  psqlp -c "SELECT worker_code, worker_group, capability_tags, COALESCE(worker_status::text,'?') FROM batch.worker_registry WHERE tenant_id='${TENANT}' ORDER BY id DESC LIMIT 10;" 2>/dev/null || true
+  psqlp_file select-sdk-worker-diagnostics.sql -v tenant_id="$TENANT" 2>/dev/null || true
   echo "----- recent job_instance for tenant=${TENANT} -----"
-  psqlp -c "SELECT instance_no, job_code, instance_status, worker_group FROM batch.job_instance WHERE tenant_id='${TENANT}' ORDER BY id DESC LIMIT 5;" 2>/dev/null || true
+  psqlp_file select-sdk-job-diagnostics.sql -v tenant_id="$TENANT" 2>/dev/null || true
   echo "----- orchestrator container log (tail) -----"; docker logs batch-orchestrator --tail 60 2>/dev/null || true
   echo "----- trigger container log (tail) -----"; docker logs batch-trigger --tail 40 2>/dev/null || true
   echo "::endgroup::"
@@ -95,9 +101,11 @@ RAW_KEY="cikey$(openssl rand -hex 20)"
 KEY_PREFIX="${RAW_KEY:0:8}"
 KEY_HASH="$(printf %s "$RAW_KEY" | sha256sum | cut -d' ' -f1)"
 echo "==> seeding API key prefix=${KEY_PREFIX} (sha256) for tenant=${TENANT}"
-psqlp -c "INSERT INTO batch.api_key (tenant_id, key_name, key_prefix, key_hash, key_hash_algo, scopes, enabled, created_at)
-          VALUES ('${TENANT}', 'ci-e2e-${LANG_ID}-$$', '${KEY_PREFIX}', '${KEY_HASH}', 'sha256', '*', true, now())
-          ON CONFLICT DO NOTHING;"
+psqlp_file insert-sdk-api-key.sql \
+  -v tenant_id="$TENANT" \
+  -v key_name="ci-e2e-${LANG_ID}-$$" \
+  -v key_prefix="$KEY_PREFIX" \
+  -v key_hash="$KEY_HASH"
 
 # ── 2. pre-create node-direct 派单 topic(消费器启动即发现当前 worker topic)──
 # topic 契约是 base-first:batch.task.dispatch.<workerType>.node.<workerCode>。
@@ -135,7 +143,8 @@ case "$LANG_ID" in
     echo "==> packaging java sample worker"
     ( cd examples/self-hosted-sdk/sample-tenant-worker-java && mvn -q package -DskipTests ) \
       || { echo "FAIL: mvn package java sample worker failed"; dump_diagnostics; exit 1; }
-    JAR="$(ls examples/self-hosted-sdk/sample-tenant-worker-java/target/sample-tenant-worker-*.jar | head -1)"
+    JAR="$(find examples/self-hosted-sdk/sample-tenant-worker-java/target -maxdepth 1 \
+      -type f -name 'sample-tenant-worker-*.jar' -print -quit)"
     # 注:jar manifest 的 Class-Path=lib/ 相对 jar 自身位置解析(maven-dependency-plugin 已拷到 target/lib)
     ( BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$RAW_KEY" BATCH_TENANT_ID="$TENANT" \
       BATCH_WORKER_CODE="$WORKER_CODE" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
@@ -173,7 +182,8 @@ for _ in $(seq 1 40); do
   if ! kill -0 "$WPID" 2>/dev/null; then
     echo "FAIL: sample worker exited early"; dump_diagnostics; exit 1
   fi
-  cnt="$(psqlp -c "SELECT count(*) FROM batch.worker_registry WHERE tenant_id='${TENANT}' AND worker_code='${WORKER_CODE}';" || echo 0)"
+  cnt="$(psqlp_file count-sdk-worker.sql \
+    -v tenant_id="$TENANT" -v worker_code="$WORKER_CODE" || echo 0)"
   if [[ "$cnt" == "1" ]]; then registered=1; break; fi
   sleep 3
 done
@@ -194,7 +204,8 @@ launch_resp="$(curl -fsS -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/
 echo "    launch response: ${launch_resp}"
 echo "    polling job_instance terminal state (best-effort, ~60s)..."
 for _ in $(seq 1 20); do
-  st="$(psqlp -c "SELECT instance_status FROM batch.job_instance WHERE tenant_id='${TENANT}' AND job_code='atomic_shell_demo' ORDER BY id DESC LIMIT 1;" 2>/dev/null || echo '')"
+  st="$(psqlp_file select-latest-sdk-job-status.sql \
+    -v tenant_id="$TENANT" -v job_code=atomic_shell_demo 2>/dev/null || echo '')"
   echo "    job_instance status=${st:-<none>}"
   case "$st" in
     SUCCESS|COMPLETED|SUCCEEDED) echo "PASS [stage B]: launched job reached terminal success (${st})"; break ;;

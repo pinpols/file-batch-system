@@ -170,6 +170,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     e.setTenantId(tenantId);
     e.setJobCode(jobCode);
     e.setScheduledFireTime(scheduledFireTime);
+    e.setExpiresAt(BatchDateTimeSupport.utcNow().plus(Duration.ofDays(7)));
     return e;
   }
 }

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -166,6 +167,23 @@ class DeliverDispatchStepTest {
     step.execute(context);
 
     verify(runtimeRepository).updateFileStatus(eq(10L), eq("DISPATCHING"), any());
+  }
+
+  @Test
+  void execute_dryRunSkipsAllDispatchSideEffects() {
+    when(runtimeRepository.toLong(any())).thenReturn(10L);
+    DispatchJobContext context = buildContext();
+    context.getAttributes().put("dryRun", true);
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry("dryRunSkipped", "DISPATCH_EXTERNAL_DELIVERY")
+        .containsEntry("externalRequestId", "DRY_RUN")
+        .containsEntry("receiptCode", "DRY_RUN_RECEIPT_CH1");
+    verifyNoInteractions(fileDispatchRepository, dispatchChannelGateway);
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
   }
 
   private void setupMocksForNewRecord() {

@@ -94,6 +94,7 @@ type TaskContext struct {
 	TaskID          string
 	EffectiveConfig map[string]any
 	TraceID         string
+	DryRun          bool
 	Cancellation    *CancellationSignal
 	Progress        ProgressReporter
 
@@ -118,6 +119,9 @@ type TaskContext struct {
 	// commitCounter counts Commit calls for modulo rate-limiting.
 	commitCounter int64
 }
+
+// IsDryRun reports whether side effects must be skipped for this task.
+func (c *TaskContext) IsDryRun() bool { return c != nil && c.DryRun }
 
 // IsCancelled reports whether cooperative cancellation has been requested. It is
 // the hot-loop poll the handler checks between batches; Commit also checks it.

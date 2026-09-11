@@ -11,6 +11,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingl
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
 import io.github.pinpols.batch.common.enums.ResourceQueueType;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
 import java.util.List;
@@ -34,7 +35,8 @@ public final class ResourceQueueExcelRowParser {
     return QueueRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .queueCode(requireText(values, "queue_code", 128, issues))
+        .queueCode(
+            CodeNormalizer.toConfigFormOrNull(requireText(values, "queue_code", 128, issues)))
         .queueName(requireText(values, "queue_name", 256, issues))
         .queueType(requireEnum(values, "queue_type", QUEUE_TYPES, 32, issues))
         .maxRunningJobs(requireInteger(values, "max_running_jobs", 0, issues))

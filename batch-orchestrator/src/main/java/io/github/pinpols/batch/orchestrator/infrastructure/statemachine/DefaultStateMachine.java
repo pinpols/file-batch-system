@@ -123,8 +123,10 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
           case "READY" -> "READY";
           case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING", "RUNNING" -> "RUNNING";
           case "SUCCESS", "SUCCEED", "COMPLETE", "FINISH" -> "SUCCESS";
+          case "SUCCESS_DRY_RUN" -> "SUCCESS_DRY_RUN";
           case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
           case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
+          case "FAILED_DRY_RUN" -> "FAILED_DRY_RUN";
           case "TERMINATE", "CANCEL", "TERMINATED", "CANCELLED" -> "TERMINATED";
           case "SKIP", "SKIPPED" -> "SKIPPED";
           case "WAITING", "CREATED", "PENDING", "NOOP" -> fromState;

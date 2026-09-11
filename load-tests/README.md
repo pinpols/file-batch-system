@@ -187,6 +187,17 @@ SKIP_AUTO_CLEANUP=1 \
 Kafka lag 默认优先通过 `batch-kafka` 容器内 `/opt/kafka/bin/kafka-consumer-groups.sh` 采样；找不到容器时会尝试本机
 `kafka-consumer-groups.sh`。非容器环境需安装 PostgreSQL client 和 Kafka CLI：
 
+自适应 Relay 容量轮次必须显式声明，preflight 会同时校验 Trigger benchmark profile、入口准入、Hikari、
+Relay min/max、当前有效速率和 consumer lag 指标：
+
+```bash
+PREFLIGHT_ONLY=1 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE=1 \
+  bash load-tests/scripts/run-p2-capacity-profile.sh
+```
+
+Relay 上限 A/B 必须同步声明预期值。例如容器以 `80 events/s` 启动时，设置
+`CAPACITY_EXPECT_TRIGGER_RELAY_RATE=80`；未设置时仍严格校验 benchmark 基线 `40 events/s`，避免误测旧容器。
+
 - `psql`：压测准备、清理、统计 SQL 都依赖它；macOS 可用 `brew install libpq`，并把 `$(brew --prefix libpq)/bin` 加入 `PATH`。
 - `kafka-consumer-groups.sh` / `kafka-topics.sh`：Kafka lag 和 topic 初始化使用；设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`。
 - Python 3：默认优先找 `python3`，也可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 指定。
