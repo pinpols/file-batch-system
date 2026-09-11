@@ -62,6 +62,11 @@ final class ImportPreprocessObjectSource {
   }
 
   void assertObjectBelongsToTenant(ImportJobContext context, ImportPayload importPayload) {
+    if (context == null || importPayload == null || !Texts.hasText(importPayload.storagePath())) {
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_OBJECT_FORBIDDEN",
+          "import object path is required before tenant ownership validation");
+    }
     Long fileId =
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
     Map<String, Object> fileRecord =

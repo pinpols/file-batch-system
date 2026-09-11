@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.common.spi.task;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -35,8 +38,14 @@ public record TaskContext(
   public TaskContext {
     Objects.requireNonNull(tenantId, "tenantId");
     Objects.requireNonNull(jobCode, "jobCode");
-    parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
-    runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
+    parameters = immutableNullableMap(parameters);
+    runtimeAttributes = immutableNullableMap(runtimeAttributes);
+  }
+
+  private static Map<String, Object> immutableNullableMap(Map<String, Object> source) {
+    return EmptyChecks.isEmpty(source)
+        ? Map.of()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(source));
   }
 
   /**

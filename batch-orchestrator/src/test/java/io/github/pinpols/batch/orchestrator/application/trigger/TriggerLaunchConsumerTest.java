@@ -16,7 +16,9 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
+import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -37,7 +39,7 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li>反序列化失败 → ack + 跳过(DLQ counter)
  *   <li>envelope/launchRequest 为 null → ack + 跳过
  *   <li>409 dedup 命中 → 视为成功 ack(uk_job_instance_tenant_dedup 回退)
- *   <li>429 限流 → 不 ack,抛出让 Kafka listener container 重投
+ *   <li>429 限流 → nack 当前 offset 并暂停 partition,绕过有限重试丢弃路径
  *   <li>RuntimeException → 抛出走 listener 重试
  *   <li>消费端不重复写 trigger_request，状态仅由 launch 主服务在事务中推进
  * </ol>
@@ -57,18 +59,20 @@ class TriggerLaunchConsumerTest {
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    consumer = new TriggerLaunchConsumer(launchApplicationService, meterRegistry);
+    TriggerConsumerProperties properties = new TriggerConsumerProperties();
+    properties.getErrorHandler().setRetryBackoffMs(1234L);
+    consumer = new TriggerLaunchConsumer(launchApplicationService, meterRegistry, properties);
   }
 
   @Test
   void consume_validEnvelope_launchesAndAcks() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
-    when(launchApplicationService.launch(any(LaunchRequest.class)))
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
         .thenReturn(new LaunchResponse("inst-001", "trace-1"));
 
     consumer.consume(consumerRecord(envelope), ack);
 
-    verify(launchApplicationService, times(1)).launch(any(LaunchRequest.class));
+    verify(launchApplicationService, times(1)).launchFromTrustedQueue(any(LaunchRequest.class));
     verify(ack).acknowledge();
     assertThat(consumed("tenant-a", "ok")).isEqualTo(1.0);
     assertThat(
@@ -83,7 +87,7 @@ class TriggerLaunchConsumerTest {
 
     consumer.consume(consumerRecord, ack);
 
-    verify(launchApplicationService, never()).launch(any());
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
     verify(ack).acknowledge();
     assertThat(failed("deserialize")).isEqualTo(1.0);
   }
@@ -94,7 +98,7 @@ class TriggerLaunchConsumerTest {
 
     consumer.consume(consumerRecord, ack);
 
-    verify(launchApplicationService, never()).launch(any());
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
     verify(ack).acknowledge();
     assertThat(failed("empty_envelope")).isEqualTo(1.0);
   }
@@ -102,7 +106,7 @@ class TriggerLaunchConsumerTest {
   @Test
   void consume_dedupConflict_treatedAsSuccessAndAcks() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-dup");
-    when(launchApplicationService.launch(any(LaunchRequest.class)))
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
         .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "dedup hit"));
 
     consumer.consume(consumerRecord(envelope), ack);
@@ -114,20 +118,20 @@ class TriggerLaunchConsumerTest {
   @Test
   void consume_rateLimited_doesNotAckSoKafkaCanRedeliver() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-rate");
-    when(launchApplicationService.launch(any(LaunchRequest.class)))
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
         .thenThrow(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "rate limit"));
 
-    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
-        .isInstanceOf(ResponseStatusException.class);
+    consumer.consume(consumerRecord(envelope), ack);
 
     verify(ack, never()).acknowledge();
+    verify(ack).nack(Duration.ofMillis(1234L));
     assertThat(failed("rate_limited")).isEqualTo(1.0);
   }
 
   @Test
   void consume_runtimeException_propagatesForListenerRetry() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-err");
-    when(launchApplicationService.launch(any(LaunchRequest.class)))
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
         .thenThrow(new IllegalStateException("downstream down"));
 
     assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
@@ -137,7 +141,6 @@ class TriggerLaunchConsumerTest {
     assertThat(failed("runtime")).isEqualTo(1.0);
   }
 
-  @Test
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private static LaunchEnvelope sampleEnvelope(String tenantId, String requestId) {

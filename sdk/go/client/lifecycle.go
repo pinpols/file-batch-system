@@ -150,6 +150,7 @@ func (w *Worker) Start(ctx context.Context) error {
 		// ADR-035 §2: SDK self-hosted workers register under the fixed "sdk-self-hosted"
 		// group (platform requires it + selects by it). Matches decision-core + Java SDK.
 		WorkerGroup:    "sdk-self-hosted",
+		MaxConcurrent:  w.cfg.MaxConcurrentTasks,
 		BuildID:        w.cfg.BuildID,
 		SDKVersion:     w.cfg.SDKVersion,
 		CapabilityTags: w.cfg.CapabilityTags,

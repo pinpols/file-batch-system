@@ -258,6 +258,7 @@ export class WorkerLifecycle {
       workerGroup: "sdk-self-hosted",
       status: "RUNNING",
       heartbeatAt: new Date().toISOString(),
+      maxConcurrent: this.#cfg.maxConcurrent,
       capabilityTags: this.#capabilityTags(),
       // #536 register-time protocol-version gate: advertise the SDK's current
       // major (last of SUPPORTED_SCHEMA_VERSIONS). Register only — heartbeat null.

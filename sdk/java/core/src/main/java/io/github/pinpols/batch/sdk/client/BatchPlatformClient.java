@@ -105,6 +105,7 @@ public class BatchPlatformClient {
     body.put("status", "RUNNING");
     body.put("heartbeatAt", Instant.now().toString());
     body.put("currentLoad", 0);
+    body.put("maxConcurrent", config.getMaxConcurrentTasks());
     List<String> capabilityTags = capabilityTags();
     body.put("capabilityTags", capabilityTags);
     // SDK-P5-3 运行指纹:host/pid 尽力采集,buildId 由租户 config 注入,sdkVersion 读 jar manifest;

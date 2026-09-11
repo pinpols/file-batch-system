@@ -7,17 +7,17 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2230 |
+| 生产 Java 源文件 | 2234 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2048 |
+| `Map<String, Object>` 出现次数 | 2051 |
 | 含 Map 的源文件 | 444 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 214 |
-| 含 suppression 的源文件 | 163 |
+| `@SuppressWarnings` | 216 |
+| 含 suppression 的源文件 | 165 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 9 |
-| `PMD.ExcessiveParameterList` 显式例外 | 30 |
+| `PMD.ExcessiveParameterList` 显式例外 | 32 |
 
 ## 模块源文件
 
@@ -25,7 +25,7 @@
 |---|---:|
 | `batch-common` | 296 |
 | `batch-console-api` | 870 |
-| `batch-orchestrator` | 526 |
+| `batch-orchestrator` | 530 |
 | `batch-trigger` | 69 |
 | `batch-worker` | 369 |
 | `sdk` | 91 |
@@ -42,7 +42,7 @@
 |---|---:|
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1106 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 819 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 831 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 775 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 765 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |
@@ -96,6 +96,7 @@
 | 文件 | 例外数 |
 |---|---:|
 | `batch-common/src/main/java/io/github/pinpols/batch/common/dto/LaunchRequest.java` | 2 |
+| `batch-common/src/main/java/io/github/pinpols/batch/common/dto/WorkerHeartbeatDto.java` | 1 |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/kafka/TaskDispatchMessage.java` | 1 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/mapper/OperationAuditMapper.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java` | 1 |
@@ -118,3 +119,4 @@
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java` | 2 |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java` | 1 |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkTaskContext.java` | 4 |
+| `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/wire/RegisterRequest.java` | 1 |

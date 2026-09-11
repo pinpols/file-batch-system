@@ -21,6 +21,7 @@ import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +42,20 @@ class ProcessStepExecutionAdapterTest {
 
   @Mock
   private PlatformFileRuntimeRepository runtimeRepository;
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void descriptorsMatchProcessPipeline() {
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        runtimeRepository,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+
+    assertThat(adapter.pipelineType()).isEqualTo(ProcessWorkerType.PROCESS);
+    assertThat(adapter.initialStage()).isEqualTo(ProcessStage.PREPARE.name());
+  }
 
   @Test
   @SuppressWarnings("unchecked")

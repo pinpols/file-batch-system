@@ -30,6 +30,9 @@ public class WorkerRegistration {
   /** 进行中的任务数 / 已认领工作量；用于 Orchestrator worker 选择（值越低越优先）。 */
   private Integer currentLoad;
 
+  /** Worker 进程实际执行许可上限；注册时上报，避免控制面使用固定默认值误判满载。 */
+  private Integer maxConcurrent;
+
   /** 能力标签；心跳上报后写入 {@code worker_registry.capability_tags} JSONB，参与 selector 路由匹配。 */
   private List<String> capabilityTags;
 }

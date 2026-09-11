@@ -58,7 +58,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldEnforceMutualExclusion() throws Exception {
-    String lockName = "it-lock-mutual-exclusion";
+    String lockName = "it-lock-mutual-exclusion-" + System.nanoTime();
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
       AtomicInteger successCount = new AtomicInteger(0);

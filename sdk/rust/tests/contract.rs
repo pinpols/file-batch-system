@@ -332,6 +332,10 @@ fn compute_request(fx: &Json) -> OutgoingRequest {
             .and_then(|c| c.get("apiKey"))
             .and_then(Json::as_str)
             .map(str::to_string),
+        max_concurrent_tasks: config
+            .and_then(|c| c.get("maxConcurrentTasks"))
+            .and_then(Json::as_num)
+            .map(|value| value as i64),
     };
     build_request(&request_spec_from(state), &cfg)
 }

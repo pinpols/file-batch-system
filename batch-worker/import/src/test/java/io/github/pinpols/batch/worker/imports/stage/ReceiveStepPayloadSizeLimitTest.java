@@ -1,9 +1,13 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -11,6 +15,7 @@ import java.util.HashMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -80,6 +85,30 @@ class ReceiveStepPayloadSizeLimitTest {
     ImportStageResult result = receiveStep.execute(ctx);
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("IMPORT_RECEIVE_INVALID");
+  }
+
+  @Test
+  void execute_sameTraceUsesTaskIdToKeepGeneratedStoragePathUnique() {
+    when(runtimeRepository.toLong(null)).thenReturn(null);
+    when(runtimeRepository.createFileRecord(any())).thenReturn(101L, 102L);
+    ImportJobContext first = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"a\"}");
+    first.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");
+    first.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 11L);
+    ImportJobContext second = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"b\"}");
+    second.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");
+    second.getAttributes().put(PipelineRuntimeKeys.TASK_ID, 12L);
+
+    assertThat(receiveStep.execute(first).success()).isTrue();
+    assertThat(receiveStep.execute(second).success()).isTrue();
+
+    ArgumentCaptor<FileRecordParam> records = ArgumentCaptor.forClass(FileRecordParam.class);
+    org.mockito.Mockito.verify(runtimeRepository, org.mockito.Mockito.times(2))
+        .createFileRecord(records.capture());
+    assertThat(records.getAllValues())
+        .extracting(FileRecordParam::getStoragePath)
+        .containsExactly(
+            "ingress/t1/shared-trace-11/import-shared-trace.json",
+            "ingress/t1/shared-trace-12/import-shared-trace.json");
   }
 
   private ImportJobContext buildContext(String tenantId, String payload) {

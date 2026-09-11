@@ -139,6 +139,7 @@ function computeRequest(fx: Fixture) {
     tenantId: fx.given.config?.tenantId,
     workerCode: fx.given.config?.workerCode,
     apiKey: fx.given.config?.apiKey,
+    maxConcurrent: fx.given.config?.maxConcurrentTasks,
   });
 }
 

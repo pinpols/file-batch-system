@@ -65,6 +65,9 @@ func TestWorker_StartConsumeReportStop(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
+	if got := fp.RegisterCalls[0].MaxConcurrent; got != 4 {
+		t.Fatalf("register maxConcurrent = %d, want 4", got)
+	}
 
 	// wait for the report to land.
 	waitFor(t, time.Second, func() bool {

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -17,8 +18,9 @@ public class ExportWorkerLoop extends AbstractWorkerLoop {
   public ExportWorkerLoop(
       WorkerRuntimeFacade workerRuntimeFacade,
       BatchDateTimeSupport dateTimeSupport,
-      ExportWorkerConfiguration configuration) {
-    super(workerRuntimeFacade, dateTimeSupport);
+      ExportWorkerConfiguration configuration,
+      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+    super(workerRuntimeFacade, dateTimeSupport, maxConcurrentTasks);
     this.configuration = configuration;
   }
 

@@ -84,6 +84,7 @@ use batch_worker_sdk::client::{ReqwestConfig, ReqwestTransport, Transport};
 
 let cfg = ReqwestConfig::new("https://orch.internal:8080", "tenant-42")
     .with_api_key(std::env::var("BATCH_API_KEY").unwrap_or_default())
+    .with_max_concurrent_tasks(4)
     .with_timeouts(5_000, 10_000); // connect_ms, read_ms (keep read < heartbeat/3)
 let transport = ReqwestTransport::new(cfg)?;        // returns Result, no unwrap on I/O
 let resp = transport.register("worker-1", r#"{"workerCode":"worker-1","tenantId":"tenant-42"}"#);

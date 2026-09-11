@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * P2-3: WorkerSelector 的 Redis 缓存配置。
  *
  * <ul>
- *   <li>{@code enabled=false}（默认）：完全直通 PG，行为同历史
- *   <li>{@code enabled=true}：按 {@code (tenantId, workerGroup)} 缓存 ONLINE worker 列表，{@code
+ *   <li>{@code enabled=false}：完全直通 PG，行为同历史
+ *   <li>{@code enabled=true}（默认）：按 {@code (tenantId, workerGroup)} 缓存 ONLINE worker 列表，{@code
  *       ttlMillis} 过期
  * </ul>
  */
@@ -16,6 +16,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.scheduler.worker-cache")
 public class WorkerSelectorCacheProperties {
 
-  private boolean enabled = false;
+  private boolean enabled = true;
   private long ttlMillis = 5_000L;
 }

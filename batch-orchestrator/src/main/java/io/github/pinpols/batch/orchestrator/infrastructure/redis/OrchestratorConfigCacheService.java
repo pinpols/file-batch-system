@@ -4,17 +4,14 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
-import io.github.pinpols.batch.orchestrator.mapper.BatchWindowMapper;
-import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
-import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,12 +20,13 @@ import org.springframework.stereotype.Service;
 /**
  * Orchestrator 配置缓存服务。
  *
- * <p>为作业定义、工作流定义、业务日历、批次窗口、租户配额策略提供统一的 Redis 二级缓存， 缓存 TTL 固定为 5 分钟（{@code CONFIG_CACHE_TTL}）。读取时先查
- * Redis，未命中再查数据库 并回填缓存；仅缓存已启用（{@code enabled=true}）的记录。提供对应的 {@code evict*} 方法
- * 供配置变更时主动失效缓存，防止脏读。所有方法在入参为空时快速返回 {@code null}，不访问缓存。
+ * <p>为作业定义、工作流定义、业务日历、批次窗口、租户配额策略提供统一的 Redis 二级缓存， 缓存 TTL 固定为 5 分钟（{@code CONFIG_CACHE_TTL}）。作业与工作流定义额外使用
+ * 250ms 量级的进程内正缓存；租户配额策略同样使用该短缓存，因为一次资源调度会分别执行 job 与 partition
+ * 闸门，不能为同一策略重复访问 Redis 和反序列化。短 TTL 将跨进程配置变更的最大陈旧窗口限制在亚秒级。仅缓存已启用记录，并由
+ * {@code evict*} 同时失效本地与 Redis 缓存。
  *
- * <p>P1 迁移：workflow / business_calendar / batch_window 改走 MyBatis Mapper； job_definition /
- * tenant_quota_policy 留在 Spring Data JDBC 仓库（P2 计划）。
+ * <p>五类配置均通过 {@link OrchestratorConfigMappers} 中的 MyBatis mapper 读取，缓存服务只负责缓存层级、TTL
+ * 和失效语义。
  */
 @Service
 public class OrchestratorConfigCacheService {
@@ -43,80 +41,66 @@ public class OrchestratorConfigCacheService {
   private static final long NEGATIVE_CACHE_MAX = 10_000L;
 
   private final Cache<String, Boolean> negativeCache;
+  private final Cache<String, JobDefinitionEntity> jobDefinitionLocalCache;
+  private final Cache<String, WorkflowDefinitionEntity> workflowDefinitionLocalCache;
+  private final Cache<String, TenantQuotaPolicyEntity> quotaPolicyLocalCache;
 
   private final OrchestratorRedisSupport redis;
-  private final JobDefinitionMapper jobDefinitionMapper;
-  private final WorkflowDefinitionMapper workflowDefinitionMapper;
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final BatchWindowMapper batchWindowMapper;
-  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+  private final OrchestratorConfigMappers configMappers;
 
   @Autowired
   public OrchestratorConfigCacheService(
       OrchestratorRedisSupport redis,
-      JobDefinitionMapper jobDefinitionMapper,
-      WorkflowDefinitionMapper workflowDefinitionMapper,
-      BusinessCalendarMapper businessCalendarMapper,
-      BatchWindowMapper batchWindowMapper,
-      TenantQuotaPolicyMapper tenantQuotaPolicyMapper,
+      OrchestratorConfigMappers configMappers,
+      OrchestratorConfigCacheProperties properties,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    this(redis, configMappers, properties, meterRegistryProvider.getIfAvailable());
+  }
+
+  OrchestratorConfigCacheService(
+      OrchestratorRedisSupport redis, OrchestratorConfigMappers configMappers) {
+    this(redis, configMappers, new OrchestratorConfigCacheProperties(), (MeterRegistry) null);
+  }
+
+  private OrchestratorConfigCacheService(
+      OrchestratorRedisSupport redis,
+      OrchestratorConfigMappers configMappers,
+      OrchestratorConfigCacheProperties properties,
+      MeterRegistry meterRegistry) {
     this.redis = redis;
-    this.jobDefinitionMapper = jobDefinitionMapper;
-    this.workflowDefinitionMapper = workflowDefinitionMapper;
-    this.businessCalendarMapper = businessCalendarMapper;
-    this.batchWindowMapper = batchWindowMapper;
-    this.tenantQuotaPolicyMapper = tenantQuotaPolicyMapper;
+    this.configMappers = configMappers;
     this.negativeCache = Caffeine.newBuilder()
         .expireAfterWrite(NEGATIVE_TTL)
         .maximumSize(NEGATIVE_CACHE_MAX)
         .build();
-    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry != null) {
-      registry.gauge(
+    Duration localPositiveTtl = Duration.ofMillis(properties.getLocalPositiveTtlMillis());
+    this.jobDefinitionLocalCache = Caffeine.newBuilder()
+        .expireAfterWrite(localPositiveTtl)
+        .maximumSize(properties.getLocalPositiveMaximumSize())
+        .recordStats()
+        .build();
+    this.workflowDefinitionLocalCache = Caffeine.newBuilder()
+        .expireAfterWrite(localPositiveTtl)
+        .maximumSize(properties.getLocalPositiveMaximumSize())
+        .recordStats()
+        .build();
+    this.quotaPolicyLocalCache = Caffeine.newBuilder()
+        .expireAfterWrite(localPositiveTtl)
+        .maximumSize(properties.getLocalPositiveMaximumSize())
+        .recordStats()
+        .build();
+    if (meterRegistry != null) {
+      meterRegistry.gauge(
           "batch.orchestrator.config.negative_cache.size", negativeCache, Cache::estimatedSize);
+      CaffeineCacheMetrics.monitor(
+          meterRegistry, jobDefinitionLocalCache, "orchestrator.config.job-definition.local");
+      CaffeineCacheMetrics.monitor(
+          meterRegistry,
+          workflowDefinitionLocalCache,
+          "orchestrator.config.workflow-definition.local");
+      CaffeineCacheMetrics.monitor(
+          meterRegistry, quotaPolicyLocalCache, "orchestrator.config.quota-policy.local");
     }
-  }
-
-  // 兼容旧构造器签名 (测试 / 其它注入路径);ObjectProvider 默认 null 即不挂 gauge。
-  public OrchestratorConfigCacheService(
-      OrchestratorRedisSupport redis,
-      JobDefinitionMapper jobDefinitionMapper,
-      WorkflowDefinitionMapper workflowDefinitionMapper,
-      BusinessCalendarMapper businessCalendarMapper,
-      BatchWindowMapper batchWindowMapper,
-      TenantQuotaPolicyMapper tenantQuotaPolicyMapper) {
-    this(
-        redis,
-        jobDefinitionMapper,
-        workflowDefinitionMapper,
-        businessCalendarMapper,
-        batchWindowMapper,
-        tenantQuotaPolicyMapper,
-        nullObjectProvider());
-  }
-
-  private static <T> ObjectProvider<T> nullObjectProvider() {
-    return new ObjectProvider<>() {
-      @Override
-      public T getObject() {
-        return null;
-      }
-
-      @Override
-      public T getObject(Object... args) {
-        return null;
-      }
-
-      @Override
-      public T getIfAvailable() {
-        return null;
-      }
-
-      @Override
-      public T getIfUnique() {
-        return null;
-      }
-    };
   }
 
   private boolean isNegativeCached(String key) {
@@ -132,17 +116,23 @@ public class OrchestratorConfigCacheService {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "job-definition", jobCode);
+    JobDefinitionEntity local = jobDefinitionLocalCache.getIfPresent(key);
+    if (local != null) {
+      return local;
+    }
     JobDefinitionEntity cached = redis.getJson(key, JobDefinitionEntity.class);
     if (cached != null) {
+      jobDefinitionLocalCache.put(key, cached);
       return cached;
     }
     if (isNegativeCached(key)) {
       return null;
     }
     JobDefinitionEntity loaded =
-        jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
+        configMappers.jobDefinition().selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+      jobDefinitionLocalCache.put(key, loaded);
     } else {
       markNegative(key);
     }
@@ -155,17 +145,24 @@ public class OrchestratorConfigCacheService {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "workflow-definition", workflowCode);
+    WorkflowDefinitionEntity local = workflowDefinitionLocalCache.getIfPresent(key);
+    if (local != null) {
+      return local;
+    }
     WorkflowDefinitionEntity cached = redis.getJson(key, WorkflowDefinitionEntity.class);
     if (cached != null) {
+      workflowDefinitionLocalCache.put(key, cached);
       return cached;
     }
     if (isNegativeCached(key)) {
       return null;
     }
-    WorkflowDefinitionEntity loaded =
-        workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, workflowCode, true);
+    WorkflowDefinitionEntity loaded = configMappers
+        .workflowDefinition()
+        .selectFirstByTenantAndCodeAndEnabled(tenantId, workflowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+      workflowDefinitionLocalCache.put(key, loaded);
     } else {
       markNegative(key);
     }
@@ -184,8 +181,9 @@ public class OrchestratorConfigCacheService {
     if (isNegativeCached(key)) {
       return null;
     }
-    BusinessCalendarEntity loaded =
-        businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
+    BusinessCalendarEntity loaded = configMappers
+        .businessCalendar()
+        .selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     } else {
@@ -206,8 +204,9 @@ public class OrchestratorConfigCacheService {
     if (isNegativeCached(key)) {
       return null;
     }
-    BatchWindowEntity loaded =
-        batchWindowMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, windowCode, true);
+    BatchWindowEntity loaded = configMappers
+        .batchWindow()
+        .selectFirstByTenantAndCodeAndEnabled(tenantId, windowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     } else {
@@ -221,17 +220,23 @@ public class OrchestratorConfigCacheService {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
+    TenantQuotaPolicyEntity local = quotaPolicyLocalCache.getIfPresent(key);
+    if (local != null) {
+      return local;
+    }
     TenantQuotaPolicyEntity cached = redis.getJson(key, TenantQuotaPolicyEntity.class);
     if (cached != null) {
+      quotaPolicyLocalCache.put(key, cached);
       return cached;
     }
     if (isNegativeCached(key)) {
       return null;
     }
     TenantQuotaPolicyEntity loaded =
-        tenantQuotaPolicyMapper.selectFirstEnabledByTenantId(tenantId, true);
+        configMappers.tenantQuotaPolicy().selectFirstEnabledByTenantId(tenantId, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+      quotaPolicyLocalCache.put(key, loaded);
     } else {
       markNegative(key);
     }
@@ -258,7 +263,10 @@ public class OrchestratorConfigCacheService {
     if (!Texts.hasText(tenantId)) {
       return;
     }
-    redis.delete(BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first"));
+    String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
+    quotaPolicyLocalCache.invalidate(key);
+    negativeCache.invalidate(key);
+    redis.delete(key);
   }
 
   private void evictConfig(String tenantId, String type, String code) {
@@ -266,6 +274,11 @@ public class OrchestratorConfigCacheService {
       return;
     }
     String key = BatchRedisKeys.config(tenantId, type, code);
+    if ("job-definition".equals(type)) {
+      jobDefinitionLocalCache.invalidate(key);
+    } else if ("workflow-definition".equals(type)) {
+      workflowDefinitionLocalCache.invalidate(key);
+    }
     redis.delete(key);
     // R3-P2-9：失效 positive cache 时也清 negative，避免开启 disabled 配置时仍命中"已知缺失"残留
     negativeCache.invalidate(key);

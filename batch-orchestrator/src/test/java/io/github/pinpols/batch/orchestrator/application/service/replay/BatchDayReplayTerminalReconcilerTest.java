@@ -84,7 +84,7 @@ class BatchDayReplayTerminalReconcilerTest {
     verify(sessionMapper)
         .updateStatus(
             eq("t1"), eq(7L), eq(ENTRY_SUCCEEDED), expected.capture(), any(), any(), any(), any());
-    assertThat(expected.getValue()).containsExactly("RUNNING");
+    assertThat(expected.getValue()).containsExactly("RUNNING", "PARTIAL_FAILED");
   }
 
   @Test
@@ -141,6 +141,37 @@ class BatchDayReplayTerminalReconcilerTest {
         .updateCounts(eq("t1"), eq(9L), eq(1), eq(0), eq(1), eq(2), any());
     verify(sessionMapper, never())
         .updateStatus(anyString(), anyLong(), anyString(), anyList(), any(), any(), any(), any());
+  }
+
+  @Test
+  void recoveredEntryMovesPartialFailedSessionBackToSucceeded() {
+    when(sessionMapper.selectById("t1", 10L))
+        .thenReturn(session(10L, JobInstanceStatus.PARTIAL_FAILED.code(), 1));
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(40L)
+        .sessionId(10L)
+        .tenantId("t1")
+        .jobCode("JOB_RECOVERED")
+        .status(ENTRY_FAILED)
+        .build();
+    when(entryMapper.selectBySessionId(10L)).thenReturn(List.of(entry));
+    when(entryMapper.countBySessionAndStatus(10L, ENTRY_SUCCEEDED)).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(10L, ENTRY_FAILED)).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(10L, "PENDING")).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(10L, "RUNNING")).thenReturn(0L);
+
+    reconciler.reconcileOnTerminal("t1", 10L, "JOB_RECOVERED", 4001L, JOB_SUCCESS);
+
+    verify(sessionMapper)
+        .updateStatus(
+            eq("t1"),
+            eq(10L),
+            eq(ENTRY_SUCCEEDED),
+            eq(List.of("RUNNING", "PARTIAL_FAILED")),
+            any(),
+            any(),
+            any(),
+            any());
   }
 
   @Test

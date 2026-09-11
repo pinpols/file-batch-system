@@ -18,9 +18,10 @@ import (
 
 // RequestBuildConfig is the boot-config subset the request builders read.
 type RequestBuildConfig struct {
-	TenantID   string
-	WorkerCode string
-	APIKey     string
+	TenantID      string
+	WorkerCode    string
+	APIKey        string
+	MaxConcurrent int
 }
 
 // ReportPayload is the report-specific body carried in given.state.request.report.
@@ -70,6 +71,9 @@ func BuildRequest(spec RequestSpec, cfg RequestBuildConfig) (OutgoingRequest, er
 			"workerCode":  cfg.WorkerCode,
 			"workerGroup": "sdk-self-hosted",
 			"status":      "RUNNING",
+		}
+		if cfg.MaxConcurrent > 0 {
+			body["maxConcurrent"] = cfg.MaxConcurrent
 		}
 		return OutgoingRequest{Body: body, Headers: headers}, nil
 

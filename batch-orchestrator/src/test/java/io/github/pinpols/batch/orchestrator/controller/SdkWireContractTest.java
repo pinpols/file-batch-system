@@ -58,6 +58,7 @@ class SdkWireContractTest {
         Instant.parse("2026-05-31T10:00:00Z"),
         List.of("echo", "sleep"),
         3,
+        4,
         null,
         "v2");
 
@@ -77,6 +78,7 @@ class SdkWireContractTest {
     assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:00:00Z"));
     assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
     assertThat(platformSide.currentLoad()).isEqualTo(3);
+    assertThat(platformSide.maxConcurrent()).isEqualTo(4);
     assertThat(platformSide.taskTypes()).isNull();
   }
 

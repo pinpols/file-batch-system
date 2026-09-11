@@ -30,6 +30,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
 import io.github.pinpols.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import io.micrometer.observation.annotation.Observed;
 import java.sql.SQLException;
@@ -77,11 +79,13 @@ public class DefaultLaunchService implements LaunchService {
   private final LaunchParamResolver launchParamResolver;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final PlatformTransactionManager transactionManager;
+  private final LaunchPhaseMetrics launchPhaseMetrics;
 
   @Override
   @Observed(name = "orch.launch", contextualName = "orch.launch")
   public LaunchResponse launch(LaunchRequest request) {
-    LaunchLoadResult loaded = launchValidationService.load(request);
+    LaunchLoadResult loaded =
+        launchPhaseMetrics.record(Phase.VALIDATION, () -> launchValidationService.load(request));
     LaunchResponse duplicateShortCircuit = maybeShortCircuitDuplicate(request, loaded);
     if (duplicateShortCircuit != null) {
       return duplicateShortCircuit;
@@ -100,7 +104,9 @@ public class DefaultLaunchService implements LaunchService {
     // T1：先把 instance/workflow 写入数据库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;
     try {
-      prepared = prepareJobInstanceInTransaction(routedRequest, loaded, effectiveParams, traceId);
+      prepared = launchPhaseMetrics.record(
+          Phase.PREPARE_TRANSACTION,
+          () -> prepareJobInstanceInTransaction(routedRequest, loaded, effectiveParams, traceId));
     } catch (DataIntegrityViolationException exception) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:DataIntegrityViolationException", exception);
@@ -116,7 +122,9 @@ public class DefaultLaunchService implements LaunchService {
       throw exception;
     }
 
-    dispatchAndMarkLaunched(request, effectiveParams, traceId, prepared);
+    launchPhaseMetrics.record(
+        Phase.DISPATCH_TRANSACTION,
+        () -> dispatchAndMarkLaunched(request, effectiveParams, traceId, prepared));
     return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
   }
 

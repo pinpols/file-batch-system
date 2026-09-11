@@ -51,6 +51,7 @@ batch:
       # worker_registry.capability_tags；让 selector 能匹配带 resource_tag 的 queue（见 DefaultWorkerSelector）
       capability-tags:
       - ingest
+      - CUSTOMER
       file-processing:
         streaming-enabled: true
         page-size: 1000

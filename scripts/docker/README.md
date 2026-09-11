@@ -24,3 +24,26 @@
 - 这类脚本不管理本地 Java 进程，只管理容器
 - 构建应用镜像时优先使用 `./scripts/docker/build-apps.sh`，这样会默认开启 BuildKit 和 Docker CLI build
 - 观测栈的快捷入口也可以直接用 `make observability-up` / `make observability-down`
+
+## 磁盘清理
+
+本地磁盘清理由 `scripts/local/cleanup-disk.sh` 统一处理。脚本默认只预览；执行模式也只清理超过保留期的 Docker 构建缓存和悬空镜像，不会删除容器、命名卷或数据库数据。
+
+```bash
+# 预览
+bash scripts/local/cleanup-disk.sh
+
+# 清理超过 7 天的可再生 Docker 缓存
+bash scripts/local/cleanup-disk.sh --apply
+
+# 磁盘紧张时清理全部未使用的 BuildKit 缓存
+bash scripts/local/cleanup-disk.sh --apply --all-build-cache
+
+# 每个镜像仓库只保留 latest（无 latest 时保留最新版本）和容器引用版本
+bash scripts/local/cleanup-disk.sh --apply --prune-old-image-tags
+
+# 明确确认后，再清理超过 14 天且无引用的 Docker 匿名卷
+bash scripts/local/cleanup-disk.sh --apply --retention-days 14 --include-anonymous-volumes
+```
+
+历史运行日志和 Maven `target` 目录也必须通过独立参数显式启用。不要使用 `docker system prune --volumes`，它无法区分可丢弃测试卷和需要保留的数据卷。

@@ -1,5 +1,66 @@
 # 控制面热路径优化核验（2026-08-25）
 
+### 2026-09-11 压测口径收口
+
+现有 `run-control-plane-worker-benchmark.sh` 与 `run-p2-capacity-profile.sh` 已统一使用同一套控制面画像入口。
+10w 子画像会显式继承 `PG_SAMPLE_INTERVAL_SECONDS`，并在流量期间持续记录：数据库大小、活跃/等待连接、锁等待、
+事务提交与回滚、WAL 字节数。报告同时保留流量前后快照和采样文件，便于区分入口、Relay、Worker 回报与终态回写阶段的压力。
+
+本次只完善压测证据采集，不修改 Orchestrator 状态机或 `report-batch` 事务语义；新的 1w/10w 结果须使用该入口重新留档，
+不得与旧报告的不同配额、并发和超时口径直接比较。代码静态验证已通过；本节不宣称已完成新的 10w 运行。
+
+### 控制面容量计划落地矩阵
+
+| 阶段 | 当前状态 | 证据 / 约束 |
+|---|---|---|
+| 统一 10w 压测入口 | ✅ 已落 | `run-p2-capacity-profile.sh` 复用 `run-control-plane-worker-benchmark.sh`，统一请求、终态和清理口径 |
+| PG profiling | ✅ 采集能力已落 | 流量前后快照 + 期间 CSV；新结果必须保留样本文件 |
+| Orchestrator 批量写入 | ✅ 已落 | `BatchInsertChunks` 已用于分区、任务和步骤实例；report-batch 仍逐项事务，避免未经证据改坏幂等语义 |
+| 1w / 10w 对比复测 | 🟡 待按新口径重跑 | 旧报告可作历史基线，不能与新采样结果混表 |
+| 多实例压测 | 🟡 待同构环境取证 | 本地 Docker 基础设施可以验证功能；生产容量需多 Orchestrator/Worker 实例和真实连接池预算 |
+| 反压闭环 | ✅ 机制已落，需持续取证 | admission、QUEUE_DEFER、Kafka lag、outbox backlog 和终态收敛均有脚本/指标 |
+| 数据归档与恢复演练 | ✅ 脚本与 runbook 已落 | 真实 PITR、独立故障域和 RTO/RPO 仍属于 staging/运维执行证据 |
+| Console 运维闭环 | ✅ 后端能力已落 | diagnosis、retry/replay/cancel/resume 等受控入口已有；前端联调结果单独留档 |
+
+### 2026-09-11 新口径本地容量复测
+
+使用现有 Docker 基础设施和 benchmark Trigger 配置，未新增容器拓扑。1k 快速回归用于验证报告关联口径，
+10w 使用 `STORM_TOTAL_REQUESTS=100000`、`STORM_RPS=200`、`PG_SAMPLE_INTERVAL_SECONDS=5`。
+
+| 档位 | 入口结果 | 实例结果 | PG / outbox 观测 | 结论 |
+|---|---|---|---|---|
+| 1k 报告口径回归 | 1,000 OK，0 KO，p95 318ms | 1,000/1,000 `SUCCESS` | 锁等待 0；报告与终态一致 | 通过 |
+| 1w | 10,000 OK，0 KO，p95 997ms | 10,000/10,000 `SUCCESS` | 锁等待 0；WAL 与数据库体积按流量增长 | 通过正确性和收敛 |
+| 1w relay benchmark（400 events/s，100 RPS） | 10,000 OK，0 KO，p95 102ms | 10,000/10,000 请求已发布并最终收敛 | `trigger_outbox_event=PUBLISHED` 10,000；锁等待 0；Kafka lag 归零 | 通过；确认 benchmark relay 配置有效 |
+| 10w relay benchmark（400 events/s，100 RPS） | 100,000 OK，0 KO，p95 51ms | 约 56k 实例在 2,400s 窗口内建立；仍有消费尾部 | `trigger_outbox_event=PUBLISHED` 100,000；锁等待 0；快照时约 81 个 RUNNING | relay 通过；控制面端到端容量仍不通过 |
+| A/B clean 1w（24 consumers / pool 100，100 RPS） | 9,758 OK，242 次 429，入口 p95 3,750ms | 已接受的 9,758/9,758 `SUCCESS` | 无锁等待；Kafka lag 归零；未产生已接受任务丢失 | 消费扩容可保证已接受任务收敛，但 admission 仍需限流 |
+| 10w | 99,964 OK，36 次 429；p95 46ms | 约 22k 在等待窗口内形成实例 | 锁等待 0；约 77k `trigger_outbox_event` 保持 `NEW`，relay 预算 40 events/s | **本机容量不通过** |
+
+10w 的失败不是终态复活或数据库锁争用：已形成实例均继续收敛，瓶颈是 Trigger 异步 launch relay 的排空预算，
+导致 HTTP `ACCEPTED` 与实例创建/完成脱钩。该结果不能作为生产容量承诺，但足以确定下一步优化方向：先把
+admission 返回语义、outbox backlog/oldest-age 告警和 relay 扩展策略闭环，再复测多实例；不能靠客户端超时重试猜测实例是否已创建。
+本轮所有测试 RUN_ID 已清理，Trigger 已恢复健康。
+
+本轮新增的 relay benchmark 短测使用同一 Docker 基础设施，将隔离 benchmark 的 relay 预算提高到 400 events/s，
+并将入口速率控制在 100 RPS 以避免 admission 保护与 relay 排空混在同一变量中。该短测通过，但它不是 10w
+生产容量承诺；正式 10w 复测仍需单独确认入口速率、接受率、outbox oldest-age 和最终实例收敛四项指标。
+
+正式 10w relay benchmark 已证明入口和 outbox 发布链路可承载 100 RPS，但未证明控制面可在窗口内完成
+100k 实例创建：本次使用中的 `batch-orchestrator` 仍由另一个 `be-acceptance` 工作树管理，实际 consumer
+并发为 6、平台库连接池为 50，benchmark 文件中新增的 24/100 覆盖尚未加载到该共享容器。因此下一轮应在
+同一 compose 项目中受控重建 Trigger 和 Orchestrator 后，再比较 6/50 与 24/100；不得把本次局部发布成功
+写成全链路 10w 通过。
+
+中间的 A/B 复测曾因上一轮 Kafka 残留产生 `request_not_found`，该轮已标记为无效并清理；新增的压测前
+consumer lag=0 预检用于阻断同类污染。当前清洁 A/B 结果只证明消费扩容后的“已接受请求”闭环，不代表
+可以取消 admission 保护或直接承诺 10w 全链路容量。
+
+随后在 lag=0 的干净环境中启动正式 10w A/B：入口发送阶段达到 `100,000/100,000`、`0 KO`，但在
+控制面收敛阶段观察到 Orchestrator CPU 约 109%、内存约 839MiB/1GiB，PG 无锁等待；在约 22 分钟
+取证点建立约 66.5k 实例，仍有约 13k `RUNNING`。该轮因已能定性控制面 JVM 处理吞吐瓶颈而中止并清理，
+不计为通过。下一步应针对 launch 事件处理和状态写入做批处理/削峰 profiling，再复测；不能继续单纯
+增加 Kafka consumer 并发。
+
 ## 本轮结论
 
 本轮针对实例聚合、任务领取、结果写入和历史表生命周期完成代码核验，并落地一个低风险优化：
@@ -244,3 +305,72 @@ admission；默认 `96` 与 6,000 请求 / 1,200 秒的画像预算匹配。上�
 这证明当前本地结构和清理后的即时状态正常，不等于长期生产生命周期已验收。仍需 staging 长周期演练，
 记录 archive lag、dead tuple、autovacuum 延迟、磁盘增长和未来分区创建失败告警；完成前不把历史表
 膨胀风险标记为关闭。
+
+### 2026-09-11 控制面消费热路径微优化
+
+10w 清洁压测在提高 Trigger relay 配额、Orchestrator 消费并发和连接池后，入口接收与消息发布均可完成，
+但本地单实例 Orchestrator CPU 已接近满载，实例形成和终态收敛仍无法在当前预算内完成；PG 未出现锁等待发散，
+因此下一步重点是 launch 状态写入/削峰，而不是继续盲目增加 Kafka consumer 并发。
+
+本轮在不改变业务状态机、事务边界、ack、重试和租户标签规则的前提下，给
+`TriggerLaunchConsumer` 的动态标签 Counter 增加了有界 Caffeine 缓存（最多 2,048 个组合，1 小时未访问过期）。
+原实现每条消息都调用 `MeterRegistry` 注册查找，改后只在新标签组合首次出现时注册；缓存驱逐后仍会从
+`MeterRegistry` 取回同名 Counter，不会改变指标累计值。测试辅助方法误留的 `@Test` 也已移除，避免 JUnit
+discovery warning 掩盖真实测试结果。
+
+验证：`TriggerLaunchConsumerTest` 6/6 通过；orchestrator 模块 `spotless:check` 通过；`git diff --check` 通过。
+该改动尚未证明可以单独消除 10w 的控制面 CPU 瓶颈，后续应在同一清洁口径下复测并比较 CPU、GC、launch
+处理速率和终态收敛时间，再决定是否进入批量状态写入改造。
+
+同日 10w 复测结果（Counter 缓存版本）：入口共 100,000 次，99,575 次 HTTP 成功、425 次 `429`
+admission 拒绝；服务端形成 99,574 个实例，99,574 个全部 `SUCCESS`，0 个 `FAILED`、0 个非终态。
+最终实例平均耗时 384.395 秒，p95 627.832 秒；Kafka launch lag 最终为 0。Orchestrator 内存约
+790--806MiB，CPU 约 70%--150% 波动。
+
+因此本轮证明了已形成实例的正确性，但没有证明 10w 在当前单实例窗口内具备目标容量；Counter 缓存也未
+带来可观测的端到端吞吐改善。严格脚本因为 425 次受控 429 和 1 条尚未关联实例的 `ACCEPTED` 请求返回
+非零，不能标记为容量通过。日志已确认该请求的 trigger outbox 成功进入 Kafka，但 Orchestrator consumer
+连续遇到 429，重试耗尽后被通用错误处理器按 recovered 消息提交 offset，最终留下 `ACCEPTED`。该 1 条
+请求已随压测现场清理；修复顺序应先保证 admission 429 不会被重试耗尽策略静默跳过，再优化 Orchestrator
+状态写入削峰/批量化，而不是继续增加 consumer 并发。
+
+### 2026-09-11 热路径与 worker 容量契约收口
+
+本轮按“先消除无效读写，再增加并发，最后用同口径压力验证”的顺序实施，未改变状态机终态、事务边界、
+Outbox 一致性、租户隔离或 Kafka ack 语义：
+
+1. Trigger launch consumer 遇到 admission `429` 时执行带退避的 nack，不再被有限重试器提交 offset；受信 Kafka
+   入口只绕过面向 HTTP 调用方的防滥用限流，业务 quota、资源队列和 worker 容量判定仍保留。
+2. launch 高频配置读取增加 250ms 有界进程内缓存；无租户/队列配额时跳过无意义的 active-count 查询。
+3. 普通可派发 plan 在同一 T2 事务内直接插入 `READY` 分区和任务，移除刚插入后再做
+   `CREATED -> READY` 的冗余 CAS；DAG、重试、WAITING 释放仍走既有状态机 CAS。
+4. 去掉 mark-running 前的实例整行重读，直接使用当前事务已知 version 做 CAS；增加 launch phase 指标，分别
+   观测 validation、prepare、plan、resource schedule、materialize 和 instance transition。
+5. benchmark profile 使用两个 Orchestrator 实例，各 6 个 launch consumer、平台库池 50；Atomic topic 12
+   分区、listener 12、执行许可/线程池 16。压测脚本会在请求总数不能被 RPS 整除、旧 launch lag 未清零、
+   容器预算不一致时前置失败，避免生成虚假的“精确 1w/10w”报告。
+
+首次把 Atomic listener 提高到 12 后，约 7 分钟只有 6,479 个实例终态，另有约 3,521 个实例停在
+`WAITING`。根因不是 Kafka lag 或 worker 执行慢，而是容器实际许可为 16，`worker_registry.max_concurrent`
+仍沿用数据库默认值 10；selector 看到的容量与 worker 实际容量不一致。修复后，五类内置 worker 在注册时
+上报本地 `max-concurrent-tasks`，平台仅在 register/re-register 时校准该值；普通 heartbeat 不覆盖平台后续
+可能下发的动态限额。旧 SDK 不带该可选字段时仍保留已有值或数据库默认值，wire 向后兼容。
+
+运行态复核确认 `atomic-node-1` 登记为 `current_load=0 / max_concurrent=16`。同一 Docker 基础设施下的结果如下：
+
+| 档位 | 入口 | 实例终态 | 实例平均 / p95 | task claim p95 | task exec p95 | 结论 |
+|---|---|---|---:|---:|---:|---|
+| 1k，100 RPS | 1,000 OK，0 KO，HTTP p95 1,269ms | 1,000 `SUCCESS`，0 非终态 | 6.919s / 9.900s | 9.643s | 241ms | 容量契约与小规模收敛通过 |
+| 1w，100 RPS | 10,000 OK，0 KO，HTTP p95 928ms | 10,000 `SUCCESS`，0 非终态 | 48.876s / 66.477s | 66.396s | 152ms | 严格画像通过；Kafka lag、锁等待和测试残留均为 0 |
+
+与本轮同日、修复容量契约前的干净 1w 结果相比，实例平均耗时从 56.049s 降到 48.876s（约 12.8%），
+p95 从 70.686s 降到 66.477s（约 6.0%），task claim p95 从 70.638s 降到 66.396s。代价是 HTTP p95
+从 162ms 上升到 928ms，launch phase 加权平均也从 validation/prepare/dispatch 的
+6.65/23.66/42.06ms 上升到约 11.98/38.02/72.11ms；Atomic 12 路消费与两个 Orchestrator 同时写平台库，
+会增加本机 CPU、连接池和 WAL 竞争。因此该配置提高了最终排空能力，但不是低延迟入口的无条件推荐值。
+
+当前下一步不应继续盲目增加 listener 或数据库连接池。生产同构环境应先分别测 8/10/12 路 Atomic
+consumer 的矩阵，固定 100 RPS 和相同 PG 规格，比较 HTTP p95、终态 p95、WAL、CPU/IO 与 backlog
+排空时间；以“满足窗口的最低并发”为生产推荐值。若 100 RPS 入口 p95 仍要求低于 500ms，应隔离
+worker 业务连接池与控制面平台库资源，或降低单节点 worker 并发并横向扩 worker，而不是削弱 quota、
+状态 CAS 或 Outbox 一致性。

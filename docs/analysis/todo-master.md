@@ -1,19 +1,37 @@
-# TODO Master · 全仓待办整合
+# TODO Master · 当前待办唯一索引
 
-> 整合范围：`docs/` 全部 md（analysis / runbook / architecture / design / compliance / changelog）+ 代码 `TODO` / `FIXME` / `@Deprecated forRemoval` 注解
-> 维护规则见底部
+> 核查日期：2026-09-11。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
+
+> 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
 
 ---
 
 ## 一、状态总览
 
-| 状态 | 计数 | 主要主题 |
-|---|---:|---|
-| ✅ **完成** | 62+ | 含 ADR-009/010/011 全栈 / EXCEL-GODCLASS 6/7 / WEBHOOK-DURABILITY / IDEMPOTENCY 三层 / FQN 全清 / Prometheus 告警 / NOISE 治理 / X-Console-Token 物删 / 12 旧 Excel 端点物删 + OpenAPI 同步 / Query factory + 守护测试 / POSITIONAL-ARGS v4 闭环；以及第 1 阶段 P0（ADR-012 / ADR-023 / ADR-025）+ 第 2 阶段 P1（ADR-021 / ADR-022 / ADR-026） |
-| 🟡 **半成** | 3 | ADR-010 Stage 6/7 灰度（灰度门禁未到）· ADR-009 Stage 4 业务方触发 · WF-design-1/2 字段先决条件未就位 |
-| ⏳ **待做** | 9 | 前端待办（ADR-018/020/026 Console UI）/ 横切（CI lint dry-run + audit/metric label）/ Quartz staging 7 项（🔒 ops/DBA/BIZ/staging）/ LIC-2 SBOM（🔒 ops 部分） |
-| 🟡 **暂缓** | 6 | ADR-024 冷热分层 / ADR-027 资源亲和 / **ADR-033 Quartz→Wheel(2026-05-21 立项)** / ADR-022 v0.2 history 表 / LIC-2 SBOM / CI flaky × 2(`@Disabled`)— 触发条件未达,priority-scope §5 守红线 |
-| ❌ **不做** | 4 | V5-P2-1 / V5-P2-9 / V5-NEW-1 / V5-NEW-2（理由见各项）|
+本表不再维护“完成 X 项”的汇总数字。数字会随历史快照、重复计划和外部验证状态变化而失真；当前判断以每条事项的状态、证据和最后核查日期为准。
+
+| 状态 | 当前口径 |
+|---|---|
+| ✅ **完成** | 有代码、测试、门禁或验证记录支撑；完成项不再重复列入待办 |
+| ⏳ **当前待做** | 本地仍有明确交付物，且没有被更新文档或决策替代 |
+| 🔒 **外部阻塞** | 本地材料已准备，等待 staging、运维、DBA、业务方或外部凭据 |
+| 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
+| ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
+
+### 当前核查边界（2026-09-11）
+
+以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
+
+| 主题 | 当前归类 | 权威来源 |
+|---|---|---|
+| staging 真实恢复、容量、发布与回滚留档 | 🔒 外部阻塞 | [`full-project-test-plan.md`](../testing/full-project-test-plan.md) |
+| 生产 PG/Kafka/Redis HA、PITR 和真实故障演练 | 🔒 外部阻塞 | [`ha-readiness.md`](../runbook/ha-readiness.md) |
+| 前端 dry-run、跨日 DAG、批次日 replay 页面 | ✅ 已完成 | 本表 §二 FE-1/2/3 |
+| CI dry-run guard、dry-run 审计与指标维度 | ✅ 已完成 | `DryRunGuardConventionTest`、`TAG_DRY_RUN` 及 worker/plugin 守护已落地 |
+| Quartz 彻底迁移、冷热分层、资源亲和 | 🟡 暂缓 | 对应 ADR 的触发条件 |
+
+其余来源文档中的“未完成 / TODO / 缺口”必须按 [`document-governance.md`](../standards/document-governance.md) 复核后，才能加入当前待办。
 
 ### 🟡 暂缓清单(2026-05-21 集中索引)
 
@@ -24,7 +42,6 @@
 | ADR-033 Quartz→Wheel 切换 | [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) §3 | fire QPS > 500 万/天 / Quartz 归因事件 / DB 锁红线 / cron SLA |
 | ADR-022 v0.2 `*_history` 影子表 + OSS 对象锁 | [ADR-022](../architecture/adr/ADR-022-forensic-audit-bundle.md) status | 7 年保留合规要求触发 |
 | LIC-2 SBOM 嵌入 artifact | todo-master §H | 合规审计 / 客户 SBOM 要求 |
-| CI flaky × 2 (JobLaunchToFinish / WheelLeaderFailover) | `@Disabled` + commit `9d3c4710` 注释 | testcontainer fast-path 时序根因可重现 |
 
 **环境分布**（可执行性切片）：
 
@@ -62,20 +79,24 @@
 | ADR-024 | 冷热分层 | archive 行数未到阈值 |
 | ADR-027 | 资源亲和 | worker_group ≥ 8 / 异构硬件 / 多机房 / 合规隔离 等条件未出现 |
 
-### 前端待办（接口已就绪，前端可开干）⏳
+### 前端能力（已完成）✅
 
-| ID | 主题 | 后端契约 |
+| ID | 主题 | 完成证据 |
 |---|---|---|
-| **FE-1** | ADR-026 Console UI 演练模式 toggle | `POST /api/console/ops/dry-run/plan` 已开放 |
-| **FE-2** | ADR-018 跨日 DAG Console UI | `ConsoleWorkflowNodeResponse.crossDayDependencies` 已返回 |
-| **FE-3** | ADR-020 批次日重放 Console UI + ALL/ALL_FAILED/SUBSET E2E | 5 个 `/api/console/ops/batch-day-replay/sessions...` 端点已开放 |
+| **FE-1** | ADR-026 Console UI 演练模式 | `batch-console/src/components/dialogs/DryRunPlanDialog.vue` + Job 定义详情接线 |
+| **FE-2** | ADR-018 跨日 DAG Console UI | `WorkflowMermaidViewer.vue` + `crossDayMermaid.test.ts` |
+| **FE-3** | ADR-020/026 批次日重放与整批量日演练 | `BatchDayReplay.vue` 支持 REPLAY/DRY_RUN、EXISTING_INSTANCES/SCHEDULE_PLAN，提交归一化单测覆盖无副作用策略 |
 
-### 横切关注点（未做）⏳
+### 横切关注点（历史编号，已完成）✅
 
 | ID | 主题 |
 |---|---|
-| **CC-1** | CI lint 守护：step plugin 必经 DryRunGuard |
-| **CC-2** | audit + metric label 加 dry_run 维度 |
+| ~~**CC-1**~~ | CI lint 守护：step plugin 必经 DryRunGuard | ✅ |
+| ~~**CC-2**~~ | audit + metric label 加 dry_run 维度 | ✅ |
+
+> **状态校准（2026-09-11）**：CC-1/CC-2 已完成。证据为 `batch-worker-core` 的
+> `DryRunGuardConventionTest`、`batch-common` 的 `BatchMetricsNames.TAG_DRY_RUN` 及相关审计字段。
+> 本表保留编号用于追溯，不再作为当前待办。
 
 ---
 
@@ -188,16 +209,16 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ID | 主题 | 代码位置 | 备注 |
 |---|---|---|---|
 | **DEP-1** | `HttpOrchestratorTriggerAdapter` 物删 | batch-trigger:HttpOrchestratorTriggerAdapter.java:27 | 同 ADR10-S7-removal |
-| **DEP-2** | `BatchSecurityProperties.testingOpen` 物删 | batch-common:BatchSecurityProperties.java:45,51 | since=2026-04-19，1 minor 后移除 |
+| ~~**DEP-2**~~ | `BatchSecurityProperties.testingOpen` 物删 | batch-common:BatchSecurityProperties.java:45,51 | ✅ 已完成；代码与配置键已物理删除，保留历史记录 |
 | ~~**DEP-3**~~ | `ConsoleAlertRoutingExcelController` 4 处旧端点物删 | batch-console-api | ✅ 2026-05-01 物删 + OpenAPI 同步 |
 | ~~**DEP-4**~~ | `ConsoleFileTemplateExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |
 | ~~**DEP-5**~~ | `ConsoleResourceQueueExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |
 
-### K. 代码内 follow-up · P3
+### K. 代码内 follow-up · P3 · ✅ 已完成
 
 | ID | 主题 | 代码位置 |
 |---|---|---|
-| **EXT-1** | V5-P2-4-ext: JOB / BATCH compensation happy-path | `DefaultCompensationServiceTest.java:167`（`// TODO V5-P2-4-ext`） |
+| ~~**EXT-1**~~ | V5-P2-4-ext: JOB / BATCH compensation happy-path | ✅ `DefaultCompensationServiceTest` 已覆盖 JOB/BATCH submit happy-path（约 269-328 行）；原 TODO 索引已过期 |
 
 ### L. 历史一次性失败修复 · P3 · ✅
 
@@ -226,10 +247,17 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 - 未做：见 §三-D
 - 🔒 全部 7 项需 ops / staging / prod — 见 §九
 
-### Worker 4 模块单测密度（V6-D-5）
+### Worker 4 模块单测密度（V6-D-5）✅
 
-- 未做：各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 个单测
+- 已完成：4 个 `Default*StageExecutor` 均已有 5 个以上场景；Import / Export / Process / Dispatch 的 `*StepExecutionAdapterTest` 均补齐 5 个核心契约场景。
 - 来源：hardening-backlog v6
+
+### 历史 flaky 测试根治 ✅
+
+- `JobLaunchToFinishLifecycleIntegrationTest`：失败上报补齐 claim 生成的 `partitionInvocationId`，恢复 CAS 真实契约后取消禁用。
+- `RlsStrictModePreflightIntegrationTest`：回滚策略对齐生产 SQL 的空字符串 GUC 语义后取消禁用。
+- 全仓仅保留 `ShellTaskExecutorTest` 的 Windows 平台条件禁用，不再存在无条件 `@Disabled`。
+- 2026-09-11 连续 3 轮目标集成验证通过。
 
 ---
 
@@ -314,7 +342,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | 校验项 | 命令 | 说明 |
 |---|---|---|
 | Query record 工厂数 | `for f in $(find docs/query/*.java); do grep -c 'public static.*\bof' $f; done` | 已闭环，详见 §五 Query Record 工厂段 |
-| 代码 TODO 总数 | `rg '\b(TODO\|FIXME\|XXX\|HACK)\b' --glob '*.java'` | 1 处（`DefaultCompensationServiceTest:167` V5-P2-4-ext，详见 §三-K）|
+| 代码 TODO 总数 | `rg '\b(TODO\|FIXME\|XXX\|HACK)\b' --glob '*.java'` | 当前应重新扫描；旧的 `DefaultCompensationServiceTest:167` V5-P2-4-ext 已由现有 happy-path 测试覆盖 |
 | `@Deprecated forRemoval=true` | `rg 'forRemoval' --glob '*.java'` | 5 类（HttpOrchestratorTriggerAdapter / BatchSecurityProperties / 3 个 ExcelController），后 3 个已物删 |
 | 多 null 占位 inline new（≥2 null）| `rg -nU --multiline 'new \w+\([^)]*null[^)]*null[^)]*\)' --glob '*.java'` | POSITIONAL-ARGS v4 闭环后回归 0；新增由守护测试拦截 |
 

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -17,8 +18,9 @@ public class DispatchWorkerLoop extends AbstractWorkerLoop {
   public DispatchWorkerLoop(
       WorkerRuntimeFacade workerRuntimeFacade,
       BatchDateTimeSupport dateTimeSupport,
-      DispatchWorkerConfiguration configuration) {
-    super(workerRuntimeFacade, dateTimeSupport);
+      DispatchWorkerConfiguration configuration,
+      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+    super(workerRuntimeFacade, dateTimeSupport, maxConcurrentTasks);
     this.configuration = configuration;
   }
 

@@ -74,6 +74,8 @@ pub struct ReqwestConfig {
     pub connect_timeout_ms: u64,
     /// Per-request read timeout in milliseconds (§1.1: keep < heartbeat/3).
     pub read_timeout_ms: u64,
+    /// 本地执行器物理并发上限。真实 HTTP 注册时自动上报给平台容量路由。
+    pub max_concurrent_tasks: i64,
     /// Request signing (scheme A, opt-in). When `true` **and** an api key is
     /// configured, every write request carries `X-Batch-Timestamp` /
     /// `X-Batch-Nonce` / `X-Batch-Signature` (HMAC over the canonical string,
@@ -95,6 +97,7 @@ impl std::fmt::Debug for ReqwestConfig {
             .field("api_key", &self.api_key.as_ref().map(|_| "***"))
             .field("connect_timeout_ms", &self.connect_timeout_ms)
             .field("read_timeout_ms", &self.read_timeout_ms)
+            .field("max_concurrent_tasks", &self.max_concurrent_tasks)
             .field("request_signing_enabled", &self.request_signing_enabled)
             .finish()
     }
@@ -109,6 +112,7 @@ impl ReqwestConfig {
             api_key: None,
             connect_timeout_ms: 5_000,
             read_timeout_ms: 10_000,
+            max_concurrent_tasks: 4,
             request_signing_enabled: false,
         }
     }
@@ -123,6 +127,12 @@ impl ReqwestConfig {
     /// api key is also configured. Mirrors Java `requestSigningEnabled`.
     pub fn with_request_signing(mut self, enabled: bool) -> Self {
         self.request_signing_enabled = enabled;
+        self
+    }
+
+    /// 设置本地执行器并发上限。范围在构造 transport 时校验，配置错误不会被静默钳制。
+    pub fn with_max_concurrent_tasks(mut self, max_concurrent_tasks: i64) -> Self {
+        self.max_concurrent_tasks = max_concurrent_tasks;
         self
     }
 
@@ -163,6 +173,7 @@ pub struct ReqwestTransport {
     base_url: String,
     tenant_id: String,
     api_key: Option<String>,
+    max_concurrent_tasks: i64,
     request_signing_enabled: bool,
 }
 
@@ -172,6 +183,7 @@ impl std::fmt::Debug for ReqwestTransport {
             .field("base_url", &self.base_url)
             .field("tenant_id", &self.tenant_id)
             .field("api_key", &self.api_key.as_ref().map(|_| "***"))
+            .field("max_concurrent_tasks", &self.max_concurrent_tasks)
             .field("request_signing_enabled", &self.request_signing_enabled)
             .finish()
     }
@@ -196,6 +208,12 @@ impl ReqwestTransport {
     /// [`TransportBuildError`] only if the client (TLS / timeout) cannot be
     /// constructed or the tenant/api-key contain non-ASCII header bytes.
     pub fn new(config: ReqwestConfig) -> Result<Self, TransportBuildError> {
+        if !(1..=64).contains(&config.max_concurrent_tasks) {
+            return Err(TransportBuildError(format!(
+                "max_concurrent_tasks must be 1..64, got {}",
+                config.max_concurrent_tasks
+            )));
+        }
         // Validate the static auth headers up-front so a bad tenant/api-key
         // fails loudly at construction, not silently per request.
         let mut default_headers = HeaderMap::new();
@@ -225,6 +243,7 @@ impl ReqwestTransport {
             base_url: config.base_url.trim_end_matches('/').to_string(),
             tenant_id: config.tenant_id,
             api_key: config.api_key.filter(|k| !k.is_empty()),
+            max_concurrent_tasks: config.max_concurrent_tasks,
             request_signing_enabled: config.request_signing_enabled,
         })
     }
@@ -362,15 +381,15 @@ fn current_protocol_version() -> &'static str {
     SUPPORTED_SCHEMA_VERSIONS.last().copied().unwrap_or("v1")
 }
 
-/// Default `protocolVersion` into a register body. If `body` parses to a JSON
-/// object lacking `protocolVersion`, insert the current major and re-serialize;
-/// a tenant-provided value is preserved. If `body` is not a JSON object (or
-/// fails to parse), it is returned unchanged.
-fn with_protocol_version(body: &str) -> String {
+/// 为注册体补齐协议版本和本地物理容量。调用方显式提供的值优先；非法或非对象 JSON
+/// 原样下发，由平台返回权威校验错误。
+fn with_register_defaults(body: &str, max_concurrent_tasks: i64) -> String {
     match serde_json::from_str::<serde_json::Value>(body) {
         Ok(serde_json::Value::Object(mut map)) => {
             map.entry("protocolVersion".to_string())
                 .or_insert_with(|| serde_json::Value::from(current_protocol_version()));
+            map.entry("maxConcurrent".to_string())
+                .or_insert_with(|| serde_json::Value::from(max_concurrent_tasks));
             serde_json::Value::Object(map).to_string()
         }
         _ => body.to_string(),
@@ -383,7 +402,7 @@ impl Transport for ReqwestTransport {
         // the SDK's current major (last of SUPPORTED_SCHEMA_VERSIONS) so the
         // platform identifies + accepts us. A tenant-provided value is left
         // intact; a non-object body is sent verbatim. Register only.
-        let sent = with_protocol_version(body);
+        let sent = with_register_defaults(body, self.max_concurrent_tasks);
         self.post("/internal/workers/register", &sent, None)
     }
 
@@ -593,6 +612,11 @@ mod tests {
             "register body must advertise protocolVersion, got {}",
             req.body,
         );
+        assert!(
+            req.body.contains("\"maxConcurrent\":4"),
+            "register body must advertise local capacity, got {}",
+            req.body,
+        );
         // original fields preserved.
         assert!(req.body.contains("\"workerCode\":\"w1\""));
     }
@@ -606,6 +630,26 @@ mod tests {
         // tenant-provided value is left intact (not overwritten).
         assert!(req.body.contains("\"protocolVersion\":\"v1\""));
         assert!(!req.body.contains("\"protocolVersion\":\"v2\""));
+    }
+
+    #[test]
+    fn register_preserves_tenant_provided_capacity() {
+        let (base, rx) = one_shot_server(200, "");
+        let t = transport(&base);
+        t.register("w1", r#"{"workerCode":"w1","maxConcurrent":7}"#);
+        let req = rx.recv().expect("captured request");
+        assert!(req.body.contains("\"maxConcurrent\":7"));
+        assert!(!req.body.contains("\"maxConcurrent\":4"));
+    }
+
+    #[test]
+    fn invalid_max_concurrent_fails_at_transport_construction() {
+        let err = ReqwestTransport::new(
+            ReqwestConfig::new("https://orch.internal:8080", "tenant-42")
+                .with_max_concurrent_tasks(0),
+        )
+        .expect_err("zero capacity must fail");
+        assert!(err.to_string().contains("must be 1..64"));
     }
 
     #[test]

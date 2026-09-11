@@ -5,6 +5,7 @@
     "config": {
       "tenantId": "acme",
       "workerCode": "w-1",
+      "maxConcurrentTasks": 4,
       "apiKey": "secret-key-xyz",
       "baseUrl": "http://orchestrator-internal:8081"
     },
@@ -21,7 +22,7 @@
     "sdkExpectedAction": "call register with the apiKey only in the X-Batch-Api-Key header; never put it in the request body",
     "sdkMustNot": ["include apiKey in the request body", "log the apiKey"],
     "expect": {
-      "requestBodyIncludes": { "tenantId": "acme", "workerCode": "w-1" },
+      "requestBodyIncludes": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrent": 4 },
       "requestBodyExcludes": ["apiKey"],
       "requestHeaders": { "X-Batch-Api-Key": "^secret-key-xyz$", "X-Batch-Tenant-Id": "^acme$" }
     }

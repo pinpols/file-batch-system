@@ -9,12 +9,14 @@
 | 01 | [deep-issue-analysis.md](./deep-issue-analysis.md) | 系统级深度问题分析：Bug / 漏洞 / 设计缺陷全景 | 想知道"目前有哪些问题" |
 | 02 | [fix-report.md](./fix-report.md) | 修复报告：哪些已修、commit 引用 | 验收 / 复盘 |
 | 03 | [hardening-backlog.md](./hardening-backlog.md) | 硬化 backlog：剩下的 P0/P1/P2 优先级排序 | 决定下个 sprint 干什么 |
-| 04 | [project-assessment.md](./project-assessment.md) | 项目工程深度评估（当前权威）：四维评分 + 演进 delta + ops 缺口锁定 | 看"项目今天整体水准"一页式判断 |
+| 04 | [project-assessment.md](./project-assessment.md) | 项目工程深度评估：四维评分 + 演进 delta + ops 缺口锁定 | 查看评估快照，当前待办以 todo-master 为准 |
 | 05 | [system-scope-boundary.md](./system-scope-boundary.md) | 系统职责范围基准：批量调度 + 文件交付闭环的边界守护 | 判定新功能是否越界、季度复盘 |
-| 06 | [todo-master.md](./todo-master.md) | 全仓待办整合：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
+| 06 | [todo-master.md](./todo-master.md) | 当前待办唯一索引：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
 | 07 | [java-readability-phase-0-classification-2026-08-12.md](./java-readability-phase-0-classification-2026-08-12.md) | Java 可读性治理分类总账；机器快照见 [inventory](./java-readability-inventory-2026-08-12.md) | 实施可读性路线图阶段 0～3、复核保留例外 |
 
 ## 工作循环
+
+当前待办的状态分类、归档边界和复扫规则以 [`../standards/document-governance.md`](../standards/document-governance.md) 为准。
 
 ```
 新 issue 发现  →  追加到 deep-issue-analysis.md

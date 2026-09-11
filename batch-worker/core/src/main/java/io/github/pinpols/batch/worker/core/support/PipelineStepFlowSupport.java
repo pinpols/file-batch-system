@@ -62,7 +62,8 @@ public final class PipelineStepFlowSupport {
       return null;
     }
     for (int index = 0; index < steps.size(); index++) {
-      if (steps.get(index).stepCode().equals(current.stepCode())) {
+      PipelineStepDefinition step = steps.get(index);
+      if (step != null && stepCodeMatches(step, current)) {
         return index + 1 < steps.size() ? steps.get(index + 1) : null;
       }
     }
@@ -99,11 +100,19 @@ public final class PipelineStepFlowSupport {
       return null;
     }
     for (PipelineStepDefinition step : steps) {
-      if (selector.equalsIgnoreCase(step.stepCode())
-          || selector.equalsIgnoreCase(step.stageCode())) {
+      if (step != null
+          && (selector.equalsIgnoreCase(step.stepCode())
+              || selector.equalsIgnoreCase(step.stageCode()))) {
         return step;
       }
     }
     return null;
+  }
+
+  private static boolean stepCodeMatches(
+      PipelineStepDefinition step, PipelineStepDefinition current) {
+    return current != null
+        && Texts.hasText(current.stepCode())
+        && current.stepCode().equals(step.stepCode());
   }
 }

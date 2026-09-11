@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +57,20 @@ class PipelineStepFlowSupportTest {
     assertThat(PipelineStepFlowSupport.resolveNextStep(s1, true, List.of(s1, s2), attrs))
         .isEqualTo(s2);
     assertThat(attrs).doesNotContainKey(PipelineRuntimeKeys.PIPELINE_NEXT_STEP_CODE);
+  }
+
+  @Test
+  void shouldIgnoreNullStepsAndStepsWithoutCode() {
+    PipelineStepDefinition current = step("S1");
+    PipelineStepDefinition withoutCode = step(null);
+    assertThat(PipelineStepFlowSupport.resolveNextStep(
+            current, true, Arrays.asList(withoutCode, current, step("S2")), new HashMap<>()))
+        .extracting(PipelineStepDefinition::stepCode)
+        .isEqualTo("S2");
+    assertThat(PipelineStepFlowSupport.resolveNextStep(
+            current, true, Arrays.asList(null, current, step("S2")), new HashMap<>()))
+        .extracting(PipelineStepDefinition::stepCode)
+        .isEqualTo("S2");
   }
 
   private static PipelineStepDefinition step(String code) {

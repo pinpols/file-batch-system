@@ -115,6 +115,9 @@ class JsonFixtureRequestSideContractTest {
   private static Object buildBody(JsonNode spec, JsonNode config) {
     String tenantId = config.path("tenantId").asText(null);
     String workerCode = config.path("workerCode").asText(null);
+    Integer maxConcurrent = config.hasNonNull("maxConcurrentTasks")
+        ? config.get("maxConcurrentTasks").asInt()
+        : null;
     String kind = spec.path("kind").asText();
     String inv = spec.hasNonNull("partitionInvocationId")
         ? spec.get("partitionInvocationId").asText()
@@ -135,6 +138,7 @@ class JsonFixtureRequestSideContractTest {
             null,
             null,
             null,
+            maxConcurrent,
             null,
             null);
       case "claim":

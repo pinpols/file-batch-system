@@ -1,5 +1,7 @@
 # 生产高可用就绪 Checklist(P0 / P1)
 
+> 状态口径：本文区分“应用代码/部署材料已具备”和“目标环境已实际部署并演练”。本地脚本或 Helm 文件存在，不等于生产 HA 已验收；“运维件未落地”也不表示应用代码缺失。当前未闭环事项统一登记在 [`../analysis/todo-master.md`](../analysis/todo-master.md)。
+
 > 上生产前逐项过。**核心结论**:应用层(调度主备 / 幂等 / 任务恢复 / Kafka 重复消费 / 降级)在本仓**已建好**;真实短板全在**基础件 HA**,且这些**与 Citus 正交**(单机 PG 生产同样需要)。Citus 是扩展不是 HA,不在本清单 P0/P1。
 >
 > 每项分:**① 运维件(部署/可选托管)** + **② 应用侧(代码/配置,本仓状态)** + **验证** + **回滚**。
@@ -35,7 +37,7 @@
 - **回滚**:Patroni `failover`/`switchover` 切回;app 无需动(连 VIP)。
 
 ### P0-3 备份 / PITR(数据安全底线)
-- **现状**:**未实现**(只有 `backup-and-pitr.md` runbook)。
+- **现状**:应用侧告警、备份脚本骨架和恢复 runbook 已具备；生产 WAL 归档、独立故障域和真实 PITR 演练尚未落地，不能标记为生产已验收。
 - **① 运维件**:`pg_basebackup` 日 base + WAL 连续归档(`archive_command` 指独立故障域)+ `pg_dump` 两库逻辑导出;Citus 下每 worker 独立备份 + coordinator 元数据。
 - **② 应用侧**:✅ 备份新鲜度告警 `PostgresBackupStale`(`prometheus-batch-rules.yml`,gauge 缺失/>26h critical)已就位,等运维 push 指标。备份脚本骨架 `scripts/db/backup/pg-backup.sh`(base + 两库逻辑 dump + 可选 WAL 清理 + 新鲜度指标 push)已落地,等运维按 §1.3 cron 编排。
 - **SLO 目标**:**RTO ≤ 30min / RPO ≤ 5min**(依据 + 调紧路径见 `backup-and-pitr.md` §1.4)。RPO 由 WAL `archive_timeout=300` 封顶,RTO 由 base+WAL replay / `pg_restore -j4` 保证。

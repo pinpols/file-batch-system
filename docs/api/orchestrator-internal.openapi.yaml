@@ -641,6 +641,14 @@ components:
         scope:
           type: string
           enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
+        executionMode:
+          type: string
+          enum: [REPLAY, DRY_RUN]
+          default: REPLAY
+        candidateSource:
+          type: string
+          enum: [EXISTING_INSTANCES, SCHEDULE_PLAN]
+          default: EXISTING_INSTANCES
         jobCodes:
           type: array
           items: {type: string}
@@ -651,10 +659,11 @@ components:
           description: OUTPUTS_ONLY 时必填。
         resultPolicy:
           type: string
-          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE, DRY_RUN_ONLY]
         configVersionPolicy:
           type: string
-          enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+          description: 后两个旧值仅用于入站兼容，服务端分别归一为 USE_LATEST_CONFIG、USE_SPECIFIED_VERSION
         configVersion: {type: integer, format: int32}
         reason: {type: string}
         requestedBy: {type: string}
@@ -671,12 +680,18 @@ components:
         scope:
           type: string
           enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
+        executionMode:
+          type: string
+          enum: [REPLAY, DRY_RUN]
+        candidateSource:
+          type: string
+          enum: [EXISTING_INSTANCES, SCHEDULE_PLAN]
         resultPolicy:
           type: string
-          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE, DRY_RUN_ONLY]
         configVersionPolicy:
           type: string
-          enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
         configVersion: {type: integer, format: int32, nullable: true}
         totalCount: {type: integer, format: int32}
         entries:
@@ -685,10 +700,16 @@ components:
         resultVersionImpacts:
           type: array
           items: {$ref: '#/components/schemas/BatchDayReplayResultVersionImpact'}
+        assetPartitionImpacts:
+          type: array
+          items: {$ref: '#/components/schemas/BatchDayReplayAssetPartitionImpact'}
+        dispatchImpacts:
+          type: array
+          items: {$ref: '#/components/schemas/BatchDayReplayDispatchImpact'}
         warnings:
           type: array
           items: {type: string}
-      required: [tenantId, calendarCode, bizDate, scope, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, warnings]
+      required: [tenantId, calendarCode, bizDate, scope, executionMode, candidateSource, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
 
     BatchDayReplayPreviewEntry:
       type: object
@@ -716,6 +737,26 @@ components:
           enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
       required: [businessKey, action, resultPolicy]
 
+    BatchDayReplayAssetPartitionImpact:
+      type: object
+      properties:
+        businessKey: {type: string}
+        assetCode: {type: string}
+        partitionKey: {type: string}
+        currentResultVersionId: {type: integer, format: int64, nullable: true}
+        freshnessStatus: {type: string}
+      required: [businessKey, assetCode, partitionKey, freshnessStatus]
+
+    BatchDayReplayDispatchImpact:
+      type: object
+      properties:
+        sourceInstanceId: {type: integer, format: int64, nullable: true}
+        recordCount: {type: integer, format: int64}
+        sentCount: {type: integer, format: int64}
+        failedCount: {type: integer, format: int64}
+        pendingReceiptCount: {type: integer, format: int64}
+      required: [recordCount, sentCount, failedCount, pendingReceiptCount]
+
     WorkerHeartbeatDto:
       type: object
       description: 同一 schema 用于 register / heartbeat / deactivate / updateStatus
@@ -738,6 +779,11 @@ components:
         currentLoad:
           type: integer
           description: "in-flight 任务数;null/负值平台 normalize 为 0"
+          nullable: true
+        maxConcurrent:
+          type: integer
+          minimum: 1
+          description: "Worker 本地实际执行许可上限;内置 worker 在 register 时上报。缺失时沿用平台已有值或数据库默认值"
           nullable: true
         taskTypes:
           type: array
@@ -792,7 +838,7 @@ components:
         desiredMaxConcurrent:
           type: integer
           nullable: true
-          description: "平台希望的最大并发(worker_registry.max_concurrent);null=不下发"
+          description: "平台当前生效的最大并发(worker_registry.max_concurrent；支持上报的 worker 注册时先以本地许可数校准);null=不下发"
         shouldDrain:
           type: boolean
           description: "true=停止认领新任务、跑完在手任务后下线"

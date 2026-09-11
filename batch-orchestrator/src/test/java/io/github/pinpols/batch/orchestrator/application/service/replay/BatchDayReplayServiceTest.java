@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 
 class BatchDayReplayServiceTest {
@@ -106,6 +107,52 @@ class BatchDayReplayServiceTest {
 
     assertThat(result.status()).isEqualTo("RUNNING");
     verify(entryMapper).insertBatch(anyList());
+  }
+
+  @Test
+  void submitNormalizesLegacyConfigVersionPolicy() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A")));
+    when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
+    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
+        .thenReturn(sessionAt("t1", 7L, "RUNNING", "ALL_FAILED"));
+
+    service.submit(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
+        .scope("ALL_FAILED")
+        .configVersionPolicy("USE_CURRENT_CONFIG")
+        .reason("compatibility check")
+        .requestedBy("ops")
+        .autoApprove(true)
+        .build());
+
+    ArgumentCaptor<BatchDayReplaySessionEntity> captor =
+        ArgumentCaptor.forClass(BatchDayReplaySessionEntity.class);
+    verify(sessionMapper).insert(captor.capture());
+    assertThat(captor.getValue().configVersionPolicy()).isEqualTo("USE_LATEST_CONFIG");
+  }
+
+  @Test
+  void previewNormalizesLegacySpecificVersionPolicy() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A")));
+
+    BatchDayReplayPreviewResponse result = service.preview(BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
+        .scope("ALL_FAILED")
+        .configVersionPolicy("USE_SPECIFIC_VERSION")
+        .configVersion(3)
+        .reason("compatibility check")
+        .requestedBy("ops")
+        .build());
+
+    assertThat(result.configVersionPolicy()).isEqualTo("USE_SPECIFIED_VERSION");
   }
 
   @Test
@@ -229,8 +276,8 @@ class BatchDayReplayServiceTest {
 
     dryRunService.submit(baseDryRunCommand().resultPolicy("CREATE_NEW_VERSION").build());
 
-    org.mockito.ArgumentCaptor<BatchDayReplaySessionEntity> captor =
-        org.mockito.ArgumentCaptor.forClass(BatchDayReplaySessionEntity.class);
+    ArgumentCaptor<BatchDayReplaySessionEntity> captor =
+        ArgumentCaptor.forClass(BatchDayReplaySessionEntity.class);
     verify(sessionMapper).insert(captor.capture());
     assertThat(captor.getValue().executionMode()).isEqualTo("DRY_RUN");
     assertThat(captor.getValue().resultPolicy()).isEqualTo("DRY_RUN_ONLY");

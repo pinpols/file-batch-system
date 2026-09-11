@@ -152,12 +152,14 @@ async def test_start_sequences_register_then_schedulers_then_kafka() -> None:
     dispatcher = _RecordingDispatcher()
     kafka = _RecordingKafka()
     events: list[str] = []
+    register_bodies: list[dict[str, Any]] = []
 
     # 包一层 register 以便记录其相对 kafka.start 的时序
     original_register = http.register
 
     async def register_recorder(*args: Any, **kwargs: Any) -> dict[str, Any]:
         events.append("register")
+        register_bodies.append(args[0])
         return await original_register(*args, **kwargs)
 
     http.register = register_recorder
@@ -178,6 +180,7 @@ async def test_start_sequences_register_then_schedulers_then_kafka() -> None:
     await client.start()
     try:
         assert client.started is True
+        assert register_bodies[0]["maxConcurrent"] == 4
         # register 在前,kafka.start 在最后
         assert events[0] == "register"
         assert events[-1] == "kafka.start"

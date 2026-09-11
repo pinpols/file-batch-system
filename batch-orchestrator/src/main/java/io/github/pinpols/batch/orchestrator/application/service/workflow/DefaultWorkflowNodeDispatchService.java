@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanSupport;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DryRunSchedulingPriority;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.WorkflowNodeRunSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
@@ -344,9 +345,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       task.setAssignedWorkerCode(resolveSelectedWorkerId(plan, partition));
       task.setTaskStatus(decision.getTaskStatus());
       task.setVersion(0L);
-      // V88: 拷 priority (workflow node task 的 priority 源 = SchedulePlan, 由
-      // DefaultSchedulePlanBuilder 读 job_definition)
-      task.setPriority(plan.getPriority());
+      task.setPriority(DryRunSchedulingPriority.resolve(plan.isDryRun(), plan.getPriority()));
       // fan-out:每个并行分区拿不同的 item(注入到 payload),非 fan-out 走共享 payload(行为不变)。
       String taskPayload = fanOut == null
           ? baseTaskPayload

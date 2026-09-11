@@ -16,7 +16,7 @@
 | kafkaTopicPattern | regex | 否 | node-direct 派生 | `KAFKA_TOPIC_PATTERN` | 默认 `batch\.task\.dispatch\..+\.node\.<workerCode>`;写成 tenant-first `<tenant>.*` → **静默收不到任务**(平台从不发布) |
 | kafkaGroupId | string | 否 | `g-sdk-<tenant>-<workerCode>` | `KAFKA_GROUP_ID` | 同 group 跨进程自动分片 |
 | buildId | string | 否 | null | `BUILD_ID` | 运行指纹(建议 CI 注入 git SHA);**禁放敏感信息**(入库对运维可见) |
-| maxConcurrentTasks | int | 否 | **4** | `MAX_CONCURRENT_TASKS` | 范围 1..64(Java 校验);超出并发走 capacity-aware pause |
+| maxConcurrentTasks | int | 否 | **4** | `MAX_CONCURRENT_TASKS` | 范围 1..64；注册时上报为 `maxConcurrent` 校准平台路由容量，进程内超限走 capacity-aware pause |
 | heartbeatInterval | 时长 | 否 | **30s** | `HEARTBEAT_INTERVAL_SECONDS` | 服务器 `nextHeartbeatHintMs` 钳制覆盖;< 1s → strict 时 fail-fast |
 | httpTimeout | 时长 | 否 | **10s** | `HTTP_TIMEOUT_SECONDS` | connect + read 合一;> heartbeat/2 → strict 时 fail-fast |
 | leaseRenewInterval | 时长 | 否 | 60s | `LEASE_RENEW_INTERVAL_SECONDS` | 应 < orchestrator lease TTL 的 1/2;> heartbeat×3 → strict 时 fail-fast |

@@ -1,5 +1,8 @@
 # 全项目完整功能与整体测试计划
 
+> 文档性质：测试计划与历史基线，不是当前缺陷清单。阶段性“未完成 / 未覆盖”只表示当时的验证范围；当前有效事项以
+> [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。真实 staging、生产 HA 和灾备证据仍须以最新验证记录为准。
+
 > 包含原 full-project-full-project-test-plan.md 的测试分层建议（2026-04-26 合并）
 
 ## 0. 测试分层建议（来自旧 full-project-full-project-test-plan.md）

@@ -15,8 +15,8 @@ import java.util.List;
  *   <li>{@code platformStatus}:平台对该 worker 的期望态;当前取值 {@code NORMAL} / {@code DRAINING}
  *       (worker_registry.status 为 DRAINING/DECOMMISSIONED 时)。{@code PAUSED} / {@code DEGRADED}
  *       预留给后续租户级暂停 / 降级基础设施。
- *   <li>{@code desiredMaxConcurrent}:平台希望的最大并发(取自 worker_registry.max_concurrent,V87 反压字段); null =
- *       不下发,SDK 用本地配置。
+ *   <li>{@code desiredMaxConcurrent}:平台当前生效的最大并发(取自 worker_registry.max_concurrent,V87
+ *       反压字段；支持上报的 worker 注册时先以本地许可数校准); null = 不下发,SDK 用本地配置。
  *   <li>{@code shouldDrain}:true = worker 应停止认领新任务、跑完在手任务后下线(DRAINING/DECOMMISSIONED)。
  *   <li>{@code pausedTaskTypes}:被暂停的 taskType 列表;当前恒空(无 taskType 级暂停基础设施),预留。
  *   <li>{@code nextHeartbeatHint}:平台建议的下次心跳间隔(秒);null = 不下发,SDK 用本地配置。
