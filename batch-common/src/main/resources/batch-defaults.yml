@@ -225,10 +225,12 @@ batch:
   replay:
     dispatch:
       enabled: true
-      poll-interval-millis: 30000
-      session-batch-size: 20
-      entry-batch-size: 50
-      claim-timeout-millis: 300000
+      poll-interval-millis: ${BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS:30000}
+      session-batch-size: ${BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE:20}
+      entry-batch-size: ${BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE:50}
+      lock-at-least-for: ${BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR:PT15S}
+      lock-at-most-for: ${BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR:PT1M}
+      claim-timeout-millis: ${BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS:300000}
     dry-run:
       enabled: false
       max-active-entries: 200

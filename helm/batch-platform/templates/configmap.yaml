@@ -91,6 +91,12 @@ data:
   BATCH_REPLAY_DRY_RUN_ENABLED: {{ (.Values.orchestrator.replayDryRun).enabled | default false | quote }}
   BATCH_REPLAY_DRY_RUN_MAX_ACTIVE_ENTRIES: {{ (.Values.orchestrator.replayDryRun).maxActiveEntries | default 200 | quote }}
   BATCH_REPLAY_DRY_RUN_RETENTION_DAYS: {{ (.Values.orchestrator.replayDryRun).retentionDays | default 7 | quote }}
+  BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS: {{ (.Values.orchestrator.replayDispatch).pollIntervalMillis | default 30000 | quote }}
+  BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE: {{ (.Values.orchestrator.replayDispatch).sessionBatchSize | default 20 | quote }}
+  BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE: {{ (.Values.orchestrator.replayDispatch).entryBatchSize | default 50 | quote }}
+  BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR: {{ (.Values.orchestrator.replayDispatch).lockAtLeastFor | default "PT15S" | quote }}
+  BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR: {{ (.Values.orchestrator.replayDispatch).lockAtMostFor | default "PT1M" | quote }}
+  BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS: {{ (.Values.orchestrator.replayDispatch).claimTimeoutMillis | default 300000 | quote }}
   BATCH_WORKER_REPORT_OUTBOX_ENABLED: {{ (.Values.orchestrator.workerReportOutbox).enabled | default false | quote }}
   BATCH_WORKER_REPORT_OUTBOX_STORAGE: {{ (.Values.orchestrator.workerReportOutbox).storage | default "PLATFORM_PG" | quote }}
   BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID: {{ (.Values.orchestrator.workerReportOutbox).cutoverId | default "" | quote }}

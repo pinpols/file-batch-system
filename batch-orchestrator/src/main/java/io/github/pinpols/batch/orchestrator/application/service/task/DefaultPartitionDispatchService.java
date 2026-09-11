@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanSupport;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DryRunSchedulingPriority;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
@@ -29,6 +30,8 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
 import io.micrometer.observation.annotation.Observed;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -66,6 +69,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   private final WorkflowNodeDispatchService workflowNodeDispatchService;
   private final JobInstanceMapper jobInstanceMapper;
   private final WorkflowRunMapper workflowRunMapper;
+  private final LaunchPhaseMetrics launchPhaseMetrics;
 
   private record TaskExecutionContext(
       LaunchRequest request,
@@ -107,12 +111,13 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             && EmptyChecks.isNotEmpty(initialNodes))
         ? dispatchInitialDagNodes(initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
         : dispatchByPlan(request, effectiveParams, traceId, jobInstance);
-    refreshJobInstanceVersion(jobInstance);
-    if (outcome.dispatchable()) {
-      transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
-    } else {
-      transitionInstanceToWaiting(jobInstance, workflowRun, outcome.partitionCount());
-    }
+    launchPhaseMetrics.record(Phase.INSTANCE_TRANSITION, () -> {
+      if (outcome.dispatchable()) {
+        transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
+      } else {
+        transitionInstanceToWaiting(jobInstance, workflowRun, outcome.partitionCount());
+      }
+    });
   }
 
   private record DispatchOutcome(int partitionCount, boolean dispatchable) {}
@@ -142,10 +147,12 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       JobInstanceEntity jobInstance) {
     SchedulePlanCommand planCommand = new SchedulePlanCommand(
         request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams);
-    SchedulePlan plan = schedulePlanBuilder.build(planCommand);
+    SchedulePlan plan =
+        launchPhaseMetrics.record(Phase.PLAN_BUILD, () -> schedulePlanBuilder.build(planCommand));
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
-    ResourceSchedulingDecision decision =
-        resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan));
+    ResourceSchedulingDecision decision = launchPhaseMetrics.record(
+        Phase.RESOURCE_SCHEDULE,
+        () -> resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan)));
     if (isRejected(decision)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
@@ -153,15 +160,21 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
           decision.getReasonCode(),
           decision.getReasonMessage());
     }
-    SchedulePlanSupport.applySchedulingDecision(plan, decision);
-    List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
-        plan, jobInstance.getId(), decision.getPartitionStatus());
-    TaskExecutionContext executionContext =
-        new TaskExecutionContext(request, effectiveParams, traceId, jobInstance);
-    TaskSchedulingContext schedulingContext = new TaskSchedulingContext(plan, partitions, decision);
-    TaskCreationContext taskContext = new TaskCreationContext(executionContext, schedulingContext);
-    createTasksAndMaybeOutboxEvents(taskContext);
-    return new DispatchOutcome(partitions.size(), decision.isDispatchable());
+    return launchPhaseMetrics.record(Phase.DISPATCH_MATERIALIZE, () -> {
+      SchedulePlanSupport.applySchedulingDecision(plan, decision);
+      prepareInitialPartitionStatuses(plan, decision);
+      List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
+          plan, jobInstance.getId(), initialPartitionStatus(decision));
+      jobInstance.setExpectedPartitionCount(partitions.size());
+      TaskExecutionContext executionContext =
+          new TaskExecutionContext(request, effectiveParams, traceId, jobInstance);
+      TaskSchedulingContext schedulingContext =
+          new TaskSchedulingContext(plan, partitions, decision);
+      TaskCreationContext taskContext =
+          new TaskCreationContext(executionContext, schedulingContext);
+      createTasksAndMaybeOutboxEvents(taskContext);
+      return new DispatchOutcome(partitions.size(), decision.isDispatchable());
+    });
   }
 
   private boolean isRejected(ResourceSchedulingDecision decision) {
@@ -170,13 +183,23 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             || decision.isFailFast());
   }
 
-  // C-2.4: 重新读取 jobInstance 获取最新 version，避免并发创建分区/任务后 version 漂移导致 markRunning CAS 失败
-  private void refreshJobInstanceVersion(JobInstanceEntity jobInstance) {
-    JobInstanceEntity fresh =
-        jobInstanceMapper.selectById(jobInstance.getTenantId(), jobInstance.getId());
-    if (EmptyChecks.isNotNull(fresh)) {
-      jobInstance.setVersion(fresh.getVersion());
+  /**
+   * 普通 plan 的新分区、新任务和 outbox 在同一 T2 事务内落库，提交前不会被 worker 看到。
+   * 因此可派发路径直接以 READY 初始化，避免刚插入又执行 CREATED → READY 的两次冗余 UPDATE。
+   * WAITING 路径仍保留调度决策的原始状态；DAG、重试和等待队列释放仍走 releaseForDispatch CAS。
+   */
+  private void prepareInitialPartitionStatuses(
+      SchedulePlan plan, ResourceSchedulingDecision decision) {
+    if (!decision.isDispatchable() || EmptyChecks.isEmpty(plan.getPartitions())) {
+      return;
     }
+    for (SchedulePlan.PartitionPlan partition : plan.getPartitions()) {
+      partition.setPartitionStatus(PartitionStatus.READY.code());
+    }
+  }
+
+  private String initialPartitionStatus(ResourceSchedulingDecision decision) {
+    return decision.isDispatchable() ? PartitionStatus.READY.code() : decision.getPartitionStatus();
   }
 
   private void transitionInstanceToRunning(
@@ -235,8 +258,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   }
 
   // PERF(5.1): fan-out 由“逐分区 createTask + 逐条 outbox”改为两阶段——先整批构建 task 一次多行
-  // INSERT（含 step 镜像批写），再逐分区 releaseForDispatch（CREATED→READY 状态机 CAS，保持逐条不动）
-  // 并写 outbox。outbox 保持逐条：写入被 OutboxWriteChokePointArchTest 锁死在
+  // INSERT（含 step 镜像批写），再逐分区写 outbox。可派发的新行在该事务内直接以 READY 初始化，
+  // 不再额外执行 CREATED→READY 的两次 UPDATE。outbox 保持逐条：写入被 OutboxWriteChokePointArchTest 锁死在
   // OutboxDomainEventPublisher.publish 单入口（NOT EXISTS 去重承重点），批量化需动 common 的
   // DomainEventPublisher 契约与该治理护栏，按任务降级方案保持逐条（见 task-5-report）。
   private void createTasksAndMaybeOutboxEvents(TaskCreationContext context) {
@@ -255,16 +278,13 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     for (int i = 0; i < partitions.size(); i++) {
       JobPartitionEntity partition = partitions.get(i);
       JobTaskEntity task = tasks.get(i);
-      if (partitionLifecycleService.releaseForDispatch(
-          partition, task, PartitionStatus.CREATED.code(), TaskStatus.CREATED.code())) {
-        taskDispatchOutboxService.writeDispatchEvent(
-            context.execution().jobInstance(),
-            task,
-            partition,
-            context.execution().traceId(),
-            OutboxEventKeyGenerator.forDispatch(
-                context.execution().request().tenantId(), task.getId()));
-      }
+      taskDispatchOutboxService.writeDispatchEvent(
+          context.execution().jobInstance(),
+          task,
+          partition,
+          context.execution().traceId(),
+          OutboxEventKeyGenerator.forDispatch(
+              context.execution().request().tenantId(), task.getId()));
     }
   }
 
@@ -279,12 +299,17 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         resolveSelectedWorkerId(context.creation().scheduling().plan(), context.partition()));
     ResourceSchedulingDecision decision = context.creation().scheduling().decision();
     task.setTaskStatus(
-        EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())
+        EmptyChecks.isNotNull(decision) && decision.isDispatchable()
             ? TaskStatus.READY.code()
-            : decision.getTaskStatus());
+            : EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.getTaskStatus())
+                ? TaskStatus.READY.code()
+                : decision.getTaskStatus());
     task.setVersion(0L);
-    // V88: 拷 priority (源 = SchedulePlan.priority, 由 DefaultSchedulePlanBuilder 从 job_definition 读)
-    task.setPriority(context.creation().scheduling().plan().getPriority());
+    // 演练任务保留完整控制面链路，但排在所有正式任务之后，避免大规模 dry-run 挤占生产批窗口。
+    boolean dryRun =
+        Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun());
+    task.setPriority(DryRunSchedulingPriority.resolve(
+        dryRun, context.creation().scheduling().plan().getPriority()));
     Map<String, Object> effectiveParams = context.creation().execution().effectiveParams();
     task.setTaskPayload(buildPayloadJson(
         context.creation().execution().request(),
@@ -294,8 +319,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
     task.setEffectiveParameters(
         EmptyChecks.isNull(effectiveParams) ? null : JsonUtils.toJson(effectiveParams));
-    task.setDryRun(
-        Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
+    task.setDryRun(dryRun);
     return task;
   }
 

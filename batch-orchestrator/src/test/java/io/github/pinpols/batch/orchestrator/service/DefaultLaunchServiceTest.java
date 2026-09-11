@@ -47,6 +47,8 @@ import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -139,7 +141,8 @@ class DefaultLaunchServiceTest {
         batchDayGateService,
         launchParamResolver,
         jobExecutionLogMapper,
-        batchDayTransactionManager);
+        batchDayTransactionManager,
+        new LaunchPhaseMetrics(new SimpleMeterRegistry()));
     when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
         .thenReturn(
             new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));

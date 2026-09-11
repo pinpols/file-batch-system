@@ -76,9 +76,13 @@ public record WorkerRegistryEntity(
         null);
   }
 
-  /** 心跳更新：状态、心跳时间、负载、能力标签。 */
+  /** 注册/重注册更新：状态、心跳时间、负载、能力标签和 worker 自报并发上限。 */
   public WorkerRegistryEntity withHeartbeat(
-      String status, Instant heartbeatAt, Integer currentLoad, JsonbString capabilityTags) {
+      String status,
+      Instant heartbeatAt,
+      Integer currentLoad,
+      JsonbString capabilityTags,
+      Integer maxConcurrent) {
     return new WorkerRegistryEntity(
         id,
         tenantId,

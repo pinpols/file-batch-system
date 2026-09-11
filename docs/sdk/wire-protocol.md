@@ -39,6 +39,11 @@
 | `POST /internal/tasks/{id}/renew` | SDK → orch | `LeaseRenewalScheduler` | 60s 默认 | `LeaseRenewalScheduler.tick()` | `TaskController.renew()` |
 | Kafka `batch.task.dispatch.<tenant>.*` | orch → SDK | orch 投递 → SDK poll | 持续 | `KafkaTaskConsumer.poll()` | producer in `*OrchestratorService` |
 
+注册体中的可选 `maxConcurrent` 是 Worker 本地执行器的物理并发上限。五语言 SDK 的默认
+注册路径都会从 `maxConcurrentTasks` 上报该值，平台据此初始化或重注册校准
+`worker_registry.max_concurrent`；旧 SDK 未携带时继续使用平台默认值。周期心跳不更新该字段，
+避免覆盖平台通过 heartbeat directive 临时下调的运行容量。
+
 **为什么 HTTP + Kafka 不合并?** ADR-035 §3:
 - HTTP 同步天然适合 register / claim / report 这类「需要返回值」的控制流(orch 给 SDK lease ttl、effective config、cancel flag)
 - Kafka 异步天然适合 dispatch:orch 不关心 SDK 何时拿到,Kafka 保留 + at-least-once + tenant 隔离 + 横向扩展

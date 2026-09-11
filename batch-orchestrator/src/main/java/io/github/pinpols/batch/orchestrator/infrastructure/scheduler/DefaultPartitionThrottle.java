@@ -47,15 +47,19 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     }
     int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
     TenantQuotaPolicyEntity quotaPolicy = resolveQuotaPolicy(request.getTenantId());
-    long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(
-        request.getTenantId(),
-        PartitionStatus.WAITING.code(),
-        PartitionStatus.READY.code(),
-        PartitionStatus.RUNNING.code(),
-        PartitionStatus.RETRYING.code());
     boolean tenantPartitionQuotaEnabled = quotaPolicy != null
         && quotaPolicy.maxPartitionsPerTenant() != null
         && quotaPolicy.maxPartitionsPerTenant() > 0;
+    boolean queuePartitionQuotaEnabled =
+        queue != null && queue.maxRunningPartitions() != null && queue.maxRunningPartitions() > 0;
+    if (!tenantPartitionQuotaEnabled && !queuePartitionQuotaEnabled) {
+      return ResourceCheck.allow();
+    }
+
+    String queueWorkerGroup = resolveQueueWorkerGroup(request, queue);
+    boolean tenantCountRequired = tenantPartitionQuotaEnabled
+        || (queuePartitionQuotaEnabled && !Texts.hasText(queueWorkerGroup));
+    long tenantActivePartitions = tenantCountRequired ? countTenantActivePartitions(request) : 0L;
     if (tenantPartitionQuotaEnabled) {
       int pburst = quotaPolicy.partitionBurstLimit() == null
           ? 0
@@ -80,11 +84,9 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         return burstCheck;
       }
     }
-    boolean queuePartitionQuotaEnabled =
-        queue != null && queue.maxRunningPartitions() != null && queue.maxRunningPartitions() > 0;
     if (queuePartitionQuotaEnabled) {
       long queueActivePartitions =
-          countQueueActivePartitions(request, queue, tenantActivePartitions);
+          countQueueActivePartitions(request, queueWorkerGroup, tenantActivePartitions);
       int burst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
       QuotaRuntimeStateService.QuotaReservationRequest queueQuotaReservation =
           new QuotaRuntimeStateService.QuotaReservationRequest(
@@ -107,10 +109,25 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     return ResourceCheck.allow();
   }
 
+  private long countTenantActivePartitions(ResourceSchedulingRequest request) {
+    return jobPartitionMapper.countActiveByTenant(
+        request.getTenantId(),
+        PartitionStatus.WAITING.code(),
+        PartitionStatus.READY.code(),
+        PartitionStatus.RUNNING.code(),
+        PartitionStatus.RETRYING.code());
+  }
+
+  private String resolveQueueWorkerGroup(
+      ResourceSchedulingRequest request, ResourceQueueEntity queue) {
+    if (Texts.hasText(request.getWorkerGroup())) {
+      return request.getWorkerGroup();
+    }
+    return queue == null ? null : queue.workerGroup();
+  }
+
   private long countQueueActivePartitions(
-      ResourceSchedulingRequest request, ResourceQueueEntity queue, long tenantActivePartitions) {
-    String workerGroup =
-        Texts.hasText(request.getWorkerGroup()) ? request.getWorkerGroup() : queue.workerGroup();
+      ResourceSchedulingRequest request, String workerGroup, long tenantActivePartitions) {
     if (!Texts.hasText(workerGroup)) {
       return tenantActivePartitions;
     }

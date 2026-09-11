@@ -448,7 +448,7 @@ class AbstractTaskConsumerTest {
     return new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport()) {
+        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport(), 8) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return cfg;

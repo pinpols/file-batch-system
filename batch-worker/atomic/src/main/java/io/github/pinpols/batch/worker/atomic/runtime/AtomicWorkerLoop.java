@@ -5,6 +5,7 @@ import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
 import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -17,8 +18,9 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
   public AtomicWorkerLoop(
       WorkerRuntimeFacade workerRuntimeFacade,
       BatchDateTimeSupport dateTimeSupport,
-      AtomicWorkerConfiguration configuration) {
-    super(workerRuntimeFacade, dateTimeSupport);
+      AtomicWorkerConfiguration configuration,
+      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+    super(workerRuntimeFacade, dateTimeSupport, maxConcurrentTasks);
     this.configuration = configuration;
   }
 

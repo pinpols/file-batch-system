@@ -37,8 +37,7 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li><b>ShedLock</b> {@code waiting_partition_dispatch}：保证多实例部署下同一时刻只有一台执行， 避免重复消费 WAITING 分片。
- *   <li><b>公平排序</b>：按 {@code (fairnessScore desc, priority desc, partitionId asc)} 排序后派发，
- *       防止单租户/单优先级独占队列；fairnessScore 由 {@code ResourceScheduler} 结合租户权重/队列权重计算。
+ *   <li><b>公平排序</b>：正式任务先于 dry-run，再按公平分、优先级和分片号排序；演练不得挤占正式批容量。
  *   <li><b>租户限流</b>：每次 release 走 {@code DISPATCH_RELEASE} 令牌桶，超额直接跳过（下轮再试）。
  *   <li><b>优雅下线</b>：{@code gracefulShutdown.isDraining()} 为 true 时整批跳过，不新派任何分片， 让现有任务收尾后进程退出。
  *   <li><b>连锁状态推进</b>：release 成功后把 job_instance（WAITING→RUNNING）与 workflow_run（CREATED→RUNNING）
@@ -124,9 +123,10 @@ public class WaitingPartitionDispatchScheduler {
     } finally {
       DefaultResourceScheduler.closeTickCache();
     }
-    Comparator<WaitingDispatchCandidate> comparator = Comparator.comparingLong(
-            WaitingDispatchCandidate::fairnessScore)
-        .reversed()
+    Comparator<WaitingDispatchCandidate> comparator = Comparator.comparing(
+            WaitingDispatchCandidate::dryRun)
+        .thenComparing(
+            Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore).reversed())
         .thenComparing(
             Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
         .thenComparingLong(WaitingDispatchCandidate::partitionId);
@@ -301,6 +301,10 @@ public class WaitingPartitionDispatchScheduler {
       return jobInstance == null || jobInstance.getPriority() == null
           ? 5
           : jobInstance.getPriority();
+    }
+
+    private boolean dryRun() {
+      return jobInstance != null && Boolean.TRUE.equals(jobInstance.getDryRun());
     }
 
     private long partitionId() {

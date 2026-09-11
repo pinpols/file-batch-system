@@ -104,6 +104,7 @@ type RegisterRequest struct {
 	// workers by this group. Omitting it makes register fail with HTTP 500. The decision-core
 	// (protocol/request.go) already encodes this value; the transport struct was missing it.
 	WorkerGroup    string         `json:"workerGroup"`
+	MaxConcurrent  int            `json:"maxConcurrent,omitempty"`
 	BuildID        string         `json:"buildId"`
 	SDKVersion     string         `json:"sdkVersion"`
 	CapabilityTags []string       `json:"capabilityTags,omitempty"`

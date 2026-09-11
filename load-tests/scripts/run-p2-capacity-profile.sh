@@ -43,14 +43,23 @@ CAPACITY_WRITE_P95_MS="${CAPACITY_WRITE_P95_MS:-5000}"
 PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
+# benchmark profile intentionally raises the isolated Trigger relay budget; do not inherit the
+# local production baseline from .env.local when checking the benchmark container.
+CAPACITY_ATOMIC_DISPATCH_PARTITIONS="${CAPACITY_ATOMIC_DISPATCH_PARTITIONS:-12}"
+CAPACITY_ATOMIC_CONCURRENCY="${CAPACITY_ATOMIC_CONCURRENCY:-12}"
+CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS="${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS:-16}"
+CAPACITY_ATOMIC_WORKER_CODE="${CAPACITY_ATOMIC_WORKER_CODE:-atomic-node-1}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
-# 被测 Trigger 的 Relay 发布上限。默认守住 benchmark 基线 40；A/B 轮次必须显式声明，
+# 被测 Trigger 的 Relay 发布上限。默认对齐隔离 benchmark 的 400/s；A/B 轮次必须显式声明，
 # 避免容器未按实验参数重启却仍生成错误容量结论。
-CAPACITY_EXPECT_TRIGGER_RELAY_RATE="${CAPACITY_EXPECT_TRIGGER_RELAY_RATE:-40}"
+CAPACITY_EXPECT_TRIGGER_RELAY_RATE="${CAPACITY_EXPECT_TRIGGER_RELAY_RATE:-400}"
 # 设为 1 时，preflight 额外确认 Trigger 已启用 lag 自适应释放且相关指标可采集。
 # 默认 0 保持既有固定 Relay 容量画像不变。
 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE="${CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE:-0}"
+# 压测前必须确认 launch consumer 没有上一轮遗留消息，否则清理数据库后旧 Kafka 消息会被
+# 当前轮消费成 request_not_found，导致实例关联率和失败率失真。
+CAPACITY_REQUIRE_EMPTY_TRIGGER_LAG="${CAPACITY_REQUIRE_EMPTY_TRIGGER_LAG:-1}"
 # 仅验证 benchmark 容器预算，不创建 fixture、不获取压测锁、也不执行清理逻辑。
 PREFLIGHT_ONLY="${PREFLIGHT_ONLY:-0}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
@@ -64,6 +73,7 @@ CAPACITY_LOCK_HELD=0
 mkdir -p "$LOG_DIR"
 PROFILE_RC=0
 STORM_TERMINAL_VERIFIED=0
+ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
@@ -200,6 +210,25 @@ require_tooling() {
   batch_require_python
 }
 
+require_exact_storm_shape() {
+  if [[ "$RUN_10W_STORM" != "1" ]]; then
+    return
+  fi
+  if ! [[ "$STORM_TOTAL_REQUESTS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "STORM_TOTAL_REQUESTS must be a positive integer, got: ${STORM_TOTAL_REQUESTS}" >&2
+    exit 2
+  fi
+  if ! [[ "$STORM_RPS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "STORM_RPS must be a positive integer, got: ${STORM_RPS}" >&2
+    exit 2
+  fi
+  if (( STORM_TOTAL_REQUESTS % STORM_RPS != 0 )); then
+    echo "STORM_TOTAL_REQUESTS (${STORM_TOTAL_REQUESTS}) must be divisible by STORM_RPS (${STORM_RPS})" >&2
+    echo "constant-rate injection uses whole seconds; a non-divisible shape would send more requests than declared" >&2
+    exit 2
+  fi
+}
+
 require_trigger_capacity_budget() {
   if [[ "$CAPACITY_REQUIRE_TRIGGER_BUDGET" != "1" ]]; then
     return
@@ -208,13 +237,38 @@ require_trigger_capacity_budget() {
     echo "docker is required to verify the local trigger capacity budget" >&2
     exit 2
   }
-  local configured profiles limit pool relay adaptive minimum metrics effective lag
+  local configured profiles limit pool relay orchestrator_configured replica_configured
+  local consumer pool_max replica_consumer replica_pool_max atomic_configured
+  local atomic_concurrency atomic_max_concurrent atomic_execution_pool atomic_topic_partitions
+  local atomic_health atomic_registered_max_concurrent adaptive minimum metrics effective lag
   configured="$(docker inspect batch-trigger --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+  orchestrator_configured="$(docker inspect batch-orchestrator --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+  replica_configured="$(docker inspect batch-orchestrator-benchmark-replica --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+  atomic_configured="$(docker inspect batch-worker-atomic --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+  atomic_health="$(docker inspect batch-worker-atomic --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
   profiles="$(printf '%s\n' "$configured" | sed -n 's/^SPRING_PROFILES_ACTIVE=//p' | tail -1)"
   relay="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
   adaptive="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED=//p' | tail -1)"
   minimum="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MIN_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
   metrics="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus)"
+  consumer="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_TRIGGER_CONSUMER_CONCURRENCY=//p' | tail -1)"
+  pool_max="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=//p' | tail -1)"
+  replica_consumer="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_TRIGGER_CONSUMER_CONCURRENCY=//p' | tail -1)"
+  replica_pool_max="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=//p' | tail -1)"
+  atomic_concurrency="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY=//p' | tail -1)"
+  atomic_max_concurrent="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS=//p' | tail -1)"
+  atomic_execution_pool="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_EXECUTION_POOL_SIZE=//p' | tail -1)"
+  atomic_topic_partitions="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server kafka:29092 \
+      --describe --topic "batch.task.dispatch.atomic.node.${CAPACITY_ATOMIC_WORKER_CODE}" 2>/dev/null \
+    | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
+  atomic_registered_max_concurrent="$(psql_platform -Atc "
+      select max_concurrent
+      from batch.worker_registry
+      where worker_code = '${CAPACITY_ATOMIC_WORKER_CODE}'
+        and status = 'ONLINE'
+      order by heartbeat_at desc
+      limit 1;")"
   limit="$(printf '%s\n' "$metrics" \
     | awk '/^batch_trigger_api_launch_admission_limit / && !found { print int($2); found=1 }')"
   pool="$(printf '%s\n' "$metrics" \
@@ -223,14 +277,19 @@ require_trigger_capacity_budget() {
     | awk '/^batch_trigger_outbox_release_budget_limit / && !found { print int($2); found=1 }')"
   lag="$(printf '%s\n' "$metrics" \
     | awk '/^batch_trigger_launch_consumer_lag / && !found { print int($2); found=1 }')"
-  if [[ ",$profiles," != *,benchmark,* \
-    || "$pool" != "40" \
-    || "$limit" != "32" \
-    || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" ]]; then
+  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" \
+      || "$consumer" != "6" || "$pool_max" != "50" \
+      || "$replica_consumer" != "6" || "$replica_pool_max" != "50" \
+      || "$atomic_concurrency" != "$CAPACITY_ATOMIC_CONCURRENCY" \
+      || "$atomic_max_concurrent" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
+      || "$atomic_execution_pool" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
+      || "$atomic_topic_partitions" != "$CAPACITY_ATOMIC_DISPATCH_PARTITIONS" \
+      || "$atomic_registered_max_concurrent" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
+      || "$atomic_health" != "healthy" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
-    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}" >&2
-    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing}" >&2
-    echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger" >&2
+    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, two orchestrators each consumers=6/db pool=50, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}" >&2
+    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing} primary consumers=${consumer:-missing}/pool=${pool_max:-missing} replica consumers=${replica_consumer:-missing}/pool=${replica_pool_max:-missing} atomic health=${atomic_health:-missing}/consumers=${atomic_concurrency:-missing}/permits=${atomic_max_concurrent:-missing}/registered-capacity=${atomic_registered_max_concurrent:-missing}/pool=${atomic_execution_pool:-missing}/partitions=${atomic_topic_partitions:-missing}" >&2
+    echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger orchestrator orchestrator-benchmark-replica worker-atomic" >&2
     exit 2
   fi
   if [[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]]; then
@@ -249,6 +308,29 @@ require_trigger_capacity_budget() {
   elif [[ "$adaptive" == "true" ]]; then
     echo "trigger adaptive release is enabled but CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE is not 1" >&2
     echo "set CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE=1 to make the measured mode explicit" >&2
+    exit 2
+  fi
+}
+
+require_empty_trigger_lag() {
+  if [[ "$CAPACITY_REQUIRE_EMPTY_TRIGGER_LAG" != "1" ]]; then
+    return
+  fi
+  command -v docker >/dev/null || {
+    echo "docker is required to verify trigger consumer lag before P2" >&2
+    exit 2
+  }
+  local lag
+  lag="$(docker exec batch-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+      --bootstrap-server kafka:29092 \
+      --describe --group orchestrator-trigger-launch 2>/dev/null \
+    | awk 'NR > 1 && $6 ~ /^[0-9]+$/ { total += $6 } END { print total + 0 }')"
+  if [[ -z "$lag" ]]; then
+    echo "cannot inspect orchestrator-trigger-launch lag; drain or verify Kafka before P2" >&2
+    exit 2
+  fi
+  if [[ "$lag" != "0" ]]; then
+    echo "trigger launch consumer lag is ${lag}; drain it before P2 to keep the profile isolated" >&2
     exit 2
   fi
 }
@@ -312,15 +394,77 @@ append_sql_summary() {
   } >> "$REPORT"
 }
 
+capture_launch_phase_metrics() {
+  local stage="$1"
+  local container output_file
+  for container in "${ORCHESTRATOR_CONTAINERS[@]}"; do
+    output_file="$LOG_DIR/${container}-launch-phase-${stage}.prom"
+    if ! docker exec "$container" curl --fail --silent --show-error \
+        http://localhost:18082/actuator/prometheus \
+        | grep '^batch_orchestrator_launch_phase_duration_' > "$output_file"; then
+      echo "cannot capture launch phase metrics from ${container} at ${stage}" >&2
+      return 1
+    fi
+  done
+}
+
+append_launch_phase_metric_summary() {
+  local container before_file after_file
+  {
+    echo "## Orchestrator Launch Phase Metrics"
+    echo
+    echo "| Instance | Phase | Count delta | Average duration |"
+    echo "|---|---|---:|---:|"
+    for container in "${ORCHESTRATOR_CONTAINERS[@]}"; do
+      before_file="$LOG_DIR/${container}-launch-phase-before.prom"
+      after_file="$LOG_DIR/${container}-launch-phase-after.prom"
+      awk -v container="$container" '
+        function phase_of(line, match_start, match_text) {
+          match_start = match(line, /phase="[^"]+"/)
+          if (match_start == 0) {
+            return "unknown"
+          }
+          match_text = substr(line, RSTART + 7, RLENGTH - 8)
+          return match_text
+        }
+        FNR == NR {
+          phase = phase_of($1)
+          if ($1 ~ /_count\{/) {
+            before_count[phase] = $2
+          } else if ($1 ~ /_sum\{/) {
+            before_sum[phase] = $2
+          }
+          next
+        }
+        {
+          phase = phase_of($1)
+          if ($1 ~ /_count\{/) {
+            after_count[phase] = $2
+          } else if ($1 ~ /_sum\{/) {
+            after_sum[phase] = $2
+          }
+        }
+        END {
+          split("validation prepare_transaction dispatch_transaction plan_build resource_schedule dispatch_materialize instance_transition", phases, " ")
+          for (phase_index = 1; phase_index <= 7; phase_index++) {
+            phase = phases[phase_index]
+            count_delta = after_count[phase] - before_count[phase]
+            sum_delta = after_sum[phase] - before_sum[phase]
+            average_ms = count_delta > 0 ? (sum_delta * 1000 / count_delta) : 0
+            printf "| %s | %s | %.0f | %.3f ms |\n", container, phase, count_delta, average_ms
+          }
+        }
+      ' "$before_file" "$after_file"
+    done
+    echo
+  } >> "$REPORT"
+}
+
 run_10w_storm() {
   local storm_run_id="${RUN_ID}-10w"
   local storm_tenant_id="$LOAD_TEST_TENANT_ID"
   local duration
-  duration="$("$PYTHON_BIN" - <<PY
-import math
-print(math.ceil(${STORM_TOTAL_REQUESTS} / ${STORM_RPS}))
-PY
-)"
+  duration="$((STORM_TOTAL_REQUESTS / STORM_RPS))"
   if [[ "$CAPACITY_ISOLATED_TENANT_ENABLED" == "1" ]]; then
     if ! acquire_capacity_lock; then
       PROFILE_RC=1
@@ -333,6 +477,10 @@ PY
     storm_tenant_id="$CAPACITY_TENANT_ID"
   fi
   echo "==> 10w storm run_id=${storm_run_id}, tenant=${storm_tenant_id}, total=${STORM_TOTAL_REQUESTS}, rps=${STORM_RPS}, duration=${duration}s"
+  if ! capture_launch_phase_metrics before; then
+    PROFILE_RC=1
+    return
+  fi
   set +e
   RUN_ID="$storm_run_id" \
   LOAD_TEST_TENANT_ID="$storm_tenant_id" \
@@ -352,9 +500,19 @@ PY
     | tee "$LOG_DIR/10w-storm.log"
   local rc=${PIPESTATUS[0]}
   set -e
+  if ! capture_launch_phase_metrics after; then
+    PROFILE_RC=1
+  else
+    append_launch_phase_metric_summary
+  fi
   echo "10w storm exit_code=${rc}" | tee "$LOG_DIR/10w-storm.exit"
   if storm_reached_terminal_state "$storm_run_id"; then
     STORM_TERMINAL_VERIFIED=1
+    # The worker benchmark may finish its bounded wait just before the final async
+    # result rows arrive. Keep the initial snapshot for latency evidence, but add a
+    # post-verification snapshot so the profile report cannot present an intermediate
+    # completion count as the final capacity result.
+    append_sql_summary "10w Atomic Storm (final verification)" "$storm_run_id"
   elif [[ "$CAPACITY_STRICT" == "1" ]]; then
     PROFILE_RC=1
   fi
@@ -403,7 +561,9 @@ run_fairness() {
 }
 
 require_tooling
+require_exact_storm_shape
 require_trigger_capacity_budget
+require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
   exit 0

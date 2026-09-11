@@ -70,6 +70,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     Integer newLoad = request.currentLoad() != null
         ? request.currentLoad()
         : (registry == null ? 0 : registry.currentLoad());
+    Integer newMaxConcurrent = request.maxConcurrent() != null
+        ? request.maxConcurrent()
+        : (registry == null
+            ? WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT
+            : registry.maxConcurrent());
     JsonbString newTags = request.capabilityTags() != null
         ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
         : (registry == null ? null : registry.capabilityTags());
@@ -88,7 +93,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           newStatus,
           heartbeatAt,
           newLoad,
-          WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT,
+          newMaxConcurrent,
           null,
           null,
           request.hostName(),
@@ -100,7 +105,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
       // 保留旧值。
       registry = registry
-          .withHeartbeat(newStatus, heartbeatAt, newLoad, newTags)
+          .withHeartbeat(newStatus, heartbeatAt, newLoad, newTags, newMaxConcurrent)
           .withFingerprint(
               request.hostName(),
               request.hostIp(),

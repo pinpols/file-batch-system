@@ -96,15 +96,18 @@ class SdkPlatformContractTest {
     simulated.put("status", "RUNNING");
     simulated.put("heartbeatAt", Instant.now().toString());
     simulated.put("currentLoad", 0);
+    simulated.put("maxConcurrent", 2);
     simulated.put("capabilityTags", List.of("echo", "sleep"));
 
     // 必填字段集合(对照 WorkerHeartbeatDto record components)
     assertThat(simulated.keySet())
-        .containsAll(List.of("tenantId", "workerCode", "status", "heartbeatAt", "currentLoad"));
+        .containsAll(List.of(
+            "tenantId", "workerCode", "status", "heartbeatAt", "currentLoad", "maxConcurrent"));
     // capabilityTags 类型必须是 List(WorkerHeartbeatDto.capabilityTags : List<String>)
     assertThat(simulated.get("capabilityTags")).isInstanceOf(List.class);
     // currentLoad 必须 Integer(不是 String / null)
     assertThat(simulated.get("currentLoad")).isInstanceOf(Integer.class);
+    assertThat(simulated.get("maxConcurrent")).isInstanceOf(Integer.class);
     // 序化往返不丢字段
     JsonNode tree = M.valueToTree(simulated);
     for (String f : List.of("tenantId", "workerCode", "status", "currentLoad")) {

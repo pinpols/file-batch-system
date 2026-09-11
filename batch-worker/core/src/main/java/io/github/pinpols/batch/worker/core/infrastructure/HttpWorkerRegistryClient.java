@@ -137,6 +137,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         PipelineStageProgressSink.currentTotalRowsHint(),
         // protocolVersion:平台内置 file-pipeline worker 与控制面同仓同步发布,非 BYO 自托管 SDK,
         // 不参与协议门禁(留 null = legacy 放行;门禁只针对外部 SDK worker 上报的 protocolVersion)。
-        null);
+        null,
+        registration.getMaxConcurrent());
   }
 }

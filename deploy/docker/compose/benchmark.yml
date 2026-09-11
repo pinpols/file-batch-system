@@ -1,7 +1,60 @@
 # 只叠加到隔离的本地容量压测栈：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh
-# 容量参数由 batch-trigger/application-benchmark.yml 统一定义；Compose 仅选择环境，
-# 不重复保存 32/40/8、队列和等待时间，避免 profile 与 .env.local 漂移。
+# HTTP admission 的 32/40/8、队列和等待时间由 batch-trigger/application-benchmark.yml
+# 统一定义；outbox relay 是 Compose benchmark 的唯一覆盖项，避免把生产 40/s 基线带入
+# 隔离容量画像，同时不改动普通 local 启动。
 services:
+  kafka-init:
+    environment:
+      # 容量画像显式扩展 dispatch/direct topic，避免 broker 自动创建的 3 分区限制
+      # Atomic worker 消费并发。Kafka 分区只能增加，普通 local profile 仍可用较低并发消费。
+      KAFKA_PARTITIONS_DISPATCH: "12"
+  orchestrator:
+    environment:
+      # 容量画像使用 2 个 orchestrator × 6 consumer，对齐 launch topic 的 12 个分区。
+      # 单实例写 24 只会留下 12 个空闲线程，不能证明横向扩展能力。
+      BATCH_TRIGGER_CONSUMER_CONCURRENCY: "6"
+      BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: "50"
+      BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS: ${BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS:-1000}
+      BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE:-20}
+      BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE:-500}
+      BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR: ${BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR:-PT1S}
+      BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR: ${BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR:-PT30S}
+      BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS: ${BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS:-300000}
+  orchestrator-benchmark-replica:
+    extends:
+      file: deploy/docker/compose/app.yml
+      service: orchestrator
+    container_name: batch-orchestrator-benchmark-replica
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.app
+      args:
+        MODULE: batch-orchestrator
+    # 第二实例只参与 Kafka consumer group 和后台调度，不暴露重复的宿主机端口。
+    ports: !reset []
+    volumes:
+      - ./logs/current/docker:/app/logs
+    environment:
+      BATCH_TRIGGER_CONSUMER_CONCURRENCY: "6"
+      BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: "50"
+      BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS: ${BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS:-1000}
+      BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE:-20}
+      BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE:-500}
+      BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR: ${BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR:-PT1S}
+      BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR: ${BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR:-PT30S}
+      BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS: ${BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS:-300000}
+      LOGGING_FILE_NAME: /app/logs/batch-orchestrator-benchmark-replica.log
   trigger:
     environment:
       SPRING_PROFILES_ACTIVE: local,benchmark
+      # 容量画像只提升隔离 benchmark 的 outbox 释放预算；生产默认值仍由
+      # application.yml 保持 40/s，避免把未验证的下游压力带入正常部署。
+      BATCH_TRIGGER_OUTBOX_BATCH_SIZE: "512"
+      BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND: "400"
+  worker-atomic:
+    environment:
+      # Atomic 轻任务的实测瓶颈在 claim/report 排队而非任务执行。benchmark profile 仅提高
+      # 消费和实例内许可，不改变普通 local / production 默认值。
+      BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY: "12"
+      BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS: "16"
+      BATCH_WORKER_EXECUTION_POOL_SIZE: "16"

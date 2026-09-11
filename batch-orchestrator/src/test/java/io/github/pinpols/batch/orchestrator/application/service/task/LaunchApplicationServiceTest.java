@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <ul>
  *   <li>tryConsume 失败 → 抛 429,不调底层 LaunchService
  *   <li>tryConsume 通过 → 透传到 LaunchService
+ *   <li>可信 Kafka 队列入口 → 跳过 HTTP 防盗刷限流并透传
  * </ul>
  */
 class LaunchApplicationServiceTest {
@@ -76,6 +78,20 @@ class LaunchApplicationServiceTest {
 
     LaunchResponse result = service.launch(req);
     assertThat(result).isSameAs(expected);
+  }
+
+  @Test
+  @DisplayName("可信队列入口 → 不重复执行 HTTP 限流,直接透传到 LaunchService")
+  void launchFromTrustedQueueSkipsHttpRateLimiter() {
+    LaunchRequest req = request("ta");
+    LaunchResponse expected = new LaunchResponse("inst-queue", "trace-queue");
+    when(launchService.launch(req)).thenReturn(expected);
+
+    LaunchResponse result = service.launchFromTrustedQueue(req);
+
+    assertThat(result).isSameAs(expected);
+    verify(rateLimiter, never()).tryConsume(anyString(), any());
+    verify(launchService).launch(req);
   }
 
   @Test

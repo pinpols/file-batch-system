@@ -79,7 +79,7 @@ class AbstractTaskConsumerBackpressureTest {
     AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
+        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport, 1) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
@@ -228,7 +228,7 @@ class AbstractTaskConsumerBackpressureTest {
     return new AbstractTaskConsumer(registry, meterRegistryProvider, maxConcurrentTasks) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
+        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport, maxConcurrentTasks) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();

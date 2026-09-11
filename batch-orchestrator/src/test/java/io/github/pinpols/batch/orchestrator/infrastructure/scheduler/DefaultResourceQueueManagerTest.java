@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
@@ -71,6 +73,17 @@ class DefaultResourceQueueManagerTest {
     ResourceQueueEntity resolved = manager.resolveQueue(request(null, "IMPORT"));
 
     assertThat(resolved).isNull();
+  }
+
+  @Test
+  @DisplayName("同一租户短时重复解析 → 空队列结果也只查询数据库一次")
+  void repeatedResolutionCachesEmptyQueueResult() {
+    when(mapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
+
+    assertThat(manager.resolveQueue(request(null, "IMPORT"))).isNull();
+    assertThat(manager.resolveQueue(request(null, "IMPORT"))).isNull();
+
+    verify(mapper, times(1)).selectByTenantAndEnabled("ta", true);
   }
 
   private static ResourceSchedulingRequest request(String queueCode, String workerType) {

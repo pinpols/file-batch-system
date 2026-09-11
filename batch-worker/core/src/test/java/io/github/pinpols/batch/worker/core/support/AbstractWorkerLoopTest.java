@@ -87,6 +87,7 @@ class AbstractWorkerLoopTest {
     assertThat(sent.getWorkerGroup()).isEqualTo("TEST");
     assertThat(sent.getPort()).isEqualTo(9999);
     assertThat(sent.getActive()).isTrue();
+    assertThat(sent.getMaxConcurrent()).isEqualTo(8);
     assertThat(sent.getRegisteredAt()).isNotNull();
     assertThat(sent.getLastHeartbeatAt()).isNotNull();
   }
@@ -169,7 +170,7 @@ class AbstractWorkerLoopTest {
   private static class TestWorkerLoop extends AbstractWorkerLoop {
 
     TestWorkerLoop(WorkerRuntimeFacade facade, BatchDateTimeSupport dateTimeSupport) {
-      super(facade, dateTimeSupport);
+      super(facade, dateTimeSupport, 8);
     }
 
     @Override

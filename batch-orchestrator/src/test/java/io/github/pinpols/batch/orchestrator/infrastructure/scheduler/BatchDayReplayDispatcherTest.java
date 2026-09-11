@@ -29,9 +29,11 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import java.lang.reflect.Method;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -83,6 +85,18 @@ class BatchDayReplayDispatcherTest {
     when(gracefulShutdown.isDraining()).thenReturn(true);
     dispatcher.scheduledDispatch();
     verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
+  }
+
+  @Test
+  void replayLockUsesConfigurableDurations() throws Exception {
+    Method scheduledDispatch =
+        BatchDayReplayDispatcher.class.getDeclaredMethod("scheduledDispatch");
+    SchedulerLock lock = scheduledDispatch.getAnnotation(SchedulerLock.class);
+
+    assertThat(lock.lockAtLeastFor()).isEqualTo("${batch.replay.dispatch.lock-at-least-for:PT15S}");
+    assertThat(lock.lockAtMostFor()).isEqualTo("${batch.replay.dispatch.lock-at-most-for:PT1M}");
+    assertThat(properties.getLockAtLeastFor()).isEqualTo(Duration.ofSeconds(15));
+    assertThat(properties.getLockAtMostFor()).isEqualTo(Duration.ofMinutes(1));
   }
 
   @Test

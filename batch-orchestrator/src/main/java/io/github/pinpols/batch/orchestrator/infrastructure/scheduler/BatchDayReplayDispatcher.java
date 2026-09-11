@@ -60,8 +60,8 @@ public class BatchDayReplayDispatcher {
   @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
   @SchedulerLock(
       name = "batch_day_replay_dispatch",
-      lockAtMostFor = "PT5M",
-      lockAtLeastFor = "PT15S")
+      lockAtMostFor = "${batch.replay.dispatch.lock-at-most-for:PT1M}",
+      lockAtLeastFor = "${batch.replay.dispatch.lock-at-least-for:PT15S}")
   public void scheduledDispatch() {
     if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
       return;

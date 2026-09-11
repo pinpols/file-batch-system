@@ -7,7 +7,8 @@
 #    （read-replica 默认 enabled=true，必须把 postgres-replica 一起拉起来才不会 unhealthy）。
 # 3) 可透传额外 docker compose 参数，例如：
 #    ./scripts/docker/up-apps.sh console-api
-# 4) 隔离容量压测：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger
+# 4) 隔离容量压测：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh
+#    若只重建控制面，须显式包含 trigger orchestrator orchestrator-benchmark-replica。
 # =========================================================
 set -euo pipefail
 
@@ -21,7 +22,7 @@ ensure_docker_on_path
 unset _DOCKER_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+REQUESTED_COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
 COMPOSE_BENCHMARK="${COMPOSE_BENCHMARK:-0}"
 
 # env-common 的默认值服务于宿主机脚本，因此 S3 默认指向 localhost:19000。
@@ -40,6 +41,12 @@ else
 fi
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+if [[ -n "$REQUESTED_COMPOSE_PROJECT_NAME" ]]; then
+  COMPOSE_PROJECT_NAME="$REQUESTED_COMPOSE_PROJECT_NAME"
+fi
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+export COMPOSE_PROJECT_NAME
+unset REQUESTED_COMPOSE_PROJECT_NAME
 if [[ "$_batch_s3_endpoint_explicit" -eq 0 ]]; then
   unset BATCH_S3_ENDPOINT
 fi
@@ -74,6 +81,7 @@ if [[ "$#" -gt 0 ]]; then
 fi
 
 docker compose \
+  --project-name "$COMPOSE_PROJECT_NAME" \
   --env-file "$COMPOSE_ENV_FILE" \
   "${compose_files[@]}" \
   --profile apps \

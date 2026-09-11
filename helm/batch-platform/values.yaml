@@ -277,6 +277,13 @@ orchestrator:
     enabled: false
     maxActiveEntries: 200
     retentionDays: 7
+  replayDispatch:
+    pollIntervalMillis: 30000
+    sessionBatchSize: 20
+    entryBatchSize: 50
+    lockAtLeastFor: PT15S
+    lockAtMostFor: PT1M
+    claimTimeoutMillis: 300000
   triggerConsumer:
     # 每个 Pod 的 Kafka listener 数。topic 至少为 replicaCount × concurrency（默认 2 × 6 = 12）。
     concurrency: 6

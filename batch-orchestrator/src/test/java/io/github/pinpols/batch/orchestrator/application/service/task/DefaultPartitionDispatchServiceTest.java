@@ -1,18 +1,188 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
+import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class DefaultPartitionDispatchServiceTest {
+
+  private SchedulePlanBuilder schedulePlanBuilder;
+  private ResourceScheduler resourceScheduler;
+  private PartitionLifecycleService partitionLifecycleService;
+  private TaskExecutionService taskExecutionService;
+  private TaskDispatchOutboxService taskDispatchOutboxService;
+  private JobInstanceMapper jobInstanceMapper;
+  private DefaultPartitionDispatchService service;
+
+  @BeforeEach
+  @SuppressWarnings("unchecked")
+  void setUp() {
+    schedulePlanBuilder = mock(SchedulePlanBuilder.class);
+    resourceScheduler = mock(ResourceScheduler.class);
+    partitionLifecycleService = mock(PartitionLifecycleService.class);
+    taskExecutionService = mock(TaskExecutionService.class);
+    taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+    jobInstanceMapper = mock(JobInstanceMapper.class);
+    StateMachine<Object> stateMachine = mock(StateMachine.class);
+    when(stateMachine.transition(any(), any()))
+        .thenReturn(new StateTransition(
+            JobInstanceStatus.CREATED.code(), "START", JobInstanceStatus.RUNNING.code()));
+    service = new DefaultPartitionDispatchService(
+        schedulePlanBuilder,
+        resourceScheduler,
+        partitionLifecycleService,
+        taskExecutionService,
+        taskDispatchOutboxService,
+        stateMachine,
+        mock(WorkflowNodeDispatchService.class),
+        jobInstanceMapper,
+        mock(WorkflowRunMapper.class),
+        new LaunchPhaseMetrics(new SimpleMeterRegistry()));
+  }
+
+  @Test
+  void dispatch_marksInstanceWithKnownVersionWithoutPrecedingReload() {
+    JobInstanceEntity jobInstance = dispatchablePlan(1L);
+    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+
+    service.dispatch(dispatchContext(jobInstance));
+
+    ArgumentCaptor<MarkInstanceRunningParam> running =
+        ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
+    verify(jobInstanceMapper).markRunning(running.capture());
+    verify(jobInstanceMapper, never()).selectById(any(), any());
+    assertThat(running.getValue().getExpectedVersion()).isEqualTo(1L);
+    assertThat(running.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.RUNNING.code());
+    assertThat(jobInstance.getVersion()).isEqualTo(2L);
+  }
+
+  @Test
+  void dispatch_rollsBackOnVersionConflictWithoutOverwritingConcurrentState() {
+    JobInstanceEntity jobInstance = dispatchablePlan(3L);
+    when(jobInstanceMapper.markRunning(any())).thenReturn(0);
+
+    assertThatThrownBy(() -> service.dispatch(dispatchContext(jobInstance)))
+        .isInstanceOf(BizException.class);
+
+    verify(jobInstanceMapper, never()).selectById(any(), any());
+    verify(jobInstanceMapper).markRunning(any());
+    assertThat(jobInstance.getVersion()).isEqualTo(3L);
+  }
+
+  @Test
+  void dispatch_insertsNewDispatchableRowsAsReadyWithoutRedundantPromotionUpdates() {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("ta");
+    plan.setDefaultWorkerType("ATOMIC");
+    SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
+    partitionPlan.setPartitionNo(1);
+    plan.setPartitions(List.of(partitionPlan));
+    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+    decision.setDispatchable(true);
+    decision.setPartitionStatus(PartitionStatus.CREATED.code());
+    decision.setTaskStatus(io.github.pinpols.batch.common.enums.TaskStatus.CREATED.code());
+    when(schedulePlanBuilder.build(any())).thenReturn(plan);
+    when(resourceScheduler.schedule(any())).thenReturn(decision);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(20L);
+    partition.setTenantId("ta");
+    partition.setPartitionNo(1);
+    partition.setPartitionStatus(PartitionStatus.READY.code());
+    partition.setIdempotencyKey("10:1");
+    partition.setVersion(0L);
+    when(partitionLifecycleService.createPartitions(plan, 10L, PartitionStatus.READY.code()))
+        .thenReturn(List.of(partition));
+    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+    JobInstanceEntity jobInstance = new JobInstanceEntity();
+    jobInstance.setId(10L);
+    jobInstance.setTenantId("ta");
+    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+    jobInstance.setVersion(0L);
+
+    service.dispatch(dispatchContext(jobInstance));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity>> tasks =
+        ArgumentCaptor.forClass(List.class);
+    verify(taskExecutionService).createTasks(tasks.capture());
+    assertThat(tasks.getValue())
+        .singleElement()
+        .satisfies(task -> assertThat(task.getTaskStatus())
+            .isEqualTo(io.github.pinpols.batch.common.enums.TaskStatus.READY.code()));
+    assertThat(partitionPlan.getPartitionStatus()).isEqualTo(PartitionStatus.READY.code());
+    assertThat(jobInstance.getExpectedPartitionCount()).isEqualTo(1);
+    verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
+    verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), any(), any());
+  }
+
+  private JobInstanceEntity dispatchablePlan(long version) {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setPartitions(List.of());
+    ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
+    decision.setDispatchable(true);
+    decision.setPartitionStatus(PartitionStatus.CREATED.code());
+    when(schedulePlanBuilder.build(any())).thenReturn(plan);
+    when(resourceScheduler.schedule(any())).thenReturn(decision);
+    when(partitionLifecycleService.createPartitions(plan, 10L, PartitionStatus.CREATED.code()))
+        .thenReturn(List.of());
+
+    JobInstanceEntity jobInstance = new JobInstanceEntity();
+    jobInstance.setId(10L);
+    jobInstance.setTenantId("ta");
+    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+    jobInstance.setVersion(version);
+    return jobInstance;
+  }
+
+  private PartitionDispatchService.DispatchContext dispatchContext(JobInstanceEntity jobInstance) {
+    LaunchRequest request = new LaunchRequest(
+        "ta",
+        "IMPORT_ORDERS",
+        LocalDate.of(2026, Month.SEPTEMBER, 11),
+        TriggerType.MANUAL,
+        "request-1",
+        "trace-1",
+        Map.of());
+    return PartitionDispatchService.DispatchContext.of(
+        new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-1"),
+        new PartitionDispatchService.DispatchRuntime(
+            jobInstance, null, List.of(), Instant.parse("2026-09-11T00:00:00Z")));
+  }
 
   @Test
   void enrichPayload_addsDerivedFieldsWhenMissing() {

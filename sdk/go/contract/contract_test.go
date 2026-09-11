@@ -319,9 +319,10 @@ func assertRequestSide(t *testing.T, fx fixture) {
 	t.Helper()
 	spec := specFromState(t, fx)
 	cfg := protocol.RequestBuildConfig{
-		TenantID:   strFromAny(fx.Given.Config["tenantId"]),
-		WorkerCode: strFromAny(fx.Given.Config["workerCode"]),
-		APIKey:     strFromAny(fx.Given.Config["apiKey"]),
+		TenantID:      strFromAny(fx.Given.Config["tenantId"]),
+		WorkerCode:    strFromAny(fx.Given.Config["workerCode"]),
+		APIKey:        strFromAny(fx.Given.Config["apiKey"]),
+		MaxConcurrent: int(numFromAny(fx.Given.Config["maxConcurrentTasks"], 0)),
 	}
 	req, err := protocol.BuildRequest(spec, cfg)
 	if err != nil {

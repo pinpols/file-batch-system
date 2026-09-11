@@ -1,7 +1,7 @@
 # 整批量日 Dry-run 增强设计与实施计划
 
 日期：2026-09-08
-状态：Implemented（代码与本地自动化验证完成；生产启用前仍需 staging 零副作用验收）
+状态：Implemented（代码、本地真实依赖与故障恢复验收完成；生产启用前仍需 staging 等价环境验收）
 关联：ADR-020（批量日重放）、ADR-026（Dry-run）、ADR-017（结果版本）、ADR-018（跨日依赖）
 
 ## 1. 决策摘要
@@ -393,5 +393,6 @@ batch:
 
 本地验证证据见
 [`batch-day-dry-run-verification-2026-09-11.md`](../verifications/batch-day-dry-run-verification-2026-09-11.md)。
-第 16 节第 3、6 项中的“真实外部依赖零副作用”和“1,000-entry 三类崩溃恢复”属于环境验收，
-不能由单元测试或静态扫描替代；开关保持默认关闭，完成 staging 验收后才允许生产开启。
+第 16 节第 3、6 项已在本地 Docker 真实 PostgreSQL、Kafka、MinIO、SFTP 和五类 Worker 环境完成，
+并扩展到 10,000-entry 容量轮、三类崩溃恢复及 dry-run/正式任务混压。实测数据与限制见验证报告。
+开关仍保持默认关闭；本地结果不替代生产等价 S3/NAS、凭据和网络策略下的 staging 验收。

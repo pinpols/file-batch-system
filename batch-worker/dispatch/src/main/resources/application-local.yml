@@ -57,6 +57,7 @@ batch:
       consumer-group-id: batch-worker-dispatch
       capability-tags:
       - delivery
+      - ORDER
   datasource:
     business:
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}

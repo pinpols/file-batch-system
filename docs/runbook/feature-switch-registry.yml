@@ -15,6 +15,18 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.replay.dispatch.lock-at-least-for
+    module: orchestrator
+    env:
+      - BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS
+      - BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE
+      - BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE
+      - BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR
+      - BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR
+      - BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.console.read-replica.enabled
     module: console-api
     env:

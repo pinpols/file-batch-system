@@ -30,6 +30,8 @@ import org.springframework.util.backoff.FixedBackOff;
  * <p><b>错误处理 (poison-pill skip)</b>：注入 {@link DefaultErrorHandler} 替换默认无限重试：
  *
  * <ul>
+ *   <li>容量反压（HTTP 429）：由 listener 显式 {@code nack(Duration)} 回退当前 offset 并暂停 partition，
+ *       不进入有限重试后跳过的 recoverer；
  *   <li>瞬时错误（PG 抖动 / Kafka 短暂不可用）：固定 backoff（默认 3 次 × 2s）后跳过当前 offset，避免一条挂死整个 partition；
  *   <li>永久错误（jobCode 不存在 / 协议反序列化失败 / 校验失败）：注册 {@link BizException} + {@link
  *       IllegalArgumentException} 为 not-retryable，命中即跳过 — 业务错不会无限重试；
@@ -96,7 +98,7 @@ public class OrchestratorKafkaConsumerConfiguration {
 
   /**
    * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
-   * IllegalArgumentException）不重试直接放行。日志记录失败上下文，offset 前进，避免单条长期停滞 partition。
+   * IllegalArgumentException）不重试直接放行。429 已由 listener 的 nack 分支处理，不会进入本 handler。
    */
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();

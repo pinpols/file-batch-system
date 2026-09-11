@@ -42,7 +42,7 @@ public class TriggerConsumerProperties {
     /** 瞬时错误重试次数(命中 not-retryable 异常会一次跳过 offset)。默认 3。 */
     private int retryAttempts = 3;
 
-    /** FixedBackOff 重试间隔(ms)。默认 2000。 */
+    /** 瞬时错误重试间隔，也是 429 反压时 partition 暂停时长(ms)。默认 2000。 */
     private long retryBackoffMs = 2_000L;
   }
 }

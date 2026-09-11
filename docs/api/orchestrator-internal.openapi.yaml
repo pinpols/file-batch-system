@@ -739,6 +739,11 @@ components:
           type: integer
           description: "in-flight 任务数;null/负值平台 normalize 为 0"
           nullable: true
+        maxConcurrent:
+          type: integer
+          minimum: 1
+          description: "Worker 本地实际执行许可上限;内置 worker 在 register 时上报。缺失时沿用平台已有值或数据库默认值"
+          nullable: true
         taskTypes:
           type: array
           items: {$ref: '#/components/schemas/WorkerTaskTypeDescriptorDto'}
@@ -792,7 +797,7 @@ components:
         desiredMaxConcurrent:
           type: integer
           nullable: true
-          description: "平台希望的最大并发(worker_registry.max_concurrent);null=不下发"
+          description: "平台当前生效的最大并发(worker_registry.max_concurrent；支持上报的 worker 注册时先以本地许可数校准);null=不下发"
         shouldDrain:
           type: boolean
           description: "true=停止认领新任务、跑完在手任务后下线"

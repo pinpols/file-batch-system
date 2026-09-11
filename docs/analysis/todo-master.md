@@ -27,7 +27,7 @@
 |---|---|---|
 | staging 真实恢复、容量、发布与回滚留档 | 🔒 外部阻塞 | [`full-project-test-plan.md`](../testing/full-project-test-plan.md) |
 | 生产 PG/Kafka/Redis HA、PITR 和真实故障演练 | 🔒 外部阻塞 | [`ha-readiness.md`](../runbook/ha-readiness.md) |
-| 前端 dry-run、跨日 DAG、批次日 replay 页面 | ⏳ 当前待做（前端仓） | 本表 §二 FE-1/2/3 |
+| 前端 dry-run、跨日 DAG、批次日 replay 页面 | ✅ 已完成 | 本表 §二 FE-1/2/3 |
 | CI dry-run guard、dry-run 审计与指标维度 | ✅ 已完成 | `DryRunGuardConventionTest`、`TAG_DRY_RUN` 及 worker/plugin 守护已落地 |
 | Quartz 彻底迁移、冷热分层、资源亲和 | 🟡 暂缓 | 对应 ADR 的触发条件 |
 
@@ -42,7 +42,6 @@
 | ADR-033 Quartz→Wheel 切换 | [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) §3 | fire QPS > 500 万/天 / Quartz 归因事件 / DB 锁红线 / cron SLA |
 | ADR-022 v0.2 `*_history` 影子表 + OSS 对象锁 | [ADR-022](../architecture/adr/ADR-022-forensic-audit-bundle.md) status | 7 年保留合规要求触发 |
 | LIC-2 SBOM 嵌入 artifact | todo-master §H | 合规审计 / 客户 SBOM 要求 |
-| CI flaky × 2 (JobLaunchToFinish / WheelLeaderFailover) | `@Disabled` + commit `9d3c4710` 注释 | testcontainer fast-path 时序根因可重现 |
 
 **环境分布**（可执行性切片）：
 
@@ -80,13 +79,13 @@
 | ADR-024 | 冷热分层 | archive 行数未到阈值 |
 | ADR-027 | 资源亲和 | worker_group ≥ 8 / 异构硬件 / 多机房 / 合规隔离 等条件未出现 |
 
-### 前端待办（接口已就绪，前端可开干）⏳
+### 前端能力（已完成）✅
 
-| ID | 主题 | 后端契约 |
+| ID | 主题 | 完成证据 |
 |---|---|---|
-| **FE-1** | ADR-026 Console UI 演练模式 toggle | `POST /api/console/ops/dry-run/plan` 已开放 |
-| **FE-2** | ADR-018 跨日 DAG Console UI | `ConsoleWorkflowNodeResponse.crossDayDependencies` 已返回 |
-| **FE-3** | ADR-020 批次日重放 Console UI + ALL/ALL_FAILED/SUBSET E2E | 5 个 `/api/console/ops/batch-day-replay/sessions...` 端点已开放 |
+| **FE-1** | ADR-026 Console UI 演练模式 | `batch-console/src/components/dialogs/DryRunPlanDialog.vue` + Job 定义详情接线 |
+| **FE-2** | ADR-018 跨日 DAG Console UI | `WorkflowMermaidViewer.vue` + `crossDayMermaid.test.ts` |
+| **FE-3** | ADR-020/026 批次日重放与整批量日演练 | `BatchDayReplay.vue` 支持 REPLAY/DRY_RUN、EXISTING_INSTANCES/SCHEDULE_PLAN，提交归一化单测覆盖无副作用策略 |
 
 ### 横切关注点（历史编号，已完成）✅
 
@@ -248,10 +247,17 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 - 未做：见 §三-D
 - 🔒 全部 7 项需 ops / staging / prod — 见 §九
 
-### Worker 4 模块单测密度（V6-D-5）
+### Worker 4 模块单测密度（V6-D-5）✅
 
-- 未做：各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 个单测
+- 已完成：4 个 `Default*StageExecutor` 均已有 5 个以上场景；Import / Export / Process / Dispatch 的 `*StepExecutionAdapterTest` 均补齐 5 个核心契约场景。
 - 来源：hardening-backlog v6
+
+### 历史 flaky 测试根治 ✅
+
+- `JobLaunchToFinishLifecycleIntegrationTest`：失败上报补齐 claim 生成的 `partitionInvocationId`，恢复 CAS 真实契约后取消禁用。
+- `RlsStrictModePreflightIntegrationTest`：回滚策略对齐生产 SQL 的空字符串 GUC 语义后取消禁用。
+- 全仓仅保留 `ShellTaskExecutorTest` 的 Windows 平台条件禁用，不再存在无条件 `@Disabled`。
+- 2026-09-11 连续 3 轮目标集成验证通过。
 
 ---
 

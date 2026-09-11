@@ -2,7 +2,6 @@ package io.github.pinpols.batch.sdk.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,8 +11,10 @@ import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * P7-3:验证 {@link BatchPlatformClient#start()} 的生命周期失败语义。
@@ -75,7 +76,9 @@ class BatchPlatformClientStartTest {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.register(any())).thenThrow(new IOException("orchestrator unreachable"));
+    ArgumentCaptor<Map<String, Object>> registerBody = ArgumentCaptor.forClass(Map.class);
+    when(http.register(registerBody.capture()))
+        .thenThrow(new IOException("orchestrator unreachable"));
     inject(client, "httpClient", http);
 
     // 执行并断言:抛 RuntimeException(register 失败让进程非 0 退出,K8s 重启)
@@ -96,6 +99,7 @@ class BatchPlatformClientStartTest {
     assertThat(m.started()).isFalse();
     assertThat(m.healthy()).isFalse();
     assertThat(m.inFlightTaskCount()).isZero();
+    assertThat(registerBody.getValue()).containsEntry("maxConcurrent", 4);
   }
 
   @Test

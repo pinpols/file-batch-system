@@ -372,6 +372,7 @@ export interface RequestBuildConfig {
   tenantId: string;
   workerCode: string;
   apiKey?: string | null;
+  maxConcurrent?: number | null;
 }
 
 /** Describes which outgoing call to build, from a fixture's given.state.request. */
@@ -429,6 +430,7 @@ export function buildRequest(spec: RequestSpec, config: RequestBuildConfig): Out
         workerCode: config.workerCode,
         workerGroup: "sdk-self-hosted",
         status: "RUNNING",
+        maxConcurrent: config.maxConcurrent,
       });
       return { body, headers };
     }

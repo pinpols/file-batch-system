@@ -119,6 +119,28 @@ class DefaultWorkerRegistryServiceTest {
         null);
   }
 
+  private WorkerHeartbeatDto dtoWithMaxConcurrent(int maxConcurrent) {
+    WorkerHeartbeatDto base = dto(WorkerRegistryStatus.ONLINE.code());
+    return new WorkerHeartbeatDto(
+        base.tenantId(),
+        base.workerCode(),
+        base.workerGroup(),
+        base.status(),
+        base.hostName(),
+        base.hostIp(),
+        base.processId(),
+        base.buildId(),
+        base.sdkVersion(),
+        base.heartbeatAt(),
+        base.capabilityTags(),
+        base.currentLoad(),
+        base.taskTypes(),
+        base.rowsProcessed(),
+        base.totalRowsHint(),
+        base.protocolVersion(),
+        maxConcurrent);
+  }
+
   private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
     return new WorkerHeartbeatDto(
         "ta",
@@ -220,8 +242,8 @@ class DefaultWorkerRegistryServiceTest {
   @Test
   @DisplayName("register: 新 worker → insert + 重读")
   void registerNewWorkerInserts() {
-    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
-        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
 
     WorkerRegistryEntity result = service.register(dto(null));
 
@@ -232,6 +254,35 @@ class DefaultWorkerRegistryServiceTest {
     assertThat(captor.getValue().maxConcurrent())
         .isEqualTo(WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT);
     assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: worker 上报实际并发上限 → 持久化到 selector 反压字段")
+  void registerPersistsReportedMaxConcurrent() {
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dtoWithMaxConcurrent(16));
+
+    verify(mapper).insert(captor.capture());
+    assertThat(captor.getValue().maxConcurrent()).isEqualTo(16);
+  }
+
+  @Test
+  @DisplayName("register: 旧 worker 未上报并发上限 → 保留已有平台值")
+  void registerWithoutMaxConcurrentPreservesExistingValue() {
+    WorkerRegistryEntity existing = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+    verify(mapper)
+        .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.ONLINE.code()));
+    assertThat(captor.getValue().maxConcurrent()).isEqualTo(10);
   }
 
   @Test

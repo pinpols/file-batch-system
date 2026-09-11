@@ -49,6 +49,7 @@ public abstract class AbstractWorkerLoop {
 
   private final WorkerRuntimeFacade workerRuntimeFacade;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final int maxConcurrentTasks;
   private final AtomicBoolean started = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
@@ -57,9 +58,12 @@ public abstract class AbstractWorkerLoop {
   private boolean failFastOnStartup;
 
   protected AbstractWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade, BatchDateTimeSupport dateTimeSupport) {
+      WorkerRuntimeFacade workerRuntimeFacade,
+      BatchDateTimeSupport dateTimeSupport,
+      int maxConcurrentTasks) {
     this.workerRuntimeFacade = workerRuntimeFacade;
     this.dateTimeSupport = dateTimeSupport;
+    this.maxConcurrentTasks = maxConcurrentTasks;
   }
 
   /** Worker 配置（topic、tenantId、workerType 等）。 */
@@ -141,6 +145,7 @@ public abstract class AbstractWorkerLoop {
       OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
       workerRegistration.setRegisteredAt(now);
       workerRegistration.setLastHeartbeatAt(now);
+      workerRegistration.setMaxConcurrent(maxConcurrentTasks);
       workerRegistration.setCapabilityTags(
           Stream.concat(cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
               .distinct()

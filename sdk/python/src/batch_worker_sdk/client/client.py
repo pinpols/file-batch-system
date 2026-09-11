@@ -261,6 +261,7 @@ class BatchPlatformClient:
             "status": "RUNNING",
             "heartbeatAt": _utc_now_iso(),
             "currentLoad": 0,
+            "maxConcurrent": self._config.max_concurrent_tasks,
             "capabilityTags": self._capability_tags(),
             "sdkVersion": self._config.sdk_version,
             # SDK-#536 register-time protocol-version gate: advertise the SDK's

@@ -124,6 +124,7 @@ public class ReceiveStep implements ImportStageStep {
     if (existingFileId == null) {
       String traceId =
           String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId()));
+      String executionRef = resolveExecutionRef(attrs, traceId);
       String fileFormatType =
           normalizeFileFormat(importPayload.fileFormatType(), context.getRawPayload());
       String fileName = resolveFileName(importPayload, fileFormatType, traceId);
@@ -152,7 +153,7 @@ public class ReceiveStep implements ImportStageStep {
           .storageType(defaultText(importPayload.storageType(), "LOCAL"))
           .storagePath(defaultText(
               importPayload.storagePath(),
-              "ingress/" + context.getTenantId() + "/" + traceId + "/" + fileName))
+              "ingress/" + context.getTenantId() + "/" + executionRef + "/" + fileName))
           .storageBucket(importPayload.storageBucket())
           .fileVersion(null)
           .bizDate(parseBizDate(context.getBizDate()))
@@ -338,6 +339,12 @@ public class ReceiveStep implements ImportStageStep {
           case "EXCEL" -> ".xlsx";
           default -> ".dat";
         };
+  }
+
+  /** 同一批量日 session 共用 traceId；加入稳定 taskId，避免并发 entry 生成相同默认存储路径。 */
+  private static String resolveExecutionRef(Map<String, Object> attributes, String traceId) {
+    Object taskId = attributes.get(PipelineRuntimeKeys.TASK_ID);
+    return taskId == null ? traceId : traceId + '-' + taskId;
   }
 
   private String normalizeFileFormat(String fileFormatType, String rawPayload) {

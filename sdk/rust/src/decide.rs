@@ -471,6 +471,7 @@ pub struct RequestBuildConfig {
     pub tenant_id: String,
     pub worker_code: String,
     pub api_key: Option<String>,
+    pub max_concurrent_tasks: Option<i64>,
 }
 
 /// Report-specific payload (success/outputs/errorCode/...) from the fixture.
@@ -539,6 +540,12 @@ pub fn build_request(spec: &RequestSpec, cfg: &RequestBuildConfig) -> OutgoingRe
                 BodyValue::Str("sdk-self-hosted".into()),
             );
             body.insert("status".into(), BodyValue::Str("RUNNING".into()));
+            if let Some(max_concurrent) = cfg.max_concurrent_tasks.filter(|value| *value > 0) {
+                body.insert(
+                    "maxConcurrent".into(),
+                    BodyValue::Num(max_concurrent as f64),
+                );
+            }
         }
         RequestSpec::ClaimOrRenew {
             partition_invocation_id,

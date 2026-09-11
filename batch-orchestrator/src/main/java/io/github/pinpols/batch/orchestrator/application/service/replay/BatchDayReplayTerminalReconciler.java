@@ -170,7 +170,12 @@ public class BatchDayReplayTerminalReconciler {
     return ENTRY_RUNNING;
   }
 
-  /** 重读各状态计数；全部终态 → session 推到 SUCCEEDED / PARTIAL_FAILED；否则更新计数继续 RUNNING。 */
+  /**
+   * 重读各状态计数；全部终态时同步 session 终态。
+   *
+   * <p>实例允许在受控 retry/compensation 后从失败收敛为成功，因此 entry 也可能从 FAILED 改为 SUCCEEDED。
+   * 此时 session 可能已经是 PARTIAL_FAILED，必须随最新 entry 真相重新收敛，避免状态与计数永久矛盾。
+   */
   private void advanceSessionCounts(BatchDayReplaySessionEntity session, Instant now) {
     long succeeded = entryMapper.countBySessionAndStatus(session.id(), ENTRY_SUCCEEDED);
     long failed = entryMapper.countBySessionAndStatus(session.id(), ENTRY_FAILED);
@@ -185,13 +190,15 @@ public class BatchDayReplayTerminalReconciler {
         (int) inFlight,
         session.totalCount(),
         now);
-    if (inFlight == 0L && SESSION_RUNNING.equals(session.status())) {
+    if (inFlight == 0L
+        && (SESSION_RUNNING.equals(session.status())
+            || SESSION_PARTIAL_FAILED.equals(session.status()))) {
       String terminalStatus = failed > 0L ? SESSION_PARTIAL_FAILED : SESSION_SUCCEEDED;
       int updated = sessionMapper.updateStatus(
           session.tenantId(),
           session.id(),
           terminalStatus,
-          List.of(SESSION_RUNNING),
+          List.of(SESSION_RUNNING, SESSION_PARTIAL_FAILED),
           null,
           now,
           null,

@@ -52,6 +52,8 @@ test("lifecycle: start registers, starts schedulers, then runs claimâ†’executeâ†
   assert.ok(ops.indexOf("register") === 0, "register first");
   assert.ok(ops.includes("claim"), "claim happened");
   assert.ok(ops.includes("report"), "report happened");
+  const register = platform.transport.calls.find((c) => c.op === "register");
+  assert.equal((register!.args[0] as Record<string, unknown>).maxConcurrent, 4);
 
   // report body carries exact field names + claimed config in ctx
   const report = platform.transport.calls.find((c) => c.op === "report");

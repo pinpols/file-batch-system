@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -19,6 +20,12 @@ public class BatchDayReplayDispatchProperties {
 
   /** 单 session 单轮处理 PENDING entries 的上限（rate-limit）。 */
   private int entryBatchSize = 50;
+
+  /** ShedLock 最短持锁时间；生产默认 15 秒，容量环境可独立缩短。 */
+  private Duration lockAtLeastFor = Duration.ofSeconds(15);
+
+  /** ShedLock 故障兜底时长；实例非正常退出后，其他实例最迟在该时长后接管。 */
+  private Duration lockAtMostFor = Duration.ofMinutes(1);
 
   /** 未绑定实例的 RUNNING entry 超过该时长后允许回收，避免启动窗口崩溃造成永久卡住。 */
   private long claimTimeoutMillis = 300_000L;

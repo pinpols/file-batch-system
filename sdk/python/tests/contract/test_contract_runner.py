@@ -187,6 +187,7 @@ def _cfg_from_fixture(fixture_cfg: dict[str, Any]) -> BatchPlatformClientConfig:
         "tenant_id": fixture_cfg.get("tenantId", "acme"),
         "worker_code": fixture_cfg.get("workerCode", "w-1"),
         "api_key": fixture_cfg.get("apiKey"),
+        "max_concurrent_tasks": int(fixture_cfg.get("maxConcurrentTasks", 4)),
         "retry_base_delay": timedelta(milliseconds=1),
     }
     if "retryMaxAttempts" in fixture_cfg:
@@ -538,7 +539,11 @@ def _build_request_body(spec: dict[str, Any], cfg: BatchPlatformClientConfig) ->
     resultSummary/partitionInvocationId),把 13 的字段名红线机器化。"""
     kind = spec["kind"]
     if kind == "register":
-        return {"tenantId": cfg.tenant_id, "workerCode": cfg.worker_code}
+        return {
+            "tenantId": cfg.tenant_id,
+            "workerCode": cfg.worker_code,
+            "maxConcurrent": cfg.max_concurrent_tasks,
+        }
     if kind == "renew":
         body: dict[str, Any] = {"tenantId": cfg.tenant_id, "workerId": cfg.worker_code}
         if spec.get("partitionInvocationId") is not None:
