@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigMappers;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -33,6 +35,7 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
 
   @SpringBootConfiguration
   @EnableAutoConfiguration
+  @EnableConfigurationProperties(OrchestratorConfigCacheProperties.class)
   @Import({
     BatchClockConfig.class,
     OrchestratorRedisSupport.class,
