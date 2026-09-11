@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
@@ -74,7 +75,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
     }
     List<ResourceQueueEntity> queues =
         enabledQueuesByTenant.get(request.getTenantId(), this::loadEnabledQueues);
-    if (queues == null || queues.isEmpty()) {
+    if (EmptyChecks.isEmpty(queues)) {
       return null;
     }
     if (Texts.hasText(request.getQueueCode())) {
@@ -101,7 +102,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
 
   private List<ResourceQueueEntity> loadEnabledQueues(String tenantId) {
     List<ResourceQueueEntity> loaded = resourceQueueMapper.selectByTenantAndEnabled(tenantId, true);
-    return loaded == null || loaded.isEmpty() ? List.of() : List.copyOf(loaded);
+    return EmptyChecks.isEmpty(loaded) ? List.of() : List.copyOf(loaded);
   }
 
   private boolean matchesQueueType(ResourceQueueEntity queue, String workerType) {

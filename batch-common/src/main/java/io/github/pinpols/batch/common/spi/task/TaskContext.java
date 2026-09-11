@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.spi.task;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,7 +43,7 @@ public record TaskContext(
   }
 
   private static Map<String, Object> immutableNullableMap(Map<String, Object> source) {
-    return source == null || source.isEmpty()
+    return EmptyChecks.isEmpty(source)
         ? Map.of()
         : Collections.unmodifiableMap(new LinkedHashMap<>(source));
   }
