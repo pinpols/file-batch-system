@@ -75,8 +75,8 @@ class DefaultPartitionLifecycleServiceTest {
   void claimReturnsFreshWhenCasSucceeds() {
     JobPartitionEntity existing = partition(100L, 1L);
     JobPartitionEntity fresh = partition(100L, 2L);
-    when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing, fresh);
-    when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(1);
+    when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing);
+    when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(fresh);
 
     JobPartitionEntity result = service.claimPartition("ta", 100L, "worker-1", Instant.now());
     assertThat(result).isSameAs(fresh);
@@ -94,7 +94,7 @@ class DefaultPartitionLifecycleServiceTest {
   void claimReturnsExistingWhenCasFails() {
     JobPartitionEntity existing = partition(100L, 5L);
     when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing);
-    when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(0);
+    when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(null);
 
     JobPartitionEntity result = service.claimPartition("ta", 100L, "worker-1", Instant.now());
     assertThat(result).isSameAs(existing);

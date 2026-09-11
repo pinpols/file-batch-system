@@ -5,12 +5,14 @@ import io.github.pinpols.batch.common.config.BatchKafkaProducerSupport;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
@@ -31,6 +33,12 @@ public class TriggerKafkaProducerConfiguration {
 
   private final TriggerKafkaProperties kafkaProperties;
   private final BatchKafkaProducerProperties commonProducerProperties;
+
+  @Bean
+  public KafkaAdmin triggerKafkaAdmin(
+      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+    return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+  }
 
   @Bean
   public ProducerFactory<String, String> triggerKafkaProducerFactory(

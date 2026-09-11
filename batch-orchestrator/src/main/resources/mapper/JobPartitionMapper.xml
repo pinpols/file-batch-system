@@ -253,7 +253,7 @@
           and job_instance_id = #{jobInstanceId}
     </select>
 
-    <update id="claimPartition">
+    <select id="claimPartition" resultMap="JobPartitionResultMap" flushCache="true" affectData="true">
         update batch.job_partition
         set worker_code = #{workerCode},
             partition_status = #{toStatus},
@@ -267,7 +267,8 @@
           and id = #{id}
           and partition_status = #{fromStatus}
           and version = #{expectedVersion}
-    </update>
+        returning *
+    </select>
 
     <!-- R3-P1-10：current_invocation_id 改为强制条件（不再 <if> 可选）。
          之前多副本同 workerCode 部署时 invocationId=null 可让任意持有该 workerCode 的实例续他人 lease。
@@ -323,7 +324,13 @@
         </if>
     </update>
 
-    <update id="markStatus">
+    <!--
+      PERF(#5)：分区首次进入 SUCCESS/FAILED 与实例计数增量在同一 SQL、同一事务内完成。
+      partition 的 version + 非终态谓词是幂等门：重复 report 无法再次进入 transitioned，
+      因而不会重复累加 job_instance。非终态转换（如 RUNNING→WAITING）不改实例计数。
+    -->
+    <select id="markStatus" resultType="int" flushCache="true" affectData="true">
+        with transitioned as (
         update batch.job_partition
         set partition_status = #{partitionStatus},
             worker_code = case when #{partitionStatus} = #{runningStatus} then worker_code else null end,
@@ -340,7 +347,23 @@
           and id = #{id}
           and version = #{expectedVersion}
           and partition_status not in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4})
-    </update>
+        returning tenant_id, job_instance_id
+        ), progressed as (
+        update batch.job_instance ji
+        set success_partition_count = success_partition_count
+                + case when #{partitionStatus} = #{terminalStatus1} then 1 else 0 end,
+            failed_partition_count = failed_partition_count
+                + case when #{partitionStatus} = #{terminalStatus2} then 1 else 0 end,
+            version = version + 1,
+            updated_at = current_timestamp
+        from transitioned p
+        where ji.tenant_id = p.tenant_id
+          and ji.id = p.job_instance_id
+          and #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2})
+        returning ji.id
+        )
+        select count(*)::integer from transitioned
+    </select>
 
     <!-- reclaim 路径:整批在一个 @Transactional 内逐分区 markStatus(行锁持有到提交)。若不加
          FOR UPDATE SKIP LOCKED,本查询按 id asc 取行、markStatus 又按 asc 持锁,会与
@@ -412,8 +435,21 @@
         limit #{batchSize}
     </select>
 
-    <update id="resetForDispatch">
-        update batch.job_partition
+    <!--
+      终态分区人工重试/文件重派时反向扣减实例计数；RUNNING lease reclaim 等非终态复位 delta=0。
+      candidate 锁定旧状态，transitioned 与 progressed 在一条语句内提交，避免分区已重开但计数未回退。
+    -->
+    <select id="resetForDispatch" resultType="int" flushCache="true" affectData="true">
+        with candidate as (
+        select tenant_id, id, job_instance_id, partition_status
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          and (lease_expire_at is null or lease_expire_at &lt; current_timestamp)
+        for update
+        ), transitioned as (
+        update batch.job_partition p
         set partition_status = #{readyStatus},
             worker_code = null,
             lease_expire_at = null,
@@ -423,16 +459,30 @@
             finished_at = null,
             version = version + 1,
             updated_at = current_timestamp
-        where tenant_id = #{tenantId}
-          and id = #{id}
-          and version = #{expectedVersion}
-          <!--
-            额外守护 lease_expire_at &lt; now：reclaim 选中 → renew 抢答（不 bump version）
-            的窗口期里，CAS 仅看 version 会误判 lease 仍过期。补这一条让 renew 抢答能挡住 reclaim。
-            lease_expire_at IS NULL 也接受（极端竞争下另一侧 reclaim 已把它清空，本侧无需重做）。
-          -->
-          and (lease_expire_at is null or lease_expire_at &lt; current_timestamp)
-    </update>
+        from candidate c
+        where p.tenant_id = c.tenant_id
+          and p.id = c.id
+        returning c.tenant_id, c.job_instance_id, c.partition_status as previous_status
+        ), progressed as (
+        update batch.job_instance ji
+        set success_partition_count = greatest(
+                0,
+                success_partition_count
+                    - case when p.previous_status = 'SUCCESS' then 1 else 0 end),
+            failed_partition_count = greatest(
+                0,
+                failed_partition_count
+                    - case when p.previous_status = 'FAILED' then 1 else 0 end),
+            version = version + 1,
+            updated_at = current_timestamp
+        from transitioned p
+        where ji.tenant_id = p.tenant_id
+          and ji.id = p.job_instance_id
+          and p.previous_status in ('SUCCESS', 'FAILED')
+        returning ji.id
+        )
+        select count(*)::integer from transitioned
+    </select>
 
     <update id="promoteStatus">
         update batch.job_partition
@@ -522,7 +572,13 @@
           and lease_expire_at &lt; current_timestamp
     </select>
 
-    <update id="closeNonTerminalPartitionsForTerminalInstance">
+    <!--
+      终态实例的异常修复路径不走普通 report，因此在收敛残留分区后按真实状态校正实例计数。
+      该路径低频且以一致性为先；普通 report 仍使用上面的 O(1) 增量更新。
+    -->
+    <select id="closeNonTerminalPartitionsForTerminalInstance"
+            resultType="int" flushCache="true" affectData="true">
+        with transitioned as (
         update batch.job_partition
         set partition_status = #{targetPartitionStatus},
             worker_code = null,
@@ -535,5 +591,34 @@
         where tenant_id = #{tenantId}
           and job_instance_id = #{jobInstanceId}
           and partition_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'RETRYING')
-    </update>
+        returning tenant_id, job_instance_id
+        ), transition_delta as (
+        select tenant_id, job_instance_id, count(*)::integer as closed_count
+        from transitioned
+        group by tenant_id, job_instance_id
+        ), progressed as (
+        update batch.job_instance ji
+        set success_partition_count = (
+                select count(*)::integer
+                from batch.job_partition jp
+                where jp.tenant_id = ji.tenant_id
+                  and jp.job_instance_id = ji.id
+                  and jp.partition_status = 'SUCCESS')
+                + case when #{targetPartitionStatus} = 'SUCCESS' then d.closed_count else 0 end,
+            failed_partition_count = (
+                select count(*)::integer
+                from batch.job_partition jp
+                where jp.tenant_id = ji.tenant_id
+                  and jp.job_instance_id = ji.id
+                  and jp.partition_status = 'FAILED')
+                + case when #{targetPartitionStatus} = 'FAILED' then d.closed_count else 0 end,
+            version = version + 1,
+            updated_at = current_timestamp
+        from transition_delta d
+        where ji.tenant_id = d.tenant_id
+          and ji.id = d.job_instance_id
+        returning ji.id
+        )
+        select coalesce(sum(closed_count), 0)::integer from transition_delta
+    </select>
 </mapper>

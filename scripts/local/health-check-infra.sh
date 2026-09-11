@@ -31,6 +31,7 @@ set -uo pipefail
 
 # 加载 .env(若存在),让本机默认值生效;命令行 env var 优先级最高
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SQL_DIR="$ROOT_DIR/scripts/local/sql"
 [[ -f "$ROOT_DIR/.env" ]] && set -a && source "$ROOT_DIR/.env" 2>/dev/null && set +a
 # 只引入 IPv4/IPv6 host 工具，不让公共入口再次读取 .env，保持本脚本
 # “命令行环境变量优先”的既有契约。
@@ -77,6 +78,12 @@ GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' DIM='\033[2m' RST='\033[0m'
 PASS=0 FAIL=0 SKIP=0
 RESULTS=()
 
+pg_query() {
+  local host="$1" port="$2" sql_file="$3"
+  PGPASSWORD="$PG_PASSWORD" psql -X -h "$host" -p "$port" -U "$PG_USER" -d "$PG_DB" \
+    -v ON_ERROR_STOP=1 -q -tA -f "$SQL_DIR/$sql_file"
+}
+
 ok()   { (( PASS++ )); [[ $QUIET == 1 ]] || printf "  ${GREEN}✓${RST} %-20s %s\n" "$1" "$2"; RESULTS+=("OK|$1|$2"); }
 ng()   { (( FAIL++ )); [[ $QUIET == 1 ]] || printf "  ${RED}✗${RST} %-20s %s\n" "$1" "$2"; RESULTS+=("FAIL|$1|$2"); }
 warn() { [[ $QUIET == 1 ]] || printf "  ${YELLOW}⚠${RST} %-20s %s\n" "$1" "$2"; RESULTS+=("WARN|$1|$2"); }
@@ -121,16 +128,14 @@ check_pg_primary() {
     return
   fi
   local out
-  out=$(PGPASSWORD="$PG_PASSWORD" psql -h "$PG_PRIMARY_HOST" -p "$PG_PRIMARY_PORT" \
-        -U "$PG_USER" -d "$PG_DB" -tAc "select 1, current_setting('server_version_num')::int / 10000" 2>&1)
+  out=$(pg_query "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT" select-postgres-health.sql 2>&1)
   if [[ $? -ne 0 ]]; then
     ng "PG primary" "psql 连接失败:$out"
     return
   fi
   local pg_ver; pg_ver=$(echo "$out" | awk -F'|' '{print $2}')
   local tbl_count
-  tbl_count=$(PGPASSWORD="$PG_PASSWORD" psql -h "$PG_PRIMARY_HOST" -p "$PG_PRIMARY_PORT" \
-              -U "$PG_USER" -d "$PG_DB" -tAc "select count(*) from pg_tables where schemaname='batch'" 2>/dev/null)
+  tbl_count=$(pg_query "$PG_PRIMARY_HOST" "$PG_PRIMARY_PORT" count-batch-schema-tables.sql 2>/dev/null)
   ok "PG primary" "PG ${pg_ver} on $PG_PRIMARY_HOST:$PG_PRIMARY_PORT,batch schema $tbl_count 表"
 }
 
@@ -149,15 +154,12 @@ check_pg_replica() {
     return
   fi
   local recovery lag_sec
-  recovery=$(PGPASSWORD="$PG_PASSWORD" psql -h "$PG_REPLICA_HOST" -p "$PG_REPLICA_PORT" \
-             -U "$PG_USER" -d "$PG_DB" -tAc "select pg_is_in_recovery()" 2>&1)
+  recovery=$(pg_query "$PG_REPLICA_HOST" "$PG_REPLICA_PORT" select-postgres-recovery-state.sql 2>&1)
   if [[ "$recovery" != "t" ]]; then
     ng "PG replica" "pg_is_in_recovery=$recovery(应为 t)"
     return
   fi
-  lag_sec=$(PGPASSWORD="$PG_PASSWORD" psql -h "$PG_REPLICA_HOST" -p "$PG_REPLICA_PORT" \
-            -U "$PG_USER" -d "$PG_DB" -tAc \
-            "select coalesce(extract(epoch from now() - pg_last_xact_replay_timestamp())::int, 0)" 2>/dev/null)
+  lag_sec=$(pg_query "$PG_REPLICA_HOST" "$PG_REPLICA_PORT" select-postgres-replica-lag.sql 2>/dev/null)
   lag_sec=${lag_sec:-0}
   if (( lag_sec > PG_REPLICA_LAG_THRESHOLD_SEC )); then
     warn "PG replica" "in recovery,但 lag ${lag_sec}s > 阈值 ${PG_REPLICA_LAG_THRESHOLD_SEC}s"

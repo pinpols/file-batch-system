@@ -12,6 +12,8 @@ public record ConsoleBatchDayReplaySessionResponse(
     String calendarCode,
     LocalDate bizDate,
     String scope,
+    String executionMode,
+    String candidateSource,
     String scopePayload,
     String resultPolicy,
     String configVersionPolicy,

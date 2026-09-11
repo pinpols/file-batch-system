@@ -27,6 +27,7 @@ from typing import Final
 
 # 对齐 Java ``TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS``。
 SCHEMA_VERSIONS_SUPPORTED: Final[tuple[str, ...]] = ("v1", "v2")
+DRY_RUN_SAFE_CAPABILITY: Final[str] = "dry-run-safe"
 
 # 对齐 Java ``WorkerRuntimeState`` enum;运行态实现见
 # :mod:`batch_worker_sdk.task.state`,这里仅作为 yaml parity 用字符串集合。
@@ -65,6 +66,7 @@ TASK_STATUSES: Final[tuple[str, ...]] = (
 )
 
 __all__ = [
+    "DRY_RUN_SAFE_CAPABILITY",
     "SCHEMA_VERSIONS_SUPPORTED",
     "SENSITIVE_KEYWORDS",
     "TASK_STATUSES",

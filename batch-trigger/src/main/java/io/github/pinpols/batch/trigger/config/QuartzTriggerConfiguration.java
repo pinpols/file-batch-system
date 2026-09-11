@@ -42,6 +42,22 @@ public class QuartzTriggerConfiguration {
     return scheduler;
   }
 
+  /** Kafka lag 查询使用独立线程，避免 AdminClient 超时阻塞 outbox 发布和其它周期任务。 */
+  @Bean(name = "triggerLaunchLagMonitorScheduler", destroyMethod = "shutdown")
+  public ThreadPoolTaskScheduler triggerLaunchLagMonitorScheduler(
+      TriggerOutboxRelayProperties properties) {
+    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+    scheduler.setPoolSize(1);
+    scheduler.setThreadNamePrefix("trigger-launch-lag-monitor-");
+    scheduler.setPhase(properties.getSchedulerPhase());
+    scheduler.setWaitForTasksToCompleteOnShutdown(false);
+    scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getShutdownAwaitSeconds()));
+    scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+    scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+    scheduler.setRemoveOnCancelPolicy(true);
+    return scheduler;
+  }
+
   @Bean
   public RestClient orchestratorRestClient(
       RestClient.Builder builder,

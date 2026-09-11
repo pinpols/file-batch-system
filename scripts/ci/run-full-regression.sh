@@ -282,8 +282,12 @@ deploy_smoke() {
   local -a secret_args=(
     --set-string postgresql.platform.password="${BATCH_DEPLOY_SMOKE_PLATFORM_DB_PASSWORD:-smoke-platform-pass}"
     --set-string postgresql.business.password="${BATCH_DEPLOY_SMOKE_BUSINESS_DB_PASSWORD:-smoke-business-pass}"
-    --set-string minio.accessKey="${BATCH_DEPLOY_SMOKE_MINIO_ACCESS_KEY:-smoke-access-key}"
-    --set-string minio.secretKey="${BATCH_DEPLOY_SMOKE_MINIO_SECRET_KEY:-smoke-secret-key}"
+    --set-string objectStorage.accessKey="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_ACCESS_KEY:-smoke-access-key}"
+    --set-string objectStorage.secretKey="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_SECRET_KEY:-smoke-secret-key}"
+    --set-string security.internalSecret="${BATCH_DEPLOY_SMOKE_INTERNAL_SECRET:-smoke-internal-secret}"
+    --set-string security.consoleJwtSecret="${BATCH_DEPLOY_SMOKE_CONSOLE_JWT_SECRET:-smoke-console-jwt-secret}"
+    --set-string security.loginEncryption.privateKeyPem="${BATCH_DEPLOY_SMOKE_LOGIN_PRIVATE_KEY:-smoke-private-key}"
+    --set-string security.loginEncryption.publicKeyPem="${BATCH_DEPLOY_SMOKE_LOGIN_PUBLIC_KEY:-smoke-public-key}"
   )
 
   run_helm lint "$chart_dir"
@@ -291,6 +295,8 @@ deploy_smoke() {
 
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" >"$render_dir/default.yaml"
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" -f "$prod_values" "${secret_args[@]}" >"$render_dir/prod.yaml"
+  run_helm template "$release_name" "$chart_dir" --namespace "$namespace" \
+    -f "$chart_dir/examples/values-autoscale.yaml" >"$render_dir/autoscale.yaml"
 
   assert_manifest_contains "$render_dir/default.yaml" "kind: Deployment"
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-trigger"
@@ -311,6 +317,16 @@ deploy_smoke() {
   assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-process"
   assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-dispatch"
   assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-atomic"
+
+  # Orchestrator 自动扩缩必须和动态分片同时渲染，且租约参数要明确注入。
+  assert_manifest_contains "$render_dir/autoscale.yaml" "kind: StatefulSet"
+  assert_manifest_contains "$render_dir/autoscale.yaml" "kind: HorizontalPodAutoscaler"
+  assert_manifest_contains "$render_dir/autoscale.yaml" "name: BATCH_OUTBOX_SHARDING_MODE"
+  assert_manifest_contains "$render_dir/autoscale.yaml" 'value: "dynamic"'
+  assert_manifest_contains "$render_dir/autoscale.yaml" "name: BATCH_OUTBOX_SHARD_MEMBERS_KEY"
+  assert_manifest_contains "$render_dir/autoscale.yaml" "batch:${namespace}:${release_name}:orchestrator:members"
+  assert_manifest_contains "$render_dir/autoscale.yaml" "name: BATCH_OUTBOX_SHARD_HEARTBEAT_INTERVAL_MS"
+  assert_manifest_contains "$render_dir/autoscale.yaml" "name: BATCH_OUTBOX_SHARD_MEMBER_TTL_MS"
 
   if [[ "${BATCH_DEPLOY_SMOKE_KEEP_RENDERED:-false}" != "true" ]]; then
     rm -rf "$render_dir"

@@ -52,6 +52,14 @@ class DefaultStateMachineTest {
   }
 
   @Test
+  void shouldMapDryRunTerminalEvents() {
+    assertThat(machine.transition("RUNNING", "SUCCESS_DRY_RUN").toState())
+        .isEqualTo("SUCCESS_DRY_RUN");
+    assertThat(machine.transition("RUNNING", "FAILED_DRY_RUN").toState())
+        .isEqualTo("FAILED_DRY_RUN");
+  }
+
+  @Test
   void shouldMapReadyEventToReadyState() {
     StateTransition t = machine.transition("CREATED", "READY");
     assertThat(t.toState()).isEqualTo("READY");

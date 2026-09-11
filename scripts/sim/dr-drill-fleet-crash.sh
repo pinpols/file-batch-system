@@ -18,6 +18,9 @@
 # ============================================================================
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SQL_DIR="$ROOT/scripts/sim/sql"
+
 PG_CONTAINER="${PG_CONTAINER:?需设置 PG_CONTAINER(平台 PG 容器名)}"
 POSTGRES_USER="${POSTGRES_USER:-batch}"
 PG_PLATFORM_DB="${PG_PLATFORM_DB:-batch_platform}"
@@ -29,15 +32,17 @@ POLL_S="${POLL_S:-5}"
 command -v docker >/dev/null 2>&1 || { echo "❌ 需要 docker" >&2; exit 2; }
 
 psql_platform() {
-  docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" -tAc "$1"
+  local sql_file="$1"
+  shift
+  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file"
 }
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
 # ---- 1) 基线:记录当前在飞(RUNNING/CLAIMED)的任务集合 -------------------
 log "采集基线:在飞任务快照"
-INFLIGHT_BEFORE="$(psql_platform \
-  "select count(*) from batch.job_task where task_status in ('RUNNING','READY');")"
+INFLIGHT_BEFORE="$(psql_platform dr-count-inflight-tasks.sql)"
 log "在飞 job_task=$INFLIGHT_BEFORE"
 if [ "${INFLIGHT_BEFORE:-0}" -lt 1 ]; then
   echo "❌ 没有在飞任务可崩;先起载荷(05-load.sh)再演练" >&2
@@ -82,8 +87,7 @@ KILLED=""  # 已主动拉回,后续 EXIT trap 不再重复 start(仅在中途中
 log "轮询沉降(≤ ${SETTLE_TIMEOUT_S}s)"
 deadline=$(( $(date +%s) + SETTLE_TIMEOUT_S ))
 while :; do
-  pending="$(psql_platform \
-    "select count(*) from batch.job_task where task_status in ('RUNNING','READY');")"
+  pending="$(psql_platform dr-count-inflight-tasks.sql)"
   [ "${pending:-1}" -eq 0 ] && { log "已沉降"; break; }
   if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "❌ 超时未沉降:仍有 ${pending} 个 job_task 卡在 RUNNING/READY(疑似长期停滞/未重投)" >&2
@@ -95,34 +99,24 @@ done
 # ---- 6) 精确一次断言 ------------------------------------------------------
 fail=0
 
-dup_instances="$(psql_platform "
-  select coalesce(string_agg(tenant_id||'/'||dedup_key||':'||c, ', '), '')
-  from (select tenant_id, dedup_key, count(*) c
-        from batch.job_instance
-        group by tenant_id, dedup_key, run_attempt having count(*) > 1) d;")"
+dup_instances="$(psql_platform dr-find-duplicate-instances.sql)"
 if [ -n "${dup_instances:-}" ]; then
   echo "❌ 重复 job_instance(同 tenant/dedup_key/run_attempt):$dup_instances" >&2; fail=1
 else log "✅ 无重复 job_instance(UNIQUE(tenant_id,dedup_key,run_attempt) 承重)"; fi
 
-dup_outbox="$(psql_platform "
-  select coalesce(string_agg(tenant_id||'/'||event_key||':'||c, ', '), '')
-  from (select tenant_id, event_key, count(*) c
-        from batch.outbox_event
-        group by tenant_id, event_key having count(*) > 1) d;")"
+dup_outbox="$(psql_platform dr-find-duplicate-outbox.sql)"
 if [ -n "${dup_outbox:-}" ]; then
   echo "❌ 重复 outbox_event(同 tenant/event_key):$dup_outbox" >&2; fail=1
 else log "✅ 无重复 outbox_event(UNIQUE(tenant_id,event_key) 承重)"; fi
 
-stuck="$(psql_platform \
-  "select count(*) from batch.job_task where task_status in ('RUNNING','READY');")"
+stuck="$(psql_platform dr-count-inflight-tasks.sql)"
 if [ "${stuck:-0}" -ne 0 ]; then
   echo "❌ 仍有 ${stuck} 个 job_task 未达终态(复活/长期停滞)" >&2; fail=1
 else log "✅ 所有 job_task 已达终态"; fi
 
 # 终态分布(给运维看,非门禁)
 log "终态分布:"
-psql_platform "select task_status, count(*) from batch.job_task
-               group by task_status order by 2 desc;" | sed 's/|/ = /'
+psql_platform dr-task-status-distribution.sql | sed 's/|/ = /'
 
 if [ "$fail" -ne 0 ]; then
   echo "❌ DR 全 worker 组崩溃演练:精确一次断言失败" >&2

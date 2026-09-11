@@ -55,4 +55,10 @@ public class BatchDayReplaySubmitRequest {
   private Boolean autoApprove = Boolean.FALSE;
 
   private String traceId;
+
+  /** REPLAY（默认）或 DRY_RUN。 */
+  private String executionMode = "REPLAY";
+
+  /** EXISTING_INSTANCES（默认）或 SCHEDULE_PLAN。 */
+  private String candidateSource = "EXISTING_INSTANCES";
 }

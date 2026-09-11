@@ -95,4 +95,21 @@ public interface ResultVersionMapper {
   /** 找出所有 status='SUPERSEDED' 且 deactivated_at 早于 cutoff 的版本，scheduler 用。 */
   List<ResultVersionEntity> selectSupersededOlderThan(
       @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+  /** 找出可从 batch 热表清理的 ARCHIVED 版本。 */
+  List<ResultVersionEntity> selectArchivedOlderThan(
+      @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+  /** 找出超过 dry-run 独立保留期、可迁移到冷表的演练结果。 */
+  List<ResultVersionEntity> selectDryRunOlderThan(
+      @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+  /** 原子写入 archive 镜像并删除 batch 热表中的 DRY_RUN 结果。 */
+  int archiveAndDeleteDryRun(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("archivedAt") Instant archivedAt);
+
+  /** 清理 batch 热表中的 ARCHIVED 版本；仍被 asset_partition 引用时由 SQL 保护并跳过。 */
+  int deleteArchived(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

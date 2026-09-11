@@ -1,7 +1,7 @@
 # ADR-026 · 演练 / Dry-run 模式
 
-- **Status**: Accepted（**第 2 阶段 / P1-P2 轻量版**，gated — 三层粒度先做 L1/L2/L3 配置/计划/Explain，FULL_SIMULATION 不做）
-- **Date**: 2026-05-06
+- **Status**: Implemented（默认关闭，按环境验收后启用；仍不支持 FULL_SIMULATION）
+- **Date**: 2026-05-06（实现校准：2026-09-11）
 - **Supersedes**: —
 - **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
@@ -32,7 +32,7 @@
 不同语义的"安全跑"现在都被 `batch.security.bypass-mode` 一个开关混在一起：
 
 - **bypass-mode**：本地联调用，整条安全链放行 — 不安全，prod 拒绝；
-- **dry-run**：prod 也想跑，但**不写业务表 / 不发外部消息**，只演练；当前不存在。
+- **dry-run**：prod 可按受控开关执行，但**不写业务表 / 不发外部消息**；job/workflow 与整批量日链路均已落地。
 
 业务诉求：
 
@@ -105,7 +105,9 @@ step plugin 写业务表 / 外部 IO 前必经此 guard；不经 = 静态 lint �
 
 1. **Console UI**：launch 表单加 "Dry Run" toggle；权限 `job.launch.dry_run` 与正常 launch 分开；
 2. **API**：`POST /api/console/jobs/launch` body 加 `dryRun: true`；
-3. **Batch_day 级**：`POST /api/console/batch-days/dry-run` 启动整日演练（创建 dry_run batch_day_instance + 跑全部当日 job 的 dry_run 副本）；
+3. **Batch_day 级**：复用 `POST /api/console/ops/batch-day-replay/sessions`，传
+   `executionMode=DRY_RUN`；演练由 replay session/entry 聚合，不创建第二条正式
+   `batch_day_instance`；
 4. **CLI**：`mvn ... -Dbatch.launch.dry-run=true`（开发自测）。
 
 ### 终态状态机
@@ -163,16 +165,16 @@ ADR-017 result_version 加 `status = DRY_RUN`：
 
 1. dry_run = true 的 instance 终态永远是 SUCCESS_DRY_RUN / FAILED_DRY_RUN，**不能**是 SUCCESS / FAILED；
 2. 下游消费（result_version 读 / workflow_node 跨日依赖）**永远不读** DRY_RUN 版本；
-3. dry_run = true 的 outbox_event 不写库（不仅仅是 PUBLISHED 状态过滤）—— 物理不写，永远不会发到 Kafka；
+3. dry_run = true 不写业务副作用 Outbox；任务派发、claim/report 等控制面 Outbox 必须保留，否则演练链无法执行；
 4. `bypass-mode` 与 `dry_run` 正交且互不替代：bypass-mode=true + dry_run=false 仍会真改业务表（只是不安全）；bypass-mode=false + dry_run=true 不改但要鉴权；
 5. dry_run 跑出来的 metric tag 都带 `dry_run=true`，看板默认过滤掉，演练才显式打开。
 
 ## 验收
 
-- 单测：DryRunGuard 在 4 种 ExternalActionType 下行为
-- IT：完整 IMPORT 跑 dry-run 不写 staging 表 / 不发 outbox / 不调 dispatch
-- E2E：日终批 batch-day 级 dry-run vs real 资源使用对比
-- CI 守护：lint 工具扫所有 step plugin 写业务表 / 外部 IO 必经 DryRunGuard
+- 单测：重放服务、终态回填、dispatcher、worker capability、结果保留期已覆盖；
+- PostgreSQL IT：V202 数据约束、冷热表镜像、NOT VALID 守卫、DRY_RUN 结果先归档后清理已覆盖；
+- CI 守护：扫描现有五类 Worker 的 pipeline step 与 Atomic executor，不再使用历史目录名；
+- 环境验收：功能默认关闭；生产开放前仍须在 staging 运行五类真实依赖零副作用快照与 1,000-entry 对抗测试。
 
 ## 实施触发条件
 

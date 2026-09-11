@@ -83,6 +83,13 @@
           and id = #{id}
     </select>
 
+    <select id="selectByCommandNo" resultMap="CompensationCommandResultMap">
+        select *
+        from batch.compensation_command
+        where tenant_id = #{tenantId}
+          and command_no = #{commandNo}
+    </select>
+
     <update id="updateStatus">
         update batch.compensation_command
         set command_status = #{commandStatus},

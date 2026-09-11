@@ -72,13 +72,12 @@ public class DispatchChannelHealthRepository {
 
   /**
    * P2：原子写入"失败"结果。consecutive_failures 由 SQL {@code COALESCE(...) + 1} 递增； health_status 根据
-   * failureThreshold 自动判为 UNHEALTHY / DEGRADED。随后调用 {@link #recalcBackoff} 按新的 count 更新
-   * next_probe_at，完成指数退避。
+   * failureThreshold 自动判为 UNHEALTHY / DEGRADED，并直接返回本次递增后的计数。
    *
    * <p>{@link DispatchHealthUpsertCommand#nextProbeAt()} 在失败路径上承载"首次失败 INSERT 的 placeholder
    * 回退时间"（{@code firstFailureBackoffAt}），mapper XML 字段名保持不变。
    */
-  public void upsertFailureAndBump(DispatchHealthUpsertCommand cmd) {
+  public int upsertFailureAndBump(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
     params.put(P_TENANT_ID, cmd.tenantId());
     params.put(P_CHANNEL_CODE, cmd.channelCode());
@@ -88,10 +87,10 @@ public class DispatchChannelHealthRepository {
     params.put("failureThreshold", Math.max(1, cmd.failureThreshold()));
     params.put(P_PROBE_MESSAGE, cmd.probeMessage());
     params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
-    mapper.upsertFailureAndBump(params);
+    return mapper.upsertFailureAndBump(params);
   }
 
-  public void recalcBackoff(DispatchHealthUpsertCommand cmd) {
+  public boolean recalcBackoff(DispatchHealthUpsertCommand cmd, int expectedFailures) {
     Map<String, Object> params = new HashMap<>();
     params.put(P_TENANT_ID, cmd.tenantId());
     params.put(P_CHANNEL_CODE, cmd.channelCode());
@@ -99,7 +98,8 @@ public class DispatchChannelHealthRepository {
     // Citus:next_probe_at 由调用方(Java)按新 count 算好指数退避后传入,不再在 SQL 里
     // 用 power(2, consecutive_failures) 这类带列引用的函数(分布式 UPDATE 不允许)。
     params.put("newNextProbeAt", toTimestamp(cmd.nextProbeAt()));
-    mapper.recalcBackoff(params);
+    params.put("expectedFailures", expectedFailures);
+    return mapper.recalcBackoff(params) > 0;
   }
 
   public long countByHealthStatus(String healthStatus) {

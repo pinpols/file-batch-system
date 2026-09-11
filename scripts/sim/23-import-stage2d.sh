@@ -19,6 +19,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+SIM_SQL_DIR="$ROOT/scripts/sim/sql"
+export SIM_SQL_DIR
 
 SIM_STAGE_NAME="import-stage2d"
 # shellcheck source=env-common.sh
@@ -54,7 +56,8 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2d-reset-errors.sql >/dev/null
 
-START_TS="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc "select now()")"
+START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
 export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2d.log"
@@ -64,22 +67,28 @@ import subprocess
 import sys
 import time
 import urllib.request
+from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
+SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
 
-def psql(db, sql, tuples=False):
+def psql_file(db, sql_file, variables=None, tuples=False):
     args = [
-        "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
-        "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db, "-P", "pager=off",
+        "docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql",
+        "-X", "-U", os.environ.get("POSTGRES_USER", "batch_user"), "-d", db,
+        "-v", "ON_ERROR_STOP=1", "-P", "pager=off",
     ]
     if tuples:
         args += ["-t", "-A"]
-    args += ["-c", sql]
-    return subprocess.run(args, check=False, capture_output=True, text=True)
+    for key, value in (variables or {}).items():
+        args += ["-v", f"{key}={value}"]
+    args += ["-f", "/dev/stdin"]
+    sql = (SQL_DIR / sql_file).read_text(encoding="utf-8")
+    return subprocess.run(args, input=sql, check=True, capture_output=True, text=True)
 
 def xml_payload(rows):
     items = []
@@ -133,14 +142,12 @@ def launch(label, content, batch_no):
 def wait_for(rid, expected):
     deadline = time.time() + 180
     while time.time() < deadline:
-        out = psql(os.environ["PLATFORM_DB"], (
-            "select coalesce(i.instance_status,'') || '|' || coalesce(t.task_status,'') || '|' || coalesce(t.error_code,'') "
-            "from batch.trigger_request tr "
-            "left join batch.job_instance i on i.id = tr.related_job_instance_id "
-            "left join batch.job_task t on t.job_instance_id = i.id "
-            f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
-            "order by tr.created_at desc, t.id desc limit 1"
-        ), tuples=True)
+        out = psql_file(
+            os.environ["PLATFORM_DB"],
+            "select-stage2d-request-status.sql",
+            {"tenant_id": "ta", "request_id": rid},
+            tuples=True,
+        )
         status = (out.stdout or "").strip()
         terminal = status.split("|", 1)[0]
         if terminal in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
@@ -207,61 +214,44 @@ rid_over = launch("skip_over_threshold", over_threshold, BATCH + "-over")
 over_status = wait_for(rid_over, "FAILED")
 
 print("\n-- job_status --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select tr.request_id,i.id,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
-    "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id = i.id "
-    f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,t.id"
-], check=False)
+print(psql_file(
+    os.environ["PLATFORM_DB"],
+    "select-stage2d-job-status.sql",
+    {"tenant_id": "ta", "request_ids": f"{rid_under},{rid_over}"},
+).stdout, end="")
 
 print("\n-- file_records --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select fr.id,fr.file_status,fr.metadata_json->>'badRecordCount' as bad_records,"
-    "fr.metadata_json->>'skippedCount' as skipped,fr.metadata_json->>'validatedCount' as validated,"
-    "fr.metadata_json->>'loadedCount' as loaded,fr.metadata_json->>'skipThresholdExceeded' as threshold_exceeded "
-    "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
-    "join batch.file_record fr on fr.id = pi.file_id "
-    f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,fr.id"
-], check=False)
+print(psql_file(
+    os.environ["PLATFORM_DB"],
+    "select-stage2d-file-records.sql",
+    {"tenant_id": "ta", "request_ids": f"{rid_under},{rid_over}"},
+).stdout, end="")
 
 print("\n-- error_records --", flush=True)
-subprocess.run([
-    "docker", "exec", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
-    "-d", os.environ["PLATFORM_DB"], "-P", "pager=off", "-c",
-    "select tr.request_id,er.record_no,er.error_code,er.error_stage,er.is_skipped,er.skip_action "
-    "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
-    "join batch.file_record fr on fr.id = pi.file_id "
-    "join batch.file_error_record er on er.file_id = fr.id "
-    f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,er.record_no,er.id"
-], check=False)
+print(psql_file(
+    os.environ["PLATFORM_DB"],
+    "select-stage2d-error-records.sql",
+    {"tenant_id": "ta", "request_ids": f"{rid_under},{rid_over}"},
+).stdout, end="")
 
-loaded_ok = (psql(os.environ["BUSINESS_DB"], (
-    "select count(*) from biz.customer_account "
-    "where tenant_id='ta' and customer_no='S2DSKIPOK001'"
-), tuples=True).stdout or "").strip()
-loaded_bad = (psql(os.environ["BUSINESS_DB"], (
-    "select count(*) from biz.customer_account "
-    "where tenant_id='ta' and customer_no in ('S2DSKIPBAD001','S2DSKIPEXBAD001','S2DSKIPEXBAD002','S2DSKIPEXOK001')"
-), tuples=True).stdout or "").strip()
-error_summary = (psql(os.environ["PLATFORM_DB"], (
-    "select count(*) filter (where tr.request_id='" + rid_under + "' and er.is_skipped) || '|' || "
-    "count(*) filter (where tr.request_id='" + rid_over + "' and er.is_skipped) "
-    "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
-    "join batch.file_record fr on fr.id = pi.file_id "
-    "join batch.file_error_record er on er.file_id = fr.id "
-    "where tr.request_id in ('" + rid_under + "','" + rid_over + "')"
-), tuples=True).stdout or "").strip()
+loaded_ok = (psql_file(
+    os.environ["BUSINESS_DB"],
+    "count-stage2d-loaded-customer.sql",
+    {"tenant_id": "ta", "customer_no": "S2DSKIPOK001"},
+    tuples=True,
+).stdout or "").strip()
+loaded_bad = (psql_file(
+    os.environ["BUSINESS_DB"],
+    "count-stage2d-blocked-customers.sql",
+    {"tenant_id": "ta"},
+    tuples=True,
+).stdout or "").strip()
+error_summary = (psql_file(
+    os.environ["PLATFORM_DB"],
+    "select-stage2d-error-summary.sql",
+    {"tenant_id": "ta", "under_request_id": rid_under, "over_request_id": rid_over},
+    tuples=True,
+).stdout or "").strip()
 
 summary = f"{under_status}|{over_status}|loaded_ok={loaded_ok}|blocked_loaded={loaded_bad}|errors={error_summary}"
 print(f"\n-- assertion_summary --\n{summary}", flush=True)

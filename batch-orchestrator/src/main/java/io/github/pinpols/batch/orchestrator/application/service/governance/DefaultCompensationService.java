@@ -84,14 +84,19 @@ public class DefaultCompensationService implements CompensationService {
       Map<String, Object> params,
       String traceId,
       String commandNo,
-      Long replaySessionId) {
+      Long replaySessionId,
+      Long replayEntryId,
+      Boolean dryRun) {
     private static CompensationLaunchRequest of(
         CompensationLaunchTarget target,
         Map<String, Object> params,
         String traceId,
         String commandNo,
-        Long replaySessionId) {
-      return new CompensationLaunchRequest(target, params, traceId, commandNo, replaySessionId);
+        Long replaySessionId,
+        Long replayEntryId,
+        Boolean dryRun) {
+      return new CompensationLaunchRequest(
+          target, params, traceId, commandNo, replaySessionId, replayEntryId, dryRun);
     }
   }
 
@@ -296,7 +301,9 @@ public class DefaultCompensationService implements CompensationService {
         params,
         traceId,
         commandNo,
-        command.replaySessionId()));
+        command.replaySessionId(),
+        command.replayEntryId(),
+        command.dryRun()));
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? sourceInstance.getId() : launched.getId());
@@ -389,7 +396,9 @@ public class DefaultCompensationService implements CompensationService {
     if (!Texts.hasText(command.jobCode()) || command.bizDate() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.batch_rerun_args_required");
     }
-    Map<String, Object> params = new LinkedHashMap<>();
+    Map<String, Object> params = command.launchParams() == null
+        ? new LinkedHashMap<>()
+        : new LinkedHashMap<>(command.launchParams());
     params.put("operationType", "BATCH_RERUN");
     params.put("operatorId", command.operatorId());
     params.put("approvalId", command.approvalId());
@@ -406,7 +415,9 @@ public class DefaultCompensationService implements CompensationService {
         params,
         traceId,
         commandNo,
-        command.replaySessionId()));
+        command.replaySessionId(),
+        command.replayEntryId(),
+        command.dryRun()));
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());
@@ -438,7 +449,10 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   private LaunchResponse launchCompensation(CompensationLaunchRequest request) {
-    String requestId = IdGenerator.newBusinessNo("req");
+    boolean replayEntry = request.replaySessionId() != null && request.replayEntryId() != null;
+    String requestId = replayEntry
+        ? "replay-" + request.replaySessionId() + "-" + request.replayEntryId()
+        : IdGenerator.newBusinessNo("req");
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
     triggerRequest.setTenantId(request.target().tenantId());
     triggerRequest.setRequestId(requestId);
@@ -446,10 +460,17 @@ public class DefaultCompensationService implements CompensationService {
     triggerRequest.setJobCode(request.target().jobCode());
     triggerRequest.setBizDate(request.target().bizDate());
     triggerRequest.setDedupKey(
-        request.target().tenantId() + ":compensation:" + request.commandNo() + ":" + requestId);
+        replayEntry
+            ? request.target().tenantId() + ":" + requestId
+            : request.target().tenantId() + ":compensation:" + request.commandNo() + ":"
+                + requestId);
     triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
     triggerRequest.setTraceId(request.traceId());
-    jobMappers.triggerRequestMapper.insert(triggerRequest);
+    if (replayEntry) {
+      jobMappers.triggerRequestMapper.insertIfAbsent(triggerRequest);
+    } else {
+      jobMappers.triggerRequestMapper.insert(triggerRequest);
+    }
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(request.target().tenantId())
         .jobCode(request.target().jobCode())
@@ -459,6 +480,7 @@ public class DefaultCompensationService implements CompensationService {
         .traceId(request.traceId())
         .params(request.params())
         .replaySessionId(request.replaySessionId())
+        .dryRun(Boolean.TRUE.equals(request.dryRun()))
         .build();
     return launchServiceProvider.getObject().launch(launchRequest);
   }

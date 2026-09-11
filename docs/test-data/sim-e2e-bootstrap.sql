@@ -458,8 +458,8 @@ SET query_param_schema = '{
 WHERE tenant_id = 'tc'
   AND template_code = 'TC_IMPORT_RISK_SCORE_TPL';
 
--- 旧 Excel/seed 可能把规则写成数组、把默认日历写成下划线；当前 worker
--- 统一消费 fieldRules 对象和连字符日历编码，基础租户也必须与克隆租户一致。
+-- 旧 Excel/seed 可能把规则写成数组、把默认日历写成连字符；当前配置码
+-- 统一使用小写下划线，基础租户也必须与克隆租户一致。
 UPDATE batch.file_template_config t
 SET validation_rule_set = jsonb_build_object(
       'fieldRules', COALESCE(
@@ -474,10 +474,10 @@ WHERE t.tenant_id IN ('ta', 'tb', 'tc')
   AND jsonb_typeof(t.validation_rule_set) = 'array';
 
 UPDATE batch.job_definition
-SET calendar_code = 'default-calendar',
+SET calendar_code = 'default_calendar',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id IN ('ta', 'tb', 'tc')
-  AND calendar_code = 'default_calendar';
+  AND calendar_code = 'default-calendar';
 
 UPDATE batch.file_template_config
 SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',

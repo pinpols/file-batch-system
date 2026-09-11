@@ -20,13 +20,20 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
+import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
@@ -35,6 +42,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
@@ -55,15 +63,24 @@ class BatchDayReplayServiceTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     resultVersionMapper = mock(ResultVersionMapper.class);
     promoteService = mock(ResultVersionPromoteService.class);
-    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
-        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    BatchDayDryRunProperties dryRunProperties = new BatchDayDryRunProperties();
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
+    BatchDateTimeSupport dateTimeSupport =
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider);
     service = new BatchDayReplayService(
         sessionMapper,
         entryMapper,
         jobInstanceMapper,
         resultVersionMapper,
         promoteService,
-        dateTimeSupport);
+        dateTimeSupport,
+        dryRunProperties,
+        mock(JobDefinitionMapper.class),
+        mock(SchedulePlanBuilder.class),
+        mock(BatchDayPlanCalendarMapper.class),
+        mock(DisasterDayOverrideMapper.class),
+        timezoneProvider);
   }
 
   @Test
@@ -187,6 +204,76 @@ class BatchDayReplayServiceTest {
             .autoApprove(true)
             .build()))
         .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  void dryRunSubmitIsDisabledByDefault() {
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            anyString(), anyString(), any(), anyList(), anyList()))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A")));
+
+    assertThatThrownBy(() -> service.submit(baseDryRunCommand().build()))
+        .isInstanceOf(BizException.class);
+    verify(sessionMapper, never()).insert(any());
+  }
+
+  @Test
+  void dryRunSubmitForcesInternalResultPolicy() {
+    BatchDayReplayService dryRunService = dryRunService(true);
+    when(jobInstanceMapper.selectBatchDayCandidates(
+            anyString(), anyString(), any(), anyList(), anyList()))
+        .thenReturn(List.of(jobInstance(101L, "JOB_A")));
+    when(sessionMapper.insert(any())).thenReturn(1);
+    when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
+        .thenReturn(sessionAt("t1", 9L, "RUNNING", "ALL"));
+
+    dryRunService.submit(baseDryRunCommand().resultPolicy("CREATE_NEW_VERSION").build());
+
+    org.mockito.ArgumentCaptor<BatchDayReplaySessionEntity> captor =
+        org.mockito.ArgumentCaptor.forClass(BatchDayReplaySessionEntity.class);
+    verify(sessionMapper).insert(captor.capture());
+    assertThat(captor.getValue().executionMode()).isEqualTo("DRY_RUN");
+    assertThat(captor.getValue().resultPolicy()).isEqualTo("DRY_RUN_ONLY");
+  }
+
+  @Test
+  void schedulePlanPreviewMaterializesImmutableSnapshot() {
+    JobDefinitionMapper definitionMapper = mock(JobDefinitionMapper.class);
+    SchedulePlanBuilder planBuilder = mock(SchedulePlanBuilder.class);
+    BatchDayPlanCalendarMapper calendarMapper = mock(BatchDayPlanCalendarMapper.class);
+    DisasterDayOverrideMapper overrideMapper = mock(DisasterDayOverrideMapper.class);
+    BatchDayReplayService dryRunService =
+        dryRunService(true, definitionMapper, planBuilder, calendarMapper, overrideMapper);
+    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+        .id(7L)
+        .tenantId("t1")
+        .jobCode("JOB_PLAN")
+        .calendarCode("CAL")
+        .scheduleType("CRON")
+        .scheduleExpr("0 0 1 * * *")
+        .timezone("Asia/Shanghai")
+        .defaultParams(Map.of("source", "snapshot"))
+        .version(3)
+        .enabled(true)
+        .build();
+    SchedulePlan plan = new SchedulePlan();
+    plan.setQueueCode("Q1");
+    plan.setWorkerGroup("IMPORT");
+    plan.setDefaultWorkerType("IMPORT");
+    plan.setPartitionCount(2);
+    when(definitionMapper.selectByTenantAndEnabled("t1", true)).thenReturn(List.of(definition));
+    when(calendarMapper.selectEffectiveDayType("t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
+        .thenReturn("WORKDAY");
+    when(planBuilder.build(any())).thenReturn(plan);
+
+    BatchDayReplayPreviewResponse preview = dryRunService.preview(
+        baseDryRunCommand().candidateSource("SCHEDULE_PLAN").build());
+
+    assertThat(preview.entries()).singleElement().satisfies(entry -> {
+      assertThat(entry.jobCode()).isEqualTo("JOB_PLAN");
+      assertThat(entry.sourceInstanceId()).isNull();
+      assertThat(entry.action()).isEqualTo("LAUNCH_SCHEDULE_PLAN");
+    });
   }
 
   @Test
@@ -345,7 +432,7 @@ class BatchDayReplayServiceTest {
         .resultVersionId(12L)
         .status("PENDING")
         .build();
-    when(entryMapper.selectBySessionAndStatus(eq(5L), eq("PENDING"), anyInt()))
+    when(entryMapper.selectBySessionAndStatus(eq(5L), eq("t1"), eq("PENDING"), anyInt()))
         .thenReturn(List.of(e1, e2));
 
     var result = service.executeOutputsOnly("t1", 5L);
@@ -375,6 +462,54 @@ class BatchDayReplayServiceTest {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
+
+  private BatchDayReplayService dryRunService(boolean enabled) {
+    return dryRunService(
+        enabled,
+        mock(JobDefinitionMapper.class),
+        mock(SchedulePlanBuilder.class),
+        mock(BatchDayPlanCalendarMapper.class),
+        mock(DisasterDayOverrideMapper.class));
+  }
+
+  private BatchDayReplayService dryRunService(
+      boolean enabled,
+      JobDefinitionMapper definitionMapper,
+      SchedulePlanBuilder planBuilder,
+      BatchDayPlanCalendarMapper calendarMapper,
+      DisasterDayOverrideMapper overrideMapper) {
+    BatchDayDryRunProperties properties = new BatchDayDryRunProperties();
+    properties.setEnabled(enabled);
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
+    return new BatchDayReplayService(
+        sessionMapper,
+        entryMapper,
+        jobInstanceMapper,
+        resultVersionMapper,
+        promoteService,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        properties,
+        definitionMapper,
+        planBuilder,
+        calendarMapper,
+        overrideMapper,
+        timezoneProvider);
+  }
+
+  private static BatchDayReplaySubmitCommand.BatchDayReplaySubmitCommandBuilder
+      baseDryRunCommand() {
+    return BatchDayReplaySubmitCommand.builder()
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, Month.MAY, 4))
+        .scope("ALL")
+        .executionMode("DRY_RUN")
+        .candidateSource("EXISTING_INSTANCES")
+        .reason("release rehearsal")
+        .requestedBy("ops")
+        .autoApprove(true);
+  }
 
   private static JobInstanceEntity jobInstance(Long id, String jobCode) {
     JobInstanceEntity entity = new JobInstanceEntity();

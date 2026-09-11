@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
@@ -39,6 +40,18 @@ class RegisterStepTest {
     s3StorageProperties = new S3StorageProperties();
     s3StorageProperties.setBucket("bucket-1");
     step = new RegisterStep(runtimeRepository, exportDataPluginRegistry, s3StorageProperties);
+  }
+
+  @Test
+  void execute_dryRunSkipsFileRegistrationAndPluginCallback() {
+    ExportJobContext context = baseContext();
+    context.getAttributes().put("dryRun", true);
+    context.getAttributes().put("objectName", "dry-run/no-upload");
+
+    var result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    verifyNoInteractions(runtimeRepository, exportDataPluginRegistry, exportDataPlugin);
   }
 
   @Test

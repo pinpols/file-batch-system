@@ -19,7 +19,7 @@ INSERT INTO batch.job_definition (
     previous_day_dependency_scope, job_group_code, retry_policy_by_class
 ) VALUES (
     'tb', 'TB_DISPATCH_STAGE5_FAIL_ONCE', 'TB dispatch stage5 fail once', 'DISPATCH', 'DISPATCH_STAGE5', 'MANUAL', NULL,
-    'Asia/Shanghai', 5, 'tb_dispatch_queue', 'DISPATCH', 'default-calendar', 'always_open',
+    'Asia/Shanghai', 5, 'tb_dispatch_queue', 'DISPATCH', 'default_calendar', 'always_open',
     'API', false, 'NONE', 'NONE', 0, 3600, 'statementDispatchHandler', '{}', '{}', 1,
     true, 'Stage 5 dispatch HTTP 500 terminal failure', 'sim-e2e', 'sim-e2e', 'FULL', NULL,
     'INHERIT', NULL, NULL

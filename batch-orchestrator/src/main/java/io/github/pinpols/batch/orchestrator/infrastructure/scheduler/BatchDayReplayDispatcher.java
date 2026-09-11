@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -10,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionE
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,8 +103,11 @@ public class BatchDayReplayDispatcher {
    * 避免单条失败回滚整批。
    */
   void dispatchSession(BatchDayReplaySessionEntity session) {
+    Instant now = BatchDateTimeSupport.utcNow();
+    entryMapper.resetStaleUnboundRunning(
+        session.id(), now.minusMillis(properties.getClaimTimeoutMillis()), now);
     List<BatchDayReplayEntryEntity> pending = entryMapper.selectBySessionAndStatus(
-        session.id(), ENTRY_PENDING, properties.getEntryBatchSize());
+        session.id(), session.tenantId(), ENTRY_PENDING, properties.getEntryBatchSize());
     if (pending == null || pending.isEmpty()) {
       return;
     }
@@ -113,12 +118,18 @@ public class BatchDayReplayDispatcher {
       try {
         entryExecutor.dispatch(session, entry);
       } catch (Exception entryFailure) {
-        log.warn(
-            "batch_day_replay dispatch entry error: sessionId={}, entryId={}, jobCode={}, msg={}",
-            session.id(),
-            entry.id(),
-            entry.jobCode(),
-            entryFailure.getMessage());
+        try {
+          entryExecutor.markFailed(session, entry, entryFailure);
+        } catch (Exception markFailure) {
+          log.error(
+              "batch_day_replay entry failure could not be persisted: sessionId={}, entryId={},"
+                  + " jobCode={}, dispatchMsg={}, markMsg={}",
+              session.id(),
+              entry.id(),
+              entry.jobCode(),
+              entryFailure.getMessage(),
+              markFailure.getMessage());
+        }
       }
     }
   }

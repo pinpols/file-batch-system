@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.application;
 
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
+import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 
 /**
@@ -17,6 +18,7 @@ final class TriggerOutboxReleaseBudget {
   private static final long NANOS_PER_SECOND = 1_000_000_000L;
 
   private final TriggerOutboxRelayProperties properties;
+  private final IntSupplier limitSupplier;
   private final LongSupplier epochSecondSupplier;
   private final LongSupplier monotonicNanosSupplier;
 
@@ -27,19 +29,40 @@ final class TriggerOutboxReleaseBudget {
   private long pacedAvailableTokenNanos;
 
   TriggerOutboxReleaseBudget(TriggerOutboxRelayProperties properties) {
-    this(properties, () -> System.currentTimeMillis() / 1_000L, System::nanoTime);
+    this(
+        properties,
+        properties::getMaxPublishEventsPerSecond,
+        () -> System.currentTimeMillis() / 1_000L,
+        System::nanoTime);
   }
 
   TriggerOutboxReleaseBudget(
       TriggerOutboxRelayProperties properties, LongSupplier epochSecondSupplier) {
-    this(properties, epochSecondSupplier, System::nanoTime);
+    this(
+        properties,
+        properties::getMaxPublishEventsPerSecond,
+        epochSecondSupplier,
+        System::nanoTime);
   }
 
   TriggerOutboxReleaseBudget(
       TriggerOutboxRelayProperties properties,
       LongSupplier epochSecondSupplier,
       LongSupplier monotonicNanosSupplier) {
+    this(
+        properties,
+        properties::getMaxPublishEventsPerSecond,
+        epochSecondSupplier,
+        monotonicNanosSupplier);
+  }
+
+  TriggerOutboxReleaseBudget(
+      TriggerOutboxRelayProperties properties,
+      IntSupplier limitSupplier,
+      LongSupplier epochSecondSupplier,
+      LongSupplier monotonicNanosSupplier) {
     this.properties = properties;
+    this.limitSupplier = limitSupplier;
     this.epochSecondSupplier = epochSecondSupplier;
     this.monotonicNanosSupplier = monotonicNanosSupplier;
   }
@@ -51,7 +74,7 @@ final class TriggerOutboxReleaseBudget {
     if (requested <= 0) {
       return 0;
     }
-    int limit = properties.getMaxPublishEventsPerSecond();
+    int limit = limitSupplier.getAsInt();
     if (limit <= 0) {
       return requested;
     }
@@ -72,7 +95,7 @@ final class TriggerOutboxReleaseBudget {
     if (batchSize <= 0) {
       return 0;
     }
-    int limit = properties.getMaxPublishEventsPerSecond();
+    int limit = limitSupplier.getAsInt();
     if (limit <= 0) {
       return batchSize;
     }
@@ -101,7 +124,7 @@ final class TriggerOutboxReleaseBudget {
   }
 
   synchronized int reservedInCurrentWindow() {
-    if (properties.getMaxPublishEventsPerSecond() <= 0) {
+    if (limitSupplier.getAsInt() <= 0) {
       return 0;
     }
     resetWindowIfNeeded();

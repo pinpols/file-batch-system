@@ -103,11 +103,29 @@ public interface WorkerRegistryMapper {
    */
   int markSelfHosted(@Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
 
+  /** 重注册刷新运行信息；仅当状态仍等于读取快照时更新，防止覆盖并发 drain/decommission。 */
+  int updateRegistrationIfCurrent(
+      @Param("worker") WorkerRegistryEntity worker, @Param("expectedStatus") String expectedStatus);
+
+  /** 按旧状态推进到目标状态；返回 0 表示并发状态冲突。 */
+  int updateStatusIfCurrent(
+      @Param("tenantId") String tenantId,
+      @Param("workerCode") String workerCode,
+      @Param("expectedStatus") String expectedStatus,
+      @Param("nextStatus") String nextStatus);
+
+  /** 开始排空并使用数据库时间设置窗口；返回 0 表示并发状态冲突。 */
+  int startDrainIfCurrent(
+      @Param("tenantId") String tenantId,
+      @Param("workerCode") String workerCode,
+      @Param("expectedStatus") String expectedStatus,
+      @Param("timeoutSeconds") int timeoutSeconds);
+
+  /** 仅允许 OFFLINE 转为 ONLINE；返回 0 表示状态已被并发修改。 */
+  int warmupIfOffline(@Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
+
   /**
-   * register / status / drain 等更新路径的统一 upsert：按 id 全字段覆盖 status / heartbeat_at / current_load /
-   * capability_tags / drain_started_at / drain_deadline_at；不参与 CAS（worker_registry 不是状态机推进核心， 业务上由
-   * mapper.touchHeartbeat / markDecommissioned 等单字段 SQL 接管热路径，本方法仅供 register / forceOffline
-   * 等冷路径全字段写入）。
+   * 测试夹具兼容的整行更新。生产状态推进必须使用上述语义化 CAS，禁止调用本方法。
    *
    * @return 影响行数（0 表示行不存在）
    */

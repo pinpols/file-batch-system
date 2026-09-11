@@ -9,6 +9,8 @@ public record BatchDayReplayPreviewResponse(
     String calendarCode,
     LocalDate bizDate,
     String scope,
+    String executionMode,
+    String candidateSource,
     String resultPolicy,
     String configVersionPolicy,
     Integer configVersion,

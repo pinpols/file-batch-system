@@ -4,6 +4,7 @@ if (( BASH_VERSINFO[0] < 4 )); then
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SQL_DIR="$ROOT/scripts/sim/sql"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
 # shellcheck source=../lib/python-runtime.sh
@@ -36,8 +37,13 @@ if ! [[ "$LOOKBACK_MINUTES" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 PG_USER="${PG_USER:-$PGUSER}"
-psql_q() { docker exec "$PG" psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
-psql_b() { docker exec "$PG" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc "$1" 2>/dev/null; }
+psql_q() {
+  local database="$1" sql_file="$2"
+  shift 2
+  docker exec -i "$PG" psql -X -U "$PG_USER" -d "$database" -v ON_ERROR_STOP=1 \
+    -tA "$@" -f /dev/stdin < "$SQL_DIR/$sql_file" 2>/dev/null
+}
+psql_b() { psql_q "$BUSINESS_DB" "$@"; }
 minio_mc() {
   docker exec "$MINIO" sh -c \
     'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && exec mc "$@"' \
@@ -50,10 +56,6 @@ ok()  { printf "  ${GREEN}✓${RST} %-32s %s\n" "$1" "$2"; }
 ng()  { printf "  ${RED}✗${RST} %-32s %s\n" "$1" "$2"; }
 note(){ printf "  ${YELLOW}·${RST} %-32s %s\n" "$1" "$2"; }
 fail(){ ng "$1" "$2"; FAILS=$((FAILS + 1)); }
-
-sql_escape() {
-  printf "%s" "$1" | sed "s/'/''/g"
-}
 
 dispatch_issue() {
   if [[ "$STRICT_DISPATCH" == "true" ]]; then
@@ -75,9 +77,7 @@ dispatch_issue() {
 hdr "PREREQ(若 EXPORT/DISPATCH 报 0 文件先看这里)"
 
 # (a) EXPORT job_definition 是否齐(说明 03-import-tenants.sh 已跑)
-export_defs=$(psql_q "$PLATFORM_DB" \
-  "select count(*) from batch.job_definition where job_code in
-   ('TA_EXPORT_REPORT','TB_EXPORT_STATEMENT','TC_EXPORT_RISK_ALERT')" | tr -dc '0-9')
+export_defs=$(psql_q "$PLATFORM_DB" count-sim-export-definitions.sql | tr -dc '0-9')
 export_defs="${export_defs:-0}"
 if [[ "$export_defs" -ge 3 ]]; then
   ok "EXPORT job_definition" "$export_defs / 3"
@@ -98,11 +98,7 @@ else
 fi
 
 # (c) 近 10min FAILED 且 step 全停在 READY = 典型无 worker 现场
-ready_fail=$(psql_q "$PLATFORM_DB" "select count(*) from batch.job_instance i
-  where i.job_code like '%EXPORT%' and i.instance_status='FAILED'
-    and i.created_at > now() - interval '2 hour'
-    and not exists (select 1 from batch.job_step_instance s
-      where s.job_instance_id=i.id and s.step_status not in ('READY'))" | tr -dc '0-9')
+ready_fail=$(psql_q "$PLATFORM_DB" count-sim-export-ready-failures.sql | tr -dc '0-9')
 ready_fail="${ready_fail:-0}"
 if [[ "$ready_fail" -gt 0 ]]; then
   ng "EXPORT FAILED + step READY" "$ready_fail 个 — 强烈指示 worker-export 当时未运行"
@@ -114,7 +110,7 @@ note "sleep 提示" "触发 05 后建议 sleep 120(EXPORT 写 MinIO,60s 偏紧)"
 hdr "IMPORT 产物(biz.* 表行数)"
 for entry in "ta:customer_account" "tb:transaction" "tc:risk_score"; do
   tenant="${entry%%:*}"; table="${entry##*:}"
-  cnt=$(psql_b "select count(*) from biz.$table where tenant_id='$tenant'" 2>/dev/null | tr -dc '0-9')
+  cnt=$(psql_b "count-sim-${table//_/-}.sql" -v tenant_id="$tenant" | tr -dc '0-9')
   cnt="${cnt:-0}"
   if [[ "$cnt" -gt 0 ]]; then
     ok "biz.${table}[${tenant}]" "$cnt 行"
@@ -158,63 +154,16 @@ hdr "DISPATCH DB 硬断言(workerType/task/dispatch_record)"
 note "lookback" "${LOOKBACK_MINUTES} min${BATCH_FILTER:+, batchNo=$BATCH_FILTER}"
 
 verify_dispatch_case() {
-  local tenant="$1" job="$2" channel="$3" path="$4"
-  local tenant_sql job_sql channel_sql batch_sql batch_clause row
-  tenant_sql="$(sql_escape "$tenant")"
-  job_sql="$(sql_escape "$job")"
-  channel_sql="$(sql_escape "$channel")"
-  batch_sql="$(sql_escape "$BATCH_FILTER")"
-  batch_clause=""
-  if [[ -n "$BATCH_FILTER" ]]; then
-    batch_clause="and coalesce(i.params_snapshot->'effectiveParams'->>'batchNo', i.params_snapshot->>'batchNo') = '$batch_sql'"
-  fi
+  local tenant="$1" job="$2" channel="$3" path="$4" row
 
   # dispatch 沉降到 SUCCESS/ACKED 有异步延迟;05-load 后立刻查会撞时序竞态
   # (instance 还在 RUNNING / dispatch 还没 ACKED)→ 误报。poll 到 SUCCESS 或超时
   # (默认 12×5s=60s);真不沉降仍走下方断言失败。
   local _settle_n=0
   while :; do
-  row=$(psql_q "$PLATFORM_DB" "
-    with latest as (
-      select i.id, i.tenant_id, i.job_code, i.instance_status, i.params_snapshot, i.created_at
-        from batch.job_instance i
-       where i.tenant_id = '$tenant_sql'
-         and i.job_code = '$job_sql'
-         and i.created_at > now() - interval '$LOOKBACK_MINUTES minutes'
-         and coalesce(i.params_snapshot->'effectiveParams'->>'channelCode', i.params_snapshot->>'channelCode') = '$channel_sql'
-         $batch_clause
-       order by i.created_at desc
-       limit 1
-    ),
-    task_summary as (
-      select l.id as instance_id,
-             l.instance_status,
-             count(t.id) as task_count,
-             coalesce(string_agg(distinct t.task_type, ',' order by t.task_type), '') as task_types,
-             coalesce(string_agg(distinct t.task_status, ',' order by t.task_status), '') as task_statuses
-        from latest l
-        left join batch.job_task t on t.job_instance_id = l.id
-       group by l.id, l.instance_status
-    ),
-    dispatch_summary as (
-      select count(d.id) as dispatch_count,
-             coalesce(string_agg(distinct d.dispatch_status, ',' order by d.dispatch_status), '') as dispatch_statuses
-        from latest l
-        left join batch.file_dispatch_record d
-          on d.tenant_id = l.tenant_id
-         and d.channel_code = '$channel_sql'
-         and d.file_id::text = coalesce(l.params_snapshot->'effectiveParams'->>'fileId', l.params_snapshot->>'fileId')
-    )
-    select task_summary.instance_id || '|' ||
-           coalesce(task_summary.instance_status, '') || '|' ||
-           task_summary.task_count || '|' ||
-           task_summary.task_types || '|' ||
-           task_summary.task_statuses || '|' ||
-           dispatch_summary.dispatch_count || '|' ||
-           dispatch_summary.dispatch_statuses
-      from task_summary
-      cross join dispatch_summary
-  ")
+    row=$(psql_q "$PLATFORM_DB" select-sim-dispatch-verification.sql \
+      -v tenant_id="$tenant" -v job_code="$job" -v channel_code="$channel" \
+      -v lookback_minutes="$LOOKBACK_MINUTES" -v batch_no="$BATCH_FILTER")
     local _st; _st="$(printf '%s' "$row" | cut -d'|' -f2)"
     if [[ -n "$row" && "$_st" == "SUCCESS" ]]; then break; fi
     _settle_n=$((_settle_n+1))
@@ -266,10 +215,10 @@ verify_dispatch_case "tb" "TB_DISPATCH_SETTLE" "tb_api_ingest" "/tb/ingest"
 verify_dispatch_case "tc" "TC_DISPATCH_REVIEW" "tc_api_risk_push" "/tc/ingest"
 
 hdr "WORKFLOW + 全局 job_instance 状态"
-psql_q "$PLATFORM_DB" "select instance_status, count(*) from batch.job_instance where created_at > now() - interval '10 min' group by instance_status order by instance_status" | head -10 | sed 's/^/    /'
+psql_q "$PLATFORM_DB" select-sim-recent-instance-statuses.sql | head -10 | sed 's/^/    /'
 
 hdr "Outbox 积压检查(健康度)"
-backlog=$(psql_q "$PLATFORM_DB" "select count(*) from batch.outbox_event where publish_status in ('NEW','FAILED')" 2>/dev/null | tr -dc '0-9')
+backlog=$(psql_q "$PLATFORM_DB" count-sim-outbox-backlog.sql | tr -dc '0-9')
 backlog="${backlog:-0}"
 if [[ "$backlog" -lt 10 ]]; then
   ok "outbox backlog" "$backlog(健康)"
