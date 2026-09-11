@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
@@ -510,7 +511,7 @@ public class BatchDayReplayService {
     }
     List<JobDefinitionEntity> definitions =
         jobDefinitionMapper.selectByTenantAndEnabled(command.tenantId(), true);
-    if (definitions == null || definitions.isEmpty()) {
+    if (EmptyChecks.isEmpty(definitions)) {
       return List.of();
     }
     List<BatchDayReplayEntryEntity> entries = new ArrayList<>();
@@ -539,7 +540,7 @@ public class BatchDayReplayService {
   }
 
   private List<String> normalizeRequestedJobCodes(List<String> jobCodes) {
-    if (jobCodes == null || jobCodes.isEmpty()) {
+    if (EmptyChecks.isEmpty(jobCodes)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
     }
@@ -556,7 +557,7 @@ public class BatchDayReplayService {
         || !calendarCode.equals(definition.calendarCode())) {
       return false;
     }
-    if (!requestedCodes.isEmpty() && !requestedCodes.contains(definition.jobCode())) {
+    if (EmptyChecks.isNotEmpty(requestedCodes) && !requestedCodes.contains(definition.jobCode())) {
       return false;
     }
     if (ScheduleType.MANUAL.code().equalsIgnoreCase(definition.scheduleType())) {

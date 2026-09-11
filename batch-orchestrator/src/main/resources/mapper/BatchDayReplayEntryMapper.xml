@@ -88,6 +88,11 @@
             failure_reason = null,
             updated_at = #{now}
         where session_id = #{sessionId}
+          and tenant_id = (
+              select tenant_id
+              from batch.batch_day_replay_session
+              where id = #{sessionId}
+          )
           and status = 'RUNNING'
           and rerun_instance_id is null
           and started_at &lt; #{cutoff}

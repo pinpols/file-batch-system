@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.client;
 
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -188,7 +189,7 @@ public class BatchPlatformClientConfig {
         .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
 
     String dryRunSafe = env.apply(prefix + "DRY_RUN_SAFE");
-    if (dryRunSafe != null && !dryRunSafe.isBlank()) {
+    if (!EmptyChecks.isBlank(dryRunSafe)) {
       builder.dryRunSafe(parseBoolean(dryRunSafe.trim()));
     }
 

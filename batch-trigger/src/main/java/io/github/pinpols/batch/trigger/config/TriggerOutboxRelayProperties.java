@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.config;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
@@ -80,8 +81,7 @@ public class TriggerOutboxRelayProperties {
     return maxPublishEventsPerSecond > 0
         && minPublishEventsPerSecond <= maxPublishEventsPerSecond
         && lagSoftThreshold < lagHardThreshold
-        && consumerGroupId != null
-        && !consumerGroupId.isBlank();
+        && EmptyChecks.isNotBlank(consumerGroupId);
   }
 
   /**

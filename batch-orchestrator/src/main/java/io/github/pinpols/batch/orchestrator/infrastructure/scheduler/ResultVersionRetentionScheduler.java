@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.config.ResultVersionRetentionProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -70,7 +71,7 @@ public class ResultVersionRetentionScheduler {
     Instant cutoff = now.minus(Duration.ofDays(properties.getSupersededDays()));
     List<ResultVersionEntity> stale =
         resultVersionMapper.selectSupersededOlderThan(cutoff, properties.getBatchSize());
-    if (stale == null || stale.isEmpty()) {
+    if (EmptyChecks.isEmpty(stale)) {
       return 0;
     }
     int archived = 0;
@@ -98,15 +99,12 @@ public class ResultVersionRetentionScheduler {
     Instant cutoff = now.minus(Duration.ofDays(properties.getArchivedDays()));
     List<ResultVersionEntity> stale =
         resultVersionMapper.selectArchivedOlderThan(cutoff, properties.getBatchSize());
-    if (stale == null || stale.isEmpty()) {
+    if (EmptyChecks.isEmpty(stale)) {
       return 0;
     }
     int deleted = 0;
     for (ResultVersionEntity row : stale) {
-      if (row == null
-          || row.id() == null
-          || row.tenantId() == null
-          || row.tenantId().isBlank()) {
+      if (row == null || row.id() == null || EmptyChecks.isBlank(row.tenantId())) {
         continue;
       }
       int affected = RlsTenantContextHolder.runWithTenant(
@@ -124,15 +122,12 @@ public class ResultVersionRetentionScheduler {
     Instant cutoff = now.minus(Duration.ofDays(retentionDays));
     List<ResultVersionEntity> stale =
         resultVersionMapper.selectDryRunOlderThan(cutoff, properties.getBatchSize());
-    if (stale == null || stale.isEmpty()) {
+    if (EmptyChecks.isEmpty(stale)) {
       return 0;
     }
     int archived = 0;
     for (ResultVersionEntity row : stale) {
-      if (row == null
-          || row.id() == null
-          || row.tenantId() == null
-          || row.tenantId().isBlank()) {
+      if (row == null || row.id() == null || EmptyChecks.isBlank(row.tenantId())) {
         continue;
       }
       int affected = RlsTenantContextHolder.runWithTenant(

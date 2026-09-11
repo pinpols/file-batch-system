@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.FileDispatchRunStatus;
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
@@ -366,7 +367,7 @@ public class FileGovernanceRepository {
       String tenantId, long staleSeconds, int limit) {
     List<Long> failedPipelineIds =
         markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
-    if (failedPipelineIds.isEmpty()) {
+    if (EmptyChecks.isEmpty(failedPipelineIds)) {
       return new StaleSweepResult(0, 0);
     }
     int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, failedPipelineIds);
@@ -375,7 +376,7 @@ public class FileGovernanceRepository {
 
   public int markRunningPipelineStepsFailedForInstances(
       String tenantId, List<Long> pipelineInstanceIds) {
-    if (!Texts.hasText(tenantId) || pipelineInstanceIds == null || pipelineInstanceIds.isEmpty()) {
+    if (!Texts.hasText(tenantId) || EmptyChecks.isEmpty(pipelineInstanceIds)) {
       return 0;
     }
     return fileGovernanceMapper.markRunningPipelineStepsFailedForInstances(params(

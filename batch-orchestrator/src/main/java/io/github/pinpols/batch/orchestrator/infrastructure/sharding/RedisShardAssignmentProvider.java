@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -56,7 +57,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     if (memberId == null || memberId.isBlank()) {
       throw new IllegalArgumentException("memberId must not be blank");
     }
-    if (membersKey == null || membersKey.isBlank()) {
+    if (EmptyChecks.isBlank(membersKey)) {
       throw new IllegalArgumentException("membersKey must not be blank");
     }
     this.redis = redis;
