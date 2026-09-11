@@ -49,6 +49,7 @@ public record RegisterRequest(
     String protocolVersion) {
 
   /** 保留旧构造签名,避免升级 SDK 后让租户已有的协议测试或适配代码无法编译。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public RegisterRequest(
       String tenantId,
       String workerCode,

@@ -13,11 +13,11 @@
 | 含 Map 的源文件 | 444 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 34 |
-| `@SuppressWarnings` | 215 |
-| 含 suppression 的源文件 | 164 |
+| `@SuppressWarnings` | 216 |
+| 含 suppression 的源文件 | 165 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 9 |
-| `PMD.ExcessiveParameterList` 显式例外 | 31 |
+| `PMD.ExcessiveParameterList` 显式例外 | 32 |
 
 ## 模块源文件
 
@@ -119,3 +119,4 @@
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java` | 2 |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java` | 1 |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkTaskContext.java` | 4 |
+| `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/wire/RegisterRequest.java` | 1 |
