@@ -52,7 +52,7 @@ bash scripts/local/cleanup-disk.sh --apply --retention-days 14 --include-anonymo
 # 压测后清理观测栈命名卷（会清空 Prometheus/Loki/Tempo/Grafana 历史）：
 bash scripts/local/cleanup-disk.sh --apply --include-observability-volumes
 
-# 清理历史应用日志（不清理当前活跃日志文件，默认保留最近 7 天）：
+# 清理历史应用日志（不清理当前活跃日志文件，默认保留最近 7 天；包含 `logs/archive/app`）：
 bash scripts/local/cleanup-disk.sh --apply --include-app-logs
 ```
 
