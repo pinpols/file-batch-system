@@ -629,7 +629,7 @@ public class TaskDispatcher {
   }
 
   private static void restoreMdc(Map<String, String> previousContext) {
-    if (previousContext == null || previousContext.isEmpty()) {
+    if (EmptyChecks.isEmpty(previousContext)) {
       MDC.clear();
       return;
     }

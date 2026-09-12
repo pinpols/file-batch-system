@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.logging;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Map;
 import org.slf4j.MDC;
 
@@ -53,7 +54,7 @@ public final class BatchMdc {
 
   /** 恢复之前的完整 MDC，避免 clear() 误删 tracing 或外层 filter 字段。 */
   public static void restore(Map<String, String> previous) {
-    if (previous == null || previous.isEmpty()) {
+    if (EmptyChecks.isEmpty(previous)) {
       MDC.clear();
       return;
     }
