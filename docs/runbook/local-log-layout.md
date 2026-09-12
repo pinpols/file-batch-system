@@ -15,6 +15,7 @@ logs/
     sim-harness/<run-id>/
     sim-4day/<run-id>/   # sim-4day 4 天批量/批量日/观测快照
   archive/
+    app/                 # start-all / restart 启动前归档的上一轮应用日志
     legacy/              # 首次迁移旧 logs/app、logs/test 等目录
   pids/
     start-all.pids
@@ -41,8 +42,12 @@ logs/
 
 归档目录：
 
-- 常驻日志归档文件：`logs/archive/app/<component>-YYYYMMDD-HHMMSS-<git-sha>.log`
+- 常驻日志归档文件：`logs/archive/app/<component>.YYYYMMDD-HHMMSS-<git-sha>.log`
 - Docker 日志归档文件：`logs/archive/docker/<service>-YYYYMMDD-HHMMSS-<git-sha>.log`
 - 一次性运行目录：`logs/archive/legacy/` 用于第一次碰到旧布局（如 `logs/app`）时自动迁移保留。
 
 旧目录首次遇到时会移动到 `logs/archive/legacy/` 后再创建软链,不会直接删除。
+
+`cleanup-disk.sh --include-app-logs` 只清理超过保留期的 `logs/archive/app`，不会删除
+`logs/current/app` 中仍可能被进程持有的当前日志。相同组件在同一秒内连续启动时，归档名会追加
+`.1`、`.2` 等序号，避免覆盖。

@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
 APPLY=false
 RETENTION_DAYS=7
 INCLUDE_ANONYMOUS_VOLUMES=false
@@ -25,7 +27,7 @@ usage() {
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
   --include-build-artifacts     同时处理仓库内 Maven target 目录
-  --include-app-logs            同时清理 logs/current/app、logs/app、logs/archive/app 下的历史应用日志
+  --include-app-logs            同时清理 logs/archive/app 下的历史应用归档日志
   --include-observability-volumes 同时清理本地观测栈命名卷
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
   --prune-old-image-tags        每个镜像仓库只保留最新版本和容器引用版本
@@ -300,38 +302,32 @@ fi
 
 if [ "$INCLUDE_APP_LOGS" = true ]; then
   echo
-  echo "历史应用日志（超过 ${RETENTION_DAYS} 天）:"
-  app_candidates=""
-  for dir in "$ROOT/logs/current/app" "$ROOT/logs/app" "$ROOT/logs/archive/app"; do
-    if [ -d "$dir" ]; then
-      found="$(find "$dir" -maxdepth 1 -type f -name '*.log' -mtime +${RETENTION_DAYS} -print || true)"
-      if [ -n "$found" ]; then
-        if [ -z "$app_candidates" ]; then
-          app_candidates="$found"
-        else
-          app_candidates="$app_candidates\n$found"
-        fi
-      fi
-    fi
-  done
+  echo "历史应用归档日志（超过 ${RETENTION_DAYS} 天）:"
+  app_candidates=()
+  while IFS= read -r -d '' file; do
+    app_candidates+=("$file")
+  done < <(log_find_archived_log_files "$ROOT" app "$RETENTION_DAYS")
 
-  app_count="$(printf '%s\n' "$app_candidates" | grep -c . || true)"
+  app_count="${#app_candidates[@]}"
   echo "符合条件的应用日志文件: ${app_count}"
-  app_disk_size="$(printf '%s\n' "$app_candidates" | xargs -r du -ch 2>/dev/null | awk 'END {print $1}')"
+  app_disk_size=""
+  if [ "$app_count" -gt 0 ]; then
+    app_disk_size="$(du -ch -- "${app_candidates[@]}" 2>/dev/null | awk 'END {print $1}')"
+  fi
   [ -n "$app_disk_size" ] && echo "应用日志待清理空间: ${app_disk_size}"
-  if [ -n "$app_candidates" ]; then
+  if [ "$app_count" -gt 0 ]; then
     if [ "$APPLY" = true ]; then
-      printf '%s\n' "$app_candidates" | xargs -r rm -f
+      rm -f -- "${app_candidates[@]}"
       echo "已删除 ${app_count} 个应用日志文件（清理空间: ${app_disk_size:-未知}）"
     else
-      printf '%s\n' "$app_candidates" | head -n 20
+      printf '%s\n' "${app_candidates[@]:0:20}"
       if [ "$app_count" -gt 20 ]; then
         echo "... 其余 $((app_count - 20)) 个已省略"
       fi
     fi
   fi
 else
-  echo '历史应用日志: 未启用清理（使用 --include-app-logs 显式启用）'
+  echo '历史应用归档日志: 未启用清理（使用 --include-app-logs 显式启用）'
 fi
 
 if [ "$INCLUDE_OBSERVABILITY_VOLUMES" = true ]; then

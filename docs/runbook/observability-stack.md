@@ -149,6 +149,7 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
    ```
 2. 清理前先确认业务日志与告警指标已归档（如需要保留审计排障时长）。
 3. 清理后重新检查 `docker system df` 与 Prometheus/Loki 就绪状况。
+4. `--include-app-logs` 只清理 `logs/archive/app`，不会触碰 `logs/current/app` 活跃日志。
 
 ### Tempo 无链路
 
@@ -167,6 +168,11 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 - `docker inspect <container>` 确认 logging driver 为 `local` 且存在轮转上限。
 - 检查 Loki/Tempo/Prometheus 7 天保留策略及命名卷。
 - 检查 `grafana-data`、`prometheus-data`、`loki-data`、`tempo-data`、`otel-collector-data` 已按策略回收；若容量逼近上限，先做一次 `--include-observability-volumes` 再重压测。
+
+### Grafana 仪表盘缺失
+
+- 本地 Compose 应加载 baseline、coverage、mainline 和 SRE 四份内置仪表盘。
+- 若文件存在但页面不可见，检查 `batch-grafana` 的 `/var/lib/grafana/dashboards` 挂载和 provisioning 日志；每份仪表盘必须配置稳定 `uid`，避免容器重建后生成重复对象。
 - 检查 `/var/log/app` 中 heap dump、JFR 和 GC log；诊断卷满不应改成无限容量。
 - 本地 Compose 的 Prometheus 已增加 `retention.size=15GB` 与 `retention.time=7d` 双重边界，默认避免 tsdb 无限膨胀。
 

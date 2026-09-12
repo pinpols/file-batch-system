@@ -259,6 +259,10 @@ jobs:
         # 防止 OTLP 管道、Collector 队列/脱敏、Docker 日志上限或 JVM 诊断卷回归。
         run: python3 scripts/ci/check-observability-contract.py
 
+      - name: Local log lifecycle contract
+        shell: bash
+        run: bash scripts/ci/check-log-lifecycle.sh
+
       - name: OpenAPI breaking-change (oasdiff)
         shell: bash
         # 比 base 的 openapi,删端点/删必填/改类型等 ERR 级破坏即 fail。

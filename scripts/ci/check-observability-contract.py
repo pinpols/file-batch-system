@@ -20,6 +20,12 @@ APP_SERVICES = (
     "worker-dispatch",
     "worker-atomic",
 )
+GRAFANA_DASHBOARDS = (
+    "grafana-dashboard-batch.json",
+    "grafana-dashboard-batch-coverage.json",
+    "grafana-dashboard-batch-mainline.json",
+    "grafana-dashboard-batch-sre.json",
+)
 WORKLOAD_TEMPLATES = tuple(
     ROOT / "helm/batch-platform/templates" / name
     for name in (
@@ -77,6 +83,15 @@ def main() -> int:
     if "LOGGING_FILE_NAME" in app_text or "./logs/current/docker:/app/logs" in app_text:
         errors.append("application containers must not duplicate stdout into mounted log files")
 
+    grafana_volumes = nested(obs_compose, "services", "grafana", "volumes") or []
+    mounted_dashboards = {Path(str(volume).split(":", 1)[0]).name for volume in grafana_volumes}
+    for dashboard in GRAFANA_DASHBOARDS:
+        if dashboard not in mounted_dashboards:
+            errors.append(f"Grafana dashboard is not mounted: {dashboard}")
+        dashboard_data = load_yaml(ROOT / "deploy/docker/observability" / dashboard)
+        if not dashboard_data.get("uid"):
+            errors.append(f"Grafana dashboard must define a stable uid: {dashboard}")
+
     collector = load_yaml(ROOT / "deploy/docker/observability/otel-collector.yml")
     extensions = collector.get("extensions") or {}
     processors = collector.get("processors") or {}
@@ -97,6 +112,10 @@ def main() -> int:
             errors.append(f"Helm Collector exporter missing: {exporter_name}")
     if "exporters: [otlp/tempo, otlp/jaeger]" not in helm_collector:
         errors.append("Helm Collector traces must be delivered to Tempo and Jaeger")
+    if "address: 0.0.0.0:8888" in helm_collector or "readers:" not in helm_collector:
+        errors.append("Helm Collector self-metrics must use the current pull reader schema")
+    if "send_batch_max_size: 2048" not in helm_collector:
+        errors.append("Helm Collector batch processor must cap its maximum send batch size")
 
     prod = load_yaml(ROOT / "helm/values-prod.yaml")
     if nested(prod, "otel", "enabled") is not True:
