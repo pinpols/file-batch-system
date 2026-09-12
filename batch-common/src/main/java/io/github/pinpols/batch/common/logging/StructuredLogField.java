@@ -20,6 +20,7 @@ public final class StructuredLogField {
   public static final String FRONTEND_USER_ID = "frontendUserId";
   public static final String FRONTEND_EVENT_TYPE = "frontendEventType";
   public static final String FRONTEND_PAGE = "frontendPage";
+  public static final String XFF_HEADER_VALUE = "xffHeaderValue";
 
   private StructuredLogField() {}
 }

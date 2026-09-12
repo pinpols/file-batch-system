@@ -8,6 +8,7 @@ RETENTION_DAYS=7
 INCLUDE_ANONYMOUS_VOLUMES=false
 INCLUDE_RUN_LOGS=false
 INCLUDE_BUILD_ARTIFACTS=false
+INCLUDE_OBSERVABILITY_VOLUMES=false
 ALL_BUILD_CACHE=false
 PRUNE_OLD_IMAGE_TAGS=false
 
@@ -23,6 +24,7 @@ usage() {
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
   --include-build-artifacts     同时处理仓库内 Maven target 目录
+  --include-observability-volumes 同时清理本地观测栈命名卷
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
   --prune-old-image-tags        每个镜像仓库只保留最新版本和容器引用版本
   -h, --help                    显示帮助
@@ -62,6 +64,9 @@ while [ "$#" -gt 0 ]; do
     --include-build-artifacts)
       INCLUDE_BUILD_ARTIFACTS=true
       ;;
+    --include-observability-volumes)
+      INCLUDE_OBSERVABILITY_VOLUMES=true
+      ;;
     --all-build-cache)
       ALL_BUILD_CACHE=true
       ;;
@@ -97,6 +102,43 @@ run_or_preview() {
     printf '[预览]'
     printf ' %q' "$@"
     printf '\n'
+  fi
+}
+
+cleanup_observability_volumes() {
+  local compose_project
+  local -a suffixes=(
+    prometheus-data
+    loki-data
+    tempo-data
+    otel-collector-data
+    grafana-data
+  )
+  local -A candidates=()
+  local suffix candidate
+  compose_project="${COMPOSE_PROJECT_NAME:-batch-platform}"
+
+  for suffix in "${suffixes[@]}"; do
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] && candidates["$candidate"]=1
+    done < <(docker volume ls -q --filter "name=${compose_project}_${suffix}" || true)
+
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] && candidates["$candidate"]=1
+    done < <(docker volume ls -q --filter "name=_${suffix}$" || true)
+  done
+
+  if [ "${#candidates[@]}" -eq 0 ]; then
+    echo '符合条件的观测栈命名卷: 0'
+    return
+  fi
+
+  echo "符合条件的观测栈命名卷: ${#candidates[@]}"
+  printf '%s\n' "${!candidates[@]}"
+
+  if [ "$APPLY" = true ]; then
+    printf '%s\n' "${!candidates[@]}" | xargs -r docker volume rm -f >/dev/null
+    echo "已删除 ${#candidates[@]} 个观测栈命名卷（注意将触发其内容清空）"
   fi
 }
 
@@ -251,6 +293,13 @@ else
   echo 'Maven 构建目录: 未启用清理（使用 --include-build-artifacts 显式启用）'
 fi
 
+if [ "$INCLUDE_OBSERVABILITY_VOLUMES" = true ]; then
+  echo
+  cleanup_observability_volumes
+else
+  echo '观测栈命名卷: 未启用清理（使用 --include-observability-volumes 显式启用）'
+fi
+
 if [ "$APPLY" = true ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo
   echo 'Docker 清理后占用:'
@@ -258,4 +307,4 @@ if [ "$APPLY" = true ] && command -v docker >/dev/null 2>&1 && docker info >/dev
 fi
 
 echo
-echo '受保护项: 运行中/已停止容器、命名卷、数据库文件、Maven 仓库和当前日志。'
+echo '受保护项: 运行中/已停止容器、数据库文件、Maven 仓库和当前日志。观测栈命名卷默认不清理，需显式开启。'

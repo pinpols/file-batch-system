@@ -30,7 +30,8 @@
 
 ## 磁盘清理
 
-本地磁盘清理由 `scripts/local/cleanup-disk.sh` 统一处理。脚本默认只预览；执行模式也只清理超过保留期的 Docker 构建缓存和悬空镜像，不会删除容器、命名卷或数据库数据。
+本地磁盘清理由 `scripts/local/cleanup-disk.sh` 统一处理。脚本默认只预览；执行模式默认清理超过保留期的 Docker 构建缓存和悬空镜像。
+观测栈命名卷、历史运行日志、Maven `target`、数据库文件和当前日志默认不清理，需显式参数开启。
 
 ```bash
 # 预览
@@ -47,6 +48,9 @@ bash scripts/local/cleanup-disk.sh --apply --prune-old-image-tags
 
 # 明确确认后，再清理超过 14 天且无引用的 Docker 匿名卷
 bash scripts/local/cleanup-disk.sh --apply --retention-days 14 --include-anonymous-volumes
+
+# 压测后清理观测栈命名卷（会清空 Prometheus/Loki/Tempo/Grafana 历史）：
+bash scripts/local/cleanup-disk.sh --apply --include-observability-volumes
 ```
 
 历史运行日志和 Maven `target` 目录也必须通过独立参数显式启用。不要使用 `docker system prune --volumes`，它无法区分可丢弃测试卷和需要保留的数据卷。

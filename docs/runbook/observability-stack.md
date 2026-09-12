@@ -140,6 +140,15 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 3. 检查 Collector `otelcol_exporter_send_failed_log_records`、队列容量和 Loki 拒收指标。
 4. 检查 Loki schema v13 与 `allow_structured_metadata=true`。
 
+### 观测栈容量回收
+
+1. 完成压测后优先执行
+   ```bash
+   bash scripts/local/cleanup-disk.sh --apply --include-observability-volumes
+   ```
+2. 清理前先确认业务日志与告警指标已归档（如需要保留审计排障时长）。
+3. 清理后重新检查 `docker system df` 与 Prometheus/Loki 就绪状况。
+
 ### Tempo 无链路
 
 1. 检查应用 head sampling 是否为 `1.0`。
@@ -156,7 +165,9 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 
 - `docker inspect <container>` 确认 logging driver 为 `local` 且存在轮转上限。
 - 检查 Loki/Tempo/Prometheus 7 天保留策略及命名卷。
+- 检查 `grafana-data`、`prometheus-data`、`loki-data`、`tempo-data`、`otel-collector-data` 已按策略回收；若容量逼近上限，先做一次 `--include-observability-volumes` 再重压测。
 - 检查 `/var/log/app` 中 heap dump、JFR 和 GC log；诊断卷满不应改成无限容量。
+- 本地 Compose 的 Prometheus 已增加 `retention.size=15GB` 与 `retention.time=7d` 双重边界，默认避免 tsdb 无限膨胀。
 
 ## 7. 告警与容量
 
