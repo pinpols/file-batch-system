@@ -2,6 +2,7 @@
 # 统一本地日志布局:
 #   logs/current/<kind>/      常驻进程当前日志(app/docker)
 #   logs/runs/<kind>/<run>/   一次性任务日志(test/be-acceptance/sim)
+#   logs/archive/<kind>/      常驻日志归档(按 kind 分目录)
 #   logs/archive/legacy/      首次迁移旧目录时的历史归档
 #   logs/pids/                本地进程 pid 文件
 
@@ -31,6 +32,7 @@ log_init_layout() {
   mkdir -p \
     "$root/logs/current" \
     "$root/logs/runs" \
+    "$root/logs/archive" \
     "$root/logs/archive/legacy" \
     "$root/logs/pids"
 }
@@ -111,7 +113,7 @@ log_archive_active_log_file() {
   local kind="$2"
   local name="$3"
 
-  local log_dir
+  local log_dir log_stamp log_file git_sha
   local candidate="$root/logs/current/$kind/$name.log"
   if [[ ! -f "$candidate" ]]; then
     return 0
@@ -119,12 +121,15 @@ log_archive_active_log_file() {
 
   log_dir="$root/logs/archive/$kind"
   mkdir -p "$log_dir"
-  local archive_file
-  archive_file="$(log_archive_legacy_path "$root" "${kind}/${name}.log")"
-  archive_file="${archive_file}.log"
+  log_stamp="$(log_stamp)"
+  git_sha="$(log_git_sha "$root")"
+  log_file="$name.${log_stamp}-${git_sha}.log"
+  if [[ -n "${BATCH_LOG_ARCHIVE_SUFFIX:-}" ]]; then
+    log_file="$name.${log_stamp}-${BATCH_LOG_ARCHIVE_SUFFIX}.log"
+  fi
 
-  mv "$candidate" "$archive_file"
-  echo "  归档旧日志：$candidate -> $archive_file"
+  mv "$candidate" "$log_dir/$log_file"
+  echo "  归档旧日志：$candidate -> $log_dir/$log_file"
 }
 
 log_pid_file() {

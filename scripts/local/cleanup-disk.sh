@@ -25,7 +25,7 @@ usage() {
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
   --include-build-artifacts     同时处理仓库内 Maven target 目录
-  --include-app-logs            同时清理 logs/current/app 与 logs/app 下的历史应用日志
+  --include-app-logs            同时清理 logs/current/app、logs/app、logs/archive/app 下的历史应用日志
   --include-observability-volumes 同时清理本地观测栈命名卷
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
   --prune-old-image-tags        每个镜像仓库只保留最新版本和容器引用版本
@@ -302,7 +302,7 @@ if [ "$INCLUDE_APP_LOGS" = true ]; then
   echo
   echo "历史应用日志（超过 ${RETENTION_DAYS} 天）:"
   app_candidates=""
-  for dir in "$ROOT/logs/current/app" "$ROOT/logs/app"; do
+  for dir in "$ROOT/logs/current/app" "$ROOT/logs/app" "$ROOT/logs/archive/app"; do
     if [ -d "$dir" ]; then
       found="$(find "$dir" -maxdepth 1 -type f -name '*.log' -mtime +${RETENTION_DAYS} -print || true)"
       if [ -n "$found" ]; then
