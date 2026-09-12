@@ -145,6 +145,7 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 1. 完成压测后优先执行
    ```bash
    bash scripts/local/cleanup-disk.sh --apply --include-observability-volumes
+   bash scripts/local/cleanup-disk.sh --apply --include-app-logs
    ```
 2. 清理前先确认业务日志与告警指标已归档（如需要保留审计排障时长）。
 3. 清理后重新检查 `docker system df` 与 Prometheus/Loki 就绪状况。

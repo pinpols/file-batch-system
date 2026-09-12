@@ -8,6 +8,7 @@ RETENTION_DAYS=7
 INCLUDE_ANONYMOUS_VOLUMES=false
 INCLUDE_RUN_LOGS=false
 INCLUDE_BUILD_ARTIFACTS=false
+INCLUDE_APP_LOGS=false
 INCLUDE_OBSERVABILITY_VOLUMES=false
 ALL_BUILD_CACHE=false
 PRUNE_OLD_IMAGE_TAGS=false
@@ -24,6 +25,7 @@ usage() {
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
   --include-build-artifacts     同时处理仓库内 Maven target 目录
+  --include-app-logs            同时清理 logs/current/app 与 logs/app 下的历史应用日志
   --include-observability-volumes 同时清理本地观测栈命名卷
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
   --prune-old-image-tags        每个镜像仓库只保留最新版本和容器引用版本
@@ -61,8 +63,11 @@ while [ "$#" -gt 0 ]; do
     --include-run-logs)
       INCLUDE_RUN_LOGS=true
       ;;
-    --include-build-artifacts)
+  --include-build-artifacts)
       INCLUDE_BUILD_ARTIFACTS=true
+      ;;
+    --include-app-logs)
+      INCLUDE_APP_LOGS=true
       ;;
     --include-observability-volumes)
       INCLUDE_OBSERVABILITY_VOLUMES=true
@@ -293,6 +298,40 @@ else
   echo 'Maven 构建目录: 未启用清理（使用 --include-build-artifacts 显式启用）'
 fi
 
+if [ "$INCLUDE_APP_LOGS" = true ]; then
+  echo
+  echo "历史应用日志（超过 ${RETENTION_DAYS} 天）:"
+  app_candidates=""
+  for dir in "$ROOT/logs/current/app" "$ROOT/logs/app"; do
+    if [ -d "$dir" ]; then
+      found="$(find "$dir" -maxdepth 1 -type f -name '*.log' -mtime +${RETENTION_DAYS} -print || true)"
+      if [ -n "$found" ]; then
+        if [ -z "$app_candidates" ]; then
+          app_candidates="$found"
+        else
+          app_candidates="$app_candidates\n$found"
+        fi
+      fi
+    fi
+  done
+
+  app_count="$(printf '%s\n' "$app_candidates" | grep -c . || true)"
+  echo "符合条件的应用日志文件: ${app_count}"
+  if [ -n "$app_candidates" ]; then
+    if [ "$APPLY" = true ]; then
+      printf '%s\n' "$app_candidates" | xargs -r rm -f
+      echo "已删除 ${app_count} 个应用日志文件"
+    else
+      printf '%s\n' "$app_candidates" | head -n 20
+      if [ "$app_count" -gt 20 ]; then
+        echo "... 其余 $((app_count - 20)) 个已省略"
+      fi
+    fi
+  fi
+else
+  echo '历史应用日志: 未启用清理（使用 --include-app-logs 显式启用）'
+fi
+
 if [ "$INCLUDE_OBSERVABILITY_VOLUMES" = true ]; then
   echo
   cleanup_observability_volumes
@@ -307,4 +346,4 @@ if [ "$APPLY" = true ] && command -v docker >/dev/null 2>&1 && docker info >/dev
 fi
 
 echo
-echo '受保护项: 运行中/已停止容器、数据库文件、Maven 仓库和当前日志。观测栈命名卷默认不清理，需显式开启。'
+echo '受保护项: 运行中/已停止容器、数据库文件与 Maven 仓库。若未启用对应参数，Docker 卷/日志/历史运行目录不清理。'
