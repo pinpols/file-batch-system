@@ -24,7 +24,10 @@
 
 在上述 10 万稳定基线之后，又完成了 Worker 双 Orchestrator 端点和结果版本终态写入热路径优化。
 同键 1 万任务热态复测达到 `136.517 tasks/s`，10000/10000 成功、零失败、零非终态；该轮用于验证
-热点优化效果，不替代上表的 10 万容量验收。
+热点优化效果，不替代上表的 10 万容量验收。后续四轮 10 万 A/B 没有证明这两项改动能提高同键
+极限吞吐：最好一轮为 `131.468 tasks/s`，仍比上表低约 2.6%。进一步把结果业务键扩为 100 个的
+10 万轮次也只有 `119.898 tasks/s`。因此当前可信的 10 万基线仍是 `134.946 tasks/s`，没有把较小规模
+结果或负向实验外推成容量提升。
 
 原始报告位于本机：
 
@@ -146,6 +149,84 @@
 - `load-tests/target/p2-capacity-profile-result-version-hotpath-warm-10k-20260912.md`
 - `load-tests/target/control-plane-worker-report-result-version-hotpath-warm-10k-20260912-10w.md`
 
+### 10. 10 万 A/B、压测账本清理与负向实验
+
+继续按同一 `100000 requests @ 200 RPS` 口径复测后，发现压测夹具自身存在长期状态污染：
+`job_instance_dedup_key` 和 `outbox_event_dedup_key` 没有随 run-scoped 数据清理。专用租户一度分别累积
+约 118 万行和 117 万行历史键，后跑轮次需要维护更大的唯一索引，不能直接与早期轮次比较。
+
+现已补齐两层守护：
+
+- 清理事务在源业务行尚存在时，按 `(tenant_id, dedup_key, run_attempt)` 和
+  `(tenant_id, event_key)` 精确删除本轮账本，不按时间或租户模糊清理。
+- 隔离容量画像在造数前要求 job instance、trigger request、outbox、result version 和两张幂等账本
+  全部为 0；发现上一轮残留就拒绝启动。
+
+使用 100 个任务完成真实造数、终态和自动清理回归，两张账本各精确删除 100 行；之后每轮 10 万清理
+均精确删除 10 万行，最终六类运行数据计数均为 0。
+
+清理后的端点和限流 A/B 如下：
+
+| 轮次 | task-control 端点 | report 限流 | 完成窗口 | 完成吞吐 | launch queue 平均 / p95 | 结论 |
+|---|---|---:|---:|---:|---:|---|
+| 热路径优化后，历史账本未清 | 双端点 | 12000/min | 874.019s | 114.414/s | 30.748s / 77.429s | 状态污染，不作为基线 |
+| 清账本后 | 双端点 | 12000/min | 813.407s | 122.940/s | 10.081s / 26.315s | 较上一轮回升 7.5%，但受 autovacuum 并发影响 |
+| 清账本、单端点 | 单端点 | 12000/min | 760.639s | 131.468/s | 4.271s / 11.342s | 比双端点高 6.9%，仍低于既有基线 2.6% |
+| 清账本、单端点、限流实验 | 单端点 | 30000/min | 775.283s | 128.985/s | 26.893s / 41.855s | 429 清零但总吞吐下降，参数舍弃 |
+
+单端点 12000/min 轮次出现 2698 次 `TASK_REPORT` 429 重试，说明入口停止后的合法排空峰值超过
+200 reports/s。实验将隔离 benchmark 提高到 30000/min 后，尾部一度达到约 400 reports/s，10 万任务
+仍全部成功且没有 429；但更激进的 report 写入与 launch 在同一 PostgreSQL 上竞争，使 launch queue
+显著上升，最终吞吐反而比单端点 12000/min 低约 1.9%。因此没有合入该参数，也没有修改普通/生产
+默认的 12000/min 安全水位。
+
+这组证据还否定了“只要把 Worker HTTP 流量均摊到两台 Orchestrator 就会提高总吞吐”的假设。双端点
+确实接近 50/50 分流，但两台实例共享同一 PostgreSQL 和同键结果版本锁，总吞吐没有随 HTTP 入口扩展。
+下一步应优化共享数据库事务与真实业务键分散场景，而不是继续增加 Orchestrator HTTP 端点或放宽限流。
+
+本节原始报告：
+
+- `load-tests/target/p2-capacity-profile-result-version-hotpath-warm-100k-20260912.md`
+- `load-tests/target/p2-capacity-profile-result-version-hotpath-clean-ledger-100k-20260912.md`
+- `load-tests/target/p2-capacity-profile-rvhot-single-100k-0912.md`
+- `load-tests/target/p2-capacity-profile-rvhot-rl30k-100k-0912.md`
+
+### 11. 真实业务键分散场景复验
+
+为验证同一 `jobCode + bizDate` 的结果版本锁是否仍是 10 万规模主瓶颈，新增一轮
+`100000 requests @ 200 RPS`、100 个轮换 bizDate 的严格容量画像。运行前已清空隔离租户数据，并对控制面
+热表执行 `VACUUM (ANALYZE)`；运行后相关表 `n_dead_tup=0`，排除了历史账本和死元组污染。
+
+| 指标 | 结果 |
+|---|---:|
+| Trigger 请求 | 100000/100000 成功，0 失败 |
+| HTTP p95 / p99 / max | 135ms / 720ms / 4007ms |
+| Job 终态 | 100000 SUCCESS，0 FAILED，0 非终态 |
+| 完成窗口 | 834.045s |
+| 完成吞吐 | 119.898 tasks/s |
+| launch queue 平均 / p95 | 208.479s / 320.023s |
+| claim delay 平均 / p95 | 0.752s / 1.731s |
+| Worker 执行平均 / p95 | 0.228s / 0.569s |
+| report 429 | 0 |
+| Kafka 重启 / 最终 lag | 0 / 0 |
+
+该轮两个 Orchestrator 分别处理 49731/50269 个 launch，任务 claim 和 report 也接近 50/50，说明实例间
+分工有效；但吞吐仍比既有严格基线低约 11.2%，也比清账本后的同键单端点轮次低约 8.8%。业务键分散
+没有带来容量提升，因此结果版本 advisory lock 不是当前 10 万持续负载的主导约束。
+
+PostgreSQL 5 秒采样峰值为 98 个 active session、95 个 active waiting session；采样窗口内约产生
+184 万次事务提交和 7.39 GB WAL。压测过程中主要活动等待为 WAL 写入/同步及提交，锁等待接近 0。
+与此同时 Worker claim 与执行 p95 均低于 2 秒。证据指向 launch 建模、任务终态写入和结果落库共享
+PostgreSQL 时的提交/WAL 竞争，而不是 Worker、Kafka 分区或单一业务键锁。
+
+当前本地 PostgreSQL 未预加载 `pg_stat_statements`，`track_io_timing` 也为 `off`，因此本轮结论只定位到
+数据库提交/WAL 层，尚不能把耗时可靠归因到某一条 SQL。没有基于不完整采样直接修改事务主链。
+
+本轮原始报告：
+
+- `load-tests/target/p2-capacity-profile-rvhot-card100-100k-0912.md`
+- `load-tests/target/control-plane-worker-report-rvhot-card100-100k-0912-10w.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |
@@ -157,6 +238,9 @@
 | 1 万，结果版本热路径优化后（热态） | 有效 | 10000/10000，p95 1112ms | 136.517/s | 保留正确性锁，完成窗口较上一行缩短 14.6% |
 | 10 万，旧 3 分区缓存状态 | 趋势参考 | 100000/100000 | 约 117/s | 拓扑证据无效，不作为最终验收 |
 | 10 万，最终严格轮次 | 有效 | 100000/100000，p95 67ms | 134.946/s | 全终态、零失败、零残留 |
+| 10 万，热路径优化、清账本、单端点 | 有效 | 100000/100000，零失败 | 131.468/s | 未超过最终严格基线，不宣称提升 |
+| 10 万，report 限流 30000/min | 负向实验 | 100000/100000，p95 128ms | 128.985/s | 429 清零但 PG 竞争上升，参数不保留 |
+| 10 万，100 个业务键、双端点 | 有效负向实验 | 100000/100000，p95 135ms | 119.898/s | 锁分散后仍退化，主瓶颈转为 PG 提交/WAL 竞争 |
 
 从有真实 12 分区证据的旧 1 万轮次到当前 1 万轮次，完成吞吐约提升 8.7 倍。旧 10 万轮次受 3 分区
 元数据缓存影响，只能作为趋势参考；与其运行窗口相比，最终轮次约提升 15%、完成窗口缩短约 13%。
@@ -165,22 +249,27 @@
 
 1. PostgreSQL 仍是当前主要容量约束。持续阶段观测到 PostgreSQL 使用约 2.6-3.0 核；入口停止后，
    backlog 排空速度明显提高，说明入口建模写入与 claim/report/终态写入仍竞争共享数据库资源。
-2. 同一结果业务键的终态必须经过 advisory lock 串行化。这是结果版本正确性边界，不是可以通过增加
-   Orchestrator 实例消除的无效锁；下一步只能继续缩短锁内 SQL，或让真实业务键自然分散。
-3. Worker 多端点已经证明 claim/report 可在双 Orchestrator 间接近 50/50，但总吞吐没有仅因 HTTP 分流而
-   提升，说明单 Orchestrator HTTP 入口不是主瓶颈。
+2. 同一结果业务键的终态必须经过 advisory lock 串行化。这是结果版本正确性边界；100 个业务键的
+   10 万复验没有提升吞吐，说明该锁会影响同键修正风暴，但不是当前持续负载的主导容量约束。
+3. Worker 多端点已经证明 claim/report 可在双 Orchestrator 间接近 50/50，但清账本后的双端点轮次
+   只有 `122.940/s`，低于单端点的 `131.468/s`。单 Orchestrator HTTP 入口不是主瓶颈，双实例反而会
+   增加共享 PG 的并发竞争；多端点应作为高可用能力，不作为当前单库吞吐参数。
 4. Kubernetes Service 可在连接层分发请求，但长连接复用可能产生粘连。上线前仍应在真实 Service、多个
    Worker 实例下验证分布，不根据本地应用层轮转结果推断生产网络行为。
-5. Orchestrator 已有 report-batch API，但 Worker 当前只批量 claim，没有批量 report。直接切换会影响
-   lease、invocation fence、失败回退和终态时序，不能作为无风险参数调优混入本轮。
-6. 当前 134.946/s 是本机 Atomic SQL 场景的 10 万完成吞吐，不代表 Import/Export/Process 或真实外部 HTTP、
+5. Orchestrator 已有 report-batch API，但当前仍逐项开启独立事务；Worker 执行包装器也会在单任务完成时
+   立即 report。直接接入需要重构 lease、invocation fence、report outbox、部分失败回退和终态时序。
+   本轮放宽 report 限流没有提高总吞吐，现有证据不支持承担该改造风险。
+6. Launch 的 T1/T2 独立提交承载崩溃恢复与 Outbox 原子性。把两段简单合并为一个长事务会扩大锁持有时间，
+   并破坏 T1 已提交、T2 可恢复的故障语义，不作为性能优化方案。
+7. 当前 134.946/s 是本机 Atomic SQL 场景的 10 万完成吞吐，不代表 Import/Export/Process 或真实外部 HTTP、
    SFTP、对象存储场景的容量。
 
 ## 后续建议
 
 P0 已完成，无需继续提高 Trigger admission。Worker 多端点已经解决本地直连场景的单实例集中问题；
-下一项最有价值的工作是用 PostgreSQL statement/lock profile 继续定位锁内 SQL 占比，并在生产同构
-Service、多 Worker 环境复核连接分布和共享数据库上限。
+下一项最有价值的工作是对隔离轮次重置并采集 `pg_stat_statements`、WAL 和事务提交画像，按累计耗时、
+调用次数和 WAL 贡献定位可批量化的具体 SQL。候选改动必须逐项 A/B，且不得合并 launch T1/T2、弱化
+Outbox 原子性、关闭同步提交或删除终态 CAS。
 
 report batching 仅在 profiling 证明 report HTTP/事务是主要剩余热点后立项，并必须覆盖部分失败回退、
 旧 invocation fence、重复批次、单项超时和 Orchestrator 切换测试。不要为了继续提高单机数字而弱化
