@@ -3,7 +3,7 @@
 # build-apps.sh - 本地联调应用模块单独构建入口
 # 说明：
 # 1) 仅打包 8 个 Java 应用模块，不启动 Docker、不启动本地进程。
-# 2) 默认执行 Maven package -DskipTests，供 start-all.sh / 手工联调复用。
+# 2) 默认执行 Maven package -Dmaven.test.skip=true，供 start-all.sh / 手工联调复用。
 # 3) 默认增量构建（不 clean），Maven 自身会基于 mtime 决定是否重编；
 #    若出现「类文件在偏移 0 处截断」、repackage 失败、或 *-exec.jar 体积极小，
 #    多为 target/ 写入不完整（中断构建、磁盘或并行竞态），请用 CLEAN=1 强制清理后重编。
@@ -28,16 +28,13 @@ fi
 # CLEAN=1 强制清理；否则增量构建（实测未改动场景 40s → 9s）
 if [[ "${CLEAN:-0}" == "1" ]]; then
   _CLEAN_GOAL="clean"
-  echo "==> Maven 打包应用模块（clean package -DskipTests，CLEAN=1）..."
+    echo "==> Maven 打包应用模块（clean package -Dmaven.test.skip=true，CLEAN=1）..."
 else
   _CLEAN_GOAL=""
-  echo "==> Maven 打包应用模块（增量 package -DskipTests；强制清理用 CLEAN=1）..."
+    echo "==> Maven 打包应用模块（增量 package -Dmaven.test.skip=true；强制清理用 CLEAN=1）..."
 fi
 
-# 用 -DskipTests 而非 -Dmaven.test.skip=true：
-# 前者只跳过测试执行，保留 test-classes 和 test-jar 构建；
-# 后者会跳过 test-jar 生成，导致 worker-core/console-api/trigger/orchestrator
-# 对 batch-common:tests 的依赖解析失败。
+# 共享测试基础设施已独立为 batch-test-support 主 artifact，生产打包无需编译任何测试源码。
 # -T 2C：M 系列多核机器加倍 thread/core，实测 -16%
 # -Dflatten.skip=true：local 不 install/deploy，跳过 flatten 插件
 MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch batch-worker-atomic)
@@ -50,7 +47,7 @@ for i in "${!MODULES[@]}"; do
   find "$ROOT/${DIRS[$i]}/target" -maxdepth 1 -name "${MODULES[$i]}-*-exec.jar" -delete 2>/dev/null || true
 done
 
-"$MVN" -q -DskipTests \
+"$MVN" -q -Dmaven.test.skip=true \
   -Dcyclonedx.skip=true \
   -Dlicense.skip=true \
   -Dmaven.javadoc.skip=true \

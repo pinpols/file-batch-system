@@ -3,18 +3,28 @@ package io.github.pinpols.batch.common.arch;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaConstructor;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+import java.nio.charset.Charset;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 复用型 ArchUnit 规则,守护 CLAUDE.md 硬性规约。
  *
- * <p>使用方:在各模块 test sources 写一个 {@code XxxConventionsArchTest},import batch-common test-jar,
- * 把本类的规则跑在该模块自己 importPackages 出来的 JavaClasses 上。本类没有 {@code @Test} 方法, 不会在 batch-common surefire
+ * <p>使用方:在各模块 test sources 写一个 {@code XxxConventionsArchTest},以 test scope 引入
+ * {@code batch-test-support},把本类的规则跑在该模块自己 importPackages 出来的 JavaClasses 上。本类没有 {@code @Test} 方法,不会在 test-support surefire
  * 里被误执行;实际触发在每个模块自己的 test 类里。
  */
 public final class CodingConventionsArchRules {
@@ -27,9 +37,9 @@ public final class CodingConventionsArchRules {
         .that()
         .resideOutsideOfPackages(
             "io.github.pinpols.batch.common.config..", "io.github.pinpols.batch.common.time..")
-        .should(callMethod("java.time.ZoneId", "systemDefault"))
+        .should(callMethod(ZoneId.class.getName(), "systemDefault"))
         .allowEmptyShould(true)
-        .because("CLAUDE.md §时区策略:禁止业务代码 ZoneId.systemDefault();注入 BatchTimezoneProvider"
+        .because("CLAUDE.md §时区策略:禁止业务代码直接读取 JVM 默认时区;注入 BatchTimezoneProvider"
             + " 或调用 provider.defaultZone()。白名单 = batch-common.config / batch-common.time。");
   }
 
@@ -40,7 +50,7 @@ public final class CodingConventionsArchRules {
     return noClasses()
         .that()
         .doNotHaveFullyQualifiedName("io.github.pinpols.batch.common.utils.EncodingUtils")
-        .should(callMethod("java.nio.charset.Charset", "forName"))
+        .should(callMethod(Charset.class.getName(), "forName"))
         .allowEmptyShould(true)
         .because("CLAUDE.md §字符编码:禁止 Charset.forName(\"UTF-8\") / 字面量;改用 StandardCharsets.UTF_8"
             + " 或 EncodingUtils.resolve(raw)。白名单 = EncodingUtils 自身。");
@@ -101,15 +111,14 @@ public final class CodingConventionsArchRules {
   }
 
   /** 命中条件 = 方法同时带 triggerAnnotation 与 transactional 两个注解(同一方法)。 */
-  private static ArchCondition<com.tngtech.archunit.core.domain.JavaMethod> haveBothAnnotations(
+  private static ArchCondition<JavaMethod> haveBothAnnotations(
       String triggerAnnotation, String transactionalAnnotation) {
     return new ArchCondition<>("be annotated with both @"
         + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
         + " and @"
         + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)) {
       @Override
-      public void check(
-          com.tngtech.archunit.core.domain.JavaMethod method, ConditionEvents events) {
+      public void check(JavaMethod method, ConditionEvents events) {
         if (method.isAnnotatedWith(triggerAnnotation)
             && method.isAnnotatedWith(transactionalAnnotation)) {
           events.add(SimpleConditionEvent.violated(
@@ -180,10 +189,10 @@ public final class CodingConventionsArchRules {
     return new ArchCondition<>(description) {
       @Override
       public void check(JavaClass item, ConditionEvents events) {
-        java.util.List<String> scanList = readScanBasePackages(item);
+        List<String> scanList = readScanBasePackages(item);
         if (scanList.isEmpty()) {
           // 没显式 scanBasePackages → 默认扫 class 所在包(SB 行为)
-          scanList = java.util.List.of(item.getPackageName());
+          scanList = List.of(item.getPackageName());
         }
         for (String req : requiredPrefixes) {
           boolean covered =
@@ -201,8 +210,8 @@ public final class CodingConventionsArchRules {
         }
       }
 
-      private java.util.List<String> readScanBasePackages(JavaClass clazz) {
-        java.util.List<String> out = new java.util.ArrayList<>();
+      private List<String> readScanBasePackages(JavaClass clazz) {
+        List<String> out = new ArrayList<>();
         clazz
             .tryGetAnnotationOfType("org.springframework.boot.autoconfigure.SpringBootApplication")
             .ifPresent(a -> addStringArrayProperty(a, "scanBasePackages", out));
@@ -215,10 +224,7 @@ public final class CodingConventionsArchRules {
         return out;
       }
 
-      private void addStringArrayProperty(
-          com.tngtech.archunit.core.domain.JavaAnnotation<?> a,
-          String prop,
-          java.util.List<String> out) {
+      private void addStringArrayProperty(JavaAnnotation<?> a, String prop, List<String> out) {
         Object v = a.get(prop).orElse(null);
         if (v instanceof String[]) {
           for (String s : (String[]) v) if (s != null && !s.isBlank()) out.add(s);
@@ -231,7 +237,7 @@ public final class CodingConventionsArchRules {
 
   private static DescribedPredicate<JavaClass> isSpringStereotype() {
     return new DescribedPredicate<>("is Spring @Component / stereotype") {
-      private final java.util.Set<String> stereotypes = java.util.Set.of(
+      private final Set<String> stereotypes = Set.of(
           "org.springframework.stereotype.Component",
           "org.springframework.stereotype.Service",
           "org.springframework.stereotype.Repository",
@@ -252,11 +258,9 @@ public final class CodingConventionsArchRules {
     return new ArchCondition<>("have ≤1 public ctor OR @Autowired on one when ≥2") {
       @Override
       public void check(JavaClass item, ConditionEvents events) {
-        java.util.Set<com.tngtech.archunit.core.domain.JavaConstructor> publicCtors =
-            item.getConstructors().stream()
-                .filter(c ->
-                    c.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.PUBLIC))
-                .collect(java.util.stream.Collectors.toSet());
+        Set<JavaConstructor> publicCtors = item.getConstructors().stream()
+            .filter(c -> c.getModifiers().contains(JavaModifier.PUBLIC))
+            .collect(Collectors.toSet());
         if (publicCtors.size() < 2) {
           return; // 0 或 1 个 public ctor:Spring 自动选,无歧义
         }

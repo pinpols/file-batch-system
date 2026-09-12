@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-12
+- **构建边界与测试基础设施拆分**：共享测试代码从 `batch-common` 的 tests classifier 拆入独立 `batch-test-support` 模块，业务模块仅以 test scope 引用；生产 JAR/镜像构建可使用 `maven.test.skip=true` 跳过测试源码编译，CI 测试门禁仍使用 `-DskipTests` 或实际执行测试。Docker 构建按单服务依赖闭包与整套镜像共享 reactor 两种模式运行，保持运行时模块边界不变。
+
 ### 2026-09-11
 - **ADR-020/026 实现状态校准**：整批量日 dry-run 已基于 replay session/entry 落地，不扩展正式 batch-day 唯一身份；明确控制面 Outbox 保留、业务副作用 Outbox 禁止，功能默认关闭且须经 staging 零副作用验收后启用。
 

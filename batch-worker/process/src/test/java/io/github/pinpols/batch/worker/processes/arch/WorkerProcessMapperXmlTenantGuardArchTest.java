@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.arch.BaseMapperXmlTenantGuardArchTest;
 import java.util.Set;
 
 /**
- * batch-worker-process 多租 mapper XML 守护。规则源自 batch-common test-jar 的 {@link
+ * batch-worker-process 多租 mapper XML 守护。规则源自 batch-test-support 的 {@link
  * BaseMapperXmlTenantGuardArchTest}。
  */
 class WorkerProcessMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {

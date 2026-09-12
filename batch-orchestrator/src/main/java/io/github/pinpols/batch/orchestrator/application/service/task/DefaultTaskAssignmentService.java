@@ -601,7 +601,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     WorkerRegistryEntity fallback =
         workerRegistryMapper.selectByTenantAndWorkerCode(fallbackTenant, workerCode);
     if (EmptyChecks.isNotNull(fallback)) {
-      log.info(
+      log.debug(
           "worker claim resolved via shared tenant fallback: tenantId={}, fallbackTenant={},"
               + " workerCode={}",
           tenantId,

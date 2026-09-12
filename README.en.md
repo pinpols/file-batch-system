@@ -90,7 +90,8 @@ Getting started and operations:
 
 | Module | Port | Responsibility |
 |---|---|---|
-| `batch-common` | — | Shared enums, DTOs, Kafka message definitions, test infrastructure |
+| `batch-common` | — | Shared enums, DTOs, Kafka message definitions, and runtime infrastructure |
+| `batch-test-support` | — | Shared Testcontainers and ArchUnit support (test scope only) |
 | `batch-trigger` | 18081 | Quartz JDBC clustered scheduling, manual triggers, misfire / readiness-defer handling |
 | `batch-orchestrator` | 18082 | Single state host: DAG orchestration, sharding, routing, outbox |
 | `batch-worker-core` | — | Worker registration, heartbeat, execution-adapter base |
@@ -108,7 +109,7 @@ Getting started and operations:
 | `batch-worker-sdk` (Python) | — | Python SDK (ADR-035 cross-language peer implementation). Python 3.12+, async-only, pydantic v2 / httpx / aiokafka. Standalone toolchain (pip), not in the Maven reactor; cross-SDK contract drift is guarded by the parity lane. See [`sdk/python/README.md`](sdk/python/README.md) |
 | `batch-worker-sdk` (Go / TypeScript / Rust) | — | Cross-language SDKs as standalone toolchains (ADR-035 peers), sharing contract fixtures with Java/Python; language list, install and usage in [sdk/README.md](sdk/README.md) |
 
-> The platform runtime is a fixed set of 10 logical modules, from `batch-common` to `batch-console-api` (including `batch-worker-atomic`). `batch-worker` is an aggregator module with 6 sub-modules: `core` / `import` / `export` / `process` / `dispatch` / `atomic` (the `batch-worker-*` rows above). The root Maven reactor currently has 9 module paths: the runtime modules + `sdk/java/{core,spring,testkit}` + `batch-e2e-tests`; the Go / Python / Rust / TypeScript SDKs, `load-tests`, and `security-scan` are standalone toolchains or separate reactors. See `CLAUDE.md §模块` and [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md) before changing the layout.
+> The platform runtime is a fixed set of 10 logical modules, from `batch-common` to `batch-console-api` (including `batch-worker-atomic`). `batch-worker` is an aggregator module with 6 sub-modules: `core` / `import` / `export` / `process` / `dispatch` / `atomic` (the `batch-worker-*` rows above). The root Maven reactor currently has 10 module paths; `batch-test-support` is test-only. The Go / Python / Rust / TypeScript SDKs, `load-tests`, and `security-scan` are standalone toolchains or separate reactors. See `CLAUDE.md §模块` and [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md) before changing the layout.
 
 ## Tech stack
 

@@ -1,6 +1,6 @@
 # file-batch-system
 
-批量任务编排控制面 + 文件 / 任务交付闭环。根 Maven reactor 是 9 个 module path；平台运行时固定 10 个逻辑模块：trigger 触发 → orchestrator 派发 → workers 执行 → console-api 控制面。
+批量任务编排控制面 + 文件 / 任务交付闭环。根 Maven reactor 是 10 个 module path；平台运行时固定 10 个逻辑模块：trigger 触发 → orchestrator 派发 → workers 执行 → console-api 控制面。`batch-test-support` 只是 test-scope 工程模块，不进应用运行时。
 
 > **维护规则**:本文件只装「不能从代码推断的约束」+「高频违反的红线」+「关键路径指针」。细节去 `docs/`。
 >
@@ -11,7 +11,7 @@
 平台运行时固定 10 个逻辑模块,不可擅自增删:
 `batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-worker-core` · `batch-worker-import` · `batch-worker-export` · `batch-worker-process` · `batch-worker-dispatch` · `batch-worker-atomic` · `batch-console-api`
 
-> **目录布局**:6 个 worker 模块(core/import/export/process/dispatch/atomic)归在 `batch-worker/` 父目录下(`batch-worker/{core,import,...}`,对齐 `sdk/java/{core,spring,testkit}` 嵌套范式),由 `batch-worker/pom.xml` aggregator 聚合并作为它们的 Maven parent。**artifactId 全不变**(仍是 `batch-worker-core` 等),依赖坐标/模块身份不受影响;只是目录从根迁到 `batch-worker/` 下。`-pl` 用路径形式(如 `-pl batch-worker/import`),Dockerfile 构建用 `MODULE_DIR`(路径)+ `MODULE`(jar 名/artifactId)双参数。
+> **目录布局**:6 个 worker 模块(core/import/export/process/dispatch/atomic)归在 `batch-worker/` 父目录下(`batch-worker/{core,import,...}`,对齐 `sdk/java/{core,spring,testkit}` 嵌套范式),由 `batch-worker/pom.xml` aggregator 聚合并作为它们的 Maven parent。**artifactId 全不变**(仍是 `batch-worker-core` 等),依赖坐标/模块身份不受影响;只是目录从根迁到 `batch-worker/` 下。`-pl` 本地可用路径，Docker 单模块构建用 `-pl :artifactId -am`。
 
 > `batch-worker-atomic` = 专用 Task SPI worker,独占 shell/sql/stored-proc/http 原子执行器(dual-use RCE 隔离),不带文件 pipeline。见 ADR-029。2026-05-30 由 9 增至 10,破"固定模块"规则的理由(安全特权隔离)记于 ADR-029。
 >
@@ -31,7 +31,7 @@
 - **统一走 Maven Wrapper**:`./mvnw`(钉死 Maven 3.9.16,见 `.mvn/wrapper/maven-wrapper.properties`);CI workflow 已全部切 `./mvnw`,本地系统 mvn(≥3.9.0)仍可用但不保证版本一致
 - `./mvnw package` — 默认 build,产物 `batch-*-${revision}.jar`(根 pom flatten 插件展开 `${revision}`)
 - `./mvnw -Drevision=X.Y.Z package` — release 覆盖版本
-- 跳测试**只用 `-DskipTests`**;**严禁 `-Dmaven.test.skip=true`**(后者会同时跳 test-jar 生成,打断 `batch-common:tests` 依赖链)
+- 日常需要编译测试但不执行时用 `-DskipTests`；纯应用镜像/运行 JAR 打包由 `batch-test-support` 解除 test-jar 依赖后使用 `-Dmaven.test.skip=true`。不得在 CI 测试门禁中使用后者
 - SemVer 2.0.0;main 默认 `<revision>1.1.0-SNAPSHOT</revision>`。完整 release flow → [`docs/runbook/releasing.md`](docs/runbook/releasing.md)
 
 ## 架构硬约束

@@ -9,7 +9,7 @@ import java.util.Set;
  * #{tenantId}</if>} 这种"可空"租户过滤,只允许在已知的 ROLE_ADMIN 跨租运维入口存在。新增 mapper 必须走无条件 {@code AND tenant_id =
  * #{tenantId}} 或加入白名单并写明原因。
  *
- * <p>规则源自 batch-common test-jar 的 {@link BaseMapperXmlTenantGuardArchTest},此处仅声明本模块白名单。
+ * <p>规则源自 batch-test-support 的 {@link BaseMapperXmlTenantGuardArchTest},此处仅声明本模块白名单。
  */
 class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
 

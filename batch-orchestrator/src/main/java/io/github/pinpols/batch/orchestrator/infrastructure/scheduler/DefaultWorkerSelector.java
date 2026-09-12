@@ -99,7 +99,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
       WorkerRegistryEntity fallbackSelected =
           pickBest(fallbackCandidates, queue, request.getRequiredCapability());
       if (fallbackSelected != null) {
-        log.info(
+        log.debug(
             "worker selection fell back to shared tenant: tenantId={}, fallbackTenant={},"
                 + " workerGroup={}, workerCode={}",
             request.getTenantId(),

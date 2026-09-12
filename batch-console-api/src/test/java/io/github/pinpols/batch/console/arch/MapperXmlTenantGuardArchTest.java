@@ -9,7 +9,7 @@ import java.util.Set;
  * test="tenantId != null">AND tenant_id = #{tenantId}</if>} 这种"可空" 守护(否则 service 层一旦忘记
  * tenantGuard.resolveTenant 就漏租户隔离,原 OperationAuditQueryService 漏洞 即此类型)。
  *
- * <p>规则源自 batch-common test-jar 的 {@link BaseMapperXmlTenantGuardArchTest},此处仅声明本模块白名单。
+ * <p>规则源自 batch-test-support 的 {@link BaseMapperXmlTenantGuardArchTest},此处仅声明本模块白名单。
  */
 class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
 

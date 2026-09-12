@@ -33,6 +33,54 @@ import org.springframework.web.client.RestClient;
 class HttpTaskExecutionClientTest {
 
   @Test
+  void configuredEndpointsRoundRobinClaimAndReportRequests() throws Exception {
+    try (MockWebServer first = new MockWebServer();
+        MockWebServer second = new MockWebServer()) {
+      first.enqueue(jsonResponse("{}"));
+      second.enqueue(jsonResponse("{}"));
+      first.enqueue(new MockResponse.Builder().code(200).build());
+      second.enqueue(new MockResponse.Builder().code(200).build());
+      first.start();
+      second.start();
+
+      OrchestratorTaskClientProperties props = clientProperties(first.getPort());
+      props.setBaseUrls(List.of(baseUrl(first), baseUrl(second)));
+      HttpTaskExecutionClient client = newClient(props, new WorkerBatchClaimProperties());
+
+      assertThat(client.claim("t1", 1L, "w1")).isPresent();
+      assertThat(client.claim("t1", 2L, "w1")).isPresent();
+      client.report(report(3L));
+      client.report(report(4L));
+
+      assertThat(first.getRequestCount()).isEqualTo(2);
+      assertThat(second.getRequestCount()).isEqualTo(2);
+    }
+  }
+
+  @Test
+  void reportRetryFailsOverToNextConfiguredEndpoint() throws Exception {
+    try (MockWebServer first = new MockWebServer();
+        MockWebServer second = new MockWebServer()) {
+      first.enqueue(new MockResponse.Builder().code(503).build());
+      second.enqueue(new MockResponse.Builder().code(200).build());
+      first.start();
+      second.start();
+
+      OrchestratorTaskClientProperties props = clientProperties(first.getPort());
+      props.setBaseUrls(List.of(baseUrl(first), baseUrl(second)));
+      props.setReportMaxAttempts(2);
+      props.setReportInitialBackoffMillis(1);
+      props.setReportMaxBackoffMillis(1);
+      HttpTaskExecutionClient client = newClient(props, new WorkerBatchClaimProperties());
+
+      client.report(report(42L));
+
+      assertThat(first.getRequestCount()).isEqualTo(1);
+      assertThat(second.getRequestCount()).isEqualTo(1);
+    }
+  }
+
+  @Test
   void reportRetriesOn503ThenSucceeds() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse.Builder().code(503).build());
@@ -124,6 +172,11 @@ class HttpTaskExecutionClientTest {
   private HttpTaskExecutionClient newClient(int port, WorkerBatchClaimProperties batchProps) {
     OrchestratorTaskClientProperties props = clientProperties(port);
     props.setClaimMaxAttempts(1);
+    return newClient(props, batchProps);
+  }
+
+  private HttpTaskExecutionClient newClient(
+      OrchestratorTaskClientProperties props, WorkerBatchClaimProperties batchProps) {
     @SuppressWarnings("unchecked")
     ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
     when(noopCoordinator.getIfAvailable()).thenReturn(null);
@@ -136,6 +189,18 @@ class HttpTaskExecutionClientTest {
         noopCoordinator,
         new WorkerLeaseProperties(),
         batchProps);
+  }
+
+  private static MockResponse jsonResponse(String body) {
+    return new MockResponse.Builder()
+        .code(200)
+        .addHeader("Content-Type", "application/json")
+        .body(body)
+        .build();
+  }
+
+  private static String baseUrl(MockWebServer server) {
+    return "http://127.0.0.1:" + server.getPort();
   }
 
   /**

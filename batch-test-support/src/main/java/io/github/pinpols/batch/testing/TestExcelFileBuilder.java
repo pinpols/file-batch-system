@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.testing;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -80,8 +82,8 @@ public final class TestExcelFileBuilder {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       workbook.write(out);
       return out.toByteArray();
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to build test Excel file", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to build test Excel file", e);
     }
   }
 

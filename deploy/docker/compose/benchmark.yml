@@ -1,19 +1,25 @@
 # 只叠加到隔离的本地容量压测栈：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh
-# HTTP admission 的 32/40/8、队列和等待时间由 batch-trigger/application-benchmark.yml
-# 统一定义；outbox relay 是 Compose benchmark 的唯一覆盖项，避免把生产 40/s 基线带入
-# 隔离容量画像，同时不改动普通 local 启动。
+# HTTP admission、连接池、队列和等待时间只在本 Compose benchmark 中提高，避免把
+# 10w 容量画像预算带入普通 local 或 production 启动。
 services:
   kafka-init:
     environment:
       # 容量画像显式扩展 dispatch/direct topic，避免 broker 自动创建的 3 分区限制
       # Atomic worker 消费并发。Kafka 分区只能增加，普通 local profile 仍可用较低并发消费。
-      KAFKA_PARTITIONS_DISPATCH: "12"
+      KAFKA_PARTITIONS_DISPATCH: "24"
+      # launch topic 必须先扩到 12 再启动 Trigger producer。压测脚本会核对每个分区
+      # 的消息增量，避免 producer 缓存旧的 3 分区拓扑后产生虚假的控制面瓶颈。
+      KAFKA_PARTITIONS_TRIGGER_LAUNCH: "12"
   orchestrator:
     environment:
       # 容量画像使用 2 个 orchestrator × 6 consumer，对齐 launch topic 的 12 个分区。
       # 单实例写 24 只会留下 12 个空闲线程，不能证明横向扩展能力。
       BATCH_TRIGGER_CONSUMER_CONCURRENCY: "6"
       BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: "50"
+      # 轻任务洪峰下超过 worker 即时槽位的任务会进入 WAITING。容量画像缩短重派周期并
+      # 扩大单批扫描，避免生产保守默认 100 条/10 秒主导压测尾部。
+      BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE: "1000"
+      BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS: "1000"
       BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS: ${BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS:-1000}
       BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE:-20}
       BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE:-500}
@@ -37,6 +43,8 @@ services:
     environment:
       BATCH_TRIGGER_CONSUMER_CONCURRENCY: "6"
       BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: "50"
+      BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE: "1000"
+      BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS: "1000"
       BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS: ${BATCH_REPLAY_DISPATCH_POLL_INTERVAL_MILLIS:-1000}
       BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_SESSION_BATCH_SIZE:-20}
       BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE: ${BATCH_REPLAY_DISPATCH_ENTRY_BATCH_SIZE:-500}
@@ -47,14 +55,31 @@ services:
   trigger:
     environment:
       SPRING_PROFILES_ACTIVE: local,benchmark
-      # 容量画像只提升隔离 benchmark 的 outbox 释放预算；生产默认值仍由
-      # application.yml 保持 40/s，避免把未验证的下游压力带入正常部署。
+      # 200 RPS 持续入口在较小许可数下会因 PG 写入尾延迟填满 128 个等待槽。
+      # 80 个入口许可配 88 条平台连接，固定保留 8 条给 relay、健康检查和管理路径。
+      BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: "88"
+      BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: "80"
+      BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: "20"
+      BATCH_TRIGGER_API_LAUNCH_QUEUE_CAPACITY: "128"
+      BATCH_TRIGGER_API_LAUNCH_QUEUE_WAIT_MILLIS: "15000"
+      BATCH_TRIGGER_API_LAUNCH_DB_RESERVE_CONNECTIONS: "8"
+      # 容量画像同时提升隔离 benchmark 的 outbox 释放预算；生产默认仍为 40/s。
       BATCH_TRIGGER_OUTBOX_BATCH_SIZE: "512"
       BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND: "400"
   worker-atomic:
+    mem_limit: 768m
     environment:
-      # Atomic 轻任务的实测瓶颈在 claim/report 排队而非任务执行。benchmark profile 仅提高
-      # 消费和实例内许可，不改变普通 local / production 默认值。
-      BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY: "12"
-      BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS: "16"
-      BATCH_WORKER_EXECUTION_POOL_SIZE: "16"
+      # 本地容量画像没有 Kubernetes Service，显式轮转两个 Orchestrator，验证 claim、renew、report
+      # 不再集中到主实例。普通 Compose 和 Helm 的单 Service 配置不受影响。
+      BATCH_WORKER_TASK_CLIENT_BASE_URLS: ${BATCH_WORKER_TASK_CLIENT_BASE_URLS:-http://orchestrator:18082,http://orchestrator-benchmark-replica:18082}
+      # Atomic 轻任务的实测瓶颈在 claim/report 排队而非任务执行。隔离容量画像启用已完成
+      # 契约和 SIM 验证的 5 条 claim-batch，把认领 HTTP/事务往返从 O(N) 降为 O(N/5)。
+      # 24 个 listener 每次仍只持有 5 条；480 是调度准入窗口，让短任务积压留在 Kafka 而
+      # 不是退化到 WAITING 低频扫描。执行池按启动守卫同步设置，但 listener 实际同时提交
+      # 不超过 24 条；普通 local / production 默认仍关闭 batch-claim，不继承这些实验参数。
+      BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY: "24"
+      BATCH_WORKER_ATOMIC_KAFKA_MAX_POLL_RECORDS: "5"
+      BATCH_WORKER_BATCH_CLAIM_ENABLED: "true"
+      BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE: "5"
+      BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS: "480"
+      BATCH_WORKER_EXECUTION_POOL_SIZE: "480"

@@ -136,6 +136,22 @@ WITH ji AS (
 )
 DELETE FROM batch.compensation_command WHERE related_job_instance_id IN (SELECT id FROM ji);
 
+-- result_version 没有指向 job_instance 的外键，单独删除实例会遗留每次压测产生的
+-- 结果版本。先删除资产物化指针，再按本轮实例清理版本，避免重复压测持续放大索引、
+-- 污染不同轮次之间的性能对比。
+WITH ji AS (
+  SELECT id FROM p2_cleanup_job_instance_ids
+),
+rv AS (
+  SELECT id FROM batch.result_version WHERE job_instance_id IN (SELECT id FROM ji)
+)
+DELETE FROM batch.asset_partition WHERE result_version_id IN (SELECT id FROM rv);
+
+WITH ji AS (
+  SELECT id FROM p2_cleanup_job_instance_ids
+)
+DELETE FROM batch.result_version WHERE job_instance_id IN (SELECT id FROM ji);
+
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids
 ),

@@ -164,12 +164,14 @@ public class ResultVersionWriter {
         .createdAt(now)
         .updatedAt(now)
         .build();
-    resultVersionMapper.insert(newVersion);
+    ResultVersionEntity persisted = resultVersionMapper.insertReturning(newVersion);
+    if (persisted == null) {
+      throw new IllegalStateException("result_version insert returned no row: tenantId=" + tenantId
+          + ", businessKey=" + businessKey
+          + ", jobInstanceId=" + instance.getId());
+    }
     if (STATUS_EFFECTIVE.equals(status)) {
-      ResultVersionEntity persisted =
-          resultVersionMapper.selectByJobInstanceId(tenantId, instance.getId());
-      assetPartitionService.materializeEffectiveJobPartition(
-          instance, persisted == null ? newVersion : persisted);
+      assetPartitionService.materializeEffectiveJobPartition(instance, persisted);
     }
 
     log.debug(

@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **Java 镜像构建提速**：Dockerfile 增加全 reactor/单模块依赖闭包双路径；共享测试基础设施拆为 `batch-test-support`，镜像打包不再编译测试源码；补充 Buildx Bake 构建 DAG 与 GitHub Actions 远程缓存。
 - **配置包 Excel 技术债清偿**：`ConfigPackageExcelValidator`（1491 行）拆出 workflow DAG 拓扑校验与行级校验器；`ConfigPackageExcelWorkbookWriter`（1438 行）拆出 11 个 sheet 定义；`DefaultConsoleTenantConfigPackageExcelApplicationService`（1024 行）拆出 apply 写库服务。三个类均减半、公开 API 不变，并为 writer 导出/预览路径补 characterization 测试（此前完全无单测覆盖）。
 - **调度器统一为 Quartz**：移除 HashedWheelTimer 运行路径、Wheel 配置、指标、迁移脚本和测试；当前 trigger 统一使用 Quartz JDBC JobStore。Wheel 评估文档保留为历史记录，见 ADR-033。
 - **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。

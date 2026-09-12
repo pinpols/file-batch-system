@@ -21,6 +21,7 @@
 
     <modules>
         <module>batch-common</module>
+        <module>batch-test-support</module>
         <module>batch-trigger</module>
         <module>batch-orchestrator</module>
         <module>batch-worker</module>

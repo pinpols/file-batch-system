@@ -303,12 +303,12 @@ step_1_build_restart() {
   fi
   # 用 mvn 退出码判成功,不用 jar mtime(mvn -q 见无改动时 no-op,jar 不会重新打包)。
   # Step 2/3/4 通过 run-tests --skip-build 按单模块 -pl 隔离执行,不会用 -am 扩大测试范围;
-  # 因此 Step 1 必须先 install 本仓可发布模块,让 batch-common test-jar / worker / sdk
+  # 因此 Step 1 必须先 install 本仓可发布模块,让 batch-test-support / worker / sdk
   # testkit 等跨模块依赖都能从本地 Maven 仓库解析到最新产物。
   # batch-e2e-tests 是纯测试模块(maven-jar-plugin skipIfEmpty=true,无 main 源码不产 artifact),
   # 不能进入 install lifecycle,否则 maven-install-plugin 会报 did not assign a file。
   local test_modules
-  test_modules="batch-common,batch-trigger,batch-orchestrator,batch-worker/core,batch-worker/import,batch-worker/export,batch-worker/process,batch-worker/dispatch,batch-worker/atomic,sdk/java/core,sdk/java/testkit,batch-console-api"
+  test_modules="batch-common,batch-test-support,batch-trigger,batch-orchestrator,batch-worker/core,batch-worker/import,batch-worker/export,batch-worker/process,batch-worker/dispatch,batch-worker/atomic,sdk/java/core,sdk/java/testkit,batch-console-api"
   if ! mvn install -DskipTests -pl "$test_modules" -am -q > "$LOG_DIR/01-build-maven.log" 2>&1; then
     ng "mvn install 失败(看 $LOG_DIR/01-build-maven.log)"
     return 1

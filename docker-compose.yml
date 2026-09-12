@@ -150,6 +150,9 @@ services:
     image: apache/kafka:${KAFKA_IMAGE_TAG}
     container_name: batch-kafka
     restart: unless-stopped
+    # Docker Desktop 的总内存通常明显小于生产节点。显式限制 broker 原生内存和 JVM 堆，
+    # 避免容量测试时 Kafka 与 PostgreSQL/应用争抢宿主机内存并被 OOM kill。
+    mem_limit: ${KAFKA_MEMORY_LIMIT:-1536m}
     ports:
       - "${KAFKA_HOST_PORT}:9092"
     environment:
@@ -168,6 +171,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS}
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS:--Xms256m -Xmx768m}
     volumes:
       - kafka-data:/var/lib/kafka/data
     networks:

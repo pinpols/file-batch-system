@@ -43,6 +43,9 @@ KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092
 KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
 BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
 PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
+# 结果业务键基数。1 表示所有请求使用同一 bizDate，专测同键重跑；大于 1 时轮换 bizDate，
+# 用于测量独立业务键下的通用控制面吞吐。
+BIZ_DATE_CARDINALITY="${BIZ_DATE_CARDINALITY:-1}"
 
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
@@ -155,7 +158,7 @@ pg_pressure_snapshot() {
 pg_pressure_sampler() {
   local output_file="$1"
   : > "$output_file"
-  printf '%s\n' "sampled_at|database_size_bytes|active_connections|waiting_connections|lock_waiters|xact_commit|xact_rollback|wal_bytes" \
+  printf '%s\n' "sampled_at|database_size_bytes|active_connections|active_waiting_connections|lock_waiters|xact_commit|xact_rollback|wal_bytes" \
     >> "$output_file"
   while true; do
     psql_platform -At -F '|' \
@@ -181,7 +184,7 @@ wait_run_terminal() {
     counts="${counts#*|}"
     trigger_requests="${counts%%|*}"
     linked_terminal="${counts##*|}"
-    if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 && "$WAIT_TERMINAL_ALLOW_PARTIAL" != "1" ]]; then
+    if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 ]]; then
       if [[ "$total" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
           && "$terminal" -eq "$total" \
           && "$trigger_requests" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
@@ -340,6 +343,7 @@ run_mixed_pressure() {
       -Dinternal.secret="$INTERNAL_SECRET" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DbizDate="$BIZ_DATE" \
+      -Dcontrol.bizDate.cardinality="$BIZ_DATE_CARDINALITY" \
       -Dcontrol.modules="$MODULES_CSV" \
       -Dcontrol.process.paramsJsonFile="$PROCESS_PARAMS" \
       -Dcontrol.dispatch.paramsJsonFile="$DISPATCH_PARAMS" \
@@ -382,6 +386,7 @@ write_report() {
     echo "- Users per pipeline module: ${USERS}, ramp seconds: ${RAMP_SECONDS}"
     echo "- Mixed launch rates: process=${PROCESS_LAUNCH_RPS}/s, dispatch=${DISPATCH_LAUNCH_RPS}/s, atomic=${ATOMIC_LAUNCH_RPS}/s"
     echo "- Trigger pressure: job=${TRIGGER_JOB_CODE}, launch_rps=${TRIGGER_LAUNCH_RPS}, read_rps=${TRIGGER_READ_RPS}, duration=${TRIGGER_DURATION_SECONDS}s"
+    echo "- Result business-key cardinality: ${BIZ_DATE_CARDINALITY} (rotating bizDate from ${BIZ_DATE})"
     echo "- Trigger console reads: ${SCHEDULING_CONSOLE_READS}"
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
@@ -499,6 +504,10 @@ fi
 
 if ! [[ "$PG_SAMPLE_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
   echo "PG_SAMPLE_INTERVAL_SECONDS must be a positive integer" >&2
+  exit 2
+fi
+if ! [[ "$BIZ_DATE_CARDINALITY" =~ ^[1-9][0-9]*$ ]]; then
+  echo "BIZ_DATE_CARDINALITY must be a positive integer" >&2
   exit 2
 fi
 

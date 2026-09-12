@@ -133,7 +133,7 @@ final class TaskConsumerBatchExecutionCoordinator {
 
   private void logBatchSuccess(WorkerExecutionResult result) {
     if (result != null) {
-      log.info(
+      log.debug(
           "{} batch task processed: taskId={}, success={}, message={}",
           workerTypeSupplier.get(),
           result.taskId(),

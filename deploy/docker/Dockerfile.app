@@ -1,19 +1,21 @@
 # syntax=docker/dockerfile:1.7
 
-# 共享 builder + per-image runtime 设计:
-#   - builder stage 不带 ARG MODULE → docker BuildKit 跨 9 个 image 复用同一份 builder layer
-#   - builder 内一次 mvn -B -T 1C 并行 build 全 9 模块(共享 m2 cache mount,跨 build 持久化)
-#   - 9 个 runtime stage 各 COPY 自己 module 的 jar(从 builder 层零成本)
+# 双路径 builder + per-image runtime 设计:
+#   - BUILD_MODE=all:8 个应用共享一次全 reactor 构建,适合整套镜像构建。
+#   - BUILD_MODE=module:只构建 MODULE 及其 reactor 依赖闭包,适合单服务迭代。
+#   - runtime 只提取当前 MODULE 的 jar,不在 builder 中二次复制全部可执行 jar。
 #
 # 性能:
-#   - 首跑(cold m2 cache):builder ~8 min(download deps + parallel build),9 runtime 各几秒
+#   - 首跑(cold m2 cache):builder ~8 min(download deps + parallel build),8 runtime 各几秒
 #   - 增量(源码改 / 加新代码):builder ~2 min,runtime 秒级,总 ~3 min
-#   - 老设计(builder 带 MODULE):9 个 builder 串行各跑一次 mvn,15-20 min
+#   - 单服务迭代由 BUILD_MODE=module 避免无关模块的 compile/testCompile/repackage。
 #
 # 自包含,不需要 host 端 mvn(适配 Portainer 这类直接跑 `docker compose build` 的 GitOps 工具)。
 
-# ───── Stage 1: 共享 builder(全模块一次性 build)─────
-FROM maven:3.9.16-eclipse-temurin-21 AS builder
+ARG BUILD_MODE=all
+
+# ───── Stage 1: Maven 依赖基层─────
+FROM maven:3.9.16-eclipse-temurin-21 AS maven-base
 
 WORKDIR /workspace
 
@@ -23,6 +25,7 @@ COPY deploy/docker/settings.xml /usr/share/maven/conf/settings.xml
 # 先 COPY 所有 pom.xml 单独一层 → 仅 pom 改时才 invalidate deps cache
 COPY pom.xml ./
 COPY batch-common/pom.xml batch-common/pom.xml
+COPY batch-test-support/pom.xml batch-test-support/pom.xml
 COPY batch-console-api/pom.xml batch-console-api/pom.xml
 COPY batch-orchestrator/pom.xml batch-orchestrator/pom.xml
 COPY batch-trigger/pom.xml batch-trigger/pom.xml
@@ -38,44 +41,71 @@ COPY sdk/java/spring/pom.xml sdk/java/spring/pom.xml
 COPY sdk/java/testkit/pom.xml sdk/java/testkit/pom.xml
 COPY batch-e2e-tests/pom.xml batch-e2e-tests/pom.xml
 
+# ───── Stage 1A: 全 reactor 依赖预取─────
+FROM maven-base AS deps-all
+
 # m2 cache mount(id 命名以便跨 compose build 复用同一份;Portainer/手动 build 都行)
 RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
-    mvn -B -DskipTests -pl '!batch-e2e-tests' -am dependency:go-offline
+    mvn -B -Dmaven.test.skip=true -pl '!batch-e2e-tests' -am dependency:go-offline
 
-# 全源码进 builder,build 全部 deployable 模块(e2e-tests 不部署,排除)
+# ───── Stage 1B: 单模块依赖闭包预取─────
+FROM maven-base AS deps-module
+
+ARG MODULE
+
+RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
+    set -eux; \
+    test -n "${MODULE}"; \
+    mvn -B -Dmaven.test.skip=true -pl ":${MODULE}" -am dependency:go-offline
+
+# ───── Stage 2A: 整套镜像共享的全 reactor builder─────
+FROM deps-all AS builder-all
+
 COPY . .
 
 RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
-    mvn -B -T 1C -DskipTests -pl '!batch-e2e-tests' package
+    mvn -B -T 1C -Dmaven.test.skip=true -Dflatten.skip=true -Djacoco.skip=true \
+      -pl '!batch-e2e-tests' package
 
-# 每个可部署模块产出唯一的 *-exec.jar。集中到固定目录后，后续 target 不再依赖
-# 带 ARG 的跨阶段目录 COPY；BuildKit 并行构建多个服务时不会误复用空 target 目录。
-RUN set -eux; \
-    mkdir -p /artifacts; \
-    find /workspace -type f -path '*/target/*-exec.jar' -exec cp {} /artifacts/ \;
-
-# ───── Stage 2: extract selected jar layers(只解压当前服务的 jar)─────
-FROM builder AS selected-layers
+# ───── Stage 2B: 单服务及其依赖闭包 builder─────
+FROM deps-module AS builder-module
 
 ARG MODULE
 
-# MODULE 是 Maven artifactId；从 builder 收集的扁平 artifact 目录精确取 jar。
-COPY --from=builder /artifacts/${MODULE}-*.jar /tmp/build/
-RUN set -eux; \
-    jar=""; \
-    for f in /tmp/build/"${MODULE}"-*.jar; do \
-        case "$f" in *sources*|*javadoc*|*original*) continue ;; esac; \
-        [ -f "$f" ] || continue; \
-        jar="$f"; \
-        break; \
-    done; \
-    [ -n "$jar" ] || { echo "ERROR: no main jar found for ${MODULE}"; exit 1; }; \
-    java -Djarmode=tools -jar "$jar" extract --layers --destination /layers; \
-    rm -rf /tmp/build
+COPY . .
 
-# ───── Stage 3: per-image runtime(各服务挑自己 jar)─────
+RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
+    set -eux; \
+    test -n "${MODULE}"; \
+    mvn -B -T 1C -Dmaven.test.skip=true -Dflatten.skip=true -Djacoco.skip=true \
+      -pl ":${MODULE}" -am package
+
+# ───── Stage 3: 从所选 builder 中只提取当前服务 jar─────
+FROM builder-${BUILD_MODE} AS selected-artifact
+
+ARG MODULE
+
+RUN set -eux; \
+    mkdir -p /selected; \
+    jar="$(find /workspace -type f -path '*/target/*-exec.jar' \
+      -name "${MODULE}-*-exec.jar" \
+      ! -name '*-sources-*' ! -name '*-javadoc-*' ! -name '*-original-*' \
+      -print -quit)"; \
+    test -n "$jar"; \
+    cp "$jar" "/selected/${MODULE}-exec.jar"
+
+# ───── Stage 4: 解压当前服务的 Spring Boot layers─────
+FROM selected-artifact AS selected-layers
+
+ARG MODULE
+
+RUN set -eux; \
+    java -Djarmode=tools -jar "/selected/${MODULE}-exec.jar" extract --layers --destination /layers; \
+    rm -rf /selected
+
+# ───── Stage 5: per-image runtime─────
 FROM eclipse-temurin:21-jre-jammy
 
 ARG MODULE

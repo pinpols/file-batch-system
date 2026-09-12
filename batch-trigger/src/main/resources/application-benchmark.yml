@@ -6,16 +6,16 @@ spring:
       on-profile: benchmark
   datasource:
     hikari:
-      # 入口执行 32，保留 8 条给 outbox relay、健康检查和管理操作。
-      maximum-pool-size: ${BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE:40}
+      # 入口执行 80，保留 8 条给 outbox relay、健康检查和管理操作。
+      maximum-pool-size: ${BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE:88}
       connection-timeout: ${BATCH_TRIGGER_PLATFORM_DB_CONNECTION_TIMEOUT_MS:5000}
 
 batch:
   trigger:
     runtime:
-      api-launch-max-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY:32}
+      api-launch-max-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY:80}
       api-launch-adaptive-enabled: ${BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED:false}
-      api-launch-min-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY:8}
+      api-launch-min-concurrency: ${BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY:20}
       api-launch-slow-request-threshold-millis: ${BATCH_TRIGGER_API_LAUNCH_SLOW_REQUEST_THRESHOLD_MILLIS:1000}
       # 128 个请求有界等待。100k/40 RPS 的短暂下游抖动可达约 11 秒，因此预算为 15 秒。
       api-launch-queue-capacity: ${BATCH_TRIGGER_API_LAUNCH_QUEUE_CAPACITY:128}

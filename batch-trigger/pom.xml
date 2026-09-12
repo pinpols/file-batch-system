@@ -20,9 +20,8 @@
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
-            <artifactId>batch-common</artifactId>
+            <artifactId>batch-test-support</artifactId>
             <version>${project.version}</version>
-            <classifier>tests</classifier>
             <scope>test</scope>
         </dependency>
 
