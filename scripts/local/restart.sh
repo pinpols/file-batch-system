@@ -18,7 +18,7 @@
 # 说明：
 #   - 按依赖顺序重启：orchestrator 必须在 trigger/console/worker 之前就绪
 #   - 若 orchestrator 在重启列表中，等它 UP 后再启动其他服务
-#   - 每次重启会覆盖对应模块当前日志（logs/current/app/<module>.log，兼容 logs/app/<module>.log）
+#   - 重启前会先归档对应模块当前日志，再写入新日志文件
 # =============================================================
 set -euo pipefail
 
@@ -340,6 +340,7 @@ start_module() {
     exit 1
   fi
   warm_cds "$name" "$jar"
+  log_archive_active_log_file "$ROOT" app "$name"
   nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${__CDS_FLAG} ${JAVA_OPTS:-} \
     -jar "$jar" --spring.profiles.active=local \
     >"$LOG_DIR/$name.log" 2>&1 &

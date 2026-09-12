@@ -106,6 +106,27 @@ log_run_dir() {
   printf '%s' "$dir"
 }
 
+log_archive_active_log_file() {
+  local root="$1"
+  local kind="$2"
+  local name="$3"
+
+  local log_dir
+  local candidate="$root/logs/current/$kind/$name.log"
+  if [[ ! -f "$candidate" ]]; then
+    return 0
+  fi
+
+  log_dir="$root/logs/archive/$kind"
+  mkdir -p "$log_dir"
+  local archive_file
+  archive_file="$(log_archive_legacy_path "$root" "${kind}/${name}.log")"
+  archive_file="${archive_file}.log"
+
+  mv "$candidate" "$archive_file"
+  echo "  归档旧日志：$candidate -> $archive_file"
+}
+
 log_pid_file() {
   local root="$1"
   local filename="${2:-start-all.pids}"

@@ -39,4 +39,10 @@ logs/
 - 4day 仿真:`00-run-4days.log`、`02-day0-2026-06-06.log`、`02-day0-2026-06-06-watch.log`。
 - run id:`<label>-YYYYMMDD-HHMMSS-<git-sha>`。
 
+归档目录：
+
+- 常驻日志归档文件：`logs/archive/app/<component>-YYYYMMDD-HHMMSS-<git-sha>.log`
+- Docker 日志归档文件：`logs/archive/docker/<service>-YYYYMMDD-HHMMSS-<git-sha>.log`
+- 一次性运行目录：`logs/archive/legacy/` 用于第一次碰到旧布局（如 `logs/app`）时自动迁移保留。
+
 旧目录首次遇到时会移动到 `logs/archive/legacy/` 后再创建软链,不会直接删除。

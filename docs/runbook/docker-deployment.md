@@ -74,7 +74,7 @@
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
 业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network` 共享网络互通。
 
-应用容器的文件日志会写到 `./logs/docker/*.log`，可直接在本地查看或 `tail -f`。
+应用容器的文件日志会写到 `./logs/current/docker/*.log`（兼容路径 `./logs/docker` 指向 `./logs/current/docker`），可直接在本地查看或 `tail -f`。
 
 ## 停止
 
