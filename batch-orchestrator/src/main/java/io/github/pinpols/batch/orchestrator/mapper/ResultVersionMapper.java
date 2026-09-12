@@ -24,6 +24,12 @@ public interface ResultVersionMapper {
   int insert(ResultVersionEntity entity);
 
   /**
+   * 新增并返回持久化后的完整行。终态热路径需要生成的 {@code id} 物化 asset partition，使用
+   * {@code INSERT ... RETURNING} 避免插入后再按 job_instance 回读一次。
+   */
+  ResultVersionEntity insertReturning(ResultVersionEntity entity);
+
+  /**
    * 对同一 (tenant_id, business_key) 的版本写入加事务级锁。
    *
    * <p>该锁只在当前数据库事务内有效,用于串行化 selectMaxVersionNo / supersede / insert 组合,避免并发 AUTO_LATEST 同时写

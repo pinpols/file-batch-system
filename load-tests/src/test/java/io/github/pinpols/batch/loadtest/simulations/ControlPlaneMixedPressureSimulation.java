@@ -11,11 +11,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static io.gatling.javaapi.core.CoreDsl.*;
@@ -44,6 +46,13 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
 
   private static final String TRIGGER_JOB_CODE =
       System.getProperty("control.trigger.jobCode", "atomic_sql_demo");
+
+  /**
+   * 结果业务键基数。默认 1 保留“同 job + 同 bizDate 并发重跑”的热点键画像；大于 1 时按请求序号轮换
+   * bizDate，用于测量不受单一 result_version 版本链串行锁限制的通用控制面吞吐。
+   */
+  private static final int BIZ_DATE_CARDINALITY =
+      positiveIntProperty("control.bizDate.cardinality", 1);
 
   private static final double PROCESS_RPS =
       Double.parseDouble(System.getProperty("control.process.rps", "1.0"));
@@ -142,12 +151,12 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
             {
               "tenantId": "%s",
               "jobCode": "%s",
-              "bizDate": "%s",
+              "bizDate": "#{bizDate}",
               "triggerType": "API",
               "params": %s
             }
             """
-            .formatted(GatlingConfig.TENANT_ID, jobCode, GatlingConfig.BIZ_DATE, paramsJson);
+            .formatted(GatlingConfig.TENANT_ID, jobCode, paramsJson);
 
     return feed(feeder(module))
         .exec(
@@ -162,18 +171,33 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
   }
 
   private static Iterator<Map<String, Object>> feeder(String module) {
+    LocalDate firstBizDate = LocalDate.parse(GatlingConfig.BIZ_DATE);
+    AtomicLong sequence = new AtomicLong();
     return Stream.generate(
-            () ->
-                Map.<String, Object>of(
-                    "idempotencyKey", UUID.randomUUID().toString(),
-                    "requestId", GatlingConfig.RUN_ID + "-" + module + "-" + UUID.randomUUID(),
-                    "traceId",
-                    GatlingConfig.RUN_ID
-                        + "-mix-"
-                        + module
-                        + "-"
-                        + UUID.randomUUID().toString().replace("-", "").substring(0, 16)))
+            () -> {
+              long requestIndex = sequence.getAndIncrement();
+              LocalDate bizDate =
+                  firstBizDate.plusDays(Math.floorMod(requestIndex, BIZ_DATE_CARDINALITY));
+              return Map.<String, Object>of(
+                  "idempotencyKey", UUID.randomUUID().toString(),
+                  "requestId", GatlingConfig.RUN_ID + "-" + module + "-" + UUID.randomUUID(),
+                  "traceId",
+                  GatlingConfig.RUN_ID
+                      + "-mix-"
+                      + module
+                      + "-"
+                      + UUID.randomUUID().toString().replace("-", "").substring(0, 16),
+                  "bizDate", bizDate.toString());
+            })
         .iterator();
+  }
+
+  private static int positiveIntProperty(String name, int defaultValue) {
+    int value = Integer.parseInt(System.getProperty(name, String.valueOf(defaultValue)));
+    if (value <= 0) {
+      throw new IllegalArgumentException(name + " must be a positive integer");
+    }
+    return value;
   }
 
   private static boolean enabled(String module) {

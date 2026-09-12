@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
@@ -24,10 +25,12 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -58,8 +61,9 @@ public class HttpTaskExecutionClient
   private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
   private final int renewBatchMaxItems;
   private final int claimBatchMaxItems;
-  // L-2: AtomicReference 保证懒初始化发布安全，避免其他线程读到未完全构造的 RestClient。
-  private final AtomicReference<RestClient> restClient = new AtomicReference<>();
+  // L-2: AtomicReference 保证多端点客户端列表的懒初始化发布安全，避免其他线程读到半构造状态。
+  private final AtomicReference<List<RestClient>> restClients = new AtomicReference<>();
+  private final AtomicInteger endpointCursor = new AtomicInteger();
 
   // 构造器注入(CLAUDE.md §Java #3 合规)。MeterRegistry 为 optional bean,沿用
   // @Autowired(required=false) 在 ctor 参数上 — 这是构造器注入,不是 field/setter 注入。
@@ -583,41 +587,80 @@ public class HttpTaskExecutionClient
   }
 
   private RestClient client() {
-    RestClient current = this.restClient.get();
+    List<RestClient> clients = clients();
+    int selectedIndex = Math.floorMod(endpointCursor.getAndIncrement(), clients.size());
+    return clients.get(selectedIndex);
+  }
+
+  private List<RestClient> clients() {
+    List<RestClient> current = this.restClients.get();
     if (current != null) {
       return current;
     }
     synchronized (this) {
-      current = this.restClient.get();
+      current = this.restClients.get();
       if (current == null) {
-        JdkClientHttpRequestFactory factory =
-            new JdkClientHttpRequestFactory(HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .build());
-        factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
-        current = restClientBuilderProvider
-            .getObject()
-            .baseUrl(resolveBaseUrl())
-            .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
-            .requestFactory(factory)
+        HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
             .build();
-        this.restClient.set(current);
+        current = resolveBaseUrls().stream()
+            .map(baseUrl -> buildClient(baseUrl, httpClient))
+            .toList();
+        this.restClients.set(current);
+        log.info("orchestrator task client initialized: endpointCount={}", current.size());
       }
       return current;
     }
   }
 
-  private String resolveBaseUrl() {
+  private RestClient buildClient(String baseUrl, HttpClient httpClient) {
+    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+    factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
+    return restClientBuilderProvider
+        .getObject()
+        .baseUrl(baseUrl)
+        .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+        .requestFactory(factory)
+        .build();
+  }
+
+  private List<String> resolveBaseUrls() {
+    LinkedHashSet<String> resolved = new LinkedHashSet<>();
+    if (properties.getBaseUrls() != null) {
+      properties.getBaseUrls().stream()
+          .map(HttpTaskExecutionClient::normalizeBaseUrl)
+          .filter(Texts::hasText)
+          .forEach(resolved::add);
+    }
     String configuredBaseUrl = properties.getBaseUrl();
-    if (Texts.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
-      return configuredBaseUrl;
+    if (EmptyChecks.isEmpty(resolved)) {
+      String normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl);
+      if (Texts.hasText(normalizedBaseUrl)) {
+        resolved.add(normalizedBaseUrl);
+      }
     }
-    String localPort = environment.getProperty("local.server.port");
-    if (Texts.hasText(localPort)) {
-      return "http://127.0.0.1:" + localPort;
+    if (EmptyChecks.isEmpty(resolved)) {
+      String localPort = environment.getProperty("local.server.port");
+      if (Texts.hasText(localPort)) {
+        resolved.add("http://127.0.0.1:" + localPort);
+      }
     }
-    throw new IllegalStateException(
-        "Unable to resolve batch.worker.task-client.base-url for task execution client");
+    if (EmptyChecks.isEmpty(resolved)) {
+      throw new IllegalStateException(
+          "Unable to resolve batch.worker.task-client.base-url/base-urls for task execution client");
+    }
+    return List.copyOf(resolved);
+  }
+
+  private static String normalizeBaseUrl(String value) {
+    if (!Texts.hasText(value) || value.contains("${")) {
+      return null;
+    }
+    String normalized = value.trim();
+    while (normalized.endsWith("/") && !normalized.endsWith("://")) {
+      normalized = normalized.substring(0, normalized.length() - 1);
+    }
+    return normalized;
   }
 
   private record ClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}

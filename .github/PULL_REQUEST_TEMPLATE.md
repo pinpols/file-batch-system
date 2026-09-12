@@ -12,7 +12,7 @@ PR 描述模板 — 编辑时仅删除不适用段落,保留勾选/填写部分�
 
 ## 影响范围
 
-<!-- 模块名:batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch} / batch-console-api / batch-e2e-tests / docs -->
+<!-- 模块名:batch-common / batch-test-support / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch,atomic} / batch-console-api / batch-e2e-tests / docs -->
 
 ---
 

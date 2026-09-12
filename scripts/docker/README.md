@@ -4,7 +4,7 @@
 
 ## 常用脚本
 
-- `build-apps.sh`：构建本地应用镜像，默认启用 BuildKit
+- `build-apps.sh`：构建本地应用镜像；单服务自动走 Maven 依赖闭包，多服务共享全 reactor
 - `up-apps.sh`：启动本地基础依赖 + 应用容器
 - `down-apps.sh`：停止本地基础依赖 + 应用容器（只 stop，不 down）
 - `up-observability.sh`：启动本地观测栈
@@ -23,6 +23,9 @@
 - 如需切换环境，可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
 - 这类脚本不管理本地 Java 进程，只管理容器
 - 构建应用镜像时优先使用 `./scripts/docker/build-apps.sh`，这样会默认开启 BuildKit 和 Docker CLI build
+- 只重建 Atomic：`./scripts/docker/build-apps.sh worker-atomic`，脚本会自动传入 `BUILD_MODE=module`
+- 整套 8 个镜像显式共享一次 builder：`BUILD_MODE=all ./scripts/docker/build-apps.sh`
+- 整套并行构建也可使用 `docker buildx bake`；CI 叠加 `docker-bake.ci.hcl` 复用 GitHub Actions 远程缓存
 - 观测栈的快捷入口也可以直接用 `make observability-up` / `make observability-down`
 
 ## 磁盘清理

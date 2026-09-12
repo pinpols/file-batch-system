@@ -6,7 +6,8 @@ SELECT 'active_connections', count(*) FILTER (WHERE state = 'active')::text
 FROM pg_stat_activity
 WHERE datname = current_database()
 UNION ALL
-SELECT 'waiting_connections', count(*) FILTER (WHERE wait_event IS NOT NULL)::text
+SELECT 'active_waiting_connections',
+       count(*) FILTER (WHERE state = 'active' AND wait_event IS NOT NULL)::text
 FROM pg_stat_activity
 WHERE datname = current_database()
 UNION ALL

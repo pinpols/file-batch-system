@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -192,9 +193,11 @@ class AssetPartitionServiceTest {
     when(assetPartitionMapper.selectDataAssetId("t1", "JOB_A", "JOB")).thenReturn(10L);
 
     service.materializeEffectiveJobPartition(instance, version);
+    service.materializeEffectiveJobPartition(instance, version);
 
-    verify(assetPartitionMapper).upsertDataAsset("t1", "JOB_A", "JOB", "JOB_A", "JOB_A");
-    verify(assetPartitionMapper)
+    verify(assetPartitionMapper, times(1)).upsertDataAsset("t1", "JOB_A", "JOB", "JOB_A", "JOB_A");
+    verify(assetPartitionMapper, times(1)).selectDataAssetId("t1", "JOB_A", "JOB");
+    verify(assetPartitionMapper, times(2))
         .upsertEffectiveJobPartition(new AssetPartitionMaterializationCommand(
             "t1",
             10L,

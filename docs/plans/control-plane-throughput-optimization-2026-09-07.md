@@ -2,9 +2,9 @@
 
 ## 结论
 
-现有 10 万请求证据表明，入口持久化与 Kafka 投递能够承接突发，但单机控制面持续排空约为
-18-20 jobs/s。Atomic worker 执行 p95 仅几十毫秒，主要压力位于 trigger launch 消费、实例构建、
-claim/report 与共享 PostgreSQL 写入竞争。继续提高 Trigger 并发或固定 Relay 速率只会更快地产生积压。
+最新严格 10 万请求证据表明，本机入口可稳定接收 200 requests/s，控制面最终完成吞吐为
+134.946 tasks/s。Atomic worker 执行不是当前主瓶颈，主要压力位于实例构建、claim/report 与共享
+PostgreSQL 写入竞争。入口速率仍高于最终完成速率，因此不能把 200/s 表述为持续完成吞吐。
 
 本分支只改控制面流量整形和已被指标证明的热路径，不改变 job/partition/task 状态机、幂等键、
 租约、Kafka offset、事务 outbox 与终态 CAS 语义。所有新策略默认关闭或保留固定基线回退。
@@ -27,6 +27,11 @@ claim/report 与共享 PostgreSQL 写入竞争。继续提高 Trigger 并发或�
 - 阶段 4：完成首项语义等价优化：trigger request 与同 dedup key 最新 job instance 投影由两次查询合并为一次；真实 PostgreSQL IT 已覆盖最新 attempt 与租户条件。
 - 阶段 5：1k、1w 与 10w 严格容量复验均已完成。10w 达到全终态、零请求错误、零残留；
   自适应限流在 Kafka lag 触及软阈值后主动降速并恢复，证明保护链路生效。
+
+2026-09-12 在独立 benchmark overlay 上完成第二轮容量收口：12 个 launch 分区、双 Orchestrator、
+批量 claim 和 Atomic 24 消费者共同完成 100000/100000 成功终态，完成窗口 741.036s、吞吐
+134.946 tasks/s。详细环境、无效轮次、清理修复和剩余边界见
+[控制面 10 万任务吞吐优化与验证报告](../verifications/control-plane-100k-throughput-optimization-2026-09-12.md)。
 
 ## 阶段 1 参数
 
@@ -81,8 +86,10 @@ PostgreSQL 连接预算和真实 worker 组合重新取数。
 `job_instance` 与 `trigger_outbox_event` 残留均为 0。60/s 仅作为当前本机灰度候选；代码、
 `.env.local` 与部署默认值继续保持 40/s，避免把单机 A/B 参数直接带入生产。
 
-10w 是本机容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、
-PostgreSQL IOPS/WAL 和混合 worker 负载重新标定。
+以上 60/s 轮次是第一阶段历史基线，不再是当前本机容量候选。2026-09-12 的 benchmark overlay 已在
+200 requests/s 下通过严格 10 万复验，但最终完成吞吐为 134.946 tasks/s，仍存在 backlog。10w 是本机
+容量边界复验，不应直接外推为生产容量；生产启用前仍需按副本数、Kafka 分区、PostgreSQL IOPS/WAL
+和混合 worker 负载重新标定。
 
 ## 延伸优化：第 4、5、6、7、8 项
 

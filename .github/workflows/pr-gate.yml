@@ -340,10 +340,10 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Run unit tests (common + trigger + worker-process + worker-dispatch)
+      - name: Run unit tests (common + test-support + trigger + worker-process + worker-dispatch)
         shell: bash
         run: |
-          ./mvnw test -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -am \
+          ./mvnw test -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 

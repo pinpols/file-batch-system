@@ -1,12 +1,13 @@
 # file-batch-system 项目结构
 
-> 2026-06-29 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分三件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 9 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库。
+> 2026-09-12 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分三件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库。
 
 ## 顶层结构
 
 ```
 file-batch-system/
 ├── batch-common/                           基础设施 / Spring AutoConfiguration / 共享 DTO
+├── batch-test-support/                     跨模块测试基础设施（仅 test scope）
 ├── batch-trigger/                          Quartz 调度触发 + 业务日历 → trigger_outbox_event
 ├── batch-orchestrator/                     状态主机:CLAIM/EXECUTE/REPORT 闭环 + workflow 编排
 ├── batch-worker/                           worker 聚合器(aggregator + 各 worker parent;artifactId 不变)
@@ -43,10 +44,11 @@ file-batch-system/
 
 ## Maven reactor 边界
 
-根 [`../../pom.xml`](../../pom.xml) 当前纳入 9 个 module path：
+根 [`../../pom.xml`](../../pom.xml) 当前纳入 10 个 module path：
 
 ```text
 batch-common
+batch-test-support          # 只供测试依赖，不进运行时
 batch-trigger
 batch-orchestrator
 batch-worker                  # aggregator;内部聚合 6 个 worker 子模块
@@ -65,7 +67,7 @@ batch-e2e-tests
 
 | 模块 | 主要 package | 一句话职责 |
 |---|---|---|
-| `batch-common` | `common/{config,events,outbox,security,testing,...}` | 跨模块复用:AutoConfig、Outbox 抽象、RLS、Timezone、i18n、Testcontainers 基类 |
+| `batch-common` | `common/{config,events,outbox,security,...}` | 跨模块运行时复用:AutoConfig、Outbox 抽象、RLS、Timezone、i18n |
 | `batch-trigger` | `trigger/{quartz,calendar,outbox}` | Quartz 调度 → `trigger_outbox_event`（orchestrator 消费后启动 instance） |
 | `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**:CLAIM / EXECUTE / REPORT 状态流转;workflow DAG 编排;outbox 投递 |
 | `batch-worker/core`(artifactId `batch-worker-core`) | `worker/core/{pipeline,stage,registry}` | Worker SPI 抽象、PipelineStage 接口、StepRegistry |

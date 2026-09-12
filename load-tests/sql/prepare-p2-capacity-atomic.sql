@@ -23,7 +23,8 @@ SELECT
   :'capacity_tenant_id', src.job_code, src.job_name || ' P2 capacity', src.job_type, src.biz_type,
   src.schedule_type, src.schedule_expr, src.timezone, src.priority, src.queue_code, src.worker_group,
   src.calendar_code, src.window_code, src.trigger_mode, src.dag_enabled, src.shard_strategy,
-  src.retry_policy, src.retry_max_count, src.timeout_seconds, src.execution_handler, src.param_schema,
+  src.retry_policy, src.retry_max_count, :'capacity_job_timeout_seconds'::integer,
+  src.execution_handler, src.param_schema,
   src.default_params, src.version, true,
   'P2 local capacity clone with unbounded admission policy', 'load-test', 'load-test', now(), now()
 FROM batch.job_definition src

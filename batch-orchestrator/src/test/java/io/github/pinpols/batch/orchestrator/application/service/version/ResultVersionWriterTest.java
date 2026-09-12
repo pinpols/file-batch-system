@@ -54,6 +54,7 @@ class ResultVersionWriterTest {
     when(dqExecutor.execute(any(), anyString()))
         .thenReturn(io.github.pinpols.batch.orchestrator.application.service.dataquality
             .DataQualityGateOutcome.noRules());
+    when(mapper.insertReturning(any())).thenAnswer(invocation -> invocation.getArgument(0));
     writer = new ResultVersionWriter(mapper, dateTimeSupport, assetPartitionService, dqProvider);
   }
 
@@ -67,7 +68,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("recordCount", 42));
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     ResultVersionEntity inserted = captor.getValue();
     assertThat(inserted.businessKey()).isEqualTo("job:DAILY_PNL:2026-05-04");
     assertThat(inserted.versionNo()).isEqualTo(1);
@@ -95,7 +96,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("recordCount", 50));
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     assertThat(captor.getValue().versionNo()).isEqualTo(2);
     assertThat(captor.getValue().status()).isEqualTo("EFFECTIVE");
     verify(mapper).supersedePriorEffective(eq("t1"), eq("job:DAILY_PNL:2026-05-04"), any());
@@ -115,7 +116,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of());
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     assertThat(captor.getValue().status()).isEqualTo("PENDING");
     assertThat(captor.getValue().effectiveAt()).isNull();
     assertThat(captor.getValue().promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
@@ -138,7 +139,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("k", "v"));
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     assertThat(captor.getValue().status()).isEqualTo("PENDING");
     assertThat(captor.getValue().versionNo()).isEqualTo(3);
   }
@@ -153,7 +154,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("k", "v"));
 
     verify(mapper).lockBusinessKey("t1", "job:JOB_A:2026-05-04");
-    verify(mapper, never()).insert(any());
+    verify(mapper, never()).insertReturning(any());
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
     verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
@@ -166,7 +167,7 @@ class ResultVersionWriterTest {
 
     writer.writeOnTerminal(instance, Map.of("k", "v"));
 
-    verify(mapper, never()).insert(any());
+    verify(mapper, never()).insertReturning(any());
     verify(mapper, never()).lockBusinessKey(anyString(), anyString());
     verify(mapper, never()).selectByJobInstanceId(anyString(), anyLong());
   }
@@ -177,7 +178,7 @@ class ResultVersionWriterTest {
 
     writer.writeOnTerminal(instance, Map.of());
 
-    verify(mapper, never()).insert(any());
+    verify(mapper, never()).insertReturning(any());
   }
 
   @Test
@@ -186,7 +187,7 @@ class ResultVersionWriterTest {
 
     writer.writeOnTerminal(instance, Map.of());
 
-    verify(mapper, never()).insert(any());
+    verify(mapper, never()).insertReturning(any());
   }
 
   @Test
@@ -202,7 +203,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("partial", true));
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper, times(1)).insert(captor.capture());
+    verify(mapper, times(1)).insertReturning(captor.capture());
     ResultVersionEntity inserted = captor.getValue();
     assertThat(inserted.status()).isEqualTo("PENDING");
     assertThat(inserted.promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
@@ -223,7 +224,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("recordCount", 1));
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     assertThat(captor.getValue().status()).isEqualTo("DRY_RUN");
     assertThat(captor.getValue().effectiveAt()).isNull();
     assertThat(captor.getValue().versionNo()).isEqualTo(4);
@@ -254,7 +255,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("recordCount", 1));
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     // BLOCKED 强制 PENDING + MANUAL_APPROVAL，不调 supersedePriorEffective
     assertThat(captor.getValue().status()).isEqualTo("PENDING");
     assertThat(captor.getValue().promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
@@ -273,7 +274,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, null);
 
     ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
-    verify(mapper).insert(captor.capture());
+    verify(mapper).insertReturning(captor.capture());
     assertThat(captor.getValue().payloadJson()).isEqualTo("{}");
   }
 

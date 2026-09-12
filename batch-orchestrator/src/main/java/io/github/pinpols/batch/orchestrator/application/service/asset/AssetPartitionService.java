@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.orchestrator.application.service.asset;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetPartitionMapper;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
@@ -25,9 +28,21 @@ public class AssetPartitionService {
 
   private static final String FRESHNESS_EFFECTIVE = "EFFECTIVE";
   private static final String ASSET_TYPE_JOB = "JOB";
+  private static final long DATA_ASSET_ID_CACHE_MAX_SIZE = 100_000L;
+  private static final Duration DATA_ASSET_ID_CACHE_TTL = Duration.ofHours(1);
 
   private final AssetPartitionMapper assetPartitionMapper;
   private final ResultVersionQueryService resultVersionQueryService;
+
+  /**
+   * {@code data_asset.id} 由唯一键生成后不可变，仓库也没有删除该主数据的运行时路径。终态写入会反复解析同一
+   * tenant/job 的 id；使用有界、带过期时间的进程内缓存，避免在 result_version 业务键锁内每次执行
+   * upsert + select。多 Orchestrator 各自首次加载，数据库唯一键仍是最终一致性守卫。
+   */
+  private final Cache<DataAssetKey, Long> dataAssetIdCache = Caffeine.newBuilder()
+      .maximumSize(DATA_ASSET_ID_CACHE_MAX_SIZE)
+      .expireAfterAccess(DATA_ASSET_ID_CACHE_TTL)
+      .build();
 
   public Optional<AssetPartitionSnapshot> findEffectiveJobPartition(
       String tenantId, String jobCode, LocalDate bizDate) {
@@ -64,8 +79,8 @@ public class AssetPartitionService {
     }
     String tenantId = instance.getTenantId();
     String jobCode = instance.getJobCode();
-    assetPartitionMapper.upsertDataAsset(tenantId, jobCode, ASSET_TYPE_JOB, jobCode, jobCode);
-    Long assetId = assetPartitionMapper.selectDataAssetId(tenantId, jobCode, ASSET_TYPE_JOB);
+    Long assetId = dataAssetIdCache.get(
+        new DataAssetKey(tenantId, jobCode, ASSET_TYPE_JOB), this::loadDataAssetId);
     if (assetId == null) {
       log.warn(
           "asset partition materialization skipped: data_asset missing after upsert,"
@@ -89,6 +104,12 @@ public class AssetPartitionService {
             version.payloadStorage(),
             version.payloadRef());
     assetPartitionMapper.upsertEffectiveJobPartition(materializationCommand);
+  }
+
+  private Long loadDataAssetId(DataAssetKey key) {
+    assetPartitionMapper.upsertDataAsset(
+        key.tenantId(), key.assetCode(), key.assetType(), key.assetCode(), key.assetCode());
+    return assetPartitionMapper.selectDataAssetId(key.tenantId(), key.assetCode(), key.assetType());
   }
 
   private boolean isMaterializable(JobInstanceEntity instance, ResultVersionEntity version) {
@@ -123,4 +144,6 @@ public class AssetPartitionService {
   private String toPartitionKey(LocalDate bizDate) {
     return bizDate.toString();
   }
+
+  private record DataAssetKey(String tenantId, String assetCode, String assetType) {}
 }

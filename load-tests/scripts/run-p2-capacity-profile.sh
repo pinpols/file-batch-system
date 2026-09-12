@@ -12,6 +12,9 @@ RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
 STORM_RPS="${STORM_RPS:-200}"
 STORM_WAIT_SECONDS="${STORM_WAIT_SECONDS:-2400}"
+# 容量画像允许请求进入速度高于单机最终完成速度，因此尾部实例可能在队列中等待数分钟。
+# 使用独立测试租户的显式硬超时，避免继承演示作业的 300s 超时后把容量排队误判为业务超时。
+CAPACITY_JOB_TIMEOUT_SECONDS="${CAPACITY_JOB_TIMEOUT_SECONDS:-3600}"
 # 夹具准备会集中写入业务/平台表。正式吞吐计时前等待 WAL 与自动清理回稳，避免将
 # 非业务入口负载错误归因到 trigger launch 延迟。
 STORM_POST_PREPARE_SETTLE_SECONDS="${STORM_POST_PREPARE_SETTLE_SECONDS:-30}"
@@ -41,13 +44,24 @@ CAPACITY_MAX_ERROR_PCT="${CAPACITY_MAX_ERROR_PCT:-0.0}"
 # 单节点高压下的硬上限；更严格的交互延迟仍由常规 control-plane profile 守护。
 CAPACITY_WRITE_P95_MS="${CAPACITY_WRITE_P95_MS:-5000}"
 PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
+# 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
+# result_version 单业务键串行锁后测通用控制面容量。
+CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 # benchmark profile intentionally raises the isolated Trigger relay budget; do not inherit the
 # local production baseline from .env.local when checking the benchmark container.
-CAPACITY_ATOMIC_DISPATCH_PARTITIONS="${CAPACITY_ATOMIC_DISPATCH_PARTITIONS:-12}"
-CAPACITY_ATOMIC_CONCURRENCY="${CAPACITY_ATOMIC_CONCURRENCY:-12}"
-CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS="${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS:-16}"
+CAPACITY_ATOMIC_DISPATCH_PARTITIONS="${CAPACITY_ATOMIC_DISPATCH_PARTITIONS:-24}"
+CAPACITY_TRIGGER_LAUNCH_PARTITIONS="${CAPACITY_TRIGGER_LAUNCH_PARTITIONS:-12}"
+CAPACITY_ATOMIC_CONCURRENCY="${CAPACITY_ATOMIC_CONCURRENCY:-24}"
+CAPACITY_ATOMIC_MAX_POLL_RECORDS="${CAPACITY_ATOMIC_MAX_POLL_RECORDS:-5}"
+CAPACITY_EXPECT_ATOMIC_BATCH_CLAIM_ENABLED="${CAPACITY_EXPECT_ATOMIC_BATCH_CLAIM_ENABLED:-1}"
+CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS="${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS:-480}"
+CAPACITY_WAITING_DISPATCH_BATCH_SIZE="${CAPACITY_WAITING_DISPATCH_BATCH_SIZE:-1000}"
+CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS="${CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS:-1000}"
+CAPACITY_TRIGGER_API_MAX_CONCURRENCY="${CAPACITY_TRIGGER_API_MAX_CONCURRENCY:-80}"
+CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE="${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE:-88}"
+CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS="${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS:-http://orchestrator:18082,http://orchestrator-benchmark-replica:18082}"
 CAPACITY_ATOMIC_WORKER_CODE="${CAPACITY_ATOMIC_WORKER_CODE:-atomic-node-1}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
@@ -74,6 +88,8 @@ mkdir -p "$LOG_DIR"
 PROFILE_RC=0
 STORM_TERMINAL_VERIFIED=0
 ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
+KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
+KAFKA_RESTART_COUNT_BEFORE=""
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
@@ -222,6 +238,18 @@ require_exact_storm_shape() {
     echo "STORM_RPS must be a positive integer, got: ${STORM_RPS}" >&2
     exit 2
   fi
+  if ! [[ "$STORM_WAIT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "STORM_WAIT_SECONDS must be a positive integer, got: ${STORM_WAIT_SECONDS}" >&2
+    exit 2
+  fi
+  if ! [[ "$CAPACITY_JOB_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "CAPACITY_JOB_TIMEOUT_SECONDS must be a positive integer, got: ${CAPACITY_JOB_TIMEOUT_SECONDS}" >&2
+    exit 2
+  fi
+  if ! [[ "$CAPACITY_BIZ_DATE_CARDINALITY" =~ ^[1-9][0-9]*$ ]]; then
+    echo "CAPACITY_BIZ_DATE_CARDINALITY must be a positive integer, got: ${CAPACITY_BIZ_DATE_CARDINALITY}" >&2
+    exit 2
+  fi
   if (( STORM_TOTAL_REQUESTS % STORM_RPS != 0 )); then
     echo "STORM_TOTAL_REQUESTS (${STORM_TOTAL_REQUESTS}) must be divisible by STORM_RPS (${STORM_RPS})" >&2
     echo "constant-rate injection uses whole seconds; a non-divisible shape would send more requests than declared" >&2
@@ -237,9 +265,13 @@ require_trigger_capacity_budget() {
     echo "docker is required to verify the local trigger capacity budget" >&2
     exit 2
   }
-  local configured profiles limit pool relay orchestrator_configured replica_configured
+  local configured profiles limit pool relay
+  local orchestrator_configured replica_configured
   local consumer pool_max replica_consumer replica_pool_max atomic_configured
-  local atomic_concurrency atomic_max_concurrent atomic_execution_pool atomic_topic_partitions
+  local waiting_batch waiting_interval replica_waiting_batch replica_waiting_interval
+  local atomic_concurrency atomic_max_poll_records atomic_batch_claim atomic_batch_claim_expected
+  local atomic_max_concurrent atomic_task_client_base_urls
+  local atomic_execution_pool atomic_topic_partitions trigger_topic_partitions
   local atomic_health atomic_registered_max_concurrent adaptive minimum metrics effective lag
   configured="$(docker inspect batch-trigger --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
   orchestrator_configured="$(docker inspect batch-orchestrator --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
@@ -255,12 +287,30 @@ require_trigger_capacity_budget() {
   pool_max="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=//p' | tail -1)"
   replica_consumer="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_TRIGGER_CONSUMER_CONCURRENCY=//p' | tail -1)"
   replica_pool_max="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=//p' | tail -1)"
+  waiting_batch="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE=//p' | tail -1)"
+  waiting_interval="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS=//p' | tail -1)"
+  replica_waiting_batch="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE=//p' | tail -1)"
+  replica_waiting_interval="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS=//p' | tail -1)"
   atomic_concurrency="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY=//p' | tail -1)"
+  atomic_max_poll_records="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_KAFKA_MAX_POLL_RECORDS=//p' | tail -1)"
+  atomic_batch_claim="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_BATCH_CLAIM_ENABLED=//p' | tail -1)"
+  # 旧 compose 未显式传入这两个键时，运行时仍采用 application.yml 的 5/false 默认值。
+  atomic_max_poll_records="${atomic_max_poll_records:-5}"
+  atomic_batch_claim="${atomic_batch_claim:-false}"
+  atomic_batch_claim_expected="false"
+  if [[ "$CAPACITY_EXPECT_ATOMIC_BATCH_CLAIM_ENABLED" == "1" ]]; then
+    atomic_batch_claim_expected="true"
+  fi
   atomic_max_concurrent="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS=//p' | tail -1)"
+  atomic_task_client_base_urls="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_TASK_CLIENT_BASE_URLS=//p' | tail -1)"
   atomic_execution_pool="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_EXECUTION_POOL_SIZE=//p' | tail -1)"
   atomic_topic_partitions="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
       --bootstrap-server kafka:29092 \
       --describe --topic "batch.task.dispatch.atomic.node.${CAPACITY_ATOMIC_WORKER_CODE}" 2>/dev/null \
+    | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
+  trigger_topic_partitions="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server kafka:29092 \
+      --describe --topic "batch.trigger.launch.v1" 2>/dev/null \
     | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
   atomic_registered_max_concurrent="$(
     psql_platform -At -v worker_code="$CAPACITY_ATOMIC_WORKER_CODE" \
@@ -274,18 +324,29 @@ require_trigger_capacity_budget() {
     | awk '/^batch_trigger_outbox_release_budget_limit / && !found { print int($2); found=1 }')"
   lag="$(printf '%s\n' "$metrics" \
     | awk '/^batch_trigger_launch_consumer_lag / && !found { print int($2); found=1 }')"
-  if [[ ",$profiles," != *,benchmark,* || "$pool" != "40" || "$limit" != "32" || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" \
+  if [[ ",$profiles," != *,benchmark,* \
+      || "$pool" != "$CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE" \
+      || "$limit" != "$CAPACITY_TRIGGER_API_MAX_CONCURRENCY" \
+      || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" \
       || "$consumer" != "6" || "$pool_max" != "50" \
       || "$replica_consumer" != "6" || "$replica_pool_max" != "50" \
+      || "$waiting_batch" != "$CAPACITY_WAITING_DISPATCH_BATCH_SIZE" \
+      || "$waiting_interval" != "$CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS" \
+      || "$replica_waiting_batch" != "$CAPACITY_WAITING_DISPATCH_BATCH_SIZE" \
+      || "$replica_waiting_interval" != "$CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS" \
       || "$atomic_concurrency" != "$CAPACITY_ATOMIC_CONCURRENCY" \
+      || "$atomic_max_poll_records" != "$CAPACITY_ATOMIC_MAX_POLL_RECORDS" \
+      || "$atomic_batch_claim" != "$atomic_batch_claim_expected" \
       || "$atomic_max_concurrent" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
+      || "$atomic_task_client_base_urls" != "$CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS" \
       || "$atomic_execution_pool" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
       || "$atomic_topic_partitions" != "$CAPACITY_ATOMIC_DISPATCH_PARTITIONS" \
+      || "$trigger_topic_partitions" != "$CAPACITY_TRIGGER_LAUNCH_PARTITIONS" \
       || "$atomic_registered_max_concurrent" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
       || "$atomic_health" != "healthy" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
-    echo "  required: profiles include benchmark, admission=32, pool=40, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, two orchestrators each consumers=6/db pool=50, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}" >&2
-    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing} primary consumers=${consumer:-missing}/pool=${pool_max:-missing} replica consumers=${replica_consumer:-missing}/pool=${replica_pool_max:-missing} atomic health=${atomic_health:-missing}/consumers=${atomic_concurrency:-missing}/permits=${atomic_max_concurrent:-missing}/registered-capacity=${atomic_registered_max_concurrent:-missing}/pool=${atomic_execution_pool:-missing}/partitions=${atomic_topic_partitions:-missing}" >&2
+    echo "  required: profiles include benchmark, admission=${CAPACITY_TRIGGER_API_MAX_CONCURRENCY}, pool=${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE}, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, launch partitions=${CAPACITY_TRIGGER_LAUNCH_PARTITIONS}, two orchestrators each consumers=6/db pool=50/waiting=${CAPACITY_WAITING_DISPATCH_BATCH_SIZE}@${CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS}ms, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/max-poll=${CAPACITY_ATOMIC_MAX_POLL_RECORDS}/batch-claim=${CAPACITY_EXPECT_ATOMIC_BATCH_CLAIM_ENABLED}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}/task-client=${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS}" >&2
+    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing} launch partitions=${trigger_topic_partitions:-missing}, primary consumers=${consumer:-missing}/pool=${pool_max:-missing}/waiting=${waiting_batch:-missing}@${waiting_interval:-missing}ms replica consumers=${replica_consumer:-missing}/pool=${replica_pool_max:-missing}/waiting=${replica_waiting_batch:-missing}@${replica_waiting_interval:-missing}ms atomic health=${atomic_health:-missing}/consumers=${atomic_concurrency:-missing}/max-poll=${atomic_max_poll_records:-missing}/batch-claim=${atomic_batch_claim:-false}/permits=${atomic_max_concurrent:-missing}/registered-capacity=${atomic_registered_max_concurrent:-missing}/pool=${atomic_execution_pool:-missing}/partitions=${atomic_topic_partitions:-missing}/task-client=${atomic_task_client_base_urls:-missing}" >&2
     echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger orchestrator orchestrator-benchmark-replica worker-atomic" >&2
     exit 2
   fi
@@ -317,18 +378,72 @@ require_empty_trigger_lag() {
     echo "docker is required to verify trigger consumer lag before P2" >&2
     exit 2
   }
-  local lag
-  lag="$(docker exec batch-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  local lag_stats assigned_partitions lag
+  lag_stats="$(docker exec batch-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
       --bootstrap-server kafka:29092 \
       --describe --group orchestrator-trigger-launch 2>/dev/null \
-    | awk 'NR > 1 && $6 ~ /^[0-9]+$/ { total += $6 } END { print total + 0 }')"
-  if [[ -z "$lag" ]]; then
+    | awk '$2 == "batch.trigger.launch.v1" && $3 ~ /^[0-9]+$/ {
+        partitions[$3] = 1
+        if ($6 ~ /^[0-9]+$/) total_lag += $6
+      }
+      END {
+        for (partition in partitions) partition_count++
+        print partition_count + 0 "|" total_lag + 0
+      }')"
+  assigned_partitions="${lag_stats%%|*}"
+  lag="${lag_stats##*|}"
+  if [[ -z "$lag_stats" || ! "$assigned_partitions" =~ ^[0-9]+$ || ! "$lag" =~ ^[0-9]+$ ]]; then
     echo "cannot inspect orchestrator-trigger-launch lag; drain or verify Kafka before P2" >&2
+    exit 2
+  fi
+  if [[ "$assigned_partitions" != "$CAPACITY_TRIGGER_LAUNCH_PARTITIONS" ]]; then
+    echo "orchestrator-trigger-launch owns ${assigned_partitions}/${CAPACITY_TRIGGER_LAUNCH_PARTITIONS} partitions" >&2
+    echo "restart every orchestrator consumer after increasing topic partitions, then rerun the profile" >&2
     exit 2
   fi
   if [[ "$lag" != "0" ]]; then
     echo "trigger launch consumer lag is ${lag}; drain it before P2 to keep the profile isolated" >&2
     exit 2
+  fi
+}
+
+capture_kafka_stability_baseline() {
+  local health
+  health="$(docker inspect "$KAFKA_CONTAINER_NAME" \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+  KAFKA_RESTART_COUNT_BEFORE="$(docker inspect "$KAFKA_CONTAINER_NAME" \
+    --format '{{.RestartCount}}' 2>/dev/null || true)"
+  if [[ "$health" != "healthy" || ! "$KAFKA_RESTART_COUNT_BEFORE" =~ ^[0-9]+$ ]]; then
+    echo "Kafka must be healthy before the capacity profile: container=${KAFKA_CONTAINER_NAME}, health=${health:-missing}, restarts=${KAFKA_RESTART_COUNT_BEFORE:-missing}" >&2
+    exit 2
+  fi
+}
+
+verify_kafka_stability() {
+  local health restart_count_after stable
+  health="$(docker inspect "$KAFKA_CONTAINER_NAME" \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+  restart_count_after="$(docker inspect "$KAFKA_CONTAINER_NAME" \
+    --format '{{.RestartCount}}' 2>/dev/null || true)"
+  stable="no"
+  if [[ "$health" == "healthy" \
+      && "$restart_count_after" =~ ^[0-9]+$ \
+      && "$restart_count_after" == "$KAFKA_RESTART_COUNT_BEFORE" ]]; then
+    stable="yes"
+  fi
+  {
+    echo "## Kafka Stability"
+    echo
+    echo "- Container: ${KAFKA_CONTAINER_NAME}"
+    echo "- Restart count before: ${KAFKA_RESTART_COUNT_BEFORE}"
+    echo "- Restart count after: ${restart_count_after:-unknown}"
+    echo "- Final health: ${health:-unknown}"
+    echo "- Stable during profile: ${stable}"
+    echo
+  } >> "$REPORT"
+  if [[ "$stable" != "yes" ]]; then
+    echo "Kafka restarted or became unhealthy during the capacity profile; the result is invalid" >&2
+    return 1
   fi
 }
 
@@ -360,12 +475,15 @@ write_report_header() {
     echo "- Time UTC start: ${RUN_STARTED_AT}"
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
-    echo "- Strict capacity validation: $([[ \"$CAPACITY_STRICT\" == \"1\" ]] && echo enabled || echo disabled)"
+    echo "- Strict capacity validation: $([[ "$CAPACITY_STRICT" == "1" ]] && echo enabled || echo disabled)"
     echo "- Maximum failed request rate: ${CAPACITY_MAX_ERROR_PCT}%"
     echo "- Capacity write p95 budget: ${CAPACITY_WRITE_P95_MS}ms"
+    echo "- Capacity job hard timeout: ${CAPACITY_JOB_TIMEOUT_SECONDS}s"
     echo "- PostgreSQL pressure sample interval: ${PG_SAMPLE_INTERVAL_SECONDS}s"
+    echo "- Result business-key cardinality: ${CAPACITY_BIZ_DATE_CARDINALITY}"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo "- Trigger adaptive release expected: $([[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]] && echo enabled || echo disabled)"
+    echo "- Kafka restart count before: ${KAFKA_RESTART_COUNT_BEFORE}"
     echo
   } > "$REPORT"
 }
@@ -388,7 +506,50 @@ append_sql_summary() {
       -f "$LOAD_DIR/sql/p2-run-task-summary.sql"
     echo '```'
     echo
+    echo '```text'
+    psql_platform -P pager=off -F ' | ' -A \
+      -v run_id="$run_id" \
+      -f "$LOAD_DIR/sql/p2-run-end-to-end-summary.sql"
+    echo '```'
+    echo
   } >> "$REPORT"
+}
+
+capture_trigger_partition_offsets() {
+  local stage="$1"
+  docker exec "$KAFKA_CONTAINER_NAME" /opt/kafka/bin/kafka-get-offsets.sh \
+    --bootstrap-server kafka:29092 \
+    --topic batch.trigger.launch.v1 \
+    --time -1 \
+    | sort -t: -k2,2n > "$LOG_DIR/trigger-launch-offsets-${stage}.txt"
+}
+
+append_trigger_partition_summary() {
+  local before_file="$LOG_DIR/trigger-launch-offsets-before.txt"
+  local after_file="$LOG_DIR/trigger-launch-offsets-after.txt"
+  local active_partitions
+  active_partitions="$(awk -F: '
+    FNR == NR { before[$2] = $3; next }
+    { if (($3 - before[$2]) > 0) active++ }
+    END { print active + 0 }
+  ' "$before_file" "$after_file")"
+  {
+    echo "## Trigger Launch Partition Distribution"
+    echo
+    echo "- Active partitions: ${active_partitions}/${CAPACITY_TRIGGER_LAUNCH_PARTITIONS}"
+    echo
+    echo "| Partition | Message delta |"
+    echo "|---:|---:|"
+    awk -F: '
+      FNR == NR { before[$2] = $3; next }
+      { printf "| %s | %.0f |\n", $2, $3 - before[$2] }
+    ' "$before_file" "$after_file"
+    echo
+  } >> "$REPORT"
+  if [[ "$active_partitions" -lt "$CAPACITY_TRIGGER_LAUNCH_PARTITIONS" ]]; then
+    echo "trigger producer used only ${active_partitions}/${CAPACITY_TRIGGER_LAUNCH_PARTITIONS} launch partitions; restart the producer after topic topology changes and rerun" >&2
+    return 1
+  fi
 }
 
 capture_launch_phase_metrics() {
@@ -403,6 +564,70 @@ capture_launch_phase_metrics() {
       return 1
     fi
   done
+}
+
+capture_task_claim_metrics() {
+  local stage="$1"
+  local container output_file
+  for container in "${ORCHESTRATOR_CONTAINERS[@]}"; do
+    output_file="$LOG_DIR/${container}-task-claim-${stage}.prom"
+    docker exec "$container" curl --fail --silent --show-error \
+      http://localhost:18082/actuator/prometheus \
+      | grep -E '^batch_task_(claim_duration_seconds_count|batch_claim_size_(count|sum))|^http_server_requests_seconds_count\{.*uri="/internal/tasks/\{taskId\}/report"' \
+      > "$output_file" || true
+  done
+}
+
+append_task_claim_metric_summary() {
+  local container before_file after_file
+  {
+    echo "## Worker Claim Request Metrics"
+    echo
+    echo "| Instance | Single claim calls | Batch claim calls | Batch claim items | Report calls | Effective batch size |"
+    echo "|---|---:|---:|---:|---:|---:|"
+    for container in "${ORCHESTRATOR_CONTAINERS[@]}"; do
+      before_file="$LOG_DIR/${container}-task-claim-before.prom"
+      after_file="$LOG_DIR/${container}-task-claim-after.prom"
+      awk -v container="$container" '
+        function metric_value(line, value_parts, part_count) {
+          part_count = split(line, value_parts, " ")
+          return value_parts[part_count] + 0
+        }
+        FILENAME == ARGV[1] {
+          if ($0 ~ /^batch_task_claim_duration_seconds_count/ && $0 ~ /method="claim"/) {
+            before_single += metric_value($0)
+          } else if ($0 ~ /^batch_task_batch_claim_size_count/) {
+            before_batch_calls += metric_value($0)
+          } else if ($0 ~ /^batch_task_batch_claim_size_sum/) {
+            before_batch_items += metric_value($0)
+          } else if ($0 ~ /^http_server_requests_seconds_count/ && $0 ~ /uri="\/internal\/tasks\/.*\/report"/) {
+            before_report_calls += metric_value($0)
+          }
+          next
+        }
+        {
+          if ($0 ~ /^batch_task_claim_duration_seconds_count/ && $0 ~ /method="claim"/) {
+            after_single += metric_value($0)
+          } else if ($0 ~ /^batch_task_batch_claim_size_count/) {
+            after_batch_calls += metric_value($0)
+          } else if ($0 ~ /^batch_task_batch_claim_size_sum/) {
+            after_batch_items += metric_value($0)
+          } else if ($0 ~ /^http_server_requests_seconds_count/ && $0 ~ /uri="\/internal\/tasks\/.*\/report"/) {
+            after_report_calls += metric_value($0)
+          }
+        }
+        END {
+          single_delta = after_single - before_single
+          batch_calls_delta = after_batch_calls - before_batch_calls
+          batch_items_delta = after_batch_items - before_batch_items
+          report_calls_delta = after_report_calls - before_report_calls
+          effective = batch_calls_delta > 0 ? batch_items_delta / batch_calls_delta : 0
+          printf "| %s | %.0f | %.0f | %.0f | %.0f | %.2f |\n", container, single_delta, batch_calls_delta, batch_items_delta, report_calls_delta, effective
+        }
+      ' "$before_file" "$after_file"
+    done
+    echo
+  } >> "$REPORT"
 }
 
 append_launch_phase_metric_summary() {
@@ -424,7 +649,7 @@ append_launch_phase_metric_summary() {
           match_text = substr(line, RSTART + 7, RLENGTH - 8)
           return match_text
         }
-        FNR == NR {
+        FILENAME == ARGV[1] {
           phase = phase_of($1)
           if ($1 ~ /_count\{/) {
             before_count[phase] = $2
@@ -460,8 +685,14 @@ append_launch_phase_metric_summary() {
 run_10w_storm() {
   local storm_run_id="${RUN_ID}-10w"
   local storm_tenant_id="$LOAD_TEST_TENANT_ID"
-  local duration
+  local duration minimum_timeout_seconds
   duration="$((STORM_TOTAL_REQUESTS / STORM_RPS))"
+  minimum_timeout_seconds="$((duration + STORM_WAIT_SECONDS))"
+  if (( CAPACITY_JOB_TIMEOUT_SECONDS < minimum_timeout_seconds )); then
+    echo "CAPACITY_JOB_TIMEOUT_SECONDS (${CAPACITY_JOB_TIMEOUT_SECONDS}) must be >= traffic duration + terminal wait (${minimum_timeout_seconds})" >&2
+    PROFILE_RC=1
+    return
+  fi
   if [[ "$CAPACITY_ISOLATED_TENANT_ENABLED" == "1" ]]; then
     if ! acquire_capacity_lock; then
       PROFILE_RC=1
@@ -469,6 +700,7 @@ run_10w_storm() {
     fi
     echo "==> prepare isolated capacity tenant=${CAPACITY_TENANT_ID} with unbounded admission policy"
     psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+      -v capacity_job_timeout_seconds="$CAPACITY_JOB_TIMEOUT_SECONDS" \
       -f "$LOAD_DIR/sql/prepare-p2-capacity-atomic.sql"
     evict_capacity_config_cache
     storm_tenant_id="$CAPACITY_TENANT_ID"
@@ -478,6 +710,11 @@ run_10w_storm() {
     PROFILE_RC=1
     return
   fi
+  if ! capture_trigger_partition_offsets before; then
+    PROFILE_RC=1
+    return
+  fi
+  capture_task_claim_metrics before
   set +e
   RUN_ID="$storm_run_id" \
   LOAD_TEST_TENANT_ID="$storm_tenant_id" \
@@ -487,10 +724,11 @@ run_10w_storm() {
   TRIGGER_DURATION_SECONDS="$duration" \
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
-  WAIT_TERMINAL_ALLOW_PARTIAL=1 \
+  WAIT_TERMINAL_ALLOW_PARTIAL=0 \
   POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
   WRITE_P95_MS="$CAPACITY_WRITE_P95_MS" \
   PG_SAMPLE_INTERVAL_SECONDS="$PG_SAMPLE_INTERVAL_SECONDS" \
+  BIZ_DATE_CARDINALITY="$CAPACITY_BIZ_DATE_CARDINALITY" \
   MAX_ERROR_PCT="$CAPACITY_MAX_ERROR_PCT" \
   SKIP_AUTO_CLEANUP=1 \
     "$LOAD_DIR/scripts/run-control-plane-worker-benchmark.sh" \
@@ -501,6 +739,11 @@ run_10w_storm() {
     PROFILE_RC=1
   else
     append_launch_phase_metric_summary
+  fi
+  capture_task_claim_metrics after
+  append_task_claim_metric_summary
+  if ! capture_trigger_partition_offsets after || ! append_trigger_partition_summary; then
+    PROFILE_RC=1
   fi
   echo "10w storm exit_code=${rc}" | tee "$LOG_DIR/10w-storm.exit"
   if storm_reached_terminal_state "$storm_run_id"; then
@@ -560,6 +803,7 @@ run_fairness() {
 require_tooling
 require_exact_storm_shape
 require_trigger_capacity_budget
+capture_kafka_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
@@ -575,6 +819,10 @@ fi
 
 if [[ "$RUN_FAIRNESS" == "1" ]]; then
   run_fairness
+fi
+
+if ! verify_kafka_stability; then
+  PROFILE_RC=1
 fi
 
 {

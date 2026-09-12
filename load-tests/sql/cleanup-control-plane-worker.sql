@@ -76,6 +76,32 @@ oe AS (
 DELETE FROM batch.event_delivery_log
 WHERE outbox_event_id IN (SELECT id FROM oe);
 
+-- 两张全局幂等账本在生产中按 retention runbook 长期保留，但容量画像使用专用租户并会
+-- 反复创建一次性 key。若只删业务行，连续压测会永久放大 PK 索引，使后一轮比前一轮更慢。
+-- 必须在 outbox_event 尚未删除时按本轮事件的完整唯一键精确回收，不能按时间或租户模糊删除。
+WITH ji AS (
+  SELECT id FROM p2_cleanup_job_instance_ids
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+oe AS (
+  SELECT tenant_id, event_key
+  FROM batch.outbox_event
+  WHERE (
+      (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
+      OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
+      OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
+    )
+)
+DELETE FROM batch.outbox_event_dedup_key ledger
+USING oe
+WHERE ledger.tenant_id = oe.tenant_id
+  AND ledger.event_key = oe.event_key;
+
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids
 ),
@@ -136,6 +162,22 @@ WITH ji AS (
 )
 DELETE FROM batch.compensation_command WHERE related_job_instance_id IN (SELECT id FROM ji);
 
+-- result_version 没有指向 job_instance 的外键，单独删除实例会遗留每次压测产生的
+-- 结果版本。先删除资产物化指针，再按本轮实例清理版本，避免重复压测持续放大索引、
+-- 污染不同轮次之间的性能对比。
+WITH ji AS (
+  SELECT id FROM p2_cleanup_job_instance_ids
+),
+rv AS (
+  SELECT id FROM batch.result_version WHERE job_instance_id IN (SELECT id FROM ji)
+)
+DELETE FROM batch.asset_partition WHERE result_version_id IN (SELECT id FROM rv);
+
+WITH ji AS (
+  SELECT id FROM p2_cleanup_job_instance_ids
+)
+DELETE FROM batch.result_version WHERE job_instance_id IN (SELECT id FROM ji);
+
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids
 ),
@@ -183,6 +225,15 @@ SET related_job_instance_id = NULL
 WHERE related_job_instance_id IN (
     SELECT id FROM p2_cleanup_job_instance_ids
   );
+
+-- job_instance_dedup_key.first_instance_id 不是运行时关联键，必须趁实例仍在时用完整
+-- (tenant_id, dedup_key, run_attempt) 回收本轮 ledger。该删除只覆盖 temp 表解析出的 run_id。
+DELETE FROM batch.job_instance_dedup_key ledger
+USING batch.job_instance instance
+WHERE instance.id IN (SELECT id FROM p2_cleanup_job_instance_ids)
+  AND ledger.tenant_id = instance.tenant_id
+  AND ledger.dedup_key = instance.dedup_key
+  AND ledger.run_attempt = instance.run_attempt;
 
 DELETE FROM batch.job_instance
 WHERE id IN (SELECT id FROM p2_cleanup_job_instance_ids);

@@ -217,7 +217,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
               message.taskId());
           return true;
         }
-        log.info(
+        log.debug(
             "{} task processed: taskId={}, success={}, message={}",
             workerConfiguration().workerType(),
             result.taskId(),

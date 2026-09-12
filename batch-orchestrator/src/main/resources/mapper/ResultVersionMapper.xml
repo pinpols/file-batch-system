@@ -75,6 +75,55 @@
         )
     </insert>
 
+    <!--
+      终态热路径要立即使用生成的 id 写 asset_partition。PostgreSQL RETURNING 让插入和回读合成
+      一个往返；affectData=true 告知 MyBatis 这是会修改数据的 select，事务与缓存语义仍按写操作处理。
+    -->
+    <select id="insertReturning"
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity"
+            resultMap="ResultVersionResultMap"
+            flushCache="true"
+            affectData="true">
+        insert into batch.result_version (
+            tenant_id,
+            business_key,
+            version_no,
+            job_instance_id,
+            status,
+            effective_at,
+            deactivated_at,
+            payload_storage,
+            payload_json,
+            payload_ref,
+            generated_at,
+            generated_by,
+            promotion_policy,
+            approval_id,
+            created_at,
+            updated_at,
+            dq_gate_status
+        ) values (
+            #{tenantId},
+            #{businessKey},
+            #{versionNo},
+            #{jobInstanceId},
+            #{status},
+            #{effectiveAt},
+            #{deactivatedAt},
+            #{payloadStorage},
+            #{payloadJson,jdbcType=VARCHAR}::jsonb,
+            #{payloadRef},
+            #{generatedAt},
+            #{generatedBy},
+            #{promotionPolicy},
+            #{approvalId},
+            #{createdAt},
+            #{updatedAt},
+            #{dqGateStatus}
+        )
+        returning *
+    </select>
+
     <select id="lockBusinessKey" resultType="java.lang.Integer">
         select 1
         from (

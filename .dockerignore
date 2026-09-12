@@ -8,16 +8,26 @@ target
 *.log
 *.iml
 docs
-README.md
+README*.md
+CHANGELOG.md
 AGENT.md
 start-all.sh
 stop-all.sh
 batch-e2e-tests
 load-tests
 security-scan
+.github
+.remember
+helm
+reports
+qodana.sarif.json
+examples
 .claude
 .local
 **/target/**
+# flatten-maven-plugin 会在模块目录重写该文件；它不是运行时输入，纳入构建上下文会让
+# 多服务共享 builder 的源码层持续失效，导致每个镜像重复执行全仓 Maven package。
+**/.flattened-pom.xml
 build/runtime-jars
 sdk/**/.venv
 sdk/**/.mypy_cache
@@ -25,6 +35,10 @@ sdk/**/.pytest_cache
 sdk/**/.ruff_cache
 sdk/**/node_modules
 sdk/**/target
+sdk/go
+sdk/python
+sdk/dotnet
+sdk/typescript
 examples/**/target
 examples/**/node_modules
 !batch-e2e-tests/

@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.worker.core.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -13,6 +15,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class OrchestratorTaskClientProperties {
 
   private String baseUrl;
+
+  /**
+   * 可选的 Orchestrator 地址列表。非空时优先于 {@link #baseUrl}，task-client 按请求轮转；瞬态失败重试会选择
+   * 下一个地址。Kubernetes 应优先配置单个 Service 地址，本配置用于 VM、裸机或本地容量画像的多实例直连。
+   */
+  private List<String> baseUrls = new ArrayList<>();
+
   private int batchSize = 10;
 
   /** 建立到 Orchestrator TCP 连接的连接超时。 */
