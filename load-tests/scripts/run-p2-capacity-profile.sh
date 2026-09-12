@@ -407,6 +407,23 @@ require_empty_trigger_lag() {
   fi
 }
 
+require_capacity_tenant_runtime_clean() {
+  if [[ "$CAPACITY_ISOLATED_TENANT_ENABLED" != "1" ]]; then
+    return
+  fi
+  local counts total
+  counts="$(
+    psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+      -f "$LOAD_DIR/sql/p2-capacity-tenant-runtime-counts.sql"
+  )"
+  total="$(printf '%s\n' "$counts" | awk -F'|' '{ total = 0; for (i = 1; i <= NF; i++) total += $i; print total }')"
+  if [[ "$total" != "0" ]]; then
+    echo "capacity tenant ${CAPACITY_TENANT_ID} contains runtime residue: job_instance|trigger_request|outbox_event|result_version|job_instance_ledger|outbox_ledger=${counts}" >&2
+    echo "clean or preserve the previous failed profile explicitly before starting a comparable run" >&2
+    return 1
+  fi
+}
+
 capture_kafka_stability_baseline() {
   local health
   health="$(docker inspect "$KAFKA_CONTAINER_NAME" \
@@ -695,6 +712,10 @@ run_10w_storm() {
   fi
   if [[ "$CAPACITY_ISOLATED_TENANT_ENABLED" == "1" ]]; then
     if ! acquire_capacity_lock; then
+      PROFILE_RC=1
+      return
+    fi
+    if ! require_capacity_tenant_runtime_clean; then
       PROFILE_RC=1
       return
     fi
