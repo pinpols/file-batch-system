@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -29,17 +30,19 @@ public class HttpRequestMdcFilter extends OncePerRequestFilter {
         IdGenerator.newBusinessNo("req"));
     String traceId = CorrelationIds.normalize(
         request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
-    String tenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+    String requestedTenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+    Map<String, String> previousContext = BatchMdc.snapshot();
     try {
       BatchMdc.put(StructuredLogField.SERVICE, applicationName);
       BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
       BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-      BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+      // 通用 filter 执行时认证尚未完成，不能把请求头当成可信租户。
+      BatchMdc.put(StructuredLogField.REQUESTED_TENANT_ID, requestedTenantId);
       response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
       response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
       filterChain.doFilter(request, response);
     } finally {
-      BatchMdc.clear();
+      BatchMdc.restore(previousContext);
     }
   }
 }

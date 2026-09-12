@@ -6,8 +6,15 @@ x-common-runtime-env: &common-runtime-env
   BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
   TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
 
+x-container-logging: &container-logging
+  driver: local
+  options:
+    max-size: ${BATCH_DOCKER_LOG_MAX_SIZE:-50m}
+    max-file: ${BATCH_DOCKER_LOG_MAX_FILES:-3}
+
 services:
   postgres-primary:
+    logging: *container-logging
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres-primary
     restart: unless-stopped
@@ -26,6 +33,12 @@ services:
       - wal_keep_size=64
       - -c
       - hot_standby=on
+      # 容量专项诊断按需显式开启；默认关闭，避免改变普通本地/Sim 的性能口径。
+      # shared_preload_libraries 需要重建容器，track_io_timing 可能在部分平台增加计时开销。
+      - -c
+      - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}
+      - -c
+      - track_io_timing=${POSTGRES_TRACK_IO_TIMING:-off}
       # ── WAL 连续归档(PITR 第 B 层)——**默认关闭,生产再开** ──────────────
       # dev 默认不开:开了会持续往 /wal-archive 写 WAL 段,本地联调无意义且占盘。
       # 生产启用步骤(见 docs/runbook/backup-and-pitr.md §1.1):
@@ -71,6 +84,7 @@ services:
   # 首次启动时 entrypoint.sh 会从主库 pg_basebackup 引导；后续重启直接进 standby 模式。
   # `--profile replica` 启用：docker compose --profile replica up -d
   postgres-replica:
+    logging: *container-logging
     profiles: ["replica"]
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres-replica
@@ -82,6 +96,10 @@ services:
       - max_connections=300
       - -c
       - hot_standby=on
+      - -c
+      - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}
+      - -c
+      - track_io_timing=${POSTGRES_TRACK_IO_TIMING:-off}
     environment:
       POSTGRES_PRIMARY_HOST: postgres-primary
       POSTGRES_PRIMARY_PORT: 5432
@@ -116,6 +134,7 @@ services:
   # `--profile biz-shard` 启用:docker compose --profile biz-shard up -d postgres-biz-shard-1
   # 默认不启,基线启动不受影响(零行为变更,与单片路由 default 一致)。
   postgres-biz-shard-1:
+    logging: *container-logging
     profiles: ["biz-shard"]
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres-biz-shard-1
@@ -147,6 +166,7 @@ services:
       retries: 12
 
   kafka:
+    logging: *container-logging
     image: apache/kafka:${KAFKA_IMAGE_TAG}
     container_name: batch-kafka
     restart: unless-stopped
@@ -183,6 +203,7 @@ services:
       retries: 12
 
   kafka-init:
+    logging: *container-logging
     image: apache/kafka:${KAFKA_IMAGE_TAG}
     container_name: batch-kafka-init
     depends_on:
@@ -207,6 +228,7 @@ services:
       - batch-network
 
   kafka-ui:
+    logging: *container-logging
     image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:-v0.7.2}
     container_name: batch-kafka-ui
     restart: unless-stopped
@@ -224,6 +246,7 @@ services:
       - batch-network
 
   minio:
+    logging: *container-logging
     image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-09-07T16-13-09Z}
     container_name: batch-minio
     restart: unless-stopped
@@ -248,6 +271,7 @@ services:
       retries: 12
 
   minio-init:
+    logging: *container-logging
     image: minio/mc:${MINIO_MC_IMAGE_TAG:-RELEASE.2025-08-13T08-35-41Z}
     container_name: batch-minio-init
     depends_on:
@@ -267,6 +291,7 @@ services:
       - batch-network
 
   valkey:
+    logging: *container-logging
     image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1}
     container_name: batch-valkey
     restart: unless-stopped

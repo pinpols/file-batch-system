@@ -312,11 +312,12 @@ public class TaskDispatcher {
   /** 单消息处理:claim → execute → report。所有异常都被 catch。 */
   void processInWorkerThread(TaskDispatchMessage msg) {
     // P0 hardening:把 trace 信息塞 MDC,所有 handler 日志(claim/execute/report)自动带 traceId/tenantId/taskId
+    Map<String, String> previousContext = MDC.getCopyOfContextMap();
     setupMdc(msg);
     try {
       processCore(msg);
     } finally {
-      clearMdc();
+      restoreMdc(previousContext);
     }
   }
 
@@ -627,10 +628,12 @@ public class TaskDispatcher {
     if (msg.taskId() != null) MDC.put(MDC_TASK_ID, String.valueOf(msg.taskId()));
   }
 
-  private static void clearMdc() {
-    MDC.remove(MDC_TRACE_ID);
-    MDC.remove(MDC_TENANT_ID);
-    MDC.remove(MDC_TASK_ID);
+  private static void restoreMdc(Map<String, String> previousContext) {
+    if (previousContext == null || previousContext.isEmpty()) {
+      MDC.clear();
+      return;
+    }
+    MDC.setContextMap(previousContext);
   }
 
   /** 暴露给测试 + 调用方:draining 状态(stop() 已发起,等待 in-flight 跑完)。 */

@@ -13,17 +13,20 @@
 # 自包含,不需要 host 端 mvn(适配 Portainer 这类直接跑 `docker compose build` 的 GitOps 工具)。
 
 ARG BUILD_MODE=all
+ARG MAVEN_BUILD_FLAGS="-B -ntp -Dmaven.test.skip=true -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true -Dcyclonedx.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dflatten.skip=true -Djacoco.skip=true"
 
 # ───── Stage 1: Maven 依赖基层─────
-FROM maven:3.9.16-eclipse-temurin-21 AS maven-base
+# Keep the tag for readability, pin the manifest digest for reproducible builds.
+FROM maven:3.9.16-eclipse-temurin-21@sha256:a972570be789ee5c9fa23446a8914ac7327560b5c022f662cfa9452aef829f18 AS maven-base
 
 WORKDIR /workspace
 
 # aliyun mirror 避开 Maven Central 在 18081 代理下的不稳定 HTTPS
 COPY deploy/docker/settings.xml /usr/share/maven/conf/settings.xml
 
-# 先 COPY 所有 pom.xml 单独一层 → 仅 pom 改时才 invalidate deps cache
+# 先 COPY .mvn 与所有 pom.xml 单独一层 → Maven JVM 参数 / POM 改动才 invalidate deps cache
 COPY pom.xml ./
+COPY .mvn/ .mvn/
 COPY batch-common/pom.xml batch-common/pom.xml
 COPY batch-test-support/pom.xml batch-test-support/pom.xml
 COPY batch-console-api/pom.xml batch-console-api/pom.xml
@@ -44,42 +47,48 @@ COPY batch-e2e-tests/pom.xml batch-e2e-tests/pom.xml
 # ───── Stage 1A: 全 reactor 依赖预取─────
 FROM maven-base AS deps-all
 
+ARG MAVEN_BUILD_FLAGS
+
 # m2 cache mount(id 命名以便跨 compose build 复用同一份;Portainer/手动 build 都行)
 RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
-    mvn -B -Dmaven.test.skip=true -pl '!batch-e2e-tests' -am dependency:go-offline
+    mvn ${MAVEN_BUILD_FLAGS} -pl '!batch-e2e-tests' -am dependency:go-offline
 
 # ───── Stage 1B: 单模块依赖闭包预取─────
 FROM maven-base AS deps-module
 
 ARG MODULE
+ARG MAVEN_BUILD_FLAGS
 
 RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
     test -n "${MODULE}"; \
-    mvn -B -Dmaven.test.skip=true -pl ":${MODULE}" -am dependency:go-offline
+    mvn ${MAVEN_BUILD_FLAGS} -pl ":${MODULE}" -am dependency:go-offline
 
 # ───── Stage 2A: 整套镜像共享的全 reactor builder─────
 FROM deps-all AS builder-all
+
+ARG MAVEN_BUILD_FLAGS
 
 COPY . .
 
 RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
-    mvn -B -T 1C -Dmaven.test.skip=true -Dflatten.skip=true -Djacoco.skip=true \
+    mvn ${MAVEN_BUILD_FLAGS} -T 1C \
       -pl '!batch-e2e-tests' package
 
 # ───── Stage 2B: 单服务及其依赖闭包 builder─────
 FROM deps-module AS builder-module
 
 ARG MODULE
+ARG MAVEN_BUILD_FLAGS
 
 COPY . .
 
 RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
     set -eux; \
     test -n "${MODULE}"; \
-    mvn -B -T 1C -Dmaven.test.skip=true -Dflatten.skip=true -Djacoco.skip=true \
+    mvn ${MAVEN_BUILD_FLAGS} -T 1C \
       -pl ":${MODULE}" -am package
 
 # ───── Stage 3: 从所选 builder 中只提取当前服务 jar─────
@@ -106,7 +115,8 @@ RUN set -eux; \
     rm -rf /selected
 
 # ───── Stage 5: per-image runtime─────
-FROM eclipse-temurin:21-jre-jammy
+# Keep the tag for readability, pin the manifest digest for reproducible builds.
+FROM eclipse-temurin:21-jre-jammy@sha256:bce52ea7da1f72e6bf5bec505e63b6eb55ba79ad1226903579f77eab1a80139a
 
 ARG MODULE
 

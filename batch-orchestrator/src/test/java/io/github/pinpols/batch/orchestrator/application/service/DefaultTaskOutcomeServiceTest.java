@@ -30,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
+import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -267,7 +268,12 @@ class DefaultTaskOutcomeServiceTest {
     InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
     // instance 级 advisory lock 必须先于针对自己分区的 markStatus 写锁。
     inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
-    inOrder.verify(jobPartitionMapper).markStatus(any());
+    ArgumentCaptor<MarkPartitionStatusParam> partitionStatusCaptor =
+        ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
+    inOrder.verify(jobPartitionMapper).markStatus(partitionStatusCaptor.capture());
+    assertThat(partitionStatusCaptor.getValue().getOutputSummary())
+        .contains("\"taskId\":1", "\"success\":true");
+    verify(jobPartitionMapper, never()).updateOutputSummary(anyString(), anyLong(), any(), any());
     // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
     assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
         .isEqualTo(1L);

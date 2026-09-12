@@ -149,6 +149,24 @@ class TaskDispatcherP0HardeningTest {
   }
 
   @Test
+  void workerExecutionRestoresCallerMdc() {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+    MDC.put("traceId", "outer-trace");
+    MDC.put("tenantId", "outer-tenant");
+    MDC.put("hostContext", "preserved");
+
+    dispatcher.processInWorkerThread(new TaskDispatchMessage(
+        42L, "tx", "j", "tt", "ti", Map.of(), Map.of("traceId", "task-trace")));
+
+    assertThat(MDC.getCopyOfContextMap())
+        .containsEntry("traceId", "outer-trace")
+        .containsEntry("tenantId", "outer-tenant")
+        .containsEntry("hostContext", "preserved")
+        .doesNotContainKey("taskId");
+  }
+
+  @Test
   void missingTraceIdSkipsMdcKey() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();

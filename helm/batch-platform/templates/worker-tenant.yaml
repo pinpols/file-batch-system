@@ -127,9 +127,11 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "batch-platform.diagnosticsVolumeMount" $root | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "batch-platform.diagnosticsVolume" $root | nindent 8 }}
       {{- include "batch-platform.scheduling" $root | nindent 6 }}
 ---
 apiVersion: v1

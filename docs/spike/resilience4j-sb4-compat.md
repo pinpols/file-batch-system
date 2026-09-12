@@ -91,6 +91,9 @@ autoconfig(它们要 Clock / InformationSchemaMapper / DataSource 等无关 bean
 
 ### 1. logback `FRONTEND_FILE` appender 绑死 `/logs/`
 
+> 该问题已在 2026-09-12 的可观测性治理中根治：前端遥测统一写结构化 stdout/OTLP，
+> 不再创建独立 `FRONTEND_FILE`。以下内容仅保留为当时的排障记录。
+
 最小 `@SpringBootTest` 默认无 profile,触发 logback `<springProfile name="!local & !test & !e2e">` 分支,
 尝试创建 `/logs/frontend.log`(本机无写权限)→ 启动 fail。
 

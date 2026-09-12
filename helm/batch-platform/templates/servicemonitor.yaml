@@ -1,5 +1,5 @@
 {{/*
-  R7-A6-P1: Prometheus ServiceMonitor — 让 prometheus-operator 自动 scrape 7 个 Spring Boot
+  R7-A6-P1: Prometheus ServiceMonitor — 让 prometheus-operator 自动 scrape 8 个 Spring Boot
   app 的 /actuator/prometheus endpoint，替代 deploy/docker/observability/prometheus.yml 里的
   file_sd（K8s 场景下 file_sd 需要外部生成器维护 targets.json）。
 
@@ -32,5 +32,28 @@ spec:
       interval: {{ $.Values.serviceMonitor.interval | default "30s" }}
       scrapeTimeout: {{ $.Values.serviceMonitor.scrapeTimeout | default "10s" }}
       honorLabels: true
+{{- end }}
+{{- if $.Values.otelCollector.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "batch-platform.fullname" $ }}-otel-collector
+  labels:
+    app.kubernetes.io/name: {{ include "batch-platform.name" $ }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: otel-collector
+    {{- with $.Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "batch-platform.name" $ }}
+      app.kubernetes.io/component: otel-collector
+  endpoints:
+    - port: metrics
+      interval: {{ $.Values.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ $.Values.serviceMonitor.scrapeTimeout | default "10s" }}
 {{- end }}
 {{- end }}

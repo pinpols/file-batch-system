@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
@@ -10,6 +12,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpMethod;
@@ -96,9 +99,17 @@ public class InternalAuthFilter extends OncePerRequestFilter {
           : apiKeyVerifier.verifyWithScope(
               apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
       if (rec.isPresent()) {
-        request.setAttribute(ATTR_RESOLVED_TENANT_ID, rec.get().tenantId());
+        String resolvedTenantId = rec.get().tenantId();
+        request.setAttribute(ATTR_RESOLVED_TENANT_ID, resolvedTenantId);
         request.setAttribute(ATTR_API_KEY_RECORD, rec.get());
-        chain.doFilter(request, response);
+        Map<String, String> previousContext = BatchMdc.snapshot();
+        try {
+          // 只把 API-Key 校验后的 tenant 写入可信 MDC 字段。
+          BatchMdc.put(StructuredLogField.TENANT_ID, resolvedTenantId);
+          chain.doFilter(request, response);
+        } finally {
+          BatchMdc.restore(previousContext);
+        }
         return;
       }
       // API key 提供但校验失败 → 401(不 fallback secret,防 key 泄漏后凭 secret 冒充)

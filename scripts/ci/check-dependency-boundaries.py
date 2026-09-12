@@ -35,9 +35,7 @@ def main() -> int:
     grandfathered_common_runtime = {
         ("software.amazon.awssdk", "s3"),
         ("software.amazon.awssdk", "apache-client"),
-        ("io.micrometer", "micrometer-tracing-bridge-otel"),
-        ("io.opentelemetry", "opentelemetry-exporter-otlp"),
-        ("io.opentelemetry", "opentelemetry-exporter-sender-jdk"),
+        ("org.springframework.boot", "spring-boot-starter-opentelemetry"),
     }
     forbidden_common_runtime = {
         ("org.springframework.ai", "spring-ai-starter-model-openai"),

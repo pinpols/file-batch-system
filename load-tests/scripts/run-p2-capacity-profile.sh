@@ -44,9 +44,14 @@ CAPACITY_MAX_ERROR_PCT="${CAPACITY_MAX_ERROR_PCT:-0.0}"
 # 单节点高压下的硬上限；更严格的交互延迟仍由常规 control-plane profile 守护。
 CAPACITY_WRITE_P95_MS="${CAPACITY_WRITE_P95_MS:-5000}"
 PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
+# SQL 画像需显式开启，并要求 PostgreSQL 已预加载 pg_stat_statements 且打开 I/O 计时。
+# 默认关闭，保证普通容量基线与历史口径一致。
+CAPACITY_PG_STATEMENTS_PROFILE_ENABLED="${CAPACITY_PG_STATEMENTS_PROFILE_ENABLED:-0}"
 # 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
 # result_version 单业务键串行锁后测通用控制面容量。
 CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
+# 大容量画像不需要以 2 秒频率反复扫描整轮实例。降低轮询频率可避免观测 SQL 与被测写链路争抢 I/O。
+CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS="${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS:-10}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 # benchmark profile intentionally raises the isolated Trigger relay budget; do not inherit the
@@ -90,9 +95,58 @@ STORM_TERMINAL_VERIFIED=0
 ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
 KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
+KAFKA_PROFILE_STARTED_AT=""
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
+}
+
+require_pg_statement_profile() {
+  if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" != "1" ]]; then
+    return
+  fi
+  local profile_state preload_libraries track_io_timing extension_installed
+  profile_state="$(
+    psql_platform -tA -F '|' -f "$LOAD_DIR/sql/verify-control-pg-statement-profile.sql"
+  )"
+  preload_libraries="${profile_state%%|*}"
+  profile_state="${profile_state#*|}"
+  track_io_timing="${profile_state%%|*}"
+  extension_installed="${profile_state##*|}"
+  if [[ ",$preload_libraries," != *,pg_stat_statements,* \
+      || "$track_io_timing" != "on" \
+      || "$extension_installed" != "1" ]]; then
+    echo "PostgreSQL statement profile is not ready:" >&2
+    echo "  required: shared_preload_libraries contains pg_stat_statements, track_io_timing=on, extension installed" >&2
+    echo "  actual: shared_preload_libraries=${preload_libraries:-empty}, track_io_timing=${track_io_timing:-unknown}, extension=${extension_installed:-0}" >&2
+    echo "  local start: POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements POSTGRES_TRACK_IO_TIMING=on docker compose --env-file .env.local up -d --force-recreate --no-deps postgres-primary postgres-replica" >&2
+    exit 2
+  fi
+}
+
+reset_pg_statement_profile() {
+  if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]]; then
+    psql_platform -f "$LOAD_DIR/sql/reset-control-pg-statement-profile.sql" >/dev/null
+  fi
+}
+
+append_pg_statement_profile() {
+  if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" != "1" ]]; then
+    return
+  fi
+  local output_file="$LOG_DIR/pg-statement-profile.txt"
+  psql_platform -P pager=off -F ' | ' -A \
+    -f "$LOAD_DIR/sql/control-pg-statement-profile.sql" > "$output_file"
+  {
+    echo "## PostgreSQL Statement Profile"
+    echo
+    echo "- Source: ${output_file}"
+    echo
+    echo '```text'
+    cat "$output_file"
+    echo '```'
+    echo
+  } >> "$REPORT"
 }
 
 storm_reached_terminal_state() {
@@ -101,6 +155,7 @@ storm_reached_terminal_state() {
   counts="$(
     psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
       -v storm_run_id="$storm_run_id" \
+      -v biz_date="$BIZ_DATE" -v biz_date_cardinality="$CAPACITY_BIZ_DATE_CARDINALITY" \
       -f "$LOAD_DIR/sql/p2-storm-terminal-counts.sql"
   )"
   total="${counts%%|*}"
@@ -248,6 +303,10 @@ require_exact_storm_shape() {
   fi
   if ! [[ "$CAPACITY_BIZ_DATE_CARDINALITY" =~ ^[1-9][0-9]*$ ]]; then
     echo "CAPACITY_BIZ_DATE_CARDINALITY must be a positive integer, got: ${CAPACITY_BIZ_DATE_CARDINALITY}" >&2
+    exit 2
+  fi
+  if ! [[ "$CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS must be a positive integer, got: ${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS}" >&2
     exit 2
   fi
   if (( STORM_TOTAL_REQUESTS % STORM_RPS != 0 )); then
@@ -430,6 +489,7 @@ capture_kafka_stability_baseline() {
     --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
   KAFKA_RESTART_COUNT_BEFORE="$(docker inspect "$KAFKA_CONTAINER_NAME" \
     --format '{{.RestartCount}}' 2>/dev/null || true)"
+  KAFKA_PROFILE_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if [[ "$health" != "healthy" || ! "$KAFKA_RESTART_COUNT_BEFORE" =~ ^[0-9]+$ ]]; then
     echo "Kafka must be healthy before the capacity profile: container=${KAFKA_CONTAINER_NAME}, health=${health:-missing}, restarts=${KAFKA_RESTART_COUNT_BEFORE:-missing}" >&2
     exit 2
@@ -437,15 +497,21 @@ capture_kafka_stability_baseline() {
 }
 
 verify_kafka_stability() {
-  local health restart_count_after stable
+  local health restart_count_after stable instability_log instability_events
   health="$(docker inspect "$KAFKA_CONTAINER_NAME" \
     --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
   restart_count_after="$(docker inspect "$KAFKA_CONTAINER_NAME" \
     --format '{{.RestartCount}}' 2>/dev/null || true)"
+  instability_log="$LOG_DIR/kafka-instability.log"
+  docker logs --since "$KAFKA_PROFILE_STARTED_AT" "$KAFKA_CONTAINER_NAME" 2>&1 \
+    | grep -E 'Unable to send a heartbeat because the RPC got timed out|NotLeaderOrFollowerException|NOT_LEADER_OR_FOLLOWER|This is not the correct coordinator|Renouncing .*leadership|broker.*fenced|fenced.*broker' \
+    > "$instability_log" || true
+  instability_events="$(wc -l < "$instability_log" | tr -d '[:space:]')"
   stable="no"
   if [[ "$health" == "healthy" \
       && "$restart_count_after" =~ ^[0-9]+$ \
-      && "$restart_count_after" == "$KAFKA_RESTART_COUNT_BEFORE" ]]; then
+      && "$restart_count_after" == "$KAFKA_RESTART_COUNT_BEFORE" \
+      && "$instability_events" == "0" ]]; then
     stable="yes"
   fi
   {
@@ -455,11 +521,13 @@ verify_kafka_stability() {
     echo "- Restart count before: ${KAFKA_RESTART_COUNT_BEFORE}"
     echo "- Restart count after: ${restart_count_after:-unknown}"
     echo "- Final health: ${health:-unknown}"
+    echo "- Broker instability events: ${instability_events}"
+    echo "- Instability evidence: ${instability_log}"
     echo "- Stable during profile: ${stable}"
     echo
   } >> "$REPORT"
   if [[ "$stable" != "yes" ]]; then
-    echo "Kafka restarted or became unhealthy during the capacity profile; the result is invalid" >&2
+    echo "Kafka restarted, became unhealthy, or lost broker/controller leadership during the capacity profile; the result is invalid" >&2
     return 1
   fi
 }
@@ -497,7 +565,9 @@ write_report_header() {
     echo "- Capacity write p95 budget: ${CAPACITY_WRITE_P95_MS}ms"
     echo "- Capacity job hard timeout: ${CAPACITY_JOB_TIMEOUT_SECONDS}s"
     echo "- PostgreSQL pressure sample interval: ${PG_SAMPLE_INTERVAL_SECONDS}s"
+    echo "- PostgreSQL statement profile: $([[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]] && echo enabled || echo disabled)"
     echo "- Result business-key cardinality: ${CAPACITY_BIZ_DATE_CARDINALITY}"
+    echo "- Terminal polling interval: ${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS}s"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo "- Trigger adaptive release expected: $([[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]] && echo enabled || echo disabled)"
     echo "- Kafka restart count before: ${KAFKA_RESTART_COUNT_BEFORE}"
@@ -736,6 +806,7 @@ run_10w_storm() {
     return
   fi
   capture_task_claim_metrics before
+  reset_pg_statement_profile
   set +e
   RUN_ID="$storm_run_id" \
   LOAD_TEST_TENANT_ID="$storm_tenant_id" \
@@ -744,6 +815,7 @@ run_10w_storm() {
   ATOMIC_LAUNCH_RPS="$STORM_RPS" \
   TRIGGER_DURATION_SECONDS="$duration" \
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
+  WAIT_TERMINAL_POLL_INTERVAL_SECONDS="$CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
   WAIT_TERMINAL_ALLOW_PARTIAL=0 \
   POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
@@ -756,6 +828,7 @@ run_10w_storm() {
     | tee "$LOG_DIR/10w-storm.log"
   local rc=${PIPESTATUS[0]}
   set -e
+  append_pg_statement_profile
   if ! capture_launch_phase_metrics after; then
     PROFILE_RC=1
   else
@@ -824,6 +897,7 @@ run_fairness() {
 require_tooling
 require_exact_storm_shape
 require_trigger_capacity_budget
+require_pg_statement_profile
 capture_kafka_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then

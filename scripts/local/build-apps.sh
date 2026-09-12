@@ -3,7 +3,8 @@
 # build-apps.sh - 本地联调应用模块单独构建入口
 # 说明：
 # 1) 仅打包 8 个 Java 应用模块，不启动 Docker、不启动本地进程。
-# 2) 默认执行 Maven package -Dmaven.test.skip=true，供 start-all.sh / 手工联调复用。
+# 2) 默认执行低开销 Maven package，跳过测试、IT、PMD、Spotless 和发布类插件，
+#    供 start-all.sh / 手工联调复用。
 # 3) 默认增量构建（不 clean），Maven 自身会基于 mtime 决定是否重编；
 #    若出现「类文件在偏移 0 处截断」、repackage 失败、或 *-exec.jar 体积极小，
 #    多为 target/ 写入不完整（中断构建、磁盘或并行竞态），请用 CLEAN=1 强制清理后重编。
@@ -16,14 +17,9 @@ cd "$ROOT"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 mkdir -p "$RUNTIME_JAR_DIR"
 
-# 优先使用 mvnd（Maven Daemon），没装则降级到 mvn
-_MVND_BIN="${HOME}/.local/bin/mvnd"
-if [[ -x "$_MVND_BIN" ]]; then
-  export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
-  MVN="$_MVND_BIN"
-else
-  MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
-fi
+# shellcheck source=maven-env.sh
+source "$ROOT/scripts/local/maven-env.sh"
+MVN="$(batch_resolve_maven_command "$ROOT")"
 
 # CLEAN=1 强制清理；否则增量构建（实测未改动场景 40s → 9s）
 if [[ "${CLEAN:-0}" == "1" ]]; then
@@ -47,7 +43,10 @@ for i in "${!MODULES[@]}"; do
   find "$ROOT/${DIRS[$i]}/target" -maxdepth 1 -name "${MODULES[$i]}-*-exec.jar" -delete 2>/dev/null || true
 done
 
-"$MVN" -q -Dmaven.test.skip=true \
+"$MVN" -q -ntp -Dmaven.test.skip=true \
+  -DskipITs=true \
+  -Dspotless.check.skip=true \
+  -Dpmd.skip=true \
   -Dcyclonedx.skip=true \
   -Dlicense.skip=true \
   -Dmaven.javadoc.skip=true \

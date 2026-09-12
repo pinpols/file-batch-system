@@ -14,6 +14,7 @@ PIPELINE_MAX_POLLS="${PIPELINE_MAX_POLLS:-0}"
 PIPELINE_POLL_INTERVAL_SEC="${PIPELINE_POLL_INTERVAL_SEC:-2}"
 WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-300}"
 WAIT_TERMINAL_MIN_INSTANCES="${WAIT_TERMINAL_MIN_INSTANCES:-1}"
+WAIT_TERMINAL_POLL_INTERVAL_SECONDS="${WAIT_TERMINAL_POLL_INTERVAL_SECONDS:-2}"
 # 仅对经 Trigger API 注入的容量画像启用。默认 0 保持其它混合画像原有的最小实例等待语义。
 # 启用后，不能仅因已创建的子集全部终态而提前结束，必须让每个入口请求都已创建并完成实例。
 WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-0}"
@@ -99,6 +100,10 @@ cleanup_atomic_trigger() {
 require_tooling() {
   command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
   command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
+  if ! [[ "$WAIT_TERMINAL_POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "WAIT_TERMINAL_POLL_INTERVAL_SECONDS must be a positive integer" >&2
+    exit 2
+  fi
 }
 
 login_token() {
@@ -157,14 +162,35 @@ pg_pressure_snapshot() {
 
 pg_pressure_sampler() {
   local output_file="$1"
+  local sample_header
+  sample_header="sampled_at|database_size_bytes|active_connections|active_waiting_connections"
+  sample_header+="|lock_waiters|xact_commit|xact_rollback|wal_bytes|wal_records|wal_fpi"
+  sample_header+="|wal_buffers_full|wal_write|wal_sync|checkpoints_timed|checkpoints_requested"
+  sample_header+="|checkpoint_buffers_written"
   : > "$output_file"
-  printf '%s\n' "sampled_at|database_size_bytes|active_connections|active_waiting_connections|lock_waiters|xact_commit|xact_rollback|wal_bytes" \
-    >> "$output_file"
+  printf '%s\n' "$sample_header" >> "$output_file"
   while true; do
     psql_platform -At -F '|' \
       -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" >> "$output_file" 2>/dev/null || true
     sleep "$PG_SAMPLE_INTERVAL_SECONDS"
   done
+}
+
+append_pg_pressure_delta() {
+  local before_file="$1"
+  local after_file="$2"
+  awk -F ' \\| ' '
+    FNR == 1 { next }
+    FILENAME == ARGV[1] {
+      if ($1 != "sampled_at") {
+        before[$1] = $2
+      }
+      next
+    }
+    $1 != "sampled_at" && $2 ~ /^-?[0-9]+([.][0-9]+)?$/ && ($1 in before) {
+      printf "| %s | %s | %s | %.3f |\n", $1, before[$1], $2, $2 - before[$1]
+    }
+  ' "$before_file" "$after_file"
 }
 
 wait_run_terminal() {
@@ -176,6 +202,7 @@ wait_run_terminal() {
     local counts total terminal trigger_requests linked_terminal
     counts="$(
       psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
+        -v biz_date="$BIZ_DATE" -v biz_date_cardinality="$BIZ_DATE_CARDINALITY" \
         -f "$LOAD_DIR/sql/control-run-terminal-counts.sql"
     )"
     total="${counts%%|*}"
@@ -208,8 +235,8 @@ wait_run_terminal() {
       echo "==> ${label}: terminal instances ${terminal}/${total}"
       return 0
     fi
-    sleep 2
-    elapsed=$((elapsed + 2))
+    sleep "$WAIT_TERMINAL_POLL_INTERVAL_SECONDS"
+    elapsed=$((elapsed + WAIT_TERMINAL_POLL_INTERVAL_SECONDS))
   done
   echo "==> ${label}: timed out waiting for terminal instances" >&2
   return 1
@@ -332,8 +359,7 @@ run_mixed_pressure() {
 
   # Keep collecting terminal-state evidence after a Gatling SLO failure. The caller receives the
   # original exit code only after the sampler and asynchronous execution chain have settled.
-  set +e
-  (
+  if (
     cd "$LOAD_DIR"
     mvn gatling:test \
       -Dsimulation=io.github.pinpols.batch.loadtest.simulations.ControlPlaneMixedPressureSimulation \
@@ -358,9 +384,11 @@ run_mixed_pressure() {
       -Dslo.write.p95ms="$WRITE_P95_MS" \
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       --batch-mode
-  ) | tee "$log_file"
-  gatling_rc=${PIPESTATUS[0]}
-  set -e
+  ) | tee "$log_file"; then
+    gatling_rc=0
+  else
+    gatling_rc=${PIPESTATUS[0]}
+  fi
 
   if [[ -n "$sampler_pid" ]]; then
     wait "$sampler_pid" || true
@@ -454,6 +482,13 @@ write_report() {
     echo "--- after ---"
     cat "$LOG_DIR/pg-pressure-after.txt"
     echo '```'
+    echo
+    echo "### PostgreSQL Pressure Delta"
+    echo
+    echo "| Metric | Before | After | Delta |"
+    echo "|---|---:|---:|---:|"
+    append_pg_pressure_delta \
+      "$LOG_DIR/pg-pressure-before.txt" "$LOG_DIR/pg-pressure-after.txt"
     echo
     echo "## PostgreSQL Pressure Samples"
     echo

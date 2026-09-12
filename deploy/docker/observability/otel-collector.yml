@@ -15,6 +15,10 @@ extensions:
     endpoint: 0.0.0.0:13133
   pprof:
     endpoint: 0.0.0.0:1777
+  file_storage:
+    directory: /var/lib/otelcol/storage
+    create_directory: true
+    timeout: 10s
 
 # ── 接收器（Receivers）──────────────────────────────────────────
 receivers:
@@ -49,6 +53,33 @@ processors:
         value: batch-platform
         action: upsert
 
+  # 错误和慢链路全量保留，普通成功链路采样 10%。应用端需设为 100%
+  # 上报，否则在 head sampling 阶段丢弃的错误链路无法被这里挽回。
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 50000
+    expected_new_traces_per_sec: 1000
+    policies:
+      - name: errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: slow
+        type: latency
+        latency:
+          threshold_ms: 5000
+      - name: baseline
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+  # 遥测属性是第二道脱敏防线；业务代码仍不得主动记录密钥。
+  redaction:
+    allow_all_keys: true
+    blocked_key_patterns:
+      - "(?i).*(authorization|password|passwd|secret|token|api[_-]?key|credential).*"
+    summary: silent
+
 # ── 导出器（Exporters）────────────────────────────────────────────
 exporters:
   # 链路 → Tempo（OTLP gRPC 4317）；Grafana 直查 Tempo 出 service graph + span metrics
@@ -56,26 +87,36 @@ exporters:
     endpoint: tempo:4317
     tls:
       insecure: true
+    sending_queue: &durable_queue
+      enabled: true
+      num_consumers: 8
+      queue_size: 10000
+      storage: file_storage
+    retry_on_failure: &retry_policy
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 10m
 
   # 链路 → Jaeger（Jaeger 1.35+ 原生支持 OTLP gRPC 4317），保留 UI 兼容
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
+    sending_queue: *durable_queue
+    retry_on_failure: *retry_policy
 
   # 日志 → Loki（Loki 2.9+ 原生支持 OTLP HTTP /otlp/v1/logs）
   otlphttp/loki:
     endpoint: http://loki:3100/otlp
     tls:
       insecure: true
-
-  # 调试：将所有遥测数据打印到 Collector 自身日志（生产可移除）
-  debug:
-    verbosity: basic
+    sending_queue: *durable_queue
+    retry_on_failure: *retry_policy
 
 # ── 服务（Service）────────────────────────────────────────────────
 service:
-  extensions: [health_check, pprof]
+  extensions: [health_check, pprof, file_storage]
   telemetry:
     logs:
       level: warn
@@ -89,9 +130,9 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
-      exporters: [otlp/tempo, otlp/jaeger, debug]
+      processors: [memory_limiter, resource, redaction, tail_sampling, batch]
+      exporters: [otlp/tempo, otlp/jaeger]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
-      exporters: [otlphttp/loki, debug]
+      processors: [memory_limiter, resource, redaction, batch]
+      exporters: [otlphttp/loki]

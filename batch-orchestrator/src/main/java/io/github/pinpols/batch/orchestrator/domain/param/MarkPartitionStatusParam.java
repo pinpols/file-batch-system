@@ -14,5 +14,6 @@ public class MarkPartitionStatusParam {
   private final String terminalStatus2;
   private final String terminalStatus3;
   private final String terminalStatus4;
+  private final String outputSummary;
   private final Long expectedVersion;
 }

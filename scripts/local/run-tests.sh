@@ -35,6 +35,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 # shellcheck source=../lib/logging.sh
 source "$ROOT_DIR/scripts/lib/logging.sh"
+# shellcheck source=maven-env.sh
+source "$ROOT_DIR/scripts/local/maven-env.sh"
 
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
@@ -170,13 +172,7 @@ cleanup_orphan_testcontainers() {
 
 run_mvn() {
   local mvn_bin
-  local _mvnd_bin="${HOME}/.local/bin/mvnd"
-  if [[ -x "$_mvnd_bin" ]]; then
-    export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
-    mvn_bin="$_mvnd_bin"
-  else
-    mvn_bin=$(command -v mvnd 2>/dev/null || command -v mvn)
-  fi
+  mvn_bin="$(batch_resolve_maven_command "$ROOT_DIR")"
   local -a cmd=("$mvn_bin" -T "$MAVEN_THREADS" --no-transfer-progress "$@")
   if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
     cmd+=("${EXTRA_MVN_ARGS[@]}")

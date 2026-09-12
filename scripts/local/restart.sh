@@ -38,6 +38,8 @@ else
 fi
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=maven-env.sh
+source "$ROOT/scripts/local/maven-env.sh"
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
@@ -297,13 +299,7 @@ build_module() {
   local dir
   dir="$(maven_dir_for "$name")"
   echo "  构建 $mod ..."
-  _MVND_BIN="${HOME}/.local/bin/mvnd"
-  if [[ -x "$_MVND_BIN" ]]; then
-    export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
-    _MVN="$_MVND_BIN"
-  else
-    _MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
-  fi
+  _MVN="$(batch_resolve_maven_command "$ROOT")"
   find "$dir/target" -maxdepth 1 -name "${mod}-*-exec.jar" -delete 2>/dev/null || true
   "$_MVN" -pl "$dir" -am clean package -DskipTests -q
   jar="$(find "$dir/target" -maxdepth 1 -name "${mod}-*-exec.jar" 2>/dev/null | head -1 || true)"
