@@ -20,13 +20,13 @@
 ## 启动方式
 
 ```bash
-./scripts/deploy/docker/observability/up.sh
+./scripts/docker/observability/up.sh
 ```
 
 默认使用 `.env.local`。如需切换环境：
 
 ```bash
-COMPOSE_ENV_FILE=.env.test ./scripts/deploy/docker/observability/up.sh
+COMPOSE_ENV_FILE=.env.test ./scripts/docker/observability/up.sh
 ```
 
 ## 说明

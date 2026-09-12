@@ -55,7 +55,7 @@
 ## 启动观测栈
 
 ```bash
-./scripts/deploy/docker/observability/up.sh
+./scripts/docker/observability/up.sh
 ```
 
 观测栈会额外启动：
@@ -69,7 +69,7 @@
 - Loki
 - Grafana
 
-对应脚本在 [scripts/deploy/docker/observability/](../../scripts/deploy/docker/observability/)。
+对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability/)。
 
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
 业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network` 共享网络互通。

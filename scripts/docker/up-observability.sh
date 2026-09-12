@@ -9,5 +9,4 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-exec "$ROOT/scripts/deploy/docker/observability/up.sh" "$@"
-
+exec "$ROOT/scripts/docker/observability/up.sh" "$@"
