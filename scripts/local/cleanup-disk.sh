@@ -317,10 +317,12 @@ if [ "$INCLUDE_APP_LOGS" = true ]; then
 
   app_count="$(printf '%s\n' "$app_candidates" | grep -c . || true)"
   echo "符合条件的应用日志文件: ${app_count}"
+  app_disk_size="$(printf '%s\n' "$app_candidates" | xargs -r du -ch 2>/dev/null | awk 'END {print $1}')"
+  [ -n "$app_disk_size" ] && echo "应用日志待清理空间: ${app_disk_size}"
   if [ -n "$app_candidates" ]; then
     if [ "$APPLY" = true ]; then
       printf '%s\n' "$app_candidates" | xargs -r rm -f
-      echo "已删除 ${app_count} 个应用日志文件"
+      echo "已删除 ${app_count} 个应用日志文件（清理空间: ${app_disk_size:-未知}）"
     else
       printf '%s\n' "$app_candidates" | head -n 20
       if [ "$app_count" -gt 20 ]; then
