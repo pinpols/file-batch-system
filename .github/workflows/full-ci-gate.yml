@@ -189,13 +189,14 @@ jobs:
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
 
-      - name: Run unit + IT (common + trigger + worker-process + worker-dispatch)
+      - name: Run unit + IT (common + test-support + trigger + worker-process + worker-dispatch)
         shell: bash
         run: |
-          ./mvnw verify -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -am \
+          ./mvnw verify -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
-          # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 目标模块。
+          # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 的生产模块。
+          # batch-test-support 是测试基础设施，执行自身测试但不纳入产品代码覆盖率。
           ./mvnw jacoco:check@check -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
 
       - name: Upload Surefire Reports
