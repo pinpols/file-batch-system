@@ -254,6 +254,11 @@ jobs:
         # 改 canonical 忘同步 chart 副本 → k8s 与 docker 告警漂移(新关键告警生产没下发)。
         run: bash scripts/ci/check-helm-prometheusrule-sync.sh
 
+      - name: Logging and telemetry delivery contract
+        shell: bash
+        # 防止 OTLP 管道、Collector 队列/脱敏、Docker 日志上限或 JVM 诊断卷回归。
+        run: python3 scripts/ci/check-observability-contract.py
+
       - name: OpenAPI breaking-change (oasdiff)
         shell: bash
         # 比 base 的 openapi,删端点/删必填/改类型等 ERR 级破坏即 fail。

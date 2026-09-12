@@ -738,6 +738,11 @@ securityContext:
     drop:
       - ALL
 
+# JVM GC/JFR/heap dump 临时诊断卷。Pod 存活期内可通过 kubectl cp 取回；
+# sizeLimit 是节点磁盘保护上限，应大于最大 JVM heap + JFR/GC 余量。
+diagnostics:
+  sizeLimit: "4Gi"
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -777,10 +782,18 @@ javaOpts: >-
 # ── OpenTelemetry Collector(无 sidecar 的 gateway 模式)────────────
 otelCollector:
   enabled: false        # 置 true 则与应用一起部署 Collector
-  imageTag: "0.116.0"
-  replicaCount: 1
+  imageTag: "0.127.0"
+  replicaCount: 2
   deploymentEnvironment: "production"
   memoryLimitMib: 512
+  queueSize: 10000
+  storageSizeLimit: "4Gi"
+  tailSampling:
+    numTraces: 50000
+    expectedNewTracesPerSecond: 1000
+    slowTraceThresholdMillis: 5000
+    baselinePercentage: 10
+  tempoEndpoint: "tempo:4317"              # 主链路存储，Grafana 直接查询
   jaegerEndpoint: "jaeger:4317"            # 用实际 Jaeger 地址覆盖
   lokiEndpoint: "http://loki:3100"         # 用实际 Loki 地址覆盖
   resources:
@@ -793,8 +806,11 @@ otelCollector:
 
 # ── 注入所有应用 pod 的 OTEL 环境变量(经 ConfigMap)────────
 otel:
-  endpoint: "http://batch-platform-otel-collector:4318"  # 集群内地址
-  samplingProbability: "0.1"
+  enabled: false
+  # 外部 Collector 地址。内置 Collector 开启时根据 Helm release fullname 自动生成。
+  endpoint: ""
+  # Collector 使用 tail sampling，应用端必须全量上报才能保留错误/慢链路。
+  samplingProbability: "1.0"
   logFormat: "ecs"                                        # 结构化 JSON
 
 # ── Phase D · per-tenant worker pool（大租户物理隔离，默认空=不渲染）────────────

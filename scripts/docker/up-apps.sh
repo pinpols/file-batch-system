@@ -51,8 +51,6 @@ if [[ "$_batch_s3_endpoint_explicit" -eq 0 ]]; then
   unset BATCH_S3_ENDPOINT
 fi
 unset _batch_s3_endpoint_explicit _env_file
-# shellcheck source=../lib/logging.sh
-source "$ROOT/scripts/lib/logging.sh"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
@@ -62,8 +60,7 @@ if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
   docker network create "$APP_NETWORK_NAME" >/dev/null
 fi
 
-DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
-echo "应用容器文件日志目录: ${DOCKER_LOG_DIR}（兼容 logs/docker）"
+echo "应用容器日志通过 docker compose logs 查询，并由 local driver 限量轮转。"
 
 compose_files=(
   -f docker-compose.yml

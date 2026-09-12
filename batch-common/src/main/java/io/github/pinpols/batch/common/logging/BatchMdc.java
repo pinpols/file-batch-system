@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.logging;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.Map;
 import org.slf4j.MDC;
 
 /** 基于 SLF4J MDC 的轻量封装，统一结构化日志字段写入。 */
@@ -43,6 +45,20 @@ public final class BatchMdc {
 
   public static void clear() {
     MDC.clear();
+  }
+
+  /** 保存当前线程上下文，用于 filter/aspect 结束时恢复外层 MDC。 */
+  public static Map<String, String> snapshot() {
+    return MDC.getCopyOfContextMap();
+  }
+
+  /** 恢复之前的完整 MDC，避免 clear() 误删 tracing 或外层 filter 字段。 */
+  public static void restore(Map<String, String> previous) {
+    if (EmptyChecks.isEmpty(previous)) {
+      MDC.clear();
+      return;
+    }
+    MDC.setContextMap(previous);
   }
 
   public static void withTenantAndTrace(String tenantId, String traceId, Runnable runnable) {

@@ -172,3 +172,19 @@ tolerations:
   {{- toYaml . | nindent 2 }}
 {{- end }}
 {{- end }}
+
+{{/*
+JVM 诊断目录。所有应用的 JAVA_OPTS 都会把 GC/JFR/heap dump 写入
+/var/log/app，因此该卷不能只在个别 workload 上挂载。sizeLimit 防止诊断
+文件挤爆节点磁盘。
+*/}}
+{{- define "batch-platform.diagnosticsVolumeMount" -}}
+- name: diagnostics
+  mountPath: /var/log/app
+{{- end }}
+
+{{- define "batch-platform.diagnosticsVolume" -}}
+- name: diagnostics
+  emptyDir:
+    sizeLimit: {{ .Values.diagnostics.sizeLimit | quote }}
+{{- end }}

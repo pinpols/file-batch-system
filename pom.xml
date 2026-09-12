@@ -81,6 +81,9 @@
         <jsqlparser.version>5.3</jsqlparser.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.12</spring-retry.version>
+        <!-- OTel Logback appender 与 Spring Boot 4.1 的 OTel 1.62 API 兼容；
+             instrumentation 项目尚以 alpha 后缀发布该独立工件。 -->
+        <opentelemetry-instrumentation.version>2.25.0-alpha</opentelemetry-instrumentation.version>
         <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.4.2</archunit.version>

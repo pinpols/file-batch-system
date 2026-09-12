@@ -337,6 +337,9 @@
             lease_expire_at = case when #{partitionStatus} = #{runningStatus} then lease_expire_at else null end,
             current_invocation_id = case when #{partitionStatus} = #{runningStatus} then current_invocation_id else null end,
             invocation_started_at = case when #{partitionStatus} = #{runningStatus} then invocation_started_at else null end,
+            <if test="outputSummary != null">
+            output_summary = #{outputSummary,jdbcType=VARCHAR}::jsonb,
+            </if>
             finished_at = case
                 when #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at

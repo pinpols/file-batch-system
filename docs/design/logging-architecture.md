@@ -21,15 +21,15 @@
 │                     后端（Spring Boot）                           │
 │                                                                  │
 │  console-api / orchestrator / trigger / worker-*                 │
-│    ├─→ slf4j + MDC → 应用日志文件（/var/log/batch/*.log）          │
+│    ├─→ slf4j + MDC → 结构化 stdout + OTLP logs                    │
 │    └─→ 业务审计表（PostgreSQL batch schema）                      │
 └──────────────────────────┬───────────────────────────────────────┘
                            ↓
 ┌──────────────────────────────────────────────────────────────────┐
 │                      日志管道（Loki 方案）                         │
 │                                                                  │
-│  Promtail → Loki → Grafana                                       │
-│  （按 service / tenantId / traceId / level 等标签查询）            │
+│  OTel Collector → Loki → Grafana                                 │
+│  （低基数 label 检索，高基数字段保留为 structured metadata）       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +63,8 @@ Console pattern：
 | 字段 | 注入来源 | 用途 |
 |------|---------|------|
 | `service` | 各模块启动时设置 | 区分控制面和各 worker |
-| `tenantId` | HTTP Filter / Kafka Consumer | 租户隔离 |
+| `tenantId` | 认证 Filter / Kafka Consumer | 已验证租户关联 |
+| `requestedTenantId` | 前置 HTTP Filter | 未认证请求头，仅用于安全审计 |
 | `traceId` | HTTP Filter / Kafka Consumer | 链路追踪 |
 | `requestId` | HTTP Filter | 请求关联 |
 | `jobInstanceId` | 调度循环 / Worker 消费 | 作业实例关联 |
@@ -89,12 +90,12 @@ Console pattern：
 
 ### 2.6 存储方案
 
-**应用运行日志不存数据库**，走文件 + Loki 管道：
+**应用运行日志不存数据库**，走结构化 stdout/OTLP + Loki 管道：
 
 ```
-应用 logback → 日志文件
+应用 logback → 结构化 stdout（容器平台兜底）+ OTLP logs
     ↓
-Promtail（regex 解析 MDC 字段为 label）
+OTel Collector（内存保护、批量、持久队列、失败重试）
     ↓
 Loki（按标签查询，不做全文索引）
     ↓
@@ -108,16 +109,16 @@ Grafana（可视化看板）
 
 ### 2.7 OTLP 链路追踪
 
-除 Loki 外，同时通过 OTLP 协议导出 Trace 和 Logs 到 OTel Collector：
+应用通过 Spring Boot 4 官方 `spring-boot-starter-opentelemetry` 创建 SDK、Trace/Log
+provider 和 OTLP exporter；`opentelemetry-logback-appender-1.0` 与
+`OpenTelemetryLogbackBridge` 负责把 SLF4J/Logback 事件送入 Log provider。Starter 本身不会
+自动采集 Logback 事件，因此这两部分缺一不可：
 
 ```yaml
 management:
-  otlp:
-    tracing:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces
-    logging:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs
-```
+  opentelemetry:
+    tracing.export.otlp.endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces
+    logging.export.otlp.endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs
 
 ---
 
@@ -165,9 +166,9 @@ management:
 | `api` | Axios 响应拦截器 | API 请求结果（method、url、status） |
 | `error` | 全局错误处理（Vue + window） | JS 异常、unhandledrejection |
 
-### 4.3 上报通道（方案 A：slf4j 直出）
+### 4.3 上报通道（方案 A：结构化 slf4j 直出）
 
-前端批量上报到后端，后端通过 slf4j 打到应用日志，复用 Promtail → Loki 管道：
+前端批量上报到后端，后端通过 slf4j 打到结构化 stdout/OTLP logs，复用 Collector → Loki 管道：
 
 ```
 前端 logger.ts
@@ -176,9 +177,9 @@ management:
               ↓
          ConsoleTelemetryController
               ↓ slf4j log.info/warn/error + MDC
-         应用日志文件（console.log）
+         结构化 stdout + OTLP logs
               ↓
-         Promtail → Loki → Grafana
+         OTel Collector → Loki → Grafana
 ```
 
 ### 4.4 上报策略
@@ -228,7 +229,7 @@ Authorization: Bearer <jwt>
 - `ts`：ISO 8601 时间字符串
 - `props`：任意 key-value 对象，后端序列化为 JSON 字符串记录
 - 需要 JWT 认证
-- 后端通过 MDC 注入 `frontendApp`、`frontendUserId`、`frontendEventType`、`frontendPage`，便于 Loki 按标签过滤
+- 后端通过 MDC 注入 `frontendApp`、`frontendUserId`、`frontendEventType`、`frontendPage`；这些字段默认作为 structured metadata 查询，不创建高基数索引标签
 - `error` 类型以 ERROR 级别记录，其余以 INFO 级别记录
 
 ### 4.6 选择方案 A 的原因
@@ -238,7 +239,7 @@ Authorization: Bearer <jwt>
 | 额外依赖 | 无 | 新增 Kafka topic |
 | 实现复杂度 | 一个 Controller | Controller + Producer + Consumer |
 | 适用量级 | 内部控制台（百级用户） | 千级以上用户 |
-| 观测管道 | 复用现有 Promtail → Loki | 需独立 Consumer 写 Loki/ClickHouse |
+| 观测管道 | 复用现有 OTel Collector → Loki | 需独立 Consumer 写 Loki/ClickHouse |
 
 当前是内部控制台场景，方案 A 零额外依赖、完全复用现有日志管道，够用。未来用户量增长后，只需将 Controller 中的 `log.info()` 替换为 `kafkaTemplate.send()` 即可平滑切换到方案 B。
 
@@ -252,7 +253,7 @@ Authorization: Bearer <jwt>
 | 请求链路追踪 | Loki + Tempo | 按 traceId 查看完整调用链 |
 | 前端错误监控 | Loki | `{frontendCategory="error"}` 按页面/时间聚合 |
 | 前端用户行为 | Loki | `{frontendCategory="click"}` 按 action 统计 |
-| 租户维度日志 | Loki | `{tenantId="xxx"}` 按租户过滤所有前后端日志 |
+| 租户维度日志 | Loki | 先按 service label 缩小时间窗，再用 structured metadata 过滤 tenantId |
 | 业务审计查询 | PostgreSQL | config_change_log、file_audit_log 等表的 Grafana 直连 |
 
 ---
@@ -261,17 +262,17 @@ Authorization: Bearer <jwt>
 
 ```logql
 # 后端 ERROR 日志
-{service="batch-orchestrator"} |= "ERROR"
+{service_name="batch-orchestrator"} |= "ERROR"
 
-# 按租户查日志
-{tenantId="default-tenant"}
+# 按租户查日志（tenantId 不是 label）
+{service_name="batch-orchestrator"} | tenantId="default-tenant"
 
 # 前端错误日志
-{frontendCategory="error"}
+{service_name="batch-console-api"} | frontendEventType="error"
 
 # 前端某页面的点击行为
-{frontendCategory="click", frontendPage="/jobs"}
+{service_name="batch-console-api"} | frontendEventType="click" | frontendPage="/jobs"
 
 # 按 traceId 追踪完整链路
-{traceId="abc123"}
+{service_name=~"batch-.+"} | traceId="abc123"
 ```

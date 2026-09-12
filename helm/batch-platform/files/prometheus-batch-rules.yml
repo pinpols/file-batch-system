@@ -12,6 +12,83 @@ groups:
           summary: "{{ $labels.job }} is down"
           description: "Prometheus target {{ $labels.instance }} for {{ $labels.job }} is not scraping successfully."
 
+      - alert: BatchTelemetryCollectorDown
+        expr: absent(up{job=~".*otel.*collector.*"}) or max(up{job=~".*otel.*collector.*"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "OpenTelemetry Collector is unavailable"
+          description: "Collector metrics have been unreachable for two minutes; traces and OTLP logs may be unavailable."
+
+      - alert: BatchTelemetryBackendDown
+        expr: up{job=~"loki|tempo"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "Telemetry backend {{ $labels.job }} is unavailable"
+          description: "{{ $labels.job }} has been unreachable for two minutes; investigate its storage and ingestion path."
+
+      - alert: BatchLokiDiscardingLogs
+        expr: sum(increase(loki_discarded_samples_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "Loki is discarding logs"
+          description: "Loki discarded {{ $value | humanize }} log samples in five minutes."
+
+      - alert: BatchTempoDiscardingSpans
+        expr: sum(increase(tempo_discarded_spans_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "Tempo is discarding spans"
+          description: "Tempo discarded {{ $value | humanize }} spans in five minutes."
+
+      - alert: BatchTelemetryExportFailures
+        expr: sum by (exporter, data_type) (increase(otelcol_exporter_send_failed_spans[5m]) + increase(otelcol_exporter_send_failed_log_records[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "OpenTelemetry exporter is dropping telemetry"
+          description: "Exporter {{ $labels.exporter }} failed to send {{ $value | humanize }} telemetry records in five minutes."
+
+      - alert: BatchTelemetryReceiverRefusedData
+        expr: sum(increase(otelcol_receiver_refused_spans[5m])) + sum(increase(otelcol_receiver_refused_log_records[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "OpenTelemetry Collector refused incoming telemetry"
+          description: "The Collector refused spans or logs, usually because memory protection or backpressure is active."
+
+      - alert: BatchTelemetryExporterQueueNearCapacity
+        expr: max by (exporter) (otelcol_exporter_queue_size / clamp_min(otelcol_exporter_queue_capacity, 1)) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "OpenTelemetry exporter queue is near capacity"
+          description: "Exporter {{ $labels.exporter }} queue has stayed above 80%; inspect Loki/Tempo/Jaeger availability."
+
       - alert: BatchSlaViolationsPresent
         expr: batch_job_sla_violation_count > 0
         for: 10m

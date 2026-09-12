@@ -1,9 +1,16 @@
 # 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
 # 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml up -d
+x-observability-logging: &observability-logging
+  driver: local
+  options:
+    max-size: ${BATCH_DOCKER_LOG_MAX_SIZE:-50m}
+    max-file: ${BATCH_DOCKER_LOG_MAX_FILES:-3}
+
 services:
 
   # ── 指标 ──────────────────────────────────────────────────────────
   prometheus:
+    logging: *observability-logging
     image: prom/prometheus:${PROMETHEUS_IMAGE_TAG:-v3.11.3}
     container_name: batch-prometheus
     restart: unless-stopped
@@ -25,6 +32,7 @@ services:
       - batch-network
 
   alertmanager:
+    logging: *observability-logging
     image: prom/alertmanager:${ALERTMANAGER_IMAGE_TAG:-v0.28.1}
     container_name: batch-alertmanager
     restart: unless-stopped
@@ -39,6 +47,7 @@ services:
 
   # ── 链路 ──────────────────────────────────────────────────────────
   jaeger:
+    logging: *observability-logging
     image: jaegertracing/jaeger:${JAEGER_IMAGE_TAG:-2.7.0}
     container_name: batch-jaeger
     restart: unless-stopped
@@ -51,6 +60,7 @@ services:
       - batch-network
 
   tempo:
+    logging: *observability-logging
     image: grafana/tempo:${TEMPO_IMAGE_TAG:-2.6.1}
     container_name: batch-tempo
     restart: unless-stopped
@@ -67,6 +77,7 @@ services:
 
   # ── 日志 ──────────────────────────────────────────────────────────
   loki:
+    logging: *observability-logging
     image: grafana/loki:${LOKI_IMAGE_TAG:-3.5.0}
     container_name: batch-loki
     restart: unless-stopped
@@ -81,6 +92,7 @@ services:
 
   # ── OTel Collector ────────────────────────────────────────────────
   otel-collector:
+    logging: *observability-logging
     image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.127.0}
     container_name: batch-otel-collector
     restart: unless-stopped
@@ -89,6 +101,7 @@ services:
       DEPLOYMENT_ENVIRONMENT: local
     volumes:
       - ./deploy/docker/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
+      - otel-collector-data:/var/lib/otelcol
     ports:
       - "${OTEL_GRPC_PORT:-4317}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"
@@ -101,6 +114,7 @@ services:
 
   # ── 仪表盘 ───────────────────────────────────────────────────────
   grafana:
+    logging: *observability-logging
     image: grafana/grafana:${GRAFANA_IMAGE_TAG:-11.6.0}
     container_name: batch-grafana
     restart: unless-stopped
@@ -125,6 +139,7 @@ services:
 
   # ── 基础设施 Exporters ───────────────────────────────────────────
   redis-exporter:
+    logging: *observability-logging
     image: oliver006/redis_exporter:${REDIS_EXPORTER_IMAGE_TAG:-v1.84.0}
     container_name: batch-redis-exporter
     restart: unless-stopped
@@ -137,6 +152,7 @@ services:
         condition: service_healthy
 
   postgres-exporter:
+    logging: *observability-logging
     image: prometheuscommunity/postgres-exporter:${POSTGRES_EXPORTER_IMAGE_TAG:-v0.19.1}
     container_name: batch-postgres-exporter
     restart: unless-stopped
@@ -153,6 +169,7 @@ services:
         condition: service_healthy
 
   kafka-exporter:
+    logging: *observability-logging
     image: danielqsj/kafka-exporter:${KAFKA_EXPORTER_IMAGE_TAG:-v1.9.0}
     container_name: batch-kafka-exporter
     restart: unless-stopped
@@ -164,6 +181,7 @@ services:
         condition: service_healthy
 
   node-exporter:
+    logging: *observability-logging
     image: prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG:-v1.11.1}
     container_name: batch-node-exporter
     restart: unless-stopped
@@ -171,6 +189,7 @@ services:
       - batch-network
 
   cadvisor:
+    logging: *observability-logging
     image: gcr.io/cadvisor/cadvisor:${CADVISOR_IMAGE_TAG:-v0.52.1}
     container_name: batch-cadvisor
     restart: unless-stopped
@@ -186,6 +205,7 @@ volumes:
   prometheus-data:
   loki-data:
   tempo-data:
+  otel-collector-data:
   grafana-data:
 
 networks:

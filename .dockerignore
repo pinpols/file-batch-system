@@ -24,6 +24,13 @@ qodana.sarif.json
 examples
 .claude
 .local
+deploy/docker/biz-shard-init
+deploy/docker/compose
+deploy/docker/mockserver
+deploy/docker/observability
+deploy/docker/postgres
+deploy/docker/postgres-replica
+deploy/docker/sftp
 **/target/**
 # flatten-maven-plugin 会在模块目录重写该文件；它不是运行时输入，纳入构建上下文会让
 # 多服务共享 builder 的源码层持续失效，导致每个镜像重复执行全仓 Maven package。
@@ -43,4 +50,3 @@ examples/**/target
 examples/**/node_modules
 !batch-e2e-tests/
 !batch-e2e-tests/pom.xml
-deploy/docker/sftp/data

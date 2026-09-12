@@ -1279,7 +1279,7 @@ All console APIs support versioned paths via URL prefix:
 - `props`: arbitrary key-value object, backend serializes to JSON for logging
 - Outer `app` / `userId` / `sessionId` provide session context without repeating per event
 - Max 50 events per batch
-- Backend logs each event via slf4j with MDC fields (`frontendApp`, `frontendUserId`, `frontendEventType`, `frontendPage`), then Promtail picks up into Loki
+- Backend logs each event via slf4j with MDC fields (`frontendApp`, `frontendUserId`, `frontendEventType`, `frontendPage`), then the OpenTelemetry pipeline exports it to Loki
 - `error` type events are logged at ERROR level; all others at INFO level
 - Requires JWT authentication (any authenticated console user)
 - Frontend should batch non-critical events (click, route) and report errors immediately

@@ -15,6 +15,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
     response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
     response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
+    Map<String, String> previousContext = BatchMdc.snapshot();
     try {
       BatchMdc.put(StructuredLogField.SERVICE, applicationName);
       BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
@@ -80,7 +82,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       }
       filterChain.doFilter(request, response);
     } finally {
-      BatchMdc.clear();
+      BatchMdc.restore(previousContext);
     }
   }
 

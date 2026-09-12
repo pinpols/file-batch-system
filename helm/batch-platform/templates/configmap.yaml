@@ -156,11 +156,19 @@ data:
   LC_ALL: {{ .Values.batchLocale | quote }}
 
   # ── OpenTelemetry ──────────────────────────────────────────────────────────
-  # R7-A4-P1: 只在 otelCollector.enabled=true 时输出 endpoint，否则 OTLP exporter
-  # 解析不到 service 持续报 "no such host" / 启动时 DNS 探测超时。日志格式与采样
-  # 始终输出（即使 collector 关，logback JSON / 日志采样阈值仍要生效）。
+  # 应用可以连 chart 内 Collector，也可以连集群外部 Collector。
+  # 两个开关都关闭时显式禁用 SDK，避免无意义的 DNS/重试噪音。
+  {{- $otelEnabled := or .Values.otel.enabled .Values.otelCollector.enabled }}
+  MANAGEMENT_OPENTELEMETRY_ENABLED: {{ $otelEnabled | quote }}
+  {{- if $otelEnabled }}
+  {{- $otelEndpoint := .Values.otel.endpoint }}
   {{- if .Values.otelCollector.enabled }}
-  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}
+  {{- $otelEndpoint = printf "http://%s-otel-collector:4318" (include "batch-platform.fullname" .) }}
+  {{- end }}
+  {{- if empty $otelEndpoint }}
+  {{- fail "otel.enabled=true 或 otelCollector.enabled=true 时必须配置 otel.endpoint" }}
+  {{- end }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ $otelEndpoint | quote }}
   {{- end }}
   OTEL_SAMPLING_PROBABILITY: {{ .Values.otel.samplingProbability | quote }}
   BATCH_LOG_FORMAT: {{ .Values.otel.logFormat | quote }}

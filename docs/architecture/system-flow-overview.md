@@ -300,7 +300,7 @@ flowchart LR
   GRAF["Grafana<br/>(三件套统一入口)"]:::svc
   USER([运营 / SRE]):::user
 
-  SVC1 ==>|"OTLP HTTP :4318<br/>(traces + logs · micrometer-tracing-bridge-otel)"| OTEL
+  SVC1 ==>|"OTLP HTTP :4318<br/>(traces + logs · Spring Boot OTel starter)"| OTEL
   SVC2 ==>|"OTLP HTTP :4318"| OTEL
   SVC3 ==>|"OTLP HTTP :4318"| OTEL
   SVC4 ==>|"OTLP HTTP :4318"| OTEL

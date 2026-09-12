@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
@@ -13,6 +15,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -28,6 +31,7 @@ class ConsoleRequestContextFilterTest {
 
   @BeforeEach
   void setUp() {
+    BatchMdc.clear();
     filter = new ConsoleRequestContextFilter(new ConsoleSecurityResponseWriter(new ObjectMapper()));
     ReflectionTestUtils.setField(filter, "applicationName", "batch-console-api");
     SecurityContextHolder.clearContext();
@@ -73,6 +77,29 @@ class ConsoleRequestContextFilterTest {
     ConsoleRequestMetadata metadata = (ConsoleRequestMetadata)
         request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
     assertThat(metadata.tenantId()).isEqualTo("tenant-a");
+  }
+
+  @Test
+  void shouldExposeResolvedTenantInChainAndRestoreOuterMdc() throws Exception {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")),
+            "secret",
+            Set.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+    MockHttpServletRequest request = baseRequest();
+    request.addHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER, "tenant-a");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    BatchMdc.put(StructuredLogField.TENANT_ID, "outer-tenant");
+    AtomicReference<String> tenantInChain = new AtomicReference<>();
+
+    filter.doFilter(
+        request,
+        response,
+        (servletRequest, servletResponse) ->
+            tenantInChain.set(BatchMdc.snapshot().get(StructuredLogField.TENANT_ID)));
+
+    assertThat(tenantInChain).hasValue("tenant-a");
+    assertThat(BatchMdc.snapshot()).containsEntry(StructuredLogField.TENANT_ID, "outer-tenant");
   }
 
   @Test

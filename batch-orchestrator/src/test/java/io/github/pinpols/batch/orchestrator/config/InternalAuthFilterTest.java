@@ -10,10 +10,13 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -27,6 +30,7 @@ class InternalAuthFilterTest {
 
   @BeforeEach
   void setUp() {
+    BatchMdc.clear();
     props = new BatchSecurityProperties();
     props.setInternalSecret("super-secret");
     props.setBypassMode(false);
@@ -47,10 +51,14 @@ class InternalAuthFilterTest {
             Optional.of(new ApiKeyEntity(1L, "tx", "n", "*", true, null, "h", "s", "pbkdf2")));
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
-    FilterChain chain = mock(FilterChain.class);
+    BatchMdc.put(StructuredLogField.TENANT_ID, "outer-tenant");
+    AtomicReference<String> tenantInChain = new AtomicReference<>();
+    FilterChain chain = (request, response) ->
+        tenantInChain.set(BatchMdc.snapshot().get(StructuredLogField.TENANT_ID));
     filter.doFilterInternal(req, resp, chain);
 
-    verify(chain).doFilter(req, resp);
+    assertThat(tenantInChain).hasValue("tx");
+    assertThat(BatchMdc.snapshot()).containsEntry(StructuredLogField.TENANT_ID, "outer-tenant");
     assertThat(req.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID)).isEqualTo("tx");
     assertThat(req.getAttribute(InternalAuthFilter.ATTR_API_KEY_RECORD)).isNotNull();
   }

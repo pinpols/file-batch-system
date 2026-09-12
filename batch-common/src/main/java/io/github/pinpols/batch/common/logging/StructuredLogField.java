@@ -5,6 +5,7 @@ public final class StructuredLogField {
 
   public static final String SERVICE = "service";
   public static final String TENANT_ID = "tenantId";
+  public static final String REQUESTED_TENANT_ID = "requestedTenantId";
   public static final String TRACE_ID = "traceId";
   public static final String REQUEST_ID = "requestId";
   public static final String JOB_INSTANCE_ID = "jobInstanceId";
@@ -15,6 +16,10 @@ public final class StructuredLogField {
   public static final String STAGE = "stage";
   public static final String FILE_ID = "fileId";
   public static final String OPERATOR_ID = "operatorId";
+  public static final String FRONTEND_APP = "frontendApp";
+  public static final String FRONTEND_USER_ID = "frontendUserId";
+  public static final String FRONTEND_EVENT_TYPE = "frontendEventType";
+  public static final String FRONTEND_PAGE = "frontendPage";
 
   private StructuredLogField() {}
 }

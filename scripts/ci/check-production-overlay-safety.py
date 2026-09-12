@@ -44,6 +44,9 @@ def main() -> int:
         ("workerAtomic.requireIsolation", ("workerAtomic", "requireIsolation")),
         ("workerAtomic.isolationAcknowledged", ("workerAtomic", "isolationAcknowledged")),
         ("workerAtomic.networkPolicy.enabled", ("workerAtomic", "networkPolicy", "enabled")),
+        ("otel.enabled", ("otel", "enabled")),
+        ("serviceMonitor.enabled", ("serviceMonitor", "enabled")),
+        ("prometheusRule.enabled", ("prometheusRule", "enabled")),
     )
     for label, path in required_true:
         if not is_true(get(values, *path)):
@@ -51,6 +54,19 @@ def main() -> int:
 
     if get(values, "orchestrator", "quota", "redisFailureMode") != "FAIL_CLOSED":
         errors.append("orchestrator.quota.redisFailureMode must be FAIL_CLOSED in production")
+
+    otel_endpoint = get(values, "otel", "endpoint")
+    if not isinstance(otel_endpoint, str) or not otel_endpoint.strip():
+        errors.append("otel.endpoint must name the production OpenTelemetry Collector")
+    elif not is_true(get(values, "otelCollector", "enabled")) and "batch-platform-otel-collector" in otel_endpoint:
+        errors.append("otel.endpoint must not target the disabled in-chart Collector")
+
+    try:
+        sampling_probability = float(get(values, "otel", "samplingProbability"))
+        if sampling_probability != 1.0:
+            errors.append("otel.samplingProbability must be 1.0 so Collector tail sampling can retain errors")
+    except (TypeError, ValueError):
+        errors.append("otel.samplingProbability must be a numeric string")
 
     for label, path in (
         ("workerAtomic.serviceAccountName", ("workerAtomic", "serviceAccountName")),

@@ -188,17 +188,39 @@ management:
   # ── 分布式追踪 ──────────────────────────────────────────────────
   tracing:
     sampling:
-      # 生产建议 0.1（10%）；staging/压测设为 1.0；本地默认 1.0 方便调试
+      # 使用 Collector tail sampling 时必须设 1.0，才能保留全部错误/慢链路。
       probability: ${OTEL_SAMPLING_PROBABILITY:1.0}
-  # ── OTLP 导出（链路 Trace 与日志 → OTel Collector）────────────────────
-  otlp:
+    export:
+      otlp:
+        enabled: true
+  # ── Spring Boot 4 OpenTelemetry / OTLP 导出───────────────────
+  # MANAGEMENT_OPENTELEMETRY_ENABLED 是唯一总开关，默认关闭以避免本地重试噪音。
+  opentelemetry:
+    enabled: ${MANAGEMENT_OPENTELEMETRY_ENABLED:false}
+    resource-attributes:
+      service.name: ${spring.application.name:batch}
+      service.namespace: batch-platform
     tracing:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/traces
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/traces
     logging:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/logs
+      limits:
+        max-attributes: 64
+        max-attribute-value-length: 4096
+      export:
+        max-queue-size: 8192
+        max-batch-size: 512
+        schedule-delay: 1s
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/logs
+  logging:
+    export:
+      otlp:
+        enabled: true
 
 # ------------------------------------------------------------------
-# 结构化日志（MDC 字段统一：service / tenantId / traceId / requestId / jobInstanceId / fileId）
+# 结构化日志（字段定义以 StructuredLogField 为准）
 # 生产/K8s 环境：设 BATCH_LOG_FORMAT=ecs 输出 JSON（Loki / Elasticsearch 可直接解析）
 # 本地开发：留空，使用下方 console pattern（可读格式）
 # ------------------------------------------------------------------
@@ -209,6 +231,8 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
   level:
+    # 统一由 Spring Boot LoggingSystem 管理，避免模块自带 logback-spring.xml 覆盖结构化 encoder。
+    org.springframework.aop.framework.CglibAopProxy: ERROR
     # Kafka 客户端在构造 Consumer/Producer 时默认以 INFO 转储完整 ConsumerConfig/ProducerConfig
     # （bootstrap.servers / security.protocol / ssl.* / sasl.jaas.config 等），
     # 生产走 SASL/SCRAM 时会把明文凭证打进日志。压到 WARN：保留客户端错误，抑制配置转储。

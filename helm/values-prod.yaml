@@ -276,3 +276,24 @@ javaOpts: >-
 # 否则 OTLP exporter 持续投递失败产生噪音日志。
 otelCollector:
   enabled: false
+
+# 生产使用 monitoring namespace 内的集中 Collector。若实际服务名不同，
+# 发布 overlay 必须覆盖 endpoint；CI 会拒绝回落到被关闭的 chart 内地址。
+otel:
+  enabled: true
+  endpoint: "http://otel-collector.monitoring.svc.cluster.local:4318"
+  # 应用端全量上报，由 Collector tail sampling 保留所有错误/慢链路，
+  # 并对普通成功链路按比例采样。
+  samplingProbability: "1.0"
+  logFormat: "ecs"
+
+# 生产必须让 Prometheus Operator 发现应用指标并加载告警规则。
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+prometheusRule:
+  enabled: true
+  labels:
+    release: prometheus

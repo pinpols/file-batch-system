@@ -13,6 +13,10 @@ data:
     extensions:
       health_check:
         endpoint: 0.0.0.0:13133
+      file_storage:
+        directory: /var/lib/otelcol/storage
+        create_directory: true
+        timeout: 10s
 
     receivers:
       otlp:
@@ -38,19 +42,59 @@ data:
           - key: service.namespace
             value: batch-platform
             action: upsert
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: {{ .Values.otelCollector.tailSampling.numTraces }}
+        expected_new_traces_per_sec: {{ .Values.otelCollector.tailSampling.expectedNewTracesPerSecond }}
+        policies:
+          - name: errors
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+          - name: slow
+            type: latency
+            latency:
+              threshold_ms: {{ .Values.otelCollector.tailSampling.slowTraceThresholdMillis }}
+          - name: baseline
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: {{ .Values.otelCollector.tailSampling.baselinePercentage }}
+      redaction:
+        allow_all_keys: true
+        blocked_key_patterns:
+          - "(?i).*(authorization|password|passwd|secret|token|api[_-]?key|credential).*"
+        summary: silent
 
     exporters:
+      otlp/tempo:
+        endpoint: {{ .Values.otelCollector.tempoEndpoint }}
+        tls:
+          insecure: true
+        sending_queue: &durable_queue
+          enabled: true
+          num_consumers: 8
+          queue_size: {{ .Values.otelCollector.queueSize }}
+          storage: file_storage
+        retry_on_failure: &retry_policy
+          enabled: true
+          initial_interval: 1s
+          max_interval: 30s
+          max_elapsed_time: 10m
       otlp/jaeger:
         endpoint: {{ .Values.otelCollector.jaegerEndpoint }}
         tls:
           insecure: true
+        sending_queue: *durable_queue
+        retry_on_failure: *retry_policy
       otlphttp/loki:
         endpoint: {{ .Values.otelCollector.lokiEndpoint }}/otlp
         tls:
           insecure: true
+        sending_queue: *durable_queue
+        retry_on_failure: *retry_policy
 
     service:
-      extensions: [health_check]
+      extensions: [health_check, file_storage]
       telemetry:
         logs:
           level: warn
@@ -59,11 +103,11 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, resource, batch]
-          exporters: [otlp/jaeger]
+          processors: [memory_limiter, resource, redaction, tail_sampling, batch]
+          exporters: [otlp/tempo, otlp/jaeger]
         logs:
           receivers: [otlp]
-          processors: [memory_limiter, resource, batch]
+          processors: [memory_limiter, resource, redaction, batch]
           exporters: [otlphttp/loki]
 ---
 # ── Deployment ────────────────────────────────────────────────────
@@ -85,10 +129,13 @@ spec:
         {{- include "batch-platform.selectorLabels" (merge (dict "component" "otel-collector") .) | nindent 8 }}
     spec:
       {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
+      {{- include "batch-platform.podSecurityDefaults" . | nindent 6 }}
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:{{ .Values.otelCollector.imageTag }}
           imagePullPolicy: IfNotPresent
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           args: ["--config=/etc/otelcol/config.yaml"]
           env:
             - name: BATCH_TIMEZONE_DEFAULT_ZONE
@@ -110,6 +157,8 @@ spec:
             - name: config
               mountPath: /etc/otelcol
               readOnly: true
+            - name: storage
+              mountPath: /var/lib/otelcol
           livenessProbe:
             httpGet:
               path: /
@@ -128,6 +177,9 @@ spec:
         - name: config
           configMap:
             name: {{ include "batch-platform.fullname" . }}-otel-collector-config
+        - name: storage
+          emptyDir:
+            sizeLimit: {{ .Values.otelCollector.storageSizeLimit | quote }}
 ---
 # ── Service ───────────────────────────────────────────────────────
 apiVersion: v1
@@ -151,4 +203,17 @@ spec:
     - name: metrics
       port: 8888
       targetPort: metrics
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" "otel-collector") .) | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" "otel-collector") .) | nindent 6 }}
 {{- end }}

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
@@ -192,6 +193,50 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         TENANT,
         fannedOut.instanceId());
     assertThat(resultVersionRows).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("终态报告把分区状态、计数和输出摘要原子落库")
+  void terminalReport_persistsPartitionSummaryWithStatusTransition() {
+    FannedOutInstance fannedOut = launchBundle(1);
+    Shard shard = claimAllShards(fannedOut).get(0);
+
+    reportOutcome(shard, true);
+
+    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, shard.partitionId());
+    assertThat(partition.getPartitionStatus()).isEqualTo(PartitionStatus.SUCCESS.code());
+    Map<?, ?> outputSummary = JsonUtils.fromJson(partition.getOutputSummary(), Map.class);
+    assertThat(((Number) outputSummary.get("taskId")).longValue()).isEqualTo(shard.taskId());
+    assertThat(outputSummary.get("success")).isEqualTo(true);
+    assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("终态父实例的分区和任务同时活跃时只计一次")
+  void terminalInstanceWithActivePartitionAndTask_isCountedOnce() {
+    long before = jobInstanceMapper.countTerminalInstancesWithActiveChildren();
+    FannedOutInstance fannedOut = launchBundle(1);
+    claimAllShards(fannedOut);
+
+    jdbcTemplate.update(
+        "update batch.job_instance set instance_status = 'SUCCESS'"
+            + " where tenant_id = ? and id = ?",
+        TENANT,
+        fannedOut.instanceId());
+
+    assertThat(jobInstanceMapper.countTerminalInstancesWithActiveChildren()).isEqualTo(before + 1);
+
+    jdbcTemplate.update(
+        "update batch.job_partition set partition_status = 'SUCCESS'"
+            + " where tenant_id = ? and job_instance_id = ?",
+        TENANT,
+        fannedOut.instanceId());
+    jdbcTemplate.update(
+        "update batch.job_task set task_status = 'SUCCESS'"
+            + " where tenant_id = ? and job_instance_id = ?",
+        TENANT,
+        fannedOut.instanceId());
+    assertThat(jobInstanceMapper.countTerminalInstancesWithActiveChildren()).isEqualTo(before);
   }
 
   @Test

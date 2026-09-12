@@ -330,8 +330,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           command.tenantId(), task.getJobInstanceId()));
     }
 
+    String outputSummary = TaskOutcomeSummaryBuilder.buildOutputSummary(command, task);
     if (command.success()) {
-      applySuccessOutcome(command, partition);
+      applySuccessOutcome(command, partition, outputSummary);
       // ADR-030 §F：worker 上报的 ContentVerifier 失败 → 同事务写 outbox_event(verifier.failure.v1)。
       // 软告警语义：不翻转 task SUCCESS，仅产出可订阅的事件供告警面板消费。
       collaborators.verifierFailureOutboxService().writeVerifierFailures(command, task);
@@ -350,19 +351,16 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
       }
     } else {
-      applyFailureOutcome(command, partition, retryScheduled);
+      applyFailureOutcome(command, partition, retryScheduled, outputSummary);
     }
-    if (EmptyChecks.isNotNull(partition)) {
-      // R3-P0-5：传 invocationId 作为 CAS 守卫，迟到的旧 invocation 的 report 不再覆盖新 output。
-      // command 携带 partitionInvocationId 来自 task CLAIM 时的快照；与 partition.current_invocation_id 比对。
+    if (EmptyChecks.isNotNull(partition) && retryScheduled) {
+      // RETRYING 使用独立状态更新；保留 invocation fence，防止迟到报告覆盖下一次执行的输出。
+      // SUCCESS/最终 FAILED 已把摘要合并进 markStatus，同一 CAS 原子落库，避免每个终态多一次 UPDATE/WAL。
       jobMappers.jobPartitionMapper.updateOutputSummary(
-          command.tenantId(),
-          partition.getId(),
-          TaskOutcomeSummaryBuilder.buildOutputSummary(command, task),
-          command.partitionInvocationId());
+          command.tenantId(), partition.getId(), outputSummary, command.partitionInvocationId());
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
-    updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
+    updateStepInstanceProgress(command, task, retryScheduled, finishedAt, outputSummary);
     if (EmptyChecks.isNotNull(jobInstance)) {
       instanceProgressor.advance(command, task, jobInstance, finishedAt, this::applyTaskOutcome);
     }
@@ -387,7 +385,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   /** 处理成功路径：将分区标记为 SUCCESS。 */
-  private void applySuccessOutcome(TaskOutcomeCommand command, JobPartitionEntity partition) {
+  private void applySuccessOutcome(
+      TaskOutcomeCommand command, JobPartitionEntity partition, String outputSummary) {
     if (EmptyChecks.isNull(partition)) {
       return;
     }
@@ -402,6 +401,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .terminalStatus2(PartitionStatus.FAILED.code())
             .terminalStatus3(PartitionStatus.CANCELLED.code())
             .terminalStatus4(PartitionStatus.TERMINATED.code())
+            .outputSummary(outputSummary)
             .expectedVersion(partition.getVersion())
             .build());
     warnIfCasMiss(partitionUpdated, "partition markStatus(SUCCESS)", partition.getId());
@@ -409,7 +409,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   /** 处理失败/重试路径：根据是否安排重试，将分区标记为 RETRYING 或 FAILED。 */
   private void applyFailureOutcome(
-      TaskOutcomeCommand command, JobPartitionEntity partition, boolean retryScheduled) {
+      TaskOutcomeCommand command,
+      JobPartitionEntity partition,
+      boolean retryScheduled,
+      String outputSummary) {
     if (EmptyChecks.isNull(partition)) {
       return;
     }
@@ -432,6 +435,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           .terminalStatus2(PartitionStatus.FAILED.code())
           .terminalStatus3(PartitionStatus.CANCELLED.code())
           .terminalStatus4(PartitionStatus.TERMINATED.code())
+          .outputSummary(outputSummary)
           .expectedVersion(partition.getVersion())
           .build());
       warnIfCasMiss(failUpdated, "partition markStatus(FAILED)", partition.getId());
@@ -439,7 +443,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   private void updateStepInstanceProgress(
-      TaskOutcomeCommand command, JobTaskEntity task, boolean retryScheduled, Instant finishedAt) {
+      TaskOutcomeCommand command,
+      JobTaskEntity task,
+      boolean retryScheduled,
+      Instant finishedAt,
+      String outputSummary) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
       return;
     }
@@ -459,7 +467,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .stepStatus(nextStatus)
         .retryCount(nextRetryCount)
         .relatedFileId(TaskOutcomePayloadSupport.resolveRelatedFileId(task, command))
-        .resultSummary(TaskOutcomeSummaryBuilder.buildOutputSummary(command, task))
+        .resultSummary(outputSummary)
         .errorCode(command.errorCode())
         .errorMessage(command.errorMessage())
         .errorKey(command.errorKey())

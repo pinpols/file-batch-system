@@ -18,9 +18,9 @@
 
 | 项               | 说明                                                                                                                                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| OTel 桥接 + 导出    | `batch-common`：`micrometer-tracing-bridge-otel`、`opentelemetry-exporter-otlp`（JDK sender），BOM 由 Spring Boot 4.1.0 管理                                                                                   |
+| OTel 桥接 + 导出    | `batch-common`：Starter 装配 SDK/provider/exporter；官方 Logback appender + `OpenTelemetryLogbackBridge` 接入应用日志 |
 | `@Observed` AOP | `BatchObservabilityAutoConfiguration` → `ObservedAspect` bean                                                                                                                                          |
-| 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；`management.otlp.tracing.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/traces` |
+| 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；`management.opentelemetry.*.export.otlp.endpoint` 统一指向 Collector |
 | 种子 manual span  | `orch.launch`、`orch.partition.dispatch`、`orch.workflow.param-resolve`（后续按需追加）                                                                                                                          |
 | 业务 trace ↔ OTel | `OtelTraceContext.currentTraceIdOrNull()`；`IdGenerator.newTraceId()` 优先当前 OTel span traceId（详见 §后果）                                                                                                    |
 
@@ -65,10 +65,8 @@ Spring Boot 4.x + 已加依赖后自动获得：
 
 - 业务持久化 `trace_id` 与 OTel traceId **入口对齐**：`OtelTraceContext.currentTraceIdOrNull()`；`IdGenerator.newTraceId()` 优先取当前 OTel span 的 traceId（32 hex）；无 OTel context 时 fallback UUID。HTTP/Kafka 自动 instrument 建立 current span 后，新建业务的 `trace_id` 与 Jaeger/Tempo 查询一致。**反向**（仅用外部传入的业务 trace_id 覆盖 OTel TraceContext）按 OTel SDK 惯例不做 — 外部传入值仍可走 baggage / MDC / 日志并行关联。
 
-**后续演进（可选立项）**：
-
-- **运维 dashboard**：Grafana 已配但未导入 batch 专属 trace dashboard。
-- **采样策略动态调整**：当前固定 `OTEL_SAMPLING_PROBABILITY`，生产可考虑 head-based / tail-based 自适应采样。
+**采样策略**：应用端使用 100% head sampling，Collector 使用 tail sampling
+全量保留错误/慢链路，普通成功链路保留 10%。
 
 ## 测试覆盖
 
@@ -87,3 +85,4 @@ Spring Boot 4.x + 已加依赖后自动获得：
 | ~2026-04   | batch-defaults.yml 加 management.tracing 配置                                                                              |
 | 2026-05-03 | **本 ADR**：补 ObservedAspect bean + 3 个种子 manual span，闭环可用                                                                |
 | 2026-05-03 | **业务 trace_id 桥接**：`OtelTraceContext` + `IdGenerator.newTraceId()` 优先用 OTel current span traceId，业务字段与 OTel timeline 一致 |
+| 2026-09-12 | 切换 Spring Boot 4 官方 OTel starter；补齐 Logback→OTel 桥接；增加持久队列、重试、脱敏、tail sampling 和管道告警 |

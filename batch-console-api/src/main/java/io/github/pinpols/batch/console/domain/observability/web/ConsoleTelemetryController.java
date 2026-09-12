@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.BatchMdc;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.web.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.web.request.FrontendTelemetryRequest.Event;
@@ -13,14 +15,13 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 前端遥测日志收集：接收前端埋点，通过 slf4j + MDC 输出结构化日志，由 Promtail 采集进 Loki。 */
+/** 前端遥测收集：接收前端埋点，通过 slf4j + MDC 输出结构化日志。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/telemetry")
@@ -38,14 +39,14 @@ public class ConsoleTelemetryController {
   @PostMapping("/events")
   public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
     validateProps(request);
-    MDC.put("frontendApp", request.app());
+    BatchMdc.put(StructuredLogField.FRONTEND_APP, request.app());
     if (request.userId() != null) {
-      MDC.put("frontendUserId", request.userId());
+      BatchMdc.put(StructuredLogField.FRONTEND_USER_ID, request.userId());
     }
     try {
       for (Event event : request.events()) {
-        MDC.put("frontendEventType", event.type());
-        MDC.put("frontendPage", event.page() != null ? event.page() : "");
+        BatchMdc.put(StructuredLogField.FRONTEND_EVENT_TYPE, event.type());
+        BatchMdc.put(StructuredLogField.FRONTEND_PAGE, event.page());
         try {
           // P2-2(2026-05-16):不再把 props 整体序列化进结构化日志,只记 props key 数量。
           // 原写法 props={整个 JSON} 让登录用户任意撑大日志,且潜在把 token/密码等敏感字段
@@ -67,13 +68,12 @@ public class ConsoleTelemetryController {
                 propsKeys);
           }
         } finally {
-          MDC.remove("frontendEventType");
-          MDC.remove("frontendPage");
+          BatchMdc.removeAll(
+              StructuredLogField.FRONTEND_EVENT_TYPE, StructuredLogField.FRONTEND_PAGE);
         }
       }
     } finally {
-      MDC.remove("frontendApp");
-      MDC.remove("frontendUserId");
+      BatchMdc.removeAll(StructuredLogField.FRONTEND_APP, StructuredLogField.FRONTEND_USER_ID);
     }
     return responseFactory.success(null);
   }

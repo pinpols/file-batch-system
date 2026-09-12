@@ -174,7 +174,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- ── 分布式追踪（OTEL 桥接 + OTLP 导出器）── -->
+        <!-- ── 分布式追踪与 OTLP 导出── -->
         <!--
           micrometer-core：ContentVerifierRegistry (ADR-030) 用 Timer/Counter 暴露 batch.verifier.* 指标。
           通过 optional=true 避免污染使用方依赖图——使用方模块都已通过 actuator starter 引入 micrometer-core。
@@ -184,27 +184,25 @@
             <artifactId>micrometer-core</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- micrometer-tracing-bridge-otel：将 Micrometer Observation API 桥接到 OpenTelemetry SDK -->
+        <!--
+          Spring Boot 4 将 tracing / OpenTelemetry 自动配置拆成独立 starter。
+          只引 micrometer bridge + exporter 不会创建 SDK/Tracer/日志 provider，
+          management.otlp.* 配置也不会真正导出。使用官方 starter 统一装配
+          trace / log OTLP exporter，版本由 Spring Boot BOM 管理。
+        -->
         <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-opentelemetry</artifactId>
         </dependency>
-        <!-- OTLP 导出器：将 Trace/Span 经 HTTP/gRPC 推送到 OpenTelemetry Collector -->
+        <!--
+          Spring Boot 会装配 OTel LoggerProvider/OTLP exporter，但不会自动把 SLF4J
+          事件桥接进去。该官方 appender 由 OpenTelemetryLogbackBridge 按总开关动态挂载，
+          避免关闭遥测时缓存日志或产生后台导出开销。
+        -->
         <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-exporter-otlp</artifactId>
-            <exclusions>
-                <!-- 避免引入 okhttp 5.x（与项目其他处使用的 okhttp 4.x 冲突） -->
-                <exclusion>
-                    <groupId>io.opentelemetry</groupId>
-                    <artifactId>opentelemetry-exporter-sender-okhttp</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <!-- 使用 JDK HTTP 发送端，避免在运行/测试 classpath 中引入 okhttp 5.x -->
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-logback-appender-1.0</artifactId>
+            <version>${opentelemetry-instrumentation.version}</version>
         </dependency>
 
         <!--
