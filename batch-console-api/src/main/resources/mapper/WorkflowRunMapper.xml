@@ -18,7 +18,18 @@
     </resultMap>
 
     <select id="selectByQuery" resultMap="WorkflowRunResultMap">
-        select *
+        select id,
+               tenant_id,
+               workflow_definition_id,
+               related_job_instance_id,
+               biz_date,
+               run_status,
+               current_node_code,
+               trace_id,
+               started_at,
+               finished_at,
+               created_at,
+               updated_at
         from batch.workflow_run
         where tenant_id = #{tenantId}
         <if test="cursorId != null">
@@ -37,7 +48,7 @@
             and current_node_code = #{currentNodeCode}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id like concat('%', #{traceId}, '%')
+            and trace_id = #{traceId}
         </if>
         order by id desc
         <choose>
@@ -74,7 +85,7 @@
             and current_node_code = #{currentNodeCode}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id like concat('%', #{traceId}, '%')
+            and trace_id = #{traceId}
         </if>
     </select>
 

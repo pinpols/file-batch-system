@@ -14,7 +14,7 @@ WITH instances AS (
         job_code
     FROM batch.job_instance
     WHERE tenant_id = :'tenant_id'
-      AND params_snapshot::text LIKE '%' || :'run_id' || '%'
+      AND coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
 )
 SELECT
     instance.benchmark_module,

@@ -2,7 +2,7 @@ WITH scoped AS (
     SELECT job_code, instance_status, created_at, finished_at FROM batch.job_instance
     WHERE tenant_id = :'tenant_id'
       AND job_code IN ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
-      AND params_snapshot::text LIKE '%' || :'run_id' || '%'
+      AND coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
 )
 SELECT job_code, count(*) AS total,
        count(*) FILTER (WHERE instance_status = 'SUCCESS') AS success,

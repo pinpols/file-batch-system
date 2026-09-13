@@ -8,14 +8,14 @@ BEGIN;
 CREATE TEMP TABLE cleanup_trigger_requests ON COMMIT DROP AS
 SELECT DISTINCT tr.id, tr.request_id
 FROM batch.trigger_request tr
-WHERE tr.request_id LIKE '%' || :'run_id' || '%'
-   OR tr.dedup_key LIKE '%' || :'run_id' || '%'
-   OR tr.trace_id LIKE '%' || :'run_id' || '%'
+WHERE tr.request_id LIKE :'run_id' || '%'
+   OR tr.dedup_key LIKE :'run_id' || '%'
+   OR tr.trace_id LIKE :'run_id' || '%'
 UNION
 SELECT DISTINCT tr.id, tr.request_id
 FROM batch.trigger_request tr
 JOIN batch.job_instance ji ON ji.id = tr.related_job_instance_id
-WHERE ji.params_snapshot::text LIKE '%' || :'run_id' || '%'
+WHERE coalesce(ji.params_snapshot #>> '{requestParams,metadata,runId}', ji.params_snapshot #>> '{effectiveParams,metadata,runId}', ji.params_snapshot #>> '{metadata,runId}', ji.params_snapshot #>> '{runId}') = :'run_id'
    OR ji.trace_id LIKE :'run_id' || '%'
    OR ji.batch_no = :'run_id' || '-SETTLEMENT';
 
@@ -25,7 +25,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 ),
@@ -40,7 +40,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -52,7 +52,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -64,7 +64,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -79,7 +79,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -94,7 +94,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -106,7 +106,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -118,7 +118,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -130,7 +130,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -142,7 +142,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 ),
@@ -170,7 +170,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 ),
@@ -198,7 +198,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 ),
@@ -221,7 +221,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 ),
@@ -244,7 +244,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 ),
@@ -270,7 +270,7 @@ WITH ji AS (
   WHERE job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
     )
 )
@@ -286,7 +286,7 @@ WHERE (
       job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'lt_process_copy_job', 'atomic_sql_demo')
       AND (
       trace_id LIKE :'run_id' || '%'
-      OR params_snapshot::text LIKE '%' || :'run_id' || '%'
+      OR coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
       OR batch_no = :'run_id' || '-SETTLEMENT'
       )
     )
@@ -295,23 +295,23 @@ WHERE (
 DELETE FROM batch.trigger_request
 WHERE (
     id IN (SELECT id FROM cleanup_trigger_requests)
-    OR request_id LIKE '%' || :'run_id' || '%'
-    OR dedup_key LIKE '%' || :'run_id' || '%'
-    OR trace_id LIKE '%' || :'run_id' || '%'
+    OR request_id LIKE :'run_id' || '%'
+    OR dedup_key LIKE :'run_id' || '%'
+    OR trace_id LIKE :'run_id' || '%'
   );
 
 DELETE FROM batch.file_dispatch_record
-WHERE (external_request_id LIKE '%' || :'run_id' || '%' OR file_id IN (
-    SELECT id FROM batch.file_record WHERE metadata_json::text LIKE '%' || :'run_id' || '%'
+WHERE (external_request_id LIKE :'run_id' || '%' OR file_id IN (
+    SELECT id FROM batch.file_record WHERE metadata_json ->> 'runId' = :'run_id'
   ));
 
 DELETE FROM batch.file_audit_log
 WHERE file_id IN (
     SELECT id FROM batch.file_record
-    WHERE (file_code LIKE :'run_id' || '%' OR metadata_json::text LIKE '%' || :'run_id' || '%')
+    WHERE (file_code LIKE :'run_id' || '%' OR metadata_json ->> 'runId' = :'run_id')
   );
 
 DELETE FROM batch.file_record
-WHERE (file_code LIKE :'run_id' || '%' OR metadata_json::text LIKE '%' || :'run_id' || '%');
+WHERE (file_code LIKE :'run_id' || '%' OR metadata_json ->> 'runId' = :'run_id');
 
 COMMIT;

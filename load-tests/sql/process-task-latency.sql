@@ -6,5 +6,5 @@ SELECT instance.job_code, task.task_status, count(*) AS tasks,
 FROM batch.job_instance instance
 JOIN batch.job_task task ON task.tenant_id = instance.tenant_id AND task.job_instance_id = instance.id
 WHERE instance.tenant_id = :'tenant_id' AND instance.job_code IN ('lt_process_sql_job','lt_process_copy_job')
-  AND instance.params_snapshot::text LIKE '%' || :'run_id' || '%'
+  AND coalesce(instance.params_snapshot #>> '{requestParams,metadata,runId}', instance.params_snapshot #>> '{effectiveParams,metadata,runId}', instance.params_snapshot #>> '{metadata,runId}', instance.params_snapshot #>> '{runId}') = :'run_id'
 GROUP BY instance.job_code, task.task_status ORDER BY instance.job_code, task.task_status;

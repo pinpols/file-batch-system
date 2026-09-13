@@ -32,7 +32,7 @@
             and file_id = #{fileId}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id like concat('%', #{traceId}, '%')
+            and trace_id = #{traceId}
         </if>
         <if test="fromTime != null">
             and created_at &gt;= #{fromTime}
@@ -68,7 +68,7 @@
             and file_id = #{fileId}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id like concat('%', #{traceId}, '%')
+            and trace_id = #{traceId}
         </if>
         <if test="fromTime != null">
             and created_at &gt;= #{fromTime}

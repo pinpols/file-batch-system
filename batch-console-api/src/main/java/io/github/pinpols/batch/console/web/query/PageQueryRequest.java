@@ -19,8 +19,9 @@ public class PageQueryRequest {
   /**
    * 双轨分页 cursor token (ADR-031)。
    *
-   * <p>非空时 endpoint 走 cursor 模式:不查 count,不返 total,返回 {@code nextCursor} + {@code hasMore}。 空时回退到
-   * pageNo 经典 offset 分页。仅大表 / 时间序端点的 controller 把这个字段透到 Mapper(其它端点忽略)。
+   * <p>请求参数包含 cursor 时 endpoint 走 cursor 模式:不查 count,不返 total,返回 {@code nextCursor} + {@code hasMore}。
+   * 首页传空字符串即可进入 cursor 模式;不传 cursor 时回退到 pageNo 经典 offset 分页。
+   * 仅大表 / 时间序端点的 controller 把这个字段透到 Mapper(其它端点忽略)。
    */
   private String cursor;
 }

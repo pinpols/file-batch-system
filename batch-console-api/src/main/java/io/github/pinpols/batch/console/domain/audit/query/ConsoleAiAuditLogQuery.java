@@ -13,7 +13,8 @@ public record ConsoleAiAuditLogQuery(
     String promptDecision,
     Instant fromTime,
     Instant toTime,
-    PageRequest pageRequest) {
+    PageRequest pageRequest,
+    Long cursorId) {
 
   public static ConsoleAiAuditLogQuery ofTenant(String tenantId, PageRequest pageRequest) {
     return builder().tenantId(tenantId).pageRequest(pageRequest).build();

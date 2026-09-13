@@ -32,7 +32,7 @@
             and log_type = #{logType}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id like concat('%', #{traceId}, '%')
+            and trace_id = #{traceId}
         </if>
         <if test="keyword != null and keyword != ''">
             and message like concat('%', #{keyword}, '%')
@@ -40,7 +40,17 @@
     </sql>
 
     <select id="selectByQuery" resultMap="JobExecutionLogResultMap">
-        select *
+        select id,
+               tenant_id,
+               job_instance_id,
+               job_partition_id,
+               log_level,
+               log_type,
+               trace_id,
+               message,
+               detail_ref,
+               extra_json,
+               created_at
         from batch.job_execution_log
         where tenant_id = #{tenantId}
         <include refid="filters"/>
