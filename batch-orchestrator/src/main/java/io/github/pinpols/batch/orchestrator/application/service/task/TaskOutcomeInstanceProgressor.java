@@ -31,7 +31,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>task 终态写入以后，分区状态、实例进度、节点切换、父任务回报和 workflow 终态必须按固定顺序
  * 在同一 report 事务中完成。将这段聚合编排从入口服务下沉后，入口只保留 report 的身份校验、task
- * CAS 和 step 镜像更新；本类仍不声明独立事务，避免把一次回报拆成多个提交单元。
+ * CAS 和 step 镜像更新；本类仍不声明独立事务，避免把一次回报拆成多个提交单元。调用方必须在取得
+ * instance advisory lock 后加载并传入权威实例快照，本类不再重复读取同一实例。
  */
 @Component
 @Slf4j
@@ -71,27 +72,23 @@ public final class TaskOutcomeInstanceProgressor {
     WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
         command.tenantId(), jobInstance.getId());
     boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
-    JobInstanceEntity freshInstance =
-        jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstance.getId());
-    JobInstanceEntity progressInstance =
-        EmptyChecks.isNotNull(freshInstance) ? freshInstance : jobInstance;
     List<PartitionStatusRef> statusRefs = dagInstance
         ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
             command.tenantId(), task.getJobInstanceId())
         : List.of();
     long totalPartitionCount = dagInstance
         ? statusRefs.size()
-        : Optional.ofNullable(progressInstance.getExpectedPartitionCount()).orElse(0);
+        : Optional.ofNullable(jobInstance.getExpectedPartitionCount()).orElse(0);
     long successCount = dagInstance
         ? statusRefs.stream()
             .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
             .count()
-        : Optional.ofNullable(progressInstance.getSuccessPartitionCount()).orElse(0);
+        : Optional.ofNullable(jobInstance.getSuccessPartitionCount()).orElse(0);
     long failedCount = dagInstance
         ? statusRefs.stream()
             .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
             .count()
-        : Optional.ofNullable(progressInstance.getFailedPartitionCount()).orElse(0);
+        : Optional.ofNullable(jobInstance.getFailedPartitionCount()).orElse(0);
     long finishedPartitionCount = successCount + failedCount;
     boolean allPartitionsFinished =
         totalPartitionCount > 0 && finishedPartitionCount == totalPartitionCount;
@@ -143,26 +140,16 @@ public final class TaskOutcomeInstanceProgressor {
     boolean dagContinues =
         EmptyChecks.isNotNull(workflowRun) && EmptyChecks.isNotEmpty(activeNodes);
     boolean jobFullyComplete = allPartitionsFinished && !dagContinues;
-    if (EmptyChecks.isNotNull(freshInstance)) {
-      jobInstance.setVersion(freshInstance.getVersion());
-      jobInstance.setInstanceStatus(freshInstance.getInstanceStatus());
-    }
     String instanceEvent = TaskOutcomeStatePolicy.resolveInstanceEvent(
         successCount,
         failedCount,
         allPartitionsFinished,
         dagContinues,
-        TaskOutcomeStatePolicy.isDryRun(
-            EmptyChecks.isNotNull(freshInstance) ? freshInstance : jobInstance));
-    String instanceStatus = collaborators
-        .stateMachine()
-        .transition(
-            EmptyChecks.isNotNull(freshInstance) ? freshInstance : jobInstance, instanceEvent)
-        .toState();
+        TaskOutcomeStatePolicy.isDryRun(jobInstance));
+    String instanceStatus =
+        collaborators.stateMachine().transition(jobInstance, instanceEvent).toState();
     if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
-        EmptyChecks.isNotNull(freshInstance)
-            ? freshInstance.getInstanceStatus()
-            : jobInstance.getInstanceStatus(),
+        jobInstance.getInstanceStatus(),
         instanceEvent,
         successCount,
         failedCount,
@@ -175,9 +162,7 @@ public final class TaskOutcomeInstanceProgressor {
               + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
           command.tenantId(),
           jobInstance.getId(),
-          EmptyChecks.isNotNull(freshInstance)
-              ? freshInstance.getInstanceStatus()
-              : jobInstance.getInstanceStatus(),
+          jobInstance.getInstanceStatus(),
           successCount);
     }
     String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)

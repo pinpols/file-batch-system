@@ -227,13 +227,6 @@ class DefaultTaskOutcomeServiceTest {
     partition.setPartitionStatus(PartitionStatus.RUNNING.code()); // 未完成 → 非终态,流程短
     partition.setVersion(1L);
 
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(10L);
-    instance.setTenantId("t1");
-    instance.setInstanceStatus("RUNNING");
-    instance.setVersion(1L);
-    instance.setDryRun(false);
-
     JobInstanceEntity progressedInstance = new JobInstanceEntity();
     progressedInstance.setId(10L);
     progressedInstance.setTenantId("t1");
@@ -246,7 +239,7 @@ class DefaultTaskOutcomeServiceTest {
 
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance, progressedInstance);
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(progressedInstance);
     when(jobTaskMapper.finishTask(any())).thenReturn(task);
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(stateMachine.transition(any(), anyString()))
@@ -269,11 +262,13 @@ class DefaultTaskOutcomeServiceTest {
     verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
 
     InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
-    // instance 级 advisory lock 必须先于针对自己分区的 markStatus 写锁。
+    // instance 级 advisory lock 必须先于分区写锁；权威快照必须在 markStatus 递增实例版本后读取。
     inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
     ArgumentCaptor<MarkPartitionStatusParam> partitionStatusCaptor =
         ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
     inOrder.verify(jobPartitionMapper).markStatus(partitionStatusCaptor.capture());
+    inOrder.verify(jobInstanceMapper).selectById("t1", 10L);
+    verify(jobInstanceMapper, times(1)).selectById("t1", 10L);
     assertThat(partitionStatusCaptor.getValue().getOutputSummary())
         .contains("\"taskId\":1", "\"success\":true");
     verify(jobPartitionMapper, never()).updateOutputSummary(anyString(), anyLong(), any(), any());
@@ -300,13 +295,6 @@ class DefaultTaskOutcomeServiceTest {
     partition.setPartitionStatus(PartitionStatus.RUNNING.code());
     partition.setVersion(1L);
 
-    JobInstanceEntity instance = new JobInstanceEntity();
-    instance.setId(10L);
-    instance.setTenantId("t1");
-    instance.setInstanceStatus("FAILED");
-    instance.setVersion(2L);
-    instance.setDryRun(false);
-
     JobInstanceEntity progressedInstance = new JobInstanceEntity();
     progressedInstance.setId(10L);
     progressedInstance.setTenantId("t1");
@@ -319,7 +307,7 @@ class DefaultTaskOutcomeServiceTest {
 
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance, progressedInstance);
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(progressedInstance);
     when(jobTaskMapper.finishTask(any())).thenReturn(task);
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
@@ -340,6 +328,7 @@ class DefaultTaskOutcomeServiceTest {
         captor = ArgumentCaptor.forClass(
             io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam.class);
     verify(jobInstanceMapper).updateProgress(captor.capture());
+    verify(jobInstanceMapper, times(1)).selectById("t1", 10L);
     assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
   }
 }
