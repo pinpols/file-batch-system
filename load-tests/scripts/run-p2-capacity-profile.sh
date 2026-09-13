@@ -12,6 +12,7 @@ RUN_ID="${RUN_ID:-p2-capacity-$(date +%Y%m%d%H%M%S)}"
 CAPACITY_RUNTIME_PROFILE="${CAPACITY_RUNTIME_PROFILE:-local-docker}"
 CAPACITY_EXPECT_APP_IMAGE_REVISION="${CAPACITY_EXPECT_APP_IMAGE_REVISION:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
 CAPACITY_REQUIRE_CLEAN_WORKTREE="${CAPACITY_REQUIRE_CLEAN_WORKTREE:-1}"
+CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY="${CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY:-1}"
 RUN_10W_STORM="${RUN_10W_STORM:-1}"
 RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
@@ -193,6 +194,28 @@ require_application_image_provenance() {
       exit 2
     fi
   done
+}
+
+require_isolated_application_topology() {
+  if [[ "$CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY" != "1" ]]; then
+    return
+  fi
+  local container running=""
+  for container in \
+    batch-worker-import \
+    batch-worker-export \
+    batch-worker-process \
+    batch-worker-dispatch; do
+    if [[ "$(docker inspect "$container" --format '{{.State.Running}}' 2>/dev/null || true)" == "true" ]]; then
+      running="${running}${running:+,}${container}"
+    fi
+  done
+  if [[ -n "$running" ]]; then
+    echo "Capacity benchmark requires unrelated application workers to be stopped: ${running}" >&2
+    echo "  stop: docker stop batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch" >&2
+    echo "  these workers consume Docker memory, CPU and PostgreSQL connections but are outside the Atomic profile" >&2
+    exit 2
+  fi
 }
 
 require_capacity_environment_alignment() {
@@ -1089,6 +1112,7 @@ require_tooling
 require_exact_storm_shape
 require_supported_capacity_runtime
 require_application_image_provenance
+require_isolated_application_topology
 require_trigger_capacity_budget
 require_pg_statement_profile
 require_capacity_environment_alignment
