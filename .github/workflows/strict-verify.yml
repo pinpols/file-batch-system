@@ -120,7 +120,9 @@ jobs:
       - name: Start console-api
         shell: bash
         run: |
-          JAR=$(ls batch-console-api/target/batch-console-api-*.jar | head -1)
+          JAR=$(find batch-console-api/target -maxdepth 1 -type f \
+            -name 'batch-console-api-*.jar' -print -quit)
+          [[ -n "$JAR" ]] || { echo "console-api jar not found" >&2; exit 1; }
           echo "starting $JAR"
           nohup java -jar "$JAR" --spring.profiles.active=local \
             > /tmp/console-api.log 2>&1 &
