@@ -332,6 +332,7 @@ DB (job_task: READY)
 
 | 文档 | 说明 |
 |------|------|
+| [文档总入口](docs/README.md) | `docs/` 目录分层、角色阅读路径、归档与状态规则 |
 | [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
 | [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK 与文档/脚本目录边界 |
 | [SDK 总入口](sdk/README.md) | 租户自托管 Worker SDK 使用说明书（选语言 / 安装 / 跑 / 测 / 排障），配套 [docs/sdk/README.md](docs/sdk/README.md) 文档索引 |
@@ -359,7 +360,7 @@ DB (job_task: READY)
 | [观测栈 Docker 环境](deploy/docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [平台 Worker 续跑位点](docs/runbook/platform-worker-checkpoint-howto.md) | checkpoint 断点续跑的位点语义与运维说明 |
-| [设计差距审计](docs/archive/architecture/design-gap-audit-2026-04-09.md) | 当前实现与设计文档的差距分析 |
+| [历史设计差距审计](docs/archive/architecture/design-gap-audit-2026-04-09.md) | 2026-04-09 时点快照，仅用于历史审计 |
 | [默认运行参数](docs/design/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |
 | [Flyway 迁移脚本](db/migration) | 数据库迁移脚本目录 |
 

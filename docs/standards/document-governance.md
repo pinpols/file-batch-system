@@ -8,7 +8,7 @@
 
 | 内容 | 唯一入口 | 说明 |
 |---|---|---|
-| 当前架构事实 | `docs/architecture/architecture-truth.md` | 只描述当前 As-Is；过期内容必须更新或移入 archive |
+| 当前架构事实 | `docs/architecture/architecture-truth.md` | 稳定入口，指向代码、部署配置和当前架构文档；不复制易漂移统计 |
 | 当前待办 | `docs/analysis/todo-master.md` | 唯一当前待办索引，不在其它文档重复维护总数 |
 | 当前问题与修复 | `docs/analysis/deep-issue-analysis.md`、`fix-report.md`、`hardening-backlog.md` | 按“发现 → 修复 → 排期”维护 |
 | 测试覆盖与发布门禁 | `docs/testing/` | 以最新验证记录和门禁脚本为准 |
@@ -57,10 +57,14 @@ rg -n -i --glob '*.md' \
 
 ```bash
 bash scripts/ci/check-hardcoded-runtime-config.sh
+python3 scripts/ci/check-docs-structure.py
 ```
 
 该门禁检查当前文档的个人绝对路径、运维旧端口、local profile 固定 Redis 地址、Kafka
 容器 CLI 路径散落和可变 Sonar 镜像。`docs/archive/` 是只读历史证据，不追溯改写。
+
+文档结构门禁检查主目录 README、总索引覆盖、仓库内相对链接、Finder 元数据和带日期的本机
+验收报告。外部 URL 不联网检查，避免第三方站点波动阻断 CI。
 
 ## 5. 维护责任
 

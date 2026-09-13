@@ -2,7 +2,7 @@
 
 **状态**:路线图参考 · 2026-05-31
 **对标系统**:Temporal · Zeebe (Camunda 8) · Conductor (Netflix) · AWS Step Functions Activity Worker
-**关联文档**:[worker-deployment-models](./worker-deployment-models.md) · [深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md) · [ADR-035](../adr/ADR-035-tenant-self-hosted-worker-sdk.md)
+**关联文档**:[worker-deployment-models](./worker-deployment-models.md) · [深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md) · [ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 
 > 本文跟 review doc 不同:review 是当前实现的"近期修复清单",本文是**跨季度路线图参考** —— 跟 Temporal / Zeebe 等成熟系统对标,识别长期演进方向。
 

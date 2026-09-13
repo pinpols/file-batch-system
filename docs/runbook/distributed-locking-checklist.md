@@ -118,7 +118,7 @@ echo $BATCH_SHEDLOCK_REDIS_ENV
 
 ### 当前正例
 
-[TriggerOutboxEventMapper.xml:56](batch-trigger/src/main/resources/mapper/TriggerOutboxEventMapper.xml:56) `FOR UPDATE SKIP LOCKED` + `idx_trigger_outbox_pending` partial index，标准实现。
+[TriggerOutboxEventMapper.xml](../../batch-trigger/src/main/resources/mapper/TriggerOutboxEventMapper.xml) 使用 `FOR UPDATE SKIP LOCKED` + `idx_trigger_outbox_pending` partial index，是标准实现。
 
 ---
 

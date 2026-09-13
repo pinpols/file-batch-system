@@ -268,7 +268,7 @@
 - 一张图看链路：[`docs/architecture/system-flow-overview.md`](./system-flow-overview.md)
 - 海量承载评估：[`docs/architecture/scalability-assessment.md`](./scalability-assessment.md)
 - 改造分类：[`docs/architecture/rework-classification.md`](./rework-classification.md)
-- Wheel 替换设计：[`docs/architecture/quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)
+- 已撤销的 Wheel 方案历史评估：[`docs/architecture/quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)；当前运行时统一使用 Quartz JDBC JobStore
 - 改造排期：[`docs/architecture/rework-classification.md`](./rework-classification.md) Phase 1/2/3
 - Feature 开关：[`docs/runbook/feature-switches.md`](../runbook/feature-switches.md)
 - Changelog（规范条款变化）：[`docs/changelog.md`](../changelog.md)

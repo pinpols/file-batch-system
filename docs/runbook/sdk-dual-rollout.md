@@ -109,7 +109,7 @@ T2: (可选) Agent-API / FE 跟上(如新字段需要在 console 展示)
 ## 参考
 
 - [SDK roadmap H2-2026 plan](../plans/sdk-roadmap-2026-h2.md) §1 决策 #3 / §2 Phase 0 / §15.5
-- [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-sdk.md) §9 两套绑定契约
+- [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §9 两套绑定契约
 - [Orchestrator internal OpenAPI](../api/orchestrator-internal.openapi.yaml)
 - [SdkWireContractTest](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/controller/SdkWireContractTest.java)
 - [SDK TaskDispatchMessage schemaVersion 实现](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java)

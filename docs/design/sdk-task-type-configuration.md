@@ -3,7 +3,7 @@
 # 自定义 taskType 作业配置设计
 
 **状态**:基线设计(部分未实施) · 2026-05-31
-**关联**:[worker-deployment-models](./worker-deployment-models.md) · [sdk-industry-benchmark](./sdk-industry-benchmark.md) · [ADR-035](../adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
+**关联**:[worker-deployment-models](./worker-deployment-models.md) · [sdk-industry-benchmark](./sdk-industry-benchmark.md) · [ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
 
 > 本文回答:**租户写了一个 SDK handler 之后,运营 / 业务方怎么在 console 上用它?参数怎么填?默认值怎么设?敏感凭据怎么处理?**
 >
@@ -344,5 +344,5 @@ Conductor 的 `TaskDef` 模型是最对标的,我们参考它。
 - [worker-deployment-models](./worker-deployment-models.md)
 - [sdk-industry-benchmark](./sdk-industry-benchmark.md)
 - [batch-worker-sdk 深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
-- [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-worker-sdk.md)
+- [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 - [Conductor TaskDef](https://conductor-oss.org/docs/documentation/configuration/taskdef)

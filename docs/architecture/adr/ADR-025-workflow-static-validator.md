@@ -3,7 +3,7 @@
 - **Status**: Accepted（**第 1 阶段必做 / P0**，~5 人天，便宜高收益，建议第一个落地）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

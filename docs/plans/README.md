@@ -10,6 +10,18 @@
 | [spring-boot-engineering-patterns-plan-2026-08-02.md](./spring-boot-engineering-patterns-plan-2026-08-02.md) | Spring Boot 工程化样板落地计划 |
 | [engineering-benchmark-comparison-2026-08-02.md](./engineering-benchmark-comparison-2026-08-02.md) | BFS 与优秀系统的工程能力对照表 |
 
+## 计划登记
+
+计划状态以各文档头部和 [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准；“Implemented”文档只保留实施与验收依据。
+
+| 领域 | 文档 |
+|---|---|
+| 控制面与 HA | [控制面吞吐](./control-plane-throughput-optimization-2026-09-07.md)、[HA 部署](./2026-06-13-ha-deployment-plan.md)、[多租隔离](./multi-tenant-isolation-plan-2026-05-31.md)、[biz 分层租户](./biz-tiered-tenancy-plan-2026-06-14.md) |
+| 文件与恢复 | [Export keyset](./2026-06-06-export-partition-keyset-range.md)、[Export slice](./2026-06-06-export-partition-slice.md)、[S3 SDK 迁移](./2026-06-06-migrate-minio-sdk-to-aws-sdk-v2.md)、[完整性 sidecar](./file-integrity-sidecar-manifest-plan-2026-06-07.md)、[checkpoint](./checkpoint-resume-design-2026-07.md) |
+| 批量日与结算 | [整批量日 dry-run](./batch-day-dry-run-enhancement-plan-2026-09-08.md)、[结算差距治理](./settlement-gap-remediation-roadmap-2026-06-20.md) |
+| SDK 与前端 | [SDK roadmap](./sdk-roadmap-2026-h2.md)、[roadmap 进度](./sdk-roadmap-2026-h2-progress.md)、[FE 工作清单](./fe-worklist-2026-h2-atomic-sdk.md) |
+| 可观测与扩展 | [Alertmanager 迁移](./alertmanager-migration-plan-2026-07.md)、[AI 接入](./ai-integration-plan-2026-07.md) |
+
 历史验证基础设施计划：
 
 ## r3 Validation Infrastructure Plans

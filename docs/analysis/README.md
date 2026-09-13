@@ -14,6 +14,19 @@
 | 06 | [todo-master.md](./todo-master.md) | 当前待办唯一索引：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
 | 07 | [java-readability-phase-0-classification-2026-08-12.md](./java-readability-phase-0-classification-2026-08-12.md) | Java 可读性治理分类总账；机器快照见 [inventory](./java-readability-inventory-2026-08-12.md) | 实施可读性路线图阶段 0～3、复核保留例外 |
 
+## 专题分析与快照
+
+以下文档提供特定时点或特定主题的证据，不替代上面的当前待办和滚动三件套：
+
+| 主题 | 文档 |
+|---|---|
+| 构建与运行时 | [构建耗时](./build-time-optimization-2026-09-12.md)、[脚本兼容矩阵](./script-runtime-compatibility-matrix-2026-09-01.md)、[JDK 特性](./jdk-feature-usage-analysis-2026-06-09.md) |
+| 数据与扩展 | [Schema 优化](./schema-optimization-review-2026-09-07.md)、[扩展状态](./scaling-state-and-biz-path-2026-06-14.md)、[单 Worker 容量](./single-worker-tens-of-thousands-capacity-2026-06-21.md) |
+| 架构治理 | [bounded context 计划](./bounded-context-migration-plan-2026-08-03.md)、[系统能力差距](./system-wide-capability-gap-analysis-2026-06-20.md)、[行业对标计划](./industry-benchmark-improvement-plan.md) |
+| 代码质量 | [语义表达扫描](./java-semantic-expression-scan-2026-08-26.md)、[可读性机器快照](./java-readability-inventory-2026-08-12.md) |
+| 历史审计 | [提交审查](./commit-review-2026-06-05-to-09.md)、[上线真实性](./go-live-realism-audit-2026-06-21.md)、[鲁棒性扫描](./robustness-deep-scan-2026-06-10.md)、[SQL 配置治理](./sql-config-governance-report-2026-06-08.md) |
+| 历史路线 | [P1A 迁移](./p1a-stage1-migration-plan-2026-05-30.md)、[开源系统差距](./competitive-gap-analysis-2026-05-30.md)、[P0/P1 状态](./p0-p1-governance-status-2026-09-02.md) |
+
 ## 工作循环
 
 当前待办的状态分类、归档边界和复扫规则以 [`../standards/document-governance.md`](../standards/document-governance.md) 为准。

@@ -794,7 +794,7 @@ flowchart TD
 
 #### 与统一核心模型对齐
 
-本节的命名与边界统一以 [`docs/architecture/core-model.md`](./architecture/core-model.md) 为准，主设计文档不再单独维持另一套口径。
+本节的命名与边界统一以 [`docs/architecture/core-model.md`](../architecture/core-model.md) 为准，主设计文档不再单独维持另一套口径。
 
 - `ExecutionContext` 是统一主名；`PipelineContext` 只作为历史检索词保留，不再新增为类型名或接口名。
 - `jobCode` 是统一业务主名；`pipelineCode` / `flowCode` 只允许作为兼容读写口径存在，不再作为新设计主名继续扩散。
@@ -969,7 +969,7 @@ flowchart LR
 
 ### 9.9 幂等、重试与补偿要求
 
-本节中的 `retry / rerun / recover / compensate` 统一口径请以 [`docs/architecture/core-model.md`](./architecture/core-model.md) 为准。
+本节中的 `retry / rerun / recover / compensate` 统一口径请以 [`docs/architecture/core-model.md`](../architecture/core-model.md) 为准。
 
 文件链路必须补齐阶段级幂等，而不是只做“任务级重跑”。
 

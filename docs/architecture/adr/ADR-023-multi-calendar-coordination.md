@@ -3,7 +3,7 @@
 - **Status**: Accepted（**第 1 阶段必做 / P0-P1**，gated — 见"实施触发条件"；满足跨境 / 半天 cutoff / 灾难日审计 任一即开工）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-018（跨日 DAG，calendar 跨时区独立）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-018（跨日 DAG，calendar 跨时区独立）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

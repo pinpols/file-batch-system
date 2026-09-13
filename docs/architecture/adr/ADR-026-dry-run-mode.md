@@ -3,7 +3,7 @@
 - **Status**: Implemented（默认关闭，按环境验收后启用；仍不支持 FULL_SIMULATION）
 - **Date**: 2026-05-06（实现校准：2026-09-11）
 - **Supersedes**: —
-- **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

@@ -367,7 +367,7 @@ public CommonResponse<List<JobDefinitionDto>> listJobs(...) {
 
 ## 7. REST 删除规范
 
-> 完整设计说明见 [docs/design/delete-strategy.md](../design/delete-strategy.md)。
+> 完整设计说明见 [docs/design/delete-strategy.md](./design/delete-strategy.md)。
 
 ### 7.1 两类删除与 HTTP 方法
 

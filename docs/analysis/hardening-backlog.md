@@ -14,7 +14,7 @@ v6 周期（57 项硬化条目）**已实质收敛**。2026-06-15 重新核实�
 |---|---|---|---|
 | DBA-P0-1 `outbox_event` 月分区 | 🟡 待 ops | ✅ 已落地 | `db/migration/V172__outbox_event_monthly_partition.sql`（PR #470）|
 | DBA-P0-2 `job_instance` 月分区 | 🟡 待 ops | ✅ 已落地 | `db/migration/V173__job_instance_monthly_partition.sql`（PR #470/#479）|
-| OPS-1 `.env.prod`↔`.env.example` CI 同步 | ✅ 部分（治本待 CI）| ✅ 完成 | `scripts/ci/check-env-prod-sync.sh` 已在仓 |
+| OPS-1 生产环境变量同步 | ✅ 部分（治本待 CI）| ✅ 完成 | `.env.example` 为受版本控制的 Compose 权威模板；`check-config-defaults-sync.py`、`check-feature-switch-registry.py`、`check-helm-env-sync.py` 和 `check-production-overlay-safety.py` 共同校验应用/Compose/Helm。`.env.prod` 含真实环境值且被忽略，不再伪装成 CI 可比较输入 |
 | V6-P2-POSITIONAL-ARGS inline argc>6 清理 | 方案定稿 | ✅ 完成 | `PositionalArgsConventionTest` 守护已落（CI 绿即无回潮）|
 
 → v6 实际仅剩 **3 项真未决**，均为低优先 / 证据驱动，无代码级 blocker。

@@ -1,6 +1,7 @@
 # Quartz 容量基线压测 Runbook
 
-> **目标**：测出本项目部署形态下 Quartz 共库的真实拐点，作为 [`quartz-replacement-evaluation.md`](../architecture/quartz-replacement-evaluation.md) 阶段 1 启动决策的实测依据。
+> **目标**：测出本项目部署形态下 Quartz JDBC JobStore 的真实拐点，作为扩容、分库或重新评估调度内核的容量证据。
+> Wheel 替换方案已撤销；历史评估不能直接作为当前实施指令。
 >
 > **何时跑**：阶段 0 准备时跑一次拿基线；之后每半年或扩容后跑一次刷新；业务量级增长接近上一次基线 70% 时立即重跑。
 
@@ -158,10 +159,10 @@ Active triggers:    1000-10000
 
 → 接近舒适区上限。动作：
 1. 跑姿势 B 模拟 2 倍当前量,看 P99 / misfire 怎么变
-2. 把 `quartz-replacement-evaluation.md` 阶段 1 的 1 人月工程列入排期
+2. 根据锁等待、misfire、数据库 I/O 和触发延迟证据制定独立扩容或架构评估
 3. Grafana 告警阈值收紧（红色阈值降一档）
 
-### 4.3 红色（立即启动阶段 1）
+### 4.3 红色（立即限流并启动容量治理）
 
 ```
 Fire QPS:           > 50
@@ -171,7 +172,7 @@ Active triggers:    > 10000
 QRTZ_LOCKS 抢锁等待已成主因
 ```
 
-→ Quartz 共库已是瓶颈。**立即按 quartz-replacement-evaluation.md §6 阶段 1 启动时间轮替换**，1 人月工期。
+→ Quartz 共库已是瓶颈。先限制新增高频 trigger、扩展数据库与 Trigger 实例，并基于实测另立 ADR；不得直接恢复已撤销的时间轮实现。
 
 > 同时排查是否有"误注册"trigger（loadtest 残留 / 业务方误把高频任务直接放 cron 表达式）：先清孤儿能给阶段 1 争取时间。
 
@@ -223,6 +224,6 @@ QRTZ_LOCKS 抢锁等待已成主因
 
 ## 7. 相关文档
 
-- [`docs/architecture/quartz-replacement-evaluation.md`](../architecture/quartz-replacement-evaluation.md) §7 拐点预警
+- [`docs/architecture/quartz-replacement-evaluation.md`](../architecture/quartz-replacement-evaluation.md)（已撤销方案的历史风险分析）
 - [`docs/runbook/feature-switches.md`](./feature-switches.md) §3.4（Phase 2 quartz-datasource 开关移除说明）
 - [`docs/runbook/observability-stack.md`](./observability-stack.md) PG 监控

@@ -32,7 +32,9 @@ file-batch-system/
 ├── docs/                                   全文档体系(见下)
 ├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/tools)
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
-├── docker/                                 Docker Compose / Dockerfile
+├── docker-compose.yml                      本地基础依赖 Compose 入口
+├── docker-compose.kafka-ha.yml             本地 Kafka HA 可选叠加层
+├── deploy/docker/                          Dockerfile + 应用 / 测试 / 观测 Compose
 ├── .github/workflows/                      CI(pr-gate / strict-verify / sdk-publish 等)
 ├── .githooks/                              本地 pre-commit / pre-push 守护
 ├── pom.xml                                 Root POM(flatten + revision 占位)

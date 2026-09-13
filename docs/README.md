@@ -24,17 +24,18 @@
 | 06 | [analysis/](./analysis/README.md) | 演进向：问题 / 修复 / 加固三件套 + 长期治理方案 + 项目评估 | `deep-issue-analysis.md` |
 | 07 | [dict/](./dict/README.md) | **Reference dict**（错误码 / 配置键，自动生成）| `error-codes.md` + `config-keys.md` |
 | 08 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
-| 09 | [audit/](./audit/) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md) |
-| 10 | [backlog/](./backlog/) | 待办与加固路线 | hardening / throughput / ADR follow-up |
+| 09 | [audit/](./audit/README.md) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md) |
+| 10 | [backlog/](./backlog/README.md) | 专题治理背景与历史执行计划 | 当前待办仍以 `analysis/todo-master.md` 为准 |
 | 11 | [plans/](./plans/README.md) | 阶段计划 | SDK roadmap / HA / 多租隔离计划 |
 | 12 | [review/](./review/README.md) | 评审结论 | code review / project deep review |
-| 13 | [sdk/](./sdk/) | SDK 使用与接入 | BYO worker / quickstart |
-| 14 | [stats/](./stats/) | 规模统计 | LoC / 文档体量统计 |
+| 13 | [sdk/](./sdk/README.md) | SDK 使用与接入 | BYO worker / quickstart |
+| 14 | [stats/](./stats/README.md) | 规模统计 | LoC / 文档体量统计 |
 | 15 | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
-| 16 | [verifications/](./verifications/) | 验证记录 | 实测 / drill / go-live evidence |
-| 17 | [standards/document-governance.md](./standards/document-governance.md) | 文档状态、待办和归档治理 | 文档复扫与状态校准 |
+| 16 | [verifications/](./verifications/README.md) | 验证记录 | 实测 / drill / go-live evidence |
+| 17 | [standards/](./standards/README.md) | 文档状态、待办和归档治理 | 文档复扫与状态校准 |
+| 18 | [governance/](./governance/README.md) | 机器可读治理契约 | CI 规则输入 |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
-| — | [spike/](./spike/) | Spike 实验记录 | 临时技术验证 |
+| — | [spike/](./spike/README.md) | Spike 实验记录 | 临时技术验证 |
 
 ## 常用角色路径
 

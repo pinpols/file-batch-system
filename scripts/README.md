@@ -10,6 +10,12 @@
 - `scripts/data/`：数据初始化与加载（init-kafka、init-minio、load-*）
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/db/`：数据库维护、种子数据、备份恢复和分区迁移演练
+- `scripts/codegen/`：OpenAPI、错误码字典和契约 fixture 等可复现代码生成
+- `scripts/dev/`：开发期诊断、演示和本机工具，不作为生产运维入口
+- `scripts/ha/`：高可用部署与故障转移演练
+- `scripts/lib/`：Shell/Python 共享函数库，只供其他脚本引用
+- `scripts/sim/`、`scripts/sim-4day/`：受管环境场景模拟与四日链路验证
+- `scripts/tools/`：不属于运行、运维或 CI 主链的独立维护工具
 
 ## 主要入口
 
