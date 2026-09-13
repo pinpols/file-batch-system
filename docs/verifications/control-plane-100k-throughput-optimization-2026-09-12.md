@@ -290,7 +290,8 @@ PostgreSQL 时的提交/WAL 竞争，而不是 Worker、Kafka 分区或单一业
 - 默认要求 `synchronous_commit=on`、`wal_compression=off`、`max_wal_size=1GiB`、
   `checkpoint_timeout=300s`；实验参数必须显式覆盖期望值并单独命名 run。
 - 记录 Git SHA、数据库观测参数、主机 CPU 数和 load；运行中 PostgreSQL 压力采样同步记录主机 1 分钟 load。
-- 默认主机 1 分钟 load/CPU 不得超过 1.0；发压前超限会拒绝启动，运行中峰值超限会将整轮标为失败。
+- 默认发压前主机 1 分钟 load/CPU 不得超过 0.75，超限会拒绝启动。运行中的 load 包含被测系统自身
+  产生的有效压力，因此仅记录峰值用于归因，不将它错误地作为硬失败条件。
 - 隔离租户六类运行数据必须为 0，Kafka launch lag 必须清零，容器预算和分区数必须与 benchmark profile
   一致；任何不一致均不得进入容量对比表。
 

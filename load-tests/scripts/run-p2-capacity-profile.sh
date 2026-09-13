@@ -63,7 +63,7 @@ CAPACITY_EXPECT_SYNCHRONOUS_COMMIT="${CAPACITY_EXPECT_SYNCHRONOUS_COMMIT:-on}"
 CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
 CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
 CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
-CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-1.0}"
+CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-0.75}"
 # 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
 # result_version 单业务键串行锁后测通用控制面容量。
 CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
@@ -229,7 +229,7 @@ append_pg_statement_profile() {
   } >> "$REPORT"
 }
 
-verify_host_load_budget() {
+append_host_load_summary() {
   local benchmark_run_id="$1"
   local sample_file="$LOAD_DIR/target/control-plane-worker-logs/${benchmark_run_id}/pg-pressure-samples.csv"
   local cpu_count peak_load load_per_cpu
@@ -259,14 +259,12 @@ verify_host_load_budget() {
     echo "- Logical CPUs: ${cpu_count}"
     echo "- Peak 1-minute load: ${peak_load}"
     echo "- Peak load per CPU: ${load_per_cpu}"
-    echo "- Maximum allowed load per CPU: ${CAPACITY_MAX_HOST_LOAD_PER_CPU}"
+    echo "- Preflight reference limit per CPU: ${CAPACITY_MAX_HOST_LOAD_PER_CPU}"
+    echo "- Interpretation: runtime load includes the measured workload and is diagnostic only"
     echo
   } >> "$REPORT"
-  if ! awk -v ratio="$load_per_cpu" -v limit="$CAPACITY_MAX_HOST_LOAD_PER_CPU" \
-      'BEGIN { exit !(ratio <= limit) }'; then
-    echo "Capacity run is contaminated by host load: peak_load_per_cpu=${load_per_cpu}, limit=${CAPACITY_MAX_HOST_LOAD_PER_CPU}" >&2
-    return 1
-  fi
+  # 运行中的 load 包含被测 Docker/JVM/PostgreSQL 自身产生的有效压力，不能据此硬判环境污染。
+  # 是否允许发压只看运行前的空闲负载；运行峰值保留在报告中用于跨轮次解释。
 }
 
 storm_reached_terminal_state() {
@@ -966,7 +964,7 @@ run_10w_storm() {
     | tee "$LOG_DIR/10w-storm.log"
   local rc=${PIPESTATUS[0]}
   set -e
-  if ! verify_host_load_budget "$storm_run_id"; then
+  if ! append_host_load_summary "$storm_run_id"; then
     PROFILE_RC=1
   fi
   append_pg_statement_profile
