@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-SIM_STAGE_NAME="atomic-stage5b"
+export SIM_STAGE_NAME="atomic-stage5b"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 

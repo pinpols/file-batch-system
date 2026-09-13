@@ -22,7 +22,7 @@ cd "$ROOT"
 SIM_SQL_DIR="$ROOT/scripts/sim/sql"
 export SIM_SQL_DIR
 
-SIM_STAGE_NAME="import-stage2d"
+export SIM_STAGE_NAME="import-stage2d"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 

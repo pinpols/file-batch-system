@@ -32,7 +32,7 @@ set -uo pipefail
 SKIP_BUILD=false
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT_DIR"
+cd "$ROOT_DIR" || exit 1
 # shellcheck source=../lib/logging.sh
 source "$ROOT_DIR/scripts/lib/logging.sh"
 # shellcheck source=maven-env.sh
@@ -495,4 +495,7 @@ else
 fi
 printf '%s\n' "$(printf '=%.0s' {1..64})"
 
-exit $([ $TEST_FAILED -eq 0 ] && echo 0 || echo 1)
+if ((TEST_FAILED == 0)); then
+  exit 0
+fi
+exit 1

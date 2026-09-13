@@ -53,7 +53,8 @@ import_one() {
   # 1) upload
   local upload_resp upload_body upload_code
   upload_body="$(mktemp -t sim-tenant-upload.XXXXXX)"
-  local upload_key="sim-${tenant}-tenant-package-upload-$(date +%s%N)"
+  local upload_key
+  upload_key="sim-${tenant}-tenant-package-upload-$(date +%s%N)"
   upload_code=$(curl -sS --max-time 90 --connect-timeout 5 -o "$upload_body" -w "%{http_code}" -X POST \
     -H "X-Tenant-Id: $tenant" "${CURL_AUTH_ARGS[@]}" \
     -H "Idempotency-Key: $upload_key" \
@@ -77,7 +78,8 @@ import_one() {
   # 2) apply
   local apply_resp apply_body apply_code
   apply_body="$(mktemp -t sim-tenant-apply.XXXXXX)"
-  local apply_key="sim-${tenant}-tenant-package-apply-$(date +%s%N)"
+  local apply_key
+  apply_key="sim-${tenant}-tenant-package-apply-$(date +%s%N)"
   apply_code=$(curl -sS --max-time 180 --connect-timeout 5 -o "$apply_body" -w "%{http_code}" -X POST \
     -H "X-Tenant-Id: $tenant" "${CURL_AUTH_ARGS[@]}" \
     -H "Idempotency-Key: $apply_key" \

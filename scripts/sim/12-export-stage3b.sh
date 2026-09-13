@@ -15,13 +15,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-SIM_STAGE_NAME="export-stage3b"
+export SIM_STAGE_NAME="export-stage3b"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
-SQL_DIR="$ROOT/scripts/sim/sql"
-
 echo "==> apply bootstrap + stage3b fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \

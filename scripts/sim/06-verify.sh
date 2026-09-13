@@ -86,13 +86,10 @@ else
 fi
 
 # (b) worker-export 进程是否在听 18084 / 容器是否在
-worker_ok=0
 if docker ps --format '{{.Names}}' | grep -q '^batch-worker-export$'; then
   ok "worker-export 容器" "running"
-  worker_ok=1
 elif process_port_is_listening 18084; then
   ok "worker-export :18084" "LISTEN(本地 mvn 进程)"
-  worker_ok=1
 else
   ng "worker-export" "未运行,EXPORT step 会停在 READY → 60+min 后 FAILED;请启动 worker-export"
 fi

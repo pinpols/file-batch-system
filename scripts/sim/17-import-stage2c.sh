@@ -18,12 +18,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-SIM_STAGE_NAME="import-stage2c"
+export SIM_STAGE_NAME="import-stage2c"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
-SQL_DIR="$ROOT/scripts/sim/sql"
 
 __RESTARTED_IMPORT_WITH_CHECKPOINT_DISABLED=0
 wait_import_worker() {

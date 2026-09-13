@@ -18,7 +18,6 @@ WORKER_PROCESS_PROM="${WORKER_PROCESS_PROM:-http://localhost:${WORKER_PROCESS_PO
 SQL_DIR="$ROOT_DIR/scripts/dev/sql"
 
 JOB_CODE="process_demo_aggregate_job"
-PIPELINE_CODE="process_demo_aggregate_pipeline"
 
 echo "==> 1. 业务库 biz.process_demo_source / biz.process_demo_target 建表 + 灌 source 数据"
 psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 \

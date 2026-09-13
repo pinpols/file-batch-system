@@ -363,7 +363,7 @@ wait_orchestrator() {
   local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
   local url="http://127.0.0.1:${port}/actuator/health"
   echo "  等待 orchestrator 就绪（${url}）..."
-  for i in $(seq 1 60); do
+  for _ in $(seq 1 60); do
     sleep 3
     if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \
         | grep -q '"status":"UP"'; then
