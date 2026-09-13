@@ -21,6 +21,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
@@ -245,10 +246,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (EmptyChecks.isNull(command)) {
       return null;
     }
-    JobTaskEntity task = jobMappers.jobTaskMapper.selectById(command.tenantId(), command.taskId());
-    if (EmptyChecks.isNull(task)) {
+    TaskOutcomePersistenceContext persistenceContext =
+        jobMappers.jobTaskMapper.selectOutcomePersistenceContext(
+            command.tenantId(), command.taskId());
+    if (EmptyChecks.isNull(persistenceContext)
+        || EmptyChecks.isNull(persistenceContext.getTask())) {
       return null;
     }
+    JobTaskEntity task = persistenceContext.getTask();
     // 只处理 RUNNING → terminal 的一次性回报；重复回报直接返回当前状态，保证幂等。
     if (!TaskStatus.RUNNING.code().equals(task.getTaskStatus())) {
       log.info(
@@ -261,8 +266,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       throw BizException.of(ResultCode.FORBIDDEN, "error.worker.not_owner");
     }
     Instant finishedAt = BatchDateTimeSupport.utcNow();
-    JobPartitionEntity partition =
-        jobMappers.jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId());
+    JobPartitionEntity partition = persistenceContext.getPartition();
     // R3-P1-10 一致性:report 纳入 partition invocation fence,与 renew/updateOutputSummary 同一守卫宇宙。
     // partition-bound 且该 partition 已被 CLAIM(current_invocation_id 非空)的任务,其 report 必须携带
     // 匹配的 invocationId —— 缺失或不匹配即拒(error.task.invocation_mismatch)。此前 report 是唯一"带
@@ -334,8 +338,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
 
     String outputSummary = TaskOutcomeSummaryBuilder.buildOutputSummary(command, task);
+    JobInstanceEntity transitionedInstance;
     if (command.success()) {
-      applySuccessOutcome(command, partition, outputSummary);
+      transitionedInstance = applySuccessOutcome(command, partition, outputSummary);
       // ADR-030 §F：worker 上报的 ContentVerifier 失败 → 同事务写 outbox_event(verifier.failure.v1)。
       // 软告警语义：不翻转 task SUCCESS，仅产出可订阅的事件供告警面板消费。
       collaborators.verifierFailureOutboxService().writeVerifierFailures(command, task);
@@ -354,7 +359,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
       }
     } else {
-      applyFailureOutcome(command, partition, retryScheduled, outputSummary);
+      transitionedInstance = applyFailureOutcome(command, partition, retryScheduled, outputSummary);
     }
     if (EmptyChecks.isNotNull(partition) && retryScheduled) {
       // RETRYING 使用独立状态更新；保留 invocation fence，防止迟到报告覆盖下一次执行的输出。
@@ -364,11 +369,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
     updateStepInstanceProgress(command, task, retryScheduled, finishedAt, outputSummary);
-    // markStatus 会同步递增 job_instance 的分区计数和 version，因此权威快照必须在该写入之后读取。
-    // 读取仍位于 instance advisory lock 保护范围内；Progressor 直接消费本快照，避免成功路径
-    // 在同一事务内重复点查 job_instance。
-    JobInstanceEntity jobInstance =
-        jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
+    // 终态 CTE 会同步递增 job_instance 的分区计数和 version，并直接返回权威快照；虚拟任务、重试路径
+    // 或 CAS 未命中时才回读。两条路径都位于 instance advisory lock 保护范围内。
+    JobInstanceEntity jobInstance = EmptyChecks.isNotNull(transitionedInstance)
+        ? transitionedInstance
+        : jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
     if (EmptyChecks.isNotNull(jobInstance)) {
       instanceProgressor.advance(command, task, jobInstance, finishedAt, this::applyTaskOutcome);
     }
@@ -393,36 +398,41 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   /** 处理成功路径：将分区标记为 SUCCESS。 */
-  private void applySuccessOutcome(
+  private JobInstanceEntity applySuccessOutcome(
       TaskOutcomeCommand command, JobPartitionEntity partition, String outputSummary) {
     if (EmptyChecks.isNull(partition)) {
-      return;
+      return null;
     }
-    // C-8: 检查 markStatus 返回值，0 行表示并发更新已推进分区状态，保证分区与任务状态在同一事务内一致
-    int partitionUpdated =
-        jobMappers.jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
-            .tenantId(command.tenantId())
-            .id(partition.getId())
-            .partitionStatus(PartitionStatus.SUCCESS.code())
-            .runningStatus(PartitionStatus.RUNNING.code())
-            .terminalStatus1(PartitionStatus.SUCCESS.code())
-            .terminalStatus2(PartitionStatus.FAILED.code())
-            .terminalStatus3(PartitionStatus.CANCELLED.code())
-            .terminalStatus4(PartitionStatus.TERMINATED.code())
-            .outputSummary(outputSummary)
-            .expectedVersion(partition.getVersion())
-            .build());
-    warnIfCasMiss(partitionUpdated, "partition markStatus(SUCCESS)", partition.getId());
+    // C-8: null 表示并发更新已推进分区状态；回读 instance 继续沿用原有幂等兜底。
+    JobInstanceEntity transitionedInstance =
+        jobMappers.jobPartitionMapper.markTerminalStatusAndLoadInstance(
+            MarkPartitionStatusParam.builder()
+                .tenantId(command.tenantId())
+                .id(partition.getId())
+                .partitionStatus(PartitionStatus.SUCCESS.code())
+                .runningStatus(PartitionStatus.RUNNING.code())
+                .terminalStatus1(PartitionStatus.SUCCESS.code())
+                .terminalStatus2(PartitionStatus.FAILED.code())
+                .terminalStatus3(PartitionStatus.CANCELLED.code())
+                .terminalStatus4(PartitionStatus.TERMINATED.code())
+                .outputSummary(outputSummary)
+                .expectedVersion(partition.getVersion())
+                .build());
+    warnIfCasMiss(
+        EmptyChecks.isNull(transitionedInstance) ? 0 : 1,
+        "partition markStatus(SUCCESS)",
+        partition.getId());
+    return transitionedInstance;
   }
 
   /** 处理失败/重试路径：根据是否安排重试，将分区标记为 RETRYING 或 FAILED。 */
-  private void applyFailureOutcome(
+  private JobInstanceEntity applyFailureOutcome(
       TaskOutcomeCommand command,
       JobPartitionEntity partition,
       boolean retryScheduled,
       String outputSummary) {
     if (EmptyChecks.isNull(partition)) {
-      return;
+      return null;
     }
     if (retryScheduled) {
       // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
@@ -433,20 +443,27 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           PartitionStatus.RETRYING.code(),
           partition.getVersion());
       warnIfCasMiss(retryUpdated, "partition markRetrying", partition.getId());
+      return null;
     } else {
-      int failUpdated = jobMappers.jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
-          .tenantId(command.tenantId())
-          .id(partition.getId())
-          .partitionStatus(PartitionStatus.FAILED.code())
-          .runningStatus(PartitionStatus.RUNNING.code())
-          .terminalStatus1(PartitionStatus.SUCCESS.code())
-          .terminalStatus2(PartitionStatus.FAILED.code())
-          .terminalStatus3(PartitionStatus.CANCELLED.code())
-          .terminalStatus4(PartitionStatus.TERMINATED.code())
-          .outputSummary(outputSummary)
-          .expectedVersion(partition.getVersion())
-          .build());
-      warnIfCasMiss(failUpdated, "partition markStatus(FAILED)", partition.getId());
+      JobInstanceEntity transitionedInstance =
+          jobMappers.jobPartitionMapper.markTerminalStatusAndLoadInstance(
+              MarkPartitionStatusParam.builder()
+                  .tenantId(command.tenantId())
+                  .id(partition.getId())
+                  .partitionStatus(PartitionStatus.FAILED.code())
+                  .runningStatus(PartitionStatus.RUNNING.code())
+                  .terminalStatus1(PartitionStatus.SUCCESS.code())
+                  .terminalStatus2(PartitionStatus.FAILED.code())
+                  .terminalStatus3(PartitionStatus.CANCELLED.code())
+                  .terminalStatus4(PartitionStatus.TERMINATED.code())
+                  .outputSummary(outputSummary)
+                  .expectedVersion(partition.getVersion())
+                  .build());
+      warnIfCasMiss(
+          EmptyChecks.isNull(transitionedInstance) ? 0 : 1,
+          "partition markStatus(FAILED)",
+          partition.getId());
+      return transitionedInstance;
     }
   }
 

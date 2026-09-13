@@ -384,6 +384,54 @@ PostgreSQL 约 295% CPU。最终服务端接收并完成 9814/9814，全部 SUCC
 - `load-tests/target/p2-capacity-profile-tor10k-w2-0913.md`
 - `load-tests/target/p2-capacity-profile-tor10k-w3-0913.md`
 
+### 7. Report 往返、Trigger 并发预算与 outbox 写放大收口
+
+SQL 画像显示成功 report 会重复读取 task、partition 和 terminal instance。当前将 task 与 partition
+持久化上下文合并为一次查询，并让分区终态 CAS 在同一 SQL 中返回更新后的 job instance；重试、虚拟
+task 和 CAS miss 仍走原有回退路径。改动不调整租户谓词、invocation fence、事务边界、终态聚合或
+补偿语义。Orchestrator 编译通过，真实 PostgreSQL 的 `WorkerClaimProgressCompleteIntegrationTest`
+2 项通过。
+
+复核历史基线发现，`134.946 tasks/s` 严格轮次使用 Trigger admission `32`、平台连接池 `40`。后续将
+该容量预算提高到 `80/88` 后，在同一 8 核共享 PostgreSQL 上出现更高的 WAL/连接争用，launch T1/T2
+平均耗时由历史十几至二十余毫秒放大到近百至二百余毫秒，入口队列最终产生 429 或连接提前关闭。
+benchmark profile 已恢复为 `32/40`，并保留 8 条数据库连接给 relay、健康检查和管理路径。该裁定只
+影响隔离容量 profile，不改变 local/prod 默认值；后续不得以“并发值更大”为理由直接放大连接池，必须
+通过同容量等级 A/B 证明吞吐收益。
+
+同时确认 `outbox_event.payload_json` GIN 索引在仓库运行时查询中没有消费路径，实库父子索引扫描次数为
+0；反复容量测试后，空的当月 outbox 分区仍占 91 MiB，其中 GIN 子索引占 79 MiB。V208 前向迁移删除
+该父索引及已挂接子索引，并兼容删除旧非分区索引；event key、aggregate 和 publish status 等实际查询
+使用的 B-tree 索引全部保留。本地删除索引并执行普通 `VACUUM (ANALYZE)` 后，当月空分区降为约
+4.1 MiB，热表死元组归零，空闲 PostgreSQL CPU 从约 42% 回落到约 5%。容量脚本对应的手工分区迁移
+也不再创建该 GIN 索引。
+
+在宿主机仍高于可比门槛的情况下，完成 `1000 requests @ 100 RPS` 无回归轮次：入口和终态均为
+`1000/1000`、HTTP p95 `354ms`、任务执行 p95 `1.935s`、Kafka 最终 lag 为 0、所有容器零重启，完成
+吞吐 `51.186 tasks/s`。该轮预检 load 为 `7.88-9.17`，只证明主链正确，不作为历史吞吐对比。当前
+性能基线仍是 `134.946 tasks/s`；只有宿主机连续预检 `load1 <= 6` 后的同口径 1 万三轮中位数，才可
+用于判断本轮优化是否提升峰值。
+
+最终提交 `178e56527` 重新构建并部署后又执行了预热和严格轮次。预热轮次在预检 load
+`7.74-7.83` 下接收并完成 `990/990`，10 个拒绝全部由 admission queue full 触发；严格 1 万轮次的
+预检样本为 `5.84,5.70,5.56,6.15,5.98`，其中一个样本超过可比门槛，因此脚本正确标记为不可比较。
+运行期宿主机 load1 峰值达到 `22.77`，现场采样为 `0% idle / 46.61% system CPU`；Trigger 使用
+`720.1/768 MiB`，G1 young GC 暂停累计 `17.343s`、单次最大 `1.706s`，PostgreSQL 同时有 5 个会话
+等待 `WALWrite`。入口最终返回 3056 个成功响应、2992 个 429、3819 个客户端超时和 133 个连接提前
+关闭；客户端超时后仍有请求完成落库，服务端实际创建的 `4789/4789` 个实例全部进入 SUCCESS，Kafka
+lag 归零、应用与基础容器均无重启。该轮完成吞吐 `21.302 tasks/s` 只是共享宿主机饱和时的稳定性证据，
+既不能证明本次 SQL 优化提升，也不能据此判定为代码性能回退。不得通过提高 admission、连接池或
+可比负载阈值把该轮包装成有效容量结果。
+
+本节原始证据：
+
+- `load-tests/target/p2-capacity-profile-report-roundtrip-card100-dual-10k-20260913.md`
+- `load-tests/target/p2-capacity-profile-t32-rpt-10k-0913.md`
+- `load-tests/target/p2-capacity-profile-gin0-t32-10k.md`
+- `load-tests/target/p2-capacity-profile-opt-1k-100.md`
+- `load-tests/target/p2-capacity-profile-opt-final-warmup-1k-0913.md`
+- `load-tests/target/p2-capacity-profile-opt-final-strict-10k-0913.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |
@@ -395,6 +443,7 @@ PostgreSQL 约 295% CPU。最终服务端接收并完成 9814/9814，全部 SUCC
 | 1 万，结果版本热路径优化后（热态） | 有效 | 10000/10000，p95 1112ms | 136.517/s | 保留正确性锁，完成窗口较上一行缩短 14.6% |
 | 1 万，最新 main、低负载复验 | 有效 | 10000/10000，p95 858ms | 97.081/s | 比同日较早轮次回升 8.4%，尚未恢复历史热态峰值 |
 | 1 万，最新 main、高负载取证 | 无效负向实验 | 9814/10000 入库，入口超时/拒绝 | 25.109/s | 运行期 load1 40.81，证明提高执行门槛不等于提高容量 |
+| 1 万，最终 report 优化 SHA、高负载取证 | 无效负向实验 | 4789/4789 入库实例成功，入口超时/拒绝 | 21.302/s | 预检未满足可比门槛，运行期 0% CPU idle、GC 与 WALWrite 同时放大，不用于判断性能增减 |
 | 10 万，旧 3 分区缓存状态 | 趋势参考 | 100000/100000 | 约 117/s | 拓扑证据无效，不作为最终验收 |
 | 10 万，最终严格轮次 | 有效 | 100000/100000，p95 67ms | 134.946/s | 全终态、零失败、零残留 |
 | 10 万，热路径优化、清账本、单端点 | 有效 | 100000/100000，零失败 | 131.468/s | 未超过最终严格基线，不宣称提升 |

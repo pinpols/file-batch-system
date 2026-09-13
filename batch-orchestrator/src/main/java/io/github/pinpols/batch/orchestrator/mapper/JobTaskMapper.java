@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.mapper;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
+import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
@@ -18,6 +19,10 @@ public interface JobTaskMapper {
   int insertBatch(List<JobTaskEntity> entities);
 
   JobTaskEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /** REPORT 热路径一次读取 task 与所属 partition，避免同事务连续两次主键查询。 */
+  TaskOutcomePersistenceContext selectOutcomePersistenceContext(
+      @Param("tenantId") String tenantId, @Param("id") Long id);
 
   JobTaskEntity selectByPartitionAndSeq(
       @Param("tenantId") String tenantId,

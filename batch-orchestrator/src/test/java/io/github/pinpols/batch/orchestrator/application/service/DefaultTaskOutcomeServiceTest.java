@@ -31,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
+import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
@@ -139,7 +140,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   void applyTaskOutcome_taskNotFound_returnsNull() {
-    when(jobTaskMapper.selectById(anyString(), anyLong())).thenReturn(null);
+    when(jobTaskMapper.selectOutcomePersistenceContext(anyString(), anyLong())).thenReturn(null);
 
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder().tenantId("t1").taskId(99L).success(true).build();
@@ -149,7 +150,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   void applyTaskOutcome_nullTenantId_returnsNull() {
-    when(jobTaskMapper.selectById(null, 1L)).thenReturn(null);
+    when(jobTaskMapper.selectOutcomePersistenceContext(null, 1L)).thenReturn(null);
 
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder().taskId(1L).success(true).build();
@@ -172,8 +173,8 @@ class DefaultTaskOutcomeServiceTest {
     JobPartitionEntity partition = new JobPartitionEntity();
     partition.setCurrentInvocationId("inv-db");
 
-    when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
-    when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
+    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
+        .thenReturn(persistenceContext(task, partition));
 
     TaskOutcomeCommand command = TaskOutcomeCommand.builder()
         .tenantId("t1")
@@ -237,11 +238,11 @@ class DefaultTaskOutcomeServiceTest {
     progressedInstance.setFailedPartitionCount(0);
     progressedInstance.setDryRun(false);
 
-    when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
-    when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(progressedInstance);
+    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
+        .thenReturn(persistenceContext(task, partition));
     when(jobTaskMapper.finishTask(any())).thenReturn(task);
-    when(jobPartitionMapper.markStatus(any())).thenReturn(1);
+    when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any()))
+        .thenReturn(progressedInstance);
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
@@ -256,7 +257,7 @@ class DefaultTaskOutcomeServiceTest {
     JobTaskEntity outcome = service.applyTaskOutcome(command);
 
     assertThat(outcome).isSameAs(task);
-    verify(jobTaskMapper, times(1)).selectById("t1", 1L);
+    verify(jobTaskMapper, times(1)).selectOutcomePersistenceContext("t1", 1L);
     verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
     verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
     verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
@@ -266,9 +267,10 @@ class DefaultTaskOutcomeServiceTest {
     inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
     ArgumentCaptor<MarkPartitionStatusParam> partitionStatusCaptor =
         ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
-    inOrder.verify(jobPartitionMapper).markStatus(partitionStatusCaptor.capture());
-    inOrder.verify(jobInstanceMapper).selectById("t1", 10L);
-    verify(jobInstanceMapper, times(1)).selectById("t1", 10L);
+    inOrder
+        .verify(jobPartitionMapper)
+        .markTerminalStatusAndLoadInstance(partitionStatusCaptor.capture());
+    verify(jobInstanceMapper, never()).selectById("t1", 10L);
     assertThat(partitionStatusCaptor.getValue().getOutputSummary())
         .contains("\"taskId\":1", "\"success\":true");
     verify(jobPartitionMapper, never()).updateOutputSummary(anyString(), anyLong(), any(), any());
@@ -305,11 +307,11 @@ class DefaultTaskOutcomeServiceTest {
     progressedInstance.setFailedPartitionCount(0);
     progressedInstance.setDryRun(false);
 
-    when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
-    when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
-    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(progressedInstance);
+    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
+        .thenReturn(persistenceContext(task, partition));
     when(jobTaskMapper.finishTask(any())).thenReturn(task);
-    when(jobPartitionMapper.markStatus(any())).thenReturn(1);
+    when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any()))
+        .thenReturn(progressedInstance);
     when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
         .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L));
     when(stateMachine.transition(any(), anyString()))
@@ -328,7 +330,15 @@ class DefaultTaskOutcomeServiceTest {
         captor = ArgumentCaptor.forClass(
             io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam.class);
     verify(jobInstanceMapper).updateProgress(captor.capture());
-    verify(jobInstanceMapper, times(1)).selectById("t1", 10L);
+    verify(jobInstanceMapper, never()).selectById("t1", 10L);
     assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
+  }
+
+  private static TaskOutcomePersistenceContext persistenceContext(
+      JobTaskEntity task, JobPartitionEntity partition) {
+    TaskOutcomePersistenceContext context = new TaskOutcomePersistenceContext();
+    context.setTask(task);
+    context.setPartition(partition);
+    return context;
   }
 }
