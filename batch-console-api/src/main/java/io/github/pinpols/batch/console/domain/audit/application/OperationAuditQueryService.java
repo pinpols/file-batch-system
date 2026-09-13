@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.application;
 
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
@@ -33,7 +34,7 @@ public class OperationAuditQueryService {
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
     String tenantId = TenantScope.requireTenant(tenantGuard.resolveTenant(req.getTenantId()));
-    boolean cursorMode = req.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(req.getCursor());
     int pageNo = req.getPageNo() == null ? 1 : req.getPageNo();
     int pageSize = req.getPageSize() == null ? 20 : req.getPageSize();
     int offset = cursorMode ? 0 : (pageNo - 1) * pageSize;

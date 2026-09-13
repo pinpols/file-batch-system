@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
@@ -73,7 +74,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -110,7 +111,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
       OutboxRetryLogQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -133,7 +134,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -162,7 +163,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -187,7 +188,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -209,7 +210,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -232,7 +233,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
       PendingCatchUpQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -268,7 +269,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());

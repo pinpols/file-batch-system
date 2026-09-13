@@ -77,7 +77,7 @@ public class ConsoleFileQueryService {
   private final ConsoleOrchestratorPort orchestratorProxy;
 
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());

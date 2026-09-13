@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
@@ -71,7 +72,7 @@ public class ConsoleJobQueryService {
    */
   public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
       JobExecutionLogQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -110,7 +111,7 @@ public class ConsoleJobQueryService {
   }
 
   public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     // ADR-031:cursor 模式 cursor key 是 id,与 sortBy=duration 互斥(duration 排序 cursor key 应该是 duration)
     // 不静默忽略 sortBy,直接拒绝,避免「客户端以为按 duration 翻页实际按 id」的隐性 bug
     if (cursorMode && "duration".equals(request.getSortBy())) {
@@ -164,7 +165,7 @@ public class ConsoleJobQueryService {
 
   public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
       JobStepInstanceQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -192,7 +193,7 @@ public class ConsoleJobQueryService {
   }
 
   public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());

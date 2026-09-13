@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -94,7 +95,7 @@ public class ConsoleWorkflowQueryService {
   }
 
   public PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -123,7 +124,7 @@ public class ConsoleWorkflowQueryService {
 
   public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
       WorkflowNodeRunQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null;
+    boolean cursorMode = EmptyChecks.isNotNull(request.getCursor());
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
