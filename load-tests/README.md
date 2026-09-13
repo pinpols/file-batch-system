@@ -209,6 +209,12 @@ Orchestrator、Atomic Worker、Kafka 和 PostgreSQL compose 服务。Linux Docke
 声明的分区数，再重启 producer/consumer。Kafka 分区不可缩减；切回普通 local 后可以继续使用已扩展的
 topic，但不能把切换前后的结果视为同一环境基线。
 
+应用镜像必须通过 `./scripts/docker/build-apps.sh` 构建。该入口会把当前 Git revision 写入 OCI
+`org.opencontainers.image.revision` 标签；存在未提交文件时标签追加 `-dirty`。P2 preflight 默认要求工作树
+干净，并校验 Trigger、双 Orchestrator 与 Atomic Worker 镜像标签等于当前 Git revision，防止换分支或
+换机器后误用旧的 `:local` 镜像。仅复验历史镜像时可显式设置
+`CAPACITY_EXPECT_APP_IMAGE_REVISION=<sha>`，报告会保留该声明，不能与当前代码基线混称。
+
 容量对比必须先通过环境同构门禁。脚本默认按 2026-09-12 无画像基线校验：
 
 - `pg_stat_statements.track=none`、`track_io_timing=off`

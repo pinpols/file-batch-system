@@ -2,6 +2,10 @@ variable "APP_IMAGE_TAG" {
   default = "local"
 }
 
+variable "BUILD_REVISION" {
+  default = "unknown"
+}
+
 // CI overlay 可向该抽象目标注入远程缓存，本地构建不依赖 GitHub Actions 环境。
 target "_cache" {}
 
@@ -10,7 +14,8 @@ target "_app" {
   context    = "."
   dockerfile = "deploy/docker/Dockerfile.app"
   args = {
-    BUILD_MODE = "all"
+    BUILD_MODE     = "all"
+    BUILD_REVISION = BUILD_REVISION
   }
 }
 

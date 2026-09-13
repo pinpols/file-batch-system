@@ -10,6 +10,8 @@ RUN_ID="${RUN_ID:-p2-capacity-$(date +%Y%m%d%H%M%S)}"
 # 该画像会核对固定 compose 服务、容器资源和 Kafka 分区，只支持仓库提供的本地 Docker
 # benchmark 拓扑。远程/staging 使用 Gatling 环境 profile，不能伪装成同一容量基线。
 CAPACITY_RUNTIME_PROFILE="${CAPACITY_RUNTIME_PROFILE:-local-docker}"
+CAPACITY_EXPECT_APP_IMAGE_REVISION="${CAPACITY_EXPECT_APP_IMAGE_REVISION:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
+CAPACITY_REQUIRE_CLEAN_WORKTREE="${CAPACITY_REQUIRE_CLEAN_WORKTREE:-1}"
 RUN_10W_STORM="${RUN_10W_STORM:-1}"
 RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
@@ -169,6 +171,28 @@ require_supported_capacity_runtime() {
     echo "  use Maven -Pstaging/-Pprod-probe Gatling profiles for remote environments" >&2
     exit 2
   fi
+}
+
+require_application_image_provenance() {
+  local container actual_revision
+  if [[ "$CAPACITY_REQUIRE_CLEAN_WORKTREE" == "1" ]] \
+      && [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal)" ]]; then
+    echo "Capacity benchmark requires a clean Git worktree" >&2
+    echo "  commit or remove local changes before building and measuring application images" >&2
+    exit 2
+  fi
+  for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic; do
+    actual_revision="$(docker inspect "$container" \
+      --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
+    if [[ "$actual_revision" != "$CAPACITY_EXPECT_APP_IMAGE_REVISION" ]]; then
+      echo "Capacity application image revision does not match the declared source:" >&2
+      echo "  container=${container}" >&2
+      echo "  expected=${CAPACITY_EXPECT_APP_IMAGE_REVISION}" >&2
+      echo "  actual=${actual_revision:-missing}" >&2
+      echo "  rebuild: ./scripts/docker/build-apps.sh trigger orchestrator worker-atomic" >&2
+      exit 2
+    fi
+  done
 }
 
 require_capacity_environment_alignment() {
@@ -674,6 +698,7 @@ evict_capacity_config_cache() {
 write_report_header() {
   local database_observability_state statement_track track_io_timing synchronous_commit
   local wal_compression max_wal_size checkpoint_timeout cpu_count host_load git_revision
+  local container container_revision
   database_observability_state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/capture-pg-capacity-settings.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
     max_wal_size checkpoint_timeout <<< "$database_observability_state"
@@ -696,10 +721,12 @@ write_report_header() {
     echo "- PostgreSQL runtime tracking: pg_stat_statements.track=${statement_track}, track_io_timing=${track_io_timing}"
     echo "- PostgreSQL durability/WAL: synchronous_commit=${synchronous_commit}, wal_compression=${wal_compression}, max_wal_size=${max_wal_size}, checkpoint_timeout=${checkpoint_timeout}"
     echo "- Git revision: ${git_revision}"
+    echo "- Expected application image revision: ${CAPACITY_EXPECT_APP_IMAGE_REVISION}"
     echo "- Load-generator host CPUs: ${cpu_count}"
     echo "- Load-generator host load snapshot: ${host_load}"
     for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
-      echo "- Container image ${container}: $(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || echo unavailable)"
+      container_revision="$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
+      echo "- Container image ${container}: $(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || echo unavailable), revision=${container_revision:-unavailable}"
     done
     echo "- Result business-key cardinality: ${CAPACITY_BIZ_DATE_CARDINALITY}"
     echo "- Terminal polling interval: ${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS}s"
@@ -1041,6 +1068,7 @@ run_fairness() {
 require_tooling
 require_exact_storm_shape
 require_supported_capacity_runtime
+require_application_image_provenance
 require_trigger_capacity_budget
 require_pg_statement_profile
 require_capacity_environment_alignment

@@ -26,6 +26,10 @@
 - 只重建 Atomic：`./scripts/docker/build-apps.sh worker-atomic`，脚本会自动传入 `BUILD_MODE=module`
 - 整套 8 个镜像显式共享一次 builder：`BUILD_MODE=all ./scripts/docker/build-apps.sh`
 - 整套并行构建也可使用 `docker buildx bake`；CI 叠加 `docker-bake.ci.hcl` 复用 GitHub Actions 远程缓存
+- 标准构建入口会写入 OCI `org.opencontainers.image.revision` 标签；工作树不干净时标签追加
+  `-dirty`，容量基线据此拒绝把未提交代码或旧镜像当作当前提交测试。
+- 手工执行 `docker buildx bake` 时应传入 `BUILD_REVISION=$(git rev-parse HEAD)`；CI 已自动使用
+  `${{ github.sha }}`。未声明时标签为 `unknown`，只能用于普通联调，不能通过容量基线门禁。
 - 观测栈的快捷入口也可以直接用 `make observability-up` / `make observability-down`
 
 ## 磁盘清理
