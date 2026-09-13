@@ -238,7 +238,9 @@ CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
 运行期间的 load 峰值包含被测 Docker/JVM/PostgreSQL 自身压力，只记录到报告中用于跨轮次归因，不作为
 硬失败条件；外部后台进程是否抢占 CPU 仍需结合主机进程采样判断。
 
-- `psql`：压测准备、清理、统计 SQL 都依赖它；macOS 可用 `brew install libpq`，并把 `$(brew --prefix libpq)/bin` 加入 `PATH`。
+- PostgreSQL 客户端：统一入口默认依次尝试宿主机 `psql`、Python `psycopg`、运行中的
+  `batch-postgres-primary` 容器；可用 `BATCH_PG_CLIENT_MODE=host|python|docker` 固定模式。本地 Docker
+  容量画像无需额外安装宿主机 `psql`。
 - `kafka-consumer-groups.sh` / `kafka-topics.sh`：Kafka lag 和 topic 初始化使用；设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`。
 - Python 3：默认优先找 `python3`，也可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 指定。
 
