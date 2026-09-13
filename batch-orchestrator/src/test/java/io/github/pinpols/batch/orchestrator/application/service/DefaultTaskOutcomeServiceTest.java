@@ -206,12 +206,11 @@ class DefaultTaskOutcomeServiceTest {
   }
 
   /**
-   * 死锁回归守护(perf 改造后):成功 outcome 必须**先**对 (tenantId, jobInstanceId) 取事务级 advisory lock(同 instance
-   * 串行化),**再**对自己这个分区 {@code markStatus} 写锁。此前用 whole-instance FOR UPDATE 建立锁序,现改为 advisory
-   * lock,不变量从「bulk FOR UPDATE 先于 per-partition write」演进为「advisory lock 先于 per-partition write」。
+   * 死锁回归守护：成功 outcome 必须先对 (tenantId, jobInstanceId) 取事务级 advisory lock，再依次写 task 和
+   * partition。任何 outcome 在等待实例锁时都不能持有业务行锁，否则实例收敛可能反向等待该行并形成锁环。
    */
   @Test
-  void applyTaskOutcome_acquiresInstanceAdvisoryLockBeforeMarkingSelf() {
+  void applyTaskOutcome_acquiresInstanceAdvisoryLockBeforeTaskAndPartitionWrites() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(1L);
     task.setTenantId("t1");
@@ -262,9 +261,10 @@ class DefaultTaskOutcomeServiceTest {
     verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
     verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
 
-    InOrder inOrder = inOrder(jobInstanceMapper, jobPartitionMapper);
-    // instance 级 advisory lock 必须先于分区写锁；权威快照必须在 markStatus 递增实例版本后读取。
+    InOrder inOrder = inOrder(jobInstanceMapper, jobTaskMapper, jobPartitionMapper);
+    // 统一锁序必须是 instance advisory lock -> task -> partition。
     inOrder.verify(jobInstanceMapper).acquireInstanceAdvisoryLock("t1", 10L);
+    inOrder.verify(jobTaskMapper).finishTask(any());
     ArgumentCaptor<MarkPartitionStatusParam> partitionStatusCaptor =
         ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
     inOrder
