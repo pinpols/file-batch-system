@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- 修复关闭 `MANAGEMENT_OPENTELEMETRY_ENABLED` 后 Micrometer OTLP metrics 仍后台连接 Collector 的配置漂移；metrics、traces、logs exporter 现统一跟随总开关，未部署观测栈的本地与容量环境不再产生重试噪音。
 - 修复 P2 容量 fixture 隐式依赖演示 seed、缺少源定义时仍继续发压的问题；fixture 现自包含创建 Atomic 作业并在发压前核验，同时避免不同 worktree 的应用定向启动误重建 PostgreSQL 容器，并拒绝非被测 Worker 污染 Atomic 容量基线；异常轮次统一清理入口按引用顺序回收控制面数据和专用租户孤儿记录。
 - 修复 PostgreSQL Docker 客户端 fallback 将宿主机 `-f` 路径直接传入容器、导致无宿主机 `psql` 环境无法执行 SQL 文件的问题；公共入口现通过 stdin 传输文件并保留其余参数。
 - 修复 replay service 手写兼容构造导致 Spring 无法创建 Bean、V202 候选约束遗漏 `OUTPUTS_ONLY` 形态及未 VALIDATE、DryRunGuard 架构测试扫描旧目录造成假绿；补齐 DRY_RUN 结果 7 天后先归档再清理的执行链，并禁止 Dispatch 演练写投递记录或推进正式文件状态。

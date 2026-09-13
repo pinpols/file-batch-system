@@ -129,6 +129,19 @@ class ConfigDriftGuardTest {
   }
 
   @Test
+  void openTelemetryMasterSwitchControlsEveryExporter() throws IOException {
+    Map<String, Object> flat = flatten(loadYaml(baselineYml()));
+    String masterSwitch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}";
+
+    assertThat(flat)
+        .as("关闭 OpenTelemetry 总开关时，metrics/traces/logs 都不能继续后台连接 Collector")
+        .containsEntry("management.opentelemetry.enabled", masterSwitch)
+        .containsEntry("management.otlp.metrics.export.enabled", masterSwitch)
+        .containsEntry("management.tracing.export.otlp.enabled", masterSwitch)
+        .containsEntry("management.logging.export.otlp.enabled", masterSwitch);
+  }
+
+  @Test
   void serviceModulesDoNotRedefineBaselineOwnedKeys() throws IOException {
     Path root = repoRoot();
     Map<String, String> drift = new LinkedHashMap<>();
