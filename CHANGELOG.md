@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **容量基线镜像来源约束**：标准 Compose/Bake 构建为应用镜像写入 OCI `org.opencontainers.image.revision`；P2 容量画像要求干净工作树，并校验 Trigger、双 Orchestrator 和 Atomic Worker 镜像与声明 revision 一致，禁止旧镜像或未提交代码生成可比较基线。
 - **Java 镜像构建提速**：Dockerfile 增加全 reactor/单模块依赖闭包双路径；共享测试基础设施拆为 `batch-test-support`，镜像打包不再编译测试源码；补充 Buildx Bake 构建 DAG 与 GitHub Actions 远程缓存。
 - **容器环境标识统一**：普通本地 Compose 栈固定使用 `batch-platform`，Docker 观测标签和 Kafka UI 集群名按环境注入，生产 Helm overlay 显式使用 `production`。
 - **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。
