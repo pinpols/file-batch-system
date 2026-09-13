@@ -35,9 +35,9 @@ public class OperationAuditQueryService {
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
     String tenantId = TenantScope.requireTenant(tenantGuard.resolveTenant(req.getTenantId()));
     boolean cursorMode = EmptyChecks.isNotNull(req.getCursor());
-    int pageNo = req.getPageNo() == null ? 1 : req.getPageNo();
-    int pageSize = req.getPageSize() == null ? 20 : req.getPageSize();
-    int offset = cursorMode ? 0 : (pageNo - 1) * pageSize;
+    int requestedPageNo = EmptyChecks.isNull(req.getPageNo()) ? 1 : req.getPageNo();
+    int requestedPageSize = EmptyChecks.isNull(req.getPageSize()) ? 20 : req.getPageSize();
+    PageRequest pageRequest = new PageRequest(cursorMode ? 1 : requestedPageNo, requestedPageSize);
     List<AuditRow> rows = mapper.query(
         tenantId,
         req.getAggregateType(),
@@ -49,11 +49,9 @@ public class OperationAuditQueryService {
         req.getStartTime(),
         req.getEndTime(),
         ConsoleQuerySupport.decodeCursorId(req.getCursor()),
-        offset,
-        pageSize);
+        pageRequest);
     if (cursorMode) {
-      return ConsoleQuerySupport.cursorPage(
-          new PageRequest(1, pageSize), rows, this::toResponse, AuditRow::id);
+      return ConsoleQuerySupport.cursorPage(pageRequest, rows, this::toResponse, AuditRow::id);
     }
     long total = mapper.count(
         tenantId,
@@ -68,7 +66,7 @@ public class OperationAuditQueryService {
         null);
     List<ConsoleOperationAuditResponse> items =
         rows.stream().map(this::toResponse).toList();
-    return new PageResponse<>(total, pageNo, pageSize, items);
+    return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
   private ConsoleOperationAuditResponse toResponse(AuditRow r) {

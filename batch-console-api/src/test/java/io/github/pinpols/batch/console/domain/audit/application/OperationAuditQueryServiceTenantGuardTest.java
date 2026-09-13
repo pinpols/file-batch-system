@@ -3,13 +3,13 @@ package io.github.pinpols.batch.console.domain.audit.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
@@ -56,9 +56,7 @@ class OperationAuditQueryServiceTenantGuardTest {
         .thenThrow(new IllegalStateException("request scope missing"));
     when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(0L);
-    when(mapper.query(
-            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(),
-            anyInt()))
+    when(mapper.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(List.of());
   }
 
@@ -104,9 +102,7 @@ class OperationAuditQueryServiceTenantGuardTest {
     service.query(req);
     verify(mapper).count(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any());
     verify(mapper)
-        .query(
-            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(),
-            anyInt());
+        .query(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -153,8 +149,17 @@ class OperationAuditQueryServiceTenantGuardTest {
         .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     verify(mapper)
         .query(
-            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), eq(100L), eq(0),
-            eq(10));
+            eq("ta"),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            eq(100L),
+            eq(new PageRequest(1, 10)));
   }
 
   @Test
@@ -174,7 +179,16 @@ class OperationAuditQueryServiceTenantGuardTest {
         .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     verify(mapper)
         .query(
-            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), eq(null), eq(0),
-            eq(10));
+            eq("ta"),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            eq(null),
+            eq(new PageRequest(1, 10)));
   }
 }

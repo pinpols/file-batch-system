@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.audit.support.OperationAuditEvent;
 import java.time.Instant;
 import java.util.List;
@@ -33,8 +34,7 @@ public interface OperationAuditMapper {
       @Param("startTime") Instant startTime,
       @Param("endTime") Instant endTime,
       @Param("cursorId") Long cursorId,
-      @Param("offset") int offset,
-      @Param("limit") int limit);
+      @Param("pageRequest") PageRequest pageRequest);
 
   /** 跟 query 同条件,只数总数。给 UI 算总页数用。 */
   // 同 query 的参数集（共 9 个),用同一组 @Param 实现 count 查询,不可包装。

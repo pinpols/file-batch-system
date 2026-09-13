@@ -19,4 +19,11 @@ class PageRequestTest {
     assertThat(r.pageNo()).isEqualTo(3);
     assertThat(r.pageSize()).isEqualTo(50);
   }
+
+  @Test
+  void shouldClampPageNoAndPageSizeToSafeUpperBounds() {
+    PageRequest r = new PageRequest(Integer.MAX_VALUE, Integer.MAX_VALUE);
+    assertThat(r.pageNo()).isEqualTo(PageRequest.MAX_PAGE_NO);
+    assertThat(r.pageSize()).isEqualTo(PageRequest.MAX_PAGE_SIZE);
+  }
 }

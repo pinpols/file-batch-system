@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **Console 热列表查询性能**：文件记录、操作审计、AI 审计等高频列表支持游标分页，收窄查询投影并补充精确 trace、模糊文件名、JSONB 到达组及游标排序索引；压测数据清理改用结构化运行标识过滤。
 - **容量画像环境可比性**：P2 压测在发压前连续采样宿主负载，并在报告中固化负载发生器硬件/JDK与实际运行容器签名；8 核环境允许 `load1 < 15` 做稳定性复验，但只有 `load1 <= 6` 的轮次可与标准基线比较。入口请求稳定短缺时提前终止无意义的终态等待。
 - **容量基线镜像来源约束**：标准 Compose/Bake 构建为应用镜像写入 OCI `org.opencontainers.image.revision`；P2 容量画像要求干净工作树，并校验 Trigger、双 Orchestrator 和 Atomic Worker 镜像与声明 revision 一致，禁止旧镜像或未提交代码生成可比较基线。
 - **Java 镜像构建提速**：Dockerfile 增加全 reactor/单模块依赖闭包双路径；共享测试基础设施拆为 `batch-test-support`，镜像打包不再编译测试源码；补充 Buildx Bake 构建 DAG 与 GitHub Actions 远程缓存。

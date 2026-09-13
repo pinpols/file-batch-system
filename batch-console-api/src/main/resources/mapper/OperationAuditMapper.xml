@@ -75,11 +75,12 @@
         <choose>
             <when test="cursorId != null">
                 ORDER BY id DESC
-                LIMIT #{limit}
+                LIMIT #{pageRequest.pageSize}
             </when>
             <otherwise>
                 ORDER BY created_at DESC, id DESC
-                LIMIT #{limit} OFFSET #{offset}
+                LIMIT #{pageRequest.pageSize}
+                OFFSET (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
             </otherwise>
         </choose>
     </select>
