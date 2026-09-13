@@ -75,7 +75,7 @@
 | Read replica | D + E | ✅ 改（DataSource routing） | ✅ 完成（含 docker 部署 + 本地验证） | `batch-console-api/.../config/ReadReplicaDataSourceConfiguration.java` 路由 + 9 个核心 query service 加 `@Transactional(readOnly=true)`；docker-compose `--profile replica` 起 `postgres-replica` 容器（streaming replication）；运维指引见 `docs/runbook/read-replica.md` |
 | WorkerSelector 加 Redis cache | F | ✅ 改 | ✅ 完成 | `WorkerRegistryCache`（5s TTL，fail-open）+ `WorkerSelectorCacheProperties`；`DefaultWorkerSelector.findCandidates` 走缓存；开关 `batch.scheduler.worker-cache.enabled` |
 | Kafka topic 按租户/优先级分 | D + F | ✅ 改（producer/consumer 分流） | ✅ 完成 | `BatchTopicResolver` 按 `MqRoutingProperties.mode=SINGLE/TENANT/PRIORITY` 追加 topic 后缀；`KafkaOutboxPublisher` 走 resolver；开关 `batch.mq.routing.mode` |
-| ~~Quartz JobStore 单独库~~ | ~~D~~ | — | ❌ **2026-04-25 撤销**（半成品清理） | 移除原因：基础设施未交付（无独立 PG 容器 / QRTZ_* 建表 SQL / 数据迁移），且即使补完只能解 Quartz 共库 5% 问题（WAL 隔离），不能解 95% 协调瓶颈（QRTZ_LOCKS 行锁 / polling / 全副本拓扑）。演进路径直接换时间轮，详见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) |
+| ~~Quartz JobStore 单独库~~ | ~~D~~ | — | ❌ **2026-04-25 撤销**（半成品清理） | 当前统一使用 Quartz JDBC JobStore；时间轮替换也已撤销。历史分析见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)，未来变更必须基于新容量证据另立 ADR。 |
 | quota Redis token bucket | F | ✅ 改（替换实现） | ✅ **2026-04-25 完成** |
 
 **Phase 2：原 5 项 → 现 4 项**（Quartz JobStore 单独库已撤销）— 其余 4 项 ✅✅✅✅ 全部交付
@@ -87,7 +87,7 @@
 | `batch.console.read-replica.enabled` | true | **true**（与 yml 一致） | fail-open 已就位；测试 `application-test.yml` 覆盖 false |
 | `batch.scheduler.worker-cache.enabled` | true | true | Redis fail-open 已就位 |
 | `batch.mq.routing.mode` | TENANT | TENANT | 切换需 worker 端 topicPattern 配套 |
-| ~~`batch.trigger.quartz-datasource.enabled`~~ | — | — | **已移除**（2026-04-25 半成品清理）；演进直接换时间轮见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) |
+| ~~`batch.trigger.quartz-datasource.enabled`~~ | — | — | **已移除**（2026-04-25 半成品清理）；当前不保留替代引擎开关，历史评估见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) |
 | `batch.quota.runtime-store` | redis | redis | Redis 故障默认 fail-closed；`batch.quota.redis.failure-mode` 可显式切到 FAIL_OPEN |
 
 > 历史叙述（"opt-in scaffolding，所有开关默认关闭"）已不准确，以本表 + `feature-switches.md` 为准。
@@ -142,7 +142,7 @@
 - ✅ worker auto-restart（A）
 
 **4 项全部不动业务代码**。1 人 1-2 周。能把"无意识技术债"挡住。
-（原"Quartz JobStore 单独库"已于 2026-04-25 撤销半成品；真要演进直接换时间轮，详见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)）
+（原“Quartz JobStore 单独库”和后续时间轮方案均已撤销；未来演进需按实测容量重新立项，历史背景见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)。）
 
 ### 5.2 中等扩容（一个 sprint）
 

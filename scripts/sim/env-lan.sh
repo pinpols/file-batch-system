@@ -32,16 +32,18 @@ source "$LAN_ROOT/scripts/lib/env-common.sh"
 
 # 2) BE / FE / 模拟器 host 端口(对齐 .env.local 默认值)
 export LAN_HOST
-export CONSOLE_BASE="http://$(batch_format_host_port "$LAN_HOST" "${CONSOLE_PORT:-18080}")"
-export TRIGGER_BASE="http://$(batch_format_host_port "$LAN_HOST" "${TRIGGER_PORT:-18081}")"
-export ORCH_BASE="http://$(batch_format_host_port "$LAN_HOST" "${ORCHESTRATOR_PORT:-18082}")"
-export MOCK_BASE="http://$(batch_format_host_port "$LAN_HOST" "${MOCKSERVER_HOST_PORT:-11080}")"
+CONSOLE_BASE="http://$(batch_format_host_port "$LAN_HOST" "${CONSOLE_PORT:-18080}")"
+TRIGGER_BASE="http://$(batch_format_host_port "$LAN_HOST" "${TRIGGER_PORT:-18081}")"
+ORCH_BASE="http://$(batch_format_host_port "$LAN_HOST" "${ORCHESTRATOR_PORT:-18082}")"
+MOCK_BASE="http://$(batch_format_host_port "$LAN_HOST" "${MOCKSERVER_HOST_PORT:-11080}")"
+export CONSOLE_BASE TRIGGER_BASE ORCH_BASE MOCK_BASE
 
 # Infra(脚本里 docker exec 不依赖这些,但客户端 / DataGrip 用得着)
 export PG_PRIMARY_HOST="$LAN_HOST"; export PG_PRIMARY_PORT="${POSTGRES_PORT:-15432}"
 export REDIS_HOST="$LAN_HOST";      export REDIS_PORT="${REDIS_PORT:-16379}"
-export KAFKA_BOOTSTRAP="$(batch_format_host_port "$LAN_HOST" "${KAFKA_HOST_PORT:-19092}")"
-export MINIO_URL="http://$(batch_format_host_port "$LAN_HOST" "${MINIO_API_PORT:-19000}")"
+KAFKA_BOOTSTRAP="$(batch_format_host_port "$LAN_HOST" "${KAFKA_HOST_PORT:-19092}")"
+MINIO_URL="http://$(batch_format_host_port "$LAN_HOST" "${MINIO_API_PORT:-19000}")"
+export KAFKA_BOOTSTRAP MINIO_URL
 export SFTP_HOST="$LAN_HOST"
 export SFTP_PORT="${SFTP_HOST_PORT:-12222}"
 

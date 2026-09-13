@@ -6,7 +6,7 @@
 # 2) 只启动 deploy/docker/compose/observability.yml 的 observability profile。
 # 3) 业务容器请先通过 scripts/docker/up-apps.sh 或 scripts/local/start-all.sh 启动。
 # 4) 可透传额外 docker compose 参数，例如：
-#    ./scripts/deploy/docker/observability/up.sh prometheus grafana
+#    ./scripts/docker/observability/up.sh prometheus grafana
 # =========================================================
 set -euo pipefail
 

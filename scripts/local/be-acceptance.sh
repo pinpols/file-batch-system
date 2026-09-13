@@ -467,7 +467,7 @@ step_10_backlog() {
 ---
 
 ## 关联日志(本次跑)
-$(find "$LOG_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | sort | sed 's|^|- |')
+$(find "$LOG_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | sort | sed "s|^$ROOT_DIR/|- |")
 
 ## gh CLI dry-run(确认后自己 push)
 \`\`\`bash

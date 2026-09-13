@@ -21,7 +21,7 @@
 #
 # ─── 验证（broker HA + 0 丢） ────────────────────────────────────────────────
 #   # 1) topic RF=3 且 ISR=3：
-#   docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
+#   docker exec batch-kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-topics.sh" \
 #       --bootstrap-server kafka:29092 --describe --topic batch.task.dispatch.import
 #       # 期望：ReplicationFactor: 3，Isr 列出 3 个 broker，Configs 含 min.insync.replicas=2
 #   # 2) 滚动重启 1 broker，生产/消费不中断：
@@ -79,7 +79,7 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-topics.sh --bootstrap-server kafka:29092 --list >/dev/null 2>&1"]
 
   kafka-2:
     <<: *kafka-broker-common
@@ -93,7 +93,7 @@ services:
     volumes:
       - kafka-data-2:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-2:29092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-topics.sh --bootstrap-server kafka-2:29092 --list >/dev/null 2>&1"]
 
   kafka-3:
     <<: *kafka-broker-common
@@ -106,7 +106,7 @@ services:
     volumes:
       - kafka-data-3:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-3:29092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-topics.sh --bootstrap-server kafka-3:29092 --list >/dev/null 2>&1"]
 
   # topic 初始化：等 3 broker 全就绪后建 topic，RF=3 + min.insync.replicas=2。
   kafka-init:

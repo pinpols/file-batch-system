@@ -71,10 +71,15 @@ def main() -> int:
     for label, path in (
         ("workerAtomic.serviceAccountName", ("workerAtomic", "serviceAccountName")),
         ("workerAtomic.envFromSecretName", ("workerAtomic", "envFromSecretName")),
+        ("orchestratorBaseUrl", ("orchestratorBaseUrl",)),
+        ("triggerBaseUrl", ("triggerBaseUrl",)),
+        ("workerAtomicBaseUrl", ("workerAtomicBaseUrl",)),
     ):
         value = get(values, *path)
         if not isinstance(value, str) or not value.strip():
             errors.append(f"{label} must name an externally managed production resource")
+        elif "localhost" in value.lower() or "127.0.0.1" in value:
+            errors.append(f"{label} must not use a loopback development address")
 
     atomic_network = get(values, "workerAtomic", "networkPolicy", "egress") or {}
     for kind in ("postgresql", "kafka"):

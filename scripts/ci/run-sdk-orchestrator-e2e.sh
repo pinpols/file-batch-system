@@ -47,6 +47,7 @@ ORCH_PORT="${ORCH_PORT:-18082}"
 TRIGGER_PORT="${TRIGGER_PORT:-18081}"
 KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-19092}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-kafka}"
+KAFKA_CONTAINER_BIN_DIR="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-batch-postgres-primary}"
 TENANT="${TENANT:-default-tenant}"
 ORCH_URL="http://localhost:${ORCH_PORT}"
@@ -111,7 +112,7 @@ psqlp_file insert-sdk-api-key.sql \
 # topic 契约是 base-first:batch.task.dispatch.<workerType>.node.<workerCode>。
 # 旧 tenant-first topic 无法匹配五语言 SDK 的 node-direct 订阅模式。
 echo "==> pre-creating dispatch topic batch.task.dispatch.echo.node.${WORKER_CODE}"
-docker exec "${KAFKA_CONTAINER}" /opt/kafka/bin/kafka-topics.sh \
+docker exec "${KAFKA_CONTAINER}" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
   --bootstrap-server kafka:29092 --create --if-not-exists \
   --topic "batch.task.dispatch.echo.node.${WORKER_CODE}" --partitions 3 --replication-factor 1 \
   || echo "WARN: topic create returned non-zero (may already exist)"

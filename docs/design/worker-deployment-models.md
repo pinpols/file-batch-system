@@ -1,7 +1,7 @@
 # Worker 部署模型:平台 worker vs 自托管 SDK
 
 **状态**:基线说明 · 2026-05-31
-**关联 ADR**:[ADR-035](../adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [ADR-036](../adr/ADR-036-sdk-task-handler-templates.md) · [ADR-029](../adr/ADR-029-dedicated-spi-worker.md)
+**关联 ADR**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [ADR-036](../architecture/adr/ADR-036-sdk-task-handler-templates.md) · [ADR-029](../architecture/adr/ADR-029-dedicated-spi-worker.md)
 **关联模块**:`batch-worker-{core,import,export,process,dispatch,atomic}` · `batch-worker-sdk`
 
 > 本文档讲清两种 worker 的**边界、互补关系、混用方式、选型决策**。属架构基线,长期维护;具体协议字段在 [`docs/api/`](../api/),具体演进历史在 ADR-035。
@@ -637,8 +637,8 @@ public SdkTaskResult execute(SdkTaskContext ctx) {
 
 **参考**
 
-- [ADR-035 租户自托管 SDK](../adr/ADR-035-tenant-self-hosted-worker-sdk.md)
-- [ADR-036 SDK 业务模板](../adr/ADR-036-sdk-task-handler-templates.md)
-- [ADR-029 Atomic worker 隔离](../adr/ADR-029-dedicated-spi-worker.md)
+- [ADR-035 租户自托管 SDK](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
+- [ADR-036 SDK 业务模板](../architecture/adr/ADR-036-sdk-task-handler-templates.md)
+- [ADR-029 Atomic worker 隔离](../architecture/adr/ADR-029-dedicated-spi-worker.md)
 - [batch-worker-sdk 深度评估](../review/batch-worker-sdk-deep-review-2026-05-31.md)
 - [Pipeline vs Workflow 边界](pipeline-vs-workflow-definition.md)

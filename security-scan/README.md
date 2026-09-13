@@ -37,14 +37,14 @@ bash scripts/ci/security-scan.sh
 
 ```bash
 mvn -f security-scan/pom.xml package
-java -jar security-scan/target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --root=. --target-url=http://localhost:8080
+java -jar security-scan/target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --root=. --target-url=http://localhost:18080
 ```
 
 如果从 `security-scan/` 目录运行：
 
 ```bash
 mvn package
-java -jar target/security-scan-1.0.0.jar --mode=all --root=.. --target-url=http://localhost:8080
+java -jar target/security-scan-1.0.0.jar --mode=all --root=.. --target-url=http://localhost:18080
 ```
 
 ## 常用参数
@@ -52,8 +52,9 @@ java -jar target/security-scan-1.0.0.jar --mode=all --root=.. --target-url=http:
 - `--mode=all|secret|deps|sast|filesystem|image|dast`
 - `--root=.`：仓库根目录
 - `--report-dir=target/security-scan-report`
-- `--target-url=http://localhost:8080`
-- `--image-name=batch-console-api:local`
+- `--target-url=http://localhost:18080`（也可通过 `BATCH_SECURITY_SCAN_TARGET_URL` 设置默认值）
+- `--image-name=batch-console-api:local`（也可通过 `BATCH_SECURITY_SCAN_IMAGE_NAME` 设置默认值）
+- `--zap-image=ghcr.io/zaproxy/zaproxy:stable`（也可通过 `BATCH_SECURITY_SCAN_ZAP_IMAGE` 设置默认值）
 - `--zap-report=target/zap-report.html`
 - `--zap-scan=baseline|api|full`
 - `--zap-api-spec=docs/api/console-api.openapi.yaml`：`--zap-scan=api` 时必填，可传本地 OpenAPI 文件或 URL

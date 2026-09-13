@@ -16,7 +16,7 @@ cd "$ROOT"
 SIM_SQL_DIR="$ROOT/scripts/sim/sql"
 export SIM_SQL_DIR
 
-SIM_STAGE_NAME="export-stage3c"
+export SIM_STAGE_NAME="export-stage3c"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 

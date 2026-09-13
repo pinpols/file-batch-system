@@ -18,8 +18,8 @@
         mvn gatling:test -Dsimulation=AtomicTaskDispatchSimulation -DjobCode=atomic_sql_demo -DtenantId=default-tenant
 
       目标环境参数（可通过 -D 或各环境 profile 覆盖）：
-        -Dtrigger.baseUrl=http://localhost:8081
-        -Dconsole.baseUrl=http://localhost:8080
+        -Dtrigger.baseUrl=http://localhost:18081
+        -Dconsole.baseUrl=http://localhost:18080
         -Dorchestrator.baseUrl=http://localhost:18082
         -DjobCode=E2E_IMPORT_123456
         -DtenantId=t1
@@ -83,8 +83,8 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <properties>
-                <trigger.baseUrl>http://localhost:8081</trigger.baseUrl>
-                <console.baseUrl>http://localhost:8080</console.baseUrl>
+                <trigger.baseUrl>http://localhost:18081</trigger.baseUrl>
+                <console.baseUrl>http://localhost:18080</console.baseUrl>
                 <users.peak>20</users.peak>
                 <duration.seconds>120</duration.seconds>
                 <ramp.seconds>30</ramp.seconds>
@@ -95,8 +95,8 @@
         <profile>
             <id>staging</id>
             <properties>
-                <trigger.baseUrl>http://batch-trigger.staging.internal:8081</trigger.baseUrl>
-                <console.baseUrl>http://batch-console.staging.internal:8080</console.baseUrl>
+                <trigger.baseUrl>http://batch-trigger.staging.internal:18081</trigger.baseUrl>
+                <console.baseUrl>http://batch-console.staging.internal:18080</console.baseUrl>
                 <users.peak>100</users.peak>
                 <duration.seconds>300</duration.seconds>
                 <ramp.seconds>60</ramp.seconds>
@@ -107,8 +107,8 @@
         <profile>
             <id>prod-probe</id>
             <properties>
-                <trigger.baseUrl>http://batch-trigger.prod.internal:8081</trigger.baseUrl>
-                <console.baseUrl>http://batch-console.prod.internal:8080</console.baseUrl>
+                <trigger.baseUrl>http://batch-trigger.prod.internal:18081</trigger.baseUrl>
+                <console.baseUrl>http://batch-console.prod.internal:18080</console.baseUrl>
                 <users.peak>200</users.peak>
                 <duration.seconds>600</duration.seconds>
                 <ramp.seconds>120</ramp.seconds>

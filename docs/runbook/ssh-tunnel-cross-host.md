@@ -151,7 +151,7 @@ sudo launchctl kickstart -k system/com.openssh.sshd
 
 防开机断 / 进程被关:写一个 `start-ssh-tunnel-15.ps1` + `launch-ssh-tunnel-15.vbs`(同 `deploy-be` 那套模式),schtasks 注册 ONSTART + 每 5 min 健康检查(`Get-Process ssh -ErrorAction SilentlyContinue` 没有就重启)。
 
-参考实现见 [`script-deploy.md`](script-deploy.md) §安装的 schtasks + vbs 模式。
+可按本节参数制作 PowerShell 启动脚本，并用 Windows `schtasks` 注册 `ONSTART` 与周期健康检查；仓库当前不维护独立的 Windows 部署脚本。
 
 ## 杀隧道
 

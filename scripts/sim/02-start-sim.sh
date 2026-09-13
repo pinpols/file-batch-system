@@ -16,18 +16,16 @@ docker compose --env-file "$ENV_FILE" \
   -f docker-compose.yml -f scripts/sim/compose.yml up -d sftp mockserver
 
 echo "==> 等 healthy/ready(30s)..."
-for c in sftp; do
-  healthy=0
-  for i in $(seq 1 30); do
-    status=$(docker inspect "$c" --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
-    if [[ "$status" == "healthy" ]]; then echo "  ✓ $c"; healthy=1; break; fi
-    sleep 1
-  done
-  if [[ "$healthy" -ne 1 ]]; then
-    echo "  ✗ $c 30s 未 healthy(last status=$status)" >&2
-    exit 1
-  fi
+healthy=0
+for _ in $(seq 1 30); do
+  status=$(docker inspect sftp --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
+  if [[ "$status" == "healthy" ]]; then echo "  ✓ sftp"; healthy=1; break; fi
+  sleep 1
 done
+if [[ "$healthy" -ne 1 ]]; then
+  echo "  ✗ sftp 30s 未 healthy(last status=$status)" >&2
+  exit 1
+fi
 
 echo "==> 验证 endpoint 联通"
 docker exec sftp /bin/sh -c "ls -d /home/ta/inbound /home/tb/inbound /home/tc/inbound" 2>&1 | head
@@ -35,7 +33,7 @@ docker exec sftp /bin/sh -c "ls -d /home/ta/inbound /home/tb/inbound /home/tc/in
 # 这里以 host 端口真实 HTTP readiness 为准。
 sm_port="${MOCKSERVER_HOST_PORT:-11080}"
 code=""
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   code=$(curl -s --max-time 5 --connect-timeout 2 -o /dev/null -w "%{http_code}" -X PUT "http://localhost:${sm_port}/mockserver/status" 2>/dev/null || true)
   if [[ "$code" == "200" ]]; then
     echo "  ✓ mockserver HTTP ready"

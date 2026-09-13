@@ -357,11 +357,20 @@ MISSING=$(jq -r '.summary.missingInReplay' "$ANALYZE_OUT")
 log "✓ 报告: $REPORT_MD"
 log "  原始 diff:  $ANALYZE_OUT"
 log "  解包目录:   $UNPACKED  (保留供排查)"
-log "  临时 schema:$REPLAY_SCHEMA  (跑完未自动 drop;清理:DROP SCHEMA $REPLAY_SCHEMA CASCADE)"
 
 # 退出码:有 status_changed 或 error_changed → 非 0,给 CI 用
 if [[ "$STATUS_CHANGED" -gt 0 || "$ERROR_CHANGED" -gt 0 ]]; then
+  log "  临时 schema:$REPLAY_SCHEMA  (检测到差异，保留现场)"
   log "WARN: 出现 status/error 改判,exit 2(代码可能改判)"
   exit 2
+fi
+
+if [[ "$KEEP" -eq 1 ]]; then
+  log "  临时 schema:$REPLAY_SCHEMA  (--keep 已保留)"
+else
+  psql_business -v replay_schema="$REPLAY_SCHEMA" \
+    -f "$SQL_DIR/drop-forensic-replay-schema.sql" >/dev/null \
+    || fail "清理临时 schema 失败: $REPLAY_SCHEMA"
+  log "  临时 schema:$REPLAY_SCHEMA  (已清理)"
 fi
 exit 0

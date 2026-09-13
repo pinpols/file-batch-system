@@ -22,6 +22,7 @@
 : "${PGDATABASE:=batch_platform}"; : "${BATCH_PLATFORM_DB_PASSWORD:=batch_pass_123}"
 : "${ORCH_URL:=http://localhost:18082}"; : "${TRIGGER_URL:=http://localhost:18081}"
 : "${KAFKA_HOST_PORT:=19092}"; : "${KAFKA_CONTAINER:=batch-kafka}"; : "${TENANT:=default-tenant}"
+: "${KAFKA_CONTAINER_BIN_DIR:=/opt/kafka/bin}"
 if [[ -z "${GOROOT_HINT:-}" ]]; then
   if command -v go >/dev/null 2>&1; then
     GOROOT_HINT="$(go env GOROOT)"
@@ -88,14 +89,14 @@ sdk_e2e_kafka_topics() {
       "$bin" --bootstrap-server "$KAFKA_BOOTSTRAP" "$@"
       ;;
     docker)
-      docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 "$@"
+      docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server kafka:29092 "$@"
       ;;
     auto)
       local bin
       if bin="$(sdk_e2e_kafka_topics_bin)"; then
         "$bin" --bootstrap-server "$KAFKA_BOOTSTRAP" "$@"
       else
-        docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 "$@"
+        docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server kafka:29092 "$@"
       fi
       ;;
     *) sdk_e2e_fail "BATCH_SCRIPT_RUNTIME must be one of: auto, host, docker"; return 2 ;;

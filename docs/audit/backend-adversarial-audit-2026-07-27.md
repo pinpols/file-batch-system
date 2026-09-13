@@ -31,10 +31,10 @@
 
 代码位置：
 
-- [RetryScheduleMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml:81)
-- [RetryScheduleMapper.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/RetryScheduleMapper.java:18)
-- [DefaultRetryGovernanceService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java:230)
-- [RetryScheduleIntegrationTest.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryScheduleIntegrationTest.java:112)
+- `batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml:81`
+- `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/RetryScheduleMapper.java:18`
+- `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java:230`
+- `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryScheduleIntegrationTest.java:112`
 
 ## 审查覆盖
 

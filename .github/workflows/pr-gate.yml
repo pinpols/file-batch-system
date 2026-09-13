@@ -11,9 +11,9 @@ name: pr-gate
 # 这 3 个名字上;改名会导致 ruleset 失配。命令从 `mvn verify`(failsafe IT)改成
 # `mvn test`(只跑 surefire unit)。
 #
-# affected 极小化:paths-ignore 在触发层拦"纯文档/yml/配置"改动;细粒度 docs-only PR
-# 由 `changes` job 的 dorny/paths-filter 二次判定后跳过 3 个 unit job
-# (skipped == SUCCESS,ruleset required check 不挂)。
+# affected 极小化：workflow 始终触发以回报 required check；`changes` job 按文件域路由，
+# Java 单测和 static-checks 内的专项步骤只在对应 java/database/scripts/docs/config/api/ci
+# 变更时执行。跨域 secret scan 保持全 PR 执行。
 
 on:
   workflow_dispatch:
@@ -61,6 +61,13 @@ jobs:
       # 任一 code 路径命中 => docs-only=false;全无命中 => docs-only=true。
       # merge_group / push 事件无 PR diff,paths-filter 直接判 true(执行 unit)。
       docs-only: ${{ steps.filter.outputs.code == 'false' }}
+      java: ${{ steps.filter.outputs.java }}
+      database: ${{ steps.filter.outputs.database }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+      docs: ${{ steps.filter.outputs.docs }}
+      config: ${{ steps.filter.outputs.config }}
+      api: ${{ steps.filter.outputs.api }}
+      ci: ${{ steps.filter.outputs.ci }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -86,16 +93,53 @@ jobs:
           # db/migration/** 保留:Flyway 平台 schema,IT 跑在其上,语义回归只有 IT 逮得到。
           filters: |
             code:
-              - 'batch-*/**'
+              - 'batch-*/src/**'
               - 'db/migration/**'
               - 'pom.xml'
               - '**/pom.xml'
+            java:
+              - 'batch-*/src/**/*.java'
+              - 'pom.xml'
+              - '**/pom.xml'
+            database:
+              - 'db/**'
+              - 'scripts/db/**'
+              - '**/src/main/resources/mapper/**'
+            scripts:
+              - 'scripts/**'
+              - 'load-tests/scripts/**'
+              - 'load-tests/sql/**'
+              - '.githooks/**'
+              - 'Makefile'
+            docs:
+              - '**/*.md'
+              - 'docs/**'
+            config:
+              - '.env.example'
+              - '.trivyignore'
+              - '**/src/main/resources/*.yml'
+              - '**/src/main/resources/*.yaml'
+              - 'docker-compose*.yml'
+              - 'docker-bake*.hcl'
+              - 'deploy/**'
+              - 'helm/**'
+            api:
+              - 'docs/api/**'
+              - 'scripts/codegen/**'
+              - 'batch-console-api/src/main/java/**/*Controller.java'
+              - 'batch-orchestrator/src/main/java/**/*Controller.java'
+            ci:
+              - '.github/workflows/pr-gate.yml'
+              - '.github/workflows/full-ci-gate.yml'
+              - '.github/actions/setup-build-env/**'
+              - 'scripts/ci/**'
 
   # ===========================================================================
   # Job 1: static-checks — yml/dict/openapi/PMD/Spotless 等静态校验
   # 不依赖任何下游,与所有 maven job 并发起跑
   # ===========================================================================
   static-checks:
+    needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -108,9 +152,11 @@ jobs:
           fetch-depth: 0
 
       - name: Setup build environment
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-build-env
 
       - name: Install squawk + oasdiff (迁移/契约守护工具)
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
           npm install -g squawk-cli@2.58.0
@@ -121,22 +167,27 @@ jobs:
 
       - name: Resolve guard base ref
         shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
-          BASE="${{ github.base_ref || 'main' }}"
+          BASE="${BASE_REF}"
           git fetch --no-tags --depth=200 origin "$BASE" || git fetch --no-tags origin "$BASE"
           echo "GUARD_BASE=origin/${BASE}" >> "$GITHUB_ENV"
 
       - name: Validate KAFKA_TOPICS sync (.env.example ↔ BatchTopics.java)
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        # CI 没有 .env.prod / .env.local(均 gitignored),把 .env.example 作为
-        # canonical 源(本就是 prod 的 1:1 模板)。本地仍用脚本默认 .env.prod。
+        # CI 没有 .env.prod / .env.local（均 gitignored），使用版本化的
+        # .env.example 作为权威模板；本地也默认校验该文件。
         run: bash scripts/ci/validate-kafka-topics.sh .env.example
 
       - name: Validate Flyway schema (parse + checksum drift detection)
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/validate-flyway-schema.sh
 
       - name: Verify generated dicts in sync
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # codegen 依赖 PyYAML；runner 镜像通常已预装，缺失时补装（失败会由下方 import 报错暴露）
         run: |
@@ -144,58 +195,107 @@ jobs:
           python3 scripts/codegen/gen-error-codes-dict.py --check
 
       - name: Verify yml ↔ docker-compose default sync
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-config-defaults-sync.py --check
 
+      - name: Verify tracked env files are shell-safe
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # .env.example 会被 CI 复制成 .env.local 并由本地脚本 source;含空格的值必须加引号。
+        run: python3 scripts/ci/check-env-file-shell-safety.py
+
+      - name: Verify hardcoded runtime configuration boundaries
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/check-hardcoded-runtime-config.sh
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: python3 scripts/ci/check-repository-hygiene.py
+
+      - name: Verify script governance and zero ShellCheck warnings
+        if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: |
+          python3 scripts/ci/check-script-governance.py
+          bash scripts/ci/check-shell-scripts.sh
+
+      - name: Verify module dependency boundaries
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: python3 scripts/ci/check-dependency-boundaries.py
+
+      - name: Verify changelog synchronization
+        shell: bash
+        run: python3 scripts/ci/check-changelog-sync.py --base "$GUARD_BASE"
+
+      - name: Verify documentation structure and internal links
+        if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: python3 scripts/ci/check-docs-structure.py
+
       - name: Validate feature switch registry
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-feature-switch-registry.py
 
       - name: Verify Helm env switch sync
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-helm-env-sync.py
 
       - name: Verify production Helm overlay safety
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-production-overlay-safety.py
 
       - name: Verify application governance contract
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-application-governance.py
 
       - name: Verify code documentation references
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-code-doc-references.py
 
       - name: Verify Java readability conventions
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-java-readability.py
 
       - name: Verify Java readability inventory
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md
 
       - name: Verify Console controller ↔ OpenAPI route sync
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。
         run: python3 scripts/ci/check-console-openapi-paths.py
 
       - name: Verify SQL/config placement boundaries
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/check-sql-config-boundaries.sh
 
       - name: No positional INSERT...SELECT * in mappers
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 拦「insert into archive.x_archive select *」位置式归档复制:列顺序漂移会静默错位
         # (ArchiveSchemaDriftCheck 只比对列名集合不比顺序)。必须用显式列名。
         run: python3 scripts/ci/check-no-positional-insert-select-star.py
 
       - name: No JDK preview flags in prod build/run config
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 拦 JDK preview 启用标记进入生产构建/运行(load-tests benchmark 豁免)。脚本内有详细说明。
         run: bash scripts/ci/check-no-enable-preview.sh
 
       - name: No Map/List/Set.of swallowing nullable getMessage()
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 拦不可变工厂 Map.of/List.of/Set.of 直接吞裸 e.getMessage()(契约可 null)——
         # 值为 null 时 NPE 把干净 4xx 掩盖成 500(实锤 #752 / 388e43e39)。脚本内含自测,
@@ -203,38 +303,74 @@ jobs:
         run: python3 scripts/ci/check-mapof-null-values.py
 
       - name: Enforce centralized empty checks
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 只检查本 PR 新增的生产 Java 行，历史遗留由专项迁移逐步收口；从此禁止新增
         # == null / != null / isEmpty / isBlank 等零散判断，统一使用 EmptyChecks。
         run: python3 scripts/ci/check-empty-checks.py --base "$GUARD_BASE"
 
+      - name: Verify readiness contract documentation sync
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # readiness 涉及 trigger / asset_partition / result_version / API / 运维文档的跨模块契约。
+        # 改实现但漏文档、API 或测试证据时直接 fail。
+        run: python3 scripts/ci/check-readiness-doc-sync.py --base "$GUARD_BASE"
+
+      - name: Verify Trivy ignore expiry metadata
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # .trivyignore 的每组 CVE 必须有 owner / reason / expires,过期豁免不得继续放行。
+        run: python3 scripts/ci/check-trivy-ignore-expiry.py
+
+      - name: Trivy fs scan on supply-chain inputs
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # 只在依赖、镜像、部署或安全白名单输入变更时跑,避免普通业务 PR 被漏洞库下载拖慢。
+        run: |
+          changed="$(git diff --name-only "$GUARD_BASE"...HEAD || true)"
+          if ! printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore$)'; then
+            echo "No supply-chain inputs changed; skip Trivy fs scan."
+            exit 0
+          fi
+          TRIVY_VERSION=0.70.0
+          curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo mv /tmp/trivy /usr/local/bin/trivy
+          trivy fs --scanners vuln,config --severity CRITICAL,HIGH --exit-code 1 .
+
       - name: Verify e2e shard lists cover all *E2eIT
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 守护 full-ci-gate / staging-gate 的硬编码 e2e shard 清单与实际 *E2eIT 一致,
         # 防新增 / 重命名后被静默漏跑(2026-06-14 实测漏 5 个)。
         run: bash scripts/ci/check-e2e-shard-coverage.sh
 
       - name: Verify CI -pl covers all tested reactor modules
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 守护根 reactor 里有测试的模块都被某 unit shard 的 -pl 覆盖,
         # 防新模块漏进 shard 被静默跳过(2026-06-14 实测 sdk×3 共 ~370 测试从未跑)。
         run: bash scripts/ci/check-module-test-coverage.sh
 
       - name: Migration safety lint (squawk, diff-only)
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 只扫本 PR 新增/改动的 db/migration,拦危险 DDL(DROP COLUMN / 改类型 / 加 UNIQUE 长锁等)。
         run: bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
 
       - name: Database comment coverage (diff-only)
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 新建业务表及状态/策略/载荷/幂等等关键字段必须在同一迁移声明注释；历史基线见审计文档。
         run: bash scripts/ci/check-db-comment-coverage.sh "$GUARD_BASE"
 
       - name: Required Java architecture documentation
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/check-required-java-docs.sh
 
       - name: DB scripts safety lint (scripts/db/** 手工 DDL)
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 补 squawk 盲区:batch_business 不走 Flyway,partition-migration / business 下的手工
         # DDL 脚本(改 UNIQUE/PK 列集 / DROP TABLE)不在迁移守护内。本步要求这类危险脚本头部
@@ -242,12 +378,14 @@ jobs:
         run: bash scripts/ci/check-db-scripts-safety.sh
 
       - name: Version alignment (pom revision ↔ Chart appVersion ↔ load-tests)
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 校验根 pom <revision> 与 helm Chart appVersion、load-tests/pom.xml 版本字面量一致。
         # load-tests 是独立 reactor,版本手工同步(CLAUDE.md 点名高危点)。
         run: bash scripts/ci/check-version-alignment.sh
 
       - name: Helm PrometheusRule sync (告警规则 chart 副本 ↔ canonical)
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # helm/batch-platform/files/prometheus-batch-rules.yml 是 deploy/docker/observability 下
         # canonical 告警规则的 chart 副本(经 templates/prometheusrule.yaml 下发到 k8s)。
@@ -255,30 +393,41 @@ jobs:
         run: bash scripts/ci/check-helm-prometheusrule-sync.sh
 
       - name: Logging and telemetry delivery contract
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 防止 OTLP 管道、Collector 队列/脱敏、Docker 日志上限或 JVM 诊断卷回归。
         run: python3 scripts/ci/check-observability-contract.py
 
+      - name: Local log lifecycle contract
+        if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/check-log-lifecycle.sh
+
       - name: OpenAPI breaking-change (oasdiff)
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 比 base 的 openapi,删端点/删必填/改类型等 ERR 级破坏即 fail。
         run: bash scripts/ci/check-openapi-breaking.sh "$GUARD_BASE"
 
       - name: Biz table multi-tenant + RLS guard
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # biz.* 基表必须含 tenant_id 且进 strict RLS tables[] 数组。
         run: python3 scripts/ci/check-biz-table-tenant-rls.py
 
       - name: No silently-disabled tests
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # @Disabled 必须带非空 reason(防覆盖率被静默掏空)。
         run: bash scripts/ci/check-no-silent-disabled-tests.sh
 
       - name: Java suppression registry
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: python3 scripts/ci/check-java-suppression-registry.py
 
       - name: PMD + Spotless + dependency boundary
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
         run: ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B

@@ -2,9 +2,10 @@
 # =========================================================
 # pre-push-sdk-checks.sh
 #
-# SDK 路线图 PR 推送前自查 — 拦截两类高频被 CI 拦截的事:
+# SDK 路线图 PR 推送前自查 — 拦截高频被 CI 拦截的问题:
 #   1. Java 编码反例(CLAUDE.md 「Java 编码细则」10 条)
 #   2. API 文档对齐(Controller API 契约改了但 OpenAPI / protocol.md 没改)
+#   3. 轻量契约门禁(EmptyChecks、readiness 文档同步、Trivy ignore 到期)
 #
 # 设计原则:
 #   - 只检查"本 PR 改过的文件",不扫全仓(快,< 30s)
@@ -27,14 +28,31 @@ set -uo pipefail
 # ── 参数解析 ─────────────────────────────────────────────
 BASE_REF="origin/main"
 SKIP_BUILD=0
-for arg in "$@"; do
-  case "$arg" in
-    --base)        BASE_REF="$2"; shift 2 ;;
-    --base=*)      BASE_REF="${arg#--base=}" ;;
-    --skip-build)  SKIP_BUILD=1 ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "缺少 --base 参数值" >&2
+        exit 2
+      fi
+      BASE_REF="$2"
+      shift 2
+      ;;
+    --base=*)
+      BASE_REF="${1#--base=}"
+      shift
+      ;;
+    --skip-build)
+      SKIP_BUILD=1
+      shift
+      ;;
     --help|-h)
       sed -n '2,30p' "$0"
       exit 0
+      ;;
+    *)
+      echo "未知参数:$1" >&2
+      exit 2
       ;;
   esac
 done
@@ -84,15 +102,94 @@ CHANGED_CTL=$(echo "$CHANGED_FILES" | grep -E "Controller\.java$" || true)
 CHANGED_YAML=$(echo "$CHANGED_FILES" | grep -E "openapi\.yaml$" || true)
 CHANGED_PROTOCOL=$(echo "$CHANGED_FILES" | grep -E "console-api-protocol\.md$" || true)
 CHANGED_FLYWAY=$(echo "$CHANGED_FILES" | grep -E "db/migration/V[0-9]+__" || true)
+CHANGED_SHELL=$(echo "$CHANGED_FILES" | grep -E "\.sh$" || true)
+CHANGED_DOCKER_BUILD=$(echo "$CHANGED_FILES" | grep -E "(^|/)(Dockerfile[^/]*|docker-bake.*\.hcl|docker-compose.*\.ya?ml)$|^deploy/docker/|^helm/" || true)
 
 info "本次 push 涉及:"
 [[ -n "$CHANGED_JAVA" ]]     && info "  Java 文件 $(echo "$CHANGED_JAVA" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_CTL" ]]      && info "  Controller $(echo "$CHANGED_CTL" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_YAML" ]]     && info "  OpenAPI yaml $(echo "$CHANGED_YAML" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_FLYWAY" ]]   && info "  Flyway migration $(echo "$CHANGED_FLYWAY" | wc -l | tr -d ' ') 个"
+[[ -n "$CHANGED_SHELL" ]]    && info "  Shell 脚本 $(echo "$CHANGED_SHELL" | wc -l | tr -d ' ') 个"
 echo ""
 
 errors=0
+
+# ═════════════════════════════════════════════════════════
+# 检查 0:轻量契约门禁(与 CI static-checks 对齐)
+# ═════════════════════════════════════════════════════════
+info "──────────────────────────────────────"
+info "检查 0:轻量契约门禁"
+info "──────────────────────────────────────"
+
+if [[ -n "$BASE_REF" ]]; then
+  if ! python3 scripts/ci/check-empty-checks.py --base "$BASE_REF"; then
+    errors=$((errors+1))
+  fi
+  if ! python3 scripts/ci/check-readiness-doc-sync.py --base "$BASE_REF"; then
+    errors=$((errors+1))
+  fi
+else
+  warn "无可用 base,跳过 diff 类 Python 门禁"
+fi
+
+if [[ -f ".trivyignore" ]]; then
+  if ! python3 scripts/ci/check-trivy-ignore-expiry.py; then
+    errors=$((errors+1))
+  fi
+fi
+
+if ! python3 scripts/ci/check-env-file-shell-safety.py; then
+  errors=$((errors+1))
+fi
+
+READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"
+if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; then
+  if [[ -f "scripts/ci/report-java-readability-inventory.py" && -f "$READABILITY_INVENTORY" ]]; then
+    if python3 scripts/ci/report-java-readability-inventory.py --output "$READABILITY_INVENTORY"; then
+      if git diff --quiet -- "$READABILITY_INVENTORY"; then
+        ok "Java readability inventory 已同步"
+      else
+        fail "Java readability inventory 已自动刷新,请 git add/commit 后再 push:$READABILITY_INVENTORY"
+        errors=$((errors+1))
+      fi
+    else
+      fail "Java readability inventory 生成失败"
+      errors=$((errors+1))
+    fi
+  fi
+fi
+
+if [[ -n "$CHANGED_SHELL" ]]; then
+  if [[ -x "scripts/ci/check-shell-scripts.sh" ]]; then
+    if ! bash scripts/ci/check-shell-scripts.sh; then
+      errors=$((errors+1))
+    fi
+  fi
+  while IFS= read -r script; do
+    [[ -z "$script" || ! -f "$script" ]] && continue
+    if ! bash -n "$script"; then
+      fail "Shell 语法检查失败:$script"
+      errors=$((errors+1))
+    fi
+  done <<< "$CHANGED_SHELL"
+fi
+
+if [[ -n "$CHANGED_DOCKER_BUILD" ]]; then
+  if command -v docker >/dev/null 2>&1 && docker buildx version >/dev/null 2>&1; then
+    if ! docker buildx bake -f docker-bake.hcl -f docker-bake.ci.hcl --print >/tmp/pre-push-docker-bake.json 2>/tmp/pre-push-docker-bake.log; then
+      fail "Docker bake 配置解析失败:"
+      sed 's/^/    /' /tmp/pre-push-docker-bake.log
+      errors=$((errors+1))
+    else
+      ok "Docker bake 配置解析通过"
+    fi
+  else
+    warn "检测到 Docker/Helm 构建配置变更,但本机 docker buildx 不可用;CI 会继续校验"
+  fi
+fi
+
+echo ""
 
 # ═════════════════════════════════════════════════════════
 # 检查 1:Java 编码反例(CLAUDE.md 「Java 编码细则」10 条节选)

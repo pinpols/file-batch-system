@@ -11,7 +11,7 @@
 #
 #   # 实际重放，限定单个租户
 #   BATCH_HEAL_DRY_RUN=false \
-#   BATCH_ORCHESTRATOR_URL=http://localhost:8082 \
+#   BATCH_ORCHESTRATOR_URL=http://localhost:18082 \
 #   BATCH_HEAL_DLQ_TENANT=tenant-001 \
 #     bash scripts/ops/heal-dead-letters.sh
 #
@@ -29,7 +29,6 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/env.sh"
 
 # ── 配置 ─────────────────────────────────────────────────────────────
-BATCH_ORCHESTRATOR_URL="${BATCH_ORCHESTRATOR_URL:-http://localhost:8082}"
 BATCH_ORCHESTRATOR_TOKEN="${BATCH_ORCHESTRATOR_TOKEN:-}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 BATCH_HEAL_DLQ_TENANT="${BATCH_HEAL_DLQ_TENANT:-}"

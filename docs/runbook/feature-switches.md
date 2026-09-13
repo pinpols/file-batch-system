@@ -454,7 +454,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 | # | 待办 | 状态 |
 |---|---|---|
-| 1 | `deploy/docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 回退 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
+| 1 | `deploy/docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 回退 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关；时间轮替换方案也已撤销，当前统一使用 Quartz JDBC JobStore |
 | 2 | `rework-classification.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
 | 3 | `read-replica` 应用层 fail-open | ✅ **本次梳理前已落地**（`ReadReplicaRoutingDataSource` C-3.1：失败计数 + quarantine + micrometer 指标 + `@RouteToPrimary` 注解）；本文档 §3.1 已校准 |
 | 4 | `mq.routing` 切换灰度发布 runbook | ✅ 完成（新增 `docs/runbook/mq-topic-routing-rollout.md`） |

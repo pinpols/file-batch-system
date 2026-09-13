@@ -32,6 +32,47 @@ def runtime_dependencies(module: str) -> set[tuple[str, str]]:
 def main() -> int:
     errors: list[str] = []
 
+    sdk_allowed_internal_dependencies = {
+        "sdk/java/core": set(),
+        "sdk/java/spring": {"batch-worker-sdk"},
+        "sdk/java/testkit": {"batch-worker-sdk"},
+    }
+    for module, allowed_artifacts in sdk_allowed_internal_dependencies.items():
+        for group_id, artifact_id, scope in list_dependencies(ROOT / module / "pom.xml"):
+            if group_id != "io.github.pinpols.batch":
+                continue
+            if artifact_id not in allowed_artifacts:
+                scope_label = scope or "compile"
+                errors.append(
+                    f"{module} must not depend on platform module {artifact_id} "
+                    f"(scope={scope_label}); SDK artifacts may only depend on SDK core"
+                )
+
+    sdk_artifacts = {
+        "batch-worker-sdk",
+        "batch-worker-sdk-spring-boot-starter",
+        "batch-worker-sdk-testkit",
+    }
+    platform_modules = {
+        "batch-common",
+        "batch-console-api",
+        "batch-orchestrator",
+        "batch-trigger",
+        "batch-worker/core",
+        "batch-worker/import",
+        "batch-worker/export",
+        "batch-worker/process",
+        "batch-worker/dispatch",
+        "batch-worker/atomic",
+    }
+    for module in sorted(platform_modules):
+        for group_id, artifact_id, scope in list_dependencies(ROOT / module / "pom.xml"):
+            if group_id == "io.github.pinpols.batch" and artifact_id in sdk_artifacts and scope != "test":
+                errors.append(
+                    f"{module} must not depend on SDK artifact {artifact_id} at runtime "
+                    "(SDK is tenant-facing, platform modules may only use it in tests)"
+                )
+
     grandfathered_common_runtime = {
         ("software.amazon.awssdk", "s3"),
         ("software.amazon.awssdk", "apache-client"),

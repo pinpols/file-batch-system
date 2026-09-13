@@ -239,7 +239,7 @@ sed -i '' 's|<version>X.Y.0</version>|<version>X.(Y+1).0-SNAPSHOT</version>|' lo
 
 ## 7. CHANGELOG.md 维护
 
-每次合并到 main 后顺手往 `## [Unreleased]` 段加一行：
+每个有发布影响的 PR（功能、外部契约、配置默认值、部署/迁移、安全修复、重要缺陷或可验证的性能变化）合入 `main` 时，往 `## [Unreleased]` 对应分类追加一行。纯重构、补测试和不改变约束的文档修正不写入：
 
 ```markdown
 ## [Unreleased]
@@ -269,10 +269,12 @@ Release 时把 `[Unreleased]` 改成 `[X.Y.Z] - YYYY-MM-DD`，再开新空 `[Unr
 - 否 + 加东西 → MINOR；
 - 否 + 改东西 → PATCH。
 
-## 9. 当前状态（2026-06-24）
+## 9. 当前状态（2026-09-13）
 
-- **GA 版本**：`v1.1.0`
-- **下一开发版本**：发布后按下一轮规划切回 `<revision>1.2.0-SNAPSHOT</revision>` 或目标 hotfix 分支版本。
+- **GA 版本**：`v1.0.0`（当前唯一 Git release tag）。
+- **当前 Maven revision**：`1.0.0`。
+- **历史说明**：`1.1.0` / `1.2.0` 曾作为 GA 前开发里程碑使用，但没有对应 release tag，不视为正式发布。
+- **下一开发版本**：开始下一发布周期时按已批准的版本规划切换为目标 SNAPSHOT；不得仅依据历史里程碑编号推断下一版本。
 
 ## 10. FAQ
 

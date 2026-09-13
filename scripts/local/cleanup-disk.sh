@@ -3,11 +3,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/logging.sh
+source "$ROOT/scripts/lib/logging.sh"
 APPLY=false
 RETENTION_DAYS=7
 INCLUDE_ANONYMOUS_VOLUMES=false
 INCLUDE_RUN_LOGS=false
 INCLUDE_BUILD_ARTIFACTS=false
+INCLUDE_APP_LOGS=false
+INCLUDE_OBSERVABILITY_VOLUMES=false
 ALL_BUILD_CACHE=false
 PRUNE_OLD_IMAGE_TAGS=false
 
@@ -23,6 +27,8 @@ usage() {
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
   --include-build-artifacts     同时处理仓库内 Maven target 目录
+  --include-app-logs            同时清理 logs/archive/app 下的历史应用归档日志
+  --include-observability-volumes 同时清理本地观测栈命名卷
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
   --prune-old-image-tags        每个镜像仓库只保留最新版本和容器引用版本
   -h, --help                    显示帮助
@@ -59,8 +65,14 @@ while [ "$#" -gt 0 ]; do
     --include-run-logs)
       INCLUDE_RUN_LOGS=true
       ;;
-    --include-build-artifacts)
+  --include-build-artifacts)
       INCLUDE_BUILD_ARTIFACTS=true
+      ;;
+    --include-app-logs)
+      INCLUDE_APP_LOGS=true
+      ;;
+    --include-observability-volumes)
+      INCLUDE_OBSERVABILITY_VOLUMES=true
       ;;
     --all-build-cache)
       ALL_BUILD_CACHE=true
@@ -97,6 +109,43 @@ run_or_preview() {
     printf '[预览]'
     printf ' %q' "$@"
     printf '\n'
+  fi
+}
+
+cleanup_observability_volumes() {
+  local compose_project
+  local -a suffixes=(
+    prometheus-data
+    loki-data
+    tempo-data
+    otel-collector-data
+    grafana-data
+  )
+  local -A candidates=()
+  local suffix candidate
+  compose_project="${COMPOSE_PROJECT_NAME:-batch-platform}"
+
+  for suffix in "${suffixes[@]}"; do
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] && candidates["$candidate"]=1
+    done < <(docker volume ls -q --filter "name=${compose_project}_${suffix}" || true)
+
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] && candidates["$candidate"]=1
+    done < <(docker volume ls -q --filter "name=_${suffix}$" || true)
+  done
+
+  if [ "${#candidates[@]}" -eq 0 ]; then
+    echo '符合条件的观测栈命名卷: 0'
+    return
+  fi
+
+  echo "符合条件的观测栈命名卷: ${#candidates[@]}"
+  printf '%s\n' "${!candidates[@]}"
+
+  if [ "$APPLY" = true ]; then
+    printf '%s\n' "${!candidates[@]}" | xargs -r docker volume rm -f >/dev/null
+    echo "已删除 ${#candidates[@]} 个观测栈命名卷（注意将触发其内容清空）"
   fi
 }
 
@@ -251,6 +300,43 @@ else
   echo 'Maven 构建目录: 未启用清理（使用 --include-build-artifacts 显式启用）'
 fi
 
+if [ "$INCLUDE_APP_LOGS" = true ]; then
+  echo
+  echo "历史应用归档日志（超过 ${RETENTION_DAYS} 天）:"
+  app_candidates=()
+  while IFS= read -r -d '' file; do
+    app_candidates+=("$file")
+  done < <(log_find_archived_log_files "$ROOT" app "$RETENTION_DAYS")
+
+  app_count="${#app_candidates[@]}"
+  echo "符合条件的应用日志文件: ${app_count}"
+  app_disk_size=""
+  if [ "$app_count" -gt 0 ]; then
+    app_disk_size="$(du -ch -- "${app_candidates[@]}" 2>/dev/null | awk 'END {print $1}')"
+  fi
+  [ -n "$app_disk_size" ] && echo "应用日志待清理空间: ${app_disk_size}"
+  if [ "$app_count" -gt 0 ]; then
+    if [ "$APPLY" = true ]; then
+      rm -f -- "${app_candidates[@]}"
+      echo "已删除 ${app_count} 个应用日志文件（清理空间: ${app_disk_size:-未知}）"
+    else
+      printf '%s\n' "${app_candidates[@]:0:20}"
+      if [ "$app_count" -gt 20 ]; then
+        echo "... 其余 $((app_count - 20)) 个已省略"
+      fi
+    fi
+  fi
+else
+  echo '历史应用归档日志: 未启用清理（使用 --include-app-logs 显式启用）'
+fi
+
+if [ "$INCLUDE_OBSERVABILITY_VOLUMES" = true ]; then
+  echo
+  cleanup_observability_volumes
+else
+  echo '观测栈命名卷: 未启用清理（使用 --include-observability-volumes 显式启用）'
+fi
+
 if [ "$APPLY" = true ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo
   echo 'Docker 清理后占用:'
@@ -258,4 +344,4 @@ if [ "$APPLY" = true ] && command -v docker >/dev/null 2>&1 && docker info >/dev
 fi
 
 echo
-echo '受保护项: 运行中/已停止容器、命名卷、数据库文件、Maven 仓库和当前日志。'
+echo '受保护项: 运行中/已停止容器、数据库文件与 Maven 仓库。若未启用对应参数，Docker 卷/日志/历史运行目录不清理。'

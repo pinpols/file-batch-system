@@ -121,7 +121,7 @@ kubectl -n <ns> exec <release>-batch-platform-orchestrator-0 -- sh -c 'echo $BAT
 
 # 4) 健康端点正常
 kubectl -n <ns> port-forward <release>-batch-platform-orchestrator-0 8082:8082
-curl -s http://localhost:8082/actuator/health | jq .status
+curl -s "${ORCH_BASE:-http://localhost:18082}/actuator/health" | jq .status
 # 期望：UP
 
 # 5) PodDisruptionBudget 生成

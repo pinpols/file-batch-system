@@ -29,7 +29,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
-LOCAL_SCRIPTS="$ROOT_DIR/scripts/local"
 SOAK_LOG_DIR="$ROOT_DIR/logs/soak"
 mkdir -p "$SOAK_LOG_DIR"
 

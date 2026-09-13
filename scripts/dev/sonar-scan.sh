@@ -30,10 +30,11 @@ done
 SONAR_CONTAINER="sonarqube-batch"
 SONAR_PORT="${SONAR_PORT:-9001}"
 SONAR_URL="http://localhost:${SONAR_PORT}"
-SONAR_ADMIN_USER="admin"
-SONAR_ADMIN_PASS="admin"
-PROJECT_KEY="file-batch-system"
-PROJECT_NAME="File Batch System"
+SONAR_ADMIN_USER="${SONAR_ADMIN_USER:-admin}"
+SONAR_ADMIN_PASS="${SONAR_ADMIN_PASS:-admin}"
+SONAR_IMAGE="${SONAR_IMAGE:-sonarqube@sha256:d4899d380ad9d7b63ebaa751e047f5a4f064f8902cdf7c1a3c3c96f7d71600ed}"
+PROJECT_KEY="${SONAR_PROJECT_KEY:-file-batch-system}"
+PROJECT_NAME="${SONAR_PROJECT_NAME:-File Batch System}"
 SONAR_MAVEN_PLUGIN_VERSION="${SONAR_MAVEN_PLUGIN_VERSION:-5.7.0.6970}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/process.sh
@@ -80,7 +81,7 @@ else
   docker run -d --name "$SONAR_CONTAINER" \
     -p "${SONAR_PORT}:9000" \
     -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
-    sonarqube:community
+    "$SONAR_IMAGE"
   ok "Container started."
 fi
 
@@ -101,14 +102,20 @@ ok "SonarQube is UP (${SONAR_URL})"
 
 # 清除 admin 的强制改密标记（H2 直连，容器需处于运行态但刚就绪时 H2 TCP 端口已开）
 # SonarQube 启动 H2 TCP server 在 9092，通过端口转发直连
-H2_PORT=9092
+H2_PORT="${SONAR_H2_PORT:-9092}"
 SONAR_RESET_SQL="$(< "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sql/sonar-reset-password-flag.sql")"
-docker exec "$SONAR_CONTAINER" java \
-  -cp /opt/sonarqube/lib/jdbc/h2/h2-2.3.232.jar org.h2.tools.Shell \
-  -url "jdbc:h2:tcp://127.0.0.1:${H2_PORT}/sonar;NON_KEYWORDS=VALUE" \
-  -user "" -password "" \
-  -sql "${SONAR_RESET_SQL//:login/${SONAR_ADMIN_USER}}" \
-  &>/dev/null || true
+SONAR_H2_JAR="$(docker exec "$SONAR_CONTAINER" sh -c \
+  'find /opt/sonarqube/lib/jdbc/h2 -maxdepth 1 -type f -name "h2-*.jar" -print -quit' 2>/dev/null || true)"
+if [[ -n "$SONAR_H2_JAR" ]]; then
+  docker exec "$SONAR_CONTAINER" java \
+    -cp "$SONAR_H2_JAR" org.h2.tools.Shell \
+    -url "jdbc:h2:tcp://127.0.0.1:${H2_PORT}/sonar;NON_KEYWORDS=VALUE" \
+    -user "" -password "" \
+    -sql "${SONAR_RESET_SQL//:login/${SONAR_ADMIN_USER}}" \
+    &>/dev/null || warn "Unable to reset SonarQube password-change flag through H2"
+else
+  warn "SonarQube H2 client jar not found; skipping password-change flag reset"
+fi
 
 # 关闭强制登录，Dashboard 可匿名访问
 curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \

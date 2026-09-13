@@ -75,6 +75,9 @@ storage:
 
 # orchestrator Service DNS（集群内）。端口必须和 orchestrator.port 一致，否则 worker 注册挂。
 orchestratorBaseUrl: "http://batch-orchestrator:18082"
+# Console 调用 Trigger / Atomic Worker 的集群内地址；生产 overlay 必须按 namespace 覆盖。
+triggerBaseUrl: "http://batch-trigger:18081"
+workerAtomicBaseUrl: "http://batch-worker-atomic:18087"
 
 security:
   bypassMode: "false"

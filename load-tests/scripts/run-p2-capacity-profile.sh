@@ -92,6 +92,7 @@ CAPACITY_LOCK_HELD=0
 mkdir -p "$LOG_DIR"
 PROFILE_RC=0
 STORM_TERMINAL_VERIFIED=0
+FAIRNESS_STARTED=0
 ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
 KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
@@ -124,12 +125,6 @@ require_pg_statement_profile() {
   fi
 }
 
-reset_pg_statement_profile() {
-  if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]]; then
-    psql_platform -f "$LOAD_DIR/sql/reset-control-pg-statement-profile.sql" >/dev/null
-  fi
-}
-
 append_pg_statement_profile() {
   if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" != "1" ]]; then
     return
@@ -153,10 +148,10 @@ storm_reached_terminal_state() {
   local storm_run_id="$1"
   local counts total terminal trigger_requests linked_terminal
   counts="$(
-    psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
-      -v storm_run_id="$storm_run_id" \
+    psql_platform -tA -v tenant_id="$CAPACITY_TENANT_ID" \
+      -v run_id="$storm_run_id" \
       -v biz_date="$BIZ_DATE" -v biz_date_cardinality="$CAPACITY_BIZ_DATE_CARDINALITY" \
-      -f "$LOAD_DIR/sql/p2-storm-terminal-counts.sql"
+      -f "$LOAD_DIR/sql/control-run-terminal-counts.sql"
   )"
   total="${counts%%|*}"
   counts="${counts#*|}"
@@ -220,11 +215,11 @@ cleanup() {
     release_capacity_lock
   fi
   # Fairness uses the profile run id directly. Keep it separate from the storm's -10w suffix.
-  if [[ "$RUN_FAIRNESS" == "1" ]] \
+  if [[ "$FAIRNESS_STARTED" == "1" ]] \
       && ! psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
     rc=1
   fi
-  if [[ "$RUN_FAIRNESS" == "1" && "$FAIRNESS_LOCK_HELD" == "1" ]]; then
+  if [[ "$FAIRNESS_STARTED" == "1" && "$FAIRNESS_LOCK_HELD" == "1" ]]; then
     if ! psql_platform -f "$LOAD_DIR/sql/cleanup-p2-multitenant-fairness-policy.sql" >&2; then
       rc=1
     fi
@@ -233,7 +228,7 @@ cleanup() {
     fi
     release_fairness_lock
   fi
-  if [[ "$RUN_FAIRNESS" == "1" ]] && ! assert_no_residue "$RUN_ID"; then
+  if [[ "$FAIRNESS_STARTED" == "1" ]] && ! assert_no_residue "$RUN_ID"; then
     rc=1
   fi
   if [[ "$RUN_10W_STORM" == "1" && "$STORM_TERMINAL_VERIFIED" == "1" ]] \
@@ -341,7 +336,7 @@ require_trigger_capacity_budget() {
   relay="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MAX_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
   adaptive="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED=//p' | tail -1)"
   minimum="$(printf '%s\n' "$configured" | sed -n 's/^BATCH_TRIGGER_OUTBOX_MIN_PUBLISH_EVENTS_PER_SECOND=//p' | tail -1)"
-  metrics="$(curl --fail --silent --show-error http://localhost:18081/actuator/prometheus)"
+  metrics="$(curl --fail --silent --show-error "http://localhost:${TRIGGER_PORT}/actuator/prometheus")"
   consumer="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_TRIGGER_CONSUMER_CONCURRENCY=//p' | tail -1)"
   pool_max="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=//p' | tail -1)"
   replica_consumer="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_TRIGGER_CONSUMER_CONCURRENCY=//p' | tail -1)"
@@ -363,11 +358,11 @@ require_trigger_capacity_budget() {
   atomic_max_concurrent="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS=//p' | tail -1)"
   atomic_task_client_base_urls="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_TASK_CLIENT_BASE_URLS=//p' | tail -1)"
   atomic_execution_pool="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_EXECUTION_POOL_SIZE=//p' | tail -1)"
-  atomic_topic_partitions="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
+  atomic_topic_partitions="$(docker exec batch-kafka "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
       --bootstrap-server kafka:29092 \
       --describe --topic "batch.task.dispatch.atomic.node.${CAPACITY_ATOMIC_WORKER_CODE}" 2>/dev/null \
     | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
-  trigger_topic_partitions="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh \
+  trigger_topic_partitions="$(docker exec batch-kafka "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
       --bootstrap-server kafka:29092 \
       --describe --topic "batch.trigger.launch.v1" 2>/dev/null \
     | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
@@ -438,7 +433,7 @@ require_empty_trigger_lag() {
     exit 2
   }
   local lag_stats assigned_partitions lag
-  lag_stats="$(docker exec batch-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  lag_stats="$(docker exec batch-kafka "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
       --bootstrap-server kafka:29092 \
       --describe --group orchestrator-trigger-launch 2>/dev/null \
     | awk '$2 == "batch.trigger.launch.v1" && $3 ~ /^[0-9]+$/ {
@@ -604,7 +599,7 @@ append_sql_summary() {
 
 capture_trigger_partition_offsets() {
   local stage="$1"
-  docker exec "$KAFKA_CONTAINER_NAME" /opt/kafka/bin/kafka-get-offsets.sh \
+  docker exec "$KAFKA_CONTAINER_NAME" "$KAFKA_CONTAINER_BIN_DIR/kafka-get-offsets.sh" \
     --bootstrap-server kafka:29092 \
     --topic batch.trigger.launch.v1 \
     --time -1 \
@@ -645,7 +640,7 @@ capture_launch_phase_metrics() {
   for container in "${ORCHESTRATOR_CONTAINERS[@]}"; do
     output_file="$LOG_DIR/${container}-launch-phase-${stage}.prom"
     if ! docker exec "$container" curl --fail --silent --show-error \
-        http://localhost:18082/actuator/prometheus \
+        "http://localhost:${ORCHESTRATOR_PORT}/actuator/prometheus" \
         | grep '^batch_orchestrator_launch_phase_duration_' > "$output_file"; then
       echo "cannot capture launch phase metrics from ${container} at ${stage}" >&2
       return 1
@@ -659,7 +654,7 @@ capture_task_claim_metrics() {
   for container in "${ORCHESTRATOR_CONTAINERS[@]}"; do
     output_file="$LOG_DIR/${container}-task-claim-${stage}.prom"
     docker exec "$container" curl --fail --silent --show-error \
-      http://localhost:18082/actuator/prometheus \
+      "http://localhost:${ORCHESTRATOR_PORT}/actuator/prometheus" \
       | grep -E '^batch_task_(claim_duration_seconds_count|batch_claim_size_(count|sum))|^http_server_requests_seconds_count\{.*uri="/internal/tasks/\{taskId\}/report"' \
       > "$output_file" || true
   done
@@ -806,7 +801,6 @@ run_10w_storm() {
     return
   fi
   capture_task_claim_metrics before
-  reset_pg_statement_profile
   set +e
   RUN_ID="$storm_run_id" \
   LOAD_TEST_TENANT_ID="$storm_tenant_id" \
@@ -819,6 +813,8 @@ run_10w_storm() {
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
   WAIT_TERMINAL_ALLOW_PARTIAL=0 \
   POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
+  PRE_MEASURE_CHECKPOINT_ENABLED=1 \
+  RESET_PG_STATEMENTS_BEFORE_MEASURE="$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" \
   WRITE_P95_MS="$CAPACITY_WRITE_P95_MS" \
   PG_SAMPLE_INTERVAL_SECONDS="$PG_SAMPLE_INTERVAL_SECONDS" \
   BIZ_DATE_CARDINALITY="$CAPACITY_BIZ_DATE_CARDINALITY" \
@@ -849,6 +845,10 @@ run_10w_storm() {
     append_sql_summary "10w Atomic Storm (final verification)" "$storm_run_id"
   elif [[ "$CAPACITY_STRICT" == "1" ]]; then
     PROFILE_RC=1
+  else
+    # 未完成终态验证不是可忽略的性能阈值偏差。继续运行 fairness 会让两种负载共享
+    # PostgreSQL/Kafka 并相互污染，产出的公平性和容量结果都不可用于比较。
+    PROFILE_RC=1
   fi
   if [[ "$rc" -ne 0 && "$CAPACITY_STRICT" == "1" ]]; then
     PROFILE_RC=1
@@ -866,6 +866,7 @@ run_fairness() {
     PROFILE_RC=1
     return
   fi
+  FAIRNESS_STARTED=1
   echo "==> prepare isolated p2fa/p2fb/p2fc atomic job definitions"
   psql_platform -v fairness_group_cap="$FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS" \
     -f "$LOAD_DIR/sql/prepare-p2-multitenant-atomic.sql"
@@ -913,7 +914,17 @@ if [[ "$RUN_10W_STORM" == "1" ]]; then
 fi
 
 if [[ "$RUN_FAIRNESS" == "1" ]]; then
-  run_fairness
+  if [[ "$RUN_10W_STORM" == "1" && "$STORM_TERMINAL_VERIFIED" != "1" ]]; then
+    echo "==> skip multi-tenant fairness: 10w storm did not reach terminal verification" >&2
+    {
+      echo "## Multi-Tenant Fairness"
+      echo
+      echo "- Skipped: the preceding 10w storm did not reach terminal verification."
+      echo
+    } >> "$REPORT"
+  else
+    run_fairness
+  fi
 fi
 
 if ! verify_kafka_stability; then

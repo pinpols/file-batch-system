@@ -16,7 +16,6 @@ source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
 source "$ROOT/scripts/lib/process.sh"
 PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
-APP_LOG_DIR="$(log_current_dir "$ROOT" app app)"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 DEFAULT_STOP_WAIT_SEC=30
@@ -26,17 +25,6 @@ RUNTIME_JAVA_NAMES=(
   worker-import worker-export worker-process worker-dispatch worker-atomic
   trigger console
   orchestrator
-)
-
-LEGACY_JAR_MODULES=(
-  batch-worker-import
-  batch-worker-export
-  batch-worker-process
-  batch-worker-dispatch
-  batch-worker-atomic
-  batch-trigger
-  batch-console-api
-  batch-orchestrator
 )
 
 killed=0

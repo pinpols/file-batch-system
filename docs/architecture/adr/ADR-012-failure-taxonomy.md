@@ -3,7 +3,7 @@
 - **Status**: Accepted（**第 1 阶段必做 / P0**，不越界，~3-5 人天）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-011（幂等边界对齐）/ ADR-013（分布式 tracing）/ §14.3.2 后端缺口审计 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-011（幂等边界对齐）/ ADR-013（分布式 tracing）/ §14.3.2 后端缺口审计 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

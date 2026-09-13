@@ -148,7 +148,7 @@ docker exec -it batch-postgres psql -U batch_user -d batch_platform
 查看 Kafka Topic：
 
 ```bash
-docker exec -it batch-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec -it batch-kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-topics.sh" \
   --bootstrap-server localhost:19092 \
   --list
 ```

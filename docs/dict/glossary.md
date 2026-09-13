@@ -44,7 +44,7 @@
 | **outbox** | 事务性 Outbox 模式。状态写库 + Kafka 投递在同一事务，保证至少一次投递。 | [`../architecture/adr/ADR-002-transactional-outbox.md`](../architecture/adr/ADR-002-transactional-outbox.md) |
 | **DLQ** | Dead Letter Queue。Kafka 消费失败超过阈值的消息进 DLQ topic + `dead_letter_task` 表，等人工 / AI 重放。 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §1.8 |
 | **compensation** | 补偿。任务失败后的自动 / 手动恢复动作（rerun job / retry partition / replay file / DLQ replay）。 | [`../runbook/compensation-cleanup.md`](../runbook/compensation-cleanup.md) |
-| **misfire** | Quartz 触发器到期未执行的状态（调度器停机 / 资源紧张时发生）。默认 fire-now 策略：恢复后立刻补跑一次。 | [`../architecture/quartz-replacement-design.md`](../architecture/quartz-replacement-design.md) |
+| **misfire** | Quartz 触发器到期未执行的状态（调度器停机 / 资源紧张时发生）。默认 fire-now 策略：恢复后立刻补跑一次。 | [`../runbook/trigger-operations.md`](../runbook/trigger-operations.md) |
 | **drain** | Worker 优雅下线。停止接新 task + 等已认领 task 完成 + 释放 lease + 退出。 | [`../runbook/rolling-upgrade-workers.md`](../runbook/rolling-upgrade-workers.md) |
 | **lease** | 租约。worker 占用 partition 的时间窗口，过期未续被其他 worker 抢占。 | `PartitionLeaseProperties` |
 | **shedlock** | 分布式锁（基于 Redis）。多实例同时持有时只允许一个执行调度任务。 | [`../runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md) |

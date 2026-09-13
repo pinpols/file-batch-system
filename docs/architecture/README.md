@@ -23,10 +23,15 @@
 | 13 | [governance-tables-boundary.md](./governance-tables-boundary.md) | `config_approval` vs `approval_command` / `subscription_rule` vs `alert_routing_config` 职责边界 | 看到 governance 表对疑似重叠时 |
 | 14 | [notification-and-audit-boundary.md](./notification-and-audit-boundary.md) | 通知、技术告警、运行日志、业务审计的统一职责与复用边界 | 判断告警/通知/审计归属时 |
 | 15 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
-| 16 | [architecture-truth.md](./architecture-truth.md) | 2026-04-09 架构快照（已过期，仅保留历史对照） | 审计历史判断来源 |
+| 16 | [architecture-truth.md](./architecture-truth.md) | 当前架构事实的稳定入口与权威源清单 | 核对版本、模块、端口或迁移事实 |
 | 17 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
 | 18 | [../analysis/p0-p1-governance-status-2026-09-02.md](../analysis/p0-p1-governance-status-2026-09-02.md) | P0/P1 治理状态、证据边界与复扫入口 | 上线前复核治理是否漂移 |
 | 19 | [application-governance.md](./application-governance.md) | 超时、运行时兼容、故障注入、告警、供应链五项应用治理入口 | 复核横切治理是否有代码和证据 |
+| 20 | [bounded-context-rules.md](./bounded-context-rules.md) | bounded context 依赖方向和例外规则 | 调整跨域依赖前 |
+| 21 | [event-routing-policy.md](./event-routing-policy.md) | 事件路由与 topic 选择规则 | 新增或迁移事件前 |
+| 22 | [runtime-compatibility-contract-2026-09-01.md](./runtime-compatibility-contract-2026-09-01.md) | Java、Shell、容器和协议运行时兼容契约 | 升级运行时前 |
+| 23 | [maturity-assessment.md](./maturity-assessment.md) | 成熟度评估快照 | 能力对标时，结论需结合最新验证 |
+| 24 | [deficiencies-2026-05-30.md](./deficiencies-2026-05-30.md) / [p0-p1-p2-roadmap.md](./p0-p1-p2-roadmap.md) | 历史差距与治理路线证据 | 审计历史，不作为当前待办 |
 
 ## 角色路径
 

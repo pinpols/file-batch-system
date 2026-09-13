@@ -14,8 +14,6 @@ SQL_DIR="$HERE/sql"
 SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day "sim-4day-batchday-${START//-/}")}"
 log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
 exec > >(tee -a "$SIM4DAY_LOG_DIR/00-run-4days-batchday.log") 2>&1
-CONSOLE="${CONSOLE_BASE_URL}"
-CJ="$SIM4DAY_LOG_DIR/console-cookies.txt"
 TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
 SIM4DAY_CLOSE_ERR_LOG="$SIM4DAY_LOG_DIR/close-errors.log"
 PQF(){ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tA "$@" -f /dev/stdin 2>>"$SIM4DAY_CLOSE_ERR_LOG"; }

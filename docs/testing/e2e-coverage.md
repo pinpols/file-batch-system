@@ -218,9 +218,9 @@ E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮�
 | 平台共性 | N/A | Quartz 多实例 / 集群 failover | E2E缺口但已有集成回退 | 中 | 已有 JDBC store / cluster state 集成验证，但没有完整故障切换 E2E |
 | 平台共性 | N/A | 长时间 soak / 反复重入竞态 | E2E缺口但已有集成回退 | 中 | 已有并发 claim / scheduler 重入回归，但没有长时间 soak E2E |
 | 平台共性 | N/A | 补偿审批 / replay / dead letter 人工闭环 | E2E缺口但已有集成回退 | 中 | 有审批 / replay 控制器和服务层测试，没有专项 E2E |
-| 平台共性 | N/A | 真实外部渠道 SFTP / EMAIL / OSS | E2E缺口但已有集成回退 | 中 | 已补 [`DispatchExternalChannelIntegrationTest`](<repo-root>/batch-worker-dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchExternalChannelIntegrationTest.java)，E2E 仍缺但风险已下降 |
-| 平台共性 | N/A | worker 进程级重启后的恢复 | E2E缺口但已有集成回退 | 中 | 已补 [`WorkerProcessRestartRecoveryIntegrationTest`](<repo-root>/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/WorkerProcessRestartRecoveryIntegrationTest.java)，覆盖 worker 进程重启后的注册续跑与任务继续 |
-| 平台共性 | N/A | staging live rollout / rollback smoke | E2E缺口但已有脚本回退 | 中 | 已补 [`run-staging-live-smoke.sh`](<repo-root>/scripts/ci/run-staging-live-smoke.sh)，用于 staging 的 live deploy + rollback smoke |
+| 平台共性 | N/A | 真实外部渠道 SFTP / EMAIL / OSS | E2E缺口但已有集成回退 | 中 | 已补 [`DispatchExternalChannelIntegrationTest`](../../batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchExternalChannelIntegrationTest.java)，E2E 仍缺但风险已下降 |
+| 平台共性 | N/A | worker 进程级重启后的恢复 | 已有专项 E2E | 中 | 已补 [`WorkerProcessRestartRecoveryE2eIT`](../../batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerProcessRestartRecoveryE2eIT.java)，覆盖 worker 进程重启后的注册续跑与任务继续 |
+| 平台共性 | N/A | staging live rollout / rollback smoke | E2E缺口但已有脚本回退 | 中 | 已补 [`run-staging-live-smoke.sh`](../../scripts/ci/run-staging-live-smoke.sh)，用于 staging 的 live deploy + rollback smoke |
 
 ## 结论
 

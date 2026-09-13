@@ -93,7 +93,7 @@ curl -s http://console-api/actuator/health/rls
 
 ```bash
 # 3. worker 日志监控 30 分钟
-tail -f logs/console-api/console-api.log | grep -E "row-level security|RLS SET LOCAL failed"
+tail -f logs/current/app/console.log | grep -E "row-level security|RLS SET LOCAL failed"
 # 期望:0 行(若有,立刻执行 §5 回滚)
 ```
 
@@ -141,7 +141,7 @@ SELECT count(*) FROM pg_policies
 
 ```bash
 # 应用日志立刻无新 "row-level security violation"
-tail -f logs/console-api/console-api.log | grep "row-level security"
+tail -f logs/current/app/console.log | grep "row-level security"
 # 应停止增长
 ```
 

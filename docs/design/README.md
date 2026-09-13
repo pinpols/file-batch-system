@@ -22,14 +22,24 @@
 | 08 | [project-structure-pom.md](./project-structure-pom.md) | 早期模块结构 / POM 设计稿（当前事实以 architecture/project-structure 为准） | 查历史设计背景 |
 | 09 | [runtime-default-parameters.md](./runtime-default-parameters.md) | 运行时默认参数基线（pool / timeout / batch size 等）| 调参前看默认值 |
 | 10 | [console-sidebar-menu-tree.md](./console-sidebar-menu-tree.md) | 控制台侧边栏菜单树 + 角色可见性 | 加 console 页面 |
-| 11 | [api-gap-analysis.md](./api-gap-analysis.md) | Console API 设计与实现差距分析 | 补接口前 |
+| 11 | [api-gap-analysis.md](./api-gap-analysis.md) | 2026-04-10 Console API 差距快照 | 历史审计；当前接口以 OpenAPI 为准 |
 | 12 | [tech-stack-and-principles.md](./tech-stack-and-principles.md) | 技术栈清单 / MyBatis 单一栈原则 / 开源协议合规 / AI 接入合规 | 加新依赖 / 评估技术选型 |
 | 13 | [sla-and-quality.md](./sla-and-quality.md) | 任务 SLA / 文件到达 SLA / 数据质量校验 | 配 SLA / 补质量校验规则 |
 | 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
 | 15 | [batch-classification-and-gaps.md](./batch-classification-and-gaps.md) | 批量类型 3 维分类法（BatchType / ExecutionMode / TriggerType） + 系统缺口与 P0 落地草案 | 加新业务类型 / 评估增量执行 / 抽公共状态机 |
-| 16 | [process-worker-known-issues.md](./process-worker-known-issues.md) | PROCESS Worker 落地后的漏洞、bug、设计缺陷与下一步修复计划 | 修 PROCESS / SQL transform / staging / watermark 前 |
+| 16 | [process-worker-known-issues.md](./process-worker-known-issues.md) | 2026-04-28 PROCESS Worker 问题与修复快照 | 历史审计；当前待办以 todo-master 为准 |
 | 17 | [tenant-config-package-excel-9plus2-design.md](./tenant-config-package-excel-9plus2-design.md) | 租户配置包 Excel 9+2 优化设计：默认 9 sheet + 可选 calendar/window、依赖说明 sheet、字段说明合并单元格与关联关系列 | 改 tenant-package Excel / 补 Import 表名与 Export SQL 配置包迁移 |
 | 18 | [pipeline-stage-progress-display.md](./pipeline-stage-progress-display.md) | Pipeline step 进度展示与 SSE 刷新设计：低频 dirty event、轮询快照、Worker 支持矩阵、降级策略 | 改 Pipeline Observability / SSE / Worker progress 前 |
+
+## 专题设计
+
+| 主题 | 文档 |
+|---|---|
+| API 与安全 | [API abuse protection](./api-abuse-protection.md)、[登录防暴力破解](./console-login-bruteforce-protection.md)、[i18n](./i18n.md) |
+| 文件与存储 | [对象存储抽象](./object-storage-abstraction.md)、[文件完整性 sidecar](./file-integrity-sidecar-manifest-design-2026-06-07.md)、[字段映射推断](./import-export-column-mapping-default-inference-2026-06-20.md) |
+| Pipeline / Workflow | [边界定义](./pipeline-vs-workflow-definition.md)、[DAG 设计器](./workflow-dag-designer.md)、[动态 fan-out](./workflow-dynamic-fanout.md)、[状态机](./status-state-machines.md) |
+| 幂等与 readiness | [分区幂等](./partition-idempotency-decision.md)、[资产分区 readiness](./asset-partition-readiness.md) |
+| Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[行业对标](./sdk-industry-benchmark.md) |
 
 ## 与 architecture/ 的分工
 

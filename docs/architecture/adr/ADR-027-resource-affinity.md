@@ -3,7 +3,7 @@
 - **Status**: Accepted（**第 3 阶段 / P2-P3 暂缓**，最高越界风险 — 触发条件不到只保留 workerType + capabilityTags + resourceProfile + region/zone 字段）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-019（域级配额）/ §worker_group / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-019（域级配额）/ §worker_group / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

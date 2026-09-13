@@ -2,6 +2,7 @@
 # 统一本地日志布局:
 #   logs/current/<kind>/      常驻进程当前日志(app/docker)
 #   logs/runs/<kind>/<run>/   一次性任务日志(test/be-acceptance/sim)
+#   logs/archive/<kind>/      常驻日志归档(按 kind 分目录)
 #   logs/archive/legacy/      首次迁移旧目录时的历史归档
 #   logs/pids/                本地进程 pid 文件
 
@@ -31,6 +32,7 @@ log_init_layout() {
   mkdir -p \
     "$root/logs/current" \
     "$root/logs/runs" \
+    "$root/logs/archive" \
     "$root/logs/archive/legacy" \
     "$root/logs/pids"
 }
@@ -104,6 +106,49 @@ log_run_dir() {
   fi
   ln -sfn "$dir" "$latest"
   printf '%s' "$dir"
+}
+
+log_archive_active_log_file() {
+  local root="$1"
+  local kind="$2"
+  local name="$3"
+
+  local log_dir archive_stamp log_file suffix destination collision
+  local candidate="$root/logs/current/$kind/$name.log"
+  if [[ ! -f "$candidate" ]]; then
+    return 0
+  fi
+
+  log_dir="$root/logs/archive/$kind"
+  mkdir -p "$log_dir"
+  archive_stamp="$(log_stamp)"
+  suffix="$(log_git_sha "$root")"
+  if [[ -n "${BATCH_LOG_ARCHIVE_SUFFIX:-}" ]]; then
+    suffix="$(log_sanitize_label "$BATCH_LOG_ARCHIVE_SUFFIX")"
+    suffix="${suffix:-manual}"
+  fi
+
+  log_file="$name.${archive_stamp}-${suffix}.log"
+  destination="$log_dir/$log_file"
+  collision=1
+  while [[ -e "$destination" ]]; do
+    destination="$log_dir/${log_file%.log}.${collision}.log"
+    collision=$((collision + 1))
+  done
+
+  mv "$candidate" "$destination"
+  echo "  归档旧日志：$candidate -> $destination"
+}
+
+log_find_archived_log_files() {
+  local root="$1"
+  local kind="$2"
+  local retention_days="$3"
+  local archive_dir="$root/logs/archive/$kind"
+
+  if [[ -d "$archive_dir" ]]; then
+    find "$archive_dir" -maxdepth 1 -type f -name '*.log' -mtime "+${retention_days}" -print0
+  fi
 }
 
 log_pid_file() {

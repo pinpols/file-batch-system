@@ -60,6 +60,43 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-config-defaults-sync.py --check
 
+      - name: Verify tracked env files are shell-safe
+        shell: bash
+        run: python3 scripts/ci/check-env-file-shell-safety.py
+
+      - name: Verify hardcoded runtime configuration boundaries
+        shell: bash
+        run: bash scripts/ci/check-hardcoded-runtime-config.sh
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: python3 scripts/ci/check-repository-hygiene.py
+
+      - name: Verify script governance and zero ShellCheck warnings
+        shell: bash
+        run: |
+          python3 scripts/ci/check-script-governance.py
+          bash scripts/ci/check-shell-scripts.sh
+
+      - name: Verify module dependency boundaries
+        shell: bash
+        run: python3 scripts/ci/check-dependency-boundaries.py
+
+      - name: Verify changelog synchronization
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          BASE="$BEFORE_SHA"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="$(git rev-parse HEAD^)"
+          fi
+          python3 scripts/ci/check-changelog-sync.py --base "$BASE"
+
+      - name: Verify documentation structure and internal links
+        shell: bash
+        run: python3 scripts/ci/check-docs-structure.py
+
       - name: Validate feature switch registry
         shell: bash
         run: python3 scripts/ci/check-feature-switch-registry.py
@@ -97,6 +134,20 @@ jobs:
             BASE="$(git rev-parse HEAD^)"
           fi
           python3 scripts/ci/check-empty-checks.py --base "$BASE"
+
+      - name: Verify readiness contract documentation sync
+        shell: bash
+        # main push 工作树干净，按本次 push 的前一提交检查 readiness 契约触点是否同步文档/API/测试证据。
+        run: |
+          BASE="${{ github.event.before }}"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="$(git rev-parse HEAD^)"
+          fi
+          python3 scripts/ci/check-readiness-doc-sync.py --base "$BASE"
+
+      - name: Verify Trivy ignore expiry metadata
+        shell: bash
+        run: python3 scripts/ci/check-trivy-ignore-expiry.py
 
       - name: Database comment coverage (diff-only)
         shell: bash
@@ -313,7 +364,7 @@ jobs:
           dockerfile: deploy/docker/Dockerfile.app
           failure-threshold: warning
 
-      - name: Container security scan — Trivy
+      - name: Repository security scan — Trivy fs
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs

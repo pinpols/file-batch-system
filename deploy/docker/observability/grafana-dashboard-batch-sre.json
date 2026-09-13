@@ -1,4 +1,5 @@
 {
+  "uid": "batch-platform-sre",
   "title": "Batch Platform — SRE (HikariCP & HTTP)",
   "timezone": "browser",
   "schemaVersion": 38,

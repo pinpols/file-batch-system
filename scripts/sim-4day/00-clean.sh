@@ -28,9 +28,9 @@ clean_kafka_runtime() {
   docker exec -i "$KAFKA" sh -s "$KAFKA_BOOTSTRAP" <<'EOF'
 set -eu
 bootstrap="$1"
-topics_bin=/opt/kafka/bin/kafka-topics.sh
-offsets_bin=/opt/kafka/bin/kafka-get-offsets.sh
-delete_bin=/opt/kafka/bin/kafka-delete-records.sh
+topics_bin="$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh"
+offsets_bin="$KAFKA_CONTAINER_BIN_DIR/kafka-get-offsets.sh"
+delete_bin="$KAFKA_CONTAINER_BIN_DIR/kafka-delete-records.sh"
 topics="$($topics_bin --bootstrap-server "$bootstrap" --list | awk '/^batch\./ {print}')"
 for topic in $topics; do
   offset_file="$(mktemp)"

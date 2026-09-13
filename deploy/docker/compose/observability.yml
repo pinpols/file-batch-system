@@ -17,7 +17,9 @@ services:
     entrypoint: ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=15GB
       - --web.enable-lifecycle
     environment:
       BATCH_DEPLOY_MODE: ${BATCH_DEPLOY_MODE:-container}
@@ -127,6 +129,9 @@ services:
     volumes:
       - ./deploy/docker/observability/grafana-provisioning:/etc/grafana/provisioning:ro
       - ./deploy/docker/observability/grafana-dashboard-batch.json:/var/lib/grafana/dashboards/batch.json:ro
+      - ./deploy/docker/observability/grafana-dashboard-batch-coverage.json:/var/lib/grafana/dashboards/batch-coverage.json:ro
+      - ./deploy/docker/observability/grafana-dashboard-batch-mainline.json:/var/lib/grafana/dashboards/batch-mainline.json:ro
+      - ./deploy/docker/observability/grafana-dashboard-batch-sre.json:/var/lib/grafana/dashboards/batch-sre.json:ro
       - grafana-data:/var/lib/grafana
     ports:
       - "${GRAFANA_PORT:-13000}:3000"

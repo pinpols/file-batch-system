@@ -78,7 +78,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       }
       // P1(2026-05-23 audit):XFF 仅写入 audit 日志,不参与身份绑定;按 trusted-proxy 实际部署可观察伪造。
       if (xffHeaderValue != null && !xffHeaderValue.isBlank()) {
-        BatchMdc.put("xffHeaderValue", xffHeaderValue);
+        BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, xffHeaderValue);
       }
       filterChain.doFilter(request, response);
     } finally {

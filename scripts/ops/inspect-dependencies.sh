@@ -77,7 +77,7 @@ check_kafka() {
   if topic_cli="$(kafka_cli kafka-topics.sh 2>/dev/null)"; then
     topics_output="$($topic_cli --bootstrap-server "$KAFKA_BOOTSTRAP" --list 2>&1)" || topics_output=""
   elif docker_running "$KAFKA_CONTAINER"; then
-    topics_output="$(run_docker "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>&1)" || topics_output=""
+    topics_output="$(run_docker "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>&1)" || topics_output=""
   fi
   if [[ -n "$topics_output" ]]; then
     ok "Kafka broker responds; topics: $(printf '%s\n' "$topics_output" | sed '/^$/d' | wc -l | tr -d ' ')"
@@ -94,7 +94,7 @@ check_kafka() {
   IFS=',' read -r -a groups <<<"$KAFKA_GROUPS"
   for group in "${groups[@]}"; do
     if [[ "$group_cli" == "docker" ]]; then
-      output="$(run_docker "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --group "$group" 2>&1)" || output=""
+      output="$(run_docker "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --group "$group" 2>&1)" || output=""
     else
       output="$($group_cli --bootstrap-server "$KAFKA_BOOTSTRAP" --describe --group "$group" 2>&1)" || output=""
     fi

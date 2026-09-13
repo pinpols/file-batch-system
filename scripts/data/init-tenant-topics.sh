@@ -28,6 +28,7 @@
 set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
+kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
 tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
@@ -42,7 +43,7 @@ if [ -z "${kafka_topics_bin}" ]; then
   if command -v kafka-topics.sh >/dev/null 2>&1; then
     kafka_topics_bin="$(command -v kafka-topics.sh)"
   else
-    kafka_topics_bin="/opt/kafka/bin/kafka-topics.sh"
+    kafka_topics_bin="${kafka_container_bin_dir}/kafka-topics.sh"
   fi
 fi
 if ! command -v "${kafka_topics_bin}" >/dev/null 2>&1; then

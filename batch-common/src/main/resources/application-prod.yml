@@ -16,8 +16,8 @@ management:
     port: ${BATCH_MANAGEMENT_PORT:0}
   tracing:
     sampling:
-      # 生产采样率 10%，避免链路追踪数据量过大
-      probability: ${OTEL_SAMPLING_PROBABILITY:0.1}
+      # Collector 负责 tail sampling；应用端必须全量上报，才能保留错误与慢链路。
+      probability: ${OTEL_SAMPLING_PROBABILITY:1.0}
 
 logging:
   structured:

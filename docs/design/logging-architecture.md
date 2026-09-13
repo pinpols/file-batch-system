@@ -69,6 +69,7 @@ Console pattern：
 | `requestId` | HTTP Filter | 请求关联 |
 | `jobInstanceId` | 调度循环 / Worker 消费 | 作业实例关联 |
 | `fileId` | 文件处理链路 | 文件实体关联 |
+| `xffHeaderValue` | console-api 安全审计上下文 | 仅审计保留，非鉴权来源 |
 
 ### 2.4 MDC 注入点
 

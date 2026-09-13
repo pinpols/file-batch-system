@@ -11,10 +11,10 @@
 | 组件 | 现状 |
 |---|---|
 | REST 入口 | `POST /api/console/ai/chat`(`ConsoleAiController`,`@Idempotent`) |
-| 编排 | `DefaultConsoleAiApplicationService`(365 行):授权 → prompt 门禁 → RAG → 绑工具 → 调模型 → 附引用 → 审计 |
+| 编排 | `DefaultConsoleAiApplicationService`:授权 → prompt 门禁 → RAG → 绑工具 → 调模型 → 附引用 → 审计；模型失败 / 超时返回降级响应并记录审计 |
 | 模型 | Spring AI `ChatClient`,默认 Anthropic `claude-opus-4-8`,OpenAI 回退;开了没配 key 则启动 fail-fast |
-| RAG | 内置 5 个 `ai-knowledge/*.md`,OpenAI embedding,**进程内余弦检索**(刻意不引向量库),topK=4 |
-| 只读工具 | 3 个 `@Tool`:getJobInstance / getJobExecutionLogs / listRecentFailedJobInstances;租户 id 构造时绑定、**不暴露给模型**,强制当前租户只读 |
+| RAG | 内置 `ai-knowledge/*.md`,OpenAI embedding,**进程内余弦检索**(刻意不引向量库),topK=4;知识包覆盖概念、状态机、错误码、运维、根因、集群诊断、告警分诊、数据质量草稿与工程治理 |
+| 只读工具 | `@Tool`:getJobInstance / getJobExecutionLogs / listRecentFailedJobInstances / getClusterDiagnostics / getOpenAlerts / getRecentAlerts;租户 id 构造时绑定、**不暴露给模型**,强制当前租户只读 |
 | 授权 | 白名单(默认 admin;ADMIN/AUDITOR),匿名 FORBIDDEN |
 | prompt 门禁 | 关键词规则:blockedKeywords(密钥/系统提示词…)→ REJECTED_SAFETY;domainKeywords 判 in-scope + 分类 |
 | 审计 | 表 `console_ai_audit_log`(V11):**原文不落库**,只存 SHA-256 hash + 512 字符 preview;**拒绝也记** |
@@ -43,7 +43,7 @@
 1. **前端对接**:补 console 前端的聊天入口(后端契约 `POST /api/console/ai/chat` 已定),含流式输出、引用来源展示、门禁拒绝的友好提示。这是当前最大缺口。
 2. **依赖稳定化**:Spring AI `2.0.0-M3` 是里程碑版,跟踪其 GA,升到稳定版再谈生产。
 3. **provider 契约测试进 CI**:对 Anthropic/OpenAI 的真实调用契约做 nightly 集成测试(需 GH secrets;本地不可验)——防 SDK/API 漂移。参考 agent-ctl 的经验:provider 契约是最容易静默漂移的一环。
-4. **成本 / 限流 / 降级**:每租户/每用户的调用预算与限流(复用现有 bucket4j 限流基建);模型不可用/超时的降级(RAG 已有「embedding 不可用降级为仅 primer」的先例,聊天侧也要有明确降级)。
+4. **成本 / 限流 / 降级**:每租户/每用户独立限流、token 指标和模型调用应用层超时已落地;后续重点是配额运营口径和 provider 契约测试。
 5. **上线判定**:先「受控只读试生产」——白名单用户、单租户、只读工具、审计全开;不无人值守、不多租户放开。
 
 ### Phase 2 — 扩展接入点(按现有确定性能力的天然缺口排序)
@@ -51,11 +51,11 @@
 每个都符合「读+建议、不写库、不碰主链」的边界,且都有现成的确定性基座可挂:
 
 1. **失败根因诊断增强**(收益最高):`FailureClassifier` 只给粗类(TIMEOUT/DATA_QUALITY/INFRA/CONFIG/UNKNOWN),大量落 UNKNOWN。AI 已有 `getJobExecutionLogs` 工具,天然可做「读日志 → 给根因 + 修复建议」。把诊断纳入助手的一个引导场景即可,几乎零新基建。
-2. **集群 stuck 诊断解读**:`ConsoleClusterDiagnosticService.diagnose()` 输出结构化 Map(ShedLock 租约/worker 一致性/outbox 健康),AI 做自然语言解读 + 处置建议。新增一个只读工具接入。
+2. **集群 stuck 诊断解读**:`ConsoleClusterDiagnosticService.diagnose()` 已通过只读工具接入,AI 做自然语言解读 + 处置建议。
 3. **数据质量规则草稿**:DQ 的 `ruleType/expression/threshold` 目前手写;AI 从表结构/样例数据建议规则**草稿**(不直接写库,交人保存)。符合已固化的「输出草稿」边界。
-4. **告警分诊 / 降噪**:当前 SLA→webhook 无优先级判断;AI 对 AlertEvent 做分诊/去重/摘要(与 Alertmanager 接通后,AI 可做告警摘要层)。
+4. **告警分诊 / 降噪**:当前 OPEN / 近期告警已通过只读工具接入,AI 对 AlertEvent 做分诊、去重和摘要;后续重点是告警运营规则与通知策略。
 5. **配置向导**:`ConsoleAiProperties` 注释已明示「输入=元数据+脱敏日志+配置草稿,输出=建议/草稿」——配置向导是既定方向,把 job/channel/template 配置的自然语言辅助做成引导。
-6. **RAG 语料扩展**:目前只 5 个内置 md;把 `docs/`(设计/runbook/ADR)挂进 `rag.locations`(配置项已支持追加目录),覆盖面立刻扩大,零代码。
+6. **RAG 语料扩展**:默认仍只加载内置 `ai-knowledge/*.md`;如需覆盖完整 `docs/`(设计/runbook/ADR),可通过 `rag.locations` 追加挂载目录。若只需稳定事实摘要,优先维护内置知识包,避免把历史快照一并注入。
 
 ### Phase 3 — 谨慎/后置（明确划出以防扩张）
 
@@ -69,7 +69,7 @@
 - **prompt 门禁**:现为关键词规则(blockedKeywords/domainKeywords)。够用作第一道闸,但关键词易绕;评估是否需要更强的 in-scope 判定(注意:别为此引入另一个模型调用把成本翻倍)。
 - **审计**:已做对(hash+preview 不落原文、拒绝也记)。扩展工具时保持每次工具调用可审计。
 - **成本可观测**:token 用量、每租户成本、被门禁拒绝率——接入指标(和这两轮做的可观测同一套 Micrometer),让「AI 花了多少、挡了多少」可见。
-- **provider 契约与降级**:真 provider 进 CI(需 secrets);任一 provider 故障走回退链;全故障降级为「仅 RAG primer」或明确不可用提示,不 fail-closed 成 500。
+- **provider 契约与降级**:真 provider 进 CI(需 secrets);当前聊天侧已在模型失败 / 超时时返回明确不可用提示并记录 FAILED 审计,后续仍需覆盖真实 provider 漂移。
 - **数据脱敏**:进模型的日志/元数据要脱敏(密钥/PII);审计不落原文的原则延伸到所有新接入点。
 
 ---
@@ -108,11 +108,11 @@
 | 项 | 人天 | 说明 |
 |---|---|---|
 | 失败根因诊断增强 | 2–3 | **收益最高,基建现成**(工具已有) |
-| stuck 诊断解读 | 2–3 | 新增只读工具 |
+| stuck 诊断解读 | 已完成 | `getClusterDiagnostics` 只读工具已接入 |
 | DQ 规则草稿 | 3–4 | 输出草稿不写库 |
-| 告警分诊 | 3–4 | 依赖 AM 接通 |
+| 告警分诊 | 已完成基础能力 | `getOpenAlerts` / `getRecentAlerts` 只读工具已接入 |
 | 配置向导 | 5–8 | |
-| RAG 语料扩展 | 0.5 | 零代码,挂 docs/ 进 rag.locations |
+| RAG 语料扩展 | 持续维护 | 默认内置知识包已扩展;是否挂载完整 docs 由部署侧按噪声风险决定 |
 | **Phase 2 小计** | **16–23** | 增量,按需排 |
 
 **判断**:该先做的只有 Phase 1 收口 + Phase 2 的诊断增强(≈3 周)。三个外部依赖(前端在另一仓、Spring AI 等 GA、provider 契约要 secrets)是协调/等待,不是写码工作量。其余按需增量。

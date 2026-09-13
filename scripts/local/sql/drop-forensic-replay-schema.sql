@@ -1,0 +1,1 @@
+DROP SCHEMA IF EXISTS :"replay_schema" CASCADE;

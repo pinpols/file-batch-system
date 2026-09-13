@@ -8,50 +8,77 @@
 
 ## [Unreleased]
 
-滚动合并中的变更入口；冻结发版时整段下移到正式版本标题下。
+滚动合并中的变更入口；有发布影响的 PR 合入 `main` 时更新，冻结发版时整段下移到正式版本标题下。
 
-> 最近两个月（2026-06-03 至 2026-08-03）的变更已覆盖：2026-06-03 至 2026-06-24 见 `1.1.0`，2026-06-25 至 2026-07-13 的主线能力见 `1.2.0`；本节补录 2026-07-14 至 2026-08-03 的未发布变更。
+> 当前唯一 GA tag 为 `v1.0.0`（2026-09-02）。历史 `1.1.0` / `1.2.0` 仅为 GA 前开发里程碑，未形成 release tag，已在下文明确标注，避免被误认为正式发布。
 
 ### Added
 
 - **整批量日 Dry-run**：批量日重放 session 支持历史实例与调度计划两类演练候选，完整透传 dry-run、计划快照、独立幂等键和 Worker capability；Console、OpenAPI、五语言 SDK、Compose/Helm 开关同步完成，默认关闭。
 - **Spring Boot 运行时治理**：补充启动失败诊断（FailureAnalyzer）、配置边界校验、自动装配条件测试、生命周期 phase、readiness/drain 状态和脱敏 `batchruntime` 诊断端点；Feature Switch registry 成为配置登记与 CI 校验入口。
 - **控制面可观测性**：新增执行时间线读模型与 trace snapshot `timeline`，补齐 Redis 限流连续失败短路、Worker lease 熔断状态、消费背压 pause/resume、outbox/限流/租约告警及对应运维文档。
-- **工程化对照与上线计划**：补充 Spring Boot 工程化计划、BFS 与 Kubernetes/Spring Batch/Kafka Connect/Quartz 等系统的能力对照表和上线前验证边界。
+- **容量治理与自适应流控**：补齐 Trigger admission、Outbox 有界释放、Kafka lag 反馈和冷启动保护；增加 PostgreSQL 生产容量 profile、干净环境 preflight 与 10 万任务容量验证入口。
 
 ### Changed
 
 - **Java 镜像构建提速**：Dockerfile 增加全 reactor/单模块依赖闭包双路径；共享测试基础设施拆为 `batch-test-support`，镜像打包不再编译测试源码；补充 Buildx Bake 构建 DAG 与 GitHub Actions 远程缓存。
-- **配置包 Excel 技术债清偿**：`ConfigPackageExcelValidator`（1491 行）拆出 workflow DAG 拓扑校验与行级校验器；`ConfigPackageExcelWorkbookWriter`（1438 行）拆出 11 个 sheet 定义；`DefaultConsoleTenantConfigPackageExcelApplicationService`（1024 行）拆出 apply 写库服务。三个类均减半、公开 API 不变，并为 writer 导出/预览路径补 characterization 测试（此前完全无单测覆盖）。
-- **调度器统一为 Quartz**：移除 HashedWheelTimer 运行路径、Wheel 配置、指标、迁移脚本和测试；当前 trigger 统一使用 Quartz JDBC JobStore。Wheel 评估文档保留为历史记录，见 ADR-033。
 - **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。
 - **安全门禁与依赖治理**：强化 Helm workload 安全检查、生产凭据 fail-close、SQL 解析边界、文件完整性校验和依赖许可证/安全扫描；示例项目与 SDK 依赖同步安全修复。
 - **Worker 与控制面稳定性**：收紧 Pipeline 定义只读访问，修复 orchestrator HA 协调和 retry schedule 状态转换，稳定 Docker Sim、E2E fixture 与多模块构建链路。
+- **Orchestrator 持久化与吞吐**：claim/report 主路径采用批量 CAS、`UPDATE ... RETURNING`、实例增量计数和按任务规模分级持久化，降低控制面数据库往返与重复聚合。
+- **日志生命周期治理**：本地应用日志统一归入 `logs/app`，启动前归档到 `logs/archive/app`；清理脚本覆盖实时日志、归档和观测卷，并输出实际回收空间。
+- **脚本与 SQL 边界治理**：批量抽离 CI、Sim、压测、DR 和本地验收脚本中的内联 SQL，建立递减预算守卫，运行时策略由 Java/配置层持有。
+- **防漂移门禁闭环**：模块依赖、Shell 语法/ShellCheck warning 零容忍、脚本登记、仓库卫生和 changelog 同步进入 PR/full gate；文档检查扩展到图片、锚点、版本化目标和目录索引完整性；Zizmor 改为扫描全部 workflow/composite action。
+- **CI 按需路由**：PR required workflow 保持稳定上报，Java、数据库、脚本、文档、配置、API 和 CI 专项检查按变更路径执行；本地 pre-commit 同步采用暂存文件域路由，重型验证继续留在 pre-push / CI。
 - **代码和文档规范**：统一后端错误/告警消息为英文，收口运行时常量、Java 格式化、FQN 违约和代码规模统计；README、工程计划、Runbook 和架构边界文档同步更新。
-- **CI 提速**：full-ci-gate 的 security-scan job 移除 OWASP dependency-check（NVD 全量下载在 CI 上 5 分钟超时仍只下到 1/5、步骤 continue-on-error 不拦门禁；依赖漏洞已由同 job 的 Trivy fs 覆盖），job 预计从 6:15 降到 ~2:00，full-ci-gate 瓶颈转为 e2e-shard。
 
 ### Fixed
 
 - 修复 replay service 手写兼容构造导致 Spring 无法创建 Bean、V202 候选约束遗漏 `OUTPUTS_ONLY` 形态及未 VALIDATE、DryRunGuard 架构测试扫描旧目录造成假绿；补齐 DRY_RUN 结果 7 天后先归档再清理的执行链，并禁止 Dispatch 演练写投递记录或推进正式文件状态。
-- 修复文件接收/分发完整性检查、存储边界和下游异常路径，避免低报 size、越界读取和不完整文件继续流转。
-- 修复 retry schedule 状态推进、HA 协调失败路径、Pipeline 定义越权写入和 SDK worker direct-dispatch topic 漂移。
-- 修复 Rust SDK `quinn-proto` 安全依赖、Go SDK 依赖、E2E pipeline fixture 以及多个本地 Sim/验收环境问题。
-- 修复后合并 CI 的静态分析、Spring Bean 装配、依赖许可证和安全门禁回归。
-
-### Removed
-
-- 移除 Wheel scheduler 代码路径及其双引擎切换逻辑；未来只有在 Quartz 容量或生产故障指标达到 ADR-033 阈值后，才重新评估成熟开源时间轮实现，不自研调度内核。
+- 修复 Trigger 高压下 admission/relay 失衡、冷启动释放停顿和恢复残留；收紧批量日生命周期、Worker 状态更新及 dry-run/dispatch backoff 的租户 CAS 条件。
+- 升级存在已知漏洞的嵌入式 Tomcat，并强化生产配置、凭据和 CI 安全门禁的 fail-close 行为。
+- 修复日志归档路径、Grafana provisioning、XFF MDC 透传和观测脚本路径漂移。
 
 ### Docs
 
-- 新增/更新后端借鉴改造计划、Spring Boot 工程化计划、工程能力对照表、Feature Switch registry、观测栈、checkpoint how-to、上线 readiness 和代码规模统计。
-- 明确 Wheel 已撤销、Quartz 为当前唯一调度器，并修正历史 Wheel 评估文档的过时表述。
+- 建立文档目录索引、历史快照与当前权威入口分离规则，并将链接完整性和文档结构检查纳入 CI。
 
 ---
 
-## [1.2.0] - 2026-07-13
+## [1.0.0] - 2026-09-02
 
-> 自 1.1.0(2026-06-24)累计 1,700+ commits;发布前 BE 全链路验收 12/12 PASS(strict-verify 20/20)。
+> 首个正式 GA tag。包含下方 1.1.0 / 1.2.0 开发里程碑已完成的能力；里程碑编号不代表独立发布。
+
+### Added
+
+- 完成 Console AI 助手、Checkpoint 断点续跑、五语言 Worker SDK、Worker 执行可观测性及工程能力对照与上线计划。
+
+### Changed
+
+- 统一后端、压测模块、OpenAPI、Helm 生产镜像和前端发布版本。
+- 固化应用运行时治理、生产配置安全门禁和兼容性复扫入口。
+- 拆分配置包 Excel 超大类并补特征测试；调度器统一为 Quartz JDBC JobStore。
+- 精简 CI 安全扫描重复步骤，保留 Trivy 等实际门禁并缩短流水线耗时。
+
+### Fixed
+
+- 修复文件接收/分发完整性、对象存储长度边界及下游异常处理，阻止不完整文件继续流转。
+- 修复 retry schedule、HA 协调、Pipeline 写权限、SDK direct-dispatch topic 及五语言 SDK offset/协议一致性问题。
+- 修复静态分析、Spring Bean 装配、依赖许可证、安全门禁和本地 Sim/E2E 环境回归。
+
+### Removed
+
+- 移除 Wheel scheduler 代码路径及双引擎切换逻辑，生产调度统一使用 Quartz；未来仅达到 ADR-033 阈值后重新评估成熟开源实现。
+
+### Docs
+
+- 新增工程化计划、能力对照、Feature Switch registry、观测栈、checkpoint、上线 readiness 和代码规模统计，并校正 Wheel 历史文档。
+
+---
+
+## 2026-07-13 — 1.2.0 开发里程碑（未发布）
+
+> 自 1.1.0 开发里程碑（2026-06-24）累计 1,700+ commits；当时 BE 全链路验收 12/12 PASS（strict-verify 20/20）。该版本号未形成 Git release tag。
 
 ### Added
 - **Console AI 助手生产收口**:只读诊断/告警分诊/DQ 草稿工具 + 诊断 RAG 语料;token 成本计量、每租户+用户限流(`ai:chat:tenant:{t}:user:{u}`)、模型故障优雅降级(#786-800)。
@@ -63,7 +90,7 @@
 - **console Map 响应收敛**:105 处 `CommonResponse<Map>` 换类型化 record + OpenAPI 真 schema(4 批 #801-804),前端 gen:api 契约漂移类 bug 根治;16 处真动态 key 保留并注明。
 - REPORT 分区计数改轻量投影,消除 O(N²) report choke(#820);launch 消费扩容等控制面吞吐优化。
 - ADR-038/V164 文档措辞校正:checkpoint 为「业务先 commit→位点后 advance+插件幂等」补偿式最终一致。
-- 发布 `1.2.0`,同步应用版本、部署镜像标签、OpenAPI 与 SDK 文档。
+- 完成 `1.2.0` 开发里程碑的应用版本、部署镜像标签、OpenAPI 与 SDK 文档对齐；未形成正式 release tag。
 
 ### Fixed
 - **安全**:dry-run 分号堆叠 RCE、租户 IDOR×3、SSRF 编码变体焊死(IPv6/十进制/IPv4-mapped)、通知限流补 tenant key、IM/SMS SSRF pin(#779-790)。
@@ -75,23 +102,14 @@
 ### Docs
 - Checkpoint/断点续跑设计与分期施工、Alertmanager 直切迁移方案(#807);LOC 快照 2026-07-13(529k 行,test/main 0.77,#815/#823)。
 
-## [1.0.0] - 2026-09-02
-
-### Changed
-
-- 统一后端、压测模块、OpenAPI、Helm 生产镜像和前端发布版本。
-- 固化应用运行时治理、生产配置安全门禁和兼容性复扫入口。
-
----
-
-## [1.1.0] - 2026-06-24
+## 2026-06-24 — 1.1.0 开发里程碑（未发布）
 
 ### Added
 - 本地 Docker Compose 增加 Kafka UI 服务，默认端口 `18090`，连接同一 compose 网络内的 Kafka `kafka:29092`。
 - MinIO 运维文档补充 `mc` 常用命令，覆盖 alias、bucket/object 查看、上传下载、同步、查找、删除和临时分享链接。
 
 ### Changed
-- 应用版本从 `1.1.0-SNAPSHOT` 切到正式版 `1.1.0`，同步 Maven revision、load-tests、Helm appVersion、生产镜像 tag、OpenAPI 与 SDK 文档。
+- 应用版本从 `1.1.0-SNAPSHOT` 切到 `1.1.0` 开发里程碑，曾同步 Maven revision、load-tests、Helm appVersion、镜像 tag、OpenAPI 与 SDK 文档；未形成正式 release tag。
 - 基础环境镜像版本对齐到同一模板入口；保留 `REDIS_IMAGE_TAG` 兼容旧命名，同时补 `VALKEY_IMAGE_TAG` 表达实际镜像。
 - 版本升级脚本与 CI 对齐检查扩展为统一守护：后续 GA 发布必须同步应用版本、部署 tag、OpenAPI、SDK 文档、load-tests、基础镜像 tag 与 `CHANGELOG.md`。
 

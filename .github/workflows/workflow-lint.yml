@@ -1,11 +1,11 @@
 name: workflow-lint
 
-# 两层 workflow 自身扫描:
+# 两层 workflow / composite action 自身扫描:
 #   1) actionlint — yaml 结构 + shellcheck on `run:` blocks(防 typo/语法错只能 push 试错)
 #   2) zizmor    — 安全规则集(action 注入 / unpinned ref / 危险 token 暴露等)
 #
 # 触发面:只有改 `.github/workflows/**` 或 `.github/actions/**` 才跑。秒级,几乎无成本。
-# 2026-05-23 verify:PR #28 之后 docs-only 不触发,需 yaml 改动才命中本 wf。
+# 所有当前 workflow 和 composite action 一次扫描；既有精确 suppress/ignore 保留，新增问题直接阻断。
 
 on:
   push:
@@ -67,12 +67,8 @@ jobs:
 
       - name: Run zizmor
         shell: bash
-        # 本 PR 增量引入:只严扫**本 PR 新建**的 2 个 workflow。
-        # 老 workflow(dependabot-auto-merge / capacity-gate 等)有 cache-poisoning /
-        # dangerous-triggers / bot-conditions 等 pre-existing finding,拆独立 audit
-        # PR 治理(见 docs/runbook/ci.md TODO),防本次引入 PR 被旧债阻塞。
-        # --min-severity medium:忽略 informational/low,只看真有杀伤力的。
+        # --min-severity medium:忽略 informational/low，只阻断有实际风险的新增项。
         run: |
           zizmor --min-severity medium \
-            .github/workflows/codeql.yml \
-            .github/workflows/workflow-lint.yml
+            .github/workflows \
+            .github/actions

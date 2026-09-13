@@ -23,8 +23,9 @@ KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_
 KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic}"
 KAFKA_BIN_DIR="${BATCH_OBSERVABILITY_KAFKA_BIN_DIR:-}"
 KAFKA_LAG_THRESHOLD="${BATCH_OBSERVABILITY_KAFKA_LAG_THRESHOLD:-1000}"
-EXTRA_ENDPOINTS="${BATCH_OBSERVABILITY_EXTRA_ENDPOINTS:-http://localhost:19121/metrics|redis_connected_clients,redis_memory_used_bytes;http://localhost:19187/metrics|pg_up,pg_stat_database_numbackends;http://localhost:19308/metrics|kafka_brokers;http://localhost:19100/metrics|node_load1,node_memory_MemAvailable_bytes,node_filesystem_size_bytes,node_network_receive_bytes_total;http://localhost:19101/metrics|container_cpu_usage_seconds_total,container_memory_working_set_bytes;http://localhost:19000/minio/v2/metrics/cluster|minio_cluster_nodes_offline_total}"
-PROMETHEUS_BASE_URL="${BATCH_OBSERVABILITY_PROMETHEUS_BASE_URL:-http://localhost:19090}"
+DEFAULT_EXTRA_ENDPOINTS="http://localhost:${REDIS_EXPORTER_PORT:-19121}/metrics|redis_connected_clients,redis_memory_used_bytes;http://localhost:${POSTGRES_EXPORTER_PORT:-19187}/metrics|pg_up,pg_stat_database_numbackends;http://localhost:${KAFKA_EXPORTER_PORT:-19308}/metrics|kafka_brokers;http://localhost:${NODE_EXPORTER_PORT:-19100}/metrics|node_load1,node_memory_MemAvailable_bytes,node_filesystem_size_bytes,node_network_receive_bytes_total;http://localhost:${CADVISOR_PORT:-19101}/metrics|container_cpu_usage_seconds_total,container_memory_working_set_bytes;http://localhost:${MINIO_API_PORT}/minio/v2/metrics/cluster|minio_cluster_nodes_offline_total"
+EXTRA_ENDPOINTS="${BATCH_OBSERVABILITY_EXTRA_ENDPOINTS:-$DEFAULT_EXTRA_ENDPOINTS}"
+PROMETHEUS_BASE_URL="${BATCH_OBSERVABILITY_PROMETHEUS_BASE_URL:-http://localhost:${PROMETHEUS_PORT:-19090}}"
 PROMETHEUS_TARGET_JOBS="${BATCH_OBSERVABILITY_PROMETHEUS_TARGET_JOBS:-batch-console-api,batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic,redis-exporter,postgres-exporter,kafka-exporter,minio,node-exporter,cadvisor,otel-collector}"
 
 failures=0
@@ -103,7 +104,7 @@ check_kafka_lag() {
 check_extra_endpoints() {
   IFS=';' read -r -a targets <<<"${EXTRA_ENDPOINTS}"
   for target in "${targets[@]}"; do
-    local url metrics body metric_list
+    local url body metric_list
     url="${target%%|*}"
     metric_list="${target#*|}"
     if [[ "${url}" == "${metric_list}" ]]; then

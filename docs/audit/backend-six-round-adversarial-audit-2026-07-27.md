@@ -29,7 +29,7 @@
 - `scripts/ci/check-e2e-shard-coverage.sh`：27 个 E2E 类与 `full-ci-gate.yml`、`staging-gate.yml` 清单一致。
 - `scripts/ci/check-module-test-coverage.sh`：所有有测试的 reactor 模块均被 CI `-pl` 覆盖。
 - `scripts/ci/check-version-alignment.sh`：预发版本、Chart GA 版本、生产镜像版本及 SDK 版本符合仓库规则。
-- `scripts/ci/check-env-prod-sync.sh`：65 个关键变量同步通过；生产专用密码、密钥和限流变量的差异为预期告警。
+- 历史执行时 `scripts/ci/check-env-prod-sync.sh` 曾完成 65 个关键变量对账；该脚本于 2026-09-13 退役，因为 `.env.prod` 按安全约束不受版本控制、无法成为 CI 输入。现行守护改为受版本控制的 `.env.example` + Feature Switch registry + Compose/Helm/production overlay 多向校验。
 - `scripts/ci/check-helm-env-sync.py`：应用配置与 Helm `BATCH_*` 消费入口一致。
 - `scripts/ci/check-config-defaults-sync.py`：应用与 compose 参数同步通过，8 个网络拓扑差异和 1 个实例名差异均在规则内。
 - `scripts/ci/validate-kafka-topics.sh`：10 个 topic、环境变量与 Java 常量双向一致。

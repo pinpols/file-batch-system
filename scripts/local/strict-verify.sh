@@ -157,7 +157,7 @@ else
   offset_ids=$(psql_q strict-offset-instance-ids.sql -v tenant_id="$TENANT")
   cursor_acc=""
   last_id=""
-  for batch_i in $(seq 1 200); do
+  for _ in $(seq 1 200); do
     if [[ -z "$last_id" ]]; then
       batch_ids=$(psql_q strict-cursor-instance-ids.sql -v tenant_id="$TENANT" -v last_id= -v page_size="$PAGE_SIZE")
     else

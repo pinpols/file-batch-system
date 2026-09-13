@@ -3,7 +3,7 @@
 - **Status**: Accepted（**v0.1 已落 2026-05-07**，主链路无影响；v0.2 *_history + OSS 对象锁按触发条件）
 - **Date**: 2026-05-06（v0.1: 2026-05-07）
 - **Supersedes**: —
-- **Related**: ADR-011（idempotency）/ ADR-013（distributed tracing）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-011（idempotency）/ ADR-013（distributed tracing）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

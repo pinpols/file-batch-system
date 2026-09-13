@@ -3,7 +3,7 @@
 - **Status**: Accepted（**第 3 阶段 / P2 暂缓**，数据量 / 备份 / 监管阈值到了再开工 — 见"实施触发条件"）
 - **Date**: 2026-05-06
 - **Supersedes**: 部分超越 §archive 冷表对齐基线（仍兼容）
-- **Related**: ADR-022（forensic 长保留）/ §archive 冷表对齐 / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-022（forensic 长保留）/ §archive 冷表对齐 / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

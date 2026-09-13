@@ -34,6 +34,7 @@ helm upgrade --install batch-platform ./helm/batch-platform \
 - `postgresql.business.password`
 - `objectStorage.accessKey`
 - `objectStorage.secretKey`
+- `orchestratorBaseUrl` / `triggerBaseUrl` / `workerAtomicBaseUrl`
 - `consoleApi.ingress.enabled`
 - `otelCollector.enabled`
 
@@ -42,6 +43,10 @@ helm upgrade --install batch-platform ./helm/batch-platform \
 - `values.yaml`：默认本地联调值
 - `helm/values-prod.yaml`：生产或类生产覆盖值
 - 需要 staging 专用值时，可以新增 `values-staging.yaml`
+
+生产或类生产 profile 会拒绝 localhost/loopback 的数据库、Kafka、Redis、Orchestrator 和 S3
+地址，并要求显式配置可发现的 management 端口。跨服务 URL 必须与实际 release fullname 和
+namespace 对齐，不能依赖应用里的本地开发默认值。
 
 ## 模板说明
 

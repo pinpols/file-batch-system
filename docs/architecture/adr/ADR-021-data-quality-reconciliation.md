@@ -3,7 +3,7 @@
 - **Status**: Accepted（**两档路径**：v0.0 mini 草案 ~3.5-5 天 待激活 / v1.0 完整 ~16-18 天 强金融触发；**默认两档都不开工** — 见"实施触发条件"+ §实施分阶段）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-012（失败分类，DQ 失败映射 DATA_QUALITY）/ ADR-017（result_version，DQ 通过才能 EFFECTIVE）/ ADR-020（重放，DQ 失败可走 OUTPUTS_ONLY 反向 promote）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-012（失败分类，DQ 失败映射 DATA_QUALITY）/ ADR-017（result_version，DQ 通过才能 EFFECTIVE）/ ADR-020（重放，DQ 失败可走 OUTPUTS_ONLY 反向 promote）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
 
 ## 范围边界（Scope Discipline）
 

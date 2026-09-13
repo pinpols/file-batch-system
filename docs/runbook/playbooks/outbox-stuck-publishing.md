@@ -49,9 +49,9 @@
 
 3. **判断 Kafka 是不是写失败**
    ```bash
-   docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-topics.sh" \
      --bootstrap-server kafka:29092 --list | head
-   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-console-consumer.sh" \
      --bootstrap-server kafka:29092 --topic batch.task.dispatch.import \
      --max-messages 3 --timeout-ms 5000
    ```

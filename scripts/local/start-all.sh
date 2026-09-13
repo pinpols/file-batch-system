@@ -6,8 +6,8 @@
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
 # 4) PID 写入 logs/pids/start-all.pids（兼容软链 logs/start-all.pids），日志写入 logs/current/app/<module>.log。
-#    Docker 容器日志通过 docker logs 查看，如需落盘可手动导出到 logs/docker/。
-# 5) 每次启动会覆盖模块当前日志（兼容软链 logs/app/<module>.log），不追加。
+#    Docker 容器日志通过 docker logs 查看，如需落盘可手动导出到 logs/current/docker（兼容 logs/docker）。
+# 5) 每次启动前会先归档模块旧日志，避免同名文件被覆盖。
 # 6) 可执行 jar 统一从 build/runtime-jars/ 读取，由 build-apps.sh 产出。
 # 7) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
 #    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
@@ -55,9 +55,8 @@ LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSeri
 SKIP_CDS="${SKIP_CDS:-1}"
 CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v3-share-off}"
 
-LOG_ROOT="$ROOT/logs"
 LOG_DIR="$(log_current_dir "$ROOT" app app)"
-DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
+log_current_dir "$ROOT" docker docker >/dev/null
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 CDS_DIR="$ROOT/build/cds"
 mkdir -p "$RUNTIME_JAR_DIR" "$CDS_DIR"
@@ -182,6 +181,7 @@ start_java() {
   fi
 
   warm_cds "$name" "$jar"
+  log_archive_active_log_file "$ROOT" app "$name"
 
   # JDK 21+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
   nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${__CDS_FLAG} ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
@@ -232,7 +232,7 @@ wait_kafka_topics_ready() {
   local expected_topics="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter}"
   local i all_ready listed
   for i in $(seq 1 60); do
-    listed="$(docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>/dev/null || true)"
+    listed="$(docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>/dev/null || true)"
     all_ready=true
     local old_ifs="$IFS"
     IFS=','
@@ -313,7 +313,7 @@ wait_orchestrator_healthy() {
     fi
     sleep "$interval"
   done
-  echo "ERROR: Orchestrator 在超时时间内未就绪，请查看 logs/orchestrator.log" >&2
+  echo "ERROR: Orchestrator 在超时时间内未就绪，请查看 logs/current/app/orchestrator.log" >&2
   exit 1
 }
 

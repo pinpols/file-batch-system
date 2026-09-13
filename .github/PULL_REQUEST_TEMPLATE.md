@@ -49,6 +49,12 @@ PR 描述模板 — 编辑时仅删除不适用段落,保留勾选/填写部分�
 - [ ] CLAUDE.md 已同步追加/修改
 - [ ] `docs/changelog.md` 已按日期倒序追加条目
 
+## 涉及发布、文档或工程守护（若适用）
+
+- [ ] 功能、外部契约、生产配置/部署、迁移、安全修复或重要缺陷已更新根 `CHANGELOG.md` 的 `[Unreleased]`
+- [ ] 新增/删除 CI 守护已登记 `scripts/ci/README.md`、接入对应 workflow，并同步守护总账
+- [ ] 文档与 Shell 脚本分别通过 `check-docs-structure.py`、`check-shell-scripts.sh`
+
 ---
 
 ## 验证

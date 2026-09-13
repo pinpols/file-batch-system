@@ -28,13 +28,13 @@
 
 1. **查 lag 实况**
    ```bash
-   docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
      --bootstrap-server kafka:29092 --list
    # 重点关注 4 个 worker group + orchestrator-trigger-launch:
    #   batch-worker-import / batch-worker-export
    #   batch-worker-process / batch-worker-dispatch
    #   orchestrator-trigger-launch
-   docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
      --bootstrap-server kafka:29092 --describe --group batch-worker-import
    ```
    重点列:`LAG`(积压),`CONSUMER-ID`(`-` 表示没人接),`STATE`(`Stable` / `PreparingRebalance` / `CompletingRebalance`)。
@@ -95,7 +95,7 @@
 2. **跳过毒消息**(如果某个 offset 反复处理失败拖住整个 partition):
    ```bash
    # 危险操作:跳过当前 offset 一条(只在确认无业务影响时用)
-   docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
      --bootstrap-server kafka:29092 --group batch-worker-import \
      --topic batch.task.dispatch.import --reset-offsets --shift-by 1 --execute
    ```
@@ -104,7 +104,7 @@
    - 跳过的消息走 dead-letter topic(`batch.task.dead-letter`),后续走 forensic replay 流程(`docs/architecture/forensic-replay.md`,TODO 待 Plan #4)
 3. **看 `batch.task.dead-letter` 是不是堆积**:
    ```bash
-   docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-console-consumer.sh" \
      --bootstrap-server kafka:29092 --topic batch.task.dead-letter \
      --from-beginning --max-messages 5
    ```
@@ -121,7 +121,7 @@
 2. 重启 broker:`docker compose restart kafka`,等 healthcheck 通过(`docker compose ps kafka` STATUS=healthy)
 3. (极端)删 group offset,从最新开始消费 — **会丢未完成任务,只在 dev / 演练环境用**:
    ```bash
-   docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
      --bootstrap-server kafka:29092 --group batch-worker-import --delete
    ```
 4. 起所有 consumer,人工排查 `batch.job_instance` 与 Kafka 失联期间是否有 ghost(状态 RUNNING 但 worker 不知道)→ 走 `CompensationCommand` 走治理接口重置。
