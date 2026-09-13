@@ -52,7 +52,7 @@ final class TaskOutcomeTerminalFinalizer {
       String instanceFailureClass,
       List<JobPartitionEntity> partitions) {
     jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
-        command.tenantId(), jobInstance.getId(), instanceStatus, finishedAt);
+        command.tenantId(), jobInstance, instanceStatus, finishedAt, instanceFailureClass);
     if (EmptyChecks.isNotNull(instanceFailureClass)) {
       meterRegistry
           .counter(
