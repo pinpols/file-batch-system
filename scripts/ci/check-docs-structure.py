@@ -94,6 +94,8 @@ def check_internal_links(errors: list[str]) -> None:
                 if not target:
                     continue
                 resolved = (document.parent / target).resolve()
+                if not resolved.is_relative_to(ROOT):
+                    continue
                 if not resolved.exists():
                     errors.append(f"broken link: {document.relative_to(ROOT)}:{line_number}: {raw_target}")
                     continue
