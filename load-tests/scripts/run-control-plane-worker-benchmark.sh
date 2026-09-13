@@ -179,10 +179,16 @@ pg_pressure_sampler() {
       psql_platform -At -F '|' \
         -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" 2>/dev/null || true
     )"
-    host_load="$(
-      uptime 2>/dev/null \
-        | sed -E 's/.*load averages?:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/'
-    )"
+    if [[ -r /proc/loadavg ]]; then
+      host_load="$(awk '{ print $1 }' /proc/loadavg)"
+    elif command -v sysctl >/dev/null 2>&1; then
+      host_load="$(sysctl -n vm.loadavg 2>/dev/null | awk '{ print $2 }' || true)"
+    else
+      host_load="$(
+        LC_ALL=C uptime 2>/dev/null \
+          | sed -E 's/.*load averages?:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/'
+      )"
+    fi
     if [[ -n "$database_sample" ]]; then
       printf '%s|%s\n' "$database_sample" "${host_load:-unknown}" >> "$output_file"
     fi

@@ -7,6 +7,9 @@ LOAD_DIR="$ROOT_DIR/load-tests"
 source "$LOAD_DIR/scripts/env.sh"
 
 RUN_ID="${RUN_ID:-p2-capacity-$(date +%Y%m%d%H%M%S)}"
+# 该画像会核对固定 compose 服务、容器资源和 Kafka 分区，只支持仓库提供的本地 Docker
+# benchmark 拓扑。远程/staging 使用 Gatling 环境 profile，不能伪装成同一容量基线。
+CAPACITY_RUNTIME_PROFILE="${CAPACITY_RUNTIME_PROFILE:-local-docker}"
 RUN_10W_STORM="${RUN_10W_STORM:-1}"
 RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
@@ -143,8 +146,29 @@ host_cpu_count() {
 }
 
 host_load_one_minute() {
-  uptime 2>/dev/null \
+  if [[ -r /proc/loadavg ]]; then
+    awk '{ print $1 }' /proc/loadavg
+    return
+  fi
+  if command -v sysctl >/dev/null 2>&1; then
+    local sysctl_load
+    sysctl_load="$(sysctl -n vm.loadavg 2>/dev/null || true)"
+    if [[ "$sysctl_load" =~ \{[[:space:]]*([0-9]+([.][0-9]+)?) ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      return
+    fi
+  fi
+  LC_ALL=C uptime 2>/dev/null \
     | sed -E 's/.*load averages?:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/'
+}
+
+require_supported_capacity_runtime() {
+  if [[ "$CAPACITY_RUNTIME_PROFILE" != "local-docker" ]]; then
+    echo "Unsupported capacity runtime profile: ${CAPACITY_RUNTIME_PROFILE}" >&2
+    echo "  run-p2-capacity-profile.sh supports only the repository local-docker benchmark topology" >&2
+    echo "  use Maven -Pstaging/-Pprod-probe Gatling profiles for remote environments" >&2
+    exit 2
+  fi
 }
 
 require_capacity_environment_alignment() {
@@ -678,6 +702,7 @@ write_report_header() {
     echo "# P2 Worker Capacity Profile - ${RUN_ID}"
     echo
     echo "- Time UTC start: ${RUN_STARTED_AT}"
+    echo "- Capacity runtime profile: ${CAPACITY_RUNTIME_PROFILE}"
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
     echo "- Strict capacity validation: $([[ "$CAPACITY_STRICT" == "1" ]] && echo enabled || echo disabled)"
@@ -1033,6 +1058,7 @@ run_fairness() {
 
 require_tooling
 require_exact_storm_shape
+require_supported_capacity_runtime
 require_trigger_capacity_budget
 require_pg_statement_profile
 require_capacity_environment_alignment

@@ -199,7 +199,12 @@ PREFLIGHT_ONLY=1 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE=1 \
 Relay 上限 A/B 必须同步声明预期值。例如容器以 `80 events/s` 启动时，设置
 `CAPACITY_EXPECT_TRIGGER_RELAY_RATE=80`；未设置时仍严格校验 benchmark 基线 `400 events/s`，避免误测旧容器。
 
-容量对比必须先通过环境同构门禁。`run-p2-capacity-profile.sh` 默认按 2026-09-12 无画像基线校验：
+`run-p2-capacity-profile.sh` 只支持仓库 `local-docker` benchmark 拓扑，包括固定的 Trigger、双
+Orchestrator、Atomic Worker、Kafka 和 PostgreSQL compose 服务。Linux Docker 与 macOS Docker 使用
+同一 compose 均可运行；staging、生产探测和非 Docker 环境应使用上文的 Maven `-Pstaging` 或
+`-Pprod-probe` Gatling profile，不应绕过容器拓扑检查。
+
+容量对比必须先通过环境同构门禁。脚本默认按 2026-09-12 无画像基线校验：
 
 - `pg_stat_statements.track=none`、`track_io_timing=off`
 - `synchronous_commit=on`、`wal_compression=off`

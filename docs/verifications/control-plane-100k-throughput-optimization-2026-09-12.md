@@ -283,6 +283,8 @@ PostgreSQL 时的提交/WAL 竞争，而不是 Worker、Kafka 分区或单一业
 
 容量脚本现已在发压前校验并记录以下口径：
 
+- P2 画像脚本显式限定为仓库 `local-docker` benchmark 拓扑；远程、staging、生产探测使用独立 Gatling
+  profile，不与本机容量基线混跑。
 - 无画像容量基线默认要求 `pg_stat_statements.track=none`、`track_io_timing=off`；SQL 画像默认要求
   `top/on`。仅关闭报告开关不再被视为无观测。
 - 默认要求 `synchronous_commit=on`、`wal_compression=off`、`max_wal_size=1GiB`、
