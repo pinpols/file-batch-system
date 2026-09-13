@@ -62,6 +62,9 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 - 不判断业务金额/笔数是否正确；这仍由 DQ gate、对账规则和业务 worker 负责。
 - 不缓存 asset partition。后续如果读取 QPS 确认需要,再按明确失效策略加缓存。
 - 当前只支持 `asset_type=JOB`;文件资产、表资产后续如要扩展,只能服务 readiness / freshness,不得扩成数据目录、MDM 或治理平台。
+- P2 容量画像使用独立短生命周期租户。异常轮次清理只有在该租户不存在 `job_instance` 和
+  `trigger_request` 时，才允许删除测试产生的 `asset_partition/result_version`；生产租户和仍有运行引用的
+  测试租户不得按租户整批清理，避免破坏 readiness 的有效版本指针。
 
 ## Freshness Policy 告警
 

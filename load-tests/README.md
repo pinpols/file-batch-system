@@ -244,6 +244,8 @@ CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
 
 P2 容量与多租户公平性 fixture 会自包含创建所需的 Atomic 作业定义，不依赖可选的演示 seed；准备完成后
 脚本会核验作业类型、worker group 和启用状态，fixture 不完整时在发压前失败，避免生成入口成功但终态无效的报告。
+异常轮次排空 Kafka 后使用 `RUN_ID=<profile-run-id>-10w bash load-tests/scripts/cleanup-worker-load-data.sh`
+统一清理；该入口会先清控制面引用，再清通用平台和业务 fixture，不要手工颠倒 SQL 顺序。
 
 - PostgreSQL 客户端：统一入口默认依次尝试宿主机 `psql`、Python `psycopg`、运行中的
   `batch-postgres-primary` 容器；可用 `BATCH_PG_CLIENT_MODE=host|python|docker` 固定模式。本地 Docker

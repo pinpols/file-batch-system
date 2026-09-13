@@ -63,6 +63,8 @@ assert_no_platform_residue() {
 }
 
 wait_for_stable_platform_rows
+run_with_retry "control-plane load-test cleanup" \
+  psql_platform -v run_id="$RUN_ID" -f "$SQL_DIR/cleanup-control-plane-worker.sql"
 run_with_retry "platform load-test cleanup" \
   psql_platform -v run_id="$RUN_ID" -f "$SQL_DIR/cleanup-worker-load-platform.sql"
 run_with_retry "business load-test cleanup" \
