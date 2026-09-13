@@ -50,7 +50,7 @@ jobs:
         uses: ./.github/actions/setup-build-env
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java
           # security-extended 比 default 多 ~30 条规则(性能 / 安全热点),
@@ -65,7 +65,7 @@ jobs:
           ./mvnw -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         # Code Scanning 已启用,移除 continue-on-error 恢复硬阻断;若 SARIF
         # upload 再次 403,需在 Settings → Code security → Code scanning
         # 核查授权,而不是把本步骤再次降级。
