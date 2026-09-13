@@ -67,6 +67,10 @@ CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
 CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
 CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
 CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-0.75}"
+# 单点 load average 容易在后台任务短暂回落时误放行。正式画像要求连续多次采样都满足
+# 阈值；需要等待宿主机回稳时应在脚本外等待，不能降低阈值绕过基线约束。
+CAPACITY_HOST_LOAD_STABLE_SAMPLES="${CAPACITY_HOST_LOAD_STABLE_SAMPLES:-5}"
+CAPACITY_HOST_LOAD_SAMPLE_INTERVAL_SECONDS="${CAPACITY_HOST_LOAD_SAMPLE_INTERVAL_SECONDS:-5}"
 # 历史 10 万基线使用 Docker Desktop 8 CPU / 约 8 GiB。CPU 会直接改变吞吐，必须精确
 # 匹配；内存允许 Docker Desktop 的保留开销形成小幅波动，但不能让 16 GiB 环境冒充 8 GiB
 # 基线。需要在另一容量等级上测试时应显式覆盖这些值，并建立新的基线报告。
@@ -133,6 +137,9 @@ KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
 KAFKA_PROFILE_STARTED_AT=""
 DOCKER_ENVIRONMENT_SIGNATURE=""
+LOAD_GENERATOR_ENVIRONMENT_SIGNATURE=""
+RUNNING_CONTAINER_SIGNATURE=""
+HOST_LOAD_PREFLIGHT_SAMPLES=""
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
@@ -179,6 +186,35 @@ host_load_one_minute() {
   fi
   LC_ALL=C uptime 2>/dev/null \
     | sed -E 's/.*load averages?:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/'
+}
+
+host_total_memory_bytes() {
+  if [[ -r /proc/meminfo ]]; then
+    awk '/^MemTotal:/ { printf "%.0f\n", $2 * 1024; exit }' /proc/meminfo
+    return
+  fi
+  sysctl -n hw.memsize 2>/dev/null || echo 0
+}
+
+host_cpu_model() {
+  if [[ -r /proc/cpuinfo ]]; then
+    awk -F ': ' '/^(model name|Hardware)/ { print $2; exit }' /proc/cpuinfo
+    return
+  fi
+  sysctl -n machdep.cpu.brand_string 2>/dev/null \
+    || sysctl -n hw.model 2>/dev/null \
+    || uname -m
+}
+
+capture_load_generator_environment() {
+  local host_os host_arch host_release host_memory cpu_model java_runtime
+  host_os="$(uname -s 2>/dev/null || echo unknown)"
+  host_arch="$(uname -m 2>/dev/null || echo unknown)"
+  host_release="$(uname -r 2>/dev/null || echo unknown)"
+  host_memory="$(host_total_memory_bytes)"
+  cpu_model="$(host_cpu_model | tr ';\n' '  ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+  java_runtime="$(java -version 2>&1 | head -n 1 | tr ';' ',' || echo unavailable)"
+  LOAD_GENERATOR_ENVIRONMENT_SIGNATURE="host-v1;os=${host_os};release=${host_release};arch=${host_arch};cpus=$(host_cpu_count);memory=${host_memory};cpu=${cpu_model};java=${java_runtime}"
 }
 
 require_supported_capacity_runtime() {
@@ -287,11 +323,12 @@ require_capacity_docker_environment() {
   fi
 
   DOCKER_ENVIRONMENT_SIGNATURE="local-docker-v1;cpus=${docker_cpus};memory=${docker_memory};arch=${docker_arch};os=${docker_os};engine=${docker_version};compose=${compose_version};limits=${container_memory_signature}"
+  RUNNING_CONTAINER_SIGNATURE="$(docker ps --format '{{.Names}}={{.Image}}' | LC_ALL=C sort | paste -sd ',' -)"
 }
 
 require_capacity_environment_alignment() {
   local state statement_track track_io_timing synchronous_commit wal_compression
-  local max_wal_size_bytes checkpoint_timeout_seconds cpu_count load_one_minute
+  local max_wal_size_bytes checkpoint_timeout_seconds cpu_count load_one_minute sample
   state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/verify-pg-capacity-environment.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
     max_wal_size_bytes checkpoint_timeout_seconds <<< "$state"
@@ -316,16 +353,31 @@ require_capacity_environment_alignment() {
   fi
 
   cpu_count="$(host_cpu_count)"
-  load_one_minute="$(host_load_one_minute)"
-  if [[ ! "$cpu_count" =~ ^[1-9][0-9]*$ || ! "$load_one_minute" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  if [[ ! "$cpu_count" =~ ^[1-9][0-9]*$ \
+      || ! "$CAPACITY_HOST_LOAD_STABLE_SAMPLES" =~ ^[1-9][0-9]*$ \
+      || ! "$CAPACITY_HOST_LOAD_SAMPLE_INTERVAL_SECONDS" =~ ^[0-9]+$ ]]; then
     echo "Unable to determine host CPU/load for capacity preflight" >&2
     exit 2
   fi
-  if ! awk -v load="$load_one_minute" -v cpus="$cpu_count" \
-      -v limit="$CAPACITY_MAX_HOST_LOAD_PER_CPU" 'BEGIN { exit !((load / cpus) <= limit) }'; then
-    echo "Capacity host is already busy: load1=${load_one_minute}, cpus=${cpu_count}, max_load_per_cpu=${CAPACITY_MAX_HOST_LOAD_PER_CPU}" >&2
-    exit 2
-  fi
+  capture_load_generator_environment
+  HOST_LOAD_PREFLIGHT_SAMPLES=""
+  for ((sample = 1; sample <= CAPACITY_HOST_LOAD_STABLE_SAMPLES; sample++)); do
+    load_one_minute="$(host_load_one_minute)"
+    if [[ ! "$load_one_minute" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+      echo "Unable to determine host CPU/load for capacity preflight" >&2
+      exit 2
+    fi
+    HOST_LOAD_PREFLIGHT_SAMPLES="${HOST_LOAD_PREFLIGHT_SAMPLES}${HOST_LOAD_PREFLIGHT_SAMPLES:+,}${load_one_minute}"
+    if ! awk -v load="$load_one_minute" -v cpus="$cpu_count" \
+        -v limit="$CAPACITY_MAX_HOST_LOAD_PER_CPU" 'BEGIN { exit !((load / cpus) <= limit) }'; then
+      echo "Capacity host is already busy: load1=${load_one_minute}, cpus=${cpu_count}, max_load_per_cpu=${CAPACITY_MAX_HOST_LOAD_PER_CPU}" >&2
+      echo "  stable samples required=${CAPACITY_HOST_LOAD_STABLE_SAMPLES}, observed=${HOST_LOAD_PREFLIGHT_SAMPLES}" >&2
+      exit 2
+    fi
+    if (( sample < CAPACITY_HOST_LOAD_STABLE_SAMPLES )); then
+      sleep "$CAPACITY_HOST_LOAD_SAMPLE_INTERVAL_SECONDS"
+    fi
+  done
 }
 
 append_pg_statement_profile() {
@@ -859,9 +911,12 @@ write_report_header() {
     echo "- Git revision: ${git_revision}"
     echo "- Expected application image revision: ${CAPACITY_EXPECT_APP_IMAGE_REVISION}"
     echo "- Docker environment signature: ${DOCKER_ENVIRONMENT_SIGNATURE}"
+    echo "- Load-generator environment signature: ${LOAD_GENERATOR_ENVIRONMENT_SIGNATURE}"
+    echo "- Running container signature: ${RUNNING_CONTAINER_SIGNATURE}"
     echo "- Docker capacity class: ${CAPACITY_EXPECT_DOCKER_CPUS} CPU, ${CAPACITY_MIN_DOCKER_MEMORY_BYTES}..${CAPACITY_MAX_DOCKER_MEMORY_BYTES} bytes"
     echo "- Minimum PostgreSQL data-volume free space: ${CAPACITY_MIN_PG_DATA_FREE_KIB} KiB"
     echo "- Load-generator host CPUs: ${cpu_count}"
+    echo "- Preflight host load samples: ${HOST_LOAD_PREFLIGHT_SAMPLES}"
     echo "- Load-generator host load snapshot: ${host_load}"
     for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
       container_revision="$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
@@ -1241,6 +1296,10 @@ capture_application_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
+  echo "  docker=${DOCKER_ENVIRONMENT_SIGNATURE}"
+  echo "  load-generator=${LOAD_GENERATOR_ENVIRONMENT_SIGNATURE}"
+  echo "  running-containers=${RUNNING_CONTAINER_SIGNATURE}"
+  echo "  host-load-samples=${HOST_LOAD_PREFLIGHT_SAMPLES}"
   exit 0
 fi
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

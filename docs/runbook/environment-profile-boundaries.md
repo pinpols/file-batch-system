@@ -41,8 +41,10 @@ bash load-tests/scripts/run-p2-capacity-profile.sh
 ```
 
 压测脚本会核验 Docker 8 CPU/约 8 GiB 容量等级、目标容器健康和内存预算、镜像 revision、容器
-profile、入口许可、连接池、启动期保留连接预算、PostgreSQL 参数/磁盘余量及 Kafka lag；任一项不符即停止。
-报告中的 Docker 环境签名不同时只能建立新基线，不能直接做跨环境性能增减结论。
+profile、入口许可、连接池、启动期保留连接预算、PostgreSQL 参数/磁盘余量、Kafka lag，以及宿主机
+连续负载采样；任一项不符即停止。报告同时记录 Docker、负载发生器（OS/架构/CPU/内存/JDK）和实际
+运行容器集合的环境签名。换机器或升级 Docker/JDK 后可以运行，但必须建立新容量基线；签名不同时
+不能直接做跨环境性能增减结论。
 
 ## 变更守则
 
