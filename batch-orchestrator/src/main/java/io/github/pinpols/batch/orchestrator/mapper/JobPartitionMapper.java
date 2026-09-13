@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
@@ -89,6 +90,13 @@ public interface JobPartitionMapper {
       @Param("expectedInvocationId") String expectedInvocationId);
 
   int markStatus(MarkPartitionStatusParam param);
+
+  /**
+   * REPORT 终态专用：原子推进 partition 与 instance 计数，并返回更新后的 instance 快照。
+   *
+   * <p>返回 {@code null} 表示 partition CAS 未命中。调用方可回读 instance 保持原并发兜底语义。
+   */
+  JobInstanceEntity markTerminalStatusAndLoadInstance(MarkPartitionStatusParam param);
 
   List<JobPartitionEntity> selectExpiredLeases(
       @Param("tenantId") String tenantId,

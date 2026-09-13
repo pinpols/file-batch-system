@@ -35,6 +35,15 @@
         <result column="task_timeout_seconds" property="taskTimeoutSeconds"/>
     </resultMap>
 
+    <resultMap id="TaskOutcomePersistenceContextMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext">
+        <association property="task" resultMap="JobTaskResultMap" columnPrefix="task_"/>
+        <association property="partition"
+                     resultMap="io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper.JobPartitionResultMap"
+                     columnPrefix="partition_"
+                     notNullColumn="id"/>
+    </resultMap>
+
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_task (
@@ -141,6 +150,69 @@
         from batch.job_task
         where tenant_id = #{tenantId}
           and id = #{id}
+    </select>
+
+    <!-- REPORT 同时需要 task 与 partition 做状态/归属/invocation fence 校验；一次 LEFT JOIN
+         保留虚拟 task 无 partition 时的原有 null 语义，并减少一次数据库往返。 -->
+    <select id="selectOutcomePersistenceContext" resultMap="TaskOutcomePersistenceContextMap">
+        select t.id                         as task_id,
+               t.tenant_id                  as task_tenant_id,
+               t.job_instance_id            as task_job_instance_id,
+               t.job_partition_id           as task_job_partition_id,
+               t.task_type                  as task_task_type,
+               t.task_seq                   as task_task_seq,
+               t.task_status                as task_task_status,
+               t.assigned_worker_code       as task_assigned_worker_code,
+               t.version                    as task_version,
+               t.task_payload               as task_task_payload,
+               t.effective_parameters       as task_effective_parameters,
+               t.heartbeat_details          as task_heartbeat_details,
+               t.heartbeat_at               as task_heartbeat_at,
+               t.cancel_requested           as task_cancel_requested,
+               t.result_summary             as task_result_summary,
+               t.error_code                 as task_error_code,
+               t.error_message              as task_error_message,
+               t.error_key                  as task_error_key,
+               t.error_args                 as task_error_args,
+               t.priority                   as task_priority,
+               t.started_at                 as task_started_at,
+               t.finished_at                as task_finished_at,
+               t.created_at                 as task_created_at,
+               t.updated_at                 as task_updated_at,
+               t.failure_class              as task_failure_class,
+               t.dry_run                    as task_dry_run,
+               t.task_timeout_seconds       as task_task_timeout_seconds,
+               p.id                         as partition_id,
+               p.tenant_id                  as partition_tenant_id,
+               p.job_instance_id            as partition_job_instance_id,
+               p.partition_no               as partition_partition_no,
+               p.partition_key              as partition_partition_key,
+               p.partition_status           as partition_partition_status,
+               p.worker_group               as partition_worker_group,
+               p.worker_code                as partition_worker_code,
+               p.lease_expire_at             as partition_lease_expire_at,
+               p.current_invocation_id       as partition_current_invocation_id,
+               p.invocation_started_at       as partition_invocation_started_at,
+               p.version                    as partition_version,
+               p.retry_count                as partition_retry_count,
+               p.business_key               as partition_business_key,
+               p.idempotency_key             as partition_idempotency_key,
+               p.input_snapshot              as partition_input_snapshot,
+               p.output_summary              as partition_output_summary,
+               p.started_at                  as partition_started_at,
+               p.finished_at                 as partition_finished_at,
+               p.created_at                  as partition_created_at,
+               p.updated_at                  as partition_updated_at,
+               p.dry_run                     as partition_dry_run,
+               p.source_file_id              as partition_source_file_id,
+               p.template_code               as partition_template_code,
+               p.target_ref                  as partition_target_ref
+        from batch.job_task t
+        left join batch.job_partition p
+          on p.tenant_id = t.tenant_id
+         and p.id = t.job_partition_id
+        where t.tenant_id = #{tenantId}
+          and t.id = #{id}
     </select>
 
     <!--

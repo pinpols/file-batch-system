@@ -329,7 +329,7 @@
       partition 的 version + 非终态谓词是幂等门：重复 report 无法再次进入 transitioned，
       因而不会重复累加 job_instance。非终态转换（如 RUNNING→WAITING）不改实例计数。
     -->
-    <select id="markStatus" resultType="int" flushCache="true" affectData="true">
+    <sql id="MarkStatusTransitionCte">
         with transitioned as (
         update batch.job_partition
         set partition_status = #{partitionStatus},
@@ -363,9 +363,23 @@
         where ji.tenant_id = p.tenant_id
           and ji.id = p.job_instance_id
           and #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2})
-        returning ji.id
+        returning ji.*
         )
+    </sql>
+
+    <select id="markStatus" resultType="int" flushCache="true" affectData="true">
+        <include refid="MarkStatusTransitionCte"/>
         select count(*)::integer from transitioned
+    </select>
+
+    <!-- REPORT 成功/最终失败路径消费 progressed 的权威实例快照，省去 markStatus 后再次按主键查询。
+         非终态转换仍使用 markStatus；CAS 未命中时本查询返回 null。 -->
+    <select id="markTerminalStatusAndLoadInstance"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap"
+            flushCache="true"
+            affectData="true">
+        <include refid="MarkStatusTransitionCte"/>
+        select * from progressed
     </select>
 
     <!-- reclaim 路径:整批在一个 @Transactional 内逐分区 markStatus(行锁持有到提交)。若不加

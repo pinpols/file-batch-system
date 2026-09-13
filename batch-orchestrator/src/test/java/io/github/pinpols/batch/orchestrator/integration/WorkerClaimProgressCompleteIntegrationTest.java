@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
@@ -111,6 +112,12 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
+
+    TaskOutcomePersistenceContext outcomeContext =
+        jobTaskMapper.selectOutcomePersistenceContext(TENANT, task.getId());
+    assertThat(outcomeContext.getTask().getId()).isEqualTo(task.getId());
+    assertThat(outcomeContext.getTask().getTaskPayload()).isEqualTo(task.getTaskPayload());
+    assertThat(outcomeContext.getPartition().getJobInstanceId()).isEqualTo(jobInstance.getId());
 
     List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
