@@ -40,6 +40,7 @@
 
 ### Fixed
 
+- 修复同一实例的并发 Worker 回报先锁 task、后等待实例 advisory lock，导致终态收敛与 partition reclaim 交错时形成 PostgreSQL `40P01` 锁环的问题；状态写入现统一遵循 `instance lock -> task -> partition` 顺序，并强化真 PG 并发回归守护。
 - 修复关闭 `MANAGEMENT_OPENTELEMETRY_ENABLED` 后 Micrometer OTLP metrics 仍后台连接 Collector 的配置漂移；metrics、traces、logs exporter 现统一跟随总开关，未部署观测栈的本地与容量环境不再产生重试噪音。
 - 修复 P2 容量 fixture 隐式依赖演示 seed、缺少源定义时仍继续发压的问题；fixture 现自包含创建 Atomic 作业并在发压前核验，同时避免不同 worktree 的应用定向启动误重建 PostgreSQL 容器，并拒绝非被测 Worker 污染 Atomic 容量基线；异常轮次统一清理入口按引用顺序回收控制面数据和专用租户孤儿记录。
 - 修复 PostgreSQL Docker 客户端 fallback 将宿主机 `-f` 路径直接传入容器、导致无宿主机 `psql` 环境无法执行 SQL 文件的问题；公共入口现通过 stdin 传输文件并保留其余参数。

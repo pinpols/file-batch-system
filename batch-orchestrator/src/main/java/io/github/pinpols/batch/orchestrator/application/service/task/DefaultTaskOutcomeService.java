@@ -281,8 +281,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         && !partition.getCurrentInvocationId().equals(command.partitionInvocationId())) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
     }
-    // 成功回报不需要在实例锁前读取 job_instance；失败路径仍需用当前快照计算重试治理决策。
-    // 实例推进统一在 advisory lock 后再读取一次权威状态，避免成功路径重复点查同一热表行。
+    // 同一实例的状态写入必须统一遵循 instance advisory lock -> task -> partition 的锁序。
+    // 锁前只允许做无锁读取和参数校验；否则并发 outcome 会各自持有 task 行再等待同一实例锁，
+    // 持锁线程收敛实例子状态时又可能等待这些 task 行，形成 advisory/row-lock 环形死锁。
+    if (EmptyChecks.isNotNull(task.getJobInstanceId())) {
+      advisoryLockWaitTimer.record(() -> jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
+          command.tenantId(), task.getJobInstanceId()));
+    }
+    // 成功回报无需额外读取 job_instance；失败路径在实例锁后读取当前快照计算重试治理决策。
+    // 实例推进也在锁内读取权威状态，避免成功路径重复点查同一热表行。
     JobInstanceEntity retryContextInstance = !command.success() && EmptyChecks.isNotNull(partition)
         ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
         : null;
@@ -318,23 +325,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
           "task already finished by concurrent update: taskId=" + command.taskId());
-    }
-
-    // 死锁防护 + 同 instance 串行化(perf):此前对该 instance 的【全部兄弟分区】whole-instance FOR UPDATE
-    // (纯排序加锁、丢结果)会把同 instance 的并发 report 完全串行、且是 O(N) 行锁。改用事务级 advisory lock:
-    // 对 (tenantId, jobInstanceId) 取一把 pg_advisory_xact_lock,把同 instance 的并发 outcome 串行化,
-    // 随事务自动释放。锁的是逻辑序而非行,因此:1) 下方 markStatus / updateOutputSummary(单分区写锁)与
-    // instanceProgressor(复读计数)始终在同一把逻辑锁下顺序执行,消除了 outcome-vs-outcome 的锁顺序反转;
-    // 2) outcome 不再批量锁全兄弟分区,消除了旧的「reclaim asc N 行 / outcome desc N 行」环形死锁。
-    // 注意(边界):advisory lock 只串行化 outcome-vs-outcome,reclaim 不取该 advisory lock;outcome 仍按
-    // task(finishTask)→ partition(markStatus)取行锁,与 reclaim 的 partition→task 相反,单 outcome × 单
-    // reclaim
-    // 对同一 (task, partition) 的 2 行反转不由本 advisory lock 解决 —— 那条已由 PartitionReclaimUnit 对 task 行
-    // 改用 FOR UPDATE NOWAIT 让路修复(见 OutcomeVsReclaimDeadlockIntegrationTest)。
-    if (EmptyChecks.isNotNull(task.getJobInstanceId())) {
-      // A6:锁的阻塞获取耗时单独计时(争用归因)。record(Runnable) 只关心墙钟时长,返回值不用。
-      advisoryLockWaitTimer.record(() -> jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
-          command.tenantId(), task.getJobInstanceId()));
     }
 
     String outputSummary = TaskOutcomeSummaryBuilder.buildOutputSummary(command, task);
