@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- 修复 PostgreSQL Docker 客户端 fallback 将宿主机 `-f` 路径直接传入容器、导致无宿主机 `psql` 环境无法执行 SQL 文件的问题；公共入口现通过 stdin 传输文件并保留其余参数。
 - 修复 replay service 手写兼容构造导致 Spring 无法创建 Bean、V202 候选约束遗漏 `OUTPUTS_ONLY` 形态及未 VALIDATE、DryRunGuard 架构测试扫描旧目录造成假绿；补齐 DRY_RUN 结果 7 天后先归档再清理的执行链，并禁止 Dispatch 演练写投递记录或推进正式文件状态。
 - 修复 Docker 应用栈在全新数据卷上未先应用业务表 DDL/RLS，导致 `worker-import` 被闭世界检查反复重启的问题；启动脚本现在复用统一的业务库 bootstrap。
 - 修复 Trigger 高压下 admission/relay 失衡、冷启动释放停顿和恢复残留；收紧批量日生命周期、Worker 状态更新及 dry-run/dispatch backoff 的租户 CAS 条件。
