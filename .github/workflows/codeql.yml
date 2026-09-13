@@ -65,9 +65,48 @@ jobs:
           ./mvnw -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
 
       - name: Perform CodeQL Analysis
+        id: codeql-analysis
         uses: github/codeql-action/analyze@v4
-        # Code Scanning 已启用,移除 continue-on-error 恢复硬阻断;若 SARIF
-        # upload 再次 403,需在 Settings → Code security → Code scanning
-        # 核查授权,而不是把本步骤再次降级。
         with:
+          category: "/language:java"
+          # 分析与上传分离，避免短时上传故障迫使整套 Java 编译和查询重跑。
+          # 分析失败仍直接阻断；仅 SARIF 上传执行有界重试。
+          upload: failure-only
+
+      - name: Upload CodeQL results
+        id: codeql-upload-primary
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
+          category: "/language:java"
+
+      - name: Wait before CodeQL upload retry
+        if: steps.codeql-upload-primary.outcome == 'failure'
+        shell: bash
+        run: sleep 20
+
+      - name: Retry CodeQL results upload
+        id: codeql-upload-retry
+        if: steps.codeql-upload-primary.outcome == 'failure'
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
+          category: "/language:java"
+
+      - name: Wait before final CodeQL upload attempt
+        if: >-
+          steps.codeql-upload-primary.outcome == 'failure' &&
+          steps.codeql-upload-retry.outcome == 'failure'
+        shell: bash
+        run: sleep 40
+
+      - name: Final CodeQL results upload
+        if: >-
+          steps.codeql-upload-primary.outcome == 'failure' &&
+          steps.codeql-upload-retry.outcome == 'failure'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
           category: "/language:java"
