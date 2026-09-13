@@ -170,12 +170,22 @@ pg_pressure_sampler() {
   sample_header="sampled_at|database_size_bytes|active_connections|active_waiting_connections"
   sample_header+="|lock_waiters|xact_commit|xact_rollback|wal_bytes|wal_records|wal_fpi"
   sample_header+="|wal_buffers_full|wal_write|wal_sync|checkpoints_timed|checkpoints_requested"
-  sample_header+="|checkpoint_buffers_written"
+  sample_header+="|checkpoint_buffers_written|host_load_1m"
   : > "$output_file"
   printf '%s\n' "$sample_header" >> "$output_file"
   while true; do
-    psql_platform -At -F '|' \
-      -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" >> "$output_file" 2>/dev/null || true
+    local database_sample host_load
+    database_sample="$(
+      psql_platform -At -F '|' \
+        -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" 2>/dev/null || true
+    )"
+    host_load="$(
+      uptime 2>/dev/null \
+        | sed -E 's/.*load averages?:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/'
+    )"
+    if [[ -n "$database_sample" ]]; then
+      printf '%s|%s\n' "$database_sample" "${host_load:-unknown}" >> "$output_file"
+    fi
     sleep "$PG_SAMPLE_INTERVAL_SECONDS"
   done
 }

@@ -197,7 +197,29 @@ PREFLIGHT_ONLY=1 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE=1 \
 ```
 
 Relay 上限 A/B 必须同步声明预期值。例如容器以 `80 events/s` 启动时，设置
-`CAPACITY_EXPECT_TRIGGER_RELAY_RATE=80`；未设置时仍严格校验 benchmark 基线 `40 events/s`，避免误测旧容器。
+`CAPACITY_EXPECT_TRIGGER_RELAY_RATE=80`；未设置时仍严格校验 benchmark 基线 `400 events/s`，避免误测旧容器。
+
+容量对比必须先通过环境同构门禁。`run-p2-capacity-profile.sh` 默认按 2026-09-12 无画像基线校验：
+
+- `pg_stat_statements.track=none`、`track_io_timing=off`
+- `synchronous_commit=on`、`wal_compression=off`
+- `max_wal_size=1GiB`、`checkpoint_timeout=300s`
+- 主机 1 分钟 load/CPU 不超过 `1.0`
+- benchmark 容器拓扑、Kafka 分区/lag、隔离租户数据均符合脚本声明
+
+SQL 画像使用另一套明确口径：
+
+```bash
+CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
+  bash load-tests/scripts/run-p2-capacity-profile.sh
+```
+
+该模式要求 `pg_stat_statements.track=top`、`track_io_timing=on`。仅将
+`CAPACITY_PG_STATEMENTS_PROFILE_ENABLED` 设为 `0` 只会停止画像报告，不能关闭数据库运行时采集；修改角色、
+数据库或容器参数后必须让应用连接池全部重连。实验使用其他 WAL/checkpoint 参数时，必须同时显式传入
+`CAPACITY_EXPECT_*` 期望值并使用独立 `RUN_ID`，不得与历史基线直接混合比较。报告会记录 Git SHA、
+容器镜像 ID、数据库参数和运行期间主机 load，任一口径不一致的轮次只能作为诊断证据。
+运行期间 load/CPU 峰值超过同一阈值时，脚本会保留报告但返回失败，禁止把该轮登记为容量基线。
 
 - `psql`：压测准备、清理、统计 SQL 都依赖它；macOS 可用 `brew install libpq`，并把 `$(brew --prefix libpq)/bin` 加入 `PATH`。
 - `kafka-consumer-groups.sh` / `kafka-topics.sh`：Kafka lag 和 topic 初始化使用；设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`。
