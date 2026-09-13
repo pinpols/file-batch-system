@@ -32,7 +32,7 @@
     </select>
 
     <!-- bizDate 入参 String,PG date 列要求显式 cast::date,否则 "column biz_date is of type date" -->
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.calendar_holiday (
             calendar_id, biz_date, day_type, holiday_name, description
         ) values (

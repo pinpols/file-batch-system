@@ -91,7 +91,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
             max_running_jobs, max_running_partitions, max_qps,

@@ -111,7 +111,7 @@
           enabled=true, execution_mode='FULL'
         与 batch.job_definition 列 DEFAULT 同步;DB migration 改默认值时本 SQL 须同步。
     -->
-    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_definition (
             tenant_id, job_code, depends_on_job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
             timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,

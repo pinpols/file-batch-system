@@ -36,7 +36,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_task (
             tenant_id,
             job_instance_id,
@@ -86,7 +86,7 @@
     <!-- PERF(5.1): launch fan-out 多行 INSERT — 列清单/取值表达式与单行 insert 逐列一致;
          useGeneratedKeys 多行回填 list 元素 id(下游 step 镜像/outbox eventKey 依赖 task.getId(),
          由 BatchInsertGeneratedKeysIntegrationTest 守护)。 -->
-    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_task (
             tenant_id,
             job_instance_id,

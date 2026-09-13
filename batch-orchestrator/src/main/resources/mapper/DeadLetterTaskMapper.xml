@@ -21,7 +21,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.dead_letter_task (
             tenant_id,
             source_type,

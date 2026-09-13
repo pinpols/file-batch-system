@@ -16,7 +16,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_execution_log (
             tenant_id,
             job_instance_id,

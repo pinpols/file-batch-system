@@ -27,7 +27,7 @@
         (timeout_seconds=0, retry_policy='NONE', retry_max_count=0, enabled=true)。
         与 batch.pipeline_step_definition 列 DEFAULT 同步。
     -->
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.pipeline_step_definition (
             pipeline_definition_id, step_code, step_name, stage_code,
             step_order, impl_code, step_params, timeout_seconds,

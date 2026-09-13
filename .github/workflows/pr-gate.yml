@@ -289,6 +289,11 @@ jobs:
         # (ArchiveSchemaDriftCheck 只比对列名集合不比顺序)。必须用显式列名。
         run: python3 scripts/ci/check-no-positional-insert-select-star.py
 
+      - name: Limit MyBatis generated keys to the id column
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: python3 scripts/ci/check-mybatis-generated-key-columns.py
+
       - name: No JDK preview flags in prod build/run config
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

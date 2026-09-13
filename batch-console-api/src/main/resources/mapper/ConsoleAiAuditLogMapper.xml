@@ -22,7 +22,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.console_ai_audit_log (
             tenant_id, request_id, trace_id, session_id, operator_id,
             prompt_category, prompt_decision, model_name,

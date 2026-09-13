@@ -43,7 +43,7 @@
         parametersJson 是字符串载荷,显式 ::jsonb cast 入库;与 FileChannelConfigMapper.xml 同一风格。
         useGeneratedKeys 回写自增 id 到 param.id(测试断言依赖)。
     -->
-    <insert id="insertAtomicTaskConfig" useGeneratedKeys="true" keyProperty="p.id">
+    <insert id="insertAtomicTaskConfig" useGeneratedKeys="true" keyProperty="p.id" keyColumn="id">
         insert into batch.atomic_task_config (
             tenant_id, task_type, name, parameters, created_by,
             created_at, updated_at

@@ -75,7 +75,7 @@
     </select>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_partition (
             tenant_id,
             job_instance_id,
@@ -119,10 +119,10 @@
     </insert>
 
     <!-- PERF(5.1): launch fan-out 多行 INSERT — 列清单/取值表达式与单行 insert 逐列一致。
-         useGeneratedKeys 多行回填:PG getGeneratedKeys 返回全部行,MyBatis 按序回填 list 元素 id
+         useGeneratedKeys 多行回填:PG getGeneratedKeys 只返回 id 列,MyBatis 按序回填 list 元素 id
          (下游 buildTask/releaseForDispatch 依赖 partition.getId(),回填是硬需求,由
          BatchInsertGeneratedKeysIntegrationTest 守护)。 -->
-    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.job_partition (
             tenant_id,
             job_instance_id,

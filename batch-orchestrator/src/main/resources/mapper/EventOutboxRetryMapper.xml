@@ -16,7 +16,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.event_outbox_retry (
             tenant_id,
             outbox_event_id,

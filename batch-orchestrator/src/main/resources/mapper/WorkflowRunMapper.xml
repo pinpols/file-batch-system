@@ -18,7 +18,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.workflow_run (
             tenant_id,
             workflow_definition_id,

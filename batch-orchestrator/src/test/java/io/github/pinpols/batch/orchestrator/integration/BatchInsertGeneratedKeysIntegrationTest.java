@@ -41,7 +41,7 @@ import org.testcontainers.utility.DockerImageName;
  * <ol>
  *   <li>5.1 前置核实结论 —— createPartitions/createTasks 的下游<b>依赖生成主键回填</b>（buildTask 用
  *       partition.getId()、step 镜像/outbox eventKey 用 task.getId()），故 insertBatch 必须在 PG + MyBatis 下
- *       正确按序回填多行 id（PG getGeneratedKeys 返回全部行）。
+ *       正确按序回填多行 id（mapper 通过 {@code keyColumn=id} 只请求主键列）。
  *   <li>5.3 renewLeaseBatch 的 {@code UPDATE ... FROM VALUES JOIN ... RETURNING}（MyBatis select 标签跑
  *       UPDATE）——命中集、cancel_requested 回读、CAS 谓词（invocation 不匹配的行不动）。
  *   <li>5.4 markPublishingBatch 的 {@code UPDATE ... RETURNING id}——抢占胜出集 + publish_attempt 递增 +

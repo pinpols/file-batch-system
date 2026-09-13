@@ -91,7 +91,7 @@
     </select>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.trigger_request (
             tenant_id,
             request_id,

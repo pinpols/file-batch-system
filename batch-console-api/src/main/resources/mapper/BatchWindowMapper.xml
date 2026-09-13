@@ -79,7 +79,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.batch_window (
             tenant_id, window_code, window_name, timezone,
             start_time, end_time, end_strategy, out_of_window_action,
