@@ -174,15 +174,7 @@ require_supported_capacity_runtime() {
 require_capacity_environment_alignment() {
   local state statement_track track_io_timing synchronous_commit wal_compression
   local max_wal_size_bytes checkpoint_timeout_seconds cpu_count load_one_minute
-  state="$(
-    psql_platform -tA -F '|' -c \
-      "select coalesce(current_setting('pg_stat_statements.track', true), 'unavailable'),
-              current_setting('track_io_timing'),
-              current_setting('synchronous_commit'),
-              current_setting('wal_compression'),
-              pg_size_bytes(current_setting('max_wal_size')),
-              extract(epoch from current_setting('checkpoint_timeout')::interval)::bigint"
-  )"
+  state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/verify-pg-capacity-environment.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
     max_wal_size_bytes checkpoint_timeout_seconds <<< "$state"
   if [[ "$statement_track" == "unavailable" && "$CAPACITY_EXPECT_PG_STATEMENTS_TRACK" == "none" ]]; then
@@ -684,15 +676,7 @@ evict_capacity_config_cache() {
 write_report_header() {
   local database_observability_state statement_track track_io_timing synchronous_commit
   local wal_compression max_wal_size checkpoint_timeout cpu_count host_load git_revision
-  database_observability_state="$(
-    psql_platform -tA -F '|' -c \
-      "select coalesce(current_setting('pg_stat_statements.track', true), 'unavailable'),
-              current_setting('track_io_timing'),
-              current_setting('synchronous_commit'),
-              current_setting('wal_compression'),
-              current_setting('max_wal_size'),
-              current_setting('checkpoint_timeout')"
-  )"
+  database_observability_state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/capture-pg-capacity-settings.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
     max_wal_size checkpoint_timeout <<< "$database_observability_state"
   cpu_count="$(host_cpu_count)"
