@@ -1296,6 +1296,10 @@ capture_application_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
+  echo "  docker=${DOCKER_ENVIRONMENT_SIGNATURE}"
+  echo "  load-generator=${LOAD_GENERATOR_ENVIRONMENT_SIGNATURE}"
+  echo "  running-containers=${RUNNING_CONTAINER_SIGNATURE}"
+  echo "  host-load-samples=${HOST_LOAD_PREFLIGHT_SAMPLES}"
   exit 0
 fi
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
