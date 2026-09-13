@@ -239,7 +239,7 @@ services:
       - "${KAFKA_UI_PORT:-18090}:8080"
     environment:
       <<: *common-runtime-env
-      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_UI_CLUSTER_NAME:-local}
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       DYNAMIC_CONFIG_ENABLED: "true"
     networks:

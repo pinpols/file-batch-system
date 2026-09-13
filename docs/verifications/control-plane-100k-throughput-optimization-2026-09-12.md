@@ -227,6 +227,81 @@ PostgreSQL 时的提交/WAL 竞争，而不是 Worker、Kafka 分区或单一业
 - `load-tests/target/p2-capacity-profile-rvhot-card100-100k-0912.md`
 - `load-tests/target/control-plane-worker-report-rvhot-card100-100k-0912-10w.md`
 
+## 2026-09-13 PostgreSQL SQL/WAL 画像与复验
+
+### 1. 10 万 SQL 画像结论
+
+在相同的 2 个 Orchestrator、1 个 Atomic Worker、`100000 requests @ 200 RPS`、100 个轮换 bizDate
+口径下，开启 `pg_stat_statements.track=top` 和 `track_io_timing=on` 完成了全链路画像：
+
+| 指标 | 结果 |
+|---|---:|
+| Trigger 请求 | 100000/100000，0 失败，HTTP p95 613ms |
+| Job 终态 | 100000 SUCCESS，0 FAILED，0 非终态 |
+| 完成窗口 / 吞吐 | 1829.607s / 54.657 tasks/s |
+| launch queue 平均 / p95 | 721.600s / 1268.481s |
+| 事务提交增量 | 1893494，约 18.9 次/task |
+| WAL 增量 | 6743511380 bytes，约 67.4 KiB/task |
+| requested checkpoint | 12 次 |
+| Kafka | 12/12 launch 分区有流量，最终 lag=0，0 次重启 |
+
+累计耗时最高的 SQL 集中在分区终态推进、`trigger_outbox`/`trigger_request` 插入、实例 T1/T2 状态推进
+和结果/outbox 幂等账本写入。Worker 执行 p95 为 3.641 秒，Kafka 无积压，主要约束仍是 Orchestrator
+控制面事务与 PostgreSQL WAL/提交链路。该画像用于定位 SQL，不作为无观测容量基线。
+
+画像还发现启动恢复查询在 10 万积压下平均耗时 3.365 秒。已将 `ACCEPTED` 请求与实例的关联从
+`tenant_id + dedup_key` 改为真实来源键 `job_instance.trigger_request_id = trigger_request.id`，并新增前向
+迁移 `V205__trigger_request_stale_accepted_index.sql`。本地执行计划使用部分索引
+`idx_trigger_request_stale_accepted`，测试候选的执行时间为 1.204ms；定向
+`TriggerRequestLaunchReconcilerTest` 5 项通过。该修复降低恢复扫描成本，不改变 launch T1/T2 事务边界。
+
+### 2. A/B 边界与回退判断
+
+最初将 `CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=0` 误解为关闭 SQL 跟踪；实际上它只停止重置和导出，
+数据库仍保持 `pg_stat_statements.track=top`。该轮 10 万虽然 100000/100000 成功，但完成吞吐只有
+49.070 tasks/s，不能作为“无 pg_stat_statements”对照。
+
+后续使用角色级设置让连接池重连，分别完成了 1 万小矩阵：
+
+| 轮次 | SQL track / I/O timing | 完成吞吐 | HTTP p95 | 判定 |
+|---|---|---:|---:|---|
+| 画像口径 | top / on | 49.554/s | 3781ms | 有效 SQL 画像 |
+| 关闭 SQL track | none / on | 62.661/s | 6778ms | 只隔离 SQL 采集，入口 SLO 未过 |
+| 关闭 SQL track 与 I/O timing | none / off | 67.651/s | 2640ms | 参数生效，但主机负载污染 |
+
+最后一轮比历史 100 业务键 1 万结果 111.626/s 仍低约 39.4%。同期主机 1 分钟 load 一度为 16.92，
+8 个逻辑 CPU；`mediaanalysisd` 约占 91% CPU，Docker VM 约占 62% CPU，且空闲内存很低。因此当前证据
+只能确认“该时段本机完成吞吐低于历史”，不能证明 2026-09-12 后的代码产生性能回归，也不能据此回退
+正确性或可观测性改动。需要在主机负载受控后复跑同一 1 万矩阵；1 万恢复到历史容差范围后才允许再跑
+10 万无画像基线。
+
+`wal_compression=lz4` 的 1 万单轮将 WAL 从 464977881 bytes 降至 425726507 bytes（约 8.4%），吞吐
+从 49.554/s 升至 54.854/s，但 HTTP p95 升至 5859ms 并超过门槛。单轮结果不稳定，参数已恢复为
+`off`，不进入默认配置。
+
+### 3. 压测环境硬约束
+
+容量脚本现已在发压前校验并记录以下口径：
+
+- P2 画像脚本显式限定为仓库 `local-docker` benchmark 拓扑；远程、staging、生产探测使用独立 Gatling
+  profile，不与本机容量基线混跑。
+- 无画像容量基线默认要求 `pg_stat_statements.track=none`、`track_io_timing=off`；SQL 画像默认要求
+  `top/on`。仅关闭报告开关不再被视为无观测。
+- 默认要求 `synchronous_commit=on`、`wal_compression=off`、`max_wal_size=1GiB`、
+  `checkpoint_timeout=300s`；实验参数必须显式覆盖期望值并单独命名 run。
+- 记录 Git SHA、数据库观测参数、主机 CPU 数和 load；运行中 PostgreSQL 压力采样同步记录主机 1 分钟 load。
+- 默认发压前主机 1 分钟 load/CPU 不得超过 0.75，超限会拒绝启动。运行中的 load 包含被测系统自身
+  产生的有效压力，因此仅记录峰值用于归因，不将它错误地作为硬失败条件。
+- 隔离租户六类运行数据必须为 0，Kafka launch lag 必须清零，容器预算和分区数必须与 benchmark profile
+  一致；任何不一致均不得进入容量对比表。
+
+本轮原始报告：
+
+- `load-tests/target/p2-capacity-profile-pgprofile-stabilized-card100-100k-20260913.md`
+- `load-tests/target/control-plane-worker-report-pgprofile-stabilized-card100-100k-20260913-10w.md`
+- `load-tests/target/p2-capacity-profile-stabilized-card100-100k-nopgss-20260913.md`
+- `load-tests/target/p2-capacity-profile-tracknone-iooff-card100-10k-20260913.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |

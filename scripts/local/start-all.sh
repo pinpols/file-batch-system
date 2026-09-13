@@ -24,9 +24,18 @@ ensure_docker_on_path
 unset _LOCAL_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+REQUESTED_COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+COMPOSE_PROJECT_NAME=""
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../lib/business-db-bootstrap.sh
+source "$ROOT/scripts/lib/business-db-bootstrap.sh"
+if [[ -n "$REQUESTED_COMPOSE_PROJECT_NAME" ]]; then
+  COMPOSE_PROJECT_NAME="$REQUESTED_COMPOSE_PROJECT_NAME"
+fi
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+export COMPOSE_PROJECT_NAME
+unset REQUESTED_COMPOSE_PROJECT_NAME
 batch_configure_local_jvm_database_env
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
@@ -194,7 +203,7 @@ wait_postgres() {
   echo "==> 等待 PostgreSQL 就绪..."
   local i
   for i in $(seq 1 90); do
-    if docker compose --env-file "$COMPOSE_ENV_FILE" exec -T postgres-primary pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    if docker compose --project-name "$COMPOSE_PROJECT_NAME" --env-file "$COMPOSE_ENV_FILE" exec -T postgres-primary pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
       echo "  PostgreSQL 已就绪"
       return 0
     fi
@@ -332,7 +341,7 @@ else
 fi
 
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / kafka-ui / minio / redis${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
-docker compose --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_PROFILES[@]}"} up -d
+docker compose --project-name "$COMPOSE_PROJECT_NAME" --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_PROFILES[@]}"} up -d
 
 # postgres / minio / redis / kafka-topics / kafka-ui 相互无依赖，并发 wait 节省 5-10s
 # minio-init 依赖 minio，仍需串行于 minio healthy 之后
@@ -359,30 +368,8 @@ unset _pid_pg _pid_minio _pid_redis _pid_kafka _pid_kafka_ui _pid_replica _basic
 
 wait_container_exited_zero "$MINIO_INIT_CONTAINER" "MinIO bucket init"
 
-# ── 业务库 DDL 落地（idempotent，CREATE TABLE IF NOT EXISTS）──
-# create_biz_tables.sql 同时建 biz.* 业务表 + batch.process_staging（PROCESS WAP staging）。
-# Postgres 容器初始化只建库 + 几个 schema/shedlock，业务表必须每次启动 apply 一次，
-# 避免新增表（如 P1-7 加的 process_staging）在旧 PG 卷上缺失导致 worker 启动 SQL 异常。
-echo "==> 应用业务库 DDL（biz.* + batch.process_staging）..."
-if docker exec -i "$PG_CONTAINER" psql -U "$PGUSER" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 \
-     < "$ROOT/scripts/db/business/create_biz_tables.sql" >/dev/null 2>&1; then
-  echo "  业务库 DDL 已 apply"
-else
-  echo "ERROR: 业务库 DDL apply 失败（详见 docker logs $PG_CONTAINER）" >&2
-  exit 1
-fi
-
-echo "==> 应用业务库 RLS（roles / grants / tenant policies）..."
-if docker exec -i "$PG_CONTAINER" psql -U "$PGUSER" -d "$BUSINESS_DB" \
-     -v ON_ERROR_STOP=1 \
-     -v writer_password="${BIZ_WRITER_PASSWORD:-$POSTGRES_PASSWORD}" \
-     -v admin_password="${BIZ_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}" \
-     < "$ROOT/scripts/db/business/rls-phase-a.sql" >/dev/null 2>&1; then
-  echo "  业务库 RLS 已 apply"
-else
-  echo "ERROR: 业务库 RLS apply 失败" >&2
-  exit 1
-fi
+# 业务库 DDL/RLS 必须在裸 JVM 启动前完成；公共入口也供 Docker 应用栈复用。
+batch_bootstrap_business_database "$ROOT" "$COMPOSE_ENV_FILE" "$COMPOSE_PROJECT_NAME"
 
 if [[ "${BUILD:-0}" == "1" ]]; then
   "$ROOT/scripts/local/build-apps.sh"

@@ -787,7 +787,7 @@ otelCollector:
   enabled: false        # 置 true 则与应用一起部署 Collector
   imageTag: "0.127.0"
   replicaCount: 2
-  deploymentEnvironment: "production"
+  deploymentEnvironment: "local"
   memoryLimitMib: 512
   queueSize: 10000
   storageSizeLimit: "4Gi"

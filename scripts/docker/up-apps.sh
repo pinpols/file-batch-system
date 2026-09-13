@@ -41,6 +41,8 @@ else
 fi
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../lib/business-db-bootstrap.sh
+source "$ROOT/scripts/lib/business-db-bootstrap.sh"
 if [[ -n "$REQUESTED_COMPOSE_PROJECT_NAME" ]]; then
   COMPOSE_PROJECT_NAME="$REQUESTED_COMPOSE_PROJECT_NAME"
 fi
@@ -59,6 +61,11 @@ export COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-1}"
 if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
   docker network create "$APP_NETWORK_NAME" >/dev/null
 fi
+
+# Docker Compose 的 postgres init 只负责建库和 process staging；应用 worker 的 RLS
+# fail-fast 还要求 biz.* 与 batch.process_staging 已完成 DDL/RLS。先 bootstrap 再启动
+# 应用，避免全新 Compose 项目因 worker 反复重启而表现为部署失败。
+batch_bootstrap_business_database "$ROOT" "$COMPOSE_ENV_FILE" "$COMPOSE_PROJECT_NAME"
 
 echo "应用容器日志通过 docker compose logs 查询，并由 local driver 限量轮转。"
 

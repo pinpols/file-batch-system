@@ -278,6 +278,7 @@ javaOpts: >-
 # 否则 OTLP exporter 持续投递失败产生噪音日志。
 otelCollector:
   enabled: false
+  deploymentEnvironment: "production"
 
 # 生产使用 monitoring namespace 内的集中 Collector。若实际服务名不同，
 # 发布 overlay 必须覆盖 endpoint；CI 会拒绝回落到被关闭的 chart 内地址。

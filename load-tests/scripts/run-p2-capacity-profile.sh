@@ -7,6 +7,9 @@ LOAD_DIR="$ROOT_DIR/load-tests"
 source "$LOAD_DIR/scripts/env.sh"
 
 RUN_ID="${RUN_ID:-p2-capacity-$(date +%Y%m%d%H%M%S)}"
+# 该画像会核对固定 compose 服务、容器资源和 Kafka 分区，只支持仓库提供的本地 Docker
+# benchmark 拓扑。远程/staging 使用 Gatling 环境 profile，不能伪装成同一容量基线。
+CAPACITY_RUNTIME_PROFILE="${CAPACITY_RUNTIME_PROFILE:-local-docker}"
 RUN_10W_STORM="${RUN_10W_STORM:-1}"
 RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
@@ -47,6 +50,20 @@ PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
 # SQL 画像需显式开启，并要求 PostgreSQL 已预加载 pg_stat_statements 且打开 I/O 计时。
 # 默认关闭，保证普通容量基线与历史口径一致。
 CAPACITY_PG_STATEMENTS_PROFILE_ENABLED="${CAPACITY_PG_STATEMENTS_PROFILE_ENABLED:-0}"
+if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]]; then
+  CAPACITY_EXPECT_PG_STATEMENTS_TRACK="${CAPACITY_EXPECT_PG_STATEMENTS_TRACK:-top}"
+  CAPACITY_EXPECT_TRACK_IO_TIMING="${CAPACITY_EXPECT_TRACK_IO_TIMING:-on}"
+else
+  # 容量基线默认对齐 2026-09-12 的无 SQL 画像口径。仅关闭报告生成不会停止
+  # pg_stat_statements 采集，必须在应用连接建立前关闭并让连接池重连。
+  CAPACITY_EXPECT_PG_STATEMENTS_TRACK="${CAPACITY_EXPECT_PG_STATEMENTS_TRACK:-none}"
+  CAPACITY_EXPECT_TRACK_IO_TIMING="${CAPACITY_EXPECT_TRACK_IO_TIMING:-off}"
+fi
+CAPACITY_EXPECT_SYNCHRONOUS_COMMIT="${CAPACITY_EXPECT_SYNCHRONOUS_COMMIT:-on}"
+CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
+CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
+CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
+CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-0.75}"
 # 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
 # result_version 单业务键串行锁后测通用控制面容量。
 CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
@@ -106,21 +123,89 @@ require_pg_statement_profile() {
   if [[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" != "1" ]]; then
     return
   fi
-  local profile_state preload_libraries track_io_timing extension_installed
+  local profile_state preload_libraries track_io_timing extension_installed statement_track
   profile_state="$(
     psql_platform -tA -F '|' -f "$LOAD_DIR/sql/verify-control-pg-statement-profile.sql"
   )"
-  preload_libraries="${profile_state%%|*}"
-  profile_state="${profile_state#*|}"
-  track_io_timing="${profile_state%%|*}"
-  extension_installed="${profile_state##*|}"
+  IFS='|' read -r preload_libraries track_io_timing extension_installed statement_track \
+    <<< "$profile_state"
   if [[ ",$preload_libraries," != *,pg_stat_statements,* \
       || "$track_io_timing" != "on" \
-      || "$extension_installed" != "1" ]]; then
+      || "$extension_installed" != "1" \
+      || "$statement_track" != "top" ]]; then
     echo "PostgreSQL statement profile is not ready:" >&2
-    echo "  required: shared_preload_libraries contains pg_stat_statements, track_io_timing=on, extension installed" >&2
-    echo "  actual: shared_preload_libraries=${preload_libraries:-empty}, track_io_timing=${track_io_timing:-unknown}, extension=${extension_installed:-0}" >&2
+    echo "  required: shared_preload_libraries contains pg_stat_statements, track_io_timing=on, extension installed, pg_stat_statements.track=top" >&2
+    echo "  actual: shared_preload_libraries=${preload_libraries:-empty}, track_io_timing=${track_io_timing:-unknown}, extension=${extension_installed:-0}, statement_track=${statement_track:-unknown}" >&2
     echo "  local start: POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements POSTGRES_TRACK_IO_TIMING=on docker compose --env-file .env.local up -d --force-recreate --no-deps postgres-primary postgres-replica" >&2
+    exit 2
+  fi
+}
+
+host_cpu_count() {
+  getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 0
+}
+
+host_load_one_minute() {
+  if [[ -r /proc/loadavg ]]; then
+    awk '{ print $1 }' /proc/loadavg
+    return
+  fi
+  if command -v sysctl >/dev/null 2>&1; then
+    local sysctl_load
+    sysctl_load="$(sysctl -n vm.loadavg 2>/dev/null || true)"
+    if [[ "$sysctl_load" =~ \{[[:space:]]*([0-9]+([.][0-9]+)?) ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      return
+    fi
+  fi
+  LC_ALL=C uptime 2>/dev/null \
+    | sed -E 's/.*load averages?:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/'
+}
+
+require_supported_capacity_runtime() {
+  if [[ "$CAPACITY_RUNTIME_PROFILE" != "local-docker" ]]; then
+    echo "Unsupported capacity runtime profile: ${CAPACITY_RUNTIME_PROFILE}" >&2
+    echo "  run-p2-capacity-profile.sh supports only the repository local-docker benchmark topology" >&2
+    echo "  use Maven -Pstaging/-Pprod-probe Gatling profiles for remote environments" >&2
+    exit 2
+  fi
+}
+
+require_capacity_environment_alignment() {
+  local state statement_track track_io_timing synchronous_commit wal_compression
+  local max_wal_size_bytes checkpoint_timeout_seconds cpu_count load_one_minute
+  state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/verify-pg-capacity-environment.sql")"
+  IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
+    max_wal_size_bytes checkpoint_timeout_seconds <<< "$state"
+  if [[ "$statement_track" == "unavailable" && "$CAPACITY_EXPECT_PG_STATEMENTS_TRACK" == "none" ]]; then
+    statement_track="none"
+  fi
+  if [[ "$statement_track" != "$CAPACITY_EXPECT_PG_STATEMENTS_TRACK" \
+      || "$track_io_timing" != "$CAPACITY_EXPECT_TRACK_IO_TIMING" \
+      || "$synchronous_commit" != "$CAPACITY_EXPECT_SYNCHRONOUS_COMMIT" \
+      || "$wal_compression" != "$CAPACITY_EXPECT_WAL_COMPRESSION" \
+      || "$max_wal_size_bytes" != "$CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES" \
+      || "$checkpoint_timeout_seconds" != "$CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS" ]]; then
+    echo "Capacity environment does not match the declared benchmark baseline:" >&2
+    echo "  pg_stat_statements.track: expected=${CAPACITY_EXPECT_PG_STATEMENTS_TRACK}, actual=${statement_track}" >&2
+    echo "  track_io_timing: expected=${CAPACITY_EXPECT_TRACK_IO_TIMING}, actual=${track_io_timing}" >&2
+    echo "  synchronous_commit: expected=${CAPACITY_EXPECT_SYNCHRONOUS_COMMIT}, actual=${synchronous_commit}" >&2
+    echo "  wal_compression: expected=${CAPACITY_EXPECT_WAL_COMPRESSION}, actual=${wal_compression}" >&2
+    echo "  max_wal_size_bytes: expected=${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES}, actual=${max_wal_size_bytes}" >&2
+    echo "  checkpoint_timeout_seconds: expected=${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS}, actual=${checkpoint_timeout_seconds}" >&2
+    echo "  Change the benchmark profile explicitly and reconnect application pools; do not compare mixed environments." >&2
+    exit 2
+  fi
+
+  cpu_count="$(host_cpu_count)"
+  load_one_minute="$(host_load_one_minute)"
+  if [[ ! "$cpu_count" =~ ^[1-9][0-9]*$ || ! "$load_one_minute" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo "Unable to determine host CPU/load for capacity preflight" >&2
+    exit 2
+  fi
+  if ! awk -v load="$load_one_minute" -v cpus="$cpu_count" \
+      -v limit="$CAPACITY_MAX_HOST_LOAD_PER_CPU" 'BEGIN { exit !((load / cpus) <= limit) }'; then
+    echo "Capacity host is already busy: load1=${load_one_minute}, cpus=${cpu_count}, max_load_per_cpu=${CAPACITY_MAX_HOST_LOAD_PER_CPU}" >&2
     exit 2
   fi
 }
@@ -142,6 +227,44 @@ append_pg_statement_profile() {
     echo '```'
     echo
   } >> "$REPORT"
+}
+
+append_host_load_summary() {
+  local benchmark_run_id="$1"
+  local sample_file="$LOAD_DIR/target/control-plane-worker-logs/${benchmark_run_id}/pg-pressure-samples.csv"
+  local cpu_count peak_load load_per_cpu
+  if [[ ! -s "$sample_file" ]]; then
+    echo "Host load samples are missing: ${sample_file}" >&2
+    return 1
+  fi
+  if [[ "$(head -n 1 "$sample_file")" != *"|host_load_1m" ]]; then
+    echo "Host load sample header is stale: ${sample_file}" >&2
+    return 1
+  fi
+  cpu_count="$(host_cpu_count)"
+  peak_load="$(
+    awk -F '|' '
+      NR > 1 && $NF ~ /^[0-9]+([.][0-9]+)?$/ && $NF > peak { peak = $NF }
+      END { if (peak != "") print peak }
+    ' "$sample_file"
+  )"
+  if [[ ! "$cpu_count" =~ ^[1-9][0-9]*$ || ! "$peak_load" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo "Host load samples are invalid: ${sample_file}" >&2
+    return 1
+  fi
+  load_per_cpu="$(awk -v load="$peak_load" -v cpus="$cpu_count" 'BEGIN { printf "%.3f", load / cpus }')"
+  {
+    echo "## Load-Generator Host Pressure"
+    echo
+    echo "- Logical CPUs: ${cpu_count}"
+    echo "- Peak 1-minute load: ${peak_load}"
+    echo "- Peak load per CPU: ${load_per_cpu}"
+    echo "- Preflight reference limit per CPU: ${CAPACITY_MAX_HOST_LOAD_PER_CPU}"
+    echo "- Interpretation: runtime load includes the measured workload and is diagnostic only"
+    echo
+  } >> "$REPORT"
+  # 运行中的 load 包含被测 Docker/JVM/PostgreSQL 自身产生的有效压力，不能据此硬判环境污染。
+  # 是否允许发压只看运行前的空闲负载；运行峰值保留在报告中用于跨轮次解释。
 }
 
 storm_reached_terminal_state() {
@@ -549,10 +672,19 @@ evict_capacity_config_cache() {
 }
 
 write_report_header() {
+  local database_observability_state statement_track track_io_timing synchronous_commit
+  local wal_compression max_wal_size checkpoint_timeout cpu_count host_load git_revision
+  database_observability_state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/capture-pg-capacity-settings.sql")"
+  IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
+    max_wal_size checkpoint_timeout <<< "$database_observability_state"
+  cpu_count="$(host_cpu_count)"
+  host_load="$(uptime 2>/dev/null | sed 's/^[[:space:]]*//' || echo unavailable)"
+  git_revision="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo unavailable)"
   {
     echo "# P2 Worker Capacity Profile - ${RUN_ID}"
     echo
     echo "- Time UTC start: ${RUN_STARTED_AT}"
+    echo "- Capacity runtime profile: ${CAPACITY_RUNTIME_PROFILE}"
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
     echo "- Strict capacity validation: $([[ "$CAPACITY_STRICT" == "1" ]] && echo enabled || echo disabled)"
@@ -560,7 +692,15 @@ write_report_header() {
     echo "- Capacity write p95 budget: ${CAPACITY_WRITE_P95_MS}ms"
     echo "- Capacity job hard timeout: ${CAPACITY_JOB_TIMEOUT_SECONDS}s"
     echo "- PostgreSQL pressure sample interval: ${PG_SAMPLE_INTERVAL_SECONDS}s"
-    echo "- PostgreSQL statement profile: $([[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]] && echo enabled || echo disabled)"
+    echo "- PostgreSQL statement report: $([[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]] && echo enabled || echo disabled)"
+    echo "- PostgreSQL runtime tracking: pg_stat_statements.track=${statement_track}, track_io_timing=${track_io_timing}"
+    echo "- PostgreSQL durability/WAL: synchronous_commit=${synchronous_commit}, wal_compression=${wal_compression}, max_wal_size=${max_wal_size}, checkpoint_timeout=${checkpoint_timeout}"
+    echo "- Git revision: ${git_revision}"
+    echo "- Load-generator host CPUs: ${cpu_count}"
+    echo "- Load-generator host load snapshot: ${host_load}"
+    for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
+      echo "- Container image ${container}: $(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || echo unavailable)"
+    done
     echo "- Result business-key cardinality: ${CAPACITY_BIZ_DATE_CARDINALITY}"
     echo "- Terminal polling interval: ${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS}s"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
@@ -824,6 +964,9 @@ run_10w_storm() {
     | tee "$LOG_DIR/10w-storm.log"
   local rc=${PIPESTATUS[0]}
   set -e
+  if ! append_host_load_summary "$storm_run_id"; then
+    PROFILE_RC=1
+  fi
   append_pg_statement_profile
   if ! capture_launch_phase_metrics after; then
     PROFILE_RC=1
@@ -897,8 +1040,10 @@ run_fairness() {
 
 require_tooling
 require_exact_storm_shape
+require_supported_capacity_runtime
 require_trigger_capacity_budget
 require_pg_statement_profile
+require_capacity_environment_alignment
 capture_kafka_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
