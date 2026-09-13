@@ -23,8 +23,8 @@
 
 # 部署 / 基础设施
 /helm/                                  @pinpols
-/docker/                                @pinpols
-/docker-compose.yml                     @pinpols
+/deploy/                                @pinpols
+/docker-compose*.yml                    @pinpols
 
 # 数据库 migration(单向操作,高风险)
 /db/migration/                          @pinpols

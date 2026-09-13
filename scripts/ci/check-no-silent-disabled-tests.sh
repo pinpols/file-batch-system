@@ -18,7 +18,7 @@ while IFS= read -r file; do
     [[ -z "$lineno" ]] && continue
     trimmed="${content#"${content%%[![:space:]]*}"}"
     case "$trimmed" in
-      @DisabledOnOs* | @DisabledIf* | @DisabledForJreRange* | @DisabledIfEnvironmentVariable* | @DisabledIfSystemProperty*)
+      @DisabledOnOs* | @DisabledIf* | @DisabledForJreRange*)
         continue
         ;;
     esac

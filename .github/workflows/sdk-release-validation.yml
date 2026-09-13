@@ -69,7 +69,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
       - name: Java contract + shared-constants parity
         if: matrix.lang == 'java'
         run: |
@@ -84,8 +83,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
-          cache-dependency-path: sdk/python/pyproject.toml
       - name: Python contract + parity
         if: matrix.lang == 'python'
         working-directory: sdk/python
@@ -100,6 +97,7 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '22'
+          package-manager-cache: false
       - name: TypeScript conformance + parity
         if: matrix.lang == 'typescript'
         run: node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
@@ -109,6 +107,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: false
       - name: Go conformance + parity + vet
         if: matrix.lang == 'go'
         working-directory: sdk/go
@@ -199,6 +198,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+          package-manager-cache: false
       - name: Build + npm pack(产出可发布 tarball)
         working-directory: sdk/typescript
         run: |
@@ -271,7 +271,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
       - name: Package + install batch-worker-sdk to local m2
         # -am 拉父 reactor 依赖;装到 ~/.m2 供下面的独立消费工程引用。
         run: ./mvnw -B -pl sdk/java/core -am -DskipTests install
@@ -336,6 +335,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: false
       - name: vet + 模块可解析(Go 无打包产物,发布即 tag)
         working-directory: sdk/go
         run: |
@@ -445,6 +445,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+          package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
       - name: Build + publish to npm(--provenance)
         working-directory: sdk/typescript
@@ -514,7 +515,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
           # setup-java 会把这些写进 ~/.m2/settings.xml 的 server 凭据。
           server-id: central
           server-username: MAVEN_USERNAME

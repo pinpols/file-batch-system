@@ -2,6 +2,25 @@
 
 本目录存放 GitHub Actions 与本地均可复用的 CI 门禁脚本。
 
+## 完整守护清单
+
+下表是 `check-*` / `validate-*` 可执行守护的登记源；`check-script-governance.py` 会阻止新增守护漏登记。
+
+| 方向 | 守护 |
+|---|---|
+| 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-no-enable-preview.sh` |
+| 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
+| 配置与部署 | `check-config-defaults-sync.py`、`check-feature-switch-registry.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
+| 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-no-positional-insert-select-star.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
+| API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
+| Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
+| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh` |
+| 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
+| 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
+
+`check-sql-config-boundaries.py` 是同名 `.sh` 稳定入口的实现，两者都登记，避免包装层与实现层单独漂移。
+
 ## `check-code-doc-references.py`
 
 校验后端 Java、XML、POM 和配置文件注释中引用的仓库内 `docs/`、`sdk/` 路径存在，避免文档归档或目录迁移后代码注释继续指向失效路径。
@@ -232,3 +251,13 @@ python3 scripts/ci/report-java-readability-inventory.py \
 
 `--check` 是阶段 7 的防漂移门禁：生产 Java 文件增删或候选统计变化时，必须重新生成并审核快照，
 不能让过期报告继续作为验收证据。
+
+## `check-docs-structure.py`
+
+校验 `docs/` 一级目录入口、`docs/README.md` 覆盖、当前文档的仓库内相对链接，以及禁止提交的
+Finder 元数据和带日期本机验收报告。归档正文和外部 URL 不联网检查，避免历史快照或第三方站点
+波动造成误报。该检查已接入 PR gate 和 full gate。
+
+```bash
+python3 scripts/ci/check-docs-structure.py
+```

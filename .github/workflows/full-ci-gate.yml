@@ -68,6 +68,35 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-hardcoded-runtime-config.sh
 
+      - name: Verify repository hygiene
+        shell: bash
+        run: python3 scripts/ci/check-repository-hygiene.py
+
+      - name: Verify script governance and zero ShellCheck warnings
+        shell: bash
+        run: |
+          python3 scripts/ci/check-script-governance.py
+          bash scripts/ci/check-shell-scripts.sh
+
+      - name: Verify module dependency boundaries
+        shell: bash
+        run: python3 scripts/ci/check-dependency-boundaries.py
+
+      - name: Verify changelog synchronization
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          BASE="$BEFORE_SHA"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="$(git rev-parse HEAD^)"
+          fi
+          python3 scripts/ci/check-changelog-sync.py --base "$BASE"
+
+      - name: Verify documentation structure and internal links
+        shell: bash
+        run: python3 scripts/ci/check-docs-structure.py
+
       - name: Validate feature switch registry
         shell: bash
         run: python3 scripts/ci/check-feature-switch-registry.py

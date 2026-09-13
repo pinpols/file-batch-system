@@ -121,8 +121,10 @@ jobs:
 
       - name: Resolve guard base ref
         shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
-          BASE="${{ github.base_ref || 'main' }}"
+          BASE="${BASE_REF}"
           git fetch --no-tags --depth=200 origin "$BASE" || git fetch --no-tags origin "$BASE"
           echo "GUARD_BASE=origin/${BASE}" >> "$GITHUB_ENV"
 
@@ -155,6 +157,28 @@ jobs:
       - name: Verify hardcoded runtime configuration boundaries
         shell: bash
         run: bash scripts/ci/check-hardcoded-runtime-config.sh
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: python3 scripts/ci/check-repository-hygiene.py
+
+      - name: Verify script governance and zero ShellCheck warnings
+        shell: bash
+        run: |
+          python3 scripts/ci/check-script-governance.py
+          bash scripts/ci/check-shell-scripts.sh
+
+      - name: Verify module dependency boundaries
+        shell: bash
+        run: python3 scripts/ci/check-dependency-boundaries.py
+
+      - name: Verify changelog synchronization
+        shell: bash
+        run: python3 scripts/ci/check-changelog-sync.py --base "$GUARD_BASE"
+
+      - name: Verify documentation structure and internal links
+        shell: bash
+        run: python3 scripts/ci/check-docs-structure.py
 
       - name: Validate feature switch registry
         shell: bash
