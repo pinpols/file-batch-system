@@ -135,7 +135,9 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 
 ### 应用有 stdout、Loki 无日志
 
-1. 确认 `MANAGEMENT_OPENTELEMETRY_ENABLED=true`。
+1. 确认 `MANAGEMENT_OPENTELEMETRY_ENABLED=true`。该总开关同时控制 OTLP metrics、traces 和 logs；
+   关闭时三类 exporter 都不会创建后台发送任务，不能只关闭 OpenTelemetry SDK 而保留 Micrometer
+   `OtlpMeterRegistry`。
 2. 确认依赖中同时存在 Starter 和 OTel Logback appender。
 3. 检查 Collector `otelcol_exporter_send_failed_log_records`、队列容量和 Loki 拒收指标。
 4. 检查 Loki schema v13 与 `allow_structured_metadata=true`。

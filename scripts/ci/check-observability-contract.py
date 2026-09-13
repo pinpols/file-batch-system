@@ -159,11 +159,25 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     if 'setCaptureMdcAttributes("*")' not in bridge:
         errors.append("OpenTelemetry Logback bridge must preserve structured MDC fields")
-    defaults = (ROOT / "batch-common/src/main/resources/batch-defaults.yml").read_text(
-        encoding="utf-8"
+    defaults = load_yaml(
+        ROOT / "batch-common/src/main/resources/batch-defaults.yml"
     )
-    if "management:\n  otlp:" in defaults:
-        errors.append("deprecated Spring Boot 3 management.otlp properties are forbidden")
+    master_switch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}"
+    for path in (
+        ("management", "opentelemetry", "enabled"),
+        ("management", "otlp", "metrics", "export", "enabled"),
+        ("management", "tracing", "export", "otlp", "enabled"),
+        ("management", "logging", "export", "otlp", "enabled"),
+    ):
+        if nested(defaults, *path) != master_switch:
+            errors.append(
+                f"{'.'.join(path)} must follow MANAGEMENT_OPENTELEMETRY_ENABLED"
+            )
+    for deprecated_signal in ("tracing", "logging"):
+        if nested(defaults, "management", "otlp", deprecated_signal) is not None:
+            errors.append(
+                f"deprecated management.otlp.{deprecated_signal} properties are forbidden"
+            )
     if (ROOT / "batch-console-api/src/main/resources/logback-spring.xml").exists():
         errors.append(
             "console-api must use Boot LoggingSystem; custom logback overrides structured output"

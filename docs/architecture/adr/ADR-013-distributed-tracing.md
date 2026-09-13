@@ -20,7 +20,7 @@
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | OTel 桥接 + 导出    | `batch-common`：Starter 装配 SDK/provider/exporter；官方 Logback appender + `OpenTelemetryLogbackBridge` 接入应用日志 |
 | `@Observed` AOP | `BatchObservabilityAutoConfiguration` → `ObservedAspect` bean                                                                                                                                          |
-| 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；`management.opentelemetry.*.export.otlp.endpoint` 统一指向 Collector |
+| 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；metrics、traces、logs exporter 统一跟随 `MANAGEMENT_OPENTELEMETRY_ENABLED`，各 OTLP endpoint 指向 Collector |
 | 种子 manual span  | `orch.launch`、`orch.partition.dispatch`、`orch.workflow.param-resolve`（后续按需追加）                                                                                                                          |
 | 业务 trace ↔ OTel | `OtelTraceContext.currentTraceIdOrNull()`；`IdGenerator.newTraceId()` 优先当前 OTel span traceId（详见 §后果）                                                                                                    |
 
