@@ -12,6 +12,16 @@
 - `.env.test`：测试环境
 - `.env.prod`：生产环境模板
 
+## 环境标识与 Compose 项目名
+
+- 普通本地 Docker 栈固定使用 Compose 项目名 `batch-platform`，网络名为
+  `batch-platform_batch-network`。
+- `be-acceptance` 是验收脚本和日志的运行标识，不是普通本地 Docker 栈的项目名。
+- Docker 观测标签由 `DEPLOYMENT_ENVIRONMENT` 注入，本地默认值为 `local`；生产 Helm
+  部署必须使用 `helm/values-prod.yaml` 的 `production` 覆盖值。
+- `COMPOSE_PROJECT_NAME` 仍可由压测或隔离环境显式覆盖，但不同工作树不能共用固定的
+  `batch-*` 容器名；切换工作树前应先停止上一套栈。
+
 ## 构建应用镜像
 
 ```bash

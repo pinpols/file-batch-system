@@ -100,7 +100,7 @@ services:
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
     environment:
-      DEPLOYMENT_ENVIRONMENT: local
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-local}
     volumes:
       - ./deploy/docker/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
       - otel-collector-data:/var/lib/otelcol

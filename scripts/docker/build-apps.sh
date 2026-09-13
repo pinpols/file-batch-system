@@ -59,6 +59,7 @@ fi
 echo "==> Docker 应用镜像构建模式: ${build_mode}"
 
 docker compose \
+  --project-name "$COMPOSE_PROJECT_NAME" \
   --env-file "$COMPOSE_ENV_FILE" \
   -f docker-compose.yml \
   -f deploy/docker/compose/app.yml \

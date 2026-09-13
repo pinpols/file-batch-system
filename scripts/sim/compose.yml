@@ -63,4 +63,4 @@ volumes:
 networks:
   batch-network:
     external: true
-    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
+    name: ${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network
