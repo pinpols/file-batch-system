@@ -18,6 +18,9 @@ WAIT_TERMINAL_POLL_INTERVAL_SECONDS="${WAIT_TERMINAL_POLL_INTERVAL_SECONDS:-2}"
 # 仅对经 Trigger API 注入的容量画像启用。默认 0 保持其它混合画像原有的最小实例等待语义。
 # 启用后，不能仅因已创建的子集全部终态而提前结束，必须让每个入口请求都已创建并完成实例。
 WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-0}"
+# 发压已结束且入口记录连续稳定少于期望值时，缺失请求不可能凭空补回。容量画像可启用
+# 本开关尽快保留失败现场；普通混压仍按完整超时等待，避免改变既有行为。
+WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL="${WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL:-0}"
 # 容量画像允许 admission 先拒绝部分请求时，按实际已持久化的 trigger_request 等待收敛；
 # 仍要求关联请求数量连续稳定，避免异步入口尚未落库时过早结束。
 WAIT_TERMINAL_ALLOW_PARTIAL="${WAIT_TERMINAL_ALLOW_PARTIAL:-0}"
@@ -238,6 +241,22 @@ wait_run_terminal() {
           && "$linked_terminal" -eq "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" ]]; then
         echo "==> ${label}: trigger end-to-end terminal ${linked_terminal}/${trigger_requests}"
         return 0
+      fi
+      if [[ "$WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL" == "1" \
+          && "$trigger_requests" -lt "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" \
+          && "$trigger_requests" -gt 0 \
+          && "$total" -eq "$terminal" \
+          && "$linked_terminal" -eq "$trigger_requests" ]]; then
+        if [[ "$trigger_requests" -eq "$previous_trigger_requests" ]]; then
+          stable_trigger_requests=$((stable_trigger_requests + 1))
+        else
+          previous_trigger_requests="$trigger_requests"
+          stable_trigger_requests=0
+        fi
+        if [[ "$stable_trigger_requests" -ge 2 ]]; then
+          echo "==> ${label}: stable trigger shortfall ${trigger_requests}/${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS}; stop waiting" >&2
+          return 1
+        fi
       fi
     elif [[ "$WAIT_TERMINAL_ALLOW_PARTIAL" == "1" && "$trigger_requests" -gt 0 \
         && "$total" -eq "$terminal" && "$linked_terminal" -eq "$trigger_requests" ]]; then
