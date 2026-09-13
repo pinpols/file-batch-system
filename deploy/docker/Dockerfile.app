@@ -120,6 +120,11 @@ RUN set -eux; \
 FROM eclipse-temurin:21-jre-jammy@sha256:bce52ea7da1f72e6bf5bec505e63b6eb55ba79ad1226903579f77eab1a80139a
 
 ARG MODULE
+ARG BUILD_REVISION=unknown
+
+# 容量基线必须能证明运行镜像对应哪一版源码。不要沿用基础镜像的 version 标签
+# 代替应用版本；revision 由标准构建入口或 CI 注入。
+LABEL org.opencontainers.image.revision="${BUILD_REVISION}"
 
 ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
     TZ="Asia/Shanghai" \

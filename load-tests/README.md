@@ -204,18 +204,34 @@ Orchestrator、Atomic Worker、Kafka 和 PostgreSQL compose 服务。Linux Docke
 同一 compose 均可运行；staging、生产探测和非 Docker 环境应使用上文的 Maven `-Pstaging` 或
 `-Pprod-probe` Gatling profile，不应绕过容器拓扑检查。
 
+Atomic 容量画像要求 `batch-worker-import/export/process/dispatch` 停止运行；这些容器不参与被测链路，却会
+占用 Docker 内存、CPU 和 PostgreSQL 连接。preflight 默认对此 fail-fast，可按提示执行 `docker stop`。
+`CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY=0` 仅用于故障诊断，生成的结果不得与隔离基线比较。
+
 从普通 local 切换到 benchmark 时应使用 `COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh ...`。
 即使只指定部分应用服务，启动脚本也会先重跑 `kafka-init`，将存量 Kafka topic 扩展到 benchmark
 声明的分区数，再重启 producer/consumer。Kafka 分区不可缩减；切回普通 local 后可以继续使用已扩展的
 topic，但不能把切换前后的结果视为同一环境基线。
 
+应用镜像必须通过 `./scripts/docker/build-apps.sh` 构建。该入口会把当前 Git revision 写入 OCI
+`org.opencontainers.image.revision` 标签；存在未提交文件时标签追加 `-dirty`。P2 preflight 默认要求工作树
+干净，并校验 Trigger、双 Orchestrator 与 Atomic Worker 镜像标签等于当前 Git revision，防止换分支或
+换机器后误用旧的 `:local` 镜像。仅复验历史镜像时可显式设置
+`CAPACITY_EXPECT_APP_IMAGE_REVISION=<sha>`，报告会保留该声明，不能与当前代码基线混称。
+
 容量对比必须先通过环境同构门禁。脚本默认按 2026-09-12 无画像基线校验：
 
+- Docker Linux engine 固定为 8 CPU，内存处于 7.5-9 GiB 容量等级；Trigger、双 Orchestrator、
+  Atomic Worker、Kafka 必须健康且设置非零内存上限，具体预算进入环境签名
+- PostgreSQL 数据卷至少保留 20 GiB 空间
 - `pg_stat_statements.track=none`、`track_io_timing=off`
 - `synchronous_commit=on`、`wal_compression=off`
 - `max_wal_size=1GiB`、`checkpoint_timeout=300s`
 - 发压前主机 1 分钟 load/CPU 不超过 `0.75`
 - benchmark 容器拓扑、Kafka 分区/lag、隔离租户数据均符合脚本声明
+
+压测开始和结束时会比较 Trigger、双 Orchestrator、Atomic Worker、PostgreSQL 与 Kafka 的容器重启计数；
+任一容器在测量窗口内重启都会将该轮判为失败，不能把恢复后的请求结果冒充稳定吞吐。
 
 SQL 画像使用另一套明确口径：
 
@@ -228,11 +244,21 @@ CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
 `CAPACITY_PG_STATEMENTS_PROFILE_ENABLED` 设为 `0` 只会停止画像报告，不能关闭数据库运行时采集；修改角色、
 数据库或容器参数后必须让应用连接池全部重连。实验使用其他 WAL/checkpoint 参数时，必须同时显式传入
 `CAPACITY_EXPECT_*` 期望值并使用独立 `RUN_ID`，不得与历史基线直接混合比较。报告会记录 Git SHA、
-容器镜像 ID、数据库参数和运行期间主机 load，任一口径不一致的轮次只能作为诊断证据。
+容器镜像 ID、Docker CPU/内存/架构/Engine/Compose 组成的环境签名、数据库参数和运行期间主机 load。
+换机器或升级 Docker 后可以继续运行，但环境签名不同的结果只能建立新基线，不能直接用于宣称相对旧基线
+的性能提升或回退。确需使用其他 Docker 容量等级时，显式覆盖 `CAPACITY_EXPECT_DOCKER_CPUS`、
+`CAPACITY_MIN_DOCKER_MEMORY_BYTES` 和 `CAPACITY_MAX_DOCKER_MEMORY_BYTES`，并使用独立验证报告。
 运行期间的 load 峰值包含被测 Docker/JVM/PostgreSQL 自身压力，只记录到报告中用于跨轮次归因，不作为
 硬失败条件；外部后台进程是否抢占 CPU 仍需结合主机进程采样判断。
 
-- `psql`：压测准备、清理、统计 SQL 都依赖它；macOS 可用 `brew install libpq`，并把 `$(brew --prefix libpq)/bin` 加入 `PATH`。
+P2 容量与多租户公平性 fixture 会自包含创建所需的 Atomic 作业定义，不依赖可选的演示 seed；准备完成后
+脚本会核验作业类型、worker group 和启用状态，fixture 不完整时在发压前失败，避免生成入口成功但终态无效的报告。
+异常轮次排空 Kafka 后使用 `RUN_ID=<profile-run-id>-10w bash load-tests/scripts/cleanup-worker-load-data.sh`
+统一清理；该入口会先清控制面引用，再清通用平台和业务 fixture，不要手工颠倒 SQL 顺序。
+
+- PostgreSQL 客户端：统一入口默认依次尝试宿主机 `psql`、Python `psycopg`、运行中的
+  `batch-postgres-primary` 容器；可用 `BATCH_PG_CLIENT_MODE=host|python|docker` 固定模式。本地 Docker
+  容量画像无需额外安装宿主机 `psql`。
 - `kafka-consumer-groups.sh` / `kafka-topics.sh`：Kafka lag 和 topic 初始化使用；设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`。
 - Python 3：默认优先找 `python3`，也可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 指定。
 

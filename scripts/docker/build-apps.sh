@@ -58,6 +58,12 @@ fi
 
 echo "==> Docker 应用镜像构建模式: ${build_mode}"
 
+build_revision="${BATCH_BUILD_REVISION:-$(git rev-parse HEAD)}"
+if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  build_revision="${build_revision}-dirty"
+fi
+echo "==> Docker 应用镜像源码版本: ${build_revision}"
+
 docker compose \
   --project-name "$COMPOSE_PROJECT_NAME" \
   --env-file "$COMPOSE_ENV_FILE" \
@@ -65,4 +71,7 @@ docker compose \
   -f deploy/docker/compose/app.yml \
   --profile apps \
   --profile replica \
-  build --build-arg "BUILD_MODE=${build_mode}" "$@"
+  build \
+  --build-arg "BUILD_MODE=${build_mode}" \
+  --build-arg "BUILD_REVISION=${build_revision}" \
+  "$@"

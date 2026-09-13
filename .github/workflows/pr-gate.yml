@@ -220,6 +220,7 @@ jobs:
         run: |
           python3 scripts/ci/check-script-governance.py
           bash scripts/ci/check-shell-scripts.sh
+          bash scripts/ci/check-postgres-client-fallback.sh
 
       - name: Verify module dependency boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'

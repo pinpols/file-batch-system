@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **容量基线镜像来源约束**：标准 Compose/Bake 构建为应用镜像写入 OCI `org.opencontainers.image.revision`；P2 容量画像要求干净工作树，并校验 Trigger、双 Orchestrator 和 Atomic Worker 镜像与声明 revision 一致，禁止旧镜像或未提交代码生成可比较基线。
 - **Java 镜像构建提速**：Dockerfile 增加全 reactor/单模块依赖闭包双路径；共享测试基础设施拆为 `batch-test-support`，镜像打包不再编译测试源码；补充 Buildx Bake 构建 DAG 与 GitHub Actions 远程缓存。
 - **容器环境标识统一**：普通本地 Compose 栈固定使用 `batch-platform`，Docker 观测标签和 Kafka UI 集群名按环境注入，生产 Helm overlay 显式使用 `production`。
 - **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。
@@ -35,6 +36,8 @@
 
 ### Fixed
 
+- 修复 P2 容量 fixture 隐式依赖演示 seed、缺少源定义时仍继续发压的问题；fixture 现自包含创建 Atomic 作业并在发压前核验，同时避免不同 worktree 的应用定向启动误重建 PostgreSQL 容器，并拒绝非被测 Worker 污染 Atomic 容量基线；异常轮次统一清理入口按引用顺序回收控制面数据和专用租户孤儿记录。
+- 修复 PostgreSQL Docker 客户端 fallback 将宿主机 `-f` 路径直接传入容器、导致无宿主机 `psql` 环境无法执行 SQL 文件的问题；公共入口现通过 stdin 传输文件并保留其余参数。
 - 修复 replay service 手写兼容构造导致 Spring 无法创建 Bean、V202 候选约束遗漏 `OUTPUTS_ONLY` 形态及未 VALIDATE、DryRunGuard 架构测试扫描旧目录造成假绿；补齐 DRY_RUN 结果 7 天后先归档再清理的执行链，并禁止 Dispatch 演练写投递记录或推进正式文件状态。
 - 修复 Docker 应用栈在全新数据卷上未先应用业务表 DDL/RLS，导致 `worker-import` 被闭世界检查反复重启的问题；启动脚本现在复用统一的业务库 bootstrap。
 - 修复 Trigger 高压下 admission/relay 失衡、冷启动释放停顿和恢复残留；收紧批量日生命周期、Worker 状态更新及 dry-run/dispatch backoff 的租户 CAS 条件。

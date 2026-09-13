@@ -144,6 +144,7 @@ psql() {
   local psql_bin="${BATCH_PSQL_BIN:-}"
   local container="${PG_CONTAINER:-batch-postgres-primary}"
   local -a args=("$@")
+  local input_file=""
   local i
 
   if [[ "$mode" == "host" || "$mode" == "auto" ]] && [[ -n "$psql_bin" ]]; then
@@ -186,14 +187,36 @@ psql() {
   for ((i = 0; i < ${#args[@]}; i++)); do
     case "${args[$i]}" in
       -h|-p)
-        ((i++))
+        ((i += 1))
+        ;;
+      -f)
+        ((i += 1))
+        if ((i >= ${#args[@]})); then
+          printf 'PostgreSQL Docker client: -f requires a SQL file\n' >&2
+          return 2
+        fi
+        if [[ "${args[$i]}" == "-" ]]; then
+          docker_args+=(-f -)
+        elif [[ -n "$input_file" ]]; then
+          printf 'PostgreSQL Docker client supports one host SQL file per invocation\n' >&2
+          return 2
+        elif [[ ! -r "${args[$i]}" ]]; then
+          printf 'PostgreSQL Docker client cannot read SQL file: %s\n' "${args[$i]}" >&2
+          return 2
+        else
+          input_file="${args[$i]}"
+        fi
         ;;
       *)
         docker_args+=("${args[$i]}")
         ;;
     esac
   done
-  docker exec -i "$container" psql "${docker_args[@]}"
+  if [[ -n "$input_file" ]]; then
+    docker exec -i "$container" psql "${docker_args[@]}" < "$input_file"
+  else
+    docker exec -i "$container" psql "${docker_args[@]}"
+  fi
 }
 
 batch_require_internal_secret() {

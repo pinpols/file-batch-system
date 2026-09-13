@@ -10,6 +10,9 @@ RUN_ID="${RUN_ID:-p2-capacity-$(date +%Y%m%d%H%M%S)}"
 # 该画像会核对固定 compose 服务、容器资源和 Kafka 分区，只支持仓库提供的本地 Docker
 # benchmark 拓扑。远程/staging 使用 Gatling 环境 profile，不能伪装成同一容量基线。
 CAPACITY_RUNTIME_PROFILE="${CAPACITY_RUNTIME_PROFILE:-local-docker}"
+CAPACITY_EXPECT_APP_IMAGE_REVISION="${CAPACITY_EXPECT_APP_IMAGE_REVISION:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
+CAPACITY_REQUIRE_CLEAN_WORKTREE="${CAPACITY_REQUIRE_CLEAN_WORKTREE:-1}"
+CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY="${CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY:-1}"
 RUN_10W_STORM="${RUN_10W_STORM:-1}"
 RUN_FAIRNESS="${RUN_FAIRNESS:-1}"
 STORM_TOTAL_REQUESTS="${STORM_TOTAL_REQUESTS:-100000}"
@@ -64,6 +67,13 @@ CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
 CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
 CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
 CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-0.75}"
+# 历史 10 万基线使用 Docker Desktop 8 CPU / 约 8 GiB。CPU 会直接改变吞吐，必须精确
+# 匹配；内存允许 Docker Desktop 的保留开销形成小幅波动，但不能让 16 GiB 环境冒充 8 GiB
+# 基线。需要在另一容量等级上测试时应显式覆盖这些值，并建立新的基线报告。
+CAPACITY_EXPECT_DOCKER_CPUS="${CAPACITY_EXPECT_DOCKER_CPUS:-8}"
+CAPACITY_MIN_DOCKER_MEMORY_BYTES="${CAPACITY_MIN_DOCKER_MEMORY_BYTES:-8053063680}"
+CAPACITY_MAX_DOCKER_MEMORY_BYTES="${CAPACITY_MAX_DOCKER_MEMORY_BYTES:-9663676416}"
+CAPACITY_MIN_PG_DATA_FREE_KIB="${CAPACITY_MIN_PG_DATA_FREE_KIB:-20971520}"
 # 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
 # result_version 单业务键串行锁后测通用控制面容量。
 CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
@@ -111,9 +121,18 @@ PROFILE_RC=0
 STORM_TERMINAL_VERIFIED=0
 FAIRNESS_STARTED=0
 ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
+APPLICATION_STABILITY_CONTAINERS=(
+  batch-trigger
+  batch-orchestrator
+  batch-orchestrator-benchmark-replica
+  batch-worker-atomic
+  batch-postgres-primary
+)
+APPLICATION_RESTART_COUNTS_BEFORE=()
 KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
 KAFKA_PROFILE_STARTED_AT=""
+DOCKER_ENVIRONMENT_SIGNATURE=""
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
@@ -169,6 +188,105 @@ require_supported_capacity_runtime() {
     echo "  use Maven -Pstaging/-Pprod-probe Gatling profiles for remote environments" >&2
     exit 2
   fi
+}
+
+require_application_image_provenance() {
+  local container actual_revision
+  if [[ "$CAPACITY_REQUIRE_CLEAN_WORKTREE" == "1" ]] \
+      && [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal)" ]]; then
+    echo "Capacity benchmark requires a clean Git worktree" >&2
+    echo "  commit or remove local changes before building and measuring application images" >&2
+    exit 2
+  fi
+  for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic; do
+    actual_revision="$(docker inspect "$container" \
+      --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
+    if [[ "$actual_revision" != "$CAPACITY_EXPECT_APP_IMAGE_REVISION" ]]; then
+      echo "Capacity application image revision does not match the declared source:" >&2
+      echo "  container=${container}" >&2
+      echo "  expected=${CAPACITY_EXPECT_APP_IMAGE_REVISION}" >&2
+      echo "  actual=${actual_revision:-missing}" >&2
+      echo "  rebuild: ./scripts/docker/build-apps.sh trigger orchestrator worker-atomic" >&2
+      exit 2
+    fi
+  done
+}
+
+require_isolated_application_topology() {
+  if [[ "$CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY" != "1" ]]; then
+    return
+  fi
+  local container running=""
+  for container in \
+    batch-worker-import \
+    batch-worker-export \
+    batch-worker-process \
+    batch-worker-dispatch; do
+    if [[ "$(docker inspect "$container" --format '{{.State.Running}}' 2>/dev/null || true)" == "true" ]]; then
+      running="${running}${running:+,}${container}"
+    fi
+  done
+  if [[ -n "$running" ]]; then
+    echo "Capacity benchmark requires unrelated application workers to be stopped: ${running}" >&2
+    echo "  stop: docker stop batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch" >&2
+    echo "  these workers consume Docker memory, CPU and PostgreSQL connections but are outside the Atomic profile" >&2
+    exit 2
+  fi
+}
+
+require_capacity_docker_environment() {
+  local docker_state docker_cpus docker_memory docker_arch docker_os docker_version
+  local compose_version pg_data_free_kib container state health restart_count memory
+  local container_memory_signature=""
+  docker_state="$(docker info --format '{{.NCPU}}|{{.MemTotal}}|{{.Architecture}}|{{.OSType}}|{{.ServerVersion}}' 2>/dev/null || true)"
+  IFS='|' read -r docker_cpus docker_memory docker_arch docker_os docker_version <<< "$docker_state"
+  compose_version="$(docker compose version --short 2>/dev/null || true)"
+
+  if [[ "$docker_os" != "linux" || ! "$docker_cpus" =~ ^[1-9][0-9]*$ \
+      || ! "$docker_memory" =~ ^[1-9][0-9]*$ || -z "$docker_arch" || -z "$docker_version" \
+      || -z "$compose_version" ]]; then
+    echo "Capacity benchmark requires a healthy Linux Docker engine with Compose v2+" >&2
+    echo "  actual: cpus=${docker_cpus:-unknown}, memory=${docker_memory:-unknown}, arch=${docker_arch:-unknown}, os=${docker_os:-unknown}, engine=${docker_version:-unknown}, compose=${compose_version:-unknown}" >&2
+    exit 2
+  fi
+  if [[ "$docker_cpus" != "$CAPACITY_EXPECT_DOCKER_CPUS" \
+      || "$docker_memory" -lt "$CAPACITY_MIN_DOCKER_MEMORY_BYTES" \
+      || "$docker_memory" -gt "$CAPACITY_MAX_DOCKER_MEMORY_BYTES" ]]; then
+    echo "Docker capacity does not match the declared benchmark class:" >&2
+    echo "  expected: cpus=${CAPACITY_EXPECT_DOCKER_CPUS}, memory=${CAPACITY_MIN_DOCKER_MEMORY_BYTES}..${CAPACITY_MAX_DOCKER_MEMORY_BYTES} bytes" >&2
+    echo "  actual: cpus=${docker_cpus}, memory=${docker_memory} bytes" >&2
+    echo "  resize Docker or override the expected class and establish a separate baseline; do not compare mixed capacity classes" >&2
+    exit 2
+  fi
+
+  for container in \
+    batch-trigger \
+    batch-orchestrator \
+    batch-orchestrator-benchmark-replica \
+    batch-worker-atomic \
+    batch-kafka; do
+    IFS='|' read -r state health restart_count memory <<< "$(docker inspect "$container" \
+      --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.HostConfig.Memory}}' \
+      2>/dev/null || true)"
+    if [[ "$state" != "running" || "$health" != "healthy" \
+        || ! "$restart_count" =~ ^[0-9]+$ || ! "$memory" =~ ^[1-9][0-9]*$ ]]; then
+      echo "Capacity container does not match the benchmark topology:" >&2
+      echo "  container=${container}, state=${state:-missing}, health=${health:-missing}, restarts=${restart_count:-missing}" >&2
+      echo "  memory=${memory:-missing}; every measured container must have an explicit non-zero limit" >&2
+      exit 2
+    fi
+    container_memory_signature="${container_memory_signature}${container_memory_signature:+,}${container}=${memory}"
+  done
+
+  pg_data_free_kib="$(docker exec batch-postgres-primary df -Pk /var/lib/postgresql/data \
+    2>/dev/null | awk 'NR == 2 { print $4 }' || true)"
+  if [[ ! "$pg_data_free_kib" =~ ^[0-9]+$ || "$pg_data_free_kib" -lt "$CAPACITY_MIN_PG_DATA_FREE_KIB" ]]; then
+    echo "PostgreSQL data volume has insufficient free space for the capacity profile:" >&2
+    echo "  expected >= ${CAPACITY_MIN_PG_DATA_FREE_KIB} KiB, actual=${pg_data_free_kib:-unknown} KiB" >&2
+    exit 2
+  fi
+
+  DOCKER_ENVIRONMENT_SIGNATURE="local-docker-v1;cpus=${docker_cpus};memory=${docker_memory};arch=${docker_arch};os=${docker_os};engine=${docker_version};compose=${compose_version};limits=${container_memory_signature}"
 }
 
 require_capacity_environment_alignment() {
@@ -395,7 +513,8 @@ release_capacity_lock() {
 require_tooling() {
   command -v curl >/dev/null || { echo "curl is required" >&2; exit 2; }
   command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
-  command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
+  command -v docker >/dev/null || { echo "docker is required" >&2; exit 2; }
+  type psql >/dev/null 2>&1 || { echo "the shared PostgreSQL client wrapper is unavailable" >&2; exit 2; }
   batch_require_python
 }
 
@@ -614,6 +733,47 @@ capture_kafka_stability_baseline() {
   fi
 }
 
+capture_application_stability_baseline() {
+  local container health restart_count
+  APPLICATION_RESTART_COUNTS_BEFORE=()
+  for container in "${APPLICATION_STABILITY_CONTAINERS[@]}"; do
+    health="$(docker inspect "$container" \
+      --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+    restart_count="$(docker inspect "$container" --format '{{.RestartCount}}' 2>/dev/null || true)"
+    if [[ "$health" != "healthy" || ! "$restart_count" =~ ^[0-9]+$ ]]; then
+      echo "Application container must be healthy before the capacity profile: container=${container}, health=${health:-missing}, restarts=${restart_count:-missing}" >&2
+      exit 2
+    fi
+    APPLICATION_RESTART_COUNTS_BEFORE+=("$restart_count")
+  done
+}
+
+verify_application_stability() {
+  local index container health restart_count_before restart_count_after stable=1
+  {
+    echo "## Application Container Stability"
+    echo
+    echo "| Container | Health after | Restarts before | Restarts after | Stable |"
+    echo "|---|---|---:|---:|---|"
+    for index in "${!APPLICATION_STABILITY_CONTAINERS[@]}"; do
+      container="${APPLICATION_STABILITY_CONTAINERS[$index]}"
+      restart_count_before="${APPLICATION_RESTART_COUNTS_BEFORE[$index]}"
+      health="$(docker inspect "$container" \
+        --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+      restart_count_after="$(docker inspect "$container" --format '{{.RestartCount}}' 2>/dev/null || true)"
+      if [[ "$health" == "healthy" && "$restart_count_after" =~ ^[0-9]+$ \
+          && "$restart_count_after" == "$restart_count_before" ]]; then
+        echo "| ${container} | ${health} | ${restart_count_before} | ${restart_count_after} | yes |"
+      else
+        echo "| ${container} | ${health:-missing} | ${restart_count_before} | ${restart_count_after:-missing} | no |"
+        stable=0
+      fi
+    done
+    echo
+  } >> "$REPORT"
+  [[ "$stable" == "1" ]]
+}
+
 verify_kafka_stability() {
   local health restart_count_after stable instability_log instability_events
   health="$(docker inspect "$KAFKA_CONTAINER_NAME" \
@@ -674,6 +834,7 @@ evict_capacity_config_cache() {
 write_report_header() {
   local database_observability_state statement_track track_io_timing synchronous_commit
   local wal_compression max_wal_size checkpoint_timeout cpu_count host_load git_revision
+  local container container_revision
   database_observability_state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/capture-pg-capacity-settings.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
     max_wal_size checkpoint_timeout <<< "$database_observability_state"
@@ -696,16 +857,24 @@ write_report_header() {
     echo "- PostgreSQL runtime tracking: pg_stat_statements.track=${statement_track}, track_io_timing=${track_io_timing}"
     echo "- PostgreSQL durability/WAL: synchronous_commit=${synchronous_commit}, wal_compression=${wal_compression}, max_wal_size=${max_wal_size}, checkpoint_timeout=${checkpoint_timeout}"
     echo "- Git revision: ${git_revision}"
+    echo "- Expected application image revision: ${CAPACITY_EXPECT_APP_IMAGE_REVISION}"
+    echo "- Docker environment signature: ${DOCKER_ENVIRONMENT_SIGNATURE}"
+    echo "- Docker capacity class: ${CAPACITY_EXPECT_DOCKER_CPUS} CPU, ${CAPACITY_MIN_DOCKER_MEMORY_BYTES}..${CAPACITY_MAX_DOCKER_MEMORY_BYTES} bytes"
+    echo "- Minimum PostgreSQL data-volume free space: ${CAPACITY_MIN_PG_DATA_FREE_KIB} KiB"
     echo "- Load-generator host CPUs: ${cpu_count}"
     echo "- Load-generator host load snapshot: ${host_load}"
     for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
-      echo "- Container image ${container}: $(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || echo unavailable)"
+      container_revision="$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
+      echo "- Container image ${container}: $(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || echo unavailable), revision=${container_revision:-unavailable}"
     done
     echo "- Result business-key cardinality: ${CAPACITY_BIZ_DATE_CARDINALITY}"
     echo "- Terminal polling interval: ${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS}s"
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo "- Trigger adaptive release expected: $([[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]] && echo enabled || echo disabled)"
     echo "- Kafka restart count before: ${KAFKA_RESTART_COUNT_BEFORE}"
+    for index in "${!APPLICATION_STABILITY_CONTAINERS[@]}"; do
+      echo "- Container restart count before ${APPLICATION_STABILITY_CONTAINERS[$index]}: ${APPLICATION_RESTART_COUNTS_BEFORE[$index]}"
+    done
     echo
   } > "$REPORT"
 }
@@ -928,6 +1097,18 @@ run_10w_storm() {
     psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
       -v capacity_job_timeout_seconds="$CAPACITY_JOB_TIMEOUT_SECONDS" \
       -f "$LOAD_DIR/sql/prepare-p2-capacity-atomic.sql"
+    local prepared_job_count
+    prepared_job_count="$(
+      psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+        -v capacity_job_timeout_seconds="$CAPACITY_JOB_TIMEOUT_SECONDS" \
+        -f "$LOAD_DIR/sql/verify-p2-capacity-job.sql"
+    )"
+    prepared_job_count="${prepared_job_count//[[:space:]]/}"
+    if [[ "$prepared_job_count" != "1" ]]; then
+      echo "capacity fixture preparation produced ${prepared_job_count:-0}/1 usable atomic job definitions" >&2
+      PROFILE_RC=1
+      return
+    fi
     evict_capacity_config_cache
     storm_tenant_id="$CAPACITY_TENANT_ID"
   fi
@@ -1013,6 +1194,14 @@ run_fairness() {
   echo "==> prepare isolated p2fa/p2fb/p2fc atomic job definitions"
   psql_platform -v fairness_group_cap="$FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS" \
     -f "$LOAD_DIR/sql/prepare-p2-multitenant-atomic.sql"
+  local prepared_job_count
+  prepared_job_count="$(psql_platform -tA -f "$LOAD_DIR/sql/verify-p2-fairness-jobs.sql")"
+  prepared_job_count="${prepared_job_count//[[:space:]]/}"
+  if [[ "$prepared_job_count" != "3" ]]; then
+    echo "fairness fixture preparation produced ${prepared_job_count:-0}/3 usable atomic job definitions" >&2
+    PROFILE_RC=1
+    return
+  fi
   echo "==> evict p2fa/p2fb/p2fc job-definition and quota-policy caches after direct SQL setup"
   evict_fairness_config_cache
   echo "==> multi-tenant fairness run_id=${RUN_ID}, total=${FAIRNESS_TOTAL_REQUESTS}, group_cap=${FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS}, policy_weights=p2fa:3,p2fb:1,p2fc:1, launch_weights=${FAIRNESS_LAUNCH_WEIGHTS}"
@@ -1041,10 +1230,14 @@ run_fairness() {
 require_tooling
 require_exact_storm_shape
 require_supported_capacity_runtime
+require_application_image_provenance
+require_isolated_application_topology
+require_capacity_docker_environment
 require_trigger_capacity_budget
 require_pg_statement_profile
 require_capacity_environment_alignment
 capture_kafka_stability_baseline
+capture_application_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
@@ -1073,6 +1266,9 @@ if [[ "$RUN_FAIRNESS" == "1" ]]; then
 fi
 
 if ! verify_kafka_stability; then
+  PROFILE_RC=1
+fi
+if ! verify_application_stability; then
   PROFILE_RC=1
 fi
 
