@@ -8,14 +8,17 @@ git config core.hooksPath .githooks
 
 ## 当前 hook
 
-### `pre-commit` — Spotless auto-format（Palantir Java Format）
+### `pre-commit` — 暂存区按需轻量门禁
 
 每次 `git commit` 前：
-1. 检查 staged Java 文件
-2. 跑 `mvn spotless:apply` 自动修格式
-3. 重新 `git add` 已修改的 staged 文件
-4. 继续 commit
+1. 始终检查暂存区空白错误和冲突标记
+2. Java 变更执行 Spotless 并重新暂存原 Java 文件
+3. Shell 变更执行 `bash -n` 和 ShellCheck warning 零容忍
+4. Workflow / composite action 变更执行 actionlint
+5. 文档、脚本分别执行结构和登记守护；仓库卫生守护始终执行
 
-这样 push 上去 spotless 一定通过，CI 不再提醒格式。
+Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，避免每次提交过重。
+
+本机依赖：`python3`；提交 Shell 变更需 `shellcheck`，提交 Workflow 变更需 `actionlint`。
 
 > **跳过 hook**（不推荐）：`git commit --no-verify`

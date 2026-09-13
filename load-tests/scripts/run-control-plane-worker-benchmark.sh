@@ -585,7 +585,7 @@ write_params "$PARAM_DIR/atomic.params.json" "atomic"
 write_params "$PARAM_DIR/trigger.params.json" "trigger"
 
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-kafka_lag_snapshot > "$LOG_DIR/kafka-lag-before.txt"
+kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-before.txt"
 pg_pressure_snapshot "$LOG_DIR/pg-pressure-before.txt"
 pg_pressure_sampler "$LOG_DIR/pg-pressure-samples.csv" &
 PG_SAMPLER_PID=$!
@@ -627,7 +627,7 @@ case "$CONTROL_PLANE_MODE" in
     ;;
 esac
 
-kafka_lag_snapshot > "$LOG_DIR/kafka-lag-after.txt"
+kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-after.txt"
 stop_pg_pressure_sampler
 pg_pressure_snapshot "$LOG_DIR/pg-pressure-after.txt"
 write_report

@@ -296,7 +296,7 @@ mkdir -p "$LOG_DIR" "$PARAM_DIR"
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 pg_stat_snapshot > "$LOG_DIR/pg-before.txt"
 docker_stats_snapshot > "$LOG_DIR/docker-before.txt"
-kafka_lag_snapshot > "$LOG_DIR/kafka-lag-before.txt"
+kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-before.txt"
 
 if csv_contains aggregate "$PROCESS_SCENARIOS"; then
   run_process_job aggregate lt_process_sql_job "$PROCESS_PARAMS" "$PROCESS_USERS" || true
@@ -312,7 +312,7 @@ if csv_contains idempotency "$PROCESS_SCENARIOS"; then
   run_process_job idempotency-second lt_process_copy_job "$PARAM_DIR/process-copy-fixed.params.json" 1 || true
 fi
 
-kafka_lag_snapshot > "$LOG_DIR/kafka-lag-after.txt"
+kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-after.txt"
 docker_stats_snapshot > "$LOG_DIR/docker-after.txt"
 pg_stat_snapshot > "$LOG_DIR/pg-after.txt"
 write_report

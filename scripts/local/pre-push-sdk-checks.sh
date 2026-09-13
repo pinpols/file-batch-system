@@ -143,7 +143,29 @@ if ! python3 scripts/ci/check-env-file-shell-safety.py; then
   errors=$((errors+1))
 fi
 
+READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"
+if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; then
+  if [[ -f "scripts/ci/report-java-readability-inventory.py" && -f "$READABILITY_INVENTORY" ]]; then
+    if python3 scripts/ci/report-java-readability-inventory.py --output "$READABILITY_INVENTORY"; then
+      if git diff --quiet -- "$READABILITY_INVENTORY"; then
+        ok "Java readability inventory 已同步"
+      else
+        fail "Java readability inventory 已自动刷新,请 git add/commit 后再 push:$READABILITY_INVENTORY"
+        errors=$((errors+1))
+      fi
+    else
+      fail "Java readability inventory 生成失败"
+      errors=$((errors+1))
+    fi
+  fi
+fi
+
 if [[ -n "$CHANGED_SHELL" ]]; then
+  if [[ -x "scripts/ci/check-shell-scripts.sh" ]]; then
+    if ! bash scripts/ci/check-shell-scripts.sh; then
+      errors=$((errors+1))
+    fi
+  fi
   while IFS= read -r script; do
     [[ -z "$script" || ! -f "$script" ]] && continue
     if ! bash -n "$script"; then
