@@ -204,6 +204,11 @@ Orchestrator、Atomic Worker、Kafka 和 PostgreSQL compose 服务。Linux Docke
 同一 compose 均可运行；staging、生产探测和非 Docker 环境应使用上文的 Maven `-Pstaging` 或
 `-Pprod-probe` Gatling profile，不应绕过容器拓扑检查。
 
+从普通 local 切换到 benchmark 时应使用 `COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh ...`。
+即使只指定部分应用服务，启动脚本也会先重跑 `kafka-init`，将存量 Kafka topic 扩展到 benchmark
+声明的分区数，再重启 producer/consumer。Kafka 分区不可缩减；切回普通 local 后可以继续使用已扩展的
+topic，但不能把切换前后的结果视为同一环境基线。
+
 容量对比必须先通过环境同构门禁。脚本默认按 2026-09-12 无画像基线校验：
 
 - `pg_stat_statements.track=none`、`track_io_timing=off`
