@@ -66,7 +66,10 @@ CAPACITY_EXPECT_SYNCHRONOUS_COMMIT="${CAPACITY_EXPECT_SYNCHRONOUS_COMMIT:-on}"
 CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
 CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
 CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
-CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-0.75}"
+CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-1.875}"
+# 8 核历史基线要求 load1 <= 6；用户可在 load1 < 15 时继续做稳定性/容量复验，但只有
+# 低于本门槛的轮次才具备与历史标准基线直接比较性能增减的资格。
+CAPACITY_COMPARABLE_MAX_HOST_LOAD_PER_CPU="${CAPACITY_COMPARABLE_MAX_HOST_LOAD_PER_CPU:-0.75}"
 # 单点 load average 容易在后台任务短暂回落时误放行。正式画像要求连续多次采样都满足
 # 阈值；需要等待宿主机回稳时应在脚本外等待，不能降低阈值绕过基线约束。
 CAPACITY_HOST_LOAD_STABLE_SAMPLES="${CAPACITY_HOST_LOAD_STABLE_SAMPLES:-5}"
@@ -140,6 +143,7 @@ DOCKER_ENVIRONMENT_SIGNATURE=""
 LOAD_GENERATOR_ENVIRONMENT_SIGNATURE=""
 RUNNING_CONTAINER_SIGNATURE=""
 HOST_LOAD_PREFLIGHT_SAMPLES=""
+CAPACITY_ENVIRONMENT_COMPARABLE=1
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
@@ -361,6 +365,7 @@ require_capacity_environment_alignment() {
   fi
   capture_load_generator_environment
   HOST_LOAD_PREFLIGHT_SAMPLES=""
+  CAPACITY_ENVIRONMENT_COMPARABLE=1
   for ((sample = 1; sample <= CAPACITY_HOST_LOAD_STABLE_SAMPLES; sample++)); do
     load_one_minute="$(host_load_one_minute)"
     if [[ ! "$load_one_minute" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
@@ -373,6 +378,11 @@ require_capacity_environment_alignment() {
       echo "Capacity host is already busy: load1=${load_one_minute}, cpus=${cpu_count}, max_load_per_cpu=${CAPACITY_MAX_HOST_LOAD_PER_CPU}" >&2
       echo "  stable samples required=${CAPACITY_HOST_LOAD_STABLE_SAMPLES}, observed=${HOST_LOAD_PREFLIGHT_SAMPLES}" >&2
       exit 2
+    fi
+    if ! awk -v load="$load_one_minute" -v cpus="$cpu_count" \
+        -v limit="$CAPACITY_COMPARABLE_MAX_HOST_LOAD_PER_CPU" \
+        'BEGIN { exit !((load / cpus) <= limit) }'; then
+      CAPACITY_ENVIRONMENT_COMPARABLE=0
     fi
     if (( sample < CAPACITY_HOST_LOAD_STABLE_SAMPLES )); then
       sleep "$CAPACITY_HOST_LOAD_SAMPLE_INTERVAL_SECONDS"
@@ -917,6 +927,8 @@ write_report_header() {
     echo "- Minimum PostgreSQL data-volume free space: ${CAPACITY_MIN_PG_DATA_FREE_KIB} KiB"
     echo "- Load-generator host CPUs: ${cpu_count}"
     echo "- Preflight host load samples: ${HOST_LOAD_PREFLIGHT_SAMPLES}"
+    echo "- Standard-baseline comparable: $([[ "$CAPACITY_ENVIRONMENT_COMPARABLE" == "1" ]] && echo yes || echo no)"
+    echo "- Comparable host-load limit per CPU: ${CAPACITY_COMPARABLE_MAX_HOST_LOAD_PER_CPU}"
     echo "- Load-generator host load snapshot: ${host_load}"
     for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
       container_revision="$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
@@ -1187,6 +1199,7 @@ run_10w_storm() {
   WAIT_TERMINAL_TIMEOUT_SECONDS="$STORM_WAIT_SECONDS" \
   WAIT_TERMINAL_POLL_INTERVAL_SECONDS="$CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS" \
   WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="$STORM_TOTAL_REQUESTS" \
+  WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL=1 \
   WAIT_TERMINAL_ALLOW_PARTIAL=0 \
   POST_PREPARE_SETTLE_SECONDS="$STORM_POST_PREPARE_SETTLE_SECONDS" \
   PRE_MEASURE_CHECKPOINT_ENABLED=1 \
@@ -1300,6 +1313,7 @@ if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "  load-generator=${LOAD_GENERATOR_ENVIRONMENT_SIGNATURE}"
   echo "  running-containers=${RUNNING_CONTAINER_SIGNATURE}"
   echo "  host-load-samples=${HOST_LOAD_PREFLIGHT_SAMPLES}"
+  echo "  standard-baseline-comparable=$([[ "$CAPACITY_ENVIRONMENT_COMPARABLE" == "1" ]] && echo yes || echo no)"
   exit 0
 fi
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
