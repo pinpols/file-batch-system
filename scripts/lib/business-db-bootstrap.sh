@@ -17,7 +17,7 @@ batch_bootstrap_business_database() {
     --project-name "$compose_project_name" \
     --env-file "$compose_env_file" \
     -f "$root/docker-compose.yml" \
-    up -d postgres-primary >/dev/null
+    up -d --no-recreate postgres-primary >/dev/null
 
   local attempt
   for attempt in $(seq 1 60); do

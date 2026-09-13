@@ -22,6 +22,7 @@
 - 默认使用 `.env.local`
 - 如需切换环境，可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
 - 这类脚本不管理本地 Java 进程，只管理容器
+- 应用启动前的业务库 bootstrap 使用 `--no-recreate`，仅确保 PostgreSQL 已启动并补齐 DDL/RLS；因此从不同 worktree 定向重启应用不会误滚动数据库容器。无参数全量启动仍会按 Compose 配置正常收敛基础设施。
 - 构建应用镜像时优先使用 `./scripts/docker/build-apps.sh`，这样会默认开启 BuildKit 和 Docker CLI build
 - 只重建 Atomic：`./scripts/docker/build-apps.sh worker-atomic`，脚本会自动传入 `BUILD_MODE=module`
 - 整套 8 个镜像显式共享一次 builder：`BUILD_MODE=all ./scripts/docker/build-apps.sh`

@@ -238,6 +238,9 @@ CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
 运行期间的 load 峰值包含被测 Docker/JVM/PostgreSQL 自身压力，只记录到报告中用于跨轮次归因，不作为
 硬失败条件；外部后台进程是否抢占 CPU 仍需结合主机进程采样判断。
 
+P2 容量与多租户公平性 fixture 会自包含创建所需的 Atomic 作业定义，不依赖可选的演示 seed；准备完成后
+脚本会核验作业类型、worker group 和启用状态，fixture 不完整时在发压前失败，避免生成入口成功但终态无效的报告。
+
 - PostgreSQL 客户端：统一入口默认依次尝试宿主机 `psql`、Python `psycopg`、运行中的
   `batch-postgres-primary` 容器；可用 `BATCH_PG_CLIENT_MODE=host|python|docker` 固定模式。本地 Docker
   容量画像无需额外安装宿主机 `psql`。

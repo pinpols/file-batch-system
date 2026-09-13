@@ -955,6 +955,18 @@ run_10w_storm() {
     psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
       -v capacity_job_timeout_seconds="$CAPACITY_JOB_TIMEOUT_SECONDS" \
       -f "$LOAD_DIR/sql/prepare-p2-capacity-atomic.sql"
+    local prepared_job_count
+    prepared_job_count="$(
+      psql_platform -tA -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+        -v capacity_job_timeout_seconds="$CAPACITY_JOB_TIMEOUT_SECONDS" \
+        -f "$LOAD_DIR/sql/verify-p2-capacity-job.sql"
+    )"
+    prepared_job_count="${prepared_job_count//[[:space:]]/}"
+    if [[ "$prepared_job_count" != "1" ]]; then
+      echo "capacity fixture preparation produced ${prepared_job_count:-0}/1 usable atomic job definitions" >&2
+      PROFILE_RC=1
+      return
+    fi
     evict_capacity_config_cache
     storm_tenant_id="$CAPACITY_TENANT_ID"
   fi
@@ -1040,6 +1052,14 @@ run_fairness() {
   echo "==> prepare isolated p2fa/p2fb/p2fc atomic job definitions"
   psql_platform -v fairness_group_cap="$FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS" \
     -f "$LOAD_DIR/sql/prepare-p2-multitenant-atomic.sql"
+  local prepared_job_count
+  prepared_job_count="$(psql_platform -tA -f "$LOAD_DIR/sql/verify-p2-fairness-jobs.sql")"
+  prepared_job_count="${prepared_job_count//[[:space:]]/}"
+  if [[ "$prepared_job_count" != "3" ]]; then
+    echo "fairness fixture preparation produced ${prepared_job_count:-0}/3 usable atomic job definitions" >&2
+    PROFILE_RC=1
+    return
+  fi
   echo "==> evict p2fa/p2fb/p2fc job-definition and quota-policy caches after direct SQL setup"
   evict_fairness_config_cache
   echo "==> multi-tenant fairness run_id=${RUN_ID}, total=${FAIRNESS_TOTAL_REQUESTS}, group_cap=${FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS}, policy_weights=p2fa:3,p2fb:1,p2fc:1, launch_weights=${FAIRNESS_LAUNCH_WEIGHTS}"
