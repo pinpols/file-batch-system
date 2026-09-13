@@ -67,6 +67,13 @@ CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
 CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
 CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
 CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-0.75}"
+# 历史 10 万基线使用 Docker Desktop 8 CPU / 约 8 GiB。CPU 会直接改变吞吐，必须精确
+# 匹配；内存允许 Docker Desktop 的保留开销形成小幅波动，但不能让 16 GiB 环境冒充 8 GiB
+# 基线。需要在另一容量等级上测试时应显式覆盖这些值，并建立新的基线报告。
+CAPACITY_EXPECT_DOCKER_CPUS="${CAPACITY_EXPECT_DOCKER_CPUS:-8}"
+CAPACITY_MIN_DOCKER_MEMORY_BYTES="${CAPACITY_MIN_DOCKER_MEMORY_BYTES:-8053063680}"
+CAPACITY_MAX_DOCKER_MEMORY_BYTES="${CAPACITY_MAX_DOCKER_MEMORY_BYTES:-9663676416}"
+CAPACITY_MIN_PG_DATA_FREE_KIB="${CAPACITY_MIN_PG_DATA_FREE_KIB:-20971520}"
 # 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
 # result_version 单业务键串行锁后测通用控制面容量。
 CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
@@ -117,6 +124,7 @@ ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica
 KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
 KAFKA_PROFILE_STARTED_AT=""
+DOCKER_ENVIRONMENT_SIGNATURE=""
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"
@@ -216,6 +224,61 @@ require_isolated_application_topology() {
     echo "  these workers consume Docker memory, CPU and PostgreSQL connections but are outside the Atomic profile" >&2
     exit 2
   fi
+}
+
+require_capacity_docker_environment() {
+  local docker_state docker_cpus docker_memory docker_arch docker_os docker_version
+  local compose_version pg_data_free_kib container state health restart_count memory
+  local container_memory_signature=""
+  docker_state="$(docker info --format '{{.NCPU}}|{{.MemTotal}}|{{.Architecture}}|{{.OSType}}|{{.ServerVersion}}' 2>/dev/null || true)"
+  IFS='|' read -r docker_cpus docker_memory docker_arch docker_os docker_version <<< "$docker_state"
+  compose_version="$(docker compose version --short 2>/dev/null || true)"
+
+  if [[ "$docker_os" != "linux" || ! "$docker_cpus" =~ ^[1-9][0-9]*$ \
+      || ! "$docker_memory" =~ ^[1-9][0-9]*$ || -z "$docker_arch" || -z "$docker_version" \
+      || -z "$compose_version" ]]; then
+    echo "Capacity benchmark requires a healthy Linux Docker engine with Compose v2+" >&2
+    echo "  actual: cpus=${docker_cpus:-unknown}, memory=${docker_memory:-unknown}, arch=${docker_arch:-unknown}, os=${docker_os:-unknown}, engine=${docker_version:-unknown}, compose=${compose_version:-unknown}" >&2
+    exit 2
+  fi
+  if [[ "$docker_cpus" != "$CAPACITY_EXPECT_DOCKER_CPUS" \
+      || "$docker_memory" -lt "$CAPACITY_MIN_DOCKER_MEMORY_BYTES" \
+      || "$docker_memory" -gt "$CAPACITY_MAX_DOCKER_MEMORY_BYTES" ]]; then
+    echo "Docker capacity does not match the declared benchmark class:" >&2
+    echo "  expected: cpus=${CAPACITY_EXPECT_DOCKER_CPUS}, memory=${CAPACITY_MIN_DOCKER_MEMORY_BYTES}..${CAPACITY_MAX_DOCKER_MEMORY_BYTES} bytes" >&2
+    echo "  actual: cpus=${docker_cpus}, memory=${docker_memory} bytes" >&2
+    echo "  resize Docker or override the expected class and establish a separate baseline; do not compare mixed capacity classes" >&2
+    exit 2
+  fi
+
+  for container in \
+    batch-trigger \
+    batch-orchestrator \
+    batch-orchestrator-benchmark-replica \
+    batch-worker-atomic \
+    batch-kafka; do
+    IFS='|' read -r state health restart_count memory <<< "$(docker inspect "$container" \
+      --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.HostConfig.Memory}}' \
+      2>/dev/null || true)"
+    if [[ "$state" != "running" || "$health" != "healthy" \
+        || ! "$restart_count" =~ ^[0-9]+$ || ! "$memory" =~ ^[1-9][0-9]*$ ]]; then
+      echo "Capacity container does not match the benchmark topology:" >&2
+      echo "  container=${container}, state=${state:-missing}, health=${health:-missing}, restarts=${restart_count:-missing}" >&2
+      echo "  memory=${memory:-missing}; every measured container must have an explicit non-zero limit" >&2
+      exit 2
+    fi
+    container_memory_signature="${container_memory_signature}${container_memory_signature:+,}${container}=${memory}"
+  done
+
+  pg_data_free_kib="$(docker exec batch-postgres-primary df -Pk /var/lib/postgresql/data \
+    2>/dev/null | awk 'NR == 2 { print $4 }' || true)"
+  if [[ ! "$pg_data_free_kib" =~ ^[0-9]+$ || "$pg_data_free_kib" -lt "$CAPACITY_MIN_PG_DATA_FREE_KIB" ]]; then
+    echo "PostgreSQL data volume has insufficient free space for the capacity profile:" >&2
+    echo "  expected >= ${CAPACITY_MIN_PG_DATA_FREE_KIB} KiB, actual=${pg_data_free_kib:-unknown} KiB" >&2
+    exit 2
+  fi
+
+  DOCKER_ENVIRONMENT_SIGNATURE="local-docker-v1;cpus=${docker_cpus};memory=${docker_memory};arch=${docker_arch};os=${docker_os};engine=${docker_version};compose=${compose_version};limits=${container_memory_signature}"
 }
 
 require_capacity_environment_alignment() {
@@ -442,7 +505,8 @@ release_capacity_lock() {
 require_tooling() {
   command -v curl >/dev/null || { echo "curl is required" >&2; exit 2; }
   command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
-  command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
+  command -v docker >/dev/null || { echo "docker is required" >&2; exit 2; }
+  type psql >/dev/null 2>&1 || { echo "the shared PostgreSQL client wrapper is unavailable" >&2; exit 2; }
   batch_require_python
 }
 
@@ -745,6 +809,9 @@ write_report_header() {
     echo "- PostgreSQL durability/WAL: synchronous_commit=${synchronous_commit}, wal_compression=${wal_compression}, max_wal_size=${max_wal_size}, checkpoint_timeout=${checkpoint_timeout}"
     echo "- Git revision: ${git_revision}"
     echo "- Expected application image revision: ${CAPACITY_EXPECT_APP_IMAGE_REVISION}"
+    echo "- Docker environment signature: ${DOCKER_ENVIRONMENT_SIGNATURE}"
+    echo "- Docker capacity class: ${CAPACITY_EXPECT_DOCKER_CPUS} CPU, ${CAPACITY_MIN_DOCKER_MEMORY_BYTES}..${CAPACITY_MAX_DOCKER_MEMORY_BYTES} bytes"
+    echo "- Minimum PostgreSQL data-volume free space: ${CAPACITY_MIN_PG_DATA_FREE_KIB} KiB"
     echo "- Load-generator host CPUs: ${cpu_count}"
     echo "- Load-generator host load snapshot: ${host_load}"
     for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
@@ -1113,6 +1180,7 @@ require_exact_storm_shape
 require_supported_capacity_runtime
 require_application_image_provenance
 require_isolated_application_topology
+require_capacity_docker_environment
 require_trigger_capacity_budget
 require_pg_statement_profile
 require_capacity_environment_alignment

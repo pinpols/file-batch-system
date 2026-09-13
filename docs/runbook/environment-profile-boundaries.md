@@ -19,7 +19,9 @@
 ## 已定义环境
 
 - `local`：日常本机/Compose 联调。使用安全基础预算，不自动启用压测参数。
-- `benchmark`：仅对 Trigger 生效，必须与 `local` 组合启用。当前容量画像为入口 `32`、Hikari `40`、后台预留 `8`、有界队列 `128`、等待 `15s`。
+- `benchmark`：仅对隔离容量拓扑生效，必须与 `local` 组合启用。当前 Trigger 容量画像为入口 `80`、
+  Hikari `88`、后台预留 `8`、有界队列 `128`、等待 `15s`；双 Orchestrator 和 Atomic Worker 的预算由
+  `deploy/docker/compose/benchmark.yml` 唯一维护。
 - `ci`：CI 由工作流注入连接和密钥，不复用 `local` 的 localhost 与安全旁路。
 - `prod`：由 Helm values/Secret 注入，不得启用 `local`、`benchmark` 或 bypass。
 
@@ -38,7 +40,9 @@ COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger
 bash load-tests/scripts/run-p2-capacity-profile.sh
 ```
 
-压测脚本会核验容器 profile、入口许可、连接池和启动期保留连接预算；任一项不符即停止。
+压测脚本会核验 Docker 8 CPU/约 8 GiB 容量等级、目标容器健康和内存预算、镜像 revision、容器
+profile、入口许可、连接池、启动期保留连接预算、PostgreSQL 参数/磁盘余量及 Kafka lag；任一项不符即停止。
+报告中的 Docker 环境签名不同时只能建立新基线，不能直接做跨环境性能增减结论。
 
 ## 变更守则
 

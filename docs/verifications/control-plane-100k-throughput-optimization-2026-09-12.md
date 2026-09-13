@@ -289,9 +289,12 @@ PostgreSQL 时的提交/WAL 竞争，而不是 Worker、Kafka 分区或单一业
   `top/on`。仅关闭报告开关不再被视为无观测。
 - 默认要求 `synchronous_commit=on`、`wal_compression=off`、`max_wal_size=1GiB`、
   `checkpoint_timeout=300s`；实验参数必须显式覆盖期望值并单独命名 run。
-- 记录 Git SHA、数据库观测参数、主机 CPU 数和 load；运行中 PostgreSQL 压力采样同步记录主机 1 分钟 load。
+- 记录 Git SHA、数据库观测参数、主机 CPU 数和 load；Docker CPU/内存/架构、Engine/Compose 版本和
+  被测容器内存上限组成环境签名；运行中 PostgreSQL 压力采样同步记录主机 1 分钟 load。
 - 默认发压前主机 1 分钟 load/CPU 不得超过 0.75，超限会拒绝启动。运行中的 load 包含被测系统自身
   产生的有效压力，因此仅记录峰值用于归因，不将它错误地作为硬失败条件。
+- 历史本机基线要求 Docker 为 8 CPU、7.5-9 GiB；被测容器必须健康并设置非零内存上限，PostgreSQL
+  数据卷至少保留 20 GiB。换机器可通过显式容量等级建立新基线，但环境签名不同的结果不得直接比较。
 - 隔离租户六类运行数据必须为 0，Kafka launch lag 必须清零，容器预算和分区数必须与 benchmark profile
   一致；任何不一致均不得进入容量对比表。
 

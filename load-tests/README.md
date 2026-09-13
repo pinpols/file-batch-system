@@ -221,6 +221,9 @@ topic，但不能把切换前后的结果视为同一环境基线。
 
 容量对比必须先通过环境同构门禁。脚本默认按 2026-09-12 无画像基线校验：
 
+- Docker Linux engine 固定为 8 CPU，内存处于 7.5-9 GiB 容量等级；Trigger、双 Orchestrator、
+  Atomic Worker、Kafka 必须健康且设置非零内存上限，具体预算进入环境签名
+- PostgreSQL 数据卷至少保留 20 GiB 空间
 - `pg_stat_statements.track=none`、`track_io_timing=off`
 - `synchronous_commit=on`、`wal_compression=off`
 - `max_wal_size=1GiB`、`checkpoint_timeout=300s`
@@ -238,7 +241,10 @@ CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
 `CAPACITY_PG_STATEMENTS_PROFILE_ENABLED` 设为 `0` 只会停止画像报告，不能关闭数据库运行时采集；修改角色、
 数据库或容器参数后必须让应用连接池全部重连。实验使用其他 WAL/checkpoint 参数时，必须同时显式传入
 `CAPACITY_EXPECT_*` 期望值并使用独立 `RUN_ID`，不得与历史基线直接混合比较。报告会记录 Git SHA、
-容器镜像 ID、数据库参数和运行期间主机 load，任一口径不一致的轮次只能作为诊断证据。
+容器镜像 ID、Docker CPU/内存/架构/Engine/Compose 组成的环境签名、数据库参数和运行期间主机 load。
+换机器或升级 Docker 后可以继续运行，但环境签名不同的结果只能建立新基线，不能直接用于宣称相对旧基线
+的性能提升或回退。确需使用其他 Docker 容量等级时，显式覆盖 `CAPACITY_EXPECT_DOCKER_CPUS`、
+`CAPACITY_MIN_DOCKER_MEMORY_BYTES` 和 `CAPACITY_MAX_DOCKER_MEMORY_BYTES`，并使用独立验证报告。
 运行期间的 load 峰值包含被测 Docker/JVM/PostgreSQL 自身压力，只记录到报告中用于跨轮次归因，不作为
 硬失败条件；外部后台进程是否抢占 CPU 仍需结合主机进程采样判断。
 
