@@ -21,6 +21,7 @@
 ## 配置与开关
 - 业务异常码、字典枚举、i18n 在 `batch-common`;暴露给前端的枚举需登记 `ConsoleMetaQueryService`。
 - 安全 bypass 总开关 `batch.security.bypass-mode`(认证/加解密/审批全放行),**生产 profile 强制拒绝**。
+- AI 知识库默认加载 `classpath:ai-knowledge/*.md`;工程治理、发布门禁或运维入口变化时,需要同步更新对应知识文档,否则 Console AI 会继续按旧语料回答。
 
 ## 时区与编码
 - 全系统默认时区 `Asia/Shanghai`,业务代码禁用 `ZoneId.systemDefault()`,统一注入 `BatchTimezoneProvider`。

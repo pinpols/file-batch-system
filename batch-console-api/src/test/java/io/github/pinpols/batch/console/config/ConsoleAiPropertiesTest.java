@@ -25,6 +25,14 @@ class ConsoleAiPropertiesTest {
         .hasRootCauseInstanceOf(IllegalArgumentException.class);
   }
 
+  @Test
+  void defaultDomainKeywords_shouldCoverEngineeringGovernanceQuestions() {
+    ConsoleAiProperties properties = new ConsoleAiProperties();
+
+    assertThat(properties.getDomainKeywords())
+        .contains("readiness", "trivy", "changelog", "dependency", "maven", "docker", "门禁");
+  }
+
   private static ConsoleAiProperties bind(String provider) {
     Binder binder = new Binder(
         new MapConfigurationPropertySource(Map.of("batch.console.ai.provider", provider)));

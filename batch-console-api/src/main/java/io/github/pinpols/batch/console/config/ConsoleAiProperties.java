@@ -85,6 +85,16 @@ public class ConsoleAiProperties {
       "console",
       "audit",
       "reconcile",
+      "readiness",
+      "maven",
+      "docker",
+      "helm",
+      "trivy",
+      "changelog",
+      "dependency",
+      "version",
+      "release",
+      "script",
       "归档",
       "重分发",
       "工作流",
@@ -95,7 +105,12 @@ public class ConsoleAiProperties {
       "重试",
       "死信",
       "节点",
-      "分片"));
+      "分片",
+      "版本",
+      "发布",
+      "依赖",
+      "门禁",
+      "脚本"));
 
   /** 阻断关键词。Prompt 命中 → 直接 REJECTED_SAFETY，不发送到模型。覆盖密钥 / 越权类词。 */
   private List<String> blockedKeywords = new ArrayList<>(List.of(
