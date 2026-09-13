@@ -302,8 +302,10 @@ CAS、重复 report 和崩溃恢复测试 4 项通过。吞吐收益必须等宿
   `checkpoint_timeout=300s`；实验参数必须显式覆盖期望值并单独命名 run。
 - 记录 Git SHA、数据库观测参数、主机 CPU 数和 load；Docker CPU/内存/架构、Engine/Compose 版本和
   被测容器内存上限组成环境签名；运行中 PostgreSQL 压力采样同步记录主机 1 分钟 load。
-- 默认发压前主机 1 分钟 load/CPU 不得超过 0.75，超限会拒绝启动。运行中的 load 包含被测系统自身
-  产生的有效压力，因此仅记录峰值用于归因，不将它错误地作为硬失败条件。
+- 发压前使用两级主机负载判据：默认执行门槛为 load/CPU 不超过 2.5（8 核即 `load1 <= 20`），只决定
+  是否允许稳定性或过载取证继续；标准基线可比门槛仍为 load/CPU 不超过 0.75（8 核即 `load1 <= 6`）。
+  提高执行门槛不改变性能结论资格。运行中的 load 包含被测系统自身产生的有效压力，因此记录峰值用于
+  归因，不将运行期峰值错误地作为发压前硬失败条件。
 - 历史本机基线要求 Docker 为 8 CPU、7.5-9 GiB；被测容器必须健康并设置非零内存上限，PostgreSQL
   数据卷至少保留 20 GiB。换机器可通过显式容量等级建立新基线，但环境签名不同的结果不得直接比较。
 - 隔离租户六类运行数据必须为 0，Kafka launch lag 必须清零，容器预算和分区数必须与 benchmark profile
@@ -338,6 +340,50 @@ generated keys，真 PostgreSQL 生成键 IT 继续验证单行和批量回填�
 - `load-tests/target/p2-capacity-profile-stabilized-card100-100k-nopgss-20260913.md`
 - `load-tests/target/p2-capacity-profile-tracknone-iooff-card100-10k-20260913.md`
 
+### 6. 最新 main 热表回查验证与高负载负向轮次
+
+在最新主分支 `9b0c876671e31543e98cb509e1a27328c53a1b5c` 上重新构建 17 个 Maven 模块和
+Trigger、双 Orchestrator、Atomic Worker 镜像；Full Gate `34745088389` 通过。先以
+`1000 requests @ 100 RPS`、100 个业务键开启 `pg_stat_statements.track=top` 与
+`track_io_timing=on` 做调用次数验证：
+
+| 热表主键读取 | 旧 10 万画像 | 最新 1 千画像 | 每任务变化 |
+|---|---:|---:|---:|
+| `job_instance` | 400000（4.0/task） | 2000（2.0/task） | -2.0 |
+| `job_task` | 300000（3.0/task） | 2000（2.0/task） | -1.0 |
+
+两项优化合计确定性减少 3 次热表主键读取/任务。`job_task` 剩余两次读取分别服务于认领前的状态、版本和
+路由校验，以及回报前的 RUNNING、worker 归属和 partition invocation fence 校验；继续合并会把简单
+CAS 改造成跨表更新并扩大正确性风险，本轮明确不做。画像轮 1000/1000 全部 SUCCESS；画像开启后
+完成吞吐仅 `12.331 tasks/s`，且运行期 `load1` 峰值 17.90，因此只用于调用次数证明，不用于吞吐对比。
+
+同一最新代码的无画像、低负载 1 万轮次 `tor10k-w1-0913` 为 10000/10000 SUCCESS、零请求失败、零非终态，
+完成窗口 `103.006s`，完成吞吐 `97.081 tasks/s`；预检 load 样本为
+`4.15,3.81,3.91,3.76,3.94`，具备标准基线可比性。该结果比同日较早的 `89.578 tasks/s` 高约 8.4%，
+但仍低于历史热态最佳值，不能宣称已经恢复到历史峰值。
+
+把执行门槛放宽后又执行两轮高负载取证。`tor10k-w2-0913` 在预检样本部分超过可比上限后继续执行，
+服务端接收并完成 9549/9549，但出现 425 个连接提前关闭和 26 个 HTTP 429，完成吞吐仅
+`30.824 tasks/s`。`tor10k-w3-0913` 预检 load 为
+`8.68,8.47,7.95,7.63,7.66`，运行期峰值 40.81；Trigger 约 248% CPU 且触达 768 MiB 容器内存上限，
+PostgreSQL 约 295% CPU。最终服务端接收并完成 9814/9814，全部 SUCCESS、Kafka lag 归零、所有容器
+零重启，但 10000 个目标请求中有 163 个连接提前关闭、23 个 admission 拒绝，另有客户端超时；该轮
+完成吞吐 `25.109 tasks/s`，按规则判为无效饱和轮次。提高执行门槛只让负向实验能完整取证，并没有
+提高系统容量，也不得用来绕过基线可比性和零错误门槛。
+
+切换 SQL 画像参数时必须先重建 PostgreSQL 主从并等待角色稳定，再重启所有持有数据库连接池的应用。
+如果同时重建主从后不重启应用，Docker DNS/IP 复用可能让旧连接目标落到只读副本，表现为
+`cannot execute UPDATE in a read-only transaction`。正确顺序为“数据库主从健康且
+`pg_is_in_recovery()` 分别为 false/true -> 重建应用连接池 -> 检查最近日志无只读事务错误 -> 发压”。
+这属于本地 Docker 运维顺序约束，不是业务层主从自动降级机制。
+
+本节原始证据：
+
+- `load-tests/target/p2-capacity-profile-torpg1kb-0913.md`
+- `load-tests/target/p2-capacity-profile-tor10k-w1-0913.md`
+- `load-tests/target/p2-capacity-profile-tor10k-w2-0913.md`
+- `load-tests/target/p2-capacity-profile-tor10k-w3-0913.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |
@@ -347,6 +393,8 @@ generated keys，真 PostgreSQL 生成键 IT 继续验证单行和批量回填�
 | 1 万，清理与日志优化后 | 有效 | 10000/10000，p95 559ms | 134.367/s | 较上一有效基线提升约 4.4% |
 | 1 万，Worker 双端点，优化前 | 有效 | 10000/10000，零失败 | 116.523/s | claim/report 已双实例均衡，但共享 PG 热点仍在 |
 | 1 万，结果版本热路径优化后（热态） | 有效 | 10000/10000，p95 1112ms | 136.517/s | 保留正确性锁，完成窗口较上一行缩短 14.6% |
+| 1 万，最新 main、低负载复验 | 有效 | 10000/10000，p95 858ms | 97.081/s | 比同日较早轮次回升 8.4%，尚未恢复历史热态峰值 |
+| 1 万，最新 main、高负载取证 | 无效负向实验 | 9814/10000 入库，入口超时/拒绝 | 25.109/s | 运行期 load1 40.81，证明提高执行门槛不等于提高容量 |
 | 10 万，旧 3 分区缓存状态 | 趋势参考 | 100000/100000 | 约 117/s | 拓扑证据无效，不作为最终验收 |
 | 10 万，最终严格轮次 | 有效 | 100000/100000，p95 67ms | 134.946/s | 全终态、零失败、零残留 |
 | 10 万，热路径优化、清账本、单端点 | 有效 | 100000/100000，零失败 | 131.468/s | 未超过最终严格基线，不宣称提升 |
@@ -377,11 +425,13 @@ generated keys，真 PostgreSQL 生成键 IT 继续验证单行和批量回填�
 
 ## 后续建议
 
-P0 已完成，无需继续提高 Trigger admission。Worker 多端点已经解决本地直连场景的单实例集中问题；
-下一项最有价值的工作是对隔离轮次重置并采集 `pg_stat_statements`、WAL 和事务提交画像，按累计耗时、
-调用次数和 WAL 贡献定位可批量化的具体 SQL。候选改动必须逐项 A/B，且不得合并 launch T1/T2、弱化
-Outbox 原子性、关闭同步提交或删除终态 CAS。
+SQL 画像和两项低风险主键回查优化已经完成。当前没有证据支持继续提高 Trigger admission，也不支持把
+认领/回报前剩余的 task 读取强行并入复杂跨表 UPDATE。下一次可信容量推进应在安静宿主机或独占 runner
+上完成同口径 1 万三轮复验并取中位数；恢复到历史容差后，再运行 10 万标准基线。主机预检超过可比门槛
+时只做故障与稳定性取证，不继续消耗数十分钟生成不可比较的吞吐数字。
 
-report batching 仅在 profiling 证明 report HTTP/事务是主要剩余热点后立项，并必须覆盖部分失败回退、
-旧 invocation fence、重复批次、单项超时和 Orchestrator 切换测试。不要为了继续提高单机数字而弱化
-逐任务终态 CAS、租约或幂等边界。
+后续可单独 A/B PostgreSQL `max_wal_size`、`checkpoint_timeout` 和存储 I/O，但必须保持
+`synchronous_commit=on`，记录恢复时间与磁盘余量，并在实验结束后恢复基线。report batching 只有在
+独占环境 profiling 证明 report 事务仍是主导热点时才立项，并必须覆盖部分失败回退、旧 invocation fence、
+重复批次、单项超时和 Orchestrator 切换测试。不得为了单机数字合并 launch T1/T2、弱化 Outbox 原子性、
+关闭同步提交或删除终态 CAS。

@@ -8,7 +8,7 @@
 
 ### 2026-09-13
 - **MyBatis 生成键列约束**：所有 PostgreSQL `useGeneratedKeys` 插入必须显式声明 `keyColumn="id"`，禁止 JDBC 退化为 `RETURNING *` 后回传并解码整行 JSONB/运行快照；PR、Full Gate 和本地完整回归共用同一静态守护。
-- **容量画像环境可比性约束**：P2 压测由单点负载判断改为连续稳定采样，并记录负载发生器硬件/JDK与实际容器集合签名；8 核环境允许 `load1 < 15` 执行，但仅 `load1 <= 6` 的轮次具备标准基线可比性；入口稳定短缺时不再等待完整终态超时。
+- **容量画像环境可比性约束**：P2 压测由单点负载判断改为连续稳定采样，并记录负载发生器硬件/JDK与实际容器集合签名；8 核环境允许 `load1 <= 20` 执行稳定性或过载取证，但仅 `load1 <= 6` 的轮次具备标准基线可比性；入口稳定短缺时不再等待完整终态超时。
 - **ADR-013 OTLP 总开关语义校正**：`MANAGEMENT_OPENTELEMETRY_ENABLED` 同时控制 Micrometer metrics、traces 和 logs exporter；关闭时不得残留后台 Collector 连接，生产仍由 Helm overlay 显式开启。
 - **门禁按需执行**：`pr-gate` 的 required Job 保持每个 PR 上报状态，内部按 Java、数据库、脚本、文档、配置、API 和 CI 文件域执行对应步骤；项目级 pre-commit 同步增加暂存区空白、Spotless、ShellCheck、actionlint、文档结构、脚本登记和仓库卫生轻量守护。
 - **文档权威入口与结构门禁**：为 audit / backlog / governance / spike / standards / verifications 补齐目录索引，将旧版 `architecture-truth` 完整正文归档为带日期快照，当前路径只保留权威来源导航；新增文档结构 CI，阻断失效相对链接、缺失关键目录索引和权威入口回退为历史正文。
