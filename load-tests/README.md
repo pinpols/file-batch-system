@@ -230,6 +230,9 @@ topic，但不能把切换前后的结果视为同一环境基线。
 - 发压前主机 1 分钟 load/CPU 不超过 `0.75`
 - benchmark 容器拓扑、Kafka 分区/lag、隔离租户数据均符合脚本声明
 
+压测开始和结束时会比较 Trigger、双 Orchestrator、Atomic Worker、PostgreSQL 与 Kafka 的容器重启计数；
+任一容器在测量窗口内重启都会将该轮判为失败，不能把恢复后的请求结果冒充稳定吞吐。
+
 SQL 画像使用另一套明确口径：
 
 ```bash

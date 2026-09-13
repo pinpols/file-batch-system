@@ -121,6 +121,14 @@ PROFILE_RC=0
 STORM_TERMINAL_VERIFIED=0
 FAIRNESS_STARTED=0
 ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
+APPLICATION_STABILITY_CONTAINERS=(
+  batch-trigger
+  batch-orchestrator
+  batch-orchestrator-benchmark-replica
+  batch-worker-atomic
+  batch-postgres-primary
+)
+APPLICATION_RESTART_COUNTS_BEFORE=()
 KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
 KAFKA_PROFILE_STARTED_AT=""
@@ -725,6 +733,47 @@ capture_kafka_stability_baseline() {
   fi
 }
 
+capture_application_stability_baseline() {
+  local container health restart_count
+  APPLICATION_RESTART_COUNTS_BEFORE=()
+  for container in "${APPLICATION_STABILITY_CONTAINERS[@]}"; do
+    health="$(docker inspect "$container" \
+      --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+    restart_count="$(docker inspect "$container" --format '{{.RestartCount}}' 2>/dev/null || true)"
+    if [[ "$health" != "healthy" || ! "$restart_count" =~ ^[0-9]+$ ]]; then
+      echo "Application container must be healthy before the capacity profile: container=${container}, health=${health:-missing}, restarts=${restart_count:-missing}" >&2
+      exit 2
+    fi
+    APPLICATION_RESTART_COUNTS_BEFORE+=("$restart_count")
+  done
+}
+
+verify_application_stability() {
+  local index container health restart_count_before restart_count_after stable=1
+  {
+    echo "## Application Container Stability"
+    echo
+    echo "| Container | Health after | Restarts before | Restarts after | Stable |"
+    echo "|---|---|---:|---:|---|"
+    for index in "${!APPLICATION_STABILITY_CONTAINERS[@]}"; do
+      container="${APPLICATION_STABILITY_CONTAINERS[$index]}"
+      restart_count_before="${APPLICATION_RESTART_COUNTS_BEFORE[$index]}"
+      health="$(docker inspect "$container" \
+        --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+      restart_count_after="$(docker inspect "$container" --format '{{.RestartCount}}' 2>/dev/null || true)"
+      if [[ "$health" == "healthy" && "$restart_count_after" =~ ^[0-9]+$ \
+          && "$restart_count_after" == "$restart_count_before" ]]; then
+        echo "| ${container} | ${health} | ${restart_count_before} | ${restart_count_after} | yes |"
+      else
+        echo "| ${container} | ${health:-missing} | ${restart_count_before} | ${restart_count_after:-missing} | no |"
+        stable=0
+      fi
+    done
+    echo
+  } >> "$REPORT"
+  [[ "$stable" == "1" ]]
+}
+
 verify_kafka_stability() {
   local health restart_count_after stable instability_log instability_events
   health="$(docker inspect "$KAFKA_CONTAINER_NAME" \
@@ -823,6 +872,9 @@ write_report_header() {
     echo "- Post-prepare settle seconds: $STORM_POST_PREPARE_SETTLE_SECONDS"
     echo "- Trigger adaptive release expected: $([[ "$CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE" == "1" ]] && echo enabled || echo disabled)"
     echo "- Kafka restart count before: ${KAFKA_RESTART_COUNT_BEFORE}"
+    for index in "${!APPLICATION_STABILITY_CONTAINERS[@]}"; do
+      echo "- Container restart count before ${APPLICATION_STABILITY_CONTAINERS[$index]}: ${APPLICATION_RESTART_COUNTS_BEFORE[$index]}"
+    done
     echo
   } > "$REPORT"
 }
@@ -1185,6 +1237,7 @@ require_trigger_capacity_budget
 require_pg_statement_profile
 require_capacity_environment_alignment
 capture_kafka_stability_baseline
+capture_application_stability_baseline
 require_empty_trigger_lag
 if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
   echo "P2 capacity profile preflight passed: trigger benchmark profile and capacity budget are ready"
@@ -1213,6 +1266,9 @@ if [[ "$RUN_FAIRNESS" == "1" ]]; then
 fi
 
 if ! verify_kafka_stability; then
+  PROFILE_RC=1
+fi
+if ! verify_application_stability; then
   PROFILE_RC=1
 fi
 
