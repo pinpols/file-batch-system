@@ -3,42 +3,43 @@
 ## 结论
 
 在同一套本地 Docker 基础环境、2 个 Orchestrator、1 个 Atomic Worker 和真实 PostgreSQL/Kafka
-链路上，严格 10 万任务画像最终通过：
+链路上，2026-09-14 使用最新 `main` 完成严格 10 万任务复验：
 
 | 指标 | 最终结果 |
 |---|---:|
 | Trigger 请求 | 100000/100000 成功，0 失败 |
 | 入口速率 | 200 requests/s |
-| HTTP p95 / p99 / max | 67ms / 162ms / 1971ms |
+| HTTP p95 / p99 / max | 90ms / 175ms / 996ms |
 | Job 终态 | 100000 SUCCESS，0 FAILED，0 非终态 |
-| 完成窗口 | 741.036s |
-| 端到端完成吞吐 | 134.946 tasks/s |
-| 端到端平均 / p95 | 211.919s / 289.528s |
+| 完成窗口 | 657.167s |
+| 端到端完成吞吐 | 152.168 tasks/s |
+| 端到端平均 / p95 | 122.461s / 211.500s |
 | Kafka launch 分区 | 12/12 有流量，最终 lag=0 |
 | Atomic dispatch 分区 | 24 个消费者分区最终 lag=0 |
 | Kafka 重启 | 0 次 |
-| 压测数据残留 | result_version/job_instance/trigger_request 均为 0 |
+| 压测数据残留 | job_instance/trigger_request/result_version 均为 0 |
 
-这证明当前单机环境可以稳定接收 200 requests/s 的 10 万任务洪峰，并以约 135 tasks/s 排空。
+这证明当前单机环境可以稳定接收 200 requests/s 的 10 万任务洪峰，并以约 152 tasks/s 排空。
 入口速率高于完成速率时会形成可控 backlog，因此 200/s 不能表述为持续完成吞吐或生产容量承诺。
 
-在上述 10 万稳定基线之后，又完成了 Worker 双 Orchestrator 端点和结果版本终态写入热路径优化。
-同键 1 万任务热态复测达到 `136.517 tasks/s`，10000/10000 成功、零失败、零非终态；该轮用于验证
-热点优化效果，不替代上表的 10 万容量验收。后续四轮 10 万 A/B 没有证明这两项改动能提高同键
-极限吞吐：最好一轮为 `131.468 tasks/s`，仍比上表低约 2.6%。进一步把结果业务键扩为 100 个的
-10 万轮次也只有 `119.898 tasks/s`。因此当前可信的 10 万基线仍是 `134.946 tasks/s`，没有把较小规模
-结果或负向实验外推成容量提升。
+与 2026-09-12 同口径旧基线 `134.946 tasks/s` 相比，吞吐提高 12.8%，完成窗口缩短 11.3%，端到端
+平均和 p95 分别降低 42.2% 与 27.0%。Worker task-control 使用单一 Service 入口；两个 Orchestrator
+仍共同消费 launch topic。双 Orchestrator 直连是 HA 分流实验，不属于标准吞吐口径：同代码、同资源下
+该模式为 `96.494 tasks/s`，原因是 claim/report 同时压向共享 PostgreSQL，扩大事务与 WAL 竞争，不能
+据此判定代码性能回退。
 
 原始报告位于本机：
 
-- `load-tests/target/p2-capacity-profile-throughput-100k-200rps-final-20260912.md`
-- `load-tests/target/control-plane-worker-report-throughput-100k-200rps-final-20260912-10w.md`
+- `load-tests/target/p2-capacity-profile-latest-main-single-endpoint-100k-final-r2-20260914.md`
+- `load-tests/target/control-plane-worker-report-latest-main-single-endpoint-100k-final-r2-20260914-10w.md`
 
 ## 环境与口径
 
 - Docker Desktop：8 CPU、约 7.75 GiB 内存。
 - 基础设施：PostgreSQL 17、Kafka 4.1.2、Valkey 8.1、MinIO。
 - 应用：Trigger 1 实例、Orchestrator 2 实例、Atomic Worker 1 实例。
+- task-control：Atomic Worker 通过单一 `http://orchestrator:18082` Service 入口访问；双直连仅用于
+  HA 分流 A/B，不进入标准吞吐基线。
 - 业务负载：`atomic_sql_demo`，每个请求独立创建 trigger request、job instance、partition 和 task，
   通过真实 Kafka 派发、Worker claim/execute/report 和 PostgreSQL 终态推进。
 - 严格判据：请求零错误、请求数与实例数精确相等、全部实例终态、无失败、Kafka 无重启且最终
@@ -408,9 +409,9 @@ benchmark profile 已恢复为 `32/40`，并保留 8 条数据库连接给 relay
 
 在宿主机仍高于可比门槛的情况下，完成 `1000 requests @ 100 RPS` 无回归轮次：入口和终态均为
 `1000/1000`、HTTP p95 `354ms`、任务执行 p95 `1.935s`、Kafka 最终 lag 为 0、所有容器零重启，完成
-吞吐 `51.186 tasks/s`。该轮预检 load 为 `7.88-9.17`，只证明主链正确，不作为历史吞吐对比。当前
-性能基线仍是 `134.946 tasks/s`；只有宿主机连续预检 `load1 <= 6` 后的同口径 1 万三轮中位数，才可
-用于判断本轮优化是否提升峰值。
+吞吐 `51.186 tasks/s`。该轮预检 load 为 `7.88-9.17`，只证明主链正确，不作为历史吞吐对比。截至这组
+2026-09-13 轮次，当时的性能基线仍是 `134.946 tasks/s`；后续必须在宿主机连续预检 `load1 <= 6` 后
+完成同口径复验，才能更新基线。该前置条件已由下一节的 2026-09-14 轮次满足。
 
 最终提交 `178e56527` 重新构建并部署后又执行了预热和严格轮次。预热轮次在预检 load
 `7.74-7.83` 下接收并完成 `990/990`，10 个拒绝全部由 admission queue full 触发；严格 1 万轮次的
@@ -432,6 +433,50 @@ lag 归零、应用与基础容器均无重启。该轮完成吞吐 `21.302 task
 - `load-tests/target/p2-capacity-profile-opt-final-warmup-1k-0913.md`
 - `load-tests/target/p2-capacity-profile-opt-final-strict-10k-0913.md`
 
+### 8. 2026-09-14 最新 main 严格 10 万复验
+
+在提交 `f9967662e`、应用镜像 revision `178e56527` 上，先执行同口径 1 万门槛轮次。三个满足
+`load1 <= 6` 的有效结果分别为 `118.059/s`、`119.717/s`、`131.929/s`，中位数 `119.717/s`；三轮均
+为 10000/10000 SUCCESS、零请求失败。另一轮虽为 10000/10000 SUCCESS，但预检 load 样本达到
+`12.31`，按规则排除，没有用它抬高结果。
+
+随后使用当时 benchmark 默认的双 task-control 直连完成严格 10 万轮次：100000/100000 SUCCESS、HTTP
+p95 `129ms`、完成吞吐 `96.494/s`。该结果本身有效，但不能与 2026-09-12 的 `134.946/s` 比较：历史
+轮次的 Atomic Worker 全部 claim/report 都经过主 Orchestrator，而双直连默认由后续提交引入。双直连
+把 claim/report 近似 50/50 分散到两个进程，却令两个实例同时竞争同一 PostgreSQL；launch prepare 和
+dispatch 平均耗时分别放大到约 `21.2ms`、`38.9ms`。
+
+恢复历史一致的单 Service 入口后，首轮 10 万有 33 个请求在同一瞬间被 Trigger admission 拒绝；其余
+99967 个实例全部成功，按零错误规则判为无效。清理本轮数据后，发现连续画像留下的热表死元组；对容量
+租户涉及的控制面热表执行普通 `VACUUM (ANALYZE)` 后，死元组归零，再以完全相同参数复跑并通过：
+
+| 指标 | 2026-09-12 旧基线 | 2026-09-14 最新基线 | 变化 |
+|---|---:|---:|---:|
+| Trigger 请求 / Job 终态 | 100000 / 100000 SUCCESS | 100000 / 100000 SUCCESS | 无失败 |
+| HTTP p95 / p99 / max | 67 / 162 / 1971ms | 90 / 175 / 996ms | p95 略升，仍远低于 5s 门槛 |
+| 完成窗口 | 741.036s | 657.167s | -11.3% |
+| 完成吞吐 | 134.946/s | 152.168/s | +12.8% |
+| 端到端平均 / p95 | 211.919 / 289.528s | 122.461 / 211.500s | -42.2% / -27.0% |
+| launch queue 平均 / p95 | 未单列 | 0.957 / 3.368s | 无持续入口积压 |
+| PostgreSQL 提交增量 | 1881480 | 1843135 | -2.0% |
+| PostgreSQL WAL 增量 | 7981997029 bytes | 6437474386 bytes | -19.4% |
+
+最终轮次预检 load 样本为 `5.16,5.15,5.13,5.12,5.67`，Docker 为 8 CPU/约 7.75 GiB，PostgreSQL
+保持 `synchronous_commit=on`、`wal_compression=off`、`max_wal_size=1GiB` 和
+`checkpoint_timeout=300s`。12/12 launch 分区有流量，Kafka 最终 lag 为 0，应用和基础容器零重启；
+批量 claim 20123 次取得 100000 个任务，有效批大小 4.97。自动清理后 job instance、trigger request、
+result version 均为 0。
+
+据此，标准容量画像默认恢复为单 Service task-control 入口，并将端点值写入报告。双直连仍保留为显式
+HA 分流实验，不删除该能力，也不将其结果与标准吞吐基线混用。
+
+本节原始证据：
+
+- `load-tests/target/p2-capacity-profile-latest-main-card1-100k-final-r1-20260914.md`
+- `load-tests/target/p2-capacity-profile-latest-main-single-endpoint-100k-final-20260914.md`
+- `load-tests/target/p2-capacity-profile-latest-main-single-endpoint-100k-final-r2-20260914.md`
+- `load-tests/target/control-plane-worker-report-latest-main-single-endpoint-100k-final-r2-20260914-10w.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |
@@ -449,9 +494,12 @@ lag 归零、应用与基础容器均无重启。该轮完成吞吐 `21.302 task
 | 10 万，热路径优化、清账本、单端点 | 有效 | 100000/100000，零失败 | 131.468/s | 未超过最终严格基线，不宣称提升 |
 | 10 万，report 限流 30000/min | 负向实验 | 100000/100000，p95 128ms | 128.985/s | 429 清零但 PG 竞争上升，参数不保留 |
 | 10 万，100 个业务键、双端点 | 有效负向实验 | 100000/100000，p95 135ms | 119.898/s | 锁分散后仍退化，主瓶颈转为 PG 提交/WAL 竞争 |
+| 10 万，最新 main、双端点 | 有效 HA 实验 | 100000/100000，p95 129ms | 96.494/s | 拓扑不同，不与单 Service 基线比较 |
+| 10 万，最新 main、单端点首轮 | 无效负向实验 | 99967/100000，33 个 429 | 152.611/s | 未满足零错误门槛，清理死元组后复跑 |
+| 10 万，最新 main、单 Service 最终轮次 | **有效当前基线** | 100000/100000，p95 90ms | **152.168/s** | 全终态、零失败、零残留，较旧基线提升 12.8% |
 
-从有真实 12 分区证据的旧 1 万轮次到当前 1 万轮次，完成吞吐约提升 8.7 倍。旧 10 万轮次受 3 分区
-元数据缓存影响，只能作为趋势参考；与其运行窗口相比，最终轮次约提升 15%、完成窗口缩短约 13%。
+旧 3 分区 10 万轮次仍只作为趋势参考，不进入容量基线。与 2026-09-12 的严格 12/12 分区基线相比，
+2026-09-14 当前轮次完成吞吐提高 12.8%，完成窗口缩短 11.3%。
 
 ## 当前瓶颈与边界
 
@@ -459,9 +507,9 @@ lag 归零、应用与基础容器均无重启。该轮完成吞吐 `21.302 task
    backlog 排空速度明显提高，说明入口建模写入与 claim/report/终态写入仍竞争共享数据库资源。
 2. 同一结果业务键的终态必须经过 advisory lock 串行化。这是结果版本正确性边界；100 个业务键的
    10 万复验没有提升吞吐，说明该锁会影响同键修正风暴，但不是当前持续负载的主导容量约束。
-3. Worker 多端点已经证明 claim/report 可在双 Orchestrator 间接近 50/50，但清账本后的双端点轮次
-   只有 `122.940/s`，低于单端点的 `131.468/s`。单 Orchestrator HTTP 入口不是主瓶颈，双实例反而会
-   增加共享 PG 的并发竞争；多端点应作为高可用能力，不作为当前单库吞吐参数。
+3. Worker 多端点已经证明 claim/report 可在双 Orchestrator 间接近 50/50，但最新双端点 10 万轮次
+   只有 `96.494/s`，低于同代码单 Service 入口的 `152.168/s`。HTTP 入口不是主瓶颈，双实例并发写入
+   反而增加共享 PG 的事务与 WAL 竞争；多端点应作为高可用能力，不作为当前单库吞吐参数。
 4. Kubernetes Service 可在连接层分发请求，但长连接复用可能产生粘连。上线前仍应在真实 Service、多个
    Worker 实例下验证分布，不根据本地应用层轮转结果推断生产网络行为。
 5. Orchestrator 已有 report-batch API，但当前仍逐项开启独立事务；Worker 执行包装器也会在单任务完成时
@@ -469,15 +517,15 @@ lag 归零、应用与基础容器均无重启。该轮完成吞吐 `21.302 task
    本轮放宽 report 限流没有提高总吞吐，现有证据不支持承担该改造风险。
 6. Launch 的 T1/T2 独立提交承载崩溃恢复与 Outbox 原子性。把两段简单合并为一个长事务会扩大锁持有时间，
    并破坏 T1 已提交、T2 可恢复的故障语义，不作为性能优化方案。
-7. 当前 134.946/s 是本机 Atomic SQL 场景的 10 万完成吞吐，不代表 Import/Export/Process 或真实外部 HTTP、
+7. 当前 152.168/s 是本机 Atomic SQL 场景的 10 万完成吞吐，不代表 Import/Export/Process 或真实外部 HTTP、
    SFTP、对象存储场景的容量。
 
 ## 后续建议
 
-SQL 画像和两项低风险主键回查优化已经完成。当前没有证据支持继续提高 Trigger admission，也不支持把
-认领/回报前剩余的 task 读取强行并入复杂跨表 UPDATE。下一次可信容量推进应在安静宿主机或独占 runner
-上完成同口径 1 万三轮复验并取中位数；恢复到历史容差后，再运行 10 万标准基线。主机预检超过可比门槛
-时只做故障与稳定性取证，不继续消耗数十分钟生成不可比较的吞吐数字。
+SQL 画像、两项低风险主键回查优化和最新严格 10 万复验已经完成。当前没有证据支持继续提高 Trigger
+admission，也不支持把认领/回报前剩余的 task 读取强行并入复杂跨表 UPDATE。无需在相同本机容量等级
+立即重复 10 万；下一次容量推进应在独占 runner 上增加 Worker 实例或改变 PostgreSQL 资源等级，并建立
+新的环境签名和基线。主机预检超过可比门槛时只做故障与稳定性取证，不生成可比较的吞吐结论。
 
 后续可单独 A/B PostgreSQL `max_wal_size`、`checkpoint_timeout` 和存储 I/O，但必须保持
 `synchronous_commit=on`，记录恢复时间与磁盘余量，并在实验结束后恢复基线。report batching 只有在

@@ -204,6 +204,20 @@ Orchestrator、Atomic Worker、Kafka 和 PostgreSQL compose 服务。Linux Docke
 同一 compose 均可运行；staging、生产探测和非 Docker 环境应使用上文的 Maven `-Pstaging` 或
 `-Pprod-probe` Gatling profile，不应绕过容器拓扑检查。
 
+标准吞吐基线中，Atomic Worker 默认通过单一 `http://orchestrator:18082` Service 入口访问 task-control；
+两个 Orchestrator 仍共同消费 12 个 launch 分区。该口径与普通 Compose、Helm 以及 2026-09-12 的严格
+10 万基线一致。直接轮转两个 Orchestrator URL 属于 HA 分流 A/B，必须显式启动和声明：
+
+```bash
+BATCH_WORKER_TASK_CLIENT_BASE_URLS=http://orchestrator:18082,http://orchestrator-benchmark-replica:18082 \
+  COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh worker-atomic
+CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS=http://orchestrator:18082,http://orchestrator-benchmark-replica:18082 \
+  bash load-tests/scripts/run-p2-capacity-profile.sh
+```
+
+双直连结果用于验证 claim、renew、report 的端点切换与流量分布，不得与单 Service 标准吞吐基线直接
+比较。脚本会校验 Worker 容器中的实际端点值，并将端点口径写入报告。
+
 Atomic 容量画像要求 `batch-worker-import/export/process/dispatch` 停止运行；这些容器不参与被测链路，却会
 占用 Docker 内存、CPU 和 PostgreSQL 连接。preflight 默认对此 fail-fast，可按提示执行 `docker stop`。
 `CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY=0` 仅用于故障诊断，生成的结果不得与隔离基线比较。

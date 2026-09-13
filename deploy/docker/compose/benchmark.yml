@@ -67,9 +67,9 @@ services:
   worker-atomic:
     mem_limit: 768m
     environment:
-      # 本地容量画像没有 Kubernetes Service，显式轮转两个 Orchestrator，验证 claim、renew、report
-      # 不再集中到主实例。普通 Compose 和 Helm 的单 Service 配置不受影响。
-      BATCH_WORKER_TASK_CLIENT_BASE_URLS: ${BATCH_WORKER_TASK_CLIENT_BASE_URLS:-http://orchestrator:18082,http://orchestrator-benchmark-replica:18082}
+      # 标准吞吐基线经单一 Service 入口访问 task-control，与普通 Compose/Helm 拓扑保持一致。
+      # 双 Orchestrator 直连只用于显式 HA 分流 A/B，不能和标准吞吐基线直接比较。
+      BATCH_WORKER_TASK_CLIENT_BASE_URLS: ${BATCH_WORKER_TASK_CLIENT_BASE_URLS:-http://orchestrator:18082}
       # Atomic 轻任务的实测瓶颈在 claim/report 排队而非任务执行。隔离容量画像启用已完成
       # 契约和 SIM 验证的 5 条 claim-batch，把认领 HTTP/事务往返从 O(N) 降为 O(N/5)。
       # 24 个 listener 每次仍只持有 5 条；480 是调度准入窗口，让短任务积压留在 Kafka 而
