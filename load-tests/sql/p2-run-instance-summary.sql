@@ -2,7 +2,7 @@ WITH scoped AS (
   SELECT DISTINCT ji.*
   FROM batch.job_instance ji
   LEFT JOIN batch.trigger_request tr ON tr.related_job_instance_id = ji.id
-  WHERE ji.params_snapshot::text LIKE '%' || :'run_id' || '%'
+  WHERE coalesce(ji.params_snapshot #>> '{requestParams,metadata,runId}', ji.params_snapshot #>> '{effectiveParams,metadata,runId}', ji.params_snapshot #>> '{metadata,runId}', ji.params_snapshot #>> '{runId}') = :'run_id'
      OR tr.request_id LIKE :'run_id' || '%'
 )
 SELECT

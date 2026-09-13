@@ -5,16 +5,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,10 +54,11 @@ class OperationAuditQueryServiceTenantGuardTest {
     service = new OperationAuditQueryService(mapper, tenantGuard);
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
-    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(0L);
     when(mapper.query(
-            any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(),
+            anyInt()))
         .thenReturn(List.of());
   }
 
@@ -98,10 +102,11 @@ class OperationAuditQueryServiceTenantGuardTest {
     req.setPageSize(10);
     req.setTenantId("ta"); // 一致即透传
     service.query(req);
-    verify(mapper).count(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper).count(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any());
     verify(mapper)
         .query(
-            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt());
+            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(),
+            anyInt());
   }
 
   @Test
@@ -127,7 +132,49 @@ class OperationAuditQueryServiceTenantGuardTest {
     req.setPageSize(10);
     req.setTenantId("tb"); // admin 跨租 OK
     service.query(req);
-    verify(mapper).count(eq("tb"), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper).count(eq("tb"), any(), any(), any(), any(), any(), any(), any(), any(), any());
     assertThat(req.getTenantId()).isEqualTo("tb");
+  }
+
+  @Test
+  void shouldUseCursorWithoutCountingForOperationAuditList() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+    req.setPageNo(99);
+    req.setPageSize(10);
+    req.setTenantId("ta");
+    req.setCursor(CursorCodec.encode(Map.of("id", 100L)));
+
+    service.query(req);
+
+    verify(mapper, never())
+        .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper)
+        .query(
+            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), eq(100L), eq(0),
+            eq(10));
+  }
+
+  @Test
+  void shouldTreatEmptyCursorAsCursorFirstPage() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+    req.setPageNo(99);
+    req.setPageSize(10);
+    req.setTenantId("ta");
+    req.setCursor("");
+
+    service.query(req);
+
+    verify(mapper, never())
+        .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper)
+        .query(
+            eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), eq(null), eq(0),
+            eq(10));
   }
 }

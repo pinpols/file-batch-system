@@ -59,6 +59,7 @@
             <if test="traceId != null and traceId != ''">AND trace_id = #{traceId}</if>
             <if test="startTime != null">AND created_at &gt;= #{startTime}</if>
             <if test="endTime != null">AND created_at &lt;= #{endTime}</if>
+            <if test="cursorId != null">AND id &lt; #{cursorId}</if>
         </where>
     </sql>
 
@@ -71,8 +72,16 @@
                event_version, created_at
         FROM batch.console_operation_audit
         <include refid="queryWhere"/>
-        ORDER BY created_at DESC, id DESC
-        LIMIT #{limit} OFFSET #{offset}
+        <choose>
+            <when test="cursorId != null">
+                ORDER BY id DESC
+                LIMIT #{limit}
+            </when>
+            <otherwise>
+                ORDER BY created_at DESC, id DESC
+                LIMIT #{limit} OFFSET #{offset}
+            </otherwise>
+        </choose>
     </select>
 
     <select id="count" resultType="long">

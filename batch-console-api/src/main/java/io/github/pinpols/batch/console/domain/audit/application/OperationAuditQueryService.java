@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.domain.audit.application;
 
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
 import io.github.pinpols.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
+import io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
 import java.util.List;
@@ -31,19 +33,10 @@ public class OperationAuditQueryService {
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
     String tenantId = TenantScope.requireTenant(tenantGuard.resolveTenant(req.getTenantId()));
+    boolean cursorMode = req.getCursor() != null;
     int pageNo = req.getPageNo() == null ? 1 : req.getPageNo();
     int pageSize = req.getPageSize() == null ? 20 : req.getPageSize();
-    int offset = (pageNo - 1) * pageSize;
-    long total = mapper.count(
-        tenantId,
-        req.getAggregateType(),
-        req.getAggregateId(),
-        req.getAction(),
-        req.getOperatorId(),
-        req.getResult(),
-        req.getTraceId(),
-        req.getStartTime(),
-        req.getEndTime());
+    int offset = cursorMode ? 0 : (pageNo - 1) * pageSize;
     List<AuditRow> rows = mapper.query(
         tenantId,
         req.getAggregateType(),
@@ -54,8 +47,24 @@ public class OperationAuditQueryService {
         req.getTraceId(),
         req.getStartTime(),
         req.getEndTime(),
+        ConsoleQuerySupport.decodeCursorId(req.getCursor()),
         offset,
         pageSize);
+    if (cursorMode) {
+      return ConsoleQuerySupport.cursorPage(
+          new PageRequest(1, pageSize), rows, this::toResponse, AuditRow::id);
+    }
+    long total = mapper.count(
+        tenantId,
+        req.getAggregateType(),
+        req.getAggregateId(),
+        req.getAction(),
+        req.getOperatorId(),
+        req.getResult(),
+        req.getTraceId(),
+        req.getStartTime(),
+        req.getEndTime(),
+        null);
     List<ConsoleOperationAuditResponse> items =
         rows.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, pageNo, pageSize, items);

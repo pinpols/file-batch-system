@@ -12,4 +12,5 @@ public record FileRecordQuery(
     String traceId,
     Instant fromTime,
     Instant toTime,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest,
+    Long cursorId) {}

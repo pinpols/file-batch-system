@@ -77,7 +77,10 @@ public class ConsoleFileQueryService {
   private final ConsoleOrchestratorPort orchestratorProxy;
 
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null;
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
     FileRecordQuery query = new FileRecordQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         !Texts.hasText(request.getBizType()) ? request.getPipelineType() : request.getBizType(),
@@ -87,8 +90,12 @@ public class ConsoleFileQueryService {
         request.getTraceId(),
         parseInstant(request.getFromTime(), KEY_FROM_TIME),
         parseInstant(request.getToTime(), KEY_TO_TIME),
-        pageRequest);
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<FileRecordEntity> rows = fileMappers.fileRecordMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(pageRequest, rows, this::toFileRecordResponse, FileRecordEntity::getId);
+    }
     long total = fileMappers.fileRecordMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileRecordResponse);
   }

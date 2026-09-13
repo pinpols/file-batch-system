@@ -8,4 +8,5 @@ public record OutboxDeliveryLogQuery(
     String eventType,
     String eventKey,
     String traceId,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest,
+    Long cursorId) {}

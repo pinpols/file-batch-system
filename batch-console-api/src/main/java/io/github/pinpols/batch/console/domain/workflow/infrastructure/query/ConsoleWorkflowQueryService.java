@@ -94,7 +94,7 @@ public class ConsoleWorkflowQueryService {
   }
 
   public PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -123,7 +123,7 @@ public class ConsoleWorkflowQueryService {
 
   public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
       WorkflowNodeRunQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());

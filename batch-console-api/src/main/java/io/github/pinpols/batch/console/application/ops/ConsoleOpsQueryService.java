@@ -73,7 +73,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -110,13 +110,21 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
       OutboxRetryLogQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null;
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
     OutboxRetryLogQuery query = new OutboxRetryLogQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getRetryStatus(),
         request.getEventKey(),
-        pageRequest);
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<Map<String, Object>> rows = opsMappers.outboxRetryLogMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toOutboxRetryResponse, row -> longValue(row, "id"));
+    }
     long total = opsMappers.outboxRetryLogMapper.countByQuery(
         query.tenantId(), query.retryStatus(), query.eventKey(), query.pageRequest());
     return page(pageRequest, total, rows, this::toOutboxRetryResponse);
@@ -125,15 +133,23 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null;
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
     OutboxDeliveryLogQuery query = new OutboxDeliveryLogQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getDeliveryStatus(),
         request.getEventType(),
         request.getEventKey(),
         request.getTraceId(),
-        pageRequest);
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<Map<String, Object>> rows = opsMappers.outboxDeliveryLogMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toOutboxDeliveryResponse, row -> longValue(row, "id"));
+    }
     long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
         query.tenantId(),
         query.deliveryStatus(),
@@ -146,7 +162,10 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null;
+    PageRequest pageRequest = cursorMode
+        ? new PageRequest(1, request.getPageSize())
+        : new PageRequest(request.getPageNo(), request.getPageSize());
     ConsoleAiAuditLogQuery query = new ConsoleAiAuditLogQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getSessionId(),
@@ -155,31 +174,20 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         request.getPromptDecision(),
         parseInstant(request.getFromTime(), "fromTime"),
         parseInstant(request.getToTime(), "toTime"),
-        pageRequest);
+        pageRequest,
+        decodeCursorId(request.getCursor()));
     List<ConsoleAiAuditLogEntity> rows = opsMappers.consoleAiAuditLogMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toAiAuditLogResponse, ConsoleAiAuditLogEntity::getId);
+    }
     long total = opsMappers.consoleAiAuditLogMapper.countByQuery(query);
-    return page(pageRequest, total, rows, entity -> {
-      AiAuditLogResponse row = new AiAuditLogResponse();
-      row.setId(entity.getId());
-      row.setTenantId(entity.getTenantId());
-      row.setRequestId(entity.getRequestId());
-      row.setTraceId(entity.getTraceId());
-      row.setSessionId(entity.getSessionId());
-      row.setOperatorId(entity.getOperatorId());
-      row.setPromptCategory(entity.getPromptCategory());
-      row.setPromptDecision(entity.getPromptDecision());
-      row.setModelName(entity.getModelName());
-      row.setPromptPreview(ConsoleTextSanitizer.safeDisplay(entity.getPromptPreview(), 512));
-      row.setResponsePreview(ConsoleTextSanitizer.safeDisplay(entity.getResponsePreview(), 512));
-      row.setRefusalReason(ConsoleTextSanitizer.safeDisplay(entity.getRefusalReason(), 512));
-      row.setCreatedAt(entity.getCreatedAt());
-      return row;
-    });
+    return page(pageRequest, total, rows, this::toAiAuditLogResponse);
   }
 
   @Override
   public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -201,7 +209,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -224,7 +232,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   @Override
   public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
       PendingCatchUpQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -260,7 +268,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
   @Override
   public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
-    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    boolean cursorMode = request.getCursor() != null;
     PageRequest pageRequest = cursorMode
         ? new PageRequest(1, request.getPageSize())
         : new PageRequest(request.getPageNo(), request.getPageSize());
@@ -374,6 +382,24 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         errorMessage,
         instantValue(row, "created_at"),
         instantValue(row, "updated_at"));
+  }
+
+  private AiAuditLogResponse toAiAuditLogResponse(ConsoleAiAuditLogEntity entity) {
+    AiAuditLogResponse row = new AiAuditLogResponse();
+    row.setId(entity.getId());
+    row.setTenantId(entity.getTenantId());
+    row.setRequestId(entity.getRequestId());
+    row.setTraceId(entity.getTraceId());
+    row.setSessionId(entity.getSessionId());
+    row.setOperatorId(entity.getOperatorId());
+    row.setPromptCategory(entity.getPromptCategory());
+    row.setPromptDecision(entity.getPromptDecision());
+    row.setModelName(entity.getModelName());
+    row.setPromptPreview(ConsoleTextSanitizer.safeDisplay(entity.getPromptPreview(), 512));
+    row.setResponsePreview(ConsoleTextSanitizer.safeDisplay(entity.getResponsePreview(), 512));
+    row.setRefusalReason(ConsoleTextSanitizer.safeDisplay(entity.getRefusalReason(), 512));
+    row.setCreatedAt(entity.getCreatedAt());
+    return row;
   }
 
   private ConsoleApprovalCommandResponse toApprovalResponse(ApprovalCommandEntity entity) {

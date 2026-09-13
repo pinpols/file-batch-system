@@ -14,7 +14,8 @@ public interface OperationAuditMapper {
   int insert(@Param("e") OperationAuditEvent event);
 
   /**
-   * 分页查询。所有参数可空,空 = 不过滤。按 created_at DESC + id DESC 稳定排序。
+   * 分页查询。所有参数可空,空 = 不过滤。经典分页按 created_at DESC + id DESC 排序;cursor 分页按 id DESC
+   * keyset 查询,避免深翻页 OFFSET 扫描。
    *
    * <p>**注意**:offset 大时性能差;UI 默认 pageSize=15,且 console_operation_audit 量级不会超 千万,常规分页够用。后续真有热查询场景再加
    * (action, created_at DESC) 复合索引并改 keyset pagination。
@@ -31,6 +32,7 @@ public interface OperationAuditMapper {
       @Param("traceId") String traceId,
       @Param("startTime") Instant startTime,
       @Param("endTime") Instant endTime,
+      @Param("cursorId") Long cursorId,
       @Param("offset") int offset,
       @Param("limit") int limit);
 
@@ -46,7 +48,8 @@ public interface OperationAuditMapper {
       @Param("result") String result,
       @Param("traceId") String traceId,
       @Param("startTime") Instant startTime,
-      @Param("endTime") Instant endTime);
+      @Param("endTime") Instant endTime,
+      @Param("cursorId") Long cursorId);
 
   /**
    * 查询行,DTO 直接对应表结构。这里**不**复用 OperationAuditEvent,因为:

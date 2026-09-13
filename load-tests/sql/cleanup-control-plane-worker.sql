@@ -12,15 +12,15 @@ CREATE TEMP TABLE p2_cleanup_job_instance_ids (
 INSERT INTO p2_cleanup_job_instance_ids (id)
 SELECT ji.id
 FROM batch.job_instance ji
-WHERE ji.params_snapshot::text LIKE ('%' || :'run_id' || '%')
+WHERE coalesce(ji.params_snapshot #>> '{requestParams,metadata,runId}', ji.params_snapshot #>> '{effectiveParams,metadata,runId}', ji.params_snapshot #>> '{metadata,runId}', ji.params_snapshot #>> '{runId}') = :'run_id'
 UNION
 SELECT tr.related_job_instance_id
 FROM batch.trigger_request tr
 WHERE tr.related_job_instance_id IS NOT NULL
   AND (
-    tr.request_id LIKE ('%' || :'run_id' || '%')
-    OR tr.dedup_key LIKE ('%' || :'run_id' || '%')
-    OR tr.trace_id LIKE ('%' || :'run_id' || '%')
+    tr.request_id LIKE (:'run_id' || '%')
+    OR tr.dedup_key LIKE (:'run_id' || '%')
+    OR tr.trace_id LIKE (:'run_id' || '%')
   )
 UNION
 -- launch T1 已落库而 trigger_request.related_job_instance_id 尚未回写时，实例仍通过
@@ -30,9 +30,9 @@ SELECT ji.id
 FROM batch.job_instance ji
 JOIN batch.trigger_request tr
   ON tr.id = ji.trigger_request_id
-WHERE tr.request_id LIKE ('%' || :'run_id' || '%')
-   OR tr.dedup_key LIKE ('%' || :'run_id' || '%')
-   OR tr.trace_id LIKE ('%' || :'run_id' || '%');
+WHERE tr.request_id LIKE (:'run_id' || '%')
+   OR tr.dedup_key LIKE (:'run_id' || '%')
+   OR tr.trace_id LIKE (:'run_id' || '%');
 
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids
@@ -239,13 +239,13 @@ DELETE FROM batch.job_instance
 WHERE id IN (SELECT id FROM p2_cleanup_job_instance_ids);
 
 DELETE FROM batch.trigger_outbox_event
-WHERE request_id LIKE ('%' || :'run_id' || '%');
+WHERE request_id LIKE (:'run_id' || '%');
 
 DELETE FROM batch.trigger_request
 WHERE (
-    request_id LIKE ('%' || :'run_id' || '%')
-    OR dedup_key LIKE ('%' || :'run_id' || '%')
-    OR trace_id LIKE ('%' || :'run_id' || '%')
+    request_id LIKE (:'run_id' || '%')
+    OR dedup_key LIKE (:'run_id' || '%')
+    OR trace_id LIKE (:'run_id' || '%')
   );
 
 COMMIT;

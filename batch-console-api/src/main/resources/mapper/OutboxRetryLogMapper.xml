@@ -14,9 +14,15 @@
         <if test="eventKey != null and eventKey != ''">
             and event_key = #{eventKey}
         </if>
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         order by id desc
         <if test="pageRequest != null">
-            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+            limit #{pageRequest.pageSize}
+            <if test="cursorId == null">
+                offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+            </if>
         </if>
     </select>
 

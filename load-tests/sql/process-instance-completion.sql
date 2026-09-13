@@ -6,5 +6,5 @@ SELECT job_code, count(*) AS total,
        round(percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM finished_at - created_at)) FILTER (WHERE finished_at IS NOT NULL)::numeric, 3) AS p95_seconds
 FROM batch.job_instance
 WHERE tenant_id = :'tenant_id' AND job_code IN ('lt_process_sql_job','lt_process_copy_job')
-  AND params_snapshot::text LIKE '%' || :'run_id' || '%'
+  AND coalesce(params_snapshot #>> '{requestParams,metadata,runId}', params_snapshot #>> '{effectiveParams,metadata,runId}', params_snapshot #>> '{metadata,runId}', params_snapshot #>> '{runId}') = :'run_id'
 GROUP BY job_code ORDER BY job_code;

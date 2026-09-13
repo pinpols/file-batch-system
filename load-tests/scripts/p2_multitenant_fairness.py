@@ -129,7 +129,12 @@ def terminal_counts(tenants):
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED','REJECTED'))
         from batch.job_instance
         where tenant_id in ({tenant_list})
-          and params_snapshot::text like '%{RUN_ID}%'
+          and coalesce(
+              params_snapshot #>> '{{requestParams,metadata,runId}}',
+              params_snapshot #>> '{{effectiveParams,metadata,runId}}',
+              params_snapshot #>> '{{metadata,runId}}',
+              params_snapshot #>> '{{runId}}'
+          ) = '{RUN_ID}'
         group by tenant_id
         order by tenant_id
         """

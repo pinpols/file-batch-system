@@ -4,7 +4,7 @@ WITH stage AS (
     JOIN batch.pipeline_instance pipeline ON pipeline.tenant_id = instance.tenant_id AND pipeline.related_job_instance_id = instance.id
     JOIN batch.pipeline_step_run step ON step.pipeline_instance_id = pipeline.id
     WHERE instance.tenant_id = :'tenant_id' AND instance.job_code IN ('lt_process_sql_job','lt_process_copy_job')
-      AND instance.params_snapshot::text LIKE '%' || :'run_id' || '%' AND step.stage_code IN ('COMPUTE','COMMIT')
+      AND coalesce(instance.params_snapshot #>> '{requestParams,metadata,runId}', instance.params_snapshot #>> '{effectiveParams,metadata,runId}', instance.params_snapshot #>> '{metadata,runId}', instance.params_snapshot #>> '{runId}') = :'run_id' AND step.stage_code IN ('COMPUTE','COMMIT')
     GROUP BY instance.job_code, step.stage_code
 )
 SELECT job_code, stage_code, round(avg_seconds::numeric, 3) AS avg_seconds,

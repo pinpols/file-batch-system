@@ -13,7 +13,7 @@ WHERE instance.tenant_id = :'tenant_id'
       'import_customer_job', 'export_settlement_job',
       'lt_dispatch_local_job', 'lt_process_sql_job'
   )
-  AND instance.params_snapshot::text LIKE '%' || :'run_id' || '%'
-  AND instance.params_snapshot::text LIKE '%"stressUsers": ' || :'stress_users' || '%'
+  AND coalesce(instance.params_snapshot #>> '{requestParams,metadata,runId}', instance.params_snapshot #>> '{effectiveParams,metadata,runId}', instance.params_snapshot #>> '{metadata,runId}', instance.params_snapshot #>> '{runId}') = :'run_id'
+  AND coalesce(instance.params_snapshot #>> '{requestParams,metadata,stressUsers}', instance.params_snapshot #>> '{effectiveParams,metadata,stressUsers}', instance.params_snapshot #>> '{metadata,stressUsers}', instance.params_snapshot #>> '{stressUsers}') = :'stress_users'
 GROUP BY instance.job_code
 ORDER BY instance.job_code;
