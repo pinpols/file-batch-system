@@ -77,6 +77,20 @@ if [[ "$COMPOSE_BENCHMARK" == "1" ]]; then
   compose_files+=(-f deploy/docker/compose/benchmark.yml)
 fi
 
+# 指定应用服务时下方会使用 --no-deps，Compose 因而不会重新执行已退出的 kafka-init。
+# benchmark 会提高既有 topic 的分区数，必须先完成这一步再重启 producer/consumer，
+# 否则应用会缓存旧拓扑，压测结果不可比较。Kafka 分区只能增加，回到普通 local 后
+# 仍可由较低并发的消费者继续使用，无需也不能自动缩容。
+if [[ "$COMPOSE_BENCHMARK" == "1" && "$#" -gt 0 ]]; then
+  docker compose \
+    --project-name "$COMPOSE_PROJECT_NAME" \
+    --env-file "$COMPOSE_ENV_FILE" \
+    "${compose_files[@]}" \
+    --profile apps \
+    --profile replica \
+    run --rm --no-deps kafka-init
+fi
+
 up_args=(up -d --force-recreate)
 if [[ "$#" -gt 0 ]]; then
   # 指定服务时只重建目标，避免为一次 profile / 镜像更新连带滚动其健康依赖。
