@@ -2,7 +2,19 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.OutboxDeliveryLogMapper">
     <select id="selectByQuery" resultType="map">
-        select *
+        select id,
+               tenant_id,
+               event_type,
+               event_key,
+               trace_id,
+               delivery_status,
+               target_topic,
+               delivery_attempt,
+               error_key,
+               error_args,
+               error_message,
+               created_at,
+               updated_at
         from batch.event_delivery_log
         where tenant_id = #{tenantId}
         <if test="deliveryStatus != null and deliveryStatus != ''">

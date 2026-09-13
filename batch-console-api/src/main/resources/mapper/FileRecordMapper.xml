@@ -14,7 +14,15 @@
     </resultMap>
 
     <select id="selectByQuery" resultMap="FileRecordResultMap">
-        select *
+        select id,
+               tenant_id,
+               biz_type,
+               file_name,
+               file_status,
+               biz_date,
+               trace_id,
+               created_at,
+               updated_at
         from batch.file_record
         where tenant_id = #{tenantId}
         <if test="fileId != null">
