@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.observability;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -32,8 +33,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <ul>
  *   <li>必须在 {@code @Transactional} 内调用; 无同步上下文时静默 skip(不抛)。
- *   <li>afterCommit 路径再 selectById 拿 createdAt + jobDefinitionId; 多 1 次 SELECT 是 metrics 显式成本,
- *       仅终态切换发生时命中。
+ *   <li>worker report 热路径复用事务内已读取的实例快照，避免终态提交后再次查询同一实例；运维 / 超时
+ *       路径没有现成快照，仍在 afterCommit 后读取一次，保证只为真正提交的终态记录指标。
  *   <li>整个 try/catch 回退; metrics 失败不影响业务事务也不抛。
  * </ul>
  */
@@ -51,6 +52,31 @@ public class JobLifecycleMetricsRecorder {
   private final JobInstanceMapper jobInstanceMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final JobLifecycleMetrics jobLifecycleMetrics;
+
+  /**
+   * 使用调用方事务内已经读取的实例记录终态指标。
+   *
+   * <p>传入实体不会跨事务捕获；本方法立即复制指标需要的字段为不可变快照。{@code failureClass}
+   * 使用本次终态 CAS 即将写入的值，因为调用方持有的实体仍是更新前状态。
+   */
+  public void recordCompletionAfterCommit(
+      String tenantId,
+      JobInstanceEntity instance,
+      String terminalStatus,
+      Instant finishedAt,
+      String failureClass) {
+    if (EmptyChecks.isNull(instance) || EmptyChecks.isNull(instance.getCreatedAt())) {
+      return;
+    }
+    CompletionSnapshot snapshot = new CompletionSnapshot(
+        tenantId,
+        instance.getId(),
+        instance.getJobDefinitionId(),
+        instance.getCreatedAt(),
+        Boolean.TRUE.equals(instance.getDryRun()),
+        failureClass);
+    registerAfterCommit(snapshot, terminalStatus, finishedAt);
+  }
 
   /**
    * 在事务提交后记一笔 completion(duration + counter)。回滚 / 同步不可用时 no-op。
@@ -73,48 +99,91 @@ public class JobLifecycleMetricsRecorder {
           if (instance == null || instance.getCreatedAt() == null) {
             return;
           }
-          Instant resolvedFinished =
-              finishedAt != null ? finishedAt : BatchDateTimeSupport.utcNow();
-          Duration duration = Duration.between(instance.getCreatedAt(), resolvedFinished);
-          // ADR-026:dry_run 维度切分指标 — Boolean 字段可能为 null,缺省按 false(非演练)处理
-          boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
-          String jobType = resolveJobType(instance);
-          jobLifecycleMetrics.recordCompletion(tenantId, jobType, terminalStatus, dryRun, duration);
-          // P0 (review 2026-05-21): 失败类终态补打 JOB_FAILURE_TOTAL + error_code,
-          // 否则 batch.orchestrator.job.failure.total 永久为 0,error_code 分桶报警失效。
-          if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
-            jobLifecycleMetrics.recordFailure(
-                tenantId, jobType, resolveErrorCode(instance), dryRun);
-          }
+          recordSnapshot(
+              new CompletionSnapshot(
+                  tenantId,
+                  jobInstanceId,
+                  instance.getJobDefinitionId(),
+                  instance.getCreatedAt(),
+                  Boolean.TRUE.equals(instance.getDryRun()),
+                  instance.getFailureClass()),
+              terminalStatus,
+              finishedAt);
         } catch (RuntimeException ex) {
-          log.warn(
-              "record job lifecycle metrics failed after commit:" + " tenantId={} jobInstanceId={}",
-              tenantId,
-              jobInstanceId,
-              ex);
+          logFailure(tenantId, jobInstanceId, ex);
         }
       }
     });
+  }
+
+  private void registerAfterCommit(
+      CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        try {
+          recordSnapshot(snapshot, terminalStatus, finishedAt);
+        } catch (RuntimeException ex) {
+          logFailure(snapshot.tenantId(), snapshot.jobInstanceId(), ex);
+        }
+      }
+    });
+  }
+
+  private void recordSnapshot(
+      CompletionSnapshot snapshot, String terminalStatus, Instant finishedAt) {
+    Instant resolvedFinished =
+        EmptyChecks.isNotNull(finishedAt) ? finishedAt : BatchDateTimeSupport.utcNow();
+    Duration duration = Duration.between(snapshot.createdAt(), resolvedFinished);
+    String jobType = resolveJobType(snapshot.jobDefinitionId());
+    jobLifecycleMetrics.recordCompletion(
+        snapshot.tenantId(), jobType, terminalStatus, snapshot.dryRun(), duration);
+    // 失败指标必须使用终态 CAS 写入的 failure_class，不能从更新前的实体快照反推。
+    if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
+      jobLifecycleMetrics.recordFailure(
+          snapshot.tenantId(),
+          jobType,
+          resolveErrorCode(snapshot.failureClass()),
+          snapshot.dryRun());
+    }
+  }
+
+  private void logFailure(String tenantId, Long jobInstanceId, RuntimeException ex) {
+    log.warn(
+        "record job lifecycle metrics failed after commit: tenantId={} jobInstanceId={}",
+        tenantId,
+        jobInstanceId,
+        ex);
   }
 
   /**
    * 失败 error_code:优先 {@code failure_class}(ADR-012 故障分类),为空时回退 "unknown"。 JobInstance 表无显式
    * error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
    */
-  private String resolveErrorCode(JobInstanceEntity instance) {
-    String fc = instance.getFailureClass();
-    return fc == null || fc.isBlank() ? "unknown" : fc;
+  private String resolveErrorCode(String failureClass) {
+    return EmptyChecks.isBlank(failureClass) ? "unknown" : failureClass;
   }
 
-  private String resolveJobType(JobInstanceEntity instance) {
-    if (instance.getJobDefinitionId() == null) {
+  private String resolveJobType(Long jobDefinitionId) {
+    if (EmptyChecks.isNull(jobDefinitionId)) {
       return "unknown";
     }
-    JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
+    JobDefinitionEntity definition = jobDefinitionMapper.selectById(jobDefinitionId);
     return definition == null
             || definition.jobType() == null
             || definition.jobType().isBlank()
         ? "unknown"
         : definition.jobType();
   }
+
+  private record CompletionSnapshot(
+      String tenantId,
+      Long jobInstanceId,
+      Long jobDefinitionId,
+      Instant createdAt,
+      boolean dryRun,
+      String failureClass) {}
 }

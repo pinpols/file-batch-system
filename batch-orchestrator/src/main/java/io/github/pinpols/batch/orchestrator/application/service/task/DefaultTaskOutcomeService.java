@@ -277,16 +277,19 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         && !partition.getCurrentInvocationId().equals(command.partitionInvocationId())) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
     }
-    JobInstanceEntity jobInstance =
-        jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
+    // 成功回报不需要在实例锁前读取 job_instance；失败路径仍需用当前快照计算重试治理决策。
+    // 实例推进统一在 advisory lock 后再读取一次权威状态，避免成功路径重复点查同一热表行。
+    JobInstanceEntity retryContextInstance = !command.success() && EmptyChecks.isNotNull(partition)
+        ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
+        : null;
     // 失败时是否进入重试：由治理层统一决策（NONE/预算耗尽 → dead-letter；否则写 retry_schedule）。
     boolean retryScheduled = !command.success()
         && EmptyChecks.isNotNull(partition)
-        && EmptyChecks.isNotNull(jobInstance)
+        && EmptyChecks.isNotNull(retryContextInstance)
         && collaborators
             .retryGovernanceService()
             .scheduleRetryIfNecessary(
-                task, partition, jobInstance, command.errorCode(), command.errorMessage());
+                task, partition, retryContextInstance, command.errorCode(), command.errorMessage());
     String resolvedFailureClass = command.success()
         ? null
         : collaborators
@@ -361,6 +364,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
     updateStepInstanceProgress(command, task, retryScheduled, finishedAt, outputSummary);
+    // markStatus 会同步递增 job_instance 的分区计数和 version，因此权威快照必须在该写入之后读取。
+    // 读取仍位于 instance advisory lock 保护范围内；Progressor 直接消费本快照，避免成功路径
+    // 在同一事务内重复点查 job_instance。
+    JobInstanceEntity jobInstance =
+        jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
     if (EmptyChecks.isNotNull(jobInstance)) {
       instanceProgressor.advance(command, task, jobInstance, finishedAt, this::applyTaskOutcome);
     }
