@@ -22,7 +22,7 @@
         nodes_json / edges_json 是 JSONB,以 ::text 读出原样透传 service/FE;
         与 AtomicTaskConfigMapper.xml 同一风格。
     -->
-    <insert id="insertVersionSnapshot" useGeneratedKeys="true" keyProperty="p.id">
+    <insert id="insertVersionSnapshot" useGeneratedKeys="true" keyProperty="p.id" keyColumn="id">
         insert into batch.workflow_definition_version (
             tenant_id,
             workflow_definition_id,

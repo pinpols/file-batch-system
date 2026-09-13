@@ -281,7 +281,7 @@
           and storage_path = #{storagePath}
     </select>
 
-    <insert id="insertReconciledFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertReconciledFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.file_record (
             tenant_id, file_category, file_name, original_file_name, file_ext, file_format_type,
             charset, mime_type, file_size_bytes, checksum_type, checksum_value,

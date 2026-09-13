@@ -152,7 +152,7 @@
     </select>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         with claimed_key as (
             insert into batch.job_instance_dedup_key (
                 tenant_id,

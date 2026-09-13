@@ -34,7 +34,7 @@
     </select>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.data_quality_rule (
             tenant_id, rule_code, rule_name, rule_type, scope_business_key,
             expression, threshold_json, severity, enabled, description

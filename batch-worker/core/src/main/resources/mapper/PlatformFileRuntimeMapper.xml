@@ -112,7 +112,7 @@
       会拒绝。改 ON CONFLICT 复用现有行:把状态重置到 RUNNING、清掉旧错误、
       把 id 通过 RETURNING 回填给 useGeneratedKeys,调用方不需感知。
     -->
-    <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.pipeline_instance (
             tenant_id, pipeline_definition_id, job_code, pipeline_type,
             file_id, related_job_instance_id, current_stage, run_status,
@@ -228,7 +228,7 @@
         limit 1
     </select>
 
-    <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         with step_run_lock as (
             select pg_advisory_xact_lock(
                 hashtextextended(
@@ -282,7 +282,7 @@
           and is_latest = true
     </update>
 
-    <insert id="insertFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.file_record (
             tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
             file_ext, file_format_type, charset, mime_type, file_size_bytes,
@@ -325,7 +325,7 @@
         where id = #{fileId}
     </update>
 
-    <insert id="insertFileErrorRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertFileErrorRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.file_error_record (
             tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no,
             error_code, error_message, error_key, error_args,

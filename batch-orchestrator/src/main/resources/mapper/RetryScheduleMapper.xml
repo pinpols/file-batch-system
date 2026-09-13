@@ -21,7 +21,7 @@
     </resultMap>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.retry_schedule (
             tenant_id,
             related_type,

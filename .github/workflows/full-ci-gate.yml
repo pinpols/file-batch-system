@@ -56,6 +56,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-sql-config-boundaries.sh
 
+      - name: Limit MyBatis generated keys to the id column
+        shell: bash
+        run: python3 scripts/ci/check-mybatis-generated-key-columns.py
+
       - name: Verify yml ↔ docker-compose default sync
         shell: bash
         run: python3 scripts/ci/check-config-defaults-sync.py --check

@@ -61,7 +61,7 @@
         limit 1
     </select>
 
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.pipeline_definition (
             tenant_id, job_code, pipeline_name, pipeline_type,
             biz_type, worker_group, version, enabled, description

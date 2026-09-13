@@ -21,7 +21,7 @@
 
     <insert id="insert"
             parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity"
-            useGeneratedKeys="true" keyProperty="id">
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO batch.trigger_outbox_event (
             tenant_id, request_id, topic, payload, publish_status, publish_attempt,
             trace_id, next_publish_at

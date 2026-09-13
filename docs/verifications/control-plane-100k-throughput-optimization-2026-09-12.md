@@ -309,6 +309,28 @@ CAS、重复 report 和崩溃恢复测试 4 项通过。吞吐收益必须等宿
 - 隔离租户六类运行数据必须为 0，Kafka launch lag 必须清零，容器预算和分区数必须与 benchmark profile
   一致；任何不一致均不得进入容量对比表。
 
+### 5. 宿主机回稳复验与生成键回传优化
+
+在应用镜像、Docker 容量等级、PostgreSQL 持久性参数和业务键基数均不变的前提下，完成两轮
+`10000 requests @ 200 RPS` 复验。第二轮入口和终态均为 `10000/10000`、零失败，完成窗口
+`111.634s`，吞吐 `89.578 tasks/s`；相较首轮 `79.244 tasks/s` 回升约 13%。两轮 WAL 均约
+`412MB`，比 2026-09-12 历史轮次约 `576MB` 少 28.5%，且无 requested checkpoint，锁等待峰值
+分别为 1 和 3。当前吞吐仍低于历史 `111.626 tasks/s`，差距集中在 launch T1/T2；同期 macOS
+后台存储扫描和 Docker VM 持续占用 CPU，因此不能把差距归因于 task report 改动。
+
+SQL 画像同时确认 MyBatis 的 `useGeneratedKeys=true` 在未指定生成列时会让 PostgreSQL JDBC 使用
+`RETURNING *`。这会使 `trigger_request`、`trigger_outbox_event` 以及 job/partition/task/step 等热路径
+插入把完整行重新传回 JVM，JSONB payload 和运行快照也被无意义解码。现统一声明
+`keyColumn="id"`，保留原有实体主键回填和多行顺序回填语义，只把返回列收窄为 `id`；该优化不改变
+INSERT 数据、事务边界、WAL、CAS、幂等约束或 Outbox 原子性。静态门禁阻止后续 mapper 再引入无列名
+generated keys，真 PostgreSQL 生成键 IT 继续验证单行和批量回填。
+
+复验原始证据：
+
+- `load-tests/target/p2-capacity-profile-task-report-returning-card100-10k-warm2-20260913.md`
+- `load-tests/target/p2-capacity-profile-task-report-returning-card100-10k-warm3-20260913.md`
+- `load-tests/target/control-plane-worker-report-task-report-returning-card100-10k-warm3-20260913-10w.md`
+
 本轮原始报告：
 
 - `load-tests/target/p2-capacity-profile-pgprofile-stabilized-card100-100k-20260913.md`
