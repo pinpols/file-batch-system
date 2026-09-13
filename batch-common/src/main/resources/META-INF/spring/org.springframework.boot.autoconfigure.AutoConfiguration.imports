@@ -3,6 +3,7 @@ io.github.pinpols.batch.common.i18n.BatchI18nAutoConfiguration
 io.github.pinpols.batch.common.config.BatchPgSessionPropertiesAutoConfiguration
 io.github.pinpols.batch.common.config.BatchPgSessionAutoConfiguration
 io.github.pinpols.batch.common.config.BatchStartupSelfCheckAutoConfiguration
+io.github.pinpols.batch.common.config.ProductionRuntimeConfigurationGuard
 io.github.pinpols.batch.common.config.BatchSchedulingAutoConfiguration
 io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration
 io.github.pinpols.batch.common.config.BatchTimezoneAutoConfiguration

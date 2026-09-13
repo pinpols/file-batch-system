@@ -125,6 +125,20 @@ def main() -> int:
         errors.append("production OTLP endpoint must target the external Collector")
     if str(nested(prod, "otel", "samplingProbability")) != "1.0":
         errors.append("production head sampling must be 1.0 when tail sampling is authoritative")
+    prod_profile = load_yaml(
+        ROOT / "batch-common/src/main/resources/application-prod.yml"
+    )
+    profile_sampling = nested(
+        prod_profile, "management", "tracing", "sampling", "probability"
+    )
+    if str(profile_sampling) != "${OTEL_SAMPLING_PROBABILITY:1.0}":
+        errors.append("production profile must default head sampling to 1.0")
+    helm_config = (ROOT / "helm/batch-platform/templates/configmap.yaml").read_text(
+        encoding="utf-8"
+    )
+    for required_url in ("BATCH_TRIGGER_BASE_URL", "BATCH_WORKER_ATOMIC_BASE_URL"):
+        if required_url not in helm_config:
+            errors.append(f"Helm ConfigMap must inject {required_url}")
 
     for template in WORKLOAD_TEMPLATES:
         text = template.read_text(encoding="utf-8")

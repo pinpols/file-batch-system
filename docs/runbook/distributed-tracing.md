@@ -27,9 +27,9 @@ docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml 
 | 变量 | 默认 | 生产建议 |
 |---|---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | 指向 K8s 集群内 collector service |
-| `OTEL_SAMPLING_PROBABILITY` | `1.0` | `0.1`（10% 采样降低开销） |
+| `OTEL_SAMPLING_PROBABILITY` | `1.0` | 保持 `1.0`，由 Collector tail sampling 保留错误/慢链路并抽样普通成功链路 |
 
-→ collector 容量按"应用 QPS × 采样率 × ~1KB/span"评估。
+Collector 容量按“应用 QPS × 每请求 span 数 × 单 span 大小”评估，不能再用应用端采样率折减入口流量。
 
 ---
 
@@ -133,14 +133,14 @@ public class MyService {
 
 ### 4.2 trace 太多 collector 撑不住
 
-降低采样：
+优先降低 Collector `tail_sampling` 的 baseline 成功链路保留比例，或扩容 Collector。应用端保持：
 
 ```bash
-export OTEL_SAMPLING_PROBABILITY=0.1   # 10%
-# 重启业务模块
+export OTEL_SAMPLING_PROBABILITY=1.0
 ```
 
-或在 collector 侧加 tail-based sampling（修改 `deploy/docker/observability/otel-collector.yml`）。
+只有 Collector 已经无法接收且扩容来不及时，才临时降低应用端采样；该降级会让部分错误/慢链路在进入
+Collector 前永久丢失，必须记录变更窗口并尽快恢复。
 
 ### 4.3 业务 trace_id 与 OTel traceId 关系
 

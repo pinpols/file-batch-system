@@ -15,6 +15,8 @@
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../scripts/lib/env-common.sh
+source "$ROOT_DIR/scripts/lib/env-common.sh"
 SOAK_LOG_DIR="${SOAK_LOG_DIR:-$ROOT_DIR/logs/soak}"
 SOAK_RUN_ID="${SOAK_RUN_ID:-soak-unknown}"
 SOAK_STOP_FLAG="${SOAK_STOP_FLAG:-$SOAK_LOG_DIR/${SOAK_RUN_ID}.stop}"
@@ -125,7 +127,7 @@ check_kafka_lag() {
     kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
     [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]] || return
     lag="$(
-      docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
+      docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
         --bootstrap-server "${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}" --describe --all-groups 2>/dev/null \
         | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
     )"

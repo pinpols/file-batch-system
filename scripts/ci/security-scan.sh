@@ -32,8 +32,8 @@ Examples:
   bash scripts/ci/security-scan.sh
   bash scripts/ci/security-scan.sh --mode=secret
   bash scripts/ci/security-scan.sh --mode=deps --root=.
-  bash scripts/ci/security-scan.sh --mode=all --target-url=http://localhost:8080
-  bash scripts/ci/security-scan.sh --skip-build -- --mode=dast --target-url=http://localhost:8080
+  bash scripts/ci/security-scan.sh --mode=all --target-url=http://localhost:18080
+  bash scripts/ci/security-scan.sh --skip-build -- --mode=dast --target-url=http://localhost:18080
 EOF
 }
 

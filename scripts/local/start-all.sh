@@ -55,9 +55,8 @@ LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSeri
 SKIP_CDS="${SKIP_CDS:-1}"
 CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v3-share-off}"
 
-LOG_ROOT="$ROOT/logs"
 LOG_DIR="$(log_current_dir "$ROOT" app app)"
-DOCKER_LOG_DIR="$(log_current_dir "$ROOT" docker docker)"
+log_current_dir "$ROOT" docker docker >/dev/null
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 CDS_DIR="$ROOT/build/cds"
 mkdir -p "$RUNTIME_JAR_DIR" "$CDS_DIR"
@@ -233,7 +232,7 @@ wait_kafka_topics_ready() {
   local expected_topics="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter}"
   local i all_ready listed
   for i in $(seq 1 60); do
-    listed="$(docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>/dev/null || true)"
+    listed="$(docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --list 2>/dev/null || true)"
     all_ready=true
     local old_ifs="$IFS"
     IFS=','

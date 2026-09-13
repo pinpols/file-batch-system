@@ -11,7 +11,7 @@
 #   bash scripts/ops/trigger-compensation.sh
 #
 #   # 实际执行
-#   BATCH_CONSOLE_URL=http://localhost:8080 \
+#   BATCH_CONSOLE_URL=http://localhost:18080 \
 #   BATCH_CONSOLE_TOKEN=xxx \
 #   BATCH_COMPENSATION_DRY_RUN=false \
 #   BATCH_COMPENSATION_IDEMPOTENCY_KEY=cmp-001 \
@@ -24,20 +24,21 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=env.sh
+source "$ROOT/scripts/ops/env.sh"
+
 require_tools() {
-  for tool in curl; do
-    if ! command -v "${tool}" >/dev/null 2>&1; then
-      echo "ERROR: ${tool} not found" >&2
-      exit 1
-    fi
-  done
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "ERROR: curl not found" >&2
+    exit 1
+  fi
 }
 
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
 require_tools
 
-BATCH_CONSOLE_URL="${BATCH_CONSOLE_URL:-http://localhost:8080}"
 BATCH_CONSOLE_TOKEN="${BATCH_CONSOLE_TOKEN:-}"
 BATCH_COMPENSATION_DRY_RUN="${BATCH_COMPENSATION_DRY_RUN:-true}"
 BATCH_COMPENSATION_IDEMPOTENCY_KEY="${BATCH_COMPENSATION_IDEMPOTENCY_KEY:-cmp-$(date +%s)}"
@@ -71,4 +72,3 @@ curl -fsS -X POST \
   "${BATCH_CONSOLE_URL%/}${path}"
 
 log "补偿触发已提交"
-

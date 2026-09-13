@@ -31,6 +31,19 @@ public class BatchStartupFailureAnalyzer extends AbstractFailureAnalyzer<Illegal
           "通过 Secret Manager、Kubernetes Secret 或环境变量 BATCH_INTERNAL_SECRET 注入高熵密钥；不要使用 "
               + "CHANGE_ME、internal-secret、todo 等占位符。");
     }
+    if (message.contains("production endpoint")) {
+      return analysis(
+          cause,
+          "生产运行端点缺失，或仍指向 localhost/loopback 开发地址。",
+          "检查数据库、Kafka、Redis、Orchestrator、对象存储和 Console 跨服务地址；通过 Helm values、"
+              + "Secret/ConfigMap 或环境变量注入当前环境可访问的非 loopback 地址。");
+    }
+    if (message.contains("production management.server.port")) {
+      return analysis(
+          cause,
+          "生产管理端口未显式配置为可发现的正整数端口。",
+          "设置 BATCH_MANAGEMENT_PORT，并同步 Service、ServiceMonitor、健康检查和 NetworkPolicy；生产不得使用随机端口 0。");
+    }
     if (message.contains("jwt-secret")) {
       return analysis(
           cause,

@@ -92,6 +92,7 @@ RUN --mount=type=cache,target=/root/.m2,id=batch-mvn-cache,sharing=locked \
       -pl ":${MODULE}" -am package
 
 # ───── Stage 3: 从所选 builder 中只提取当前服务 jar─────
+# hadolint ignore=DL3006
 FROM builder-${BUILD_MODE} AS selected-artifact
 
 ARG MODULE

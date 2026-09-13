@@ -204,7 +204,7 @@ scan-deps:
 
 # DAST 动态扫描（需本地服务已启动）
 scan-dast:
-	bash scripts/ci/security-scan.sh -- --mode=dast --target-url=http://localhost:8080
+	bash scripts/ci/security-scan.sh -- --mode=dast --target-url="$${BATCH_SECURITY_SCAN_TARGET_URL:-http://localhost:18080}"
 
 ## ── 帮助 ──────────────────────────────────────────────────────────────────────
 

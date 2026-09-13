@@ -32,9 +32,9 @@ public record SecurityScanOptions(
         boolean help = false;
         ScanMode mode = ScanMode.ALL;
         Path root = defaultRoot();
-        String targetUrl = "http://localhost:8080";
-        String imageName = "batch-console-api:local";
-        String zapImage = "ghcr.io/zaproxy/zaproxy:stable";
+        String targetUrl = envOrDefault("BATCH_SECURITY_SCAN_TARGET_URL", "http://localhost:18080");
+        String imageName = envOrDefault("BATCH_SECURITY_SCAN_IMAGE_NAME", "batch-console-api:local");
+        String zapImage = envOrDefault("BATCH_SECURITY_SCAN_ZAP_IMAGE", "ghcr.io/zaproxy/zaproxy:stable");
         Path reportDir = defaultReportDir(root);
         String zapReport = reportDir.resolve("zap-report.html").toString();
         String zapAuthHeaderName = envOrDefault("BATCH_DAST_AUTH_HEADER_NAME", "Authorization");

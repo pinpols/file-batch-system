@@ -29,6 +29,7 @@ admin_config="${ADMIN_CONFIG:?required, e.g. /tmp/admin-client.properties}"
 tenant_id="${TENANT_ID:?required}"
 tenant_password="${TENANT_PASSWORD:?required, 32+ chars random}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch}"
+kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
 
 # 与 init-tenant-topics.sh 保持一致的 sanitize 规则
 sanitize() {
@@ -39,7 +40,7 @@ scram_user="batch-tenant-${safe_tenant}"
 group_id="${safe_tenant}-sample-workers"
 
 echo "==> [1/3] 创建 SCRAM-SHA-512 用户 ${scram_user}"
-/opt/kafka/bin/kafka-configs.sh \
+"${kafka_container_bin_dir}/kafka-configs.sh" \
   --bootstrap-server "${bootstrap_server}" \
   --command-config "${admin_config}" \
   --alter \
@@ -53,7 +54,7 @@ for raw_type in $(IFS=','; echo $worker_types_csv); do
   [ -n "${wt}" ] || continue
   topic="batch.task.dispatch.${wt}.${safe_tenant}"
   echo "    + topic ${topic} → User:${scram_user} READ + DESCRIBE"
-  /opt/kafka/bin/kafka-acls.sh \
+  "${kafka_container_bin_dir}/kafka-acls.sh" \
     --bootstrap-server "${bootstrap_server}" \
     --command-config "${admin_config}" \
     --add \
@@ -63,7 +64,7 @@ for raw_type in $(IFS=','; echo $worker_types_csv); do
 done
 
 echo "    + group ${group_id} → User:${scram_user} READ"
-/opt/kafka/bin/kafka-acls.sh \
+"${kafka_container_bin_dir}/kafka-acls.sh" \
   --bootstrap-server "${bootstrap_server}" \
   --command-config "${admin_config}" \
   --add \

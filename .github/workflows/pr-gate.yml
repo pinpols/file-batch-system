@@ -147,6 +147,15 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-config-defaults-sync.py --check
 
+      - name: Verify tracked env files are shell-safe
+        shell: bash
+        # .env.example 会被 CI 复制成 .env.local 并由本地脚本 source;含空格的值必须加引号。
+        run: python3 scripts/ci/check-env-file-shell-safety.py
+
+      - name: Verify hardcoded runtime configuration boundaries
+        shell: bash
+        run: bash scripts/ci/check-hardcoded-runtime-config.sh
+
       - name: Validate feature switch registry
         shell: bash
         run: python3 scripts/ci/check-feature-switch-registry.py
@@ -207,6 +216,32 @@ jobs:
         # 只检查本 PR 新增的生产 Java 行，历史遗留由专项迁移逐步收口；从此禁止新增
         # == null / != null / isEmpty / isBlank 等零散判断，统一使用 EmptyChecks。
         run: python3 scripts/ci/check-empty-checks.py --base "$GUARD_BASE"
+
+      - name: Verify readiness contract documentation sync
+        shell: bash
+        # readiness 涉及 trigger / asset_partition / result_version / API / 运维文档的跨模块契约。
+        # 改实现但漏文档、API 或测试证据时直接 fail。
+        run: python3 scripts/ci/check-readiness-doc-sync.py --base "$GUARD_BASE"
+
+      - name: Verify Trivy ignore expiry metadata
+        shell: bash
+        # .trivyignore 的每组 CVE 必须有 owner / reason / expires,过期豁免不得继续放行。
+        run: python3 scripts/ci/check-trivy-ignore-expiry.py
+
+      - name: Trivy fs scan on supply-chain inputs
+        shell: bash
+        # 只在依赖、镜像、部署或安全白名单输入变更时跑,避免普通业务 PR 被漏洞库下载拖慢。
+        run: |
+          changed="$(git diff --name-only "$GUARD_BASE"...HEAD || true)"
+          if ! printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore$)'; then
+            echo "No supply-chain inputs changed; skip Trivy fs scan."
+            exit 0
+          fi
+          TRIVY_VERSION=0.70.0
+          curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo mv /tmp/trivy /usr/local/bin/trivy
+          trivy fs --scanners vuln,config --severity CRITICAL,HIGH --exit-code 1 .
 
       - name: Verify e2e shard lists cover all *E2eIT
         shell: bash

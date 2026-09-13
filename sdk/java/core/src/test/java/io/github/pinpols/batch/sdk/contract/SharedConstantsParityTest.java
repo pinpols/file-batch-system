@@ -4,19 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import io.github.pinpols.batch.common.enums.TaskStatus;
-import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
 import io.github.pinpols.batch.sdk.dispatcher.WorkerRuntimeState;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -31,8 +29,8 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>{@code schema_versions_supported} ← {@link TaskDispatchMessage#SUPPORTED_MAJOR_VERSIONS}
  *   <li>{@code worker_runtime_states} ← {@link WorkerRuntimeState} enum constants
- *   <li>{@code sensitive_keywords} ← {@link SensitiveDataValidator}.SENSITIVE_KEYWORDS
- *   <li>{@code task_statuses} ← {@link TaskStatus} enum constants
+ *   <li>{@code sensitive_keywords} ← platform {@code SensitiveDataValidator}.SENSITIVE_KEYWORDS source
+ *   <li>{@code task_statuses} ← platform {@code TaskStatus} enum source
  * </ul>
  *
  * <p>放行 keys(yaml 可有,Java 暂无):{@code atomic_error_codes}(预留 ADR-029,enum 落地后再纳管)。
@@ -43,6 +41,7 @@ import org.junit.jupiter.api.Test;
 class SharedConstantsParityTest {
 
   private static final YAMLMapper YAML = new YAMLMapper();
+  private static final Pattern STRING_LITERAL = Pattern.compile("\"([^\"]+)\"");
 
   private static Path repoRoot() {
     for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {
@@ -55,6 +54,10 @@ class SharedConstantsParityTest {
 
   private static Path yamlPath() {
     return repoRoot().resolve("docs/api/sdk-shared-constants.yaml");
+  }
+
+  private static Path sourcePath(String relativePath) {
+    return repoRoot().resolve(relativePath);
   }
 
   @Test
@@ -75,21 +78,18 @@ class SharedConstantsParityTest {
 
   @Test
   void sensitiveKeywords_match() throws Exception {
-    // SENSITIVE_KEYWORDS is package-private; reflect to keep test code clean of @SuppressWarnings
-    Field f = SensitiveDataValidator.class.getDeclaredField("SENSITIVE_KEYWORDS");
-    f.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    List<String> raw = (List<String>) f.get(null);
-    Set<String> java = new LinkedHashSet<>(raw);
+    Set<String> java = readStringListFromSource(
+        "batch-common/src/main/java/io/github/pinpols/batch/common/security/SensitiveDataValidator.java",
+        "SENSITIVE_KEYWORDS");
     Set<String> yaml = readList("sensitive_keywords");
     assertParity("sensitive_keywords", java, yaml);
   }
 
   @Test
   void taskStatuses_match() throws IOException {
-    Set<String> java = Arrays.stream(TaskStatus.values())
-        .map(Enum::name)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
+    Set<String> java = readEnumConstantsFromSource(
+        "batch-common/src/main/java/io/github/pinpols/batch/common/enums/TaskStatus.java",
+        "TaskStatus");
     Set<String> yaml = readList("task_statuses");
     assertParity("task_statuses", java, yaml);
   }
@@ -102,6 +102,55 @@ class SharedConstantsParityTest {
     return StreamSupport.stream(arr.spliterator(), false)
         .map(JsonNode::asText)
         .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  private static Set<String> readStringListFromSource(String relativePath, String fieldName)
+      throws IOException {
+    String source = Files.readString(sourcePath(relativePath));
+    Pattern fieldPattern = Pattern.compile(
+        "\\b" + Pattern.quote(fieldName) + "\\b\\s*=\\s*List\\.of\\((.*?)\\);", Pattern.DOTALL);
+    Matcher field = fieldPattern.matcher(source);
+    assertThat(field.find())
+        .as("source missing List.of field %s in %s", fieldName, relativePath)
+        .isTrue();
+
+    Matcher literal = STRING_LITERAL.matcher(field.group(1));
+    Set<String> values = new LinkedHashSet<>();
+    while (literal.find()) {
+      values.add(literal.group(1));
+    }
+    assertThat(values)
+        .as("source field %s in %s must not be empty", fieldName, relativePath)
+        .isNotEmpty();
+    return values;
+  }
+
+  private static Set<String> readEnumConstantsFromSource(String relativePath, String enumName)
+      throws IOException {
+    String source = Files.readString(sourcePath(relativePath));
+    int enumIndex = source.indexOf("enum " + enumName);
+    assertThat(enumIndex)
+        .as("source missing enum %s in %s", enumName, relativePath)
+        .isGreaterThanOrEqualTo(0);
+    int bodyStart = source.indexOf('{', enumIndex);
+    int constantsEnd = source.indexOf(';', bodyStart);
+    assertThat(bodyStart)
+        .as("source enum %s has no body in %s", enumName, relativePath)
+        .isGreaterThanOrEqualTo(0);
+    assertThat(constantsEnd)
+        .as("source enum %s has no constant terminator in %s", enumName, relativePath)
+        .isGreaterThan(bodyStart);
+
+    Matcher constant = Pattern.compile("(?m)^\\s*([A-Z][A-Z0-9_]*)\\s*(?:\\(|,|$)")
+        .matcher(source.substring(bodyStart + 1, constantsEnd));
+    Set<String> values = new LinkedHashSet<>();
+    while (constant.find()) {
+      values.add(constant.group(1));
+    }
+    assertThat(values)
+        .as("source enum %s in %s must not be empty", enumName, relativePath)
+        .isNotEmpty();
+    return values;
   }
 
   private static void assertParity(String key, Set<String> java, Set<String> yaml) {

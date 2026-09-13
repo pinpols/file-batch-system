@@ -20,13 +20,6 @@ spring:
       # 与生产同名配置保持一致，不能再因为 local profile 固定为 10 而误判消费能力。
       minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:2}
       maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:10}
-  data:
-    redis:
-      # 宿主机裸 jar 联调：须连 compose 映射端口；勿依赖 BATCH_REDIS_HOST=valkey（主机 DNS 常指向错误 IP）
-      host: localhost
-      port: 16379
-      repositories:
-        enabled: false
   flyway:
     enabled: true
     locations: classpath:db/migration

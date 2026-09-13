@@ -92,6 +92,8 @@ networkPolicy:
 # R4-P0-4：K8s Service 实际端口 18082（见 chart values orchestrator.port），之前误用 docker-compose 内部端口 8082。
 # 修复后 worker / console-api 才能正确连到 orchestrator。
 orchestratorBaseUrl: "http://batch-platform-orchestrator.batch.svc.cluster.local:18082"
+triggerBaseUrl: "http://batch-platform-trigger.batch.svc.cluster.local:18081"
+workerAtomicBaseUrl: "http://batch-platform-worker-atomic.batch.svc.cluster.local:18087"
 
 consoleApi:
   replicaCount: 2

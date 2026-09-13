@@ -13,12 +13,12 @@
 # 使用方法：
 #   # 最小配置（DB 巡检 + 服务巡检）
 #   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_db PGUSER=batch PGPASSWORD=secret \
-#   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:8080,http://localhost:8082 \
+#   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:18080,http://localhost:18082 \
 #     bash scripts/ops/inspect-all.sh
 #
 #   # 完整配置（含 Kafka lag）
 #   PGHOST=... PGPASSWORD=... \
-#   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:8080,http://localhost:8082 \
+#   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:18080,http://localhost:18082 \
 #   BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 #     bash scripts/ops/inspect-all.sh
 #

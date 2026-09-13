@@ -50,8 +50,8 @@ mvn -Pstaging gatling:test -Dsimulation=JobLaunchSimulation
 
 ### 端点
 
-- `-Dtrigger.baseUrl=http://localhost:8081`
-- `-Dconsole.baseUrl=http://localhost:8080`
+- `-Dtrigger.baseUrl=http://localhost:18081`
+- `-Dconsole.baseUrl=http://localhost:18080`
 - `-Dorchestrator.baseUrl=http://localhost:18082`（`SchedulingSnapshotUnderLoadSimulation`；需与 orchestrator 监听一致）
 
 ### 测试数据
@@ -184,7 +184,8 @@ SKIP_AUTO_CLEANUP=1 \
   bash load-tests/scripts/run-control-plane-worker-benchmark.sh
 ```
 
-Kafka lag 默认优先通过 `batch-kafka` 容器内 `/opt/kafka/bin/kafka-consumer-groups.sh` 采样；找不到容器时会尝试本机
+Kafka lag 默认优先通过 `batch-kafka` 容器内 `${KAFKA_CONTAINER_BIN_DIR}/kafka-consumer-groups.sh` 采样；目录默认值见
+`.env.example`，可随 Kafka 镜像布局覆盖；找不到容器时会尝试本机
 `kafka-consumer-groups.sh`。非容器环境需安装 PostgreSQL client 和 Kafka CLI：
 
 自适应 Relay 容量轮次必须显式声明，preflight 会同时校验 Trigger benchmark profile、入口准入、Hikari、

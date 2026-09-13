@@ -16,6 +16,8 @@ source "$BATCH_ENV_COMMON_ROOT/scripts/lib/python-runtime.sh"
 # JVM 网络地址选择策略：保留双栈，但多地址解析时优先 IPv4。
 # 所有本地启动脚本从这里取值，避免参数在各脚本中重复维护。
 export BATCH_JVM_NETWORK_OPTS="${BATCH_JVM_NETWORK_OPTS:--Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false}"
+# Kafka 官方镜像内 CLI 目录。容器镜像布局变化时只需覆盖这一处。
+export KAFKA_CONTAINER_BIN_DIR="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
 
 batch_source_env_file() {
   local env_file="${1:-${COMPOSE_ENV_FILE:-$BATCH_ENV_COMMON_ROOT/.env.local}}"
@@ -205,6 +207,7 @@ batch_require_internal_secret() {
 # 读取，其中部分地址使用容器 DNS。调用方在加载默认 env 后显式调用本函数，
 # 将通用 PostgreSQL 配置映射到各应用的强类型配置项。
 batch_configure_local_jvm_database_env() {
+  local replica_authority
   export BATCH_PLATFORM_DB_URL="${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://$(batch_format_host_port "${PGHOST:-localhost}" "$POSTGRES_PORT")/batch_platform?reWriteBatchedInserts=true}"
   export BATCH_PLATFORM_DB_USERNAME="${BATCH_PLATFORM_DB_USERNAME:-$POSTGRES_USER}"
   export BATCH_PLATFORM_DB_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-$POSTGRES_PASSWORD}"
@@ -221,7 +224,8 @@ batch_configure_local_jvm_database_env() {
 
   case "${BATCH_CONSOLE_REPLICA_URL:-}" in
     ""|jdbc:postgresql://postgres-replica:*)
-      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://$(batch_format_host_port "${PG_REPLICA_HOST:-localhost}" "${POSTGRES_REPLICA_PORT:-15433}")/batch_platform?reWriteBatchedInserts=true"
+      replica_authority="$(batch_format_host_port "${PG_REPLICA_HOST:-localhost}" "${POSTGRES_REPLICA_PORT:-15433}")"
+      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://${replica_authority}/batch_platform?reWriteBatchedInserts=true"
       ;;
   esac
 }

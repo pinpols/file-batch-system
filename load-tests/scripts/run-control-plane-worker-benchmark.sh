@@ -37,6 +37,10 @@ SCHEDULING_CONSOLE_READS="${SCHEDULING_CONSOLE_READS:-false}"
 # 压测夹具写入结束后到正式计时开始前的稳定窗口。仅由容量画像传入，避免把
 # fixture 的 WAL/自动清理噪声计入 API 稳态 SLO。
 POST_PREPARE_SETTLE_SECONDS="${POST_PREPARE_SETTLE_SECONDS:-0}"
+# 容量对比可在正式测量前固定 checkpoint 相位，并把夹具准备产生的 SQL 从
+# pg_stat_statements 中移除。通用控制面基准默认关闭，避免改变既有运行成本。
+PRE_MEASURE_CHECKPOINT_ENABLED="${PRE_MEASURE_CHECKPOINT_ENABLED:-0}"
+RESET_PG_STATEMENTS_BEFORE_MEASURE="${RESET_PG_STATEMENTS_BEFORE_MEASURE:-0}"
 
 ATOMIC_JOBS_CSV="${ATOMIC_JOBS_CSV:-atomic_sql_demo}"
 KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|atomic)|orchestrator-trigger-launch}"
@@ -141,7 +145,7 @@ kafka_lag_snapshot() {
   kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
   if [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]]; then
     output="$(
-      docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
+      docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
         --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>&1 || true
     )"
     if [[ "$output" != *"No such file"* && "$output" != *"executable file not found"* && "$output" != *"Error:"* ]]; then
@@ -532,9 +536,25 @@ if ! [[ "$POST_PREPARE_SETTLE_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "POST_PREPARE_SETTLE_SECONDS must be a non-negative integer" >&2
   exit 2
 fi
+if [[ "$PRE_MEASURE_CHECKPOINT_ENABLED" != "0" && "$PRE_MEASURE_CHECKPOINT_ENABLED" != "1" ]]; then
+  echo "PRE_MEASURE_CHECKPOINT_ENABLED must be 0 or 1" >&2
+  exit 2
+fi
+if [[ "$RESET_PG_STATEMENTS_BEFORE_MEASURE" != "0" && "$RESET_PG_STATEMENTS_BEFORE_MEASURE" != "1" ]]; then
+  echo "RESET_PG_STATEMENTS_BEFORE_MEASURE must be 0 or 1" >&2
+  exit 2
+fi
+if [[ "$PRE_MEASURE_CHECKPOINT_ENABLED" == "1" ]]; then
+  echo "==> forcing PostgreSQL checkpoint before measured traffic"
+  psql_platform -c 'CHECKPOINT' >/dev/null
+fi
 if [[ "$POST_PREPARE_SETTLE_SECONDS" -gt 0 ]]; then
   echo "==> settling ${POST_PREPARE_SETTLE_SECONDS}s after fixture preparation before measured traffic"
   sleep "$POST_PREPARE_SETTLE_SECONDS"
+fi
+if [[ "$RESET_PG_STATEMENTS_BEFORE_MEASURE" == "1" ]]; then
+  echo "==> resetting pg_stat_statements before measured traffic"
+  psql_platform -f "$LOAD_DIR/sql/reset-control-pg-statement-profile.sql" >/dev/null
 fi
 
 if ! [[ "$PG_SAMPLE_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then

@@ -79,7 +79,7 @@ kafka_lag_snapshot() {
   kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
   if [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]]; then
     output="$(
-      docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
+      docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
         --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>&1 || true
     )"
     if [[ "$output" != *"No such file"* && "$output" != *"executable file not found"* && "$output" != *"Error:"* ]]; then

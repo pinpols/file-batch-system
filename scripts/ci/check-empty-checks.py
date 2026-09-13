@@ -18,9 +18,34 @@ import subprocess
 import sys
 
 
-DIRECT_CHECK = re.compile(
-    r"(?:\.isEmpty\s*\(\)|\.isBlank\s*\(\)|"
-    r"\.size\s*\(\)\s*==\s*0|\.length\s*==\s*0)"
+CHECK_PATTERNS = (
+    (
+        "null 判断",
+        re.compile(r"(?:(?<![=!])(?:==|!=)\s*null\b|\bnull\s*(?:==|!=)(?![=]))"),
+    ),
+    ("字符串 / 集合空判断", re.compile(r"(?:\.isEmpty\s*\(\)|\.isBlank\s*\(\))")),
+    (
+        "集合大小判断",
+        re.compile(r"(?:\.size\s*\(\)\s*(?:==|!=|>|>=|<|<=)\s*0|\b0\s*(?:==|!=|<|<=|>|>=)\s*[^;]*\.size\s*\(\))"),
+    ),
+    (
+        "数组长度判断",
+        re.compile(r"(?:\.length\s*(?:==|!=|>|>=|<|<=)\s*0|\b0\s*(?:==|!=|<|<=|>|>=)\s*[^;]*\.length\b)"),
+    ),
+    (
+        "分散工具类空判断",
+        re.compile(
+            r"\b(?:CollectionUtils|StringUtils|ObjectUtils)\."
+            r"(?:isEmpty|isNotEmpty|isBlank|isNotBlank|hasText|hasLength)\s*\("
+        ),
+    ),
+)
+
+ALLOW_MARKER = re.compile(r"empty-check:\s*allow(?:\s*-\s*(?P<reason>\S.*))?")
+ALLOWED_IDIOMS = (
+    "Objects.requireNonNull",
+    "Objects.requireNonNullElse",
+    "Objects.requireNonNullElseGet",
 )
 
 
@@ -121,21 +146,38 @@ def main() -> int:
         return 0
 
     violations = []
+    bad_allows = []
     for path, line_no, source in added_lines(args.base):
         if path.endswith("/EmptyChecks.java"):
             continue
         stripped = source.strip()
         if not stripped or stripped.startswith(("//", "/*", "*")):
             continue
+        allow = ALLOW_MARKER.search(source)
+        if allow:
+            if not allow.group("reason"):
+                bad_allows.append((path, line_no, stripped))
+            continue
         if "EmptyChecks." in source:
             continue
-        if DIRECT_CHECK.search(source):
-            violations.append((path, line_no, stripped))
+        if any(idiom in source for idiom in ALLOWED_IDIOMS):
+            continue
+        for label, pattern in CHECK_PATTERNS:
+            if pattern.search(source):
+                violations.append((path, line_no, label, stripped))
+                break
+
+    if bad_allows:
+        print("empty-check 豁免必须写明原因：", file=sys.stderr)
+        for path, line_no, source in bad_allows:
+            print(f"  {path}:{line_no}: {source}", file=sys.stderr)
+        return 1
 
     if violations:
         print("发现新增零散空值判断，请改用 EmptyChecks：", file=sys.stderr)
-        for path, line_no, source in violations:
-            print(f"  {path}:{line_no}: {source}", file=sys.stderr)
+        for path, line_no, label, source in violations:
+            print(f"  {path}:{line_no}: [{label}] {source}", file=sys.stderr)
+        print("确需保留原生判断时，在同一行追加：// empty-check: allow - 原因", file=sys.stderr)
         return 1
 
     print("EmptyChecks guard passed: 新增生产代码未发现零散空值判断。")

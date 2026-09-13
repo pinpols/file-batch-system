@@ -133,7 +133,7 @@ note "4. 启动 sample worker → 本地栈"
 DISPATCH_NODE_TOPIC="batch.task.dispatch.atomic.node.${WORKER_CODE//[^a-zA-Z0-9._-]/_}"
 WORKER_TOPIC_SUFFIX="${WORKER_CODE//[^a-zA-Z0-9._-]/_}"
 DISPATCH_TOPIC_PATTERN="${DISPATCH_TOPIC_PATTERN:-batch\\.task\\.dispatch\\.atomic\\.node\\.${WORKER_TOPIC_SUFFIX}\$}"
-if docker exec "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh \
+if docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
     --bootstrap-server "$KAFKA_INTERNAL_BOOTSTRAP" --create --if-not-exists \
     --topic "$DISPATCH_NODE_TOPIC" --partitions 1 --replication-factor 1 >/dev/null 2>&1; then
   info "预建 direct-dispatch topic: $DISPATCH_NODE_TOPIC"

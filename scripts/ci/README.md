@@ -24,6 +24,43 @@ python3 scripts/ci/check-empty-checks.py --base origin/main
 
 已接入 `pr-gate.yml` 和 `full-ci-gate.yml` 的静态检查。
 
+## `check-env-file-shell-safety.py`
+
+校验仓库跟踪的 `.env*` 文件可被 Bash 脚本安全 `source`。本地和 CI 会把
+`.env.example` 复制成 `.env.local` 后注入脚本；活动的 `KEY=value` 行如果值包含空白，
+必须写成 `KEY="..."` 或 `KEY='...'`，避免 JVM 参数这类值被拆成命令执行。
+
+```bash
+python3 scripts/ci/check-env-file-shell-safety.py
+```
+
+已接入 `pr-gate.yml`、`full-ci-gate.yml` 和本地 `scripts/local/pre-push-sdk-checks.sh`。
+
+## `check-readiness-doc-sync.py`
+
+检查 readiness 相关契约触点的 diff：`readiness`、`AssetPartition`、`ResultVersion`
+以及 trigger 调度主路径变更时，必须在同一 PR 中同步至少一类证据：设计文档、OpenAPI /
+协议文档或 readiness 相关测试。该脚本是轻量同步守护，不替代 IT / E2E 语义验证。
+
+```bash
+python3 scripts/ci/check-readiness-doc-sync.py
+python3 scripts/ci/check-readiness-doc-sync.py --base origin/main
+```
+
+已接入 `pr-gate.yml`、`full-ci-gate.yml` 和本地 `scripts/local/pre-push-sdk-checks.sh`。
+
+## `check-trivy-ignore-expiry.py`
+
+校验 `.trivyignore` 中每组 CVE 白名单必须带 `owner`、`reason`、`expires: YYYY-MM-DD`，
+且 `expires` 未过期。安全漏洞豁免只允许作为有期限的临时措施，不能长期静默留在仓库。
+
+```bash
+python3 scripts/ci/check-trivy-ignore-expiry.py
+python3 scripts/ci/check-trivy-ignore-expiry.py --today 2026-09-13
+```
+
+已接入 `pr-gate.yml`、`full-ci-gate.yml` 和本地 `scripts/local/pre-push-sdk-checks.sh`。
+
 ## `run-full-regression.sh`
 
 统一 Maven 回归入口：默认测试、`*IT` / E2E、可选压测 smoke、部署 smoke、升级 / 回滚验证与巡检。参数与行为以脚本内 `usage()` 为准。

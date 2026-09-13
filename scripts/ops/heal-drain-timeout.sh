@@ -10,7 +10,7 @@
 #   bash scripts/ops/heal-drain-timeout.sh
 #
 #   # 真正执行 force-offline
-#   BATCH_HEAL_DRY_RUN=false BATCH_CONSOLE_URL=http://localhost:8080 \
+#   BATCH_HEAL_DRY_RUN=false BATCH_CONSOLE_URL=http://localhost:18080 \
 #     PGHOST=localhost PGUSER=batch PGPASSWORD=secret \
 #     bash scripts/ops/heal-drain-timeout.sh
 #
@@ -27,7 +27,6 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/env.sh"
 
 # ── 配置 ─────────────────────────────────────────────────────────────
-BATCH_CONSOLE_URL="${BATCH_CONSOLE_URL:-http://localhost:8080}"
 BATCH_CONSOLE_TOKEN="${BATCH_CONSOLE_TOKEN:-}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 

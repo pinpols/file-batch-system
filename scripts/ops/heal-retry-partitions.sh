@@ -13,7 +13,7 @@
 #
 #   # 实际执行（建议限定租户）
 #   BATCH_HEAL_RETRY_DRY_RUN=false \
-#     BATCH_ORCHESTRATOR_URL=http://localhost:8082 \
+#     BATCH_ORCHESTRATOR_URL=http://localhost:18082 \
 #     BATCH_HEAL_RETRY_TENANT=tenant-001 \
 #     bash scripts/ops/heal-retry-partitions.sh
 #
