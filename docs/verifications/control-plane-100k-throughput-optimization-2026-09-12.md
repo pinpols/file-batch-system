@@ -384,6 +384,41 @@ PostgreSQL 约 295% CPU。最终服务端接收并完成 9814/9814，全部 SUCC
 - `load-tests/target/p2-capacity-profile-tor10k-w2-0913.md`
 - `load-tests/target/p2-capacity-profile-tor10k-w3-0913.md`
 
+### 7. Report 往返、Trigger 并发预算与 outbox 写放大收口
+
+SQL 画像显示成功 report 会重复读取 task、partition 和 terminal instance。当前将 task 与 partition
+持久化上下文合并为一次查询，并让分区终态 CAS 在同一 SQL 中返回更新后的 job instance；重试、虚拟
+task 和 CAS miss 仍走原有回退路径。改动不调整租户谓词、invocation fence、事务边界、终态聚合或
+补偿语义。Orchestrator 编译通过，真实 PostgreSQL 的 `WorkerClaimProgressCompleteIntegrationTest`
+2 项通过。
+
+复核历史基线发现，`134.946 tasks/s` 严格轮次使用 Trigger admission `32`、平台连接池 `40`。后续将
+该容量预算提高到 `80/88` 后，在同一 8 核共享 PostgreSQL 上出现更高的 WAL/连接争用，launch T1/T2
+平均耗时由历史十几至二十余毫秒放大到近百至二百余毫秒，入口队列最终产生 429 或连接提前关闭。
+benchmark profile 已恢复为 `32/40`，并保留 8 条数据库连接给 relay、健康检查和管理路径。该裁定只
+影响隔离容量 profile，不改变 local/prod 默认值；后续不得以“并发值更大”为理由直接放大连接池，必须
+通过同容量等级 A/B 证明吞吐收益。
+
+同时确认 `outbox_event.payload_json` GIN 索引在仓库运行时查询中没有消费路径，实库父子索引扫描次数为
+0；反复容量测试后，空的当月 outbox 分区仍占 91 MiB，其中 GIN 子索引占 79 MiB。V208 前向迁移删除
+该父索引及已挂接子索引，并兼容删除旧非分区索引；event key、aggregate 和 publish status 等实际查询
+使用的 B-tree 索引全部保留。本地删除索引并执行普通 `VACUUM (ANALYZE)` 后，当月空分区降为约
+4.1 MiB，热表死元组归零，空闲 PostgreSQL CPU 从约 42% 回落到约 5%。容量脚本对应的手工分区迁移
+也不再创建该 GIN 索引。
+
+在宿主机仍高于可比门槛的情况下，完成 `1000 requests @ 100 RPS` 无回归轮次：入口和终态均为
+`1000/1000`、HTTP p95 `354ms`、任务执行 p95 `1.935s`、Kafka 最终 lag 为 0、所有容器零重启，完成
+吞吐 `51.186 tasks/s`。该轮预检 load 为 `7.88-9.17`，只证明主链正确，不作为历史吞吐对比。当前
+性能基线仍是 `134.946 tasks/s`；只有宿主机连续预检 `load1 <= 6` 后的同口径 1 万三轮中位数，才可
+用于判断本轮优化是否提升峰值。
+
+本节原始证据：
+
+- `load-tests/target/p2-capacity-profile-report-roundtrip-card100-dual-10k-20260913.md`
+- `load-tests/target/p2-capacity-profile-t32-rpt-10k-0913.md`
+- `load-tests/target/p2-capacity-profile-gin0-t32-10k.md`
+- `load-tests/target/p2-capacity-profile-opt-1k-100.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |

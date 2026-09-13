@@ -103,8 +103,8 @@ CREATE INDEX idx_outbox_p_publish_status
     ON batch.outbox_event_p (publish_status, next_publish_at);
 CREATE INDEX idx_outbox_p_tenant_status_scheduled
     ON batch.outbox_event_p (tenant_id, publish_status, next_publish_at);
-CREATE INDEX idx_outbox_p_payload_json_gin
-    ON batch.outbox_event_p USING gin (payload_json);
+-- payload_json GIN 未被运行时查询使用，并会放大高频 outbox 写入；V208 已从
+-- Flyway 主链删除该索引，手工迁移脚本保持同一最终结构。
 -- OutboxPollScheduler 高优先派发扫描(partial)
 CREATE INDEX idx_outbox_p_priority_pending
     ON batch.outbox_event_p (publish_status, next_publish_at NULLS FIRST, priority DESC, id)

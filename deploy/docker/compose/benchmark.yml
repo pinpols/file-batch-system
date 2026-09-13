@@ -52,11 +52,12 @@ services:
   trigger:
     environment:
       SPRING_PROFILES_ACTIVE: local,benchmark
-      # 200 RPS 持续入口在较小许可数下会因 PG 写入尾延迟填满 128 个等待槽。
-      # 80 个入口许可配 88 条平台连接，固定保留 8 条给 relay、健康检查和管理路径。
-      BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: "88"
-      BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: "80"
-      BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: "20"
+      # 32 个入口许可配 40 条平台连接，固定保留 8 条给 relay、健康检查和管理路径。
+      # 该预算来自同一 8 核容量等级的稳定基线；放大到 80/88 会令共享 PG 过载，
+      # 造成单次 launch 事务变慢并反向填满 admission 队列。
+      BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: "40"
+      BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: "32"
+      BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: "8"
       BATCH_TRIGGER_API_LAUNCH_QUEUE_CAPACITY: "128"
       BATCH_TRIGGER_API_LAUNCH_QUEUE_WAIT_MILLIS: "15000"
       BATCH_TRIGGER_API_LAUNCH_DB_RESERVE_CONNECTIONS: "8"
