@@ -293,7 +293,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .failureClassifier()
             .classify(command.failureClass(), null)
             .code();
-    int updated = jobMappers.jobTaskMapper.finishTask(FinishTaskParam.builder()
+    JobTaskEntity finishedTask = jobMappers.jobTaskMapper.finishTask(FinishTaskParam.builder()
         .tenantId(command.tenantId())
         .id(command.taskId())
         .taskStatus(command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code())
@@ -306,7 +306,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .failureClass(resolvedFailureClass)
         .expectedVersion(task.getVersion())
         .build());
-    if (updated <= 0) {
+    if (EmptyChecks.isNull(finishedTask)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.common.state_conflict_detail",
@@ -370,7 +370,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           .applicationEventPublisher()
           .publishEvent(new WaitingCapacityReleasedEvent(command.tenantId()));
     }
-    return jobMappers.jobTaskMapper.selectById(command.tenantId(), command.taskId());
+    return finishedTask;
   }
 
   private void warnIfCasMiss(int updated, String context, long partitionId) {

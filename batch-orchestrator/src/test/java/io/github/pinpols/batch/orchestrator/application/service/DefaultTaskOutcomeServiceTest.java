@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -246,7 +247,7 @@ class DefaultTaskOutcomeServiceTest {
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance, progressedInstance);
-    when(jobTaskMapper.finishTask(any())).thenReturn(1);
+    when(jobTaskMapper.finishTask(any())).thenReturn(task);
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(stateMachine.transition(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
@@ -259,8 +260,10 @@ class DefaultTaskOutcomeServiceTest {
         .success(true)
         .build();
 
-    service.applyTaskOutcome(command);
+    JobTaskEntity outcome = service.applyTaskOutcome(command);
 
+    assertThat(outcome).isSameAs(task);
+    verify(jobTaskMapper, times(1)).selectById("t1", 1L);
     verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
     verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
     verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
@@ -317,7 +320,7 @@ class DefaultTaskOutcomeServiceTest {
     when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
     when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
     when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance, progressedInstance);
-    when(jobTaskMapper.finishTask(any())).thenReturn(1);
+    when(jobTaskMapper.finishTask(any())).thenReturn(task);
     when(jobPartitionMapper.markStatus(any())).thenReturn(1);
     when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
         .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L));

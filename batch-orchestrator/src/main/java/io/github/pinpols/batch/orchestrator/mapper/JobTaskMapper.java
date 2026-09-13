@@ -90,7 +90,13 @@ public interface JobTaskMapper {
       @Param("toStatus") String toStatus,
       @Param("expectedVersion") Long expectedVersion);
 
-  int finishTask(FinishTaskParam param);
+  /**
+   * 以状态和版本 CAS 终结任务，并返回数据库中的最终行。
+   *
+   * <p>返回 {@code null} 表示 CAS 未命中。使用 PostgreSQL {@code UPDATE ... RETURNING}，让 report 主链路
+   * 不必在成功更新后再执行一次主键查询；状态、版本和租户谓词保持不变。
+   */
+  JobTaskEntity finishTask(FinishTaskParam param);
 
   /**
    * 覆盖写 task_payload(retry/reclaim 把 RunMode 持久化到 payload 用,P1-2.2 起 Kafka message 不再透传

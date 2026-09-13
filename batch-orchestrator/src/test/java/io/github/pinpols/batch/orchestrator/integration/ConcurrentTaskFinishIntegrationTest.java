@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -21,7 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 验证 {@code JobTaskMapper.finishTask} 带有 {@code WHERE task_status = expectedStatus} 的 CAS 守卫：
- * 当两个并发线程竞争完成同一个 RUNNING 任务时，恰好一个获得 row-count=1（获胜者）， 另一个获得 0（失败者）。
+ * 当两个并发线程竞争完成同一个 RUNNING 任务时，恰好一个获得最终实体，另一个因 CAS 未命中返回 {@code null}。
  */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
@@ -83,7 +84,7 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
       CountDownLatch startGate = new CountDownLatch(1);
       ExecutorService pool = Executors.newFixedThreadPool(2);
 
-      List<Future<Integer>> futures = new ArrayList<>();
+      List<Future<JobTaskEntity>> futures = new ArrayList<>();
       for (int i = 0; i < 2; i++) {
         futures.add(pool.submit(() -> {
           startGate.await();
@@ -104,8 +105,10 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
       startGate.countDown();
 
       int totalUpdated = 0;
-      for (Future<Integer> f : futures) {
-        totalUpdated += f.get();
+      for (Future<JobTaskEntity> f : futures) {
+        if (f.get() != null) {
+          totalUpdated++;
+        }
       }
       pool.shutdown();
 

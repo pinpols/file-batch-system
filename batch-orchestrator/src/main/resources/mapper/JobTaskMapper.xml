@@ -249,7 +249,7 @@
           )
     </update>
 
-    <update id="finishTask">
+    <select id="finishTask" resultMap="JobTaskResultMap" flushCache="true" affectData="true">
         update batch.job_task
         set task_status = #{taskStatus},
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
@@ -265,7 +265,8 @@
           and id = #{id}
           and task_status = #{expectedStatus}
           and version = #{expectedVersion}
-    </update>
+        returning *
+    </select>
 
     <select id="assignWorker" resultMap="JobTaskResultMap" flushCache="true" affectData="true">
         update batch.job_task

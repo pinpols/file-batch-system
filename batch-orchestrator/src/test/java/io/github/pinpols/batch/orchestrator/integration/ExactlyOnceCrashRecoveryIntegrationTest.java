@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
@@ -58,12 +59,12 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
       // arrange:task RUNNING、version=0
 
       // act:同一份 REPORT(SUCCESS)投递两次,模拟 Kafka 重投
-      int first = finishToSuccess(taskId, 0L);
-      int second = finishToSuccess(taskId, 0L); // 重投:task 已非 RUNNING、version 已变
+      JobTaskEntity first = finishToSuccess(taskId, 0L);
+      JobTaskEntity second = finishToSuccess(taskId, 0L); // 重投:task 已非 RUNNING、version 已变
 
       // assert:恰好一次被接受;状态只前进一次,版本 0→1
-      assertThat(first).as("首次 REPORT 应被接受").isEqualTo(1);
-      assertThat(second).as("重投 REPORT 必须被终态 CAS 拒绝(幂等空转)").isZero();
+      assertThat(first).as("首次 REPORT 应被接受").isNotNull();
+      assertThat(second).as("重投 REPORT 必须被终态 CAS 拒绝(幂等空转)").isNull();
       assertThat(taskStatus(taskId)).isEqualTo(TaskStatus.SUCCESS.code());
       assertThat(taskVersion(taskId)).as("版本只前进一次,无重复推进").isEqualTo(1L);
     } finally {
@@ -77,7 +78,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
     long taskId = insertRunningTask("stale-leader-" + System.nanoTime());
     try {
       // arrange:新 leader 已把任务 REPORT 成 SUCCESS,version 0→1
-      assertThat(finishToSuccess(taskId, 0L)).isEqualTo(1);
+      assertThat(finishToSuccess(taskId, 0L)).isNotNull();
 
       // act:GC-pause 复活的旧 leader 拿着陈旧 version=0 试图把它写成 FAILED
       int stale = jobTaskMapper.updateStatus(UpdateTaskStatusParam.withDefaultTerminals()
@@ -122,7 +123,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   // ── helpers ────────────────────────────────────────────────────────────
 
-  private int finishToSuccess(long taskId, long expectedVersion) {
+  private JobTaskEntity finishToSuccess(long taskId, long expectedVersion) {
     return jobTaskMapper.finishTask(FinishTaskParam.builder()
         .tenantId(TENANT)
         .id(taskId)
