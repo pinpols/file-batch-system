@@ -29,6 +29,7 @@
 - **日志生命周期治理**：本地应用日志统一归入 `logs/app`，启动前归档到 `logs/archive/app`；清理脚本覆盖实时日志、归档和观测卷，并输出实际回收空间。
 - **脚本与 SQL 边界治理**：批量抽离 CI、Sim、压测、DR 和本地验收脚本中的内联 SQL，建立递减预算守卫，运行时策略由 Java/配置层持有。
 - **防漂移门禁闭环**：模块依赖、Shell 语法/ShellCheck warning 零容忍、脚本登记、仓库卫生和 changelog 同步进入 PR/full gate；文档检查扩展到图片、锚点、版本化目标和目录索引完整性；Zizmor 改为扫描全部 workflow/composite action。
+- **CI 按需路由**：PR required workflow 保持稳定上报，Java、数据库、脚本、文档、配置、API 和 CI 专项检查按变更路径执行；本地 pre-commit 同步采用暂存文件域路由，重型验证继续留在 pre-push / CI。
 - **代码和文档规范**：统一后端错误/告警消息为英文，收口运行时常量、Java 格式化、FQN 违约和代码规模统计；README、工程计划、Runbook 和架构边界文档同步更新。
 
 ### Fixed

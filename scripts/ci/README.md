@@ -21,6 +21,13 @@
 
 `check-sql-config-boundaries.py` 是同名 `.sh` 稳定入口的实现，两者都登记，避免包装层与实现层单独漂移。
 
+## PR 按需路由
+
+`pr-gate.yml` 始终启动，以保证 ruleset required Job 在每个 PR 上稳定回报状态；
+`changes` Job 再按 `java`、`database`、`scripts`、`docs`、`config`、`api`、`ci`
+文件域决定 static-checks 内的专项步骤。SDK 使用 `sdk-contract-parity.yml` 的独立路径路由。
+Secret scan 属于跨域检查，仍对所有非 Draft PR 执行，因为凭据可能出现在任意文件类型中。
+
 ## `check-code-doc-references.py`
 
 校验后端 Java、XML、POM 和配置文件注释中引用的仓库内 `docs/`、`sdk/` 路径存在，避免文档归档或目录迁移后代码注释继续指向失效路径。

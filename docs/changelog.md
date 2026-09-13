@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-09-13
+- **门禁按需执行**：`pr-gate` 的 required Job 保持每个 PR 上报状态，内部按 Java、数据库、脚本、文档、配置、API 和 CI 文件域执行对应步骤；项目级 pre-commit 同步增加暂存区空白、Spotless、ShellCheck、actionlint、文档结构、脚本登记和仓库卫生轻量守护。
 - **文档权威入口与结构门禁**：为 audit / backlog / governance / spike / standards / verifications 补齐目录索引，将旧版 `architecture-truth` 完整正文归档为带日期快照，当前路径只保留权威来源导航；新增文档结构 CI，阻断失效相对链接、缺失关键目录索引和权威入口回退为历史正文。
 - **部署目录治理对齐**：项目结构说明统一以根级 `docker-compose*.yml` 作为本地 Compose 入口、`deploy/docker/` 作为镜像及应用/测试/观测编排目录；CODEOWNERS 同步保护真实部署路径，移除不存在的 `/docker/` 规则。
 - **守护自身防漂移**：模块依赖检查正式接入 PR/full gate；新增 ShellCheck warning 零容忍、脚本登记、仓库卫生和 changelog 同步守护；文档结构检查覆盖图片、锚点、未版本化目标与子目录索引；Zizmor 从两个文件扩展为全 workflow/composite action 扫描。删除无法在 CI 使用的 `.env.prod` 对账脚本和与 Quartz-only 冲突的旧 cron 禁令脚本。
