@@ -53,7 +53,7 @@ if [[ -f "$COMPOSE_ENV_FILE" ]]; then
   source "$COMPOSE_ENV_FILE"
   set +a
 fi
-batch_configure_local_jvm_database_env
+batch_configure_local_jvm_runtime_env
 export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
 export LANG="$BATCH_LOCALE"
 export LC_ALL="$BATCH_LOCALE"

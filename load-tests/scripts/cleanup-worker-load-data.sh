@@ -71,7 +71,8 @@ run_with_retry "business load-test cleanup" \
   psql_business -v run_id="$RUN_ID" -f "$SQL_DIR/cleanup-worker-load-business.sql"
 assert_no_platform_residue
 
-rm -rf "/tmp/batch/load-test/${RUN_ID}-dispatch.txt"
+rm -f "/tmp/batch/load-test/${RUN_ID}-dispatch.txt"
+find /tmp/batch/load-test -maxdepth 1 -type f -name "${RUN_ID}-dispatch-*.txt" -delete
 rm -f /tmp/batch/local-dispatch/*"${RUN_ID}"* 2>/dev/null || true
 
 echo "Cleaned worker load-test data for RUN_ID=${RUN_ID}"

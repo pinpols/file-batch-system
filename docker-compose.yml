@@ -18,6 +18,8 @@ services:
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres-primary
     restart: unless-stopped
+    # 防止异常查询/连接风暴独占 Docker VM；生产 Operator 使用独立 4Gi Pod 预算。
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
     # 默认 max_connections=100 不够：6 模块 × (platform + business) × Hikari 池
     # 本地联调叠加就会失败 "too many clients already"。调到 300 留足余量。
     # P2-4: 流复制参数 —— wal_level=replica（默认值，显式声明便于审阅）+ max_wal_senders 给 replica 容器留位
@@ -100,6 +102,7 @@ services:
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres-replica
     restart: unless-stopped
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
     entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
     # Hot standby 要求 max_connections >= 主库（PG 限制）；其他参数也需匹配主库才能 redo
     command:
@@ -160,6 +163,7 @@ services:
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres-biz-shard-1
     restart: unless-stopped
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
     command:
       - postgres
       - -c
@@ -271,6 +275,9 @@ services:
     image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-09-07T16-13-09Z}
     container_name: batch-minio
     restart: unless-stopped
+    # 本地依赖也必须有 cgroup 边界，避免异常 multipart/扫描占满宿主机内存。
+    # 精确生产规格由 MinIO Tenant 清单按节点资源单独定义。
+    mem_limit: ${MINIO_MEMORY_LIMIT:-1024m}
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -316,12 +323,24 @@ services:
     image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1}
     container_name: batch-valkey
     restart: unless-stopped
+    # 数据上限保留 25% 给复制/AOF fork、连接缓冲和 allocator 碎片。
+    # noeviction 保护 ShedLock/quota 等正确性键；写满后显式失败并由应用熔断，而非静默淘汰。
+    mem_limit: ${VALKEY_MEMORY_LIMIT:-512m}
     ports:
       - "${REDIS_PORT:-16379}:6379"
     environment:
       # 全栈 UTF-8：Valkey(Redis 协议兼容)是 binary-safe，locale 只影响 redis-cli 输出/日志。
       <<: *common-runtime-env
-    command: ["valkey-server", "--appendonly", "yes"]
+    command:
+      - valkey-server
+      - --maxmemory
+      - ${VALKEY_MAXMEMORY:-384mb}
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
     volumes:
       - valkey-data:/data
     networks:

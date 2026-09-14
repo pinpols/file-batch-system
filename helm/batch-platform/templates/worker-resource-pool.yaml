@@ -89,7 +89,7 @@ spec:
           env:
             {{- include "batch-platform.workerIdentityEnv" $root | nindent 12 }}
             - name: JAVA_OPTS_EXTRA
-              value: {{ $pool.javaOptsExtra | default "-XX:MaxDirectMemorySize=1g" | quote }}
+              value: {{ $pool.javaOptsExtra | default "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g" | quote }}
             - name: BATCH_MANAGEMENT_PORT
               value: {{ $port | quote }}
             - name: BATCH_WORKER_{{ $meta.envPrefix }}_PORT

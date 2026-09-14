@@ -6,10 +6,13 @@ import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static io.gatling.javaapi.core.CoreDsl.*;
@@ -41,21 +44,22 @@ public class LaunchPipelineCompletionSimulation extends Simulation {
           ? "Bearer " + System.getProperty("console.accessToken")
           : System.getProperty("console.authToken", "Bearer load-test-token");
 
+  private static final String[] FILE_IDS =
+      Arrays.stream(System.getProperty("launch.fileIdsCsv", "").split(","))
+          .map(String::trim)
+          .filter(value -> !value.isEmpty())
+          .toArray(String[]::new);
+
   private final HttpProtocolBuilder httpProtocol =
       http
           .acceptHeader("application/json")
           .contentTypeHeader("application/json")
           .shareConnections();
 
+  private final AtomicInteger feederIndex = new AtomicInteger();
+
   private final Iterator<Map<String, Object>> feeder =
-      Stream.generate(
-              () ->
-                  Map.<String, Object>of(
-                      "idempotencyKey", UUID.randomUUID().toString(),
-                      "requestId", UUID.randomUUID().toString(),
-                      "traceId",
-                      "ltp-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16)))
-          .iterator();
+      Stream.generate(this::nextFeederRecord).iterator();
 
   private final String launchBody =
       """
@@ -126,6 +130,18 @@ public class LaunchPipelineCompletionSimulation extends Simulation {
                     + GatlingConfig.PIPELINE_MAX_POLLS
                         * (long) GatlingConfig.PIPELINE_POLL_INTERVAL_SEC
                     + 120L))
-        .assertions(global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+        .assertions(GatlingConfig.maxErrorRateAssertion());
+  }
+
+  private Map<String, Object> nextFeederRecord() {
+    Map<String, Object> values = new HashMap<>();
+    values.put("idempotencyKey", UUID.randomUUID().toString());
+    values.put("requestId", UUID.randomUUID().toString());
+    values.put(
+        "traceId", "ltp-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+    if (FILE_IDS.length > 0) {
+      values.put("fileId", FILE_IDS[Math.floorMod(feederIndex.getAndIncrement(), FILE_IDS.length)]);
+    }
+    return values;
   }
 }

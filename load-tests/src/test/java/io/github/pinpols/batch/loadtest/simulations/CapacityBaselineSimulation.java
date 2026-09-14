@@ -170,7 +170,7 @@ public class CapacityBaselineSimulation extends Simulation {
                         details("GET /api/console/query/instances")
                                 .responseTime().percentile(99).lt(GatlingConfig.READ_P99_MS),
                         // Global error gate
-                        global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT)
+                        GatlingConfig.maxErrorRateAssertion()
                 );
     }
 }

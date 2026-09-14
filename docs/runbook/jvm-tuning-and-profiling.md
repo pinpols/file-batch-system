@@ -49,12 +49,17 @@
 
 ### 1.2 按模块分档
 
+公共 `javaOpts` 不选择垃圾收集器，每个服务在 `javaOptsExtra` 中恰好选择一种。
+普通服务显式选择 G1，Orchestrator 选择 ZGC。不能依赖 JDK 自动选择：容器 CPU
+或内存限制较小时，JDK 21 可能自动改用 Serial GC。禁止在公共参数启用 G1 后再为
+单个服务追加 ZGC，否则 JVM 会因同时选择多个垃圾收集器而拒绝启动。
+
 | 模块 | heap | GC | direct mem | 备注 |
 |---|---|---|---|---|
-| `batch-trigger` | 256-512M | G1(默认) | 默认 512M | 轻量 I/O,默认够 |
+| `batch-trigger` | 256-512M | G1(显式) | 默认 512M | 轻量 I/O,默认够 |
 | `batch-orchestrator` | 1-2G | **Generational ZGC** | 默认 512M | 状态机大量短命对象,需要 sub-ms pause |
-| `batch-worker-{import,export,process,dispatch}` | 1-2G | G1 | **1G** | 大文件流,direct 要扩 |
-| `batch-console-api` | 768M-1.5G | G1 | 默认 512M | HTTP + SSE,中等 |
+| `batch-worker-{import,export,process,dispatch}` | 1-2G | G1(显式) | **1G** | 大文件流,direct 要扩 |
+| `batch-console-api` | 768M-1.5G | G1(显式) | 默认 512M | HTTP + SSE,中等 |
 
 **Orchestrator 用 ZGC 的判断依据**:状态机 transition 链路每次生成大量短命对象(event / record / DTO),G1 容易 promote 到 old gen 触发 200ms+ Stop-the-world。ZGenerational(JDK 21+)在 1-2G heap 上 pause < 1ms,代价是吞吐 -10% 但**调度延迟换比 10% CPU 值**。
 
@@ -82,21 +87,25 @@ javaOpts: >-
   --enable-native-access=ALL-UNNAMED
   -Dspring.profiles.active=prod
 
-# 每模块 override 在 helm/values-prod.yaml 的 services.<name>.javaOptsExtra
-services:
-  orchestrator:
-    javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"
-  workerImport:
-    javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
-  workerExport:
-    javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
-  workerProcess:
-    javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
-  workerDispatch:
-    javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
+# 每模块 override 位于 helm/batch-platform/values.yaml 的顶层模块节点；
+# 生产 overlay 未覆盖时会继承这些值。
+consoleApi:
+  javaOptsExtra: "-XX:+UseG1GC"
+orchestrator:
+  javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"
+workerImport:
+  javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
+workerExport:
+  javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
+workerProcess:
+  javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
+workerDispatch:
+  javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
 ```
 
-> Helm template 拼接:`JAVA_OPTS = javaOpts + " " + services.<name>.javaOptsExtra`,见 §落地 PR 改动。
+> 容器入口按 `JAVA_OPTS`、`JAVA_OPTS_EXTRA` 的顺序拼接参数；GC 选择不能依赖参数
+> 顺序覆盖。`scripts/ci/check-production-overlay-safety.py` 会检查每个最终服务配置恰好
+> 选择一种 GC，并拒绝公共层 GC 和服务层 GC 冲突。
 
 ### 1.4 Spring Boot 4 / JDK 21 新机制
 

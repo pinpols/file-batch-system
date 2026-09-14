@@ -59,6 +59,7 @@ election；本地 Compose 是单 Broker，只能用于功能和故障注入，�
 ### 日常检查
 
 - `PING`、角色、内存使用、AOF/RDB 状态和连接数。
+- `maxmemory` 必须大于 0，且低于容器 limit，为复制/AOF fork、连接缓冲和 allocator 碎片保留余量。
 - 应用配额运行时存储生产必须使用 `FAIL_CLOSED`；Valkey 故障不能长期演变成无限放行。
 - ShedLock、SSE 广播、quota 等用途要区分容量和故障影响，不能把“Valkey 可连”当成全部业务正常。
 
@@ -69,13 +70,18 @@ election；本地 Compose 是单 Broker，只能用于功能和故障注入，�
 3. ShedLock/调度异常按 [redis-shedlock-down.md](./playbooks/redis-shedlock-down.md) 处理，禁止直接清空锁键。
 4. 检查 AOF/RDB 和 Sentinel/Operator 状态后再恢复流量；应用重启不是第一步。
 
-生产需要主从/哨兵或等价托管 HA，并明确 maxmemory、淘汰策略、持久化、备份和恢复责任。
+生产需要主从/哨兵或等价托管 HA，并明确 maxmemory、淘汰策略、持久化、备份和恢复责任。本仓
+Compose 默认使用 `512MiB limit / 384MiB maxmemory`，HA 清单使用 `1Gi limit / 768MiB maxmemory`；
+两者均为 75% 数据水位、`noeviction` 和 AOF `everysec`。`noeviction` 是正确性边界：达到上限时让写入
+显式失败并触发现有熔断/告警，不能静默淘汰锁、配额或 SSE 状态。生产容量压测后可同比例扩大，不能让
+`maxmemory` 等于容器 limit。
 
 ## 4. MinIO
 
 ### 日常检查
 
 - readiness、磁盘水位、节点 offline、bucket 可访问性。
+- 单机 Compose 也必须设置容器内存上限；生产由 Tenant `resources` 管理，不能依赖节点剩余内存。
 - 生产 bucket 开启版本管理、生命周期和必要的 Object Lock；清理 incomplete multipart 必须先确认保留窗口。
 - 对象 checksum、manifest 和导出临时对象是业务闭环的一部分，不能只看 HTTP 200。
 
@@ -95,6 +101,7 @@ MinIO Console 地址只用于人工运维，应用统一使用 S3 API endpoint�
 ### 日常检查
 
 - 连接可用性、`pg_is_in_recovery()`、连接数、锁等待、WAL/磁盘水位和迁移失败记录。
+- PostgreSQL 进程必须有容器/Pod 内存上限；Compose 默认 3 GiB，生产 Operator 清单为 4 GiB。
 - 运行表、outbox、日志和 dedup ledger 按已有分区/留存 runbook 管理，不直接在线 `DELETE` 热表。
 - 备份按 [backup-and-pitr.md](./backup-and-pitr.md) 执行：base backup + WAL archive + 两个业务库逻辑导出，并定期做真实恢复演练。
 

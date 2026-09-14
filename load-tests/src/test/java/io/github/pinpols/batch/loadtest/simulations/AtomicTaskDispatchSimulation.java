@@ -92,7 +92,7 @@ public class AtomicTaskDispatchSimulation extends Simulation {
                 .protocols(httpProtocol)
                 .assertions(
                         global().responseTime().percentile(95).lt(GatlingConfig.WRITE_P95_MS),
-                        global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT)
+                        GatlingConfig.maxErrorRateAssertion()
                 );
     }
 }

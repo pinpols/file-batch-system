@@ -34,6 +34,110 @@ ON CONFLICT (tenant_id, job_code) DO UPDATE SET
   worker_group = EXCLUDED.worker_group,
   updated_at = now();
 
+INSERT INTO batch.file_template_config (
+  tenant_id, template_code, template_name, template_type, biz_type,
+  file_format_type, charset, target_charset, delimiter, quote_char, escape_char,
+  header_rows, checksum_type, compress_type, encrypt_type, field_mappings,
+  default_query_code, default_query_sql, query_param_schema, streaming_enabled,
+  page_size, fetch_size, chunk_size, enabled, version, created_by, updated_by,
+  load_target_ref, export_data_ref, is_deleted
+) VALUES
+  (
+    'default-tenant', 'import_customer_v1', 'Load Test Customer Import', 'IMPORT',
+    'LOAD_TEST', 'DELIMITED', 'UTF-8', 'UTF-8', ',', '"', '"', 1,
+    'NONE', 'NONE', 'NONE',
+    '[
+      {"name":"customerNo","targetColumn":"customer_no","type":"STRING","required":true,"maxLength":64},
+      {"name":"customerName","targetColumn":"customer_name","type":"STRING","required":true,"maxLength":256},
+      {"name":"customerType","targetColumn":"customer_type","type":"STRING","required":true}
+    ]'::jsonb,
+    NULL, NULL,
+    '{"jdbcMappedImport":{
+      "schema":"biz","table":"customer_account","tenantColumn":"tenant_id",
+      "columnMappings":[
+        {"from":"customerNo","to":"customer_no"},
+        {"from":"customerName","to":"customer_name"},
+        {"from":"customerType","to":"customer_type"}
+      ],
+      "conflictColumns":["tenant_id","customer_no"]
+    }}'::jsonb,
+    true, 1000, 1000, 500, true, 1, 'load-test', 'load-test',
+    'jdbc_mapped', NULL, false
+  ),
+  (
+    'default-tenant', 'export_settlement_v1', 'Load Test Settlement Export', 'EXPORT',
+    'LOAD_TEST', 'DELIMITED', 'UTF-8', 'UTF-8', ',', '"', '"', 0,
+    'NONE', 'NONE', 'NONE',
+    '[
+      {"name":"batchNo","sourceColumn":"batch_no","type":"STRING","header":"batchNo"},
+      {"name":"bizDate","sourceColumn":"biz_date","type":"DATE","header":"bizDate","format":"yyyy-MM-dd"},
+      {"name":"settlementNo","sourceColumn":"settlement_no","type":"STRING","header":"settlementNo"},
+      {"name":"customerNo","sourceColumn":"customer_no","type":"STRING","header":"customerNo"},
+      {"name":"grossAmount","sourceColumn":"gross_amount","type":"DECIMAL","header":"grossAmount"},
+      {"name":"feeAmount","sourceColumn":"fee_amount","type":"DECIMAL","header":"feeAmount"},
+      {"name":"netAmount","sourceColumn":"net_amount","type":"DECIMAL","header":"netAmount"},
+      {"name":"currency","sourceColumn":"currency","type":"STRING","header":"currency"},
+      {"name":"status","sourceColumn":"settlement_status","type":"STRING","header":"status"}
+    ]'::jsonb,
+    'LOAD_TEST_SETTLEMENT_DETAIL',
+    'SELECT sb.batch_no, sb.biz_date, sd.settlement_no, sd.customer_no,
+            sd.gross_amount, sd.fee_amount, sd.net_amount, sd.currency,
+            sd.settlement_status, sd.id
+       FROM biz.settlement_detail sd
+       JOIN biz.settlement_batch sb
+         ON sb.tenant_id = sd.tenant_id AND sb.id = sd.batch_id
+      WHERE sb.tenant_id = :tenantId AND sb.batch_no = :batchNo',
+    '{"sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    true, 1000, 1000, 500, true, 1, 'load-test', 'load-test',
+    NULL, 'sql_template_export', false
+  )
+ON CONFLICT (tenant_id, template_code, version) DO UPDATE SET
+  template_name = EXCLUDED.template_name,
+  template_type = EXCLUDED.template_type,
+  biz_type = EXCLUDED.biz_type,
+  file_format_type = EXCLUDED.file_format_type,
+  charset = EXCLUDED.charset,
+  target_charset = EXCLUDED.target_charset,
+  delimiter = EXCLUDED.delimiter,
+  quote_char = EXCLUDED.quote_char,
+  escape_char = EXCLUDED.escape_char,
+  header_rows = EXCLUDED.header_rows,
+  field_mappings = EXCLUDED.field_mappings,
+  default_query_code = EXCLUDED.default_query_code,
+  default_query_sql = EXCLUDED.default_query_sql,
+  query_param_schema = EXCLUDED.query_param_schema,
+  streaming_enabled = EXCLUDED.streaming_enabled,
+  page_size = EXCLUDED.page_size,
+  fetch_size = EXCLUDED.fetch_size,
+  chunk_size = EXCLUDED.chunk_size,
+  enabled = true,
+  updated_by = EXCLUDED.updated_by,
+  load_target_ref = EXCLUDED.load_target_ref,
+  export_data_ref = EXCLUDED.export_data_ref,
+  is_deleted = false,
+  updated_at = now();
+
+INSERT INTO batch.file_channel_config (
+  tenant_id, channel_code, channel_name, channel_type, target_endpoint,
+  auth_type, config_json, receipt_policy, timeout_seconds, enabled, is_deleted
+) VALUES (
+  'default-tenant', 'local_dispatch', 'Load Test Local Dispatch', 'LOCAL',
+  '/tmp/batch/local-dispatch', 'NONE',
+  '{"target_endpoint":"/tmp/batch/local-dispatch","receipt_policy":"NONE","channel_type":"LOCAL","channel_code":"local_dispatch"}'::jsonb,
+  'NONE', 30, true, false
+)
+ON CONFLICT (tenant_id, channel_code) DO UPDATE SET
+  channel_name = EXCLUDED.channel_name,
+  channel_type = EXCLUDED.channel_type,
+  target_endpoint = EXCLUDED.target_endpoint,
+  auth_type = EXCLUDED.auth_type,
+  config_json = EXCLUDED.config_json,
+  receipt_policy = EXCLUDED.receipt_policy,
+  timeout_seconds = EXCLUDED.timeout_seconds,
+  enabled = true,
+  is_deleted = false,
+  updated_at = now();
+
 DELETE FROM batch.pipeline_step_definition
 WHERE pipeline_definition_id IN (
   SELECT id FROM batch.pipeline_definition
@@ -301,10 +405,6 @@ UNION ALL
 SELECT id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
   'PROCESS_FEEDBACK', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd;
 
-WITH existing AS (
-  SELECT id FROM batch.file_record
-  WHERE tenant_id = 'default-tenant' AND file_code = :'run_id' || '-DISPATCH-FILE'
-)
 INSERT INTO batch.file_record (
   tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
   file_ext, file_format_type, charset, mime_type, file_size_bytes, checksum_type,
@@ -312,20 +412,32 @@ INSERT INTO batch.file_record (
   file_generation_no, is_latest, source_type, source_ref, file_status, biz_date,
   trace_id, metadata_json, created_at, updated_at
 ) SELECT
-  'default-tenant', :'run_id' || '-DISPATCH-FILE', 'LOAD_TEST', 'OUTPUT',
-  :'run_id' || '-dispatch.txt', :'run_id' || '-dispatch.txt', 'txt', 'DELIMITED',
-  'UTF-8', 'text/plain', :dispatch_file_size::bigint, 'NONE', :'run_id' || '-dispatch-checksum',
-  'LOCAL', :'dispatch_file', 'batch-dev', 'v1', 1, true, 'GENERATED',
-  :'run_id', 'GENERATED', :'biz_date'::date, :'run_id',
-  jsonb_build_object('runId', :'run_id', 'loadTest', true), now(), now()
-WHERE NOT EXISTS (SELECT 1 FROM existing);
-
-UPDATE batch.file_record
-SET file_status = 'GENERATED',
-    storage_path = :'dispatch_file',
-    file_size_bytes = :dispatch_file_size::bigint,
-    updated_at = now()
-WHERE tenant_id = 'default-tenant' AND file_code = :'run_id' || '-DISPATCH-FILE';
+  'default-tenant',
+  :'run_id' || '-DISPATCH-FILE-' || lpad(fixture_no::text, 6, '0'),
+  'LOAD_TEST', 'OUTPUT',
+  :'run_id' || '-dispatch-' || lpad(fixture_no::text, 6, '0') || '.txt',
+  :'run_id' || '-dispatch-' || lpad(fixture_no::text, 6, '0') || '.txt',
+  'txt', 'DELIMITED', 'UTF-8', 'text/plain', :dispatch_file_size::bigint,
+  'NONE', :'run_id' || '-dispatch-checksum-' || lpad(fixture_no::text, 6, '0'),
+  'LOCAL',
+  :'dispatch_dir' || '/' || :'run_id' || '-dispatch-' || lpad(fixture_no::text, 6, '0') || '.txt',
+  'batch-dev', 'v1', 1, true, 'GENERATED', :'run_id', 'GENERATED',
+  :'biz_date'::date, :'run_id',
+  jsonb_build_object('runId', :'run_id', 'loadTest', true, 'fixtureNo', fixture_no),
+  now(), now()
+FROM generate_series(1, :dispatch_fixture_count::integer) fixture_no
+ON CONFLICT (tenant_id, checksum_value, storage_path)
+WHERE checksum_value IS NOT NULL
+DO UPDATE SET
+  file_code = EXCLUDED.file_code,
+  file_name = EXCLUDED.file_name,
+  original_file_name = EXCLUDED.original_file_name,
+  file_size_bytes = EXCLUDED.file_size_bytes,
+  file_status = 'GENERATED',
+  biz_date = EXCLUDED.biz_date,
+  trace_id = EXCLUDED.trace_id,
+  metadata_json = EXCLUDED.metadata_json,
+  updated_at = now();
 
 UPDATE batch.worker_registry
 SET status = 'ONLINE',

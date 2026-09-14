@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
-OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data}"
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
+OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
 BIZ_DATE="${BIZ_DATE:-2026-05-05}"
 PROCESS_SOURCE_ROWS="${PROCESS_SOURCE_ROWS:-5000}"
 PROCESS_ACCOUNT_COUNT="${PROCESS_ACCOUNT_COUNT:-500}"
@@ -14,6 +14,12 @@ PROCESS_EVENT_ID_START="${PROCESS_EVENT_ID_START:-$(($(date +%s) * 10000000))}"
 PROCESS_ACCOUNT_WIDTH="${PROCESS_ACCOUNT_WIDTH:-$(n=$((PROCESS_ACCOUNT_COUNT - 1)); digits=${#n}; if [[ "$digits" -lt 4 ]]; then echo 4; else echo "$digits"; fi)}"
 PROCESS_AGG_MAX_STAGED_ROWS="${PROCESS_AGG_MAX_STAGED_ROWS:-$((PROCESS_ACCOUNT_COUNT + 1000))}"
 PROCESS_COPY_MAX_STAGED_ROWS="${PROCESS_COPY_MAX_STAGED_ROWS:-$((PROCESS_SOURCE_ROWS + 1000))}"
+DISPATCH_FIXTURE_COUNT="${DISPATCH_FIXTURE_COUNT:-1}"
+
+if [[ ! "$DISPATCH_FIXTURE_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "DISPATCH_FIXTURE_COUNT must be a positive integer" >&2
+  exit 2
+fi
 
 validate_load_test_run_id "$RUN_ID"
 
@@ -114,21 +120,30 @@ psql_business \
   -v process_source_rows="$PROCESS_SOURCE_ROWS" \
   -f "$LOAD_DIR/sql/prepare-worker-load-business.sql"
 
-DISPATCH_FILE="/tmp/batch/load-test/${RUN_ID}-dispatch.txt"
-printf 'load-test-dispatch %s\n' "$RUN_ID" > "$DISPATCH_FILE"
-DISPATCH_FILE_SIZE="$(wc -c < "$DISPATCH_FILE" | tr -d ' ')"
+DISPATCH_DIR="/tmp/batch/load-test"
+for ((fixture_no = 1; fixture_no <= DISPATCH_FIXTURE_COUNT; fixture_no++)); do
+  printf -v fixture_suffix '%06d' "$fixture_no"
+  printf 'load-test-dispatch %s fixture=%s\n' "$RUN_ID" "$fixture_suffix" \
+    > "$DISPATCH_DIR/${RUN_ID}-dispatch-${fixture_suffix}.txt"
+done
+DISPATCH_FILE_SIZE="$(wc -c < "$DISPATCH_DIR/${RUN_ID}-dispatch-000001.txt" | tr -d ' ')"
 
 psql_platform \
   -v run_id="$RUN_ID" \
   -v biz_date="$BIZ_DATE" \
-  -v dispatch_file="$DISPATCH_FILE" \
+  -v dispatch_dir="$DISPATCH_DIR" \
   -v dispatch_file_size="$DISPATCH_FILE_SIZE" \
+  -v dispatch_fixture_count="$DISPATCH_FIXTURE_COUNT" \
   -v process_agg_max_staged_rows="$PROCESS_AGG_MAX_STAGED_ROWS" \
   -v process_copy_max_staged_rows="$PROCESS_COPY_MAX_STAGED_ROWS" \
   -f "$LOAD_DIR/sql/prepare-worker-load-platform.sql"
 
-DISPATCH_FILE_ID="$(psql_platform -At -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/select-worker-load-dispatch-file-id.sql")"
-jq --arg fileId "$DISPATCH_FILE_ID" '. + {fileId: $fileId}' "$OUT_DIR/dispatch.params.json" > "$OUT_DIR/dispatch.params.tmp.json"
+DISPATCH_FILE_IDS_CSV="$(psql_platform -At -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/select-worker-load-dispatch-file-id.sql")"
+if [[ -z "$DISPATCH_FILE_IDS_CSV" ]]; then
+  echo "No dispatch fixture file IDs were created" >&2
+  exit 1
+fi
+jq --arg fileId '#{fileId}' '. + {fileId: $fileId}' "$OUT_DIR/dispatch.params.json" > "$OUT_DIR/dispatch.params.tmp.json"
 mv "$OUT_DIR/dispatch.params.tmp.json" "$OUT_DIR/dispatch.params.json"
 
 cat > "$OUT_DIR/run.env" <<ENV
@@ -140,6 +155,7 @@ IMPORT_MEDIUM_PARAMS=${OUT_DIR}/import-medium.params.json
 IMPORT_LARGE_PARAMS=${OUT_DIR}/import-large.params.json
 EXPORT_PARAMS=${OUT_DIR}/export.params.json
 DISPATCH_PARAMS=${OUT_DIR}/dispatch.params.json
+DISPATCH_FILE_IDS_CSV=${DISPATCH_FILE_IDS_CSV}
 PROCESS_PARAMS=${OUT_DIR}/process.params.json
 PROCESS_COPY_PARAMS=${OUT_DIR}/process-copy.params.json
 PROCESS_SOURCE_ROWS=${PROCESS_SOURCE_ROWS}

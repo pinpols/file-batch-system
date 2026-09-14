@@ -188,7 +188,7 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
               .percentile(99)
               .lt(GatlingConfig.READ_P99_MS));
     }
-    assertions.add(global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+    assertions.add(GatlingConfig.maxErrorRateAssertion());
     return assertions.toArray(Assertion[]::new);
   }
 }

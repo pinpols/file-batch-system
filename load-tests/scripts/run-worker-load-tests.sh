@@ -16,7 +16,9 @@ WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-180}"
 
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
 RUN_ACCOUNT_PREFIX="$(printf '%s' "$RUN_ID" | tr -cd '[:alnum:]' | cut -c1-16)"
-export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
+DISPATCH_FIXTURE_COUNT="${DISPATCH_FIXTURE_COUNT:-$USERS_PER_WORKER}"
+OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
+export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB DISPATCH_FIXTURE_COUNT OUT_DIR
 
 # 自动 cleanup（EXIT trap）：压测产物（job_instance / job_partition / job_task /
 # dead_letter_task / outbox_event / event_outbox_retry / retry_schedule /
@@ -40,7 +42,7 @@ trap on_exit_cleanup EXIT
 
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
-source "$LOAD_DIR/target/worker-load-data/run.env"
+source "$OUT_DIR/run.env"
 
 case "$IMPORT_PROFILE" in
   small) IMPORT_PARAMS="$IMPORT_SMALL_PARAMS" ;;
@@ -93,6 +95,11 @@ run_one() {
   local job_code="$2"
   local params_file="$3"
   local log_file="$LOG_DIR/${label}.log"
+  local file_ids_csv="${4:-}"
+  local -a extra_args=()
+  if [[ -n "$file_ids_csv" ]]; then
+    extra_args+=("-Dlaunch.fileIdsCsv=${file_ids_csv}")
+  fi
 
   echo "==> ${label}: job=${job_code}, params=${params_file}"
   (
@@ -115,6 +122,7 @@ run_one() {
       -Dslo.read.p99ms=5000 \
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       -Dconsole.accessToken="$TOKEN" \
+      "${extra_args[@]}" \
       --batch-mode
   ) | tee "$log_file"
 
@@ -126,10 +134,16 @@ run_one() {
         -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
     )"
     local total="${counts%%|*}"
-    local terminal="${counts##*|}"
+    local remaining="${counts#*|}"
+    local terminal="${remaining%%|*}"
+    local success="${counts##*|}"
     if [[ "$total" -ge "$USERS_PER_WORKER" && "$terminal" -eq "$total" ]]; then
-      echo "==> ${label}: terminal instances ${terminal}/${total}"
-      return 0
+      if [[ "$success" -eq "$total" ]]; then
+        echo "==> ${label}: successful instances ${success}/${total}"
+        return 0
+      fi
+      echo "==> ${label}: business failures detected, success ${success}/${total}" >&2
+      return 1
     fi
     sleep 2
     elapsed=$((elapsed + 2))
@@ -140,7 +154,7 @@ run_one() {
 
 run_one import import_customer_job "$IMPORT_PARAMS"
 run_one export export_settlement_job "$EXPORT_PARAMS"
-run_one dispatch lt_dispatch_local_job "$DISPATCH_PARAMS"
+run_one dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$DISPATCH_FILE_IDS_CSV"
 run_one process lt_process_sql_job "$PROCESS_PARAMS"
 
 RUN_FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

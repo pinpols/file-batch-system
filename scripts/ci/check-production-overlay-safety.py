@@ -8,6 +8,7 @@ back to development security, quota, or network settings.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -15,7 +16,14 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
+CHART_VALUES = ROOT / "helm/batch-platform/values.yaml"
 PROD_VALUES = ROOT / "helm/values-prod.yaml"
+LOCAL_K8S_VALUES = ROOT / "helm/batch-platform/examples/values-local-k8s.yaml"
+HEAVY_WORKER_VALUES = ROOT / "helm/batch-platform/examples/values-heavy-worker-pools.yaml"
+
+GC_ENABLE_PATTERN = re.compile(
+    r"-XX:\+Use(?:Serial|Parallel|G1|Z|Shenandoah|Epsilon)GC(?:\s|$)"
+)
 
 
 def get(values: dict, *path: str):
@@ -32,9 +40,76 @@ def is_true(value: object) -> bool:
     return value is True or (isinstance(value, str) and value.strip().lower() == "true")
 
 
+def merge_values(base: dict, overlay: dict) -> dict:
+    """按本检查涉及的 Helm map 递归覆盖语义合并 values。"""
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge_values(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def enabled_collectors(options: str) -> set[str]:
+    return {match.group(0).strip() for match in GC_ENABLE_PATTERN.finditer(options)}
+
+
+def validate_gc_configuration(label: str, values: dict, errors: list[str]) -> None:
+    """禁止公共层选择 GC，并确保每个最终服务恰好选择一种 GC。"""
+    common_java_opts = str(get(values, "javaOpts") or "")
+    common_collectors = enabled_collectors(common_java_opts)
+    if common_collectors:
+        errors.append(
+            f"{label} javaOpts must not select a garbage collector; use service.javaOptsExtra: "
+            f"{', '.join(sorted(common_collectors))}"
+        )
+
+    for service_name in (
+        "consoleApi",
+        "trigger",
+        "orchestrator",
+        "workerImport",
+        "workerExport",
+        "workerProcess",
+        "workerAtomic",
+        "workerDispatch",
+    ):
+        service_java_opts = str(get(values, service_name, "javaOptsExtra") or "")
+        collectors = enabled_collectors(f"{common_java_opts} {service_java_opts}")
+        if len(collectors) != 1:
+            errors.append(
+                f"{label} {service_name} must select exactly one garbage collector: "
+                f"{', '.join(sorted(collectors)) or 'none'}"
+            )
+
+    for pool_key in ("tenantWorkerPools", "workerResourcePools"):
+        for index, pool in enumerate(get(values, pool_key) or []):
+            pool_java_opts = str(pool.get("javaOptsExtra") or "-XX:+UseG1GC")
+            collectors = enabled_collectors(f"{common_java_opts} {pool_java_opts}")
+            if len(collectors) != 1:
+                errors.append(
+                    f"{label} {pool_key}[{index}] must select exactly one garbage collector: "
+                    f"{', '.join(sorted(collectors)) or 'none'}"
+                )
+
+
 def main() -> int:
-    values = yaml.safe_load(PROD_VALUES.read_text(encoding="utf-8")) or {}
+    chart_values = yaml.safe_load(CHART_VALUES.read_text(encoding="utf-8")) or {}
+    prod_values = yaml.safe_load(PROD_VALUES.read_text(encoding="utf-8")) or {}
+    local_k8s_values = yaml.safe_load(LOCAL_K8S_VALUES.read_text(encoding="utf-8")) or {}
+    heavy_worker_values = yaml.safe_load(HEAVY_WORKER_VALUES.read_text(encoding="utf-8")) or {}
+    values = merge_values(chart_values, prod_values)
     errors: list[str] = []
+
+    validate_gc_configuration("chart defaults", chart_values, errors)
+    validate_gc_configuration("production overlay", values, errors)
+    validate_gc_configuration(
+        "local Kubernetes example", merge_values(chart_values, local_k8s_values), errors
+    )
+    validate_gc_configuration(
+        "heavy worker pools example", merge_values(chart_values, heavy_worker_values), errors
+    )
 
     required_true = (
         ("security.enforceStrongSecrets", ("security", "enforceStrongSecrets")),
