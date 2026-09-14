@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,9 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
 
   private static final String DISPATCH_PARAMS =
       paramsJson("control.dispatch.paramsJsonFile", "control.dispatch.paramsJson");
+
+  private static final List<String> DISPATCH_FILE_IDS =
+      csvProperty("control.dispatch.fileIdsCsv");
 
   private static final String ATOMIC_PARAMS =
       paramsJson("control.atomic.paramsJsonFile", "control.atomic.paramsJson");
@@ -170,18 +174,35 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
               long requestIndex = sequence.getAndIncrement();
               LocalDate bizDate =
                   firstBizDate.plusDays(Math.floorMod(requestIndex, BIZ_DATE_CARDINALITY));
-              return Map.<String, Object>of(
-                  "idempotencyKey", UUID.randomUUID().toString(),
-                  "requestId", GatlingConfig.RUN_ID + "-" + module + "-" + UUID.randomUUID(),
+              Map<String, Object> values = new HashMap<>();
+              values.put("idempotencyKey", UUID.randomUUID().toString());
+              values.put(
+                  "requestId", GatlingConfig.RUN_ID + "-" + module + "-" + UUID.randomUUID());
+              values.put(
                   "traceId",
                   GatlingConfig.RUN_ID
                       + "-mix-"
                       + module
                       + "-"
-                      + UUID.randomUUID().toString().replace("-", "").substring(0, 16),
-                  "bizDate", bizDate.toString());
+                      + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+              values.put("bizDate", bizDate.toString());
+              if ("dispatch".equals(module)) {
+                if (requestIndex >= DISPATCH_FILE_IDS.size()) {
+                  throw new IllegalStateException(
+                      "Dispatch file ID fixture exhausted at request " + requestIndex);
+                }
+                values.put("fileId", DISPATCH_FILE_IDS.get(Math.toIntExact(requestIndex)));
+              }
+              return values;
             })
         .iterator();
+  }
+
+  private static List<String> csvProperty(String name) {
+    return Stream.of(System.getProperty(name, "").split(","))
+        .map(String::trim)
+        .filter(value -> !value.isEmpty())
+        .toList();
   }
 
   private static int positiveIntProperty(String name, int defaultValue) {

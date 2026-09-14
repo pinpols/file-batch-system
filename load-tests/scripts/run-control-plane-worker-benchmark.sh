@@ -17,6 +17,7 @@ WAIT_TERMINAL_MIN_INSTANCES="${WAIT_TERMINAL_MIN_INSTANCES:-1}"
 WAIT_TERMINAL_POLL_INTERVAL_SECONDS="${WAIT_TERMINAL_POLL_INTERVAL_SECONDS:-2}"
 # 仅对经 Trigger API 注入的容量画像启用。默认 0 保持其它混合画像原有的最小实例等待语义。
 # 启用后，不能仅因已创建的子集全部终态而提前结束，必须让每个入口请求都已创建并完成实例。
+WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS_OVERRIDE="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-}"
 WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS="${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS:-0}"
 # 发压已结束且入口记录连续稳定少于期望值时，缺失请求不可能凭空补回。容量画像可启用
 # 本开关尽快保留失败现场；普通混压仍按完整超时等待，避免改变既有行为。
@@ -58,7 +59,22 @@ BIZ_DATE_CARDINALITY="${BIZ_DATE_CARDINALITY:-1}"
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
+if [[ -z "${DISPATCH_FIXTURE_COUNT:-}" ]]; then
+  if [[ ",$MODULES_CSV," == *",dispatch,"* ]]; then
+    if [[ "$CONTROL_PLANE_MODE" == "parallel" ]]; then
+      DISPATCH_FIXTURE_COUNT="$((
+        $(awk -v rate="$DISPATCH_LAUNCH_RPS" -v duration="$TRIGGER_DURATION_SECONDS" \
+          'BEGIN { expected = rate * duration; print int(expected) + (expected > int(expected) ? 1 : 0) }') + 10
+      ))"
+    else
+      DISPATCH_FIXTURE_COUNT="$USERS"
+    fi
+  else
+    DISPATCH_FIXTURE_COUNT=1
+  fi
+fi
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB OUT_DIR
+export DISPATCH_FIXTURE_COUNT
 
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CLEANUP_ONLY="${CLEANUP_ONLY:-0}"
@@ -100,6 +116,40 @@ csv_contains() {
   local needle="$1" csv=",$2,"
   [[ "$csv" == *",$needle,"* ]]
 }
+
+requests_for_rate() {
+  local rate="$1"
+  awk -v rate="$rate" -v duration="$TRIGGER_DURATION_SECONDS" \
+    'BEGIN {
+      expected = rate * duration
+      print int(expected) + (expected > int(expected) ? 1 : 0)
+    }'
+}
+
+if [[ "$CONTROL_PLANE_MODE" == "parallel" \
+    && -z "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS_OVERRIDE" ]]; then
+  WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS=0
+  if csv_contains process "$MODULES_CSV"; then
+    WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS=$((
+      WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS + $(requests_for_rate "$PROCESS_LAUNCH_RPS")
+    ))
+  fi
+  if csv_contains dispatch "$MODULES_CSV"; then
+    WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS=$((
+      WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS + $(requests_for_rate "$DISPATCH_LAUNCH_RPS")
+    ))
+  fi
+  if csv_contains atomic "$MODULES_CSV"; then
+    WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS=$((
+      WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS + $(requests_for_rate "$ATOMIC_LAUNCH_RPS")
+    ))
+  fi
+  if csv_contains trigger "$MODULES_CSV"; then
+    WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS=$((
+      WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS + $(requests_for_rate "$TRIGGER_LAUNCH_RPS")
+    ))
+  fi
+fi
 
 cleanup_atomic_trigger() {
   psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql"
@@ -287,7 +337,12 @@ run_pipeline_completion() {
   local job_code="$2"
   local params_file="$3"
   local users="$4"
+  local file_ids_csv="${5:-}"
   local log_file="$LOG_DIR/${label}.log"
+  local -a extra_args=()
+  if [[ -n "$file_ids_csv" ]]; then
+    extra_args+=("-Dlaunch.fileIdsCsv=${file_ids_csv}")
+  fi
 
   echo "==> ${label}: job=${job_code}, users=${users}"
   (
@@ -309,6 +364,7 @@ run_pipeline_completion() {
       -Dpipeline.pollIntervalSec="$PIPELINE_POLL_INTERVAL_SEC" \
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       -Dconsole.accessToken="$TOKEN" \
+      "${extra_args[@]}" \
       --batch-mode
   ) | tee "$log_file"
 
@@ -319,11 +375,13 @@ run_pipeline_completion() {
       psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
         -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
     )"
-    local total="${counts%%|*}"
-    local terminal="${counts##*|}"
+    local total terminal success
+    IFS='|' read -r total terminal success <<< "$counts"
     if [[ "$total" -ge "$users" && "$terminal" -eq "$total" ]]; then
-      echo "==> ${label}: terminal instances ${terminal}/${total}"
-      return 0
+      echo "==> ${label}: terminal ${terminal}/${total}, success ${success}/${total}"
+      [[ "$success" -eq "$total" ]] && return 0
+      echo "==> ${label}: $((total - success)) instance(s) ended without SUCCESS" >&2
+      return 1
     fi
     sleep 2
     elapsed=$((elapsed + 2))
@@ -413,6 +471,7 @@ run_mixed_pressure() {
       -Dcontrol.modules="$MODULES_CSV" \
       -Dcontrol.process.paramsJsonFile="$PROCESS_PARAMS" \
       -Dcontrol.dispatch.paramsJsonFile="$DISPATCH_PARAMS" \
+      -Dcontrol.dispatch.fileIdsCsv="$DISPATCH_FILE_IDS_CSV" \
       -Dcontrol.atomic.paramsJsonFile="$PARAM_DIR/atomic.params.json" \
       -Dcontrol.trigger.paramsJsonFile="$PARAM_DIR/trigger.params.json" \
       -Dcontrol.process.rps="$PROCESS_LAUNCH_RPS" \
@@ -435,7 +494,24 @@ run_mixed_pressure() {
   fi
 
   wait_run_terminal mixed || return 1
+  assert_run_success mixed || return 1
   return "$gatling_rc"
+}
+
+assert_run_success() {
+  local label="$1"
+  local counts total terminal success
+  counts="$(
+    psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v run_id="$RUN_ID" \
+      -f "$LOAD_DIR/sql/control-run-instance-success-counts.sql"
+  )"
+  IFS='|' read -r total terminal success <<< "$counts"
+  echo "==> ${label}: terminal ${terminal}/${total}, success ${success}/${total}"
+  if [[ "$total" -gt 0 && "$terminal" -eq "$total" && "$success" -eq "$total" ]]; then
+    return 0
+  fi
+  echo "==> ${label}: mixed run did not finish with all instances SUCCESS" >&2
+  return 1
 }
 
 write_params() {
@@ -453,7 +529,9 @@ write_report() {
     echo "- Modules: ${MODULES_CSV}"
     echo "- Users per pipeline module: ${USERS}, ramp seconds: ${RAMP_SECONDS}"
     echo "- Mixed launch rates: process=${PROCESS_LAUNCH_RPS}/s, dispatch=${DISPATCH_LAUNCH_RPS}/s, atomic=${ATOMIC_LAUNCH_RPS}/s"
+    echo "- Dispatch fixtures: ${DISPATCH_FIXTURE_COUNT} unique file records"
     echo "- Trigger pressure: job=${TRIGGER_JOB_CODE}, launch_rps=${TRIGGER_LAUNCH_RPS}, read_rps=${TRIGGER_READ_RPS}, duration=${TRIGGER_DURATION_SECONDS}s"
+    echo "- Expected end-to-end launch requests: ${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS}"
     echo "- Result business-key cardinality: ${BIZ_DATE_CARDINALITY} (rotating bizDate from ${BIZ_DATE})"
     echo "- Trigger console reads: ${SCHEDULING_CONSOLE_READS}"
     echo "- Logs: ${LOG_DIR}"
@@ -568,6 +646,14 @@ fi
 # shellcheck disable=SC1090
 source "$OUT_DIR/run.env"
 
+if csv_contains dispatch "$MODULES_CSV"; then
+  IFS=',' read -r -a DISPATCH_FILE_IDS <<< "$DISPATCH_FILE_IDS_CSV"
+  if [[ "${#DISPATCH_FILE_IDS[@]}" -lt "$DISPATCH_FIXTURE_COUNT" ]]; then
+    echo "Expected at least ${DISPATCH_FIXTURE_COUNT} dispatch fixtures, got ${#DISPATCH_FILE_IDS[@]}" >&2
+    exit 1
+  fi
+fi
+
 if ! [[ "$POST_PREPARE_SETTLE_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "POST_PREPARE_SETTLE_SECONDS must be a non-negative integer" >&2
   exit 2
@@ -633,7 +719,8 @@ case "$CONTROL_PLANE_MODE" in
     fi
 
     if csv_contains dispatch "$MODULES_CSV"; then
-      run_pipeline_completion dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$USERS" || true
+      run_pipeline_completion dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$USERS" \
+        "$DISPATCH_FILE_IDS_CSV" || true
     fi
 
     if csv_contains atomic "$MODULES_CSV"; then

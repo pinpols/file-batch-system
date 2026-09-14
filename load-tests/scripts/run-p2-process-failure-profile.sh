@@ -68,6 +68,7 @@ wait_worker_health() {
 start_worker_process() {
   local jar="$ROOT_DIR/build/runtime-jars/worker-process.jar"
   [[ -f "$jar" ]] || { echo "missing runtime jar: $jar" >&2; exit 2; }
+  batch_configure_local_jvm_runtime_env
   local fast_opts="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off}"
   local log="$ROOT_DIR/logs/app/worker-process.log"
   nohup java --enable-native-access=ALL-UNNAMED ${fast_opts} ${JAVA_OPTS:-} \
