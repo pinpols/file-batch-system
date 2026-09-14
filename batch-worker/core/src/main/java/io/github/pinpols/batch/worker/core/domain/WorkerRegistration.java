@@ -14,6 +14,9 @@ public class WorkerRegistration {
    */
   private String workerId;
 
+  /** 稳定的路由池代码；同一 Deployment 的多个实例共享此值。 */
+  private String workerCode;
+
   private String tenantId;
   private String workerType;
 

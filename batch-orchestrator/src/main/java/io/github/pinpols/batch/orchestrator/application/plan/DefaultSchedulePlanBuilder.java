@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -58,10 +59,20 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     plan.setWorkflowDefinitionId(workflowDefinition == null ? null : workflowDefinition.id());
     plan.setQueueCode(jobDefinition == null ? null : jobDefinition.queueCode());
     plan.setWorkerGroup(jobDefinition == null ? null : jobDefinition.workerGroup());
+    plan.setResourceProfile(firstText(
+        planParams.get("resourceProfile"),
+        planParams.get("resource_profile"),
+        planParams.get("resourceTag")));
     plan.setWindowCode(jobDefinition == null ? null : jobDefinition.windowCode());
     // ADR-046:束作业的 worker 类型须投射到交付类型(BUNDLE_IMPORT→IMPORT 等),否则 task_type=BUNDLE_* 会违反
     // ck_job_task_type 且无 worker 认领。非束作业 workerTypeCode()==自身 code,行为不变;未知 job_type 回退原字面量。
     plan.setDefaultWorkerType(resolveDefaultWorkerType(jobDefinition));
+    if ("DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
+      plan.setDownstreamChannelCode(firstText(
+          planParams.get("channelCode"),
+          planParams.get("dispatchChannelCode"),
+          planParams.get("targetChannelCode")));
+    }
     plan.setPriority(jobDefinition == null ? 5 : jobDefinition.priority());
     plan.setPartitionCount(resolvePartitionCount(jobDefinition, planParams));
     plan.setTotalExpectedRows(resolveTotalExpectedRows(planParams));
@@ -264,6 +275,15 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
           SwallowedExceptionLogger.info(
               DefaultSchedulePlanBuilder.class, "catch:NumberFormatException", ignored);
         }
+      }
+    }
+    return null;
+  }
+
+  private String firstText(Object... values) {
+    for (Object value : values) {
+      if (EmptyChecks.isNotNull(value) && EmptyChecks.isNotBlank(String.valueOf(value))) {
+        return String.valueOf(value).trim();
       }
     }
     return null;

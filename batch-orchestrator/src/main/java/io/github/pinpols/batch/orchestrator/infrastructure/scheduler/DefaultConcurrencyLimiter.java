@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
 public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
   private final JobInstanceMapper jobInstanceMapper;
+  private final GlobalJobAdmission globalJobAdmission;
   private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
   private final OrchestratorConfigCacheService configCacheService;
   private final QuotaRuntimeStateService quotaRuntimeStateService;
@@ -45,7 +47,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return ResourceCheck.allow();
     }
 
-    ResourceCheck globalCheck = checkGlobalLimit();
+    ResourceCheck globalCheck = checkGlobalLimit(request);
     if (!globalCheck.allowed()) {
       return globalCheck;
     }
@@ -64,14 +66,16 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     return ResourceCheck.allow();
   }
 
-  private ResourceCheck checkGlobalLimit() {
-    long globalCap = governance.resourceScheduler().getGlobalMaxRunningJobs();
-    if (globalCap > 0) {
-      long activeAll = jobInstanceMapper.countActiveAll();
-      if (activeAll + 1 > globalCap) {
-        return ResourceCheck.waitForCapacity(
-            "GLOBAL_RUNNING_JOB_LIMIT", "global running jobs exceed cap");
-      }
+  private ResourceCheck checkGlobalLimit(ResourceSchedulingRequest request) {
+    if (!request.isNewJobAdmission()) {
+      return ResourceCheck.allow();
+    }
+    boolean hasCapacity = request.isEnforceFairShareAdmission()
+        ? globalJobAdmission.hasCapacity()
+        : globalJobAdmission.hasObservedCapacity();
+    if (!hasCapacity) {
+      return ResourceCheck.waitForCapacity(
+          "GLOBAL_RUNNING_JOB_LIMIT", "global running jobs exceed cap");
     }
     return ResourceCheck.allow();
   }

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS batch.worker_registry (
     id                  BIGSERIAL PRIMARY KEY,
     tenant_id           VARCHAR(64)  NOT NULL,
     worker_code         VARCHAR(128) NOT NULL,
+    worker_pool_code    VARCHAR(128),
     worker_group        VARCHAR(128) NOT NULL,
     host_name           VARCHAR(256),
     host_ip             VARCHAR(64),

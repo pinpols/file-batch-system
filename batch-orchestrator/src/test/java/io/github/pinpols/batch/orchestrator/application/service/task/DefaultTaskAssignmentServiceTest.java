@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -192,6 +193,42 @@ class DefaultTaskAssignmentServiceTest {
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "w1");
     assertThat(result).isSameAs(refreshed);
+  }
+
+  @Test
+  @DisplayName("assignWorker: 稳定资源池授权实例认领，CAS 后记录实际实例 ID")
+  void assignWorkerAcceptsConcreteInstanceFromAssignedPool() {
+    JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
+    initial.setAssignedWorkerCode("import-memory");
+    JobTaskEntity claimed = task(100L, 4L, TaskStatus.RUNNING.code());
+    claimed.setAssignedWorkerCode("import-memory-pod-a");
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-memory-pod-a"))
+        .thenReturn(workerWithPool("import-memory-pod-a", "import-memory"));
+    when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
+
+    JobTaskEntity result = service.assignWorker("ta", 100L, "import-memory-pod-a");
+
+    assertThat(result).isSameAs(claimed);
+    ArgumentCaptor<AssignWorkerParam> captor = ArgumentCaptor.forClass(AssignWorkerParam.class);
+    verify(jobTaskMapper).assignWorker(captor.capture());
+    assertThat(captor.getValue().getAssignedWorkerCode()).isEqualTo("import-memory-pod-a");
+    assertThat(captor.getValue().getExpectedAssignedWorkerCode()).isEqualTo("import-memory");
+  }
+
+  @Test
+  @DisplayName("assignWorker: 同组但不属于目标资源池的实例不能认领")
+  void assignWorkerRejectsConcreteInstanceFromDifferentPool() {
+    JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
+    initial.setAssignedWorkerCode("import-memory");
+    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-cpu-pod-a"))
+        .thenReturn(workerWithPool("import-cpu-pod-a", "import-cpu"));
+
+    JobTaskEntity result = service.assignWorker("ta", 100L, "import-cpu-pod-a");
+
+    assertThat(result).isSameAs(initial);
+    verify(jobTaskMapper, never()).assignWorker(any(AssignWorkerParam.class));
   }
 
   // ===== renewTaskLease =====
@@ -491,5 +528,27 @@ class DefaultTaskAssignmentServiceTest {
       String tenantId, String workerCode, String status, String group) {
     return new WorkerRegistryEntity(
         1L, tenantId, workerCode, group, null, null, status, Instant.now(), 0, 10, null, null);
+  }
+
+  private WorkerRegistryEntity workerWithPool(String workerCode, String workerPoolCode) {
+    return new WorkerRegistryEntity(
+        1L,
+        "ta",
+        workerCode,
+        "default",
+        null,
+        null,
+        WorkerRegistryStatus.ONLINE.code(),
+        Instant.now(),
+        0,
+        10,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        workerPoolCode);
   }
 }

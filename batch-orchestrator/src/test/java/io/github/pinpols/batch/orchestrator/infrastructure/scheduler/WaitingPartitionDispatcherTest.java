@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -48,6 +49,8 @@ class WaitingPartitionDispatcherTest {
       org.mockito.Mockito.mock(OrchestratorConfigCacheService.class);
   private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard =
       org.mockito.Mockito.mock(FairShareGroupAdmissionGuard.class);
+  private final GlobalJobAdmission globalJobAdmission =
+      org.mockito.Mockito.mock(GlobalJobAdmission.class);
 
   private WaitingPartitionDispatcher dispatcher;
 
@@ -70,12 +73,14 @@ class WaitingPartitionDispatcherTest {
         partitionLifecycleService,
         tenantActionRateLimiter,
         configCacheService,
+        globalJobAdmission,
         fairShareGroupAdmissionGuard);
   }
 
   @Test
   void stopsBeforeStateMutationWhenTenantDispatchLimitIsExhausted() {
     JobInstanceEntity instance = waitingInstance();
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(false);
 
     dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
@@ -94,7 +99,9 @@ class WaitingPartitionDispatcherTest {
     workflowRun.setId(99L);
     workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
     workflowRun.setCurrentNodeCode("export");
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
     when(fairShareGroupAdmissionGuard.hasCapacity(any())).thenReturn(true);
     when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
         .thenReturn(true);
@@ -118,17 +125,66 @@ class WaitingPartitionDispatcherTest {
 
   @Test
   void doesNotReleaseWhenFairShareGroupHasNoCapacity() {
+    JobInstanceEntity instance = waitingInstance();
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
     TenantQuotaPolicyEntity quotaPolicy = new TenantQuotaPolicyEntity(
         1L, "tenant-a", "p", 0, 0, 0, 1, "settlement", 0, 0, "NONE", 1, true, "QUEUE_DEFER");
     when(configCacheService.findEnabledQuotaPolicy("tenant-a")).thenReturn(quotaPolicy);
     when(fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)).thenReturn(false);
 
-    dispatcher.executeDispatch(partition(), task(), waitingInstance(), dispatchDecision());
+    dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
 
     verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
     verify(taskDispatchOutboxService, never())
         .writeDispatchEvent(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void doesNotReleaseWaitingJobWhenGlobalCapacityIsFull() {
+    JobInstanceEntity instance = waitingInstance();
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
+    when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    when(globalJobAdmission.hasCapacity()).thenReturn(false);
+
+    dispatcher.executeDispatch(partition(), task(), instance, dispatchDecision());
+
+    verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
+    verify(fairShareGroupAdmissionGuard, never()).hasCapacity(any());
+  }
+
+  @Test
+  void usesCurrentRunningParentAndDoesNotReconsumeGlobalAdmission() {
+    JobInstanceEntity staleWaitingSnapshot = waitingInstance();
+    JobInstanceEntity currentRunning = waitingInstance();
+    currentRunning.setInstanceStatus(JobInstanceStatus.RUNNING.code());
+    currentRunning.setVersion(1L);
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(currentRunning);
+    when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
+    when(fairShareGroupAdmissionGuard.hasCapacity(any())).thenReturn(true);
+    when(partitionLifecycleService.releaseForDispatch(any(), any(), any(), any()))
+        .thenReturn(true);
+
+    dispatcher.executeDispatch(partition(), task(), staleWaitingSnapshot, dispatchDecision());
+
+    verify(globalJobAdmission, never()).hasCapacity();
+    verify(jobInstanceMapper, never()).markRunning(any());
+    verify(taskDispatchOutboxService)
+        .writeDispatchEvent(eq(currentRunning), any(), any(), any(), any());
+  }
+
+  @Test
+  void doesNotReleaseWhenCurrentParentIsTerminal() {
+    JobInstanceEntity staleWaitingSnapshot = waitingInstance();
+    JobInstanceEntity cancelled = waitingInstance();
+    cancelled.setInstanceStatus(JobInstanceStatus.CANCELLED.code());
+    when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(cancelled);
+
+    dispatcher.executeDispatch(partition(), task(), staleWaitingSnapshot, dispatchDecision());
+
+    verify(tenantActionRateLimiter, never()).tryConsume(any(), any());
+    verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
   }
 
   private static JobInstanceEntity waitingInstance() {

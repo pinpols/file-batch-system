@@ -32,6 +32,7 @@
 | 22 | [runtime-compatibility-contract-2026-09-01.md](./runtime-compatibility-contract-2026-09-01.md) | Java、Shell、容器和协议运行时兼容契约 | 升级运行时前 |
 | 23 | [maturity-assessment.md](./maturity-assessment.md) | 成熟度评估快照 | 能力对标时，结论需结合最新验证 |
 | 24 | [deficiencies-2026-05-30.md](./deficiencies-2026-05-30.md) / [p0-p1-p2-roadmap.md](./p0-p1-p2-roadmap.md) | 历史差距与治理路线证据 | 审计历史，不作为当前待办 |
+| 25 | [heavy-workload-guarantees.md](./heavy-workload-guarantees.md) | 重任务容量、资源池、长任务、下游健康和窗口吞吐五项保障 | 重任务上线 / 定容 / 资源隔离前 |
 
 ## 角色路径
 

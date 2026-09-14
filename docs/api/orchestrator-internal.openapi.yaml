@@ -763,6 +763,10 @@ components:
       properties:
         tenantId: {type: string}
         workerCode: {type: string}
+        workerPoolCode:
+          type: string
+          nullable: true
+          description: "稳定 Kafka 路由池代码；workerCode 标识具体运行实例。旧 Worker 缺失时平台回退为 workerCode"
         workerGroup: {type: string, nullable: true}
         status: {type: string, description: "RUNNING / DRAINING / OFFLINE"}
         hostName: {type: string, nullable: true}
@@ -825,6 +829,10 @@ components:
         id: {type: integer, format: int64}
         tenantId: {type: string}
         workerCode: {type: string}
+        workerPoolCode:
+          type: string
+          nullable: true
+          description: "稳定 Kafka 路由池代码；旧记录回退为 workerCode"
         status: {type: string}
         lastHeartbeatAt: {type: string, format: date-time}
 
@@ -857,7 +865,7 @@ components:
       description: claim / renew 共用 schema
       properties:
         tenantId: {type: string}
-        workerId: {type: string, description: "SDK 端 == workerCode(ADR-035 §9)"}
+        workerId: {type: string, description: "具体执行实例 ID；BYO SDK 单实例池中与 workerCode 相同(ADR-035 §9)"}
         partitionInvocationId:
           type: string
           nullable: true

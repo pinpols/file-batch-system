@@ -113,6 +113,11 @@ public interface JobInstanceMapper {
   long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
 
   /**
+   * 获取平台全局 job 准入事务锁。调用方必须在同一事务内完成活跃数检查并把新实例推进到 RUNNING。
+   */
+  Integer acquireGlobalJobAdmissionLock();
+
+  /**
    * 获取公平共享组的事务级 advisory lock。
    *
    * <p>锁必须覆盖共享组活跃实例计数到实例状态提交的整个事务，避免并发 admission 同时读到同一个空余槽位。
@@ -135,7 +140,7 @@ public interface JobInstanceMapper {
   List<Map<String, Object>> countActiveByTenantAndQueueCodes(
       @Param("tenantId") String tenantId, @Param("queueCodes") Collection<String> queueCodes);
 
-  /** 统计所有租户的运行中任务总量（WAITING/READY/RUNNING）。 */
+  /** 统计所有租户已经占用执行容量的实例总量（READY/RUNNING）。 */
   long countActiveAll();
 
   long countTerminalInstancesWithActiveChildren();

@@ -127,6 +127,19 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void perSecondLimitChangeUsesNewBucketWithoutDeploymentVersionBump() {
+    String tenant = uniqueTenant();
+    String action = "SCHEDULER_DISPATCH_TENANT";
+
+    assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isTrue();
+    assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isTrue();
+    assertThat(limiter.tryConsumePerSecond(tenant, action, 2)).isFalse();
+
+    // maxQps 是数据库热配置。阈值从 2 调到 3 后必须立即使用新桶，不能等待应用级版本升级或重启。
+    assertThat(limiter.tryConsumePerSecond(tenant, action, 3)).isTrue();
+  }
+
+  @Test
   void newerConfigurationVersionReplacesPersistedBucketAndKeepsUtilization() {
     String tenant = uniqueTenant();
     String action = "TASK_REPORT";

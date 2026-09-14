@@ -39,10 +39,14 @@ bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
 default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1"
 default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.dispatch.export.node.export-node-1,batch.task.dispatch.process.node.process-node-1,batch.task.dispatch.dispatch.node.dispatch-node-1,batch.task.dispatch.atomic.node.atomic-node-1"
-# 平台核心 topic 和内置 worker direct topic 永远必须存在。KAFKA_TOPICS 只追加自定义 topic，
-# 不能因旧的 gitignored .env 覆盖而漏掉 direct / trigger / verifier topic。direct topic 若由
-# broker 自动创建，会继承 broker 默认分区数，导致 worker 并发预算与初始化声明不一致。
-topics_csv="${default_topics},${KAFKA_DIRECT_WORKER_TOPICS:-${default_direct_topics}}"
+# 平台核心 topic 和内置 worker direct topic 永远必须存在。KAFKA_TOPICS 与
+# KAFKA_DIRECT_WORKER_TOPICS 都只追加自定义 topic，不能因旧的 gitignored .env 覆盖而漏掉
+# direct / trigger / verifier topic。direct topic 若由 broker 自动创建，会继承 broker 默认分区数，
+# 导致 worker 并发预算与初始化声明不一致。
+topics_csv="${default_topics},${default_direct_topics}"
+if [ -n "${KAFKA_DIRECT_WORKER_TOPICS:-}" ]; then
+  topics_csv="${topics_csv},${KAFKA_DIRECT_WORKER_TOPICS}"
+fi
 if [ -n "${KAFKA_TOPICS:-}" ]; then
   topics_csv="${topics_csv},${KAFKA_TOPICS}"
 fi

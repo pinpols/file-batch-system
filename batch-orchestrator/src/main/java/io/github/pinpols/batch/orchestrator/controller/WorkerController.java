@@ -154,7 +154,8 @@ public class WorkerController {
         request.rowsProcessed(),
         request.totalRowsHint(),
         request.protocolVersion(),
-        request.maxConcurrent());
+        request.maxConcurrent(),
+        request.workerPoolCode());
   }
 
   private static String resolveTenant(WorkerHeartbeatDto request, HttpServletRequest httpRequest) {

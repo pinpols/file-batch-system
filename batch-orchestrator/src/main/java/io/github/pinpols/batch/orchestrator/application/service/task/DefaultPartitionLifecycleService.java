@@ -244,7 +244,21 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             : partitionPlan.getWorkerRoute());
     snapshot.put("workerGroup", EmptyChecks.isNull(plan) ? null : plan.getWorkerGroup());
     snapshot.put("queueCode", EmptyChecks.isNull(plan) ? null : plan.getQueueCode());
+    snapshot.put("resourceProfile", EmptyChecks.isNull(plan) ? null : plan.getResourceProfile());
+    snapshot.put("downstreamChannelCode", resolveDownstreamChannelCode(plan, partitionPlan));
     snapshot.put("windowCode", EmptyChecks.isNull(plan) ? null : plan.getWindowCode());
     return JsonUtils.toJson(snapshot);
+  }
+
+  /** 分发束和 fan-out 的渠道属于单个分区；普通分发仍回退到计划级渠道。 */
+  private String resolveDownstreamChannelCode(
+      SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan) {
+    if (EmptyChecks.isNotNull(plan)
+        && "DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
+        && EmptyChecks.isNotNull(partitionPlan)
+        && EmptyChecks.isNotBlank(partitionPlan.getTargetRef())) {
+      return partitionPlan.getTargetRef();
+    }
+    return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();
   }
 }

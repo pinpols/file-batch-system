@@ -16,7 +16,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
+import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -45,6 +47,8 @@ class DefaultPartitionDispatchServiceTest {
   private PartitionLifecycleService partitionLifecycleService;
   private TaskExecutionService taskExecutionService;
   private TaskDispatchOutboxService taskDispatchOutboxService;
+  private GlobalJobAdmission globalJobAdmission;
+  private WorkflowNodeDispatchService workflowNodeDispatchService;
   private JobInstanceMapper jobInstanceMapper;
   private DefaultPartitionDispatchService service;
 
@@ -56,6 +60,9 @@ class DefaultPartitionDispatchServiceTest {
     partitionLifecycleService = mock(PartitionLifecycleService.class);
     taskExecutionService = mock(TaskExecutionService.class);
     taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+    globalJobAdmission = mock(GlobalJobAdmission.class);
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
+    workflowNodeDispatchService = mock(WorkflowNodeDispatchService.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     StateMachine<Object> stateMachine = mock(StateMachine.class);
     when(stateMachine.transition(any(), any()))
@@ -68,7 +75,8 @@ class DefaultPartitionDispatchServiceTest {
         taskExecutionService,
         taskDispatchOutboxService,
         stateMachine,
-        mock(WorkflowNodeDispatchService.class),
+        globalJobAdmission,
+        workflowNodeDispatchService,
         jobInstanceMapper,
         mock(WorkflowRunMapper.class),
         new LaunchPhaseMetrics(new SimpleMeterRegistry()));
@@ -148,6 +156,44 @@ class DefaultPartitionDispatchServiceTest {
     assertThat(jobInstance.getExpectedPartitionCount()).isEqualTo(1);
     verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
     verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void initialDagStaysWaitingWhenGlobalCapacityIsFull() {
+    when(globalJobAdmission.hasCapacity()).thenReturn(false);
+    when(workflowNodeDispatchService.dispatchNode(any(), any(), any(), any(), any()))
+        .thenReturn(2);
+    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+    JobInstanceEntity jobInstance = new JobInstanceEntity();
+    jobInstance.setId(10L);
+    jobInstance.setTenantId("ta");
+    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+    jobInstance.setVersion(0L);
+    LaunchRequest request = new LaunchRequest(
+        "ta",
+        "WORKFLOW_A",
+        LocalDate.of(2026, Month.SEPTEMBER, 11),
+        TriggerType.MANUAL,
+        "request-dag",
+        "trace-dag",
+        Map.of());
+    PartitionDispatchService.DispatchContext context = PartitionDispatchService.DispatchContext.of(
+        new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-dag"),
+        new PartitionDispatchService.DispatchRuntime(
+            jobInstance,
+            null,
+            List.of(new WorkflowDagService.DagNodeResolution("IMPORT", "TASK")),
+            Instant.parse("2026-09-11T00:00:00Z")));
+
+    service.dispatch(context);
+
+    ArgumentCaptor<MarkInstanceRunningParam> transition =
+        ArgumentCaptor.forClass(MarkInstanceRunningParam.class);
+    verify(jobInstanceMapper).markRunning(transition.capture());
+    assertThat(transition.getValue().getInstanceStatus())
+        .isEqualTo(JobInstanceStatus.WAITING.code());
+    assertThat(transition.getValue().getExpectedPartitionCount()).isEqualTo(2);
+    verify(globalJobAdmission).hasCapacity();
   }
 
   private JobInstanceEntity dispatchablePlan(long version) {

@@ -9,6 +9,7 @@
 | `values-local-k8s.yaml` | Mac Docker Desktop K8s + docker-compose 基础服务（Postgres/Kafka/MinIO/Redis）本地演示部署；连接走 `host.docker.internal:<HOST_PORT>` 到宿主机 compose 栈 |
 | `values-minimal-replicas.yaml` | 单副本/双副本（orch）精简部署，总共 7 Pod，适合内存 8GB 的笔记本 demo |
 | `values-startup-probes.yaml` | 所有模块挂 `startupProbe`（20s delay + 18×10s failureThreshold = 200s 启动窗口），避免 K8s 资源紧张下被 livenessProbe 误杀 |
+| `values-heavy-worker-pools.yaml` | Import 内存池与 Process CPU 池的资源画像路由示例；仅用于渲染和定容起点 |
 
 ## 组合使用
 
@@ -39,6 +40,15 @@ helm install batch helm/batch-platform/ \
 # 等 Ready
 kubectl -n batch-prod wait --for=condition=Ready pods --all --timeout=5m
 ```
+
+只验证重任务资源池模板：
+
+```bash
+helm template batch-platform helm/batch-platform/ \
+  --values helm/batch-platform/examples/values-heavy-worker-pools.yaml
+```
+
+该示例会额外渲染 Import 内存池和 Process CPU 池，不改变默认 values，也不替代生产定容。
 
 ## 生产部署
 

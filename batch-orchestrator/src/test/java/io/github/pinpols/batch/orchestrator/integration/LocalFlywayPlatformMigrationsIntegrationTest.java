@@ -62,6 +62,22 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
           .contains("SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
       assertThat(constraintDefinition(jdbc, "workflow_run_archive", "ck_workflow_run_status"))
           .contains("SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
+      Long workerPoolColumn = jdbc.queryForObject("""
+              select count(*) from information_schema.columns
+              where table_schema = 'batch'
+                and table_name = 'worker_registry'
+                and column_name = 'worker_pool_code'
+                and data_type = 'character varying'
+                and character_maximum_length = 128
+              """, Long.class);
+      assertThat(workerPoolColumn).isEqualTo(1L);
+      String workerPoolIndex = jdbc.queryForObject("""
+              select indexdef from pg_indexes
+              where schemaname = 'batch'
+                and indexname = 'idx_worker_registry_pool_status_load'
+              """, String.class);
+      assertThat(workerPoolIndex)
+          .contains("tenant_id", "worker_pool_code", "status", "current_load", "heartbeat_at");
     }
   }
 

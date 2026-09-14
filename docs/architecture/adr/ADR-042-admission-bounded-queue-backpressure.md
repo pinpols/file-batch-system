@@ -41,6 +41,20 @@ V89 引入 `tenant_quota_policy.exceeded_strategy`,三态齐备且 `QUEUE_DEFER`
 
 后续实现以路线图 [`bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md`](../../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) §1.2 为准，先补 WAITING 边界，再补 Kafka lag / broker health 感知式准入。两项完成前，生产容量结论必须以 pending cap 和 lag 受控的压测证据为准。
 
+## 2026-09-14 活跃执行面保护落地
+
+重任务治理补齐了此前缺少的执行面硬边界，但没有篡改 2026-07-30 对 pending 队列的结论：
+
+- 新增全局活跃作业上限，生产 profile 必须配置正数；多 Orchestrator 通过 PostgreSQL transaction
+  advisory lock 串行化临界槽位准入；
+- `tenant_quota_policy.max_qps_per_tenant` 与 `resource_queue.max_qps` 接入共享 Redis 每秒令牌桶；内部
+  派发在 Redis 故障时 fail-closed；
+- Worker `current_load/max_concurrent`、`resourceProfile` 和 Dispatch 渠道健康共同参与准入；
+- WAITING 重派继续走小批量、租户限流和事务内二次容量检查。
+
+因此“活跃执行量与释放速率受控”已经完成；“WAITING 存储量有统一硬上限/TTL”与“任务派发直接按 Kafka
+lag gate”仍未完成，继续保留为路线图 P0-A/P0-B。不得用前者的完成状态替代后两项的验证证据。
+
 ## 备选(未采纳)
 
 - 令牌桶速率限流:平滑 launch 速率,但不解决总量堆积;留作后续增强。

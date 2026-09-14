@@ -141,6 +141,8 @@ trigger:
 
 orchestrator:
   replicaCount: 2
+  resourceScheduler:
+    globalMaxRunningJobs: 1000
   quota:
     # Do not allow a Redis outage to bypass tenant quota enforcement.
     redisFailureMode: "FAIL_CLOSED"

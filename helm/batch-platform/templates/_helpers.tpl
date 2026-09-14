@@ -111,6 +111,17 @@ envFrom:
 {{- end }}
 
 {{/*
+Unique worker runtime identity. The stable application workerCode remains the Kafka routing pool;
+the Pod UID only distinguishes replicas in worker_registry so capacity is not last-heartbeat-wins.
+*/}}
+{{- define "batch-platform.workerIdentityEnv" -}}
+- name: BATCH_WORKER_IDENTITY_INSTANCE_ID
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.uid
+{{- end }}
+
+{{/*
 Graceful shutdown block. Renders pod-level terminationGracePeriodSeconds (siblings
 to containers/volumes) AND container-level lifecycle.preStop sleep separately.
 

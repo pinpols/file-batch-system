@@ -11,7 +11,7 @@
 | 能力 | 文件 |
 |---|---|
 | Worker 运行期拒绝跨租户任务 `acceptsConfiguredTenantScope()` | `batch-worker-core/.../AbstractTaskConsumer.java` |
-| Kafka 订阅 mode（PATTERN / FIXED / TENANT_SCOPED）+ `tenantAllowlist` | `WorkerKafkaSubscribeProperties` |
+| Kafka 订阅 mode（PATTERN / FIXED / TENANT_SCOPED / DIRECT_ONLY）+ `tenantAllowlist` | `WorkerKafkaSubscribeProperties` |
 | Producer SINGLE / TENANT / PRIORITY → topic 后缀 | `batch-orchestrator/.../mq/BatchTopicResolver.java` |
 
 ## 1. Topic 命名规约（权威）

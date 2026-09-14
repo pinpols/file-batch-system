@@ -116,6 +116,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         .tenantId(tenantId)
         .id(taskId)
         .assignedWorkerCode(workerCode)
+        .expectedAssignedWorkerCode(current.getAssignedWorkerCode())
         .taskStatus(TaskStatus.RUNNING.code())
         .readyStatus(TaskStatus.READY.code())
         .expectedVersion(current.getVersion())
@@ -563,6 +564,16 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         : workerMemo.resolve(tenantId, workerCode, this::resolveClaimableWorker);
     if (EmptyChecks.isNull(workerRegistry)
         || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
+      return new ClaimEval(false, null);
+    }
+    // 调度记录可以绑定具体实例，也可以绑定稳定资源池。资源池中的任一在线实例均可竞争
+    // claim，但 CAS 成功后 task/partition 必须改记实际实例 ID，确保续租、取消和结果上报
+    // 仍由 invocation fence 精确约束到单个执行实例。
+    String assignedWorkerCode = EmptyChecks.isNull(task) ? null : task.getAssignedWorkerCode();
+    boolean assignedToClaimingWorker = EmptyChecks.isBlank(assignedWorkerCode)
+        || assignedWorkerCode.equals(workerCode)
+        || assignedWorkerCode.equals(workerRegistry.routingCode());
+    if (!assignedToClaimingWorker) {
       return new ClaimEval(false, null);
     }
     if (EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getJobPartitionId())) {

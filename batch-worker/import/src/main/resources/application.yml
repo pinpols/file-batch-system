@@ -39,6 +39,7 @@ batch:
     # Worker 类型（IMPORT/EXPORT/DISPATCH）：用于统一行为/注册/指标标签
     type: IMPORT
     execution:
+      pool-size: ${BATCH_WORKER_EXECUTION_POOL_SIZE:16}
       capability-timeout-seconds: ${BATCH_WORKER_IMPORT_CAPABILITY_TIMEOUT_SECONDS:1800}
     # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
     max-concurrent-tasks: ${BATCH_WORKER_IMPORT_MAX_CONCURRENT_TASKS:6}
@@ -46,6 +47,7 @@ batch:
     #   PATTERN（默认）— 宽松正则同时覆盖 SINGLE/TENANT/PRIORITY 三种 producer 输出，新增 tenant 自动拾取
     #   FIXED         — 仅订阅 base + node-direct，回退路径 / 海量 tenant 限制元数据刷新成本
     #   TENANT_SCOPED — 仅订阅 batch.worker.kafka.tenant-allowlist 列出的租户，物理隔离 worker pool
+    #   DIRECT_ONLY   — 仅订阅当前稳定 workerCode 的 node-direct topic，供专用资源画像池使用
     kafka:
       subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
       tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}

@@ -475,6 +475,17 @@
     </select>
 
     <!--
+      平台全局活跃 job 硬上限：串行化“统计 READY/RUNNING -> 当前 CREATED 实例推进 RUNNING”。
+      锁随 launch T2 事务提交/回滚自动释放；已有实例的 DAG/WAITING 重派不取得此锁。
+    -->
+    <select id="acquireGlobalJobAdmissionLock" resultType="java.lang.Integer">
+        select 1 as locked
+        from (
+            select pg_advisory_xact_lock(hashtext('global-job-admission'))
+        ) l
+    </select>
+
+    <!--
       共享组硬上限：同一组内串行化「统计活跃实例 -> 推进实例 RUNNING」。
       pg_advisory_xact_lock 随派发事务提交或回滚释放；事务外的预调度读不取得 admission，真正 release 前必须复核。
     -->

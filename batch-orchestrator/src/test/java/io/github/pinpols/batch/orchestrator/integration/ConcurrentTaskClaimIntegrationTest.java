@@ -150,6 +150,114 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
+  @Test
+  void assignWorker_poolRouteIsReplacedByConcreteInstanceOnClaim() {
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
+    String workerInstanceId = "import-memory-pod-a";
+    String workerPoolCode = "import-memory";
+    workerRegistryMapper.saveLikeSdj(
+        onlineWorker(TENANT, workerInstanceId, "DEFAULT", workerPoolCode));
+
+    LaunchResponse response = launchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.MANUAL)
+        .requestId(seed.requestId())
+        .traceId("trace-pool-claim")
+        .params(Map.of())
+        .build());
+    assertThat(response.instanceNo()).isNotBlank();
+
+    JobInstanceEntity jobInstance =
+        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    JobTaskEntity task = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
+        .getFirst();
+    JobPartitionEntity partition = jobPartitionMapper
+        .selectByQuery(new JobPartitionQuery(TENANT, jobInstance.getId(), null, null))
+        .getFirst();
+    jdbcTemplate.update(
+        "update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?",
+        workerPoolCode,
+        TENANT,
+        task.getId());
+
+    JobTaskEntity claimed =
+        taskExecutionService.assignWorker(TENANT, task.getId(), workerInstanceId);
+
+    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    assertThat(claimed.getAssignedWorkerCode()).isEqualTo(workerInstanceId);
+    assertThat(jobPartitionMapper.selectById(TENANT, partition.getId()).getWorkerCode())
+        .isEqualTo(workerInstanceId);
+  }
+
+  @Test
+  void assignWorker_onlyOneConcreteInstanceWinsWithinSamePool() throws Exception {
+    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
+    String suffix = String.valueOf(System.nanoTime());
+    String workerPoolCode = "import-memory-" + suffix;
+    String firstInstance = workerPoolCode + "-pod-a";
+    String secondInstance = workerPoolCode + "-pod-b";
+    workerRegistryMapper.saveLikeSdj(
+        onlineWorker(TENANT, firstInstance, "DEFAULT", workerPoolCode));
+    workerRegistryMapper.saveLikeSdj(
+        onlineWorker(TENANT, secondInstance, "DEFAULT", workerPoolCode));
+
+    LaunchResponse response = launchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .jobCode(seed.jobCode())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.MANUAL)
+        .requestId(seed.requestId())
+        .traceId("trace-concurrent-pool-claim")
+        .params(Map.of())
+        .build());
+    assertThat(response.instanceNo()).isNotBlank();
+
+    JobInstanceEntity jobInstance =
+        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    JobTaskEntity task = jobTaskMapper
+        .selectByQuery(new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null))
+        .getFirst();
+    JobPartitionEntity partition = jobPartitionMapper
+        .selectByQuery(new JobPartitionQuery(TENANT, jobInstance.getId(), null, null))
+        .getFirst();
+    jdbcTemplate.update(
+        "update batch.job_task set assigned_worker_code = ? where tenant_id = ? and id = ?",
+        workerPoolCode,
+        TENANT,
+        task.getId());
+
+    CountDownLatch startGate = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<JobTaskEntity> firstFuture = pool.submit(() -> {
+        startGate.await();
+        return taskExecutionService.assignWorker(TENANT, task.getId(), firstInstance);
+      });
+      Future<JobTaskEntity> secondFuture = pool.submit(() -> {
+        startGate.await();
+        return taskExecutionService.assignWorker(TENANT, task.getId(), secondInstance);
+      });
+
+      startGate.countDown();
+
+      assertConcurrentClaimRpcAndDbAgree(
+          TENANT,
+          task.getId(),
+          partition.getId(),
+          firstInstance,
+          secondInstance,
+          firstFuture.get(),
+          secondFuture.get());
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
   private void assertOneClaimWinnerForFreshLaunch() throws Exception {
     WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
@@ -247,5 +355,28 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         10,
         null,
         null);
+  }
+
+  private static WorkerRegistryEntity onlineWorker(
+      String tenantId, String workerCode, String workerGroup, String workerPoolCode) {
+    return new WorkerRegistryEntity(
+        null,
+        tenantId,
+        workerCode,
+        workerGroup,
+        new JsonbString("{}"),
+        null,
+        "ONLINE",
+        BatchDateTimeSupport.utcNow(),
+        0,
+        10,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        workerPoolCode);
   }
 }

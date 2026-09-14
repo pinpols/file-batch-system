@@ -249,6 +249,8 @@ class DefaultPartitionLifecycleServiceTest {
     plan.setBizDate("2026-06-30");
     plan.setQueueCode("import_queue");
     plan.setWorkerGroup("IMPORT");
+    plan.setResourceProfile("io-heavy");
+    plan.setDownstreamChannelCode("sftp-primary");
     plan.setWindowCode("default_window");
     SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
     partitionPlan.setPartitionNo(1);
@@ -276,6 +278,32 @@ class DefaultPartitionLifecycleServiceTest {
     assertThat(snapshot).containsEntry("rangeStartInclusive", 0);
     assertThat(snapshot).containsEntry("rangeEndExclusive", 50);
     assertThat(snapshot).containsEntry("expectedRows", 50);
+    assertThat(snapshot).containsEntry("resourceProfile", "io-heavy");
+    assertThat(snapshot).containsEntry("downstreamChannelCode", "sftp-primary");
+  }
+
+  @Test
+  @DisplayName("createPartitions: 分发束按分区固化各自的下游渠道")
+  @SuppressWarnings("unchecked")
+  void createPartitionsPersistsPartitionSpecificDispatchChannel() {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("ta");
+    plan.setJobCode("DISPATCH_BUNDLE");
+    plan.setBizDate("2026-06-30");
+    plan.setDefaultWorkerType("DISPATCH");
+    plan.setDownstreamChannelCode("fallback-channel");
+    SchedulePlan.PartitionPlan partitionPlan = new SchedulePlan.PartitionPlan();
+    partitionPlan.setPartitionNo(1);
+    partitionPlan.setTargetRef("sftp-partition-a");
+    plan.setPartitions(List.of(partitionPlan));
+
+    service.createPartitions(plan, 901L, PartitionStatus.WAITING.code());
+
+    ArgumentCaptor<List<JobPartitionEntity>> cap = ArgumentCaptor.forClass(List.class);
+    verify(jobPartitionMapper).insertBatch(cap.capture());
+    Map<String, Object> snapshot = (Map<String, Object>)
+        JsonUtils.fromJson(cap.getValue().getFirst().getInputSnapshot(), Object.class);
+    assertThat(snapshot).containsEntry("downstreamChannelCode", "sftp-partition-a");
   }
 
   // ===== fixtures =====

@@ -81,6 +81,35 @@ class WorkflowFanOutSupportTest {
   }
 
   @Test
+  void bindDispatchTargetRefs_projectsEachItemChannelBeforeAdmission() {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setDefaultWorkerType("DISPATCH");
+    List<SchedulePlan.PartitionPlan> partitions = WorkflowFanOutSupport.expandPartitions(plan, 3);
+    List<Object> items = List.of(
+        Map.of("channelCode", "SFTP_A"),
+        Map.of("dispatchChannelCode", "OSS_B"),
+        Map.of("targetChannelCode", "HTTP_C"));
+
+    WorkflowFanOutSupport.bindDispatchTargetRefs(plan, items, partitions);
+
+    assertThat(partitions)
+        .extracting(SchedulePlan.PartitionPlan::getTargetRef)
+        .containsExactly("SFTP_A", "OSS_B", "HTTP_C");
+  }
+
+  @Test
+  void bindDispatchTargetRefs_doesNotTreatNonDispatchItemsAsChannels() {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setDefaultWorkerType("PROCESS");
+    List<SchedulePlan.PartitionPlan> partitions = WorkflowFanOutSupport.expandPartitions(plan, 1);
+
+    WorkflowFanOutSupport.bindDispatchTargetRefs(
+        plan, List.of(Map.of("channelCode", "SFTP_A")), partitions);
+
+    assertThat(partitions.getFirst().getTargetRef()).isNull();
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void injectItem_addsItemAndIndexInfo() {
     String base = "{\"tenantId\":\"t1\",\"channelCode\":\"C1\"}";

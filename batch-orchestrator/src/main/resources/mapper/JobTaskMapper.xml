@@ -350,7 +350,10 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and task_status = #{readyStatus}
-          and (assigned_worker_code is null or assigned_worker_code = #{assignedWorkerCode})
+          and (
+              (#{expectedAssignedWorkerCode,jdbcType=VARCHAR} is null and assigned_worker_code is null)
+              or assigned_worker_code = #{expectedAssignedWorkerCode,jdbcType=VARCHAR}
+          )
           and version = #{expectedVersion}
         returning *
     </select>

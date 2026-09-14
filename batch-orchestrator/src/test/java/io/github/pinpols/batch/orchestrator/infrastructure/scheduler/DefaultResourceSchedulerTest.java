@@ -11,6 +11,8 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DownstreamAdmissionGuard;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
@@ -55,6 +57,12 @@ class DefaultResourceSchedulerTest {
   private PartitionThrottle partitionThrottle;
 
   @Mock
+  private DispatchAdmissionLimiter dispatchAdmissionLimiter;
+
+  @Mock
+  private DownstreamAdmissionGuard downstreamAdmissionGuard;
+
+  @Mock
   private WorkerSelector workerSelector;
 
   @Mock
@@ -87,6 +95,8 @@ class DefaultResourceSchedulerTest {
         queueManager,
         concurrencyLimiter,
         partitionThrottle,
+        dispatchAdmissionLimiter,
+        downstreamAdmissionGuard,
         workerSelector,
         priorityScheduler,
         configCacheService,
@@ -99,6 +109,8 @@ class DefaultResourceSchedulerTest {
     when(queueManager.resolveQueue(any())).thenReturn(null);
     when(priorityScheduler.resolvePriority(any(), any())).thenReturn(5);
     when(priorityScheduler.resolvePriorityBand(any())).thenReturn("MEDIUM");
+    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
     when(dateTimeSupport.nowInstant()).thenReturn(Instant.parse("2026-06-30T03:00:00Z"));
   }
 

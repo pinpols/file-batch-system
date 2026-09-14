@@ -20,8 +20,8 @@ public class ResourceSchedulerProperties {
   private long quotaResetScanIntervalMillis = 60000L;
   private boolean quotaResetEnabled = true;
 
-  /** 全局并发上限（所有租户合计的运行中任务数）。 值 <= 0 表示关闭。 */
-  private long globalMaxRunningJobs = 0;
+  /** 全局活跃作业上限。生产环境必须为正数；本地 profile 可显式设 0 关闭。 */
+  private long globalMaxRunningJobs = 1000;
 
   /**
    * ADR-041 Phase2.3:租户配额触顶但未显式配 exceeded_strategy 时的平台默认处置。默认 QUEUE_DEFER（有界队列 + 背压,峰值流量不误拒正常请求）;设

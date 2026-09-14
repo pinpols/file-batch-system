@@ -14,6 +14,7 @@
 
 ### Added
 
+- **重任务执行保障**：新增平台全局活跃作业事务级硬上限、租户/资源队列共享派发 QPS、Dispatch 下游健康准入，以及 CPU/内存/IO 专用 Worker 资源池；稳定池代码与 Pod 实例身份分离，资源画像、WAITING 重派和 claim CAS 保持同一契约。
 - **整批量日 Dry-run**：批量日重放 session 支持历史实例与调度计划两类演练候选，完整透传 dry-run、计划快照、独立幂等键和 Worker capability；Console、OpenAPI、五语言 SDK、Compose/Helm 开关同步完成，默认关闭。
 - **Spring Boot 运行时治理**：补充启动失败诊断（FailureAnalyzer）、配置边界校验、自动装配条件测试、生命周期 phase、readiness/drain 状态和脱敏 `batchruntime` 诊断端点；Feature Switch registry 成为配置登记与 CI 校验入口。
 - **控制面可观测性**：新增执行时间线读模型与 trace snapshot `timeline`，补齐 Redis 限流连续失败短路、Worker lease 熔断状态、消费背压 pause/resume、outbox/限流/租约告警及对应运维文档。
@@ -21,6 +22,7 @@
 
 ### Changed
 
+- **容量承诺口径**：容量画像新增并行任务墙钟耗时，记录/字节吞吐统一以最早开始到最晚结束的时间跨度计算；重任务容量承诺必须结合数据量、窗口、失败率和基础设施指标，不能只按控制面 tasks/s 外推。
 - **Worker report 排空预算**：严格 10 万同代码 A/B 证明 `TASK_REPORT` 30000/min 可消除合法峰值下的 429 重试并提高 5.57% 完成吞吐；默认 report 高水位升至 30000/min，claim 保持 12000/min，Bucket4j 配置版本同步递增至 2。
 - **容量画像配置签名**：P2 preflight 同时校验 Orchestrator 限流阈值/桶版本和 PostgreSQL checkpoint completion 参数；Compose 可显式注入 WAL/checkpoint 参数，普通本地与 Sim 默认值不变。
 - **10 万容量基线口径固化**：隔离 benchmark 的 Atomic task-control 默认恢复为单一 Service 入口，双 Orchestrator 直连保留为显式 HA 分流实验；报告记录实际端点拓扑。最新严格轮次 100000/100000 成功，完成吞吐 `152.168 tasks/s`，生产配置不受影响。
@@ -42,6 +44,7 @@
 
 ### Fixed
 
+- 修复 DAG 节点在资源调度完成后才合并 `channelCode/resourceProfile`、从而可能绕过下游健康和资源画像门禁的问题；修复 Kafka topic 初始化变量替换内置 direct topic 的问题，自定义 topic 现在只追加且分区可显式扩容。
 - 修复 Bucket4j 已持久化令牌桶不会随环境阈值更新的问题；限流配置现使用单调版本原子升级，按比例继承剩余令牌，并阻止滚动发布中的旧副本回写旧配置。
 - 修复同一实例的并发 Worker 回报先锁 task、后等待实例 advisory lock，导致终态收敛与 partition reclaim 交错时形成 PostgreSQL `40P01` 锁环的问题；状态写入现统一遵循 `instance lock -> task -> partition` 顺序，并强化真 PG 并发回归守护。
 - 修复关闭 `MANAGEMENT_OPENTELEMETRY_ENABLED` 后 Micrometer OTLP metrics 仍后台连接 Collector 的配置漂移；metrics、traces、logs exporter 现统一跟随总开关，未部署观测栈的本地与容量环境不再产生重试噪音。

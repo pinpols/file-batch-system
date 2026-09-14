@@ -14,8 +14,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 模式异常时的回退路径。Producer 端处于 SINGLE 模式时本模式等价。
  *
  * <p>{@link Mode#TENANT_SCOPED}：worker 物理隔离场景，只订阅 {@link #tenantAllowlist} 列出的租户 后缀 topic。例如 worker
- * pool A 只服务 t1/t2，pool B 服务 t3/t4。需要配合 producer 的 TENANT 模式使用；SINGLE / PRIORITY 模式下 base/priority
- * topic 也会被订阅以保持兼容。
+ * pool A 只服务 t1/t2，pool B 服务 t3/t4。需要配合 producer 的 TENANT 模式使用；无后缀 base topic 仍被订阅以兼容
+ * SINGLE，不能与 PRIORITY producer 混用。
+ *
+ * <p>{@link Mode#DIRECT_ONLY}：专用资源池只订阅 {@code base.node.<workerCode>}，不接收 base、租户或优先级
+ * 后缀 topic。用于 CPU/内存/IO 隔离池，防止不同 consumer group 重复消费通用任务。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.kafka")
@@ -24,7 +27,8 @@ public class WorkerKafkaSubscribeProperties {
   public enum Mode {
     PATTERN,
     FIXED,
-    TENANT_SCOPED
+    TENANT_SCOPED,
+    DIRECT_ONLY
   }
 
   private Mode subscribeMode = Mode.PATTERN;

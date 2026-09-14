@@ -36,6 +36,7 @@ class CapacityProfileServiceTest {
             0,
             2_000,
             1_000,
+            1_000,
             1_500,
             10 * 1024 * 1024,
             4_000,
@@ -48,8 +49,9 @@ class CapacityProfileServiceTest {
     assertThat(report.scope()).isEqualTo("BFS_HOT_TABLES");
     assertThat(report.rows()).hasSize(1);
     CapacityProfileRow row = report.rows().get(0);
-    assertThat(row.recordsPerSecond()).isEqualTo(2000.0);
-    assertThat(row.mbPerSecond()).isEqualTo(5.0);
+    assertThat(row.recordsPerSecond()).isEqualTo(4000.0);
+    assertThat(row.mbPerSecond()).isEqualTo(10.0);
+    assertThat(row.wallClockDurationMs()).isEqualTo(1_000);
     assertThat(report.totals().instanceCount()).isEqualTo(2);
     assertThat(report.totals().processedRecords()).isEqualTo(4_000);
     assertThat(report.coverage().knownGaps()).isNotEmpty();

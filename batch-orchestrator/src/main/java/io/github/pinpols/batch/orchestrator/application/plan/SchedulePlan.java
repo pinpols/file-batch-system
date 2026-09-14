@@ -21,6 +21,11 @@ public class SchedulePlan {
   private Long workflowDefinitionId;
   private String queueCode;
   private String workerGroup;
+  /** 作业声明的执行资源画像，例如 cpu-heavy / io-heavy；用于选择带同名能力标签的 worker 池。 */
+  private String resourceProfile;
+  /** DISPATCH 作业的目标渠道代码；控制面据此读取共享健康快照做准入。 */
+  private String downstreamChannelCode;
+
   private String windowCode;
   private String defaultWorkerType;
   private Integer priority;
