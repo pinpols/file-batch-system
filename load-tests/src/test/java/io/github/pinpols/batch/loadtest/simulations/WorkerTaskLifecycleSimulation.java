@@ -150,6 +150,6 @@ public class WorkerTaskLifecycleSimulation extends Simulation {
                 .responseTime()
                 .percentile(95)
                 .lt(GatlingConfig.WRITE_P95_MS),
-            global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+            GatlingConfig.maxErrorRateAssertion());
   }
 }

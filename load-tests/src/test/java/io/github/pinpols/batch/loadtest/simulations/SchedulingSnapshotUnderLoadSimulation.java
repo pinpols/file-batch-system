@@ -128,6 +128,6 @@ public class SchedulingSnapshotUnderLoadSimulation extends Simulation {
                 .responseTime()
                 .percentile(99)
                 .lt(GatlingConfig.READ_P99_MS),
-            global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT));
+            GatlingConfig.maxErrorRateAssertion());
   }
 }

@@ -18,12 +18,22 @@ if [[ "$STRICT" != "0" && "$STRICT" != "1" ]]; then
   exit 2
 fi
 if [[ "$STRICT" == "1" && -z "$MAX_ERROR_PCT_OVERRIDE" ]]; then
-  # Gatling 的百分比阈值使用严格比较，0.0 会把零失败边界误判为失败。
-  MAX_ERROR_PCT="0.1"
+  # GatlingConfig 对零阈值使用失败数断言，严格模式可以真正要求零失败。
+  MAX_ERROR_PCT="0.0"
 fi
 
 RUN_ID="${RUN_ID:-ltw-stress-$(date +%Y%m%d%H%M%S)}"
-export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
+IFS=',' read -r -a STEPS <<< "$STEPS_CSV"
+DISPATCH_FIXTURE_COUNT=0
+for step_users in "${STEPS[@]}"; do
+  step_users="$(echo "$step_users" | xargs)"
+  if [[ ! "$step_users" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Each STEPS_CSV value must be a positive integer: ${step_users}" >&2
+    exit 2
+  fi
+  DISPATCH_FIXTURE_COUNT=$((DISPATCH_FIXTURE_COUNT + step_users))
+done
+export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB DISPATCH_FIXTURE_COUNT
 
 # 同 run-worker-load-tests.sh 的 EXIT trap：压测产物按 RUN_ID 全清，避免历史 dead_letter 累积。
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
@@ -43,6 +53,11 @@ trap on_exit_cleanup EXIT
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
 source "$LOAD_DIR/target/worker-load-data/run.env"
+IFS=',' read -r -a DISPATCH_FILE_IDS <<< "$DISPATCH_FILE_IDS_CSV"
+if [[ "${#DISPATCH_FILE_IDS[@]}" -ne "$DISPATCH_FIXTURE_COUNT" ]]; then
+  echo "Expected ${DISPATCH_FIXTURE_COUNT} dispatch fixtures, got ${#DISPATCH_FILE_IDS[@]}" >&2
+  exit 1
+fi
 
 case "$IMPORT_PROFILE" in
   small) IMPORT_PARAMS="$IMPORT_SMALL_PARAMS" ;;
@@ -90,7 +105,12 @@ run_one() {
   local job_code="$2"
   local params_file="$3"
   local users="$4"
+  local file_ids_csv="${5:-}"
   local log_file="$LOG_DIR/${label}-u${users}.log"
+  local -a extra_args=()
+  if [[ -n "$file_ids_csv" ]]; then
+    extra_args+=("-Dlaunch.fileIdsCsv=${file_ids_csv}")
+  fi
 
   echo "==> stress ${label}: users=${users}, job=${job_code}"
   local -a pipeline_status=()
@@ -113,6 +133,7 @@ run_one() {
       -Dpipeline.pollIntervalSec="$PIPELINE_POLL_INTERVAL_SEC" \
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       -Dconsole.accessToken="$TOKEN" \
+      "${extra_args[@]}" \
       --batch-mode
   ) | tee "$log_file"
   pipeline_status=("${PIPESTATUS[@]}")
@@ -181,8 +202,9 @@ run_and_record() {
   local job_code="$2"
   local params_file="$3"
   local users="$4"
+  local file_ids_csv="${5:-}"
   local rc=0
-  if run_one "$label" "$job_code" "$params_file" "$users"; then
+  if run_one "$label" "$job_code" "$params_file" "$users" "$file_ids_csv"; then
     step_results+=("${label}=PASS")
   else
     rc=$?
@@ -194,7 +216,7 @@ run_and_record() {
   fi
 }
 
-IFS=',' read -r -a STEPS <<< "$STEPS_CSV"
+dispatch_fixture_offset=0
 for users in "${STEPS[@]}"; do
   users="$(echo "$users" | xargs)"
   STEP_DIR="$LOAD_DIR/target/worker-load-data/step-u${users}"
@@ -204,10 +226,14 @@ for users in "${STEPS[@]}"; do
   write_step_params "$DISPATCH_PARAMS" "$STEP_DIR/dispatch.params.json" "$users"
   write_step_params "$PROCESS_PARAMS" "$STEP_DIR/process.params.json" "$users"
 
+  dispatch_step_ids=("${DISPATCH_FILE_IDS[@]:dispatch_fixture_offset:users}")
+  dispatch_step_ids_csv="$(IFS=,; echo "${dispatch_step_ids[*]}")"
+  dispatch_fixture_offset=$((dispatch_fixture_offset + users))
+
   step_results=()
   run_and_record import import_customer_job "$STEP_DIR/import.params.json" "$users"
   run_and_record export export_settlement_job "$STEP_DIR/export.params.json" "$users"
-  run_and_record dispatch lt_dispatch_local_job "$STEP_DIR/dispatch.params.json" "$users"
+  run_and_record dispatch lt_dispatch_local_job "$STEP_DIR/dispatch.params.json" "$users" "$dispatch_step_ids_csv"
   run_and_record process lt_process_sql_job "$STEP_DIR/process.params.json" "$users"
 
   {

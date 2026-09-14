@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.loadtest;
 
+import static io.gatling.javaapi.core.CoreDsl.global;
+
+import io.gatling.javaapi.core.Assertion;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,6 +128,14 @@ public final class GatlingConfig {
     /** Maximum acceptable error rate percentage (0–100). */
     public static final double MAX_ERROR_RATE_PCT =
             Double.parseDouble(System.getProperty("slo.maxErrorPct", "1.0"));
+
+    /** Build an assertion that supports an exact zero-error requirement. */
+    public static Assertion maxErrorRateAssertion() {
+        if (MAX_ERROR_RATE_PCT <= 0.0d) {
+            return global().failedRequests().count().is(0L);
+        }
+        return global().failedRequests().percent().lt(MAX_ERROR_RATE_PCT);
+    }
 
     private GatlingConfig() {
     }
