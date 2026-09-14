@@ -44,6 +44,9 @@
 
 ### Fixed
 
+- 修复 Gatling 百分比严格比较无法表达零错误率的问题；Worker 严格压力测试现使用失败数断言并以 `0%` 为默认门槛，Dispatch 并发场景为每个虚拟用户分配独立文件夹具。
+- 为本地 MinIO/Valkey 和生产 Redis HA 增加内存、持久化与 `noeviction` 边界，避免依赖进程无界占用宿主资源或静默淘汰正确性键。
+- 修复 Helm 公共 JVM 参数固定 G1、同时为 Orchestrator 追加 ZGC 导致 JVM 选择多个收集器而无法启动的问题；GC 现按服务显式选择，并由生产 overlay 守护校验。
 - 修复 DAG 节点在资源调度完成后才合并 `channelCode/resourceProfile`、从而可能绕过下游健康和资源画像门禁的问题；修复 Kafka topic 初始化变量替换内置 direct topic 的问题，自定义 topic 现在只追加且分区可显式扩容。
 - 修复 Bucket4j 已持久化令牌桶不会随环境阈值更新的问题；限流配置现使用单调版本原子升级，按比例继承剩余令牌，并阻止滚动发布中的旧副本回写旧配置。
 - 修复同一实例的并发 Worker 回报先锁 task、后等待实例 advisory lock，导致终态收敛与 partition reclaim 交错时形成 PostgreSQL `40P01` 锁环的问题；状态写入现统一遵循 `instance lock -> task -> partition` 顺序，并强化真 PG 并发回归守护。
