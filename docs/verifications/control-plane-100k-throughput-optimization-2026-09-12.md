@@ -502,6 +502,15 @@ Redis 桶原子换配置；滚动发布中的旧副本不能回写旧阈值。
 组合没有带来吞吐提升，且放大故障恢复时间和磁盘余量要求，因此不改普通或生产默认；Compose 注入项
 仅保留给后续独占环境 A/B。
 
+最终提交 `ead048a7a` 构建 Trigger、双 Orchestrator 和 Atomic 镜像后，恢复 PostgreSQL
+`1GiB/5min` 标准参数并执行 1 万请求严格烟测。四个应用镜像 revision 完全一致，预检负载样本为
+`4.67,4.38,4.99,4.91,4.59`，具备标准基线可比性。入口 `10000/10000` 成功，HTTP p95 `180ms`、
+最大 `517ms`；最终 `10000/10000` 实例和 trigger request 全部终态关联，Kafka lag 归零，应用、Kafka
+和 PostgreSQL 均零重启。Worker 发起 2068 次 batch claim 取得 10000 个任务，有效批大小 `4.84`，
+report 调用恰好 10000 次；完成窗口 `94.968s`，完成吞吐 `105.298/s`，WAL 增量 `363116876 bytes`，
+没有请求 checkpoint。该轮用于证明最终默认值、镜像和主从恢复后的完整链路正确，不用短轮次结果替代
+10 万当前容量基线 `152.168/s`。
+
 本节原始证据：
 
 - `load-tests/target/p2-capacity-profile-rl12k-100k-r1-0914.md`
@@ -509,6 +518,8 @@ Redis 桶原子换配置；滚动发布中的旧副本不能回写旧阈值。
 - `load-tests/target/p2-capacity-profile-rate-limit30k-pg-wal8g-ckpt15m-100k-r3-20260914.md`
 - `load-tests/target/control-plane-worker-report-rate-limit30k-pg-wal8g-ckpt15m-100k-r3-20260914-10w.md`
 - `load-tests/target/p2-capacity-profile-pg-wal8g-ckpt15m-100k-r1-20260914.md`
+- `load-tests/target/p2-capacity-profile-final-rate30k-10k-r1-20260914.md`
+- `load-tests/target/control-plane-worker-report-final-rate30k-10k-r1-20260914-10w.md`
 
 ## 对比结果
 
@@ -532,6 +543,7 @@ Redis 桶原子换配置；滚动发布中的旧副本不能回写旧阈值。
 | 10 万，最新 main、单 Service 最终轮次 | **有效当前基线** | 100000/100000，p95 90ms | **152.168/s** | 全终态、零失败、零残留，较旧基线提升 12.8% |
 | 10 万，当前代码、PG 8GiB/15min、report 12000/min | 有效同代码 A/B | 100000/100000，零失败 | 131.458/s | 101535 次 report 调用，存在合法排空重试 |
 | 10 万，当前代码、PG 8GiB/15min、report 30000/min | **有效同代码 A/B** | 100000/100000，零失败 | **138.780/s** | 比同代码 12k 提升 5.57%，report 调用降为精确 100000 |
+| 1 万，最终构建与标准 PG 参数烟测 | 有效正确性验收 | 10000/10000，p95 180ms | 105.298/s | 四应用同 SHA、主从参数恢复、零重启；不替代 10 万容量基线 |
 
 旧 3 分区 10 万轮次仍只作为趋势参考，不进入容量基线。与 2026-09-12 的严格 12/12 分区基线相比，
 2026-09-14 当前轮次完成吞吐提高 12.8%，完成窗口缩短 11.3%。
