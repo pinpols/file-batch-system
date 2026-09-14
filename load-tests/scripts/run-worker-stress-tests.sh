@@ -23,6 +23,7 @@ if [[ "$STRICT" == "1" && -z "$MAX_ERROR_PCT_OVERRIDE" ]]; then
 fi
 
 RUN_ID="${RUN_ID:-ltw-stress-$(date +%Y%m%d%H%M%S)}"
+OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
 IFS=',' read -r -a STEPS <<< "$STEPS_CSV"
 DISPATCH_FIXTURE_COUNT=0
 for step_users in "${STEPS[@]}"; do
@@ -33,7 +34,7 @@ for step_users in "${STEPS[@]}"; do
   fi
   DISPATCH_FIXTURE_COUNT=$((DISPATCH_FIXTURE_COUNT + step_users))
 done
-export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB DISPATCH_FIXTURE_COUNT
+export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB DISPATCH_FIXTURE_COUNT OUT_DIR
 
 # 同 run-worker-load-tests.sh 的 EXIT trap：压测产物按 RUN_ID 全清，避免历史 dead_letter 累积。
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
@@ -52,7 +53,7 @@ trap on_exit_cleanup EXIT
 
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
-source "$LOAD_DIR/target/worker-load-data/run.env"
+source "$OUT_DIR/run.env"
 IFS=',' read -r -a DISPATCH_FILE_IDS <<< "$DISPATCH_FILE_IDS_CSV"
 if [[ "${#DISPATCH_FILE_IDS[@]}" -ne "$DISPATCH_FIXTURE_COUNT" ]]; then
   echo "Expected ${DISPATCH_FIXTURE_COUNT} dispatch fixtures, got ${#DISPATCH_FILE_IDS[@]}" >&2
@@ -219,7 +220,7 @@ run_and_record() {
 dispatch_fixture_offset=0
 for users in "${STEPS[@]}"; do
   users="$(echo "$users" | xargs)"
-  STEP_DIR="$LOAD_DIR/target/worker-load-data/step-u${users}"
+  STEP_DIR="$OUT_DIR/step-u${users}"
   mkdir -p "$STEP_DIR"
   write_step_params "$IMPORT_PARAMS" "$STEP_DIR/import.params.json" "$users"
   write_step_params "$EXPORT_PARAMS" "$STEP_DIR/export.params.json" "$users"

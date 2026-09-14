@@ -23,7 +23,8 @@ BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
 
 
 RUN_ID="${RUN_ID:-prcw-$(date +%Y%m%d%H%M%S)}"
-export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
+OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
+export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB OUT_DIR
 export PROCESS_SOURCE_ROWS PROCESS_ACCOUNT_COUNT
 
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
@@ -286,7 +287,7 @@ write_report() {
 require_tooling
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
-source "$LOAD_DIR/target/worker-load-data/run.env"
+source "$OUT_DIR/run.env"
 
 REPORT="$LOAD_DIR/target/process-worker-report-${RUN_ID}.md"
 LOG_DIR="$LOAD_DIR/target/process-worker-logs/${RUN_ID}"

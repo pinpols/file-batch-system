@@ -7,6 +7,7 @@ LOAD_DIR="$ROOT_DIR/load-tests"
 source "$LOAD_DIR/scripts/env.sh"
 
 RUN_ID="${RUN_ID:-p2-process-failure-$(date +%Y%m%d%H%M%S)}"
+OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
 PROCESS_SOURCE_ROWS="${PROCESS_SOURCE_ROWS:-1000000}"
 PROCESS_ACCOUNT_COUNT="${PROCESS_ACCOUNT_COUNT:-100000}"
 PROCESS_USERS=1
@@ -14,7 +15,7 @@ PROCESS_TENANT_ID="${PROCESS_TENANT_ID:-$LOAD_TEST_TENANT_ID}"
 WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-900}"
 WORKER_RESTART_WAIT_SECONDS="${WORKER_RESTART_WAIT_SECONDS:-180}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
-export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
+export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB OUT_DIR
 export PROCESS_SOURCE_ROWS PROCESS_ACCOUNT_COUNT PROCESS_USERS
 
 REPORT="$LOAD_DIR/target/p2-process-failure-${RUN_ID}.md"
@@ -233,7 +234,7 @@ require_tooling
 echo "==> prepare process load data RUN_ID=${RUN_ID}, rows=${PROCESS_SOURCE_ROWS}"
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
-source "$LOAD_DIR/target/worker-load-data/run.env"
+source "$OUT_DIR/run.env"
 
 KILL_PARAMS="$PARAM_DIR/kill-worker.params.json"
 PG_PARAMS="$PARAM_DIR/pg-disconnect.params.json"

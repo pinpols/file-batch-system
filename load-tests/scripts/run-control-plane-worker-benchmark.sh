@@ -57,7 +57,8 @@ BIZ_DATE_CARDINALITY="${BIZ_DATE_CARDINALITY:-1}"
 
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
-export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
+OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
+export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB OUT_DIR
 
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CLEANUP_ONLY="${CLEANUP_ONLY:-0}"
@@ -565,7 +566,7 @@ fi
 
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
-source "$LOAD_DIR/target/worker-load-data/run.env"
+source "$OUT_DIR/run.env"
 
 if ! [[ "$POST_PREPARE_SETTLE_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "POST_PREPARE_SETTLE_SECONDS must be a non-negative integer" >&2
