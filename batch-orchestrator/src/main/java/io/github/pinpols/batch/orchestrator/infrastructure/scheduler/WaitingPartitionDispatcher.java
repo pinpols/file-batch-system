@@ -6,10 +6,12 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -42,6 +44,7 @@ class WaitingPartitionDispatcher {
   private final PartitionLifecycleService partitionLifecycleService;
   private final TenantActionRateLimiter tenantActionRateLimiter;
   private final OrchestratorConfigCacheService configCacheService;
+  private final GlobalJobAdmission globalJobAdmission;
   private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -50,14 +53,23 @@ class WaitingPartitionDispatcher {
       JobTaskEntity task,
       JobInstanceEntity jobInstance,
       ResourceSchedulingDecision decision) {
+    JobInstanceEntity currentInstance =
+        jobMappers.jobInstanceMapper.selectById(jobInstance.getTenantId(), jobInstance.getId());
+    if (!isDispatchableParent(currentInstance)) {
+      return;
+    }
     if (!tenantActionRateLimiter.tryConsume(
-        jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE)) {
+        currentInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE)) {
+      return;
+    }
+    if (JobInstanceStatus.WAITING.code().equals(currentInstance.getInstanceStatus())
+        && !globalJobAdmission.hasCapacity()) {
       return;
     }
     // 候选排序时的 schedule() 发生在事务外，只能作为快速筛选。共享组硬上限必须在本
     // REQUIRES_NEW 事务里再次判定，并把 advisory lock 持有到 WAITING -> RUNNING 提交完成。
     if (!fairShareGroupAdmissionGuard.hasCapacity(
-        configCacheService.findEnabledQuotaPolicy(jobInstance.getTenantId()))) {
+        configCacheService.findEnabledQuotaPolicy(currentInstance.getTenantId()))) {
       return;
     }
     if (!partitionLifecycleService.releaseForDispatch(
@@ -65,13 +77,13 @@ class WaitingPartitionDispatcher {
       return;
     }
     taskDispatchOutboxService.writeDispatchEvent(
-        jobInstance,
+        currentInstance,
         task,
         partition,
-        jobInstance.getTraceId(),
+        currentInstance.getTraceId(),
         OutboxEventKeyGenerator.forDispatch(task.getTenantId(), task.getId()));
-    advanceJobInstance(jobInstance);
-    advanceWorkflowRun(jobInstance);
+    advanceJobInstance(currentInstance);
+    advanceWorkflowRun(currentInstance);
     log.info(
         "waiting partition released: tenantId={}, partitionId={}, taskId={}, fairnessScore={},"
             + " tenantWeight={}, queueWeight={}",
@@ -81,6 +93,18 @@ class WaitingPartitionDispatcher {
         decision.getFairnessScore(),
         decision.getTenantWeight(),
         decision.getQueueWeight());
+  }
+
+  /**
+   * 调度器传入的是事务外快照；真正释放前只接受数据库当前仍处于 WAITING/RUNNING 的父实例。
+   * 这样既避免同一实例第二个分片继续按旧 WAITING 快照重复占全局槽位，也不会为已经取消的实例复活任务。
+   */
+  private boolean isDispatchableParent(JobInstanceEntity jobInstance) {
+    if (EmptyChecks.isNull(jobInstance)) {
+      return false;
+    }
+    return JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())
+        || JobInstanceStatus.RUNNING.code().equals(jobInstance.getInstanceStatus());
   }
 
   private void advanceJobInstance(JobInstanceEntity jobInstance) {

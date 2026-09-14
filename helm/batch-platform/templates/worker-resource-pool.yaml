@@ -1,0 +1,189 @@
+{{/*
+专用资源画像 worker 池。
+
+每个池使用稳定 workerCode 路由到独立 node-direct topic，并使用 DIRECT_ONLY 订阅模式，
+因此不会与共享池或其它资源池重复消费 base topic。Pod UID 只用于 worker_registry 的实例身份，
+同一池的所有副本仍共享稳定路由代码和 consumer group。
+
+这里只负责部署 CPU/内存/IO 隔离，不替代 Kubernetes 调度；节点选择、污点容忍和亲和性可由每个池
+单独声明，未声明时继承 chart 的全局 scheduling 配置。
+*/}}
+{{- $root := . }}
+{{- $typeMeta := dict
+  "import"   (dict "image" "batch-worker-import"   "port" 18083 "envPrefix" "IMPORT")
+  "export"   (dict "image" "batch-worker-export"   "port" 18084 "envPrefix" "EXPORT")
+  "process"  (dict "image" "batch-worker-process"  "port" 18086 "envPrefix" "PROCESS")
+  "dispatch" (dict "image" "batch-worker-dispatch" "port" 18085 "envPrefix" "DISPATCH")
+}}
+{{- range $pool := .Values.workerResourcePools }}
+{{- $name := required "workerResourcePools[].name is required" $pool.name | lower | replace "_" "-" }}
+{{- $wt := required "workerResourcePools[].workerType is required (import|export|process|dispatch)" $pool.workerType | lower }}
+{{- $meta := get $typeMeta $wt }}
+{{- if not $meta }}{{ fail (printf "workerResourcePools: unknown workerType %q (expect import|export|process|dispatch)" $wt) }}{{- end }}
+{{- $component := printf "worker-%s-pool-%s" $wt $name | trunc 48 | trimSuffix "-" }}
+{{- $port := $meta.port | int }}
+{{- $workerCode := $pool.workerCode | default (printf "%s-%s" $wt $name) }}
+{{- $resourceProfile := $pool.resourceProfile | default $name }}
+{{- $group := printf "batch-worker-%s-pool-%s" $wt $name }}
+{{- $replicaCount := 1 }}
+{{- if hasKey $pool "replicaCount" }}{{- $replicaCount = $pool.replicaCount }}{{- end }}
+{{- if lt (int $replicaCount) 0 }}{{ fail "workerResourcePools[].replicaCount must be >= 0" }}{{- end }}
+{{- if and (hasKey $pool "maxConcurrentTasks") (le (int $pool.maxConcurrentTasks) 0) }}
+{{- fail "workerResourcePools[].maxConcurrentTasks must be > 0" }}
+{{- end }}
+{{- if and (hasKey $pool "executionPoolSize") (le (int $pool.executionPoolSize) 0) }}
+{{- fail "workerResourcePools[].executionPoolSize must be > 0" }}
+{{- end }}
+{{- if and (hasKey $pool "maxConcurrentTasks") (hasKey $pool "executionPoolSize") (lt (int $pool.executionPoolSize) (int $pool.maxConcurrentTasks)) }}
+{{- fail "workerResourcePools[].executionPoolSize must be >= maxConcurrentTasks" }}
+{{- end }}
+{{- $capabilityTags := list $resourceProfile }}
+{{- range ($pool.capabilityTags | default (list)) }}
+{{- $capabilityTags = append $capabilityTags . }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-platform.fullname" $root }}-{{ $component }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) $root) | nindent 4 }}
+    batch.example.com/worker-type: {{ $wt | quote }}
+    batch.example.com/resource-profile: {{ $resourceProfile | quote }}
+spec:
+  replicas: {{ $replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 8 }}
+        batch.example.com/resource-profile: {{ $resourceProfile | quote }}
+      {{- with $root.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "batch-platform.imagePullSecrets" $root | nindent 6 }}
+      {{- with $pool.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ $pool.terminationGracePeriodSeconds | default 285 }}
+      {{- include "batch-platform.podSecurityDefaults" $root | nindent 6 }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "batch-platform.image" (dict "root" $root "name" $meta.image) }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $port }}
+              protocol: TCP
+          env:
+            {{- include "batch-platform.workerIdentityEnv" $root | nindent 12 }}
+            - name: JAVA_OPTS_EXTRA
+              value: {{ $pool.javaOptsExtra | default "-XX:MaxDirectMemorySize=1g" | quote }}
+            - name: BATCH_MANAGEMENT_PORT
+              value: {{ $port | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_PORT
+              value: {{ $port | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_CODE
+              value: {{ $workerCode | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_TENANT_ID
+              value: {{ $pool.tenantId | default "default-tenant" | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_CAPABILITY_TAGS
+              value: {{ join "," ($capabilityTags | uniq) | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_CONSUMER_GROUP_ID
+              value: {{ $group | quote }}
+            {{- if hasKey $pool "maxConcurrentTasks" }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_MAX_CONCURRENT_TASKS
+              value: {{ $pool.maxConcurrentTasks | quote }}
+            {{- end }}
+            {{- if hasKey $pool "executionPoolSize" }}
+            - name: BATCH_WORKER_EXECUTION_POOL_SIZE
+              value: {{ $pool.executionPoolSize | quote }}
+            {{- end }}
+            - name: BATCH_WORKER_KAFKA_SUBSCRIBE_MODE
+              value: "DIRECT_ONLY"
+          {{- include "batch-platform.envFrom" $root | nindent 10 }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: {{ $port }}
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: {{ $port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml ($pool.resources | default (dict "requests" (dict "cpu" "500m" "memory" "768Mi") "limits" (dict "cpu" "2000m" "memory" "2Gi"))) | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "batch-platform.diagnosticsVolumeMount" $root | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "batch-platform.diagnosticsVolume" $root | nindent 8 }}
+      {{- with ($pool.nodeSelector | default $root.Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with ($pool.affinity | default $root.Values.affinity) }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with ($pool.tolerations | default $root.Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "batch-platform.fullname" $root }}-{{ $component }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) $root) | nindent 4 }}
+    batch.example.com/resource-profile: {{ $resourceProfile | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $port }}
+      targetPort: http
+      protocol: TCP
+{{- if and $root.Values.podDisruptionBudget.enabled (ge (int $replicaCount) 2) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "batch-platform.fullname" $root }}-{{ $component }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) $root) | nindent 4 }}
+spec:
+  {{- if hasKey $root.Values.podDisruptionBudget "maxUnavailable" }}
+  maxUnavailable: {{ $root.Values.podDisruptionBudget.maxUnavailable }}
+  {{- else if hasKey $root.Values.podDisruptionBudget "minAvailable" }}
+  minAvailable: {{ $root.Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 6 }}
+{{- end }}
+{{- end }}

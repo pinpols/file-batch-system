@@ -1,0 +1,45 @@
+# 重任务专用 Worker 池示例。
+#
+# 该文件只演示资源画像路由和 Pod 资源隔离；生产副本数、JVM、request/limit 必须由真实数据量压测确定。
+workerResourcePools:
+  - name: import-memory
+    workerType: import
+    tenantId: default-tenant
+    resourceProfile: memory-heavy
+    capabilityTags:
+      - large-file
+    replicaCount: 2
+    maxConcurrentTasks: 2
+    executionPoolSize: 4
+    javaOptsExtra: "-XX:MaxDirectMemorySize=2g"
+    nodeSelector:
+      batch.example.com/node-profile: memory
+    tolerations:
+      - key: batch.example.com/workload
+        operator: Equal
+        value: memory
+        effect: NoSchedule
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "2Gi"
+      limits:
+        cpu: "4000m"
+        memory: "6Gi"
+
+  - name: process-cpu
+    workerType: process
+    tenantId: default-tenant
+    resourceProfile: cpu-heavy
+    replicaCount: 2
+    maxConcurrentTasks: 4
+    executionPoolSize: 8
+    nodeSelector:
+      batch.example.com/node-profile: cpu
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "1Gi"
+      limits:
+        cpu: "6000m"
+        memory: "3Gi"

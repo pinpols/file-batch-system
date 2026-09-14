@@ -49,34 +49,40 @@ final class TaskConsumerRoutingPolicy {
     String baseTopic = resolveBaseTopic(configuration);
     String safeBase = baseTopic.replace(".", "\\.");
     String configuredWorkerCode = configuration.workerCode();
-    String nodeDirect = EmptyChecks.isBlank(configuredWorkerCode)
-        ? null
-        : "\\.node\\." + escapeRegex(configuredWorkerCode);
+    String nodeDirect = resolveNodeDirectSuffix(baseTopic, configuredWorkerCode);
 
-    WorkerKafkaSubscribeProperties.Mode mode = properties == null
+    WorkerKafkaSubscribeProperties.Mode mode = EmptyChecks.isNull(properties)
         ? WorkerKafkaSubscribeProperties.Mode.PATTERN
         : properties.getSubscribeMode();
     String suffixAlt;
     switch (mode) {
+      case DIRECT_ONLY:
+        if (EmptyChecks.isNull(nodeDirect)) {
+          throw new IllegalStateException(
+              "batch.worker.kafka.subscribe-mode=DIRECT_ONLY requires a worker code");
+        }
+        return "^" + safeBase + nodeDirect + "$";
       case FIXED:
         suffixAlt = nodeDirect;
         break;
       case TENANT_SCOPED:
-        List<String> allow = properties == null || properties.getTenantAllowlist() == null
-            ? List.of()
-            : properties.getTenantAllowlist();
+        List<String> allow =
+            EmptyChecks.isNull(properties) || EmptyChecks.isNull(properties.getTenantAllowlist())
+                ? List.of()
+                : properties.getTenantAllowlist();
         String tenantAlt = allow.stream()
             .filter(EmptyChecks::isNotBlank)
             .map(TaskConsumerRoutingPolicy::escapeRegex)
             .reduce((left, right) -> left + "|" + right)
             .orElse(null);
-        suffixAlt = joinAlt(nodeDirect, tenantAlt == null ? null : "\\.(" + tenantAlt + ")");
+        suffixAlt =
+            joinAlt(nodeDirect, EmptyChecks.isNull(tenantAlt) ? null : "\\.(" + tenantAlt + ")");
         break;
       case PATTERN:
       default:
         suffixAlt = joinAlt(nodeDirect, "\\.[^.]+");
     }
-    if (suffixAlt == null) {
+    if (EmptyChecks.isNull(suffixAlt)) {
       return "^" + safeBase + "$";
     }
     return "^" + safeBase + "(" + suffixAlt + ")?$";
@@ -87,19 +93,20 @@ final class TaskConsumerRoutingPolicy {
       WorkerRegistration registration,
       WorkerConfiguration configuration,
       BiPredicate<WorkerConfiguration, TaskDispatchMessage> tenantScope) {
-    if (message == null
-        || message.taskId() == null
-        || message.tenantId() == null
-        || message.workerType() == null) {
+    if (EmptyChecks.isNull(message)
+        || EmptyChecks.isNull(message.taskId())
+        || EmptyChecks.isNull(message.tenantId())
+        || EmptyChecks.isNull(message.workerType())) {
       return false;
     }
-    if (configuration.workerType() == null
+    if (EmptyChecks.isNull(configuration.workerType())
         || !configuration.workerType().equalsIgnoreCase(message.workerType())) {
       return false;
     }
-    if (message.selectedWorkerId() != null
-        && (registration == null
-            || !message.selectedWorkerId().equals(registration.getWorkerId()))) {
+    if (EmptyChecks.isNotNull(message.selectedWorkerId())
+        && (EmptyChecks.isNull(registration)
+            || (!message.selectedWorkerId().equals(registration.getWorkerCode())
+                && !message.selectedWorkerId().equals(registration.getWorkerId())))) {
       return false;
     }
     return tenantScope.test(configuration, message);
@@ -124,7 +131,7 @@ final class TaskConsumerRoutingPolicy {
   }
 
   private static String resolveTopicByWorkerCode(String workerCode) {
-    String normalized = workerCode == null ? "" : workerCode.toLowerCase(Locale.ROOT);
+    String normalized = EmptyChecks.isNull(workerCode) ? "" : workerCode.toLowerCase(Locale.ROOT);
     return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
         .filter(entry -> normalized.contains(entry.getKey()))
         .map(Map.Entry::getValue)
@@ -133,7 +140,7 @@ final class TaskConsumerRoutingPolicy {
   }
 
   private static Map<String, String> buildWorkerCodeKeywordTopic() {
-    LinkedHashMap<String, String> map = new LinkedHashMap<>(4);
+    LinkedHashMap<String, String> map = new LinkedHashMap<>(5);
     map.put("import", BatchTopics.TASK_DISPATCH_IMPORT);
     map.put("export", BatchTopics.TASK_DISPATCH_EXPORT);
     map.put("process", BatchTopics.TASK_DISPATCH_PROCESS);
@@ -143,13 +150,21 @@ final class TaskConsumerRoutingPolicy {
   }
 
   private static String joinAlt(String left, String right) {
-    if (left == null) {
+    if (EmptyChecks.isNull(left)) {
       return right;
     }
-    if (right == null) {
+    if (EmptyChecks.isNull(right)) {
       return left;
     }
     return left + "|" + right;
+  }
+
+  private static String resolveNodeDirectSuffix(String baseTopic, String workerCode) {
+    if (EmptyChecks.isBlank(workerCode)) {
+      return null;
+    }
+    String directTopic = BatchTopics.directDispatchTopic(baseTopic, workerCode);
+    return escapeRegex(directTopic.substring(baseTopic.length()));
   }
 
   private static String escapeRegex(String value) {

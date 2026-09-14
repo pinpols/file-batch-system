@@ -7,6 +7,8 @@ import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DownstreamAdmissionGuard;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
@@ -89,6 +91,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private final ResourceQueueManager resourceQueueManager;
   private final ConcurrencyLimiter concurrencyLimiter;
   private final PartitionThrottle partitionThrottle;
+  private final DispatchAdmissionLimiter dispatchAdmissionLimiter;
+  private final DownstreamAdmissionGuard downstreamAdmissionGuard;
   private final WorkerSelector workerSelector;
   private final PriorityScheduler priorityScheduler;
   private final OrchestratorConfigCacheService configCacheService;
@@ -125,6 +129,14 @@ public class DefaultResourceScheduler implements ResourceScheduler {
           priorityBand,
           ResourceCheck.waitForCapacity(
               "NO_AVAILABLE_WORKER", "no online worker matches current route"));
+    }
+    ResourceCheck downstreamCheck = downstreamAdmissionGuard.check(request);
+    if (!downstreamCheck.allowed()) {
+      return blockedDecision(request, queue, priority, priorityBand, downstreamCheck);
+    }
+    ResourceCheck dispatchRateCheck = dispatchAdmissionLimiter.check(request, queue);
+    if (!dispatchRateCheck.allowed()) {
+      return blockedDecision(request, queue, priority, priorityBand, dispatchRateCheck);
     }
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
     decision.setAdmissionAction(ResourceAdmissionAction.ACCEPT);

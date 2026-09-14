@@ -94,6 +94,7 @@ public class CapacityProfileService {
     return new CapacityProfileCoverage(
         SCOPE,
         List.of(
+            "recordsPerSecond/mbPerSecond 使用 wallClockDurationMs,不是并行任务耗时求和",
             "processedRecords 来自 pipeline_progress,未接续跑位点的历史任务会显示为 0",
             "totalFileBytes 仅统计已关联到 job_instance/pipeline_instance 的 file_record",
             "DB CPU/IO/WAL 仍以 benchmark 报告和数据库监控为准"),

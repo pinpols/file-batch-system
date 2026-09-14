@@ -1,8 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /** Shared conversion of a schedule plan to and from resource-admission decisions. */
 public final class SchedulePlanSupport {
@@ -15,6 +19,9 @@ public final class SchedulePlanSupport {
     request.setJobCode(plan.getJobCode());
     request.setQueueCode(plan.getQueueCode());
     request.setWorkerGroup(plan.getWorkerGroup());
+    request.setResourceProfile(plan.getResourceProfile());
+    request.setDownstreamChannelCode(plan.getDownstreamChannelCode());
+    request.setDownstreamChannelCodes(resolveDownstreamChannelCodes(plan));
     request.setWorkerType(plan.getDefaultWorkerType());
     request.setRequiredCapability(plan.isDryRun() ? WorkerCapabilities.DRY_RUN_SAFE : null);
     request.setWindowCode(plan.getWindowCode());
@@ -22,6 +29,27 @@ public final class SchedulePlanSupport {
     request.setRequestedPartitionCount(
         plan.getPartitionCount() == null ? 1 : plan.getPartitionCount());
     return request;
+  }
+
+  /**
+   * 普通 DISPATCH 使用计划级渠道，BUNDLE_DISPATCH 和 fan-out 使用分区级 targetRef。
+   * 两者合并去重后一次性参加准入，避免束内任一故障渠道绕过健康闸门。
+   */
+  private static List<String> resolveDownstreamChannelCodes(SchedulePlan plan) {
+    if (EmptyChecks.isNull(plan) || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
+      return List.of();
+    }
+    Set<String> channels = new LinkedHashSet<>();
+    if (hasText(plan.getDownstreamChannelCode())) {
+      channels.add(plan.getDownstreamChannelCode());
+    }
+    if (EmptyChecks.isNotNull(plan.getPartitions())) {
+      plan.getPartitions().stream()
+          .map(SchedulePlan.PartitionPlan::getTargetRef)
+          .filter(SchedulePlanSupport::hasText)
+          .forEach(channels::add);
+    }
+    return List.copyOf(channels);
   }
 
   public static void applySchedulingDecision(
@@ -53,6 +81,6 @@ public final class SchedulePlanSupport {
   }
 
   private static boolean hasText(String value) {
-    return value != null && !value.isBlank();
+    return EmptyChecks.isNotBlank(value);
   }
 }

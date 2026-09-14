@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import jakarta.annotation.PreDestroy;
 import java.net.ConnectException;
@@ -49,6 +50,7 @@ public abstract class AbstractWorkerLoop {
 
   private final WorkerRuntimeFacade workerRuntimeFacade;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final WorkerIdentityProperties identityProperties;
   private final int maxConcurrentTasks;
   private final AtomicBoolean started = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -61,9 +63,18 @@ public abstract class AbstractWorkerLoop {
       WorkerRuntimeFacade workerRuntimeFacade,
       BatchDateTimeSupport dateTimeSupport,
       int maxConcurrentTasks) {
+    this(workerRuntimeFacade, dateTimeSupport, maxConcurrentTasks, new WorkerIdentityProperties());
+  }
+
+  protected AbstractWorkerLoop(
+      WorkerRuntimeFacade workerRuntimeFacade,
+      BatchDateTimeSupport dateTimeSupport,
+      int maxConcurrentTasks,
+      WorkerIdentityProperties identityProperties) {
     this.workerRuntimeFacade = workerRuntimeFacade;
     this.dateTimeSupport = dateTimeSupport;
     this.maxConcurrentTasks = maxConcurrentTasks;
+    this.identityProperties = identityProperties;
   }
 
   /** Worker 配置（topic、tenantId、workerType 等）。 */
@@ -133,8 +144,10 @@ public abstract class AbstractWorkerLoop {
         return registration.get();
       }
       WorkerConfiguration cfg = workerConfiguration();
+      String workerPoolCode = resolveWorkerPoolCode(cfg);
       WorkerRegistration workerRegistration = new WorkerRegistration();
-      workerRegistration.setWorkerId(buildWorkerId(cfg));
+      workerRegistration.setWorkerId(buildWorkerId(workerPoolCode));
+      workerRegistration.setWorkerCode(workerPoolCode);
       workerRegistration.setTenantId(cfg.tenantId());
       workerRegistration.setWorkerType(cfg.workerType());
       // 源头归一 workerGroup 为大写，避免 IMPORT / import 同语义字符串被 ResourceScheduler 等值比较误失配
@@ -184,7 +197,24 @@ public abstract class AbstractWorkerLoop {
     stopping.set(true);
   }
 
-  private String buildWorkerId(WorkerConfiguration cfg) {
+  private String buildWorkerId(String poolCode) {
+    String instanceId =
+        EmptyChecks.isNull(identityProperties) ? null : identityProperties.getInstanceId();
+    if (!Texts.hasText(instanceId)) {
+      return poolCode;
+    }
+    String normalizedInstanceId = instanceId.replaceAll("[^a-zA-Z0-9._-]", "_");
+    String combined = poolCode + "-" + normalizedInstanceId;
+    if (combined.length() <= 128) {
+      return combined;
+    }
+    int suffixLength = Math.min(normalizedInstanceId.length(), 64);
+    String suffix = normalizedInstanceId.substring(normalizedInstanceId.length() - suffixLength);
+    int poolLength = Math.max(1, 127 - suffixLength);
+    return poolCode.substring(0, Math.min(poolCode.length(), poolLength)) + "-" + suffix;
+  }
+
+  private String resolveWorkerPoolCode(WorkerConfiguration cfg) {
     if (Texts.hasText(cfg.workerCode())) {
       return cfg.workerCode();
     }

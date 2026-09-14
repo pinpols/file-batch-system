@@ -39,9 +39,11 @@ batch:
         enabled: true
     type: PROCESS
     execution:
+      pool-size: ${BATCH_WORKER_EXECUTION_POOL_SIZE:16}
       capability-timeout-seconds: ${BATCH_WORKER_PROCESS_CAPABILITY_TIMEOUT_SECONDS:1200}
     max-concurrent-tasks: ${BATCH_WORKER_PROCESS_MAX_CONCURRENT_TASKS:4}
     kafka:
+      # PATTERN/FIXED/TENANT_SCOPED/DIRECT_ONLY；专用资源画像池使用 DIRECT_ONLY。
       subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
       tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}
     process:

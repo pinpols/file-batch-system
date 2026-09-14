@@ -78,6 +78,7 @@ class WorkerRegistryCacheTest {
             7L,
             "t1",
             "w-cached",
+            "export-heavy",
             "EXPORT",
             null,
             "report",
@@ -98,6 +99,7 @@ class WorkerRegistryCacheTest {
     assertThat(calls.get()).isZero();
     assertThat(result).hasSize(1);
     assertThat(result.get(0).workerCode()).isEqualTo("w-cached");
+    assertThat(result.get(0).routingCode()).isEqualTo("export-heavy");
     assertThat(result.get(0).heartbeatAt()).isNotNull();
   }
 

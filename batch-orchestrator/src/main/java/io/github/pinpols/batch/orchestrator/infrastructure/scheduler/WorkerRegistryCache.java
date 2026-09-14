@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -118,6 +119,7 @@ public class WorkerRegistryCache {
           .id(r.id())
           .tenantId(r.tenantId())
           .workerCode(r.workerCode())
+          .workerPoolCode(r.workerPoolCode())
           .workerGroup(r.workerGroup())
           .capabilityTagsJson(
               r.capabilityTags() == null ? null : r.capabilityTags().getValue())
@@ -151,7 +153,15 @@ public class WorkerRegistryCache {
           e.currentLoad,
           e.maxConcurrent,
           e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis),
-          e.drainDeadlineMillis == null ? null : Instant.ofEpochMilli(e.drainDeadlineMillis)));
+          EmptyChecks.isNull(e.drainDeadlineMillis)
+              ? null
+              : Instant.ofEpochMilli(e.drainDeadlineMillis),
+          null,
+          null,
+          null,
+          null,
+          null,
+          e.workerPoolCode));
     }
     return records;
   }
@@ -162,6 +172,7 @@ public class WorkerRegistryCache {
       Long id,
       String tenantId,
       String workerCode,
+      String workerPoolCode,
       String workerGroup,
       String capabilityTagsJson,
       String resourceTag,

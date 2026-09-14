@@ -29,10 +29,12 @@ public record WorkerHeartbeatDto(
     String protocolVersion,
     // Worker 本地实际并发上限；内置 worker 在 register 时上报，控制面据此校准 selector 反压阈值。
     // 旧 SDK 缺字段时保持 null，由平台沿用已有值或数据库默认值。
-    Integer maxConcurrent) {
+    Integer maxConcurrent,
+    // 稳定路由池代码；workerCode 继续表示唯一运行实例。旧 SDK 不带时由平台回退为 workerCode。
+    String workerPoolCode) {
 
   /**
-   * 兼容旧调用方的 16 参数构造器。新增并发上报字段是可选 wire 字段，旧 SDK 和测试夹具无需同步升级。
+   * 兼容旧调用方的 16 参数构造器。新增字段是可选 wire 字段，旧 SDK 和测试夹具无需同步升级。
    */
   @SuppressWarnings("PMD.ExcessiveParameterList")
   public WorkerHeartbeatDto(
@@ -69,6 +71,48 @@ public record WorkerHeartbeatDto(
         rowsProcessed,
         totalRowsHint,
         protocolVersion,
+        null,
+        null);
+  }
+
+  /** 兼容新增 workerPoolCode 之前的 17 参数调用方。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public WorkerHeartbeatDto(
+      String tenantId,
+      String workerCode,
+      String workerGroup,
+      String status,
+      String hostName,
+      String hostIp,
+      String processId,
+      String buildId,
+      String sdkVersion,
+      Instant heartbeatAt,
+      List<String> capabilityTags,
+      Integer currentLoad,
+      List<WorkerTaskTypeDescriptorDto> taskTypes,
+      Long rowsProcessed,
+      Long totalRowsHint,
+      String protocolVersion,
+      Integer maxConcurrent) {
+    this(
+        tenantId,
+        workerCode,
+        workerGroup,
+        status,
+        hostName,
+        hostIp,
+        processId,
+        buildId,
+        sdkVersion,
+        heartbeatAt,
+        capabilityTags,
+        currentLoad,
+        taskTypes,
+        rowsProcessed,
+        totalRowsHint,
+        protocolVersion,
+        maxConcurrent,
         null);
   }
 

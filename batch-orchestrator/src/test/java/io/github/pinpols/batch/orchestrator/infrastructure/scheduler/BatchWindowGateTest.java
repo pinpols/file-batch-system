@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
+import io.github.pinpols.batch.orchestrator.application.scheduler.DownstreamAdmissionGuard;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PriorityScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
@@ -66,11 +68,17 @@ class BatchWindowGateTest {
     doReturn(ResourceCheck.allow()).when(concLimit).check(any(), any());
     PartitionThrottle partThrottle = mock(PartitionThrottle.class);
     doReturn(ResourceCheck.allow()).when(partThrottle).check(any(), any());
+    DispatchAdmissionLimiter dispatchAdmissionLimiter = mock(DispatchAdmissionLimiter.class);
+    doReturn(ResourceCheck.allow()).when(dispatchAdmissionLimiter).check(any(), any());
+    DownstreamAdmissionGuard downstreamAdmissionGuard = mock(DownstreamAdmissionGuard.class);
+    doReturn(ResourceCheck.allow()).when(downstreamAdmissionGuard).check(any());
 
     scheduler = new DefaultResourceScheduler(
         queueManager,
         concLimit,
         partThrottle,
+        dispatchAdmissionLimiter,
+        downstreamAdmissionGuard,
         mockWorkerSelector(),
         prioritySched,
         configCacheService,

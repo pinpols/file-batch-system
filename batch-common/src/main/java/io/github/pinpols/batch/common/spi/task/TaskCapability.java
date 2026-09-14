@@ -7,7 +7,8 @@ import java.util.Set;
 /**
  * {@link BatchTaskExecutor} 的能力声明 — 资源占用倾向 + 行为特性。
  *
- * <p>orchestrator 用本结构做调度策略(优先级 / 配额 / cancellable check),worker 用本结构上报路由元信息。
+ * <p>该结构属于执行器内部契约，描述取消、幂等和建议超时。跨进程调度不直接序列化本对象；作业通过
+ * {@code resourceProfile}，worker 通过注册能力标签建立稳定、可演进的路由契约。
  *
  * @param resourceKinds 资源占用集合(可多选,如 SQL = {DB},SFTP = {NET, DISK})
  * @param idempotent 重跑是否安全(true → 失败可直接重试;false → 需补偿)

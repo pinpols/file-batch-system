@@ -393,6 +393,7 @@ orchestrator:
     enabled: false
     placementSource: "CONFIG"
   resourceScheduler:
+    globalMaxRunningJobs: 1000
     defaultExceededStrategy: "QUEUE_DEFER"
     waitingDispatchBatchSize: 100
     waitingDispatchIntervalMillis: 10000
@@ -836,6 +837,37 @@ otel:
 #     workerType: export
 #     replicaCount: 2
 tenantWorkerPools: []
+
+# ── 专用资源画像 worker pool（CPU / 内存 / IO 隔离，默认空=不渲染）────────────
+# 作业参数 resourceProfile（兼容 resource_profile / resourceTag）与这里的
+# resourceProfile 或 capabilityTags 匹配后，orchestrator 会路由到稳定 pool code。
+# 每个池只订阅自己的 node-direct topic，不会抢共享池或其它池的任务。
+#
+# workerResourcePools:
+#   - name: import-memory
+#     workerType: import             # import | export | process | dispatch
+#     tenantId: default-tenant       # 可选；专租户资源池填写目标 tenantId
+#     resourceProfile: memory-heavy
+#     capabilityTags: [large-file]
+#     replicaCount: 3
+#     serviceAccountName: ""       # 可选；云存储工作负载身份由部署层提供
+#     maxConcurrentTasks: 2         # 单 Pod 并发，按任务重量定容
+#     executionPoolSize: 4          # 必须 >= maxConcurrentTasks
+#     javaOptsExtra: "-XX:MaxDirectMemorySize=2g"
+#     nodeSelector: {}              # 可选；未设置时继承全局调度配置
+#     tolerations: []
+#     affinity: {}
+#     resources:
+#       requests: { cpu: "1000m", memory: "2Gi" }
+#       limits:   { cpu: "4000m", memory: "6Gi" }
+#   - name: process-cpu
+#     workerType: process
+#     resourceProfile: cpu-heavy
+#     replicaCount: 4
+#     resources:
+#       requests: { cpu: "2000m", memory: "1Gi" }
+#       limits:   { cpu: "6000m", memory: "3Gi" }
+workerResourcePools: []
 
 # ── Phase D · per-tenant 凭据 / 网络 / 资源隔离（默认空=不渲染）──────────────────
 # templates/tenant-isolation.yaml 据此渲染 per-tenant Secret / NetworkPolicy / ResourceQuota。

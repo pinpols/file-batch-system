@@ -12,6 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
@@ -367,6 +368,45 @@ class DefaultSchedulePlanBuilderTest {
 
     assertThat(plan.getPartitions().get(0).getSourceFileId()).isNull();
     assertThat(plan.getPartitions().get(0).getTemplateCode()).isNull();
+  }
+
+  @Test
+  void shouldCarryResourceProfileAndDispatchChannelIntoAdmissionPlan() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_DISPATCH"));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    SchedulePlan plan = builder.build(command(Map.of(
+        "resourceProfile",
+        "io-heavy",
+        "channelCode",
+        "SFTP_SETTLEMENT",
+        "bundleFiles",
+        List.of(Map.of("sourceFileId", 501, "targetRef", "SFTP_SETTLEMENT")))));
+
+    assertThat(plan.getResourceProfile()).isEqualTo("io-heavy");
+    assertThat(plan.getDownstreamChannelCode()).isEqualTo("SFTP_SETTLEMENT");
+    ResourceSchedulingRequest request = SchedulePlanSupport.toSchedulingRequest(plan);
+    assertThat(request.getResourceProfile()).isEqualTo("io-heavy");
+    assertThat(request.getDownstreamChannelCode()).isEqualTo("SFTP_SETTLEMENT");
+    assertThat(request.getDownstreamChannelCodes()).containsExactly("SFTP_SETTLEMENT");
+  }
+
+  @Test
+  void shouldCarryEveryDispatchBundleTargetIntoAdmissionRequest() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_DISPATCH"));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    SchedulePlan plan = builder.build(command(Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 501, "targetRef", "CH_SFTP"),
+            Map.of("sourceFileId", 502, "targetRef", "CH_OSS")))));
+
+    ResourceSchedulingRequest request = SchedulePlanSupport.toSchedulingRequest(plan);
+
+    assertThat(request.getDownstreamChannelCodes()).containsExactly("CH_SFTP", "CH_OSS");
   }
 
   // --- helpers ---

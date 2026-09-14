@@ -82,6 +82,7 @@ spec:
               containerPort: {{ $port }}
               protocol: TCP
           env:
+            {{- include "batch-platform.workerIdentityEnv" $root | nindent 12 }}
             - name: JAVA_OPTS_EXTRA
               value: {{ $pool.javaOptsExtra | default "-XX:MaxDirectMemorySize=1g" | quote }}
             - name: BATCH_MANAGEMENT_PORT

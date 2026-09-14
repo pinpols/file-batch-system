@@ -26,6 +26,7 @@ public record CapacityProfileResponse(
       long successCount,
       long failureCount,
       long totalDurationMs,
+      long wallClockDurationMs,
       long avgDurationMs,
       long p95DurationMs,
       long totalFileBytes,

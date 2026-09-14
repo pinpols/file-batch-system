@@ -40,6 +40,8 @@ batch:
   worker:
     # worker_type=ATOMIC(ADR-029 专属类型,对应 batch.task.dispatch.atomic topic)
     type: ATOMIC
+    execution:
+      pool-size: ${BATCH_WORKER_EXECUTION_POOL_SIZE:16}
     max-concurrent-tasks: ${BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS:4}
     kafka:
       subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}

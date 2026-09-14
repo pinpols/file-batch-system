@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper">
+    <!--
+      非 HEALTHY 时控制面持续禁止新派发。恢复探测由 dispatch worker 的
+      DispatchChannelHealthScheduler 独立执行；只有探针把快照更新为 HEALTHY 后才释放 WAITING，
+      避免 next_probe_at 到期瞬间由多个 orchestrator 副本同时放大故障流量。
+    -->
+    <select id="isAnyDispatchChannelBlocked" resultType="boolean">
+        select exists (
+            select 1
+              from batch.file_channel_health
+             where tenant_id = #{tenantId}
+               and channel_code in
+               <foreach collection="channelCodes" item="channelCode" open="(" separator="," close=")">
+                   #{channelCode}
+               </foreach>
+               and health_status &lt;&gt; 'HEALTHY'
+        )
+    </select>
+</mapper>

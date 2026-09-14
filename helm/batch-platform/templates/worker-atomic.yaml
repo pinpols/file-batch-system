@@ -56,6 +56,7 @@ spec:
               containerPort: {{ $svc.port }}
               protocol: TCP
           env:
+            {{- include "batch-platform.workerIdentityEnv" . | nindent 12 }}
             # per-service JVM 参数追加,见 docs/runbook/jvm-tuning-and-profiling.md §1.2
             - name: JAVA_OPTS_EXTRA
               value: {{ $svc.javaOptsExtra | default "" | quote }}

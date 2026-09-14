@@ -18,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanSupport;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DryRunSchedulingPriority;
+import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
@@ -66,6 +67,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   private final TaskExecutionService taskExecutionService;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final StateMachine<Object> stateMachine;
+  private final GlobalJobAdmission globalJobAdmission;
   private final WorkflowNodeDispatchService workflowNodeDispatchService;
   private final JobInstanceMapper jobInstanceMapper;
   private final WorkflowRunMapper workflowRunMapper;
@@ -128,6 +130,10 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       WorkflowRunEntity workflowRun,
       String sourcePayload,
       String traceId) {
+    // 普通作业在 ResourceScheduler 内只做一次全局准入；DAG 初始节点可能有多个，父实例却只应
+    // 占一个槽位。先在 T2 事务内锁定并观察一次，所有节点仍照常物化为 READY/WAITING，最后
+    // 依据该结果推进父实例，避免容量已满时父实例被错误推进为 RUNNING。
+    boolean globalCapacity = globalJobAdmission.hasCapacity();
     int partitionCount = 0;
     for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
       if (EmptyChecks.isNull(initialNode)
@@ -137,7 +143,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       partitionCount += workflowNodeDispatchService.dispatchNode(
           jobInstance, workflowRun, initialNode, sourcePayload, traceId);
     }
-    return new DispatchOutcome(partitionCount, true);
+    return new DispatchOutcome(partitionCount, globalCapacity || partitionCount == 0);
   }
 
   private DispatchOutcome dispatchByPlan(

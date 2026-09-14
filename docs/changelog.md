@@ -6,6 +6,10 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-14
+- **ADR-027/ADR-042 重任务边界落地**：资源画像只负责把任务路由到稳定 Worker 池，Kubernetes 继续负责节点与 Pod 调度；`workerPoolCode` 与具体 `workerCode` 实例身份分离，专用池仅消费自己的 direct topic。平台以 PostgreSQL 事务锁实施全局活跃作业硬上限，以租户/队列并发、共享 QPS、Worker 负载和 Dispatch 渠道健康构成统一准入链；生产不得关闭全局硬上限。明确仍不把 WAITING 描述成无限队列，也不以本地队列替代 Kafka、不自研 Kubernetes Scheduler；WAITING 存储硬上限和任务派发 Kafka lag gate 继续作为 ADR-042 独立增强。
+- **重任务容量承诺口径**：并行任务以墙钟跨度计算 records/s 与 MB/s，累计任务耗时仅用于估算资源成本；上线承诺必须同时给出数据量、批量窗口、p95、失败率、PG WAL/IO、Kafka lag 和 Worker 饱和度证据，控制面 tasks/s 不得直接外推重任务 SLA。
+
 ### 2026-09-13
 - **MyBatis 生成键列约束**：所有 PostgreSQL `useGeneratedKeys` 插入必须显式声明 `keyColumn="id"`，禁止 JDBC 退化为 `RETURNING *` 后回传并解码整行 JSONB/运行快照；PR、Full Gate 和本地完整回归共用同一静态守护。
 - **容量画像环境可比性约束**：P2 压测由单点负载判断改为连续稳定采样，并记录负载发生器硬件/JDK与实际容器集合签名；8 核环境允许 `load1 <= 20` 执行稳定性或过载取证，但仅 `load1 <= 6` 的轮次具备标准基线可比性；入口稳定短缺时不再等待完整终态超时。

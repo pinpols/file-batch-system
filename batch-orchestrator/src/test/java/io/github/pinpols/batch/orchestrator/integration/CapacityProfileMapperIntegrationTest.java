@@ -79,6 +79,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(a.successCount()).isEqualTo(1L);
     assertThat(a.failureCount()).isEqualTo(1L);
     assertThat(a.totalDurationMs()).isEqualTo(14_000L); // 10000 + 4000
+    assertThat(a.wallClockDurationMs()).isEqualTo(3_604_000L); // 10:00:00 到 11:00:04
     // A1: related_file(1000) ∪ pipeline_instance.file(500) = 1500;A2 无文件。B 的 888888888 必须缺席
     assertThat(a.totalFileBytes()).isEqualTo(1_500L);
     assertThat(a.totalFileBytes()).isNotEqualTo(TENANT_B_FILE_BYTES);
@@ -101,6 +102,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(row.tenantId()).isEqualTo(tenantA);
     assertThat(row.jobCode()).isEqualTo(JOB_CODE_A);
     assertThat(row.instanceCount()).isEqualTo(2L);
+    assertThat(row.wallClockDurationMs()).isEqualTo(3_604_000L);
     assertThat(rows).noneMatch(r -> JOB_CODE_B.equals(r.jobCode()));
   }
 
@@ -120,6 +122,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(row.tenantId()).isEqualTo(tenantA);
     assertThat(row.workerCode()).isEqualTo(WORKER_A);
     assertThat(row.taskCount()).isEqualTo(1L);
+    assertThat(row.wallClockDurationMs()).isEqualTo(10_000L);
     assertThat(rows).noneMatch(r -> WORKER_B.equals(r.workerCode()));
   }
 

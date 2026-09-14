@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -31,7 +32,7 @@ public final class WorkflowFanOutSupport {
    */
   @SuppressWarnings("unchecked")
   public static FanOutSpec parseSpec(WorkflowNodeEntity workflowNode) {
-    if (workflowNode == null || workflowNode.getNodeParams() == null) {
+    if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
       return null;
     }
     Map<String, Object> params =
@@ -42,11 +43,12 @@ public final class WorkflowFanOutSupport {
     }
     Map<String, Object> fan = (Map<String, Object>) fanOutMap;
     Object itemsExpr = fan.get("itemsExpr");
-    if (!(itemsExpr instanceof String expr) || expr.isBlank()) {
+    if (!(itemsExpr instanceof String expr) || EmptyChecks.isBlank(expr)) {
       return null;
     }
     Object itemParamObj = fan.get("itemParam");
-    String itemParam = itemParamObj instanceof String s && !s.isBlank() ? s : DEFAULT_ITEM_PARAM;
+    String itemParam =
+        itemParamObj instanceof String s && EmptyChecks.isNotBlank(s) ? s : DEFAULT_ITEM_PARAM;
     Object maxObj = fan.get("maxFanOut");
     int maxFanOut =
         maxObj instanceof Number n && n.intValue() > 0 ? n.intValue() : DEFAULT_MAX_FAN_OUT;
@@ -55,14 +57,14 @@ public final class WorkflowFanOutSupport {
 
   /** 把 plan 的分区列表替换为 N 份(以原首个分区为模板克隆 worker route / status)。 */
   public static List<SchedulePlan.PartitionPlan> expandPartitions(SchedulePlan plan, int count) {
-    SchedulePlan.PartitionPlan template =
-        plan.getPartitions() == null || plan.getPartitions().isEmpty()
-            ? new SchedulePlan.PartitionPlan()
-            : plan.getPartitions().get(0);
+    SchedulePlan.PartitionPlan template = EmptyChecks.isEmpty(plan.getPartitions())
+        ? new SchedulePlan.PartitionPlan()
+        : plan.getPartitions().get(0);
     List<SchedulePlan.PartitionPlan> expanded = new ArrayList<>(count);
     for (int i = 0; i < count; i++) {
       SchedulePlan.PartitionPlan p = new SchedulePlan.PartitionPlan();
-      p.setPartitionKey(template.getPartitionKey() == null ? "fanout" : template.getPartitionKey());
+      p.setPartitionKey(
+          EmptyChecks.isNull(template.getPartitionKey()) ? "fanout" : template.getPartitionKey());
       p.setBusinessKey(template.getBusinessKey());
       p.setWorkerRoute(template.getWorkerRoute());
       p.setPartitionStatus(template.getPartitionStatus());
@@ -71,6 +73,40 @@ public final class WorkflowFanOutSupport {
     plan.setPartitions(expanded);
     plan.normalizePartitionContract();
     return expanded;
+  }
+
+  /**
+   * 将 DISPATCH fan-out item 中的渠道字段投射到对应分区。准入检查和 WAITING 重派都读取分区计划，
+   * 因而必须在创建分区前完成绑定；非 DISPATCH 计划保持不变。
+   */
+  public static void bindDispatchTargetRefs(
+      SchedulePlan plan, List<Object> items, List<SchedulePlan.PartitionPlan> partitions) {
+    if (EmptyChecks.isNull(plan)
+        || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
+        || EmptyChecks.isNull(items)
+        || EmptyChecks.isNull(partitions)
+        || items.size() != partitions.size()) {
+      return;
+    }
+    for (int index = 0; index < items.size(); index++) {
+      String channelCode = resolveDispatchChannel(items.get(index));
+      if (EmptyChecks.isNotNull(channelCode)) {
+        partitions.get(index).setTargetRef(channelCode);
+      }
+    }
+  }
+
+  private static String resolveDispatchChannel(Object item) {
+    if (!(item instanceof Map<?, ?> itemMap)) {
+      return null;
+    }
+    for (String key : List.of("channelCode", "dispatchChannelCode", "targetChannelCode")) {
+      Object value = itemMap.get(key);
+      if (EmptyChecks.isNotNull(value) && EmptyChecks.isNotBlank(String.valueOf(value))) {
+        return String.valueOf(value).trim();
+      }
+    }
+    return null;
   }
 
   /** 给某个 fan-out 分区的 task payload 注入它负责的 item + 索引信息。 */

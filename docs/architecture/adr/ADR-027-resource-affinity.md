@@ -18,6 +18,21 @@
 - 简单策略：`workerType` 必匹配 → `capabilityTags` 必满足 → `region/zone` 优先匹配 → 不做复杂打分。
 - 单机房 + 同质 worker + 无合规隔离场景：`worker_group` 完全够用，本 ADR 不开工。
 
+### 2026-09-14 轻量资源画像实现校准
+
+本轮实现了上表中的基线能力，没有启动完整 affinity 项目：
+
+- 作业参数 `resourceProfile` 与 Worker `capabilityTags/resourceTag` 做严格匹配；
+- Helm `workerResourcePools` 可创建独立 CPU、内存或 IO Worker Deployment；
+- `worker_pool_code` 作为稳定 Kafka 路由代码，Pod UID 派生的 `worker_code` 作为具体执行实例；
+- 专用池使用 `DIRECT_ONLY` topic 和独立 consumer group，避免与共享池重复消费；
+- claim 后 task/partition 改记具体实例 ID，lease、取消和 report fence 不降级。
+
+Helm 已支持按资源池声明静态 `nodeSelector/tolerations/affinity`，实际节点放置仍由 Kubernetes 调度器执行。
+这不改变本 ADR 对控制面动态 affinity 的暂缓裁定：label/taint 表、作业级 toleration、region/zone 运行时
+打分、动态亲和解析和自动扩容策略均未实现。权威运行说明见
+[`heavy-workload-guarantees.md`](../heavy-workload-guarantees.md)。
+
 ### 完整版（触发条件到了再做）
 
 | ✅ 做（本 ADR 完整版） | ❌ 绝不做（系统定位红线） |

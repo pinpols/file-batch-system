@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
@@ -34,6 +35,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusPara
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -261,11 +263,16 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             || workflowNode.getRelatedJobCode().isBlank()
         ? jobInstance.getJobCode()
         : workflowNode.getRelatedJobCode();
+    // 下游健康与资源画像必须基于 worker 最终收到的参数判定。先合并根参数、上游产出和
+    // node_params（含 ADR-009 引用），再用同一份载荷构造计划，避免 DAG 节点静态配置的
+    // channelCode/resourceProfile 在准入完成后才出现而绕过门禁。
+    String baseTaskPayload = payloadBuilder.buildTaskPayload(
+        sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
     SchedulePlanCommand planCommand = new SchedulePlanCommand(
         jobInstance.getTenantId(),
         targetJobCode,
         jobInstance.getBizDate().toString(),
-        WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload));
+        WorkflowNodePayloadBuilder.parsePayloadMap(baseTaskPayload));
     SchedulePlan plan = schedulePlanBuilder.build(planCommand);
     if (plan == null || plan.getPartitions() == null || plan.getPartitions().isEmpty()) {
       return 0;
@@ -299,8 +306,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // P1 动态 fan-out:节点配了 fanOut → 按上游 output 数组展开成 N 个并行分区(在资源调度前展开,
     // N 个分区都参与 worker 路由)。复用现有 partition 派发 + 聚合(N partition 终态聚合成节点终态),不另造状态机。
     FanOutPlan fanOut = prepareFanOut(workflowNode, workflowRun, node.nodeCode(), plan);
-    ResourceSchedulingDecision decision =
-        resourceScheduler.schedule(SchedulePlanSupport.toSchedulingRequest(plan));
+    ResourceSchedulingRequest schedulingRequest = SchedulePlanSupport.toSchedulingRequest(plan);
+    schedulingRequest.setNewJobAdmission(
+        JobInstanceStatus.CREATED.code().equals(jobInstance.getInstanceStatus()));
+    ResourceSchedulingDecision decision = resourceScheduler.schedule(schedulingRequest);
     if (isRejected(decision)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
@@ -331,8 +340,6 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
     List<JobPartitionEntity> newPartitions = partitionLifecycleService.createPartitions(
         plan, jobInstance.getId(), decision.getPartitionStatus());
-    String baseTaskPayload = payloadBuilder.buildTaskPayload(
-        sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
     int sequence = 1;
     int fanOutIndex = 0;
     for (JobPartitionEntity partition : newPartitions) {
@@ -418,7 +425,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
           String.valueOf(items.size()),
           String.valueOf(spec.maxFanOut()));
     }
-    plan.setPartitions(WorkflowFanOutSupport.expandPartitions(plan, items.size()));
+    List<SchedulePlan.PartitionPlan> partitions =
+        WorkflowFanOutSupport.expandPartitions(plan, items.size());
+    WorkflowFanOutSupport.bindDispatchTargetRefs(plan, items, partitions);
     plan.setPartitionCount(items.size());
     return new FanOutPlan(items, spec.itemParam());
   }

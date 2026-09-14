@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -23,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
@@ -165,6 +167,31 @@ class WorkerControllerTest {
         .andExpect(status().isOk());
 
     verify(workerRegistryService).register(any(WorkerHeartbeatDto.class));
+  }
+
+  @Test
+  void registerPreservesStableWorkerPoolCodeDuringTenantNormalization() throws Exception {
+    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
+        .thenReturn(true);
+    when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
+        .thenReturn(onlineWorker("ONLINE", 10));
+
+    mockMvc
+        .perform(
+            post("/internal/workers/register").contentType(APPLICATION_JSON).content("""
+                    {
+                      "tenantId": "t1",
+                      "workerCode": "export-heavy-pod-01",
+                      "workerGroup": "EXPORT",
+                      "workerPoolCode": "export-heavy"
+                    }
+                    """))
+        .andExpect(status().isOk());
+
+    ArgumentCaptor<WorkerHeartbeatDto> captor = ArgumentCaptor.forClass(WorkerHeartbeatDto.class);
+    verify(workerRegistryService).register(captor.capture());
+    assertThat(captor.getValue().workerCode()).isEqualTo("export-heavy-pod-01");
+    assertThat(captor.getValue().workerPoolCode()).isEqualTo("export-heavy");
   }
 
   @Test

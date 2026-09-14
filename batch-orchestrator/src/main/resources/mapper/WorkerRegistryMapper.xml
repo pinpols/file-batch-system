@@ -50,7 +50,7 @@
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, workerCode, workerGroup, capabilityTags, resourceTag, status,
          heartbeatAt, currentLoad, maxConcurrent, drainStartedAt, drainDeadlineAt,
-         hostName, hostIp, processId, buildId, sdkVersion)
+         hostName, hostIp, processId, buildId, sdkVersion, workerPoolCode)
       capability_tags 是 JSONB；通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
     -->
     <resultMap id="workerRegistryMap"
@@ -75,6 +75,7 @@
             <arg column="process_id" javaType="java.lang.String"/>
             <arg column="build_id" javaType="java.lang.String"/>
             <arg column="sdk_version" javaType="java.lang.String"/>
+            <arg column="worker_pool_code" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -83,7 +84,8 @@
         capability_tags::text as capability_tags_text,
         resource_tag, status, heartbeat_at, current_load, max_concurrent,
         drain_started_at, drain_deadline_at,
-        host_name, host_ip, process_id, build_id, sdk_version
+        host_name, host_ip, process_id, build_id, sdk_version,
+        coalesce(worker_pool_code, worker_code) as worker_pool_code
     </sql>
 
     <select id="selectByTenantAndWorkerCode" resultMap="workerRegistryMap">
@@ -200,7 +202,7 @@
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, max_concurrent, drain_started_at, drain_deadline_at,
-            host_name, host_ip, process_id, build_id, sdk_version,
+            host_name, host_ip, process_id, build_id, sdk_version, worker_pool_code,
             created_at, updated_at
         ) values (
             #{tenantId}, #{workerCode}, #{workerGroup},
@@ -208,7 +210,7 @@
             #{resourceTag},
             #{status}, #{heartbeatAt}, #{currentLoad}, #{maxConcurrent},
             #{drainStartedAt}, #{drainDeadlineAt},
-            #{hostName}, #{hostIp}, #{processId}, #{buildId}, #{sdkVersion},
+            #{hostName}, #{hostIp}, #{processId}, #{buildId}, #{sdkVersion}, #{workerPoolCode},
             current_timestamp, current_timestamp
         )
         on conflict (tenant_id, worker_code) do nothing
@@ -242,6 +244,7 @@
                process_id         = coalesce(#{worker.processId}, process_id),
                build_id           = coalesce(#{worker.buildId}, build_id),
                sdk_version        = coalesce(#{worker.sdkVersion}, sdk_version),
+               worker_pool_code   = coalesce(#{worker.workerPoolCode}, worker_pool_code, worker_code),
                updated_at         = current_timestamp
          where tenant_id = #{worker.tenantId}
            and worker_code = #{worker.workerCode}
@@ -300,6 +303,7 @@
                process_id         = coalesce(#{processId}, process_id),
                build_id           = coalesce(#{buildId}, build_id),
                sdk_version        = coalesce(#{sdkVersion}, sdk_version),
+               worker_pool_code   = coalesce(#{workerPoolCode}, worker_pool_code, worker_code),
                updated_at         = current_timestamp
          where id = #{id}
     </update>

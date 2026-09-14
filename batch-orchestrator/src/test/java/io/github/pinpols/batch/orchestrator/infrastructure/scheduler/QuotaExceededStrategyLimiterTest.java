@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.QuotaExceededStrategy;
+import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -38,6 +40,7 @@ class QuotaExceededStrategyLimiterTest {
   private JobInstanceMapper jobInstanceMapper;
   private OrchestratorConfigCacheService configCache;
   private QuotaRuntimeStateService quotaRuntime;
+  private GlobalJobAdmission globalJobAdmission;
   private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
   private ResourceSchedulerProperties resScheduler;
 
@@ -46,6 +49,7 @@ class QuotaExceededStrategyLimiterTest {
     jobInstanceMapper = mock(JobInstanceMapper.class);
     configCache = mock(OrchestratorConfigCacheService.class);
     quotaRuntime = mock(QuotaRuntimeStateService.class);
+    globalJobAdmission = mock(GlobalJobAdmission.class);
     fairShareGroupAdmissionGuard = mock(FairShareGroupAdmissionGuard.class);
     BatchOrchestratorGovernanceProperties governance =
         mock(BatchOrchestratorGovernanceProperties.class);
@@ -55,9 +59,16 @@ class QuotaExceededStrategyLimiterTest {
     when(resScheduler.getQuotaResetSlidingWindowHours()).thenReturn(24);
     // ADR-041 Phase2.3:平台默认有界队列(QUEUE_DEFER),与生产 ResourceSchedulerProperties 默认一致。
     when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.QUEUE_DEFER);
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
+    when(globalJobAdmission.hasObservedCapacity()).thenReturn(true);
 
     limiter = new DefaultConcurrencyLimiter(
-        jobInstanceMapper, fairShareGroupAdmissionGuard, configCache, quotaRuntime, governance);
+        jobInstanceMapper,
+        globalJobAdmission,
+        fairShareGroupAdmissionGuard,
+        configCache,
+        quotaRuntime,
+        governance);
   }
 
   @Test
@@ -149,6 +160,26 @@ class QuotaExceededStrategyLimiterTest {
     assertThat(limiter.check(request, null).allowed()).isTrue();
 
     verify(fairShareGroupAdmissionGuard).hasObservedCapacity(fairPolicy);
+  }
+
+  @Test
+  void globalLimit_shouldAcquireTransactionLockBeforeCountingNewJob() {
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
+
+    assertThat(limiter.check(request(), null).allowed()).isTrue();
+
+    verify(globalJobAdmission).hasCapacity();
+  }
+
+  @Test
+  void existingJob_shouldNotConsumeAnotherGlobalSlot() {
+    ResourceSchedulingRequest request = request();
+    request.setNewJobAdmission(false);
+
+    assertThat(limiter.check(request, null).allowed()).isTrue();
+
+    verify(globalJobAdmission, never()).hasCapacity();
+    verify(globalJobAdmission, never()).hasObservedCapacity();
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

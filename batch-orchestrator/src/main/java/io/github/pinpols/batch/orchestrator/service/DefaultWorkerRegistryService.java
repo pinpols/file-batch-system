@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -100,7 +101,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           request.hostIp(),
           request.processId(),
           request.buildId(),
-          request.sdkVersion());
+          request.sdkVersion(),
+          resolveWorkerPoolCode(request));
     } else {
       // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
       // 保留旧值。
@@ -111,7 +113,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
               request.hostIp(),
               request.processId(),
               request.buildId(),
-              request.sdkVersion());
+              request.sdkVersion())
+          .withWorkerPoolCode(resolveWorkerPoolCode(request));
     }
     WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
     // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
@@ -340,6 +343,12 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return currentStatus;
     }
     return resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(), currentStatus);
+  }
+
+  private String resolveWorkerPoolCode(WorkerHeartbeatDto request) {
+    return EmptyChecks.isBlank(request.workerPoolCode())
+        ? request.workerCode()
+        : request.workerPoolCode();
   }
 
   private String resolveIncomingStatus(

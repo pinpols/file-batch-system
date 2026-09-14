@@ -108,6 +108,7 @@ data:
   BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED: {{ (.Values.orchestrator.businessRouting).enabled | default false | quote }}
   BATCH_DATASOURCE_BUSINESS_ROUTING_PLACEMENT_SOURCE: {{ (.Values.orchestrator.businessRouting).placementSource | default "CONFIG" | quote }}
   BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY: {{ (.Values.orchestrator.resourceScheduler).defaultExceededStrategy | default "QUEUE_DEFER" | quote }}
+  BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS: {{ (.Values.orchestrator.resourceScheduler).globalMaxRunningJobs | quote }}
   BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchBatchSize | default 100 | quote }}
   BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchIntervalMillis | default 10000 | quote }}
   BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED: {{ (.Values.orchestrator.resourceScheduler).waitingDispatchKickEnabled | quote }}

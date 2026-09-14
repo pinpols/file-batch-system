@@ -10731,7 +10731,7 @@ components:
         coverage: { $ref: '#/components/schemas/CapacityProfileCoverage' }
     CapacityProfileRow:
       type: object
-      required: [instanceCount, taskCount, successCount, failureCount, totalDurationMs, avgDurationMs, p95DurationMs, totalFileBytes, processedRecords, recordsPerSecond, mbPerSecond]
+      required: [instanceCount, taskCount, successCount, failureCount, totalDurationMs, wallClockDurationMs, avgDurationMs, p95DurationMs, totalFileBytes, processedRecords, recordsPerSecond, mbPerSecond]
       properties:
         tenantId: { type: string, nullable: true }
         jobCode: { type: string, nullable: true }
@@ -10742,6 +10742,7 @@ components:
         successCount: { type: integer, format: int64 }
         failureCount: { type: integer, format: int64 }
         totalDurationMs: { type: integer, format: int64 }
+        wallClockDurationMs: { type: integer, format: int64, description: 并行任务最早开始到最晚结束的墙钟时间，吞吐率以此为分母 }
         avgDurationMs: { type: integer, format: int64 }
         p95DurationMs: { type: integer, format: int64 }
         totalFileBytes: { type: integer, format: int64 }

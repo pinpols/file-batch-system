@@ -416,6 +416,56 @@ class AbstractTaskConsumerTest {
     assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isFalse();
   }
 
+  @Test
+  void topicPattern_directOnlyMatchesOnlyItsStablePoolTopic() throws Exception {
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, dlq, "import-heavy");
+    WorkerKafkaSubscribeProperties props = new WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY);
+    setSubscribeProperties(consumer, props);
+
+    Pattern pattern = Pattern.compile(consumer.topicPattern());
+    assertThat(pattern.matcher("batch.task.dispatch.import.node.import-heavy").matches())
+        .isTrue();
+    assertThat(pattern.matcher("batch.task.dispatch.import").matches()).isFalse();
+    assertThat(pattern.matcher("batch.task.dispatch.import.t1").matches()).isFalse();
+    assertThat(pattern.matcher("batch.task.dispatch.import.node.import-light").matches())
+        .isFalse();
+  }
+
+  @Test
+  void topicPattern_directOnlyUsesTheSameSanitizedTopicAsProducer() throws Exception {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import/heavy pool");
+    WorkerKafkaSubscribeProperties props = new WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY);
+    setSubscribeProperties(consumer, props);
+
+    Pattern pattern = Pattern.compile(consumer.topicPattern());
+
+    assertThat(
+            pattern.matcher("batch.task.dispatch.import.node.import_heavy_pool").matches())
+        .isTrue();
+    assertThat(
+            pattern.matcher("batch.task.dispatch.import.node.import/heavy pool").matches())
+        .isFalse();
+  }
+
+  @Test
+  void topicPattern_directOnlyRequiresStablePoolCode() throws Exception {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, null);
+    WorkerKafkaSubscribeProperties props = new WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY);
+    setSubscribeProperties(consumer, props);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(consumer::topicPattern)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("DIRECT_ONLY")
+        .hasMessageContaining("worker code");
+  }
+
   private static void setSubscribeProperties(
       AbstractTaskConsumer consumer, WorkerKafkaSubscribeProperties props) throws Exception {
     Field f = AbstractTaskConsumer.class.getDeclaredField("subscribeProperties");

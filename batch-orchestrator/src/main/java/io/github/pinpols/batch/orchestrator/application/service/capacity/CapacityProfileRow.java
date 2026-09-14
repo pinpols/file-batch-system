@@ -11,6 +11,7 @@ public record CapacityProfileRow(
     long successCount,
     long failureCount,
     long totalDurationMs,
+    long wallClockDurationMs,
     long avgDurationMs,
     long p95DurationMs,
     long totalFileBytes,
@@ -19,7 +20,8 @@ public record CapacityProfileRow(
     double mbPerSecond) {
 
   public CapacityProfileRow withRates() {
-    double seconds = Math.max(totalDurationMs, 0L) / 1000.0d;
+    long throughputDurationMs = wallClockDurationMs > 0 ? wallClockDurationMs : totalDurationMs;
+    double seconds = Math.max(throughputDurationMs, 0L) / 1000.0d;
     double recordsRate = seconds <= 0.0d ? 0.0d : processedRecords / seconds;
     double mbRate = seconds <= 0.0d ? 0.0d : (totalFileBytes / 1024.0d / 1024.0d) / seconds;
     return new CapacityProfileRow(
@@ -32,6 +34,7 @@ public record CapacityProfileRow(
         nonNegative(successCount),
         nonNegative(failureCount),
         nonNegative(totalDurationMs),
+        nonNegative(wallClockDurationMs),
         nonNegative(avgDurationMs),
         nonNegative(p95DurationMs),
         nonNegative(totalFileBytes),

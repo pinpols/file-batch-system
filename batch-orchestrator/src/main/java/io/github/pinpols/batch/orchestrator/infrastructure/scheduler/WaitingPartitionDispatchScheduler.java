@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -225,7 +227,7 @@ public class WaitingPartitionDispatchScheduler {
     });
   }
 
-  private ResourceSchedulingRequest buildRequest(
+  static ResourceSchedulingRequest buildRequest(
       JobInstanceEntity jobInstance,
       JobPartitionEntity partition,
       JobTaskEntity task,
@@ -248,10 +250,19 @@ public class WaitingPartitionDispatchScheduler {
             ? jobInstance.getWorkerGroup()
             : partition.getWorkerGroup());
     request.setWorkerType(task.getTaskType());
+    request.setResourceProfile(extractInputField(partition, "resourceProfile"));
+    request.setDownstreamChannelCode(firstInputField(
+        partition,
+        "downstreamChannelCode",
+        "channelCode",
+        "dispatchChannelCode",
+        "targetChannelCode"));
     request.setRequiredCapability(
         Boolean.TRUE.equals(partition.getDryRun()) ? WorkerCapabilities.DRY_RUN_SAFE : null);
     request.setPriority(jobInstance.getPriority());
     request.setRequestedPartitionCount(1);
+    request.setNewJobAdmission(
+        JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus()));
     // 本轮 schedule 只负责给候选排序；executeDispatch 会在 REQUIRES_NEW 事务内重新取得公平组锁并校验。
     request.setEnforceFairShareAdmission(false);
     request.setWaitingSince(
@@ -263,6 +274,16 @@ public class WaitingPartitionDispatchScheduler {
             ? partitionWindowCode
             : (jobDefinition == null ? null : jobDefinition.windowCode()));
     return request;
+  }
+
+  private static String firstInputField(JobPartitionEntity partition, String... fields) {
+    for (String field : fields) {
+      String value = extractInputField(partition, field);
+      if (EmptyChecks.isNotBlank(value)) {
+        return value;
+      }
+    }
+    return null;
   }
 
   /** 从 partition.input_snapshot（JSON 字符串）里抽一个顶层字符串字段。畸形 JSON 返回 null。 */

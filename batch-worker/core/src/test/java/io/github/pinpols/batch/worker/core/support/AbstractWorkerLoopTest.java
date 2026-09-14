@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,6 +103,21 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  void ensureStarted_separatesStablePoolCodeFromRuntimeInstanceId() {
+    WorkerIdentityProperties identity = new WorkerIdentityProperties();
+    identity.setInstanceId("pod/uid:01");
+    TestWorkerLoop instanceLoop =
+        new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport, identity);
+
+    instanceLoop.ensureStarted();
+
+    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+    verify(workerRuntimeFacade).start(captor.capture());
+    assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code-pod_uid_01");
+    assertThat(captor.getValue().getWorkerCode()).isEqualTo("fixed-worker-code");
+  }
+
+  @Test
   void doHeartbeat_sendsHeartbeatAfterStart() {
     loop.ensureStarted();
     loop.doHeartbeat();
@@ -171,6 +187,13 @@ class AbstractWorkerLoopTest {
 
     TestWorkerLoop(WorkerRuntimeFacade facade, BatchDateTimeSupport dateTimeSupport) {
       super(facade, dateTimeSupport, 8);
+    }
+
+    TestWorkerLoop(
+        WorkerRuntimeFacade facade,
+        BatchDateTimeSupport dateTimeSupport,
+        WorkerIdentityProperties identityProperties) {
+      super(facade, dateTimeSupport, 8, identityProperties);
     }
 
     @Override

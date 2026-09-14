@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -42,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -306,6 +308,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
     node.setNodeCode("n1");
     node.setNodeType("TASK");
     when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1")).thenReturn(node);
+    when(payloadBuilder.buildTaskPayload(any(), any(), any(), any(), any(), any()))
+        .thenReturn("{\"channelCode\":\"dispatch-primary\",\"resourceProfile\":\"io-heavy\"}");
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("WF_JOB");
@@ -325,6 +329,12 @@ class DefaultWorkflowNodeDispatchServiceTest {
             instance(), workflowRun(), new DagNodeResolution("n1", "TASK"), "{}", "trace"))
         .isInstanceOf(BizException.class)
         .hasMessage("error.partition.dispatch_business_error");
+    ArgumentCaptor<SchedulePlanCommand> commandCaptor =
+        ArgumentCaptor.forClass(SchedulePlanCommand.class);
+    verify(schedulePlanBuilder).build(commandCaptor.capture());
+    assertThat(commandCaptor.getValue().params())
+        .containsEntry("channelCode", "dispatch-primary")
+        .containsEntry("resourceProfile", "io-heavy");
     verify(partitionLifecycleService, never()).createPartitions(any(), any(), any());
   }
 }

@@ -38,13 +38,14 @@
 | 15 | [backup-and-pitr.md](./backup-and-pitr.md) | **PG 备份 / PITR / 容量护栏**（上线前必做:base+WAL+逻辑导出、恢复演练、磁盘告警） |
 | 15a | [dedup-ledger-retention.md](./dedup-ledger-retention.md) | 幂等 dedup ledger 留存治理（outbox/instance 双台账无自动清理,季度归档 SOP + 清理 SQL） |
 | 16 | [ha-readiness.md](./ha-readiness.md) | **生产 HA 就绪 Checklist（P0/P1）**——基础件 HA(Kafka/PG Patroni/备份/Redis Sentinel/PgBouncer)逐项 + 应用侧已做对照 |
+| 16a | [heavy-workload-operations.md](./heavy-workload-operations.md) | 重任务定容、专用资源池、灰度、排障与回滚 |
 
 ### 四、灰度 / 切换（特性开关）
 
 | # | 文件 | 作用 |
 |---|---|---|
 | 15 | [feature-switches.md](./feature-switches.md) | 跨模块能力开关索引、默认值、风险和回滚 |
-| 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED）切换 |
+| 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED / DIRECT_ONLY）切换 |
 | 17a | [stateful-backend-cutover.md](./stateful-backend-cutover.md) | Quota / Report Outbox / Object Storage 有状态后端切换守卫与 SOP |
 
 ### 五、观测 / 安全 / 验证 / CI
@@ -68,7 +69,7 @@
 | 上线与环境 | [上线就绪](./go-live-readiness.md)、[staging 执行](./go-live-staging-execution.md)、[环境边界](./environment-profile-boundaries.md)、[发布](./releasing.md)、[数据库迁移](./db-migration-checklist.md) |
 | Trigger 与批量日 | [Trigger 运维](./trigger-operations.md)、[异步 launch 灰度](./trigger-async-launch-rollout.md)、[依赖感知 fire](./dependency-aware-fire.md)、[批量日门禁](./batch-day-gate-howto.md)、[事件到达](./event-driven-arrival.md) |
 | 多租户与数据 | [RLS](./multi-tenant-rls.md)、[RLS 严格灰度](./multi-tenant-rls-strict-rollout.md)、[biz 路由](./biz-tenant-routing.md)、[PG session](./pg-session-tuning.md)、[分区切换](./partition-cutover-2026-05.md) |
-| Worker 与恢复 | [Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |
+| Worker 与恢复 | [重任务容量与资源池](./heavy-workload-operations.md)、[Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |
 | 文件与对象存储 | [Filesystem](./object-storage-filesystem.md)、[S3 后端](./object-storage-s3-backends.md)、[控制总数对账](./control-total-reconciliation-howto.md) |
 | 安全与权限 | [密码安全](./password-security-backlog.md)、[角色治理](./role-redesign-config-admin-audit.md)、[租户 Worker 接入](./per-tenant-worker-onboarding.md) |
 | 观测与韧性 | [分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |

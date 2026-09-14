@@ -144,6 +144,74 @@ class DefaultWorkerSelectorTest {
     assertThat(route.getAvailable()).isFalse();
   }
 
+  @Test
+  void resourceProfileSelectsMatchingPoolAndReturnsStablePoolCode() {
+    WorkerRegistryEntity general =
+        worker("export-general-pod", null, new JsonbString("[\"report\"]"));
+    WorkerRegistryEntity heavy = new WorkerRegistryEntity(
+        2L,
+        TENANT,
+        "export-heavy-pod-a",
+        GROUP,
+        new JsonbString("[\"report\", \"io-heavy\"]"),
+        null,
+        WorkerRegistryStatus.ONLINE.code(),
+        BatchDateTimeSupport.utcNow(),
+        0,
+        10,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "export-heavy");
+    stubCandidates(List.of(general, heavy));
+    ResourceSchedulingRequest request = request();
+    request.setResourceProfile("io-heavy");
+
+    WorkerRouteModel route = selector.select(request, queue(null), 5);
+
+    assertThat(route.getAvailable()).isTrue();
+    assertThat(route.getWorkerCode()).isEqualTo("export-heavy");
+    assertThat(route.getResourceProfile()).isEqualTo("io-heavy");
+  }
+
+  @Test
+  void jobResourceProfileOverridesQueueDefaultProfile() {
+    WorkerRegistryEntity queueDefault =
+        worker("export-general-pod", "standard", new JsonbString("[\"standard\"]"));
+    WorkerRegistryEntity heavy = new WorkerRegistryEntity(
+        2L,
+        TENANT,
+        "export-heavy-pod-a",
+        GROUP,
+        new JsonbString("[\"io-heavy\"]"),
+        null,
+        WorkerRegistryStatus.ONLINE.code(),
+        BatchDateTimeSupport.utcNow(),
+        0,
+        10,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "export-heavy");
+    stubCandidates(List.of(queueDefault, heavy));
+    ResourceSchedulingRequest request = request();
+    request.setResourceProfile("io-heavy");
+
+    WorkerRouteModel route = selector.select(request, queue("standard"), 5);
+
+    assertThat(route.getAvailable()).isTrue();
+    assertThat(route.getWorkerCode()).isEqualTo("export-heavy");
+    assertThat(route.getResourceProfile()).isEqualTo("io-heavy");
+  }
+
   private void stubCandidates(List<WorkerRegistryEntity> candidates) {
     when(workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
             TENANT, GROUP, WorkerRegistryStatus.ONLINE.code()))
