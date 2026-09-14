@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,13 +9,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.TokensInheritanceStrategy;
 import io.github.bucket4j.distributed.BucketProxy;
+import io.github.bucket4j.distributed.proxy.RemoteBucketBuilder;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,19 +47,35 @@ class RedisRateLimitCircuitBreakerTest {
     return config;
   }
 
+  @SuppressWarnings("unchecked")
+  private static RemoteBucketBuilder<String> mockBucketBuilder(
+      LettuceBasedProxyManager<String> proxyManager) {
+    RemoteBucketBuilder<String> builder = mock(RemoteBucketBuilder.class);
+    when(proxyManager.builder()).thenReturn(builder);
+    when(builder.withImplicitConfigurationReplacement(
+            anyLong(), eq(TokensInheritanceStrategy.PROPORTIONALLY)))
+        .thenReturn(builder);
+    return builder;
+  }
+
+  private static Supplier<BucketConfiguration> anyConfigurationSupplier() {
+    return org.mockito.ArgumentMatchers.any();
+  }
+
   @Test
   @DisplayName("连续 N 次 Redis 故障 → 熔断 OPEN → 后续请求短路 fail-open 且不再发 Redis 命令(无 500ms 阻塞)")
   void sustainedFailureOpensCircuitThenShortCircuitsWithoutHittingRedis() {
     // arrange: getProxy 恒抛 RedisException(模拟慢故障命令级失败)
     @SuppressWarnings("unchecked")
     LettuceBasedProxyManager<String> proxyManager = mock(LettuceBasedProxyManager.class);
-    when(proxyManager.getProxy(anyString(), any()))
+    RemoteBucketBuilder<String> bucketBuilder = mockBucketBuilder(proxyManager);
+    when(bucketBuilder.build(anyString(), anyConfigurationSupplier()))
         .thenThrow(new RedisCommandTimeoutException("simulated sustained timeout"));
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
         config(3, 10_000L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
-    TokenBucketRateLimiter limiter =
-        new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
+    TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(
+        proxyManager, meterRegistry, circuitBreaker, new RateLimitProperties());
 
     // act: 3 次故障填满窗口 → 熔断 OPEN(3 次都真发命令、都 fail-open)
     for (int i = 0; i < 3; i++) {
@@ -71,7 +91,7 @@ class RedisRateLimitCircuitBreakerTest {
     // assert
     assertThat(allowed).as("open circuit must still fail-open (allow)").isTrue();
     // 关键:getProxy 只被前 3 次调用,第 4 次被熔断短路——证明没再发 Redis 命令(慢故障下即省掉 requestTimeout 阻塞)
-    verify(proxyManager, times(3)).getProxy(anyString(), any());
+    verify(bucketBuilder, times(3)).build(anyString(), anyConfigurationSupplier());
     assertThat(elapsedMillis).as("short-circuit must be near-instant").isLessThan(100L);
     // gauge=1(OPEN)
     assertThat(meterRegistry
@@ -103,7 +123,8 @@ class RedisRateLimitCircuitBreakerTest {
     when(bucketProxy.tryConsume(1)).thenReturn(true);
     @SuppressWarnings("unchecked")
     LettuceBasedProxyManager<String> proxyManager = mock(LettuceBasedProxyManager.class);
-    when(proxyManager.getProxy(anyString(), any())).thenAnswer(invocation -> {
+    RemoteBucketBuilder<String> bucketBuilder = mockBucketBuilder(proxyManager);
+    when(bucketBuilder.build(anyString(), anyConfigurationSupplier())).thenAnswer(invocation -> {
       if (fail.get()) {
         throw new RedisCommandTimeoutException("simulated timeout");
       }
@@ -112,8 +133,8 @@ class RedisRateLimitCircuitBreakerTest {
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
         config(3, 100L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
-    TokenBucketRateLimiter limiter =
-        new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
+    TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(
+        proxyManager, meterRegistry, circuitBreaker, new RateLimitProperties());
 
     // act 1: 打开熔断
     for (int i = 0; i < 3; i++) {
@@ -153,12 +174,14 @@ class RedisRateLimitCircuitBreakerTest {
     when(bucketProxy.tryConsume(1)).thenReturn(true, true, false, false, false);
     @SuppressWarnings("unchecked")
     LettuceBasedProxyManager<String> proxyManager = mock(LettuceBasedProxyManager.class);
-    when(proxyManager.getProxy(eq("ratelimit:t1:TASK_REPORT"), any())).thenReturn(bucketProxy);
+    RemoteBucketBuilder<String> bucketBuilder = mockBucketBuilder(proxyManager);
+    when(bucketBuilder.build(eq("ratelimit:t1:TASK_REPORT"), anyConfigurationSupplier()))
+        .thenReturn(bucketProxy);
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
         config(3, 10_000L), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
-    TokenBucketRateLimiter limiter =
-        new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
+    TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(
+        proxyManager, meterRegistry, circuitBreaker, new RateLimitProperties());
 
     // act + assert: 放行两次,随后连续拒绝(限流正常);拒绝是正常返回 false,不是异常 → 不计失败
     assertThat(limiter.tryConsume("t1", "TASK_REPORT", 2)).isTrue();
@@ -175,7 +198,7 @@ class RedisRateLimitCircuitBreakerTest {
             .gauge()
             .value())
         .isEqualTo(0.0);
-    verify(proxyManager, times(5)).getProxy(anyString(), any());
+    verify(bucketBuilder, times(5)).build(anyString(), anyConfigurationSupplier());
     assertThat(meterRegistry.find(TokenBucketRateLimiter.METRIC_FAILOPEN).counter())
         .isNull();
   }

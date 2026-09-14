@@ -15,11 +15,12 @@ import org.junit.jupiter.api.Test;
 class RateLimitPropertiesTest {
 
   @Test
-  @DisplayName("限流默认开启，launch/register/release 阈值均为正高水位")
+  @DisplayName("限流默认开启，桶版本及 claim/report 高水位与发布契约一致")
   void defaultsEnabledWithPositiveHighWatermarks() {
     RateLimitProperties props = new RateLimitProperties();
 
     assertThat(props.isEnabled()).as("限流默认应开启").isTrue();
+    assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本").isEqualTo(2L);
     assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值应为正").isGreaterThan(0L);
     assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
         .as("worker register 阈值应为正")
@@ -27,5 +28,7 @@ class RateLimitPropertiesTest {
     assertThat(props.getMaxReleaseRequestsPerTenantPerMinute())
         .as("dispatch release 阈值应为正")
         .isGreaterThan(0L);
+    assertThat(props.getMaxClaimRequestsPerTenantPerMinute()).as("claim 阈值").isEqualTo(12000L);
+    assertThat(props.getMaxReportRequestsPerTenantPerMinute()).as("report 阈值").isEqualTo(30000L);
   }
 }

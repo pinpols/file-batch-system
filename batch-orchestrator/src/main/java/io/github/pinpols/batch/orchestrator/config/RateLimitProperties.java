@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.validation.annotation.Validated;
 
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.rate-limit")
 /** Orchestrator 入口限流策略参数。 */
 public class RateLimitProperties {
@@ -16,9 +19,17 @@ public class RateLimitProperties {
   private boolean enabled = true;
 
   /**
+   * Redis 令牌桶配置的单调版本。修改任一桶阈值时必须同步递增；新版本会在下一次请求时原子替换已有桶配置，并按比例继承令牌。
+   *
+   * <p>该值只能递增，回退阈值配置时也要使用更大的版本，避免滚动发布期间旧副本覆盖新配置。
+   */
+  @Min(value = 1, message = "bucket-configuration-version must be at least 1")
+  private long bucketConfigurationVersion = 2L;
+
+  /**
    * Redis 短路熔断配置：Redis 长时间慢故障时，连续超时判定其不健康后，限流器直接 fail-open 放行不再发 Redis 命令， 省掉每请求叠加的 {@code
    * requestTimeout}(500ms) 阻塞（见 {@code RedisRateLimitCircuitBreaker}）。热路径 claim/report
-   * (12000/min≈200/s) 在慢故障下不再被 Redis 拖垮线程池。
+   * （claim 12000/min、report 30000/min）在慢故障下不再被 Redis 拖垮线程池。
    */
   @NestedConfigurationProperty
   private CircuitBreaker redisCircuitBreaker = new CircuitBreaker();
@@ -46,9 +57,10 @@ public class RateLimitProperties {
   private long maxClaimRequestsPerTenantPerMinute = 12000;
 
   /**
-   * 每租户每分钟最大 task report 请求数（含 report-batch，按 HTTP 调用计）；<=0 表示关闭该项。默认 12000（=200/s）高水位，理由同 claim。
+   * 每租户每分钟最大 task report 请求数（含 report-batch，按 HTTP 调用计）；<=0 表示关闭该项。默认 30000（=500/s）。
+   * 严格 10 万同代码 A/B 表明该水位可覆盖合法排空峰值并消除 429 重试；claim 保持 12000/min，避免无证据地放大认领入口。
    */
-  private long maxReportRequestsPerTenantPerMinute = 12000;
+  private long maxReportRequestsPerTenantPerMinute = 30000;
 
   /**
    * Redis 限流交互的短路熔断参数。语义：连续 {@link #consecutiveFailures} 次 Redis 命令级故障 / bucket4j 超时后进入 OPEN 窗口，窗口内

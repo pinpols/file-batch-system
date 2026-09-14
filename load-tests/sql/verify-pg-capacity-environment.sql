@@ -4,4 +4,5 @@ SELECT coalesce(current_setting('pg_stat_statements.track', true), 'unavailable'
        current_setting('synchronous_commit'),
        current_setting('wal_compression'),
        pg_size_bytes(current_setting('max_wal_size')),
-       extract(epoch FROM current_setting('checkpoint_timeout')::interval)::bigint;
+       extract(epoch FROM current_setting('checkpoint_timeout')::interval)::bigint,
+       current_setting('checkpoint_completion_target');

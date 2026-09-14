@@ -36,7 +36,7 @@ def main() -> int:
         for error in errors:
             print(f"  - {error}")
         return 1
-    print(f"Script governance guard passed: {len(guards)} CI guards registered")
+    print(f"✅ Script governance guard passed: {len(guards)} CI guards registered")
     return 0
 
 

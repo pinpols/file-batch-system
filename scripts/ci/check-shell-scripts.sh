@@ -15,7 +15,7 @@ while IFS= read -r -d '' file; do
   [[ -f "$file" ]] && shell_files+=("$file")
 done < <(git ls-files --cached --others --exclude-standard -z -- '*.sh')
 if ((${#shell_files[@]} == 0)); then
-  echo "Shell guard passed: no tracked shell scripts"
+  echo "✅ Shell guard passed: no tracked shell scripts"
   exit 0
 fi
 
@@ -33,4 +33,4 @@ if ! printf '%s\0' "${shell_files[@]}" \
   exit 1
 fi
 
-echo "Shell guard passed: ${#shell_files[@]} scripts are syntax-valid with zero ShellCheck warnings"
+echo "✅ Shell guard passed: ${#shell_files[@]} scripts are syntax-valid with zero ShellCheck warnings"

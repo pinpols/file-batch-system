@@ -39,6 +39,17 @@ services:
       - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}
       - -c
       - track_io_timing=${POSTGRES_TRACK_IO_TIMING:-off}
+      # 默认保持 PostgreSQL 原生容量口径；容量 A/B 通过 env 显式覆盖，不使用 ALTER SYSTEM 留下隐形状态。
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE:-1GB}
+      - -c
+      - checkpoint_timeout=${POSTGRES_CHECKPOINT_TIMEOUT:-5min}
+      - -c
+      - checkpoint_completion_target=${POSTGRES_CHECKPOINT_COMPLETION_TARGET:-0.9}
+      - -c
+      - synchronous_commit=${POSTGRES_SYNCHRONOUS_COMMIT:-on}
+      - -c
+      - wal_compression=${POSTGRES_WAL_COMPRESSION:-off}
       # ── WAL 连续归档(PITR 第 B 层)——**默认关闭,生产再开** ──────────────
       # dev 默认不开:开了会持续往 /wal-archive 写 WAL 段,本地联调无意义且占盘。
       # 生产启用步骤(见 docs/runbook/backup-and-pitr.md §1.1):
@@ -100,6 +111,16 @@ services:
       - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}
       - -c
       - track_io_timing=${POSTGRES_TRACK_IO_TIMING:-off}
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE:-1GB}
+      - -c
+      - checkpoint_timeout=${POSTGRES_CHECKPOINT_TIMEOUT:-5min}
+      - -c
+      - checkpoint_completion_target=${POSTGRES_CHECKPOINT_COMPLETION_TARGET:-0.9}
+      - -c
+      - synchronous_commit=${POSTGRES_SYNCHRONOUS_COMMIT:-on}
+      - -c
+      - wal_compression=${POSTGRES_WAL_COMPRESSION:-off}
     environment:
       POSTGRES_PRIMARY_HOST: postgres-primary
       POSTGRES_PRIMARY_PORT: 5432

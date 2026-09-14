@@ -72,8 +72,8 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
       SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
       RedisRateLimitCircuitBreaker circuitBreaker = new RedisRateLimitCircuitBreaker(
           config(), CircuitBreakerRegistry.ofDefaults(), meterRegistry);
-      TokenBucketRateLimiter limiter =
-          new TokenBucketRateLimiter(proxyManager, meterRegistry, circuitBreaker);
+      TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(
+          proxyManager, meterRegistry, circuitBreaker, new RateLimitProperties());
 
       // sanity:健康时正常限流
       assertThat(limiter.tryConsume("t-cb", "LAUNCH", 100)).isTrue();

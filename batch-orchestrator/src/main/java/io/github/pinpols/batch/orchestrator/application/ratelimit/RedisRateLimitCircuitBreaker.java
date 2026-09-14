@@ -19,7 +19,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 限流器 Redis 交互的短路熔断器：Redis <b>长时间慢故障</b>下，避免每个 claim/report 请求都阻塞至 {@code requestTimeout}(500ms) 才
- * fail-open。#782 把 requestTimeout 从 2s 降到 500ms 缓解了线程饥饿，但热路径（12000/min≈200/s）在持续慢故障下仍叠 500ms
+ * fail-open。#782 把 requestTimeout 从 2s 降到 500ms 缓解了线程饥饿，但热路径（claim 12000/min、report
+ * 30000/min）在持续慢故障下仍叠 500ms
  * 延迟；本熔断器在连续超时判定 Redis 不健康后，直接 fail-open 放行<b>不再发 Redis 命令</b>，把叠加延迟从 500ms 降到 ~0。
  *
  * <p><b>为何用 resilience4j 而非手写状态机</b>：#774（{@code DownstreamFallback}）已在生产用 R4J CircuitBreaker 承载

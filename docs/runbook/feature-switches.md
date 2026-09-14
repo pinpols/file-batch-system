@@ -68,7 +68,7 @@
 |---|---|---|---|---|---|---|
 | `batch.security.bypass-mode` | `true` / `false` | **false** | 安全旁路（认证/脱敏/加解密/审批/渠道校验全放宽）；**仅本地/E2E**，生产 profile 拒绝 true | **P0** | `BATCH_SECURITY_BYPASS_MODE` | ✅ |
 | `batch.request-signing.enabled` | `true` / `false` | **false** | 内部写请求 HMAC 签名+ts+nonce 防重放；灰度先升 SDK 再开服务端 | P1 | `BATCH_REQUEST_SIGNING_ENABLED` | ✅ |
-| `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级固定窗口限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` | ✅ |
+| `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级分布式令牌桶限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` | ✅ |
 | `batch.replay.dry-run.enabled` | `true` / `false` | **false** | 整批量日无副作用演练；开启前必须完成五类 Worker 隔离验收 | P1 | `BATCH_REPLAY_DRY_RUN_ENABLED` | ❌ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
 | `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
@@ -106,7 +106,8 @@
 
 | 配置 key | 默认 | 作用 | env | 测试 |
 |---|---|---|---|---|
-| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | launch/release 3000、register 300、claim/report 12000 | 租户级高水位限流；<=0 关闭单项 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE` | ❌ |
+| `batch.rate-limit.bucket-configuration-version` | 2 | Redis 令牌桶配置的单调版本；调整或回退任一阈值时都必须递增 | `BATCH_RATE_LIMIT_BUCKET_CONFIGURATION_VERSION` | ✅ 真 Redis 跨副本升级 |
+| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | launch/release 3000、register 300、claim 12000、report 30000 | 租户级高水位限流；<=0 关闭单项；变更时同步递增桶配置版本 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE` | ✅ 默认绑定+桶语义+严格 10 万 A/B |
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | 10 | 导出/导入/Excel/报表按用户限流（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE` | ❌ |
 | `batch.console.security.rate-limit.file-op-user-limit-per-minute` | 60 | `/api/console/files/` 子树按用户限流（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE` | ❌ |
 | `batch.console.security.rate-limit.redis-failure-threshold` / `redis-circuit-open-seconds` | 3 / 15s | Redis 连续失败短路与冷却期（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD` / `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS` | ❌ |
@@ -160,14 +161,14 @@ Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD
 | orchestrator `/internal/workers/register` | `WORKER_REGISTER` | 300/min | 租户 | worker 注册低频，5/s 已是异常风暴 |
 | orchestrator dispatch release | `DISPATCH_RELEASE` | 3000/min | 租户 | — |
 | orchestrator `/internal/tasks/*/claim`·`claim-batch` | `TASK_CLAIM` | 12000/min | 租户 | 热路径，**按绑定 api_key 的租户聚合**（workerId 可伪造故不按 worker）；批量按 HTTP 调用计 1 |
-| orchestrator `/internal/tasks/*/report`·`report-batch` | `TASK_REPORT` | 12000/min | 租户 | 同上 |
+| orchestrator `/internal/tasks/*/report`·`report-batch` | `TASK_REPORT` | 30000/min | 租户 | 覆盖严格 10 万任务合法排空峰值；claim 仍保持 12000/min |
 | console-api 导出/导入/Excel/报表 | `expensive:user:*` | 10/min | 用户 | 前缀可配 `expensive-op-path-prefixes`；任意 HTTP 方法（导出常为 GET）；fail-open |
 | console-api 文件操作（`/api/console/files/` 下载/错误导出/归档/重派/到达组） | `fileop:user:*` | 60/min | 用户 | 防 token 直连脚本盗刷下载/导出；前缀可配 `file-op-path-prefixes`；任意 HTTP 方法；未认证 presign 下载（`fs-download`）自然跳过；fail-open |
 
 - **总开关**：orchestrator `BATCH_RATE_LIMIT_ENABLED`（默认 true）、console `batch.console.security.rate-limit.enabled`（默认 true）。
 - **超额响应**：HTTP 429；orchestrator 走 `ResponseStatusException`，console 走标准 `CommonResponse`（`ResultCode.RATE_LIMITED`）。
-- **Redis 故障**：console 限流 fail-open（放行 + WARN，见 §1.1）；orchestrator 固定窗口计数同理不阻断业务。
-- **时钟回拨保护**：orchestrator `TokenBucketRateLimiter` 检测 ≥100ms 回拨即拒当次（防 stale 窗口叠加击穿）。
+- **Redis 故障**：console 限流 fail-open（放行 + WARN，见 §1.1）；orchestrator 分布式令牌桶同理不阻断业务，并以短路熔断避免慢 Redis 持续占用请求线程。
+- **时钟回拨保护**：Bucket4j 对不递增的时间不执行 refill；回拨只会暂时少补令牌（更严格），不会复活旧窗口或额外放行。
 
 ### 1.4 请求签名防重放（方案 A，opt-in，2026-06-24）
 
