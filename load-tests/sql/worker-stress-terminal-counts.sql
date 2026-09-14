@@ -3,7 +3,8 @@ SELECT count(*) || '|'
            WHERE instance_status IN (
                'SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED'
            )
-       )
+       ) || '|'
+       || count(*) FILTER (WHERE instance_status = 'SUCCESS')
 FROM batch.job_instance
 WHERE tenant_id = :'tenant_id'
   AND job_code = :'job_code'

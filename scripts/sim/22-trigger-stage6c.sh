@@ -47,7 +47,7 @@ restart_trigger_for_fixture() {
       cd '$ROOT'
       unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
       source scripts/lib/env-common.sh
-      batch_configure_local_jvm_database_env
+      batch_configure_local_jvm_runtime_env
       exec java --enable-native-access=ALL-UNNAMED \
         ${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off} \
         ${JAVA_OPTS:-} \

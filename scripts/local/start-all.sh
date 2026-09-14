@@ -36,7 +36,7 @@ fi
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 export COMPOSE_PROJECT_NAME
 unset REQUESTED_COMPOSE_PROJECT_NAME
-batch_configure_local_jvm_database_env
+batch_configure_local_jvm_runtime_env
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh

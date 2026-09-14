@@ -135,6 +135,18 @@ STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
   bash load-tests/scripts/run-worker-stress-tests.sh
 ```
 
+发布前严格复验使用：
+
+```bash
+cd ..
+STRICT=1 STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
+  bash load-tests/scripts/run-worker-stress-tests.sh
+```
+
+`STRICT=1` 会在任一 Gatling 场景、日志采集、终态等待失败或实例非全量 `SUCCESS` 时返回非零退出码；
+未显式设置 `MAX_ERROR_PCT` 时默认使用 `0.1`，避免 Gatling 将零失败的边界误判为失败。非严格模式
+仍会在报告中记录每个场景的 `PASS/FAIL` 和总结果，但保留零退出码供容量探索连续执行。
+
 `prepare-worker-load-data.sh` 生成的 IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户替换成唯一值，避免并发下重复文件名、重复 customerNo、重复 process batchKey 影响结论。
 
 `RUN_ID` 最长 53 个字符；夹具会追加最长的 `-SETTLEMENT` 后缀并写入 `varchar(64)`。所有造数入口会在写文件或数据库前校验，P2 容量画像还会校验追加 `-10w` 后的派生标识。

@@ -54,4 +54,20 @@ if psql -f "$SQL_FILE" -f "$SQL_FILE" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "✅ PostgreSQL client fallback guard passed"
+for compose_redis_host in redis valkey; do
+  export BATCH_REDIS_HOST="$compose_redis_host"
+  batch_configure_local_jvm_runtime_env
+  if [[ "$BATCH_REDIS_HOST" != "localhost" ]]; then
+    echo "Local JVM topology did not rewrite the Compose Redis service name: $compose_redis_host" >&2
+    exit 1
+  fi
+done
+
+export BATCH_REDIS_HOST=external-redis.example.test
+batch_configure_local_jvm_runtime_env
+if [[ "$BATCH_REDIS_HOST" != "external-redis.example.test" ]]; then
+  echo "Local JVM topology overwrote an explicit external Redis host" >&2
+  exit 1
+fi
+
+echo "✅ PostgreSQL client fallback and local JVM topology guard passed"

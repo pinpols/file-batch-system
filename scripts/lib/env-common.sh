@@ -253,6 +253,20 @@ batch_configure_local_jvm_database_env() {
   esac
 }
 
+batch_configure_local_jvm_redis_env() {
+  # `.env.local` 同时供 Compose 使用，其中 Redis 采用容器服务名；裸 JVM 必须改用宿主机地址。
+  case "${BATCH_REDIS_HOST:-}" in
+    ""|redis|valkey)
+      export BATCH_REDIS_HOST="localhost"
+      ;;
+  esac
+}
+
+batch_configure_local_jvm_runtime_env() {
+  batch_configure_local_jvm_database_env
+  batch_configure_local_jvm_redis_env
+}
+
 if [[ "${BATCH_ENV_COMMON_HELPERS_ONLY:-0}" != "1" ]]; then
   batch_load_default_env
 fi
