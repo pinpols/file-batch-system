@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **Worker report 排空预算**：严格 10 万同代码 A/B 证明 `TASK_REPORT` 30000/min 可消除合法峰值下的 429 重试并提高 5.57% 完成吞吐；默认 report 高水位升至 30000/min，claim 保持 12000/min，Bucket4j 配置版本同步递增至 2。
 - **容量画像配置签名**：P2 preflight 同时校验 Orchestrator 限流阈值/桶版本和 PostgreSQL checkpoint completion 参数；Compose 可显式注入 WAL/checkpoint 参数，普通本地与 Sim 默认值不变。
 - **10 万容量基线口径固化**：隔离 benchmark 的 Atomic task-control 默认恢复为单一 Service 入口，双 Orchestrator 直连保留为显式 HA 分流实验；报告记录实际端点拓扑。最新严格轮次 100000/100000 成功，完成吞吐 `152.168 tasks/s`，生产配置不受影响。
 - **控制面 REPORT 与压测基线收敛**：worker 回报入口合并 task/partition 点查，终态分区更新直接返回实例快照；移除无运行时查询命中的 Outbox payload GIN 索引，并将 benchmark Trigger admission/连接池恢复到已验证的 `32/40` 预算，降低数据库往返和写放大。

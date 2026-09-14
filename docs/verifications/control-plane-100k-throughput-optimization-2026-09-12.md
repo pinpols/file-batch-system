@@ -176,10 +176,10 @@
 | 清账本、单端点、限流实验 | 单端点 | 30000/min | 775.283s | 128.985/s | 26.893s / 41.855s | 429 清零但总吞吐下降，参数舍弃 |
 
 单端点 12000/min 轮次出现 2698 次 `TASK_REPORT` 429 重试，说明入口停止后的合法排空峰值超过
-200 reports/s。实验将隔离 benchmark 提高到 30000/min 后，尾部一度达到约 400 reports/s，10 万任务
-仍全部成功且没有 429；但更激进的 report 写入与 launch 在同一 PostgreSQL 上竞争，使 launch queue
-显著上升，最终吞吐反而比单端点 12000/min 低约 1.9%。因此没有合入该参数，也没有修改普通/生产
-默认的 12000/min 安全水位。
+200 reports/s。当时把容器环境提高到 30000/min 后，尾部一度达到约 400 reports/s，10 万任务仍全部
+成功且没有 429；但 launch queue 明显偏高，最终吞吐比单端点 12000/min 低约 1.9%。由于当时尚未给
+Bucket4j 持久桶增加配置版本，无法证明 Redis 中的实际桶已按容器声明替换，因此该轮只保留为历史
+负向证据。第 9 节已用版本化桶和相同代码完成受控 A/B，并据此更新最终默认值。
 
 这组证据还否定了“只要把 Worker HTTP 流量均摊到两台 Orchestrator 就会提高总吞吐”的假设。双端点
 确实接近 50/50 分流，但两台实例共享同一 PostgreSQL 和同键结果版本锁，总吞吐没有随 HTTP 入口扩展。
@@ -477,6 +477,39 @@ HA 分流实验，不删除该能力，也不将其结果与标准吞吐基线�
 - `load-tests/target/p2-capacity-profile-latest-main-single-endpoint-100k-final-r2-20260914.md`
 - `load-tests/target/control-plane-worker-report-latest-main-single-endpoint-100k-final-r2-20260914-10w.md`
 
+### 9. PostgreSQL checkpoint 与版本化 report 限流复验
+
+在相同应用 revision `ca24f9346`、相同单 Service task-control 拓扑和相同 `8GiB/15min` PostgreSQL
+候选参数下，使用 Bucket4j 单调配置版本分别运行 `TASK_REPORT=12000/min` 与 `30000/min` 的严格
+10 万 A/B。两轮均 100000/100000 SUCCESS、零入口失败、零非终态、Kafka lag 归零且容器零重启：
+
+| 当前代码轮次 | claim / report 限流 | 完成窗口 | 完成吞吐 | report 调用 | launch queue 平均 / p95 | WAL 增量 | 请求 checkpoint |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A：12k report | 12000 / 12000 | 760.701s | 131.458/s | 101535 | 8.686 / 19.908s | 3644840841 bytes | 0 |
+| B：30k report | 12000 / 30000 | 720.564s | 138.780/s | 100000 | 2.203 / 7.165s | 3802118428 bytes | 0 |
+
+B 相对 A 的完成吞吐提高 `5.57%`，并消除 `1535` 次 report 重试；WAL 增加 `4.31%`。batch claim
+约 `20100` 次、平均批大小 `4.97`，调用速率远低于 12000/min，因此没有证据支持同时提高 claim。
+本次只把 report 默认值提高到 30000/min，claim 保持 12000/min，并将桶配置版本提高到 2，确保已有
+Redis 桶原子换配置；滚动发布中的旧副本不能回写旧阈值。
+
+这组同代码 A/B 取代第 10 节旧的 30k 单轮实验作为限流参数裁定依据。旧实验没有版本化替换 Redis
+持久桶，且 launch queue 明显偏高，无法证明容器声明的 30k 已成为实际桶配置；保留其数据作为历史
+负向证据，但不再据此否决 30k。
+
+另用最新 main 比较 PostgreSQL `1GiB/5min` 与 `8GiB/15min`：候选参数将 WAL 从约 6.44GB 降到
+约 3.71GB，并把请求 checkpoint 从 11 次降为 0，但完成吞吐从 152.168/s 降到 143.551/s。该参数
+组合没有带来吞吐提升，且放大故障恢复时间和磁盘余量要求，因此不改普通或生产默认；Compose 注入项
+仅保留给后续独占环境 A/B。
+
+本节原始证据：
+
+- `load-tests/target/p2-capacity-profile-rl12k-100k-r1-0914.md`
+- `load-tests/target/control-plane-worker-report-rl12k-100k-r1-0914-10w.md`
+- `load-tests/target/p2-capacity-profile-rate-limit30k-pg-wal8g-ckpt15m-100k-r3-20260914.md`
+- `load-tests/target/control-plane-worker-report-rate-limit30k-pg-wal8g-ckpt15m-100k-r3-20260914-10w.md`
+- `load-tests/target/p2-capacity-profile-pg-wal8g-ckpt15m-100k-r1-20260914.md`
+
 ## 对比结果
 
 | 轮次 | 可信度 | HTTP 结果 | 端到端完成吞吐 | 结论 |
@@ -492,11 +525,13 @@ HA 分流实验，不删除该能力，也不将其结果与标准吞吐基线�
 | 10 万，旧 3 分区缓存状态 | 趋势参考 | 100000/100000 | 约 117/s | 拓扑证据无效，不作为最终验收 |
 | 10 万，最终严格轮次 | 有效 | 100000/100000，p95 67ms | 134.946/s | 全终态、零失败、零残留 |
 | 10 万，热路径优化、清账本、单端点 | 有效 | 100000/100000，零失败 | 131.468/s | 未超过最终严格基线，不宣称提升 |
-| 10 万，report 限流 30000/min | 负向实验 | 100000/100000，p95 128ms | 128.985/s | 429 清零但 PG 竞争上升，参数不保留 |
+| 10 万，report 限流 30000/min（旧未版本化桶） | 历史负向实验 | 100000/100000，p95 128ms | 128.985/s | Redis 持久桶配置与 launch queue 均未受控，不再用于参数裁定 |
 | 10 万，100 个业务键、双端点 | 有效负向实验 | 100000/100000，p95 135ms | 119.898/s | 锁分散后仍退化，主瓶颈转为 PG 提交/WAL 竞争 |
 | 10 万，最新 main、双端点 | 有效 HA 实验 | 100000/100000，p95 129ms | 96.494/s | 拓扑不同，不与单 Service 基线比较 |
 | 10 万，最新 main、单端点首轮 | 无效负向实验 | 99967/100000，33 个 429 | 152.611/s | 未满足零错误门槛，清理死元组后复跑 |
 | 10 万，最新 main、单 Service 最终轮次 | **有效当前基线** | 100000/100000，p95 90ms | **152.168/s** | 全终态、零失败、零残留，较旧基线提升 12.8% |
+| 10 万，当前代码、PG 8GiB/15min、report 12000/min | 有效同代码 A/B | 100000/100000，零失败 | 131.458/s | 101535 次 report 调用，存在合法排空重试 |
+| 10 万，当前代码、PG 8GiB/15min、report 30000/min | **有效同代码 A/B** | 100000/100000，零失败 | **138.780/s** | 比同代码 12k 提升 5.57%，report 调用降为精确 100000 |
 
 旧 3 分区 10 万轮次仍只作为趋势参考，不进入容量基线。与 2026-09-12 的严格 12/12 分区基线相比，
 2026-09-14 当前轮次完成吞吐提高 12.8%，完成窗口缩短 11.3%。
@@ -513,8 +548,8 @@ HA 分流实验，不删除该能力，也不将其结果与标准吞吐基线�
 4. Kubernetes Service 可在连接层分发请求，但长连接复用可能产生粘连。上线前仍应在真实 Service、多个
    Worker 实例下验证分布，不根据本地应用层轮转结果推断生产网络行为。
 5. Orchestrator 已有 report-batch API，但当前仍逐项开启独立事务；Worker 执行包装器也会在单任务完成时
-   立即 report。直接接入需要重构 lease、invocation fence、report outbox、部分失败回退和终态时序。
-   本轮放宽 report 限流没有提高总吞吐，现有证据不支持承担该改造风险。
+   立即 report。只提高 report 限流已在同代码 A/B 中消除重试并提高 5.57%，但这不证明 report-batch
+   值得接入；后者仍需重构 lease、invocation fence、report outbox、部分失败回退和终态时序。
 6. Launch 的 T1/T2 独立提交承载崩溃恢复与 Outbox 原子性。把两段简单合并为一个长事务会扩大锁持有时间，
    并破坏 T1 已提交、T2 可恢复的故障语义，不作为性能优化方案。
 7. 当前 152.168/s 是本机 Atomic SQL 场景的 10 万完成吞吐，不代表 Import/Export/Process 或真实外部 HTTP、
@@ -522,8 +557,9 @@ HA 分流实验，不删除该能力，也不将其结果与标准吞吐基线�
 
 ## 后续建议
 
-SQL 画像、两项低风险主键回查优化和最新严格 10 万复验已经完成。当前没有证据支持继续提高 Trigger
-admission，也不支持把认领/回报前剩余的 task 读取强行并入复杂跨表 UPDATE。无需在相同本机容量等级
+SQL 画像、两项低风险主键回查优化、版本化 report 限流 A/B 和最新严格 10 万复验已经完成。report
+高水位采用 30000/min，claim 仍为 12000/min；当前没有证据支持继续提高 Trigger admission 或 claim，
+也不支持把认领/回报前剩余的 task 读取强行并入复杂跨表 UPDATE。无需在相同本机容量等级
 立即重复 10 万；下一次容量推进应在独占 runner 上增加 Worker 实例或改变 PostgreSQL 资源等级，并建立
 新的环境签名和基线。主机预检超过可比门槛时只做故障与稳定性取证，不生成可比较的吞吐结论。
 

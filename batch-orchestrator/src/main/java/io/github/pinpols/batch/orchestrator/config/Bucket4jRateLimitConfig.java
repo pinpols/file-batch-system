@@ -33,10 +33,11 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
  * lastRefillTime）：单机回拨最多导致少补令牌 = 更严限流（安全方向），永远不会像旧固定窗口那样复活老窗口 key 叠加计数击穿配额。
  *
  * <p><b>请求超时</b>：给 proxy manager 配 {@code requestTimeout}，避免 Redis 故障时命令阻塞到 Lettuce
- * 默认命令超时（~60s）——热路径 claim/report（12000/min）会大量线程阻塞削弱 fail-open。设 500ms：既显著大于健康时限流判定的 Redis
+ * 默认命令超时（~60s）——热路径 claim/report（claim 12000/min、report 30000/min）会大量线程阻塞削弱 fail-open。设
+ * 500ms：既显著大于健康时限流判定的 Redis
  * RTT（sub-ms，足够区分健康/故障），又足够小以防线程饥饿。为何不是 2s：Redis 慢故障（TCP 接受不响应）时每次 tryConsume 阻塞至多 requestTimeout 才
- * fail-open；claim+report 合计约 200 req/s、Tomcat 默认 200 线程，若每请求平均持有 2s → 需求并发 400 超过池容量 200 →
- * orchestrator 所有 HTTP 端点因线程池耗尽不可用，fail-open 的善意被线程饥饿反噬。降到 500ms 把最坏并发压回约 100，小于池容量。
+ * fail-open；claim/report 的配置高水位合计可达 700 req/s，2s 等待足以耗尽 Tomcat 线程池。500ms 先把单次阻塞缩短四分之三，连续失败短路再把
+ * 后续调用降到近零等待，避免 fail-open 的善意被线程饥饿反噬。
  *
  * <p><b>过期策略</b>：{@code basedOnTimeForRefillingBucketUpToMax(1min)}——空闲桶在“回满到容量所需时间”后过期， 既回收闲置
  * key，又让阈值配置变更在桶过期后自然生效。

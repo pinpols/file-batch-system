@@ -38,7 +38,7 @@
 | 层 | 内容 | 状态 | PR |
 |---|---|---|---|
 | **P0.1** | orchestrator 限流默认开启：launch/release 3000、register 300 /min（高水位） | ✅ 已合 main | #708 |
-| **P0.2** | claim/report 热路径按租户限流（12000/min），新增 `TASK_CLAIM`/`TASK_REPORT` | ✅ 已合 main | #708 |
+| **P0.2** | claim/report 热路径按租户限流（claim 12000/min、report 30000/min），新增 `TASK_CLAIM`/`TASK_REPORT` | ✅ 已落地并经严格 10 万 A/B 复验 | #708 |
 | **P0.3** | console 昂贵接口（导出/导入/Excel/报表）端点级限流，按用户 10/min | ✅ 已合 main | #708 |
 | **P1.4** | 后端 HMAC 验签 + ts + nonce 防重放（opt-in）+ Java SDK 签名跑通契约 | ✅ PR | #709 |
 | **P1.4'** | 其余 4 语言 SDK（Go/TS/Python/Rust）签名照契约铺 | 规划 | — |
@@ -51,7 +51,7 @@
 
 ### 3.1 claim/report 按"租户"聚合限流，而非按 worker
 
-`workerId` 是请求体里**可伪造的字符串**——被盗 api_key 可随意编造 workerId，按 worker 限流会被轮换 workerId 绕过。`tenantId` 由 `InternalAuthFilter` 绑定在 api_key 上、逃不掉，故按租户聚合。阈值 12000/min（=200/s）设在控制面合法峰值之上（单机 ~20 jobs/s、PG 有 10-15× 余量），只拦 runaway，可经 env 下调。批量端点（claim-batch/report-batch）按 HTTP 调用计 1。
+`workerId` 是请求体里**可伪造的字符串**——被盗 api_key 可随意编造 workerId，按 worker 限流会被轮换 workerId 绕过。`tenantId` 由 `InternalAuthFilter` 绑定在 api_key 上、逃不掉，故按租户聚合。claim 保持 12000/min（=200/s）；report 为 30000/min（=500/s），覆盖严格 10 万任务排空阶段约 400 reports/s 的合法峰值。当前代码同环境 A/B 中，report 30000/min 相比 12000/min 消除了 1535 次重试并使完成吞吐提高 5.57%；claim 调用峰值远低于 12000/min，因此不随 report 一起放大。两项都只拦 runaway，可经 env 下调；批量端点（claim-batch/report-batch）按 HTTP 调用计 1。
 
 ### 3.2 请求签名采用"方案 A：以 api_key 为 HMAC 密钥"
 

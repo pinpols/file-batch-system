@@ -17,3 +17,20 @@ export MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
 export PIPELINE_POLL_INTERVAL_SEC="${PIPELINE_POLL_INTERVAL_SEC:-2}"
 export SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 export CONSOLE_ACCESS_TOKEN="${CONSOLE_ACCESS_TOKEN:-load-test-token}"
+
+# worker 夹具会给 RUN_ID 追加最长的 "-SETTLEMENT" 后缀并写入 varchar(64)。在产生文件或写库前
+# 统一校验，避免长时间容量画像最终才以数据库长度错误失败。
+LOAD_TEST_RUN_ID_MAX_LENGTH=53
+
+validate_load_test_run_id() {
+  local run_id="${1:-}"
+  local label="${2:-RUN_ID}"
+  if [[ -z "$run_id" ]]; then
+    echo "$label must not be empty" >&2
+    return 2
+  fi
+  if (( ${#run_id} > LOAD_TEST_RUN_ID_MAX_LENGTH )); then
+    echo "$label is too long: ${#run_id} characters; maximum is ${LOAD_TEST_RUN_ID_MAX_LENGTH} because load-test fixtures append -SETTLEMENT into varchar(64)" >&2
+    return 2
+  fi
+}

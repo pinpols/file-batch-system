@@ -137,6 +137,8 @@ STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
 
 `prepare-worker-load-data.sh` 生成的 IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户替换成唯一值，避免并发下重复文件名、重复 customerNo、重复 process batchKey 影响结论。
 
+`RUN_ID` 最长 53 个字符；夹具会追加最长的 `-SETTLEMENT` 后缀并写入 `varchar(64)`。所有造数入口会在写文件或数据库前校验，P2 容量画像还会校验追加 `-10w` 后的派生标识。
+
 ### Process / Dispatch / Atomic / Trigger 控制面压测
 
 导入/导出收敛后，其他 worker 默认用独立脚本跑，避免每轮夹带 IMPORT/EXPORT：

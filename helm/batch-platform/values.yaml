@@ -410,12 +410,12 @@ orchestrator:
   rateLimit:
     enabled: true
     # 修改任一限流阈值时必须单调递增；Bucket4j 据此原地更新 Redis 中的已有桶。
-    bucketConfigurationVersion: 1
+    bucketConfigurationVersion: 2
     maxNewPerTenantPerMinute: 3000
     maxRegisterPerTenantPerMinute: 300
     maxReleasePerTenantPerMinute: 3000
     maxClaimPerTenantPerMinute: 12000
-    maxReportPerTenantPerMinute: 12000
+    maxReportPerTenantPerMinute: 30000
   requestSigning:
     enabled: false
 

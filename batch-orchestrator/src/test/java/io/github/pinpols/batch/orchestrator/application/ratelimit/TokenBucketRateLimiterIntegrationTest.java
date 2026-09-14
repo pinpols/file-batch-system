@@ -34,7 +34,11 @@ import org.springframework.context.annotation.Import;
 @SpringBootTest(
     classes = TokenBucketRateLimiterIntegrationTest.TestApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {"batch.startup-self-check.enabled=false"})
+    properties = {
+      "batch.startup-self-check.enabled=false",
+      // 显式固定旧副本版本；发布默认值递增时仍需验证 v1 -> v2 升级，而不是让夹具随默认值漂移。
+      "batch.rate-limit.bucket-configuration-version=1"
+    })
 class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
