@@ -249,14 +249,13 @@ workerAtomic:
     failureThreshold: 18
 
 # JVM 参数:沿用 values.yaml 全模块基础(含 OOM 留证据 / GC log / JFR 持续录制 /
-# UTF-8 时区硬约束),overlay 仅加 prod profile;per-service 调优在 values.yaml 各
-# service.javaOptsExtra(orchestrator ZGC / worker direct 1G 等)。
+# UTF-8 时区硬约束),overlay 仅加 prod profile。公共参数不选择 GC，普通服务在
+# service.javaOptsExtra 中显式选择 G1；Orchestrator 显式选择 ZGC。
 # 完整说明见 docs/runbook/jvm-tuning-and-profiling.md。
 javaOpts: >-
   -XX:+UseContainerSupport
   -XX:MaxRAMPercentage=75.0
   -XX:InitialRAMPercentage=50.0
-  -XX:+UseG1GC
   -XX:MaxDirectMemorySize=512m
   -XX:NativeMemoryTracking=summary
   -XX:MaxMetaspaceSize=256m

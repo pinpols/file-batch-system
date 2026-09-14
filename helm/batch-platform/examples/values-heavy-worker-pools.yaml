@@ -11,7 +11,7 @@ workerResourcePools:
     replicaCount: 2
     maxConcurrentTasks: 2
     executionPoolSize: 4
-    javaOptsExtra: "-XX:MaxDirectMemorySize=2g"
+    javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=2g"
     nodeSelector:
       batch.example.com/node-profile: memory
     tolerations:

@@ -60,7 +60,7 @@ workerResourcePools:
     replicaCount: 3
     maxConcurrentTasks: 2
     executionPoolSize: 4
-    javaOptsExtra: "-XX:MaxDirectMemorySize=2g"
+    javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=2g"
     resources:
       requests: {cpu: "1000m", memory: "2Gi"}
       limits: {cpu: "4000m", memory: "6Gi"}
