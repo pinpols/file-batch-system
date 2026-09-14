@@ -66,6 +66,7 @@ CAPACITY_EXPECT_SYNCHRONOUS_COMMIT="${CAPACITY_EXPECT_SYNCHRONOUS_COMMIT:-on}"
 CAPACITY_EXPECT_WAL_COMPRESSION="${CAPACITY_EXPECT_WAL_COMPRESSION:-off}"
 CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES="${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES:-1073741824}"
 CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS="${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS:-300}"
+CAPACITY_EXPECT_CHECKPOINT_COMPLETION_TARGET="${CAPACITY_EXPECT_CHECKPOINT_COMPLETION_TARGET:-0.9}"
 CAPACITY_MAX_HOST_LOAD_PER_CPU="${CAPACITY_MAX_HOST_LOAD_PER_CPU:-2.5}"
 # 8 核历史基线要求 load1 <= 6；执行门槛放宽到 load1 <= 20 只用于允许稳定性/过载画像继续取证，
 # 不会放宽历史对比资格。只有低于本门槛的轮次才具备与标准基线直接比较性能增减的资格。
@@ -107,6 +108,10 @@ CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
 # 被测 Trigger 的 Relay 发布上限。默认对齐隔离 benchmark 的 400/s；A/B 轮次必须显式声明，
 # 避免容器未按实验参数重启却仍生成错误容量结论。
 CAPACITY_EXPECT_TRIGGER_RELAY_RATE="${CAPACITY_EXPECT_TRIGGER_RELAY_RATE:-400}"
+# Bucket4j 会持久化桶配置；容量画像必须核对阈值和配置版本，避免容器环境已改但 Redis 仍沿用旧桶。
+CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION="${CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION:-1}"
+CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE="${CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE:-12000}"
+CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE="${CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE:-12000}"
 # 设为 1 时，preflight 额外确认 Trigger 已启用 lag 自适应释放且相关指标可采集。
 # 默认 0 保持既有固定 Relay 容量画像不变。
 CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE="${CAPACITY_EXPECT_TRIGGER_ADAPTIVE_RELEASE:-0}"
@@ -332,10 +337,11 @@ require_capacity_docker_environment() {
 
 require_capacity_environment_alignment() {
   local state statement_track track_io_timing synchronous_commit wal_compression
-  local max_wal_size_bytes checkpoint_timeout_seconds cpu_count load_one_minute sample
+  local max_wal_size_bytes checkpoint_timeout_seconds checkpoint_completion_target
+  local cpu_count load_one_minute sample
   state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/verify-pg-capacity-environment.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
-    max_wal_size_bytes checkpoint_timeout_seconds <<< "$state"
+    max_wal_size_bytes checkpoint_timeout_seconds checkpoint_completion_target <<< "$state"
   if [[ "$statement_track" == "unavailable" && "$CAPACITY_EXPECT_PG_STATEMENTS_TRACK" == "none" ]]; then
     statement_track="none"
   fi
@@ -344,7 +350,8 @@ require_capacity_environment_alignment() {
       || "$synchronous_commit" != "$CAPACITY_EXPECT_SYNCHRONOUS_COMMIT" \
       || "$wal_compression" != "$CAPACITY_EXPECT_WAL_COMPRESSION" \
       || "$max_wal_size_bytes" != "$CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES" \
-      || "$checkpoint_timeout_seconds" != "$CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS" ]]; then
+      || "$checkpoint_timeout_seconds" != "$CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS" \
+      || "$checkpoint_completion_target" != "$CAPACITY_EXPECT_CHECKPOINT_COMPLETION_TARGET" ]]; then
     echo "Capacity environment does not match the declared benchmark baseline:" >&2
     echo "  pg_stat_statements.track: expected=${CAPACITY_EXPECT_PG_STATEMENTS_TRACK}, actual=${statement_track}" >&2
     echo "  track_io_timing: expected=${CAPACITY_EXPECT_TRACK_IO_TIMING}, actual=${track_io_timing}" >&2
@@ -352,6 +359,7 @@ require_capacity_environment_alignment() {
     echo "  wal_compression: expected=${CAPACITY_EXPECT_WAL_COMPRESSION}, actual=${wal_compression}" >&2
     echo "  max_wal_size_bytes: expected=${CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES}, actual=${max_wal_size_bytes}" >&2
     echo "  checkpoint_timeout_seconds: expected=${CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS}, actual=${checkpoint_timeout_seconds}" >&2
+    echo "  checkpoint_completion_target: expected=${CAPACITY_EXPECT_CHECKPOINT_COMPLETION_TARGET}, actual=${checkpoint_completion_target}" >&2
     echo "  Change the benchmark profile explicitly and reconnect application pools; do not compare mixed environments." >&2
     exit 2
   fi
@@ -627,6 +635,8 @@ require_trigger_capacity_budget() {
   local orchestrator_configured replica_configured
   local consumer pool_max replica_consumer replica_pool_max atomic_configured
   local waiting_batch waiting_interval replica_waiting_batch replica_waiting_interval
+  local rate_limit_version claim_rate_limit report_rate_limit
+  local replica_rate_limit_version replica_claim_rate_limit replica_report_rate_limit
   local atomic_concurrency atomic_max_poll_records atomic_batch_claim atomic_batch_claim_expected
   local atomic_max_concurrent atomic_task_client_base_urls
   local atomic_execution_pool atomic_topic_partitions trigger_topic_partitions
@@ -649,6 +659,12 @@ require_trigger_capacity_budget() {
   waiting_interval="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS=//p' | tail -1)"
   replica_waiting_batch="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE=//p' | tail -1)"
   replica_waiting_interval="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS=//p' | tail -1)"
+  rate_limit_version="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_RATE_LIMIT_BUCKET_CONFIGURATION_VERSION=//p' | tail -1)"
+  claim_rate_limit="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_RATE_LIMIT_MAX_CLAIM_REQUESTS_PER_TENANT_PER_MINUTE=//p' | tail -1)"
+  report_rate_limit="$(printf '%s\n' "$orchestrator_configured" | sed -n 's/^BATCH_RATE_LIMIT_MAX_REPORT_REQUESTS_PER_TENANT_PER_MINUTE=//p' | tail -1)"
+  replica_rate_limit_version="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RATE_LIMIT_BUCKET_CONFIGURATION_VERSION=//p' | tail -1)"
+  replica_claim_rate_limit="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RATE_LIMIT_MAX_CLAIM_REQUESTS_PER_TENANT_PER_MINUTE=//p' | tail -1)"
+  replica_report_rate_limit="$(printf '%s\n' "$replica_configured" | sed -n 's/^BATCH_RATE_LIMIT_MAX_REPORT_REQUESTS_PER_TENANT_PER_MINUTE=//p' | tail -1)"
   atomic_concurrency="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_KAFKA_CONCURRENCY=//p' | tail -1)"
   atomic_max_poll_records="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_KAFKA_MAX_POLL_RECORDS=//p' | tail -1)"
   atomic_batch_claim="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_BATCH_CLAIM_ENABLED=//p' | tail -1)"
@@ -692,6 +708,12 @@ require_trigger_capacity_budget() {
       || "$waiting_interval" != "$CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS" \
       || "$replica_waiting_batch" != "$CAPACITY_WAITING_DISPATCH_BATCH_SIZE" \
       || "$replica_waiting_interval" != "$CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS" \
+      || "$rate_limit_version" != "$CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION" \
+      || "$claim_rate_limit" != "$CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE" \
+      || "$report_rate_limit" != "$CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE" \
+      || "$replica_rate_limit_version" != "$CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION" \
+      || "$replica_claim_rate_limit" != "$CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE" \
+      || "$replica_report_rate_limit" != "$CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE" \
       || "$atomic_concurrency" != "$CAPACITY_ATOMIC_CONCURRENCY" \
       || "$atomic_max_poll_records" != "$CAPACITY_ATOMIC_MAX_POLL_RECORDS" \
       || "$atomic_batch_claim" != "$atomic_batch_claim_expected" \
@@ -703,8 +725,8 @@ require_trigger_capacity_budget() {
       || "$atomic_registered_max_concurrent" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
       || "$atomic_health" != "healthy" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
-    echo "  required: profiles include benchmark, admission=${CAPACITY_TRIGGER_API_MAX_CONCURRENCY}, pool=${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE}, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, launch partitions=${CAPACITY_TRIGGER_LAUNCH_PARTITIONS}, two orchestrators each consumers=6/db pool=50/waiting=${CAPACITY_WAITING_DISPATCH_BATCH_SIZE}@${CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS}ms, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/max-poll=${CAPACITY_ATOMIC_MAX_POLL_RECORDS}/batch-claim=${atomic_batch_claim_expected}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}/task-client=${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS}" >&2
-    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing} launch partitions=${trigger_topic_partitions:-missing}, primary consumers=${consumer:-missing}/pool=${pool_max:-missing}/waiting=${waiting_batch:-missing}@${waiting_interval:-missing}ms replica consumers=${replica_consumer:-missing}/pool=${replica_pool_max:-missing}/waiting=${replica_waiting_batch:-missing}@${replica_waiting_interval:-missing}ms atomic health=${atomic_health:-missing}/consumers=${atomic_concurrency:-missing}/max-poll=${atomic_max_poll_records:-missing}/batch-claim=${atomic_batch_claim:-false}/permits=${atomic_max_concurrent:-missing}/registered-capacity=${atomic_registered_max_concurrent:-missing}/pool=${atomic_execution_pool:-missing}/partitions=${atomic_topic_partitions:-missing}/task-client=${atomic_task_client_base_urls:-missing}" >&2
+    echo "  required: profiles include benchmark, admission=${CAPACITY_TRIGGER_API_MAX_CONCURRENCY}, pool=${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE}, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, launch partitions=${CAPACITY_TRIGGER_LAUNCH_PARTITIONS}, two orchestrators each consumers=6/db pool=50/waiting=${CAPACITY_WAITING_DISPATCH_BATCH_SIZE}@${CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS}ms/rate-limit-v${CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION}/claim=${CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE}/report=${CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE}, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/max-poll=${CAPACITY_ATOMIC_MAX_POLL_RECORDS}/batch-claim=${atomic_batch_claim_expected}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}/task-client=${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS}" >&2
+    echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing} launch partitions=${trigger_topic_partitions:-missing}, primary consumers=${consumer:-missing}/pool=${pool_max:-missing}/waiting=${waiting_batch:-missing}@${waiting_interval:-missing}ms/rate-limit-v${rate_limit_version:-missing}/claim=${claim_rate_limit:-missing}/report=${report_rate_limit:-missing} replica consumers=${replica_consumer:-missing}/pool=${replica_pool_max:-missing}/waiting=${replica_waiting_batch:-missing}@${replica_waiting_interval:-missing}ms/rate-limit-v${replica_rate_limit_version:-missing}/claim=${replica_claim_rate_limit:-missing}/report=${replica_report_rate_limit:-missing} atomic health=${atomic_health:-missing}/consumers=${atomic_concurrency:-missing}/max-poll=${atomic_max_poll_records:-missing}/batch-claim=${atomic_batch_claim:-false}/permits=${atomic_max_concurrent:-missing}/registered-capacity=${atomic_registered_max_concurrent:-missing}/pool=${atomic_execution_pool:-missing}/partitions=${atomic_topic_partitions:-missing}/task-client=${atomic_task_client_base_urls:-missing}" >&2
     echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger orchestrator orchestrator-benchmark-replica worker-atomic" >&2
     exit 2
   fi
@@ -895,11 +917,12 @@ evict_capacity_config_cache() {
 
 write_report_header() {
   local database_observability_state statement_track track_io_timing synchronous_commit
-  local wal_compression max_wal_size checkpoint_timeout cpu_count host_load git_revision
+  local wal_compression max_wal_size checkpoint_timeout checkpoint_completion_target
+  local cpu_count host_load git_revision
   local container container_revision
   database_observability_state="$(psql_platform -tA -F '|' -f "$LOAD_DIR/sql/capture-pg-capacity-settings.sql")"
   IFS='|' read -r statement_track track_io_timing synchronous_commit wal_compression \
-    max_wal_size checkpoint_timeout <<< "$database_observability_state"
+    max_wal_size checkpoint_timeout checkpoint_completion_target <<< "$database_observability_state"
   cpu_count="$(host_cpu_count)"
   host_load="$(uptime 2>/dev/null | sed 's/^[[:space:]]*//' || echo unavailable)"
   git_revision="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo unavailable)"
@@ -917,7 +940,8 @@ write_report_header() {
     echo "- PostgreSQL pressure sample interval: ${PG_SAMPLE_INTERVAL_SECONDS}s"
     echo "- PostgreSQL statement report: $([[ "$CAPACITY_PG_STATEMENTS_PROFILE_ENABLED" == "1" ]] && echo enabled || echo disabled)"
     echo "- PostgreSQL runtime tracking: pg_stat_statements.track=${statement_track}, track_io_timing=${track_io_timing}"
-    echo "- PostgreSQL durability/WAL: synchronous_commit=${synchronous_commit}, wal_compression=${wal_compression}, max_wal_size=${max_wal_size}, checkpoint_timeout=${checkpoint_timeout}"
+    echo "- PostgreSQL durability/WAL: synchronous_commit=${synchronous_commit}, wal_compression=${wal_compression}, max_wal_size=${max_wal_size}, checkpoint_timeout=${checkpoint_timeout}, checkpoint_completion_target=${checkpoint_completion_target}"
+    echo "- Orchestrator rate-limit contract: configuration-version=${CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION}, claim=${CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE}/min, report=${CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE}/min"
     echo "- Git revision: ${git_revision}"
     echo "- Expected application image revision: ${CAPACITY_EXPECT_APP_IMAGE_REVISION}"
     echo "- Atomic task-control endpoints: ${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS}"

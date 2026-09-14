@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **容量画像配置签名**：P2 preflight 同时校验 Orchestrator 限流阈值/桶版本和 PostgreSQL checkpoint completion 参数；Compose 可显式注入 WAL/checkpoint 参数，普通本地与 Sim 默认值不变。
 - **10 万容量基线口径固化**：隔离 benchmark 的 Atomic task-control 默认恢复为单一 Service 入口，双 Orchestrator 直连保留为显式 HA 分流实验；报告记录实际端点拓扑。最新严格轮次 100000/100000 成功，完成吞吐 `152.168 tasks/s`，生产配置不受影响。
 - **控制面 REPORT 与压测基线收敛**：worker 回报入口合并 task/partition 点查，终态分区更新直接返回实例快照；移除无运行时查询命中的 Outbox payload GIN 索引，并将 benchmark Trigger admission/连接池恢复到已验证的 `32/40` 预算，降低数据库往返和写放大。
 - **Console 热列表查询性能**：文件记录、操作审计、AI 审计等高频列表支持游标分页，收窄查询投影并补充精确 trace、模糊文件名、JSONB 到达组及游标排序索引；压测数据清理改用结构化运行标识过滤。
@@ -40,6 +41,7 @@
 
 ### Fixed
 
+- 修复 Bucket4j 已持久化令牌桶不会随环境阈值更新的问题；限流配置现使用单调版本原子升级，按比例继承剩余令牌，并阻止滚动发布中的旧副本回写旧配置。
 - 修复同一实例的并发 Worker 回报先锁 task、后等待实例 advisory lock，导致终态收敛与 partition reclaim 交错时形成 PostgreSQL `40P01` 锁环的问题；状态写入现统一遵循 `instance lock -> task -> partition` 顺序，并强化真 PG 并发回归守护。
 - 修复关闭 `MANAGEMENT_OPENTELEMETRY_ENABLED` 后 Micrometer OTLP metrics 仍后台连接 Collector 的配置漂移；metrics、traces、logs exporter 现统一跟随总开关，未部署观测栈的本地与容量环境不再产生重试噪音。
 - 修复 P2 容量 fixture 隐式依赖演示 seed、缺少源定义时仍继续发压的问题；fixture 现自包含创建 Atomic 作业并在发压前核验，同时避免不同 worktree 的应用定向启动误重建 PostgreSQL 容器，并拒绝非被测 Worker 污染 Atomic 容量基线；异常轮次统一清理入口按引用顺序回收控制面数据和专用租户孤儿记录。

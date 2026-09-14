@@ -42,6 +42,7 @@ class RateLimitPropertiesYamlBindingTest {
     RateLimitProperties props = bindFromApplicationYaml();
 
     assertThat(props.isEnabled()).as("yml 默认应开启限流").isTrue();
+    assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本").isEqualTo(1L);
     assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值").isEqualTo(3000L);
     assertThat(props.getMaxReleaseRequestsPerTenantPerMinute()).as("release 阈值").isEqualTo(3000L);
     assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())

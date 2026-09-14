@@ -20,6 +20,7 @@ class RateLimitPropertiesTest {
     RateLimitProperties props = new RateLimitProperties();
 
     assertThat(props.isEnabled()).as("限流默认应开启").isTrue();
+    assertThat(props.getBucketConfigurationVersion()).as("令牌桶配置版本应为正").isPositive();
     assertThat(props.getMaxNewRequestsPerTenantPerMinute()).as("launch 阈值应为正").isGreaterThan(0L);
     assertThat(props.getMaxRegisterRequestsPerTenantPerMinute())
         .as("worker register 阈值应为正")

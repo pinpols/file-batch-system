@@ -3,9 +3,12 @@ package io.github.pinpols.batch.orchestrator.application.ratelimit;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.TimeoutException;
+import io.github.bucket4j.TokensInheritanceStrategy;
+import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.lettuce.core.RedisException;
 import io.micrometer.core.instrument.Counter;
@@ -27,6 +30,9 @@ import org.springframework.stereotype.Component;
  * <p><b>相较旧固定窗口的改进</b>：旧实现按 {@code floor(now/60s)} 分窗独立计数，相邻窗口边界可短暂放行 2× 配额（突发缺陷）。令牌桶的瞬时突发上限就是桶容量 =
  * {@code maxPerMinute}（< 旧的 2×），且 greedy 补充令令牌 平滑回填而非整分钟一次性投放，从而消除窗口边界翻倍突发。稳态速率仍为 {@code
  * maxPerMinute}/min。
+ *
+ * <p><b>配置变更</b>：Bucket4j 会把桶配置和令牌状态一起持久化，单纯重启应用不会更新已有桶。本实现启用 Bucket4j 的隐式配置替换；当 {@code
+ * bucket-configuration-version} 增大时，Redis 中已有桶会在下一次消费时原子更新，并按比例继承剩余令牌。这样无需删除 Redis key，滚动发布中的旧副本也不能覆盖新配置。
  *
  * <p><b>时钟回拨</b>：不再需要旧的自研 CAS 回拨保护。bucket4j 分布式 CAS proxy manager 的 refill 时间源其实是<b>客户端墙钟</b>
  * （{@code TimeMeter.SYSTEM_MILLISECONDS}，Lua 不调 Redis TIME），但移除保护仍安全：{@code BucketState} 的 refill
@@ -61,6 +67,7 @@ public class TokenBucketRateLimiter {
   private final LettuceBasedProxyManager<String> proxyManager;
   private final MeterRegistry meterRegistry;
   private final RedisRateLimitCircuitBreaker circuitBreaker;
+  private final RateLimitProperties properties;
 
   // 按 maxPerMinute 缓存 BucketConfiguration supplier，避免每次 tryConsume 都新建（阈值集合很小，见
   // RateLimitProperties）。
@@ -70,10 +77,12 @@ public class TokenBucketRateLimiter {
   public TokenBucketRateLimiter(
       LettuceBasedProxyManager<String> proxyManager,
       MeterRegistry meterRegistry,
-      RedisRateLimitCircuitBreaker circuitBreaker) {
+      RedisRateLimitCircuitBreaker circuitBreaker,
+      RateLimitProperties properties) {
     this.proxyManager = proxyManager;
     this.meterRegistry = meterRegistry;
     this.circuitBreaker = circuitBreaker;
+    this.properties = properties;
   }
 
   public boolean tryConsume(String tenantId, String action, long maxPerMinute) {
@@ -86,8 +95,7 @@ public class TokenBucketRateLimiter {
     String key = BatchRedisKeys.rateLimitBucket(tenantId, action);
     try {
       // 经短路熔断执行：CLOSED/HALF_OPEN 时正常发 Redis 命令；OPEN 时不发命令、抛 CallNotPermittedException 短路 fail-open。
-      return circuitBreaker.call(
-          () -> proxyManager.getProxy(key, configSupplierFor(maxPerMinute)).tryConsume(1));
+      return circuitBreaker.call(() -> bucketFor(key, maxPerMinute).tryConsume(1));
     } catch (CallNotPermittedException ex) {
       // 短路 OPEN：连续超时已判定 Redis 不健康，直接 fail-open 放行，未发 Redis 命令 → 省掉 requestTimeout(500ms) 阻塞。
       // 方向与下面的 catch 一致（放行），但这条路径下热路径线程不再被慢故障 Redis 拖住，避免 Tomcat 线程池耗尽。
@@ -118,6 +126,14 @@ public class TokenBucketRateLimiter {
 
   private Counter failOpenCounter(String reason) {
     return Counter.builder(METRIC_FAILOPEN).tags(Tags.of("reason", reason)).register(meterRegistry);
+  }
+
+  private BucketProxy bucketFor(String key, long maxPerMinute) {
+    return proxyManager
+        .builder()
+        .withImplicitConfigurationReplacement(
+            properties.getBucketConfigurationVersion(), TokensInheritanceStrategy.PROPORTIONALLY)
+        .build(key, configSupplierFor(maxPerMinute));
   }
 
   private Supplier<BucketConfiguration> configSupplierFor(long maxPerMinute) {

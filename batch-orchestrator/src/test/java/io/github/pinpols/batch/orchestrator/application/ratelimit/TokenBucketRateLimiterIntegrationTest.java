@@ -28,8 +28,8 @@ import org.springframework.context.annotation.Import;
 /**
  * 令牌桶限流器集成测试：用真实 Redis 容器验证 Bucket4j 分布式令牌桶语义。
  *
- * <p>覆盖：桶耗尽→拒绝、per-(tenant,action) 隔离、多“副本”共享同一 Redis 桶（配额跨副本聚合）、 greedy refill
- * 随时间恢复令牌、maxPerMinute<=0 放行。
+ * <p>覆盖：桶耗尽→拒绝、per-(tenant,action) 隔离、多“副本”共享同一 Redis 桶（配额跨副本聚合）、配置版本升级时按比例继承令牌且旧副本不能回写、greedy
+ * refill 随时间恢复令牌、maxPerMinute<=0 放行。
  */
 @SpringBootTest(
     classes = TokenBucketRateLimiterIntegrationTest.TestApplication.class,
@@ -105,7 +105,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
       TokenBucketRateLimiter replicaTwo = new TokenBucketRateLimiter(
           secondProxyManager,
           replicaMeterRegistry,
-          RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry));
+          RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
+          new RateLimitProperties());
 
       // 副本1 消费 2 个
       assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isTrue();
@@ -116,6 +117,41 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
       // 两副本合计已达 capacity=4 → 任一副本再取都被拒
       assertThat(replicaTwo.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
       assertThat(limiter.tryConsume(tenant, "LAUNCH", capacity)).isFalse();
+    } finally {
+      secondClient.shutdown();
+    }
+  }
+
+  @Test
+  void newerConfigurationVersionReplacesPersistedBucketAndKeepsUtilization() {
+    String tenant = uniqueTenant();
+    String action = "TASK_REPORT";
+    long oldCapacity = 4;
+
+    assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isTrue();
+    assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isTrue();
+
+    RedisClient secondClient = RedisClient.create(RedisURI.create(redisHost(), redisPort()));
+    try (StatefulRedisConnection<String, byte[]> conn =
+        secondClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE))) {
+      LettuceBasedProxyManager<String> secondProxyManager = Bucket4jLettuce.casBasedBuilder(conn)
+          .expirationAfterWrite(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
+              Duration.ofMinutes(1)))
+          .build();
+      SimpleMeterRegistry replicaMeterRegistry = new SimpleMeterRegistry();
+      RateLimitProperties newerProperties = new RateLimitProperties();
+      newerProperties.setBucketConfigurationVersion(2L);
+      TokenBucketRateLimiter newerReplica = new TokenBucketRateLimiter(
+          secondProxyManager,
+          replicaMeterRegistry,
+          RedisRateLimitCircuitBreaker.disabled(replicaMeterRegistry),
+          newerProperties);
+
+      // 旧桶还剩约 50%；容量从 4 降到 2 后按比例继承为 1，而不是重置为满桶或继续沿用旧容量。
+      assertThat(newerReplica.tryConsume(tenant, action, 2L)).isTrue();
+      assertThat(newerReplica.tryConsume(tenant, action, 2L)).isFalse();
+      // 旧版本副本不能把 Redis 中的 v2 配置覆盖回 v1。
+      assertThat(limiter.tryConsume(tenant, action, oldCapacity)).isFalse();
     } finally {
       secondClient.shutdown();
     }

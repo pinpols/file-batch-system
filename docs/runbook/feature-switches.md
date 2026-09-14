@@ -106,7 +106,8 @@
 
 | 配置 key | 默认 | 作用 | env | 测试 |
 |---|---|---|---|---|
-| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | launch/release 3000、register 300、claim/report 12000 | 租户级高水位限流；<=0 关闭单项 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE` | ❌ |
+| `batch.rate-limit.bucket-configuration-version` | 1 | Redis 令牌桶配置的单调版本；调整或回退任一阈值时都必须递增 | `BATCH_RATE_LIMIT_BUCKET_CONFIGURATION_VERSION` | ✅ 真 Redis 跨副本升级 |
+| `batch.rate-limit.max-{new,register,release,claim,report}-requests-per-tenant-per-minute` | launch/release 3000、register 300、claim/report 12000 | 租户级高水位限流；<=0 关闭单项；变更时同步递增桶配置版本 | `BATCH_RATE_LIMIT_MAX_*_REQUESTS_PER_TENANT_PER_MINUTE` | ✅ 默认绑定+桶语义 |
 | `batch.console.security.rate-limit.expensive-op-user-limit-per-minute` | 10 | 导出/导入/Excel/报表按用户限流（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_EXPENSIVE_OP_USER_LIMIT_PER_MINUTE` | ❌ |
 | `batch.console.security.rate-limit.file-op-user-limit-per-minute` | 60 | `/api/console/files/` 子树按用户限流（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_FILE_OP_USER_LIMIT_PER_MINUTE` | ❌ |
 | `batch.console.security.rate-limit.redis-failure-threshold` / `redis-circuit-open-seconds` | 3 / 15s | Redis 连续失败短路与冷却期（fail-open） | `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD` / `BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS` | ❌ |

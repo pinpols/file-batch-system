@@ -143,6 +143,7 @@ data:
   BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED: {{ (((.Values.orchestrator).fileGovernance).arrival).requireVerified | default false | quote }}
   BATCH_SENSOR_ENABLED: {{ (.Values.orchestrator.sensor).enabled | default true | quote }}
   BATCH_RATE_LIMIT_ENABLED: {{ .Values.orchestrator.rateLimit.enabled | default false | quote }}
+  BATCH_RATE_LIMIT_BUCKET_CONFIGURATION_VERSION: {{ .Values.orchestrator.rateLimit.bucketConfigurationVersion | default 1 | quote }}
   BATCH_RATE_LIMIT_MAX_NEW_REQUESTS_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxNewPerTenantPerMinute | default 3000 | quote }}
   BATCH_RATE_LIMIT_MAX_REGISTER_REQUESTS_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxRegisterPerTenantPerMinute | default 300 | quote }}
   BATCH_RATE_LIMIT_MAX_RELEASE_REQUESTS_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxReleasePerTenantPerMinute | default 3000 | quote }}

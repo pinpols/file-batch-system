@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.validation.annotation.Validated;
 
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.rate-limit")
 /** Orchestrator 入口限流策略参数。 */
 public class RateLimitProperties {
@@ -14,6 +17,14 @@ public class RateLimitProperties {
    * BATCH_RATE_LIMIT_ENABLED=false} 关闸。
    */
   private boolean enabled = true;
+
+  /**
+   * Redis 令牌桶配置的单调版本。修改任一桶阈值时必须同步递增；新版本会在下一次请求时原子替换已有桶配置，并按比例继承令牌。
+   *
+   * <p>该值只能递增，回退阈值配置时也要使用更大的版本，避免滚动发布期间旧副本覆盖新配置。
+   */
+  @Min(value = 1, message = "bucket-configuration-version must be at least 1")
+  private long bucketConfigurationVersion = 1L;
 
   /**
    * Redis 短路熔断配置：Redis 长时间慢故障时，连续超时判定其不健康后，限流器直接 fail-open 放行不再发 Redis 命令， 省掉每请求叠加的 {@code

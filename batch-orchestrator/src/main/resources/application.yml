@@ -255,6 +255,8 @@ batch:
     # 按租户固定窗口限流总开关：默认开启（2026-06-24 起防接口盗刷；旧默认 false）。
     # 与 RateLimitProperties 类默认(true)、feature-switches.md §1 对齐；紧急关闸经 env 置 false。
     enabled: ${BATCH_RATE_LIMIT_ENABLED:true}
+    # Bucket4j 持久化桶配置；修改任一阈值时必须单调递增此版本，已有桶按比例继承令牌并原地更新。
+    bucket-configuration-version: ${BATCH_RATE_LIMIT_BUCKET_CONFIGURATION_VERSION:1}
     # 各维度阈值为高水位("只拦 runaway"),与 feature-switches.md §1 文档口径一致；<=0 表示关闭该维度。
     # 每租户每分钟最大新建（launch）请求数：默认 3000（=50/s）。
     max-new-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_NEW_REQUESTS_PER_TENANT_PER_MINUTE:3000}
