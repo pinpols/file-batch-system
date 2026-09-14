@@ -219,6 +219,7 @@ def main() -> int:
         if not expected.exists() or expected.read_text(encoding="utf-8") != report:
             print(f"Java readability inventory is stale: {expected.relative_to(ROOT)}", file=sys.stderr)
             return 1
+        print(f"✅ Java readability inventory is current: {expected.relative_to(ROOT)}")
     if not args.output and not args.check:
         print(report, end="")
     return 0

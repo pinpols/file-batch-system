@@ -54,4 +54,4 @@ if psql -f "$SQL_FILE" -f "$SQL_FILE" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "PostgreSQL client fallback guard passed"
+echo "✅ PostgreSQL client fallback guard passed"

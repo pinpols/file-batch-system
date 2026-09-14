@@ -64,4 +64,4 @@ if ((failures > 0)); then
   exit 1
 fi
 
-echo '硬编码运行配置契约通过'
+echo '✅ 硬编码运行配置契约通过'

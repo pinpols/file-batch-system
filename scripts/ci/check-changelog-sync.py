@@ -69,7 +69,7 @@ def main() -> int:
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("Changelog sync guard passed")
+    print("✅ Changelog sync guard passed")
     return 0
 
 

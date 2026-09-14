@@ -135,7 +135,7 @@ def main() -> int:
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
-    print("Document structure guard passed")
+    print("✅ Document structure guard passed")
     return 0
 
 

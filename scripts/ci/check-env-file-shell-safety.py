@@ -57,7 +57,7 @@ def main() -> int:
         print("这些文件会被本地/CI 脚本 source；带空白的值必须写成 KEY=\"...\"。", file=sys.stderr)
         return 1
 
-    print("Env shell-safety guard passed: tracked env files are source-safe.")
+    print("✅ Env shell-safety guard passed: tracked env files are source-safe.")
     return 0
 
 
