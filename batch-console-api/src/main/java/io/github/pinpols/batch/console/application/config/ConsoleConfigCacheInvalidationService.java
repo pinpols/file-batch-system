@@ -1,10 +1,18 @@
 package io.github.pinpols.batch.console.application.config;
 
+import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import io.github.pinpols.batch.console.support.cache.RedisKeyUtils;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Instant;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -30,37 +38,73 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ConsoleConfigCacheInvalidationService {
+
+  public static final String INVALIDATION_CHANNEL = "batch:config:invalidation";
 
   /** SCAN 单次返回上限 + DEL 单批次上限：太小 → SCAN 轮次多；太大 → 单 DEL 阻塞。500 是经验折中。 */
   private static final int SCAN_BATCH_SIZE = 500;
 
   private final StringRedisTemplate redisTemplate;
   private final ConsoleQueryCacheService queryCacheService;
+  private final AtomicLong publishedRevision = new AtomicLong(0);
+  private final Counter publishSuccessCounter;
+  private final Counter publishFailureCounter;
+
+  @Autowired
+  public ConsoleConfigCacheInvalidationService(
+      StringRedisTemplate redisTemplate,
+      ConsoleQueryCacheService queryCacheService,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    this(redisTemplate, queryCacheService, meterRegistryProvider.getIfAvailable());
+  }
+
+  public ConsoleConfigCacheInvalidationService(
+      StringRedisTemplate redisTemplate, ConsoleQueryCacheService queryCacheService) {
+    this(redisTemplate, queryCacheService, (MeterRegistry) null);
+  }
+
+  private ConsoleConfigCacheInvalidationService(
+      StringRedisTemplate redisTemplate,
+      ConsoleQueryCacheService queryCacheService,
+      MeterRegistry meterRegistry) {
+    this.redisTemplate = redisTemplate;
+    this.queryCacheService = queryCacheService;
+    if (meterRegistry == null) {
+      this.publishSuccessCounter = null;
+      this.publishFailureCounter = null;
+      return;
+    }
+    meterRegistry.gauge("batch.console.config.invalidation.published_revision", publishedRevision);
+    this.publishSuccessCounter = meterRegistry.counter(
+        "batch.console.config.invalidation.publish.total", "result", "success");
+    this.publishFailureCounter = meterRegistry.counter(
+        "batch.console.config.invalidation.publish.total", "result", "failure");
+  }
 
   public void evictJobDefinition(String tenantId, String jobCode) {
-    evictAfterCommit(configKey(tenantId, "job-definition", jobCode));
+    evictAfterCommit(tenantId, "job-definition", jobCode);
   }
 
   public void evictAllJobDefinitions(String tenantId) {
-    evictByPatternAfterCommit("config:%s:job-definition:*".formatted(safe(tenantId)));
+    evictByPatternAfterCommit(
+        tenantId, "job-definition", "*", "config:%s:job-definition:*".formatted(safe(tenantId)));
   }
 
   public void evictWorkflowDefinition(String tenantId, String workflowCode) {
-    evictAfterCommit(configKey(tenantId, "workflow-definition", workflowCode));
+    evictAfterCommit(tenantId, "workflow-definition", workflowCode);
   }
 
   public void evictBusinessCalendar(String tenantId, String calendarCode) {
-    evictAfterCommit(configKey(tenantId, "business-calendar", calendarCode));
+    evictAfterCommit(tenantId, "business-calendar", calendarCode);
   }
 
   public void evictBatchWindow(String tenantId, String windowCode) {
-    evictAfterCommit(configKey(tenantId, "batch-window", windowCode));
+    evictAfterCommit(tenantId, "batch-window", windowCode);
   }
 
   public void evictQuotaPolicies(String tenantId) {
-    evictAfterCommit(configKey(tenantId, "tenant-quota-policy", "enabled-first"));
+    evictAfterCommit(tenantId, "tenant-quota-policy", "enabled-first");
   }
 
   /**
@@ -83,11 +127,16 @@ public class ConsoleConfigCacheInvalidationService {
     evict.run();
   }
 
-  private void evictByPatternAfterCommit(String pattern) {
+  private void evictByPatternAfterCommit(
+      String tenantId, String type, String code, String pattern) {
     if (!Texts.hasText(pattern)) {
       return;
     }
-    Runnable evict = () -> scanAndDelete(pattern);
+    Runnable evict = () -> {
+      if (scanAndDelete(pattern)) {
+        publishInvalidation(tenantId, type, code);
+      }
+    };
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
@@ -104,14 +153,26 @@ public class ConsoleConfigCacheInvalidationService {
    * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层捕获并抑制避免影响 afterCommit
    * 钩子流程；残余 key 走 TTL（5min）自然清理。
    */
-  private void scanAndDelete(String pattern) {
-    long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE);
-    if (deleted > 0) {
-      log.debug("evicted {} redis keys matching pattern={}", deleted, pattern);
+  private boolean scanAndDelete(String pattern) {
+    try {
+      long deleted = RedisKeyUtils.scanAndDeleteOrThrow(redisTemplate, pattern, SCAN_BATCH_SIZE);
+      if (deleted > 0) {
+        log.debug("evicted {} redis keys matching pattern={}", deleted, pattern);
+      }
+      return true;
+    } catch (RuntimeException exception) {
+      increment(publishFailureCounter);
+      log.warn(
+          "config cache redis pattern delete failed: pattern={}, reason={}",
+          pattern,
+          exception.getMessage());
+      log.debug("config cache redis pattern delete failure: pattern={}", pattern, exception);
+      return false;
     }
   }
 
-  private void evictAfterCommit(String key) {
+  private void evictAfterCommit(String tenantId, String type, String code) {
+    String key = configKey(tenantId, type, code);
     if (!Texts.hasText(key)) {
       return;
     }
@@ -119,12 +180,64 @@ public class ConsoleConfigCacheInvalidationService {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
         public void afterCommit() {
-          redisTemplate.delete(key);
+          deleteAndPublish(key, tenantId, type, code);
         }
       });
       return;
     }
-    redisTemplate.delete(key);
+    deleteAndPublish(key, tenantId, type, code);
+  }
+
+  private void deleteAndPublish(String key, String tenantId, String type, String code) {
+    try {
+      redisTemplate.delete(key);
+    } catch (RuntimeException exception) {
+      increment(publishFailureCounter);
+      log.warn("config cache redis delete failed: key={}, reason={}", key, exception.getMessage());
+      log.debug("config cache redis delete failure: key={}", key, exception);
+      return;
+    }
+    publishInvalidation(tenantId, type, code);
+  }
+
+  private void publishInvalidation(String tenantId, String type, String code) {
+    try {
+      Long revision =
+          redisTemplate.opsForValue().increment(BatchRedisKeys.configInvalidationGlobalRevision());
+      Long keyRevision = redisTemplate
+          .opsForValue()
+          .increment(BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code));
+      ConfigCacheInvalidationEvent event = new ConfigCacheInvalidationEvent(
+          safe(tenantId),
+          safe(type),
+          safe(code),
+          revision == null ? 0L : revision,
+          keyRevision == null ? 0L : keyRevision,
+          Instant.now());
+      redisTemplate.convertAndSend(INVALIDATION_CHANNEL, JsonUtils.toJson(event));
+      publishedRevision.set(event.revision());
+      increment(publishSuccessCounter);
+    } catch (RuntimeException exception) {
+      increment(publishFailureCounter);
+      log.warn(
+          "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
+          tenantId,
+          type,
+          code,
+          exception.getMessage());
+      log.debug(
+          "config cache invalidation publish failure: tenantId={}, type={}, code={}",
+          tenantId,
+          type,
+          code,
+          exception);
+    }
+  }
+
+  private void increment(Counter counter) {
+    if (counter != null) {
+      counter.increment();
+    }
   }
 
   private String configKey(String tenantId, String type, String code) {

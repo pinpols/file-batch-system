@@ -111,6 +111,15 @@ envFrom:
 {{- end }}
 
 {{/*
+启动期配置摘要。ConfigMap 或 Secret 的渲染结果变化时，Pod template hash 随之变化，
+Deployment/StatefulSet 因此自动执行滚动更新。摘要不暴露 Secret 明文。
+*/}}
+{{- define "batch-platform.configChecksumAnnotations" -}}
+checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+{{- end }}
+
+{{/*
 Unique worker runtime identity. The stable application workerCode remains the Kafka routing pool;
 the Pod UID only distinguishes replicas in worker_registry so capacity is not last-heartbeat-wins.
 */}}

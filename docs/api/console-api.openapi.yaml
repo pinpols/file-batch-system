@@ -2373,6 +2373,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchApprovalResultList'
+  /api/console/config/governance:
+    get:
+      tags: [Config]
+      summary: List configuration governance bindings
+      operationId: listConfigGovernance
+      responses:
+        '200':
+          description: Configuration source, activation and sensitivity catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConfigGovernanceList'
   /api/console/config/releases:
     get:
       tags: [Config]
@@ -11197,6 +11209,15 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConsoleConfigReleaseResponse'
+    CommonResponseConfigGovernanceList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConfigGovernanceItemResponse'
     CommonResponseSecretVersionList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12295,7 +12316,12 @@ components:
           type: string
         grayScopeJson:
           type: string
-      required: [tenantId]
+        expectedVersionNo:
+          type: integer
+          format: int32
+          minimum: 1
+          description: 页面读取到的发布版本；服务端拒绝旧版本和并发状态变更。
+      required: [tenantId, expectedVersionNo]
     SecretVersionRotateRequest:
       type: object
       properties:
@@ -14489,6 +14515,27 @@ components:
           items:
             $ref: '#/components/schemas/ConsoleBatchDayCatchUpItemResponse'
       required: [tenantId, calendarCode, bizDate, catchUpPolicy, items]
+    ConfigGovernanceItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        className:
+          type: string
+        prefix:
+          type: string
+        source:
+          type: string
+          enum: [STATIC, DYNAMIC_DB]
+        activation:
+          type: string
+          enum: [RESTART_REQUIRED, IMMEDIATE_AFTER_CONFIRMATION]
+        sensitivity:
+          type: string
+          enum: [PUBLIC, SECRET]
+        restartRequired:
+          type: boolean
+      required: [id, className, prefix, source, activation, sensitivity, restartRequired]
     ConsoleConfigReleaseResponse:
       type: object
       properties:
@@ -14508,6 +14555,17 @@ components:
         versionNo:
           type: integer
           format: int32
+        configSource:
+          type: string
+          enum: [DYNAMIC_DB]
+        activationMode:
+          type: string
+          enum: [IMMEDIATE_AFTER_CONFIRMATION]
+        restartRequired:
+          type: boolean
+        applyConfirmationStatus:
+          type: string
+          enum: [NOT_RELEASED, CONFIRMATION_REQUIRED, ROLLED_BACK]
         grayScopeJson:
           type: string
         configPayloadJson:
@@ -14542,6 +14600,10 @@ components:
         - configName
         - configStatus
         - versionNo
+        - configSource
+        - activationMode
+        - restartRequired
+        - applyConfirmationStatus
         - grayScopeJson
         - configPayloadJson
         - effectiveFromAt

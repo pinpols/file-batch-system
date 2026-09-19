@@ -77,6 +77,8 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{releaseId}
+          and version_no = #{expectedVersionNo}
+          and config_status = #{expectedStatus}
     </update>
 
     <update id="updateGrayScope">

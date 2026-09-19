@@ -780,11 +780,17 @@ Deployment note:
 ### Config
 
 - `GET /api/console/config/releases`
+- `GET /api/console/config/governance` — 返回所有生产配置绑定点的来源、生效方式、敏感级别与滚动重启要求
 - `POST /api/console/config/releases`
 - `GET /api/console/config/releases/{releaseId}`
 - `POST /api/console/config/releases/{releaseId}/publish`
 - `POST /api/console/config/releases/{releaseId}/gray`
 - `POST /api/console/config/releases/{releaseId}/rollback`
+
+上述三个状态动作必须携带 `expectedVersionNo`。服务端同时校验目标记录版本、同
+`(tenantId, configType, configKey)` 的最新版本以及当前状态 CAS；旧页面、旧版本或并发动作返回
+`STATE_CONFLICT`。响应额外返回配置来源、生效方式、是否需要滚动重启和实例确认状态；
+`CONFIRMATION_REQUIRED` 不等价于已被所有运行实例采用。
 - `GET /api/console/config/secrets`
 - `GET /api/console/config/secrets/{secretVersionId}`
 - `POST /api/console/config/secrets/rotate`

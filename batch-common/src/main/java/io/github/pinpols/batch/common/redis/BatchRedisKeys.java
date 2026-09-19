@@ -26,6 +26,15 @@ public final class BatchRedisKeys {
     return "config:%s:%s:%s".formatted(safe(tenantId), safe(type), safe(code));
   }
 
+  public static String configInvalidationGlobalRevision() {
+    return "config:invalidation:revision:global";
+  }
+
+  public static String configInvalidationKeyRevision(String tenantId, String type, String code) {
+    return "config:invalidation:revision:%s:%s:%s"
+        .formatted(safe(tenantId), safe(type), safe(code));
+  }
+
   public static String fileGovernanceMetrics(String tenantId) {
     return "metrics:file_governance:%s".formatted(safe(tenantId));
   }

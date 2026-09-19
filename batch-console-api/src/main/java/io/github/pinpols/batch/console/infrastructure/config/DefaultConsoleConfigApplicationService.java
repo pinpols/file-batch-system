@@ -30,6 +30,7 @@ import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
 import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigGovernanceItemResponse;
 import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
@@ -105,6 +106,12 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private final SecretVersionMapper secretVersionMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
   private final ConsoleDashboardQueryMapper dashboardQueryMapper;
+  private final ConfigurationGovernanceCatalog governanceCatalog;
+
+  @Override
+  public List<ConfigGovernanceItemResponse> configGovernanceCatalog() {
+    return governanceCatalog.items();
+  }
 
   @Override
   public List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request) {
@@ -182,16 +189,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   @Transactional
   public String grayConfigRelease(Long releaseId, ConfigReleaseActionRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
-    loadRelease(tenantId, releaseId);
     validateJson(request.getGrayScopeJson(), KEY_GRAY_SCOPE_JSON);
-    // 先单独更新 grayScope，再调 changeReleaseStatus 更新状态：
-    // changeReleaseStatus 内部在 GRAY 分支也会更新 scope（通用路径），
-    // 此处提前写是为了保证 scope 与状态在同一事务内同步，即便 status 已为 GRAY 也刷新 scope。
-    configReleaseMapper.updateGrayScope(mapOf(
-        KEY_TENANT_ID, tenantId,
-        KEY_RELEASE_ID, releaseId,
-        KEY_GRAY_SCOPE_JSON, request.getGrayScopeJson()));
     return changeReleaseStatus(releaseId, request, ConfigLifecycleStatus.GRAY.code(), "GRAY");
   }
 
@@ -291,6 +289,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
       Long releaseId, ConfigReleaseActionRequest request, String nextStatus, String changeAction) {
     String tenantId = resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    validateExpectedVersion(request.getExpectedVersionNo(), release);
+    validateLatestVersion(tenantId, release);
     validateReleaseTransition(release.getConfigStatus(), nextStatus);
     // publishedAt / rolledBackAt 仅在对应状态转换时打时间戳，其他状态传 null（保留历史值）；
     // 时间戳一旦写入不再清除，回滚后仍可查到最近一次发布时间以供审计。
@@ -301,6 +301,10 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         releaseId,
         "nextStatus",
         nextStatus,
+        "expectedStatus",
+        release.getConfigStatus(),
+        "expectedVersionNo",
+        release.getVersionNo(),
         "publishedAt",
         ConfigLifecycleStatus.PUBLISHED.code().equals(nextStatus)
             ? BatchDateTimeSupport.utcNow()
@@ -311,10 +315,12 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             : null,
         "updatedBy",
         ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64));
-    configReleaseMapper.updateConfigReleaseStatus(params);
+    int updated = configReleaseMapper.updateConfigReleaseStatus(params);
+    if (updated != 1) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config.release_concurrent_change");
+    }
     if (ConfigLifecycleStatus.GRAY.code().equals(nextStatus)
         && Texts.hasText(request.getGrayScopeJson())) {
-      validateJson(request.getGrayScopeJson(), KEY_GRAY_SCOPE_JSON);
       configReleaseMapper.updateGrayScope(mapOf(
           KEY_TENANT_ID, tenantId,
           KEY_RELEASE_ID, releaseId,
@@ -335,6 +341,33 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     if (!ALLOWED_RELEASE_TRANSITIONS.getOrDefault(next, Set.of()).contains(current)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.config.release_transition_illegal", current, next);
+    }
+  }
+
+  private void validateExpectedVersion(Integer expectedVersionNo, ConfigReleaseEntity release) {
+    if (!Objects.equals(expectedVersionNo, release.getVersionNo())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.config.release_version_stale",
+          expectedVersionNo,
+          release.getVersionNo());
+    }
+  }
+
+  private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
+    Integer latestVersionNo = configReleaseMapper.selectLatestVersionNo(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_CONFIG_TYPE,
+        release.getConfigType(),
+        "configKey",
+        release.getConfigKey()));
+    if (latestVersionNo != null && !Objects.equals(latestVersionNo, release.getVersionNo())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.config.release_not_latest",
+          release.getVersionNo(),
+          latestVersionNo);
     }
   }
 
@@ -461,6 +494,10 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConsoleTextSanitizer.safeDisplay(entity.getConfigName()),
         ConsoleTextSanitizer.safeDisplay(entity.getConfigStatus()),
         entity.getVersionNo(),
+        "DYNAMIC_DB",
+        "IMMEDIATE_AFTER_CONFIRMATION",
+        false,
+        applyConfirmationStatus(entity.getConfigStatus()),
         ConsoleTextSanitizer.safeDisplay(entity.getGrayScope()),
         ConsoleTextSanitizer.safeDisplay(entity.getConfigPayload()),
         entity.getEffectiveFromAt(),
@@ -471,6 +508,17 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy()),
         entity.getCreatedAt(),
         entity.getUpdatedAt());
+  }
+
+  private String applyConfirmationStatus(String configStatus) {
+    if (ConfigLifecycleStatus.PUBLISHED.code().equals(configStatus)
+        || ConfigLifecycleStatus.GRAY.code().equals(configStatus)) {
+      return "CONFIRMATION_REQUIRED";
+    }
+    if (ConfigLifecycleStatus.ROLLED_BACK.code().equals(configStatus)) {
+      return "ROLLED_BACK";
+    }
+    return "NOT_RELEASED";
   }
 
   private ConsoleSecretVersionResponse toSecretVersionResponse(SecretVersionEntity entity) {

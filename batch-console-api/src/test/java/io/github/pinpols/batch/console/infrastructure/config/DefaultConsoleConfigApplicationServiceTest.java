@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,12 +64,17 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Mock
   private ConsoleDashboardQueryMapper dashboardQueryMapper;
 
+  @Mock
+  private ConfigurationGovernanceCatalog governanceCatalog;
+
   @InjectMocks
   private DefaultConsoleConfigApplicationService service;
 
   @BeforeEach
   void setUp() {
     when(tenantGuard.resolveTenant(any())).thenReturn(TENANT);
+    lenient().when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(1);
+    lenient().when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(1);
   }
 
   // ── configReleases ──────────────────────────────────────────────────────
@@ -169,8 +174,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     String status = service.grayConfigRelease(10L, req);
 
     assertThat(status).isEqualTo(ConfigLifecycleStatus.GRAY.code());
-    // grayScope updated twice — once in grayConfigRelease, once inside changeReleaseStatus
-    verify(configReleaseMapper, times(2)).updateGrayScope(anyMap());
+    verify(configReleaseMapper).updateGrayScope(anyMap());
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
   }
 
@@ -184,8 +188,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     String status = service.grayConfigRelease(10L, req);
 
     assertThat(status).isEqualTo(ConfigLifecycleStatus.GRAY.code());
-    // outer updateGrayScope still called once (with null), inner branch skipped
-    verify(configReleaseMapper, times(1)).updateGrayScope(anyMap());
+    verify(configReleaseMapper, never()).updateGrayScope(anyMap());
   }
 
   @Test
@@ -237,6 +240,40 @@ class DefaultConsoleConfigApplicationServiceTest {
     verify(configReleaseMapper).updateConfigReleaseStatus(captor.capture());
     assertThat(captor.getValue().get("rolledBackAt")).isNotNull();
     assertThat(captor.getValue().get("publishedAt")).isNull();
+  }
+
+  @Test
+  void shouldReject_whenExpectedVersionIsStale() {
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 2));
+
+    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
+    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
+  }
+
+  @Test
+  void shouldReject_whenReleaseIsNotLatestVersion() {
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+    when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
+
+    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
+    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
+  }
+
+  @Test
+  void shouldReject_whenStatusCasLosesRace() {
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+    when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(0);
+
+    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
   }
 
   // ── secretVersions / rotate ─────────────────────────────────────────────
@@ -500,6 +537,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     req.setOperatorId("op");
     req.setTraceId("tr");
     req.setReason("action");
+    req.setExpectedVersionNo(1);
     return req;
   }
 

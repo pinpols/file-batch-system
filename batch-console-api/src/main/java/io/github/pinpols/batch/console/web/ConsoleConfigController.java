@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
 import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigGovernanceItemResponse;
 import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
@@ -48,6 +49,13 @@ public class ConsoleConfigController {
   public CommonResponse<List<ConsoleConfigReleaseResponse>> configReleases(
       @Valid @ModelAttribute ConfigReleaseQueryRequest request) {
     return responseFactory.success(applicationService.configReleases(request));
+  }
+
+  /** 查询所有启动期配置绑定点及其生效、重启与敏感级别。 */
+  @GetMapping("/governance")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  public CommonResponse<List<ConfigGovernanceItemResponse>> configGovernanceCatalog() {
+    return responseFactory.success(applicationService.configGovernanceCatalog());
   }
 
   /** 创建配置发布单草稿。 */

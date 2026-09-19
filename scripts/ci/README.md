@@ -11,7 +11,7 @@
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-no-enable-preview.sh` |
 | 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
-| 配置与部署 | `check-config-defaults-sync.py`、`check-feature-switch-registry.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
+| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-feature-switch-registry.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
@@ -160,6 +160,17 @@ python3 scripts/ci/check-helm-env-sync.py
 ```
 
 成功时打印 `Helm BATCH_* env 与应用消费入口一致` 并以退出码 `0` 结束；违反约束时列出未知变量或缺失入口并以 `1` 结束。
+
+## `check-config-governance.py`
+
+校验所有生产源码 `@ConfigurationProperties` 绑定点都登记在
+`docs/runbook/config-governance-registry.yml`，并明确配置来源、生效方式和敏感级别。同时禁止直接引入
+`@RefreshScope`、配置重绑定器以及未评审的 Spring Cloud/Nacos/Apollo 配置客户端。
+
+```bash
+python3 scripts/ci/check-config-governance.py
+python3 scripts/ci/check-config-governance.py --write  # 新增配置类后重建登记表
+```
 
 ## `check-db-scripts-safety.sh`
 

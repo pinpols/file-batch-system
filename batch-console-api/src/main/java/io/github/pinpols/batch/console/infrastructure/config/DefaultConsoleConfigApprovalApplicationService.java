@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,6 +71,7 @@ public class DefaultConsoleConfigApprovalApplicationService
       Long releaseId, ConfigReleaseApprovalSubmitRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    validateLatestVersion(tenantId, release);
     if (!ConfigLifecycleStatus.DRAFT.code().equals(release.getConfigStatus())) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.config_release.only_draft_can_submit");
@@ -91,19 +93,7 @@ public class DefaultConsoleConfigApprovalApplicationService
         ConsoleTextSanitizer.safeInput(request.getReason(), 1024),
         "expiredAt",
         parseInstant(request.getExpiredAt())));
-    configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        tenantId,
-        KEY_RELEASE_ID,
-        releaseId,
-        KEY_NEXT_STATUS,
-        PENDING_APPROVAL,
-        "publishedAt",
-        null,
-        "rolledBackAt",
-        null,
-        "updatedBy",
-        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+    transitionRelease(tenantId, release, PENDING_APPROVAL, null, request.getOperatorId());
     logChange(
         tenantId,
         release,
@@ -142,6 +132,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    validateLatestVersion(tenantId, release);
     int rows = configApprovalMapper.approve(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
@@ -154,19 +145,12 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
-    configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
+    transitionRelease(
         tenantId,
-        KEY_RELEASE_ID,
-        releaseId,
-        KEY_NEXT_STATUS,
+        release,
         ConfigLifecycleStatus.PUBLISHED.code(),
-        "publishedAt",
         BatchDateTimeSupport.utcNow(),
-        "rolledBackAt",
-        null,
-        "updatedBy",
-        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+        request.getOperatorId());
     logChange(
         tenantId,
         release,
@@ -188,6 +172,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    validateLatestVersion(tenantId, release);
     int rows = configApprovalMapper.reject(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
@@ -200,19 +185,8 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
-    configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        tenantId,
-        KEY_RELEASE_ID,
-        releaseId,
-        KEY_NEXT_STATUS,
-        ConfigLifecycleStatus.DRAFT.code(),
-        "publishedAt",
-        null,
-        "rolledBackAt",
-        null,
-        "updatedBy",
-        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+    transitionRelease(
+        tenantId, release, ConfigLifecycleStatus.DRAFT.code(), null, request.getOperatorId());
     logChange(
         tenantId,
         release,
@@ -267,5 +241,50 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   private Long longValue(Object value) {
     return ConsoleMapSupport.longValue(value);
+  }
+
+  private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
+    Integer latestVersionNo = configReleaseMapper.selectLatestVersionNo(ConsoleMapSupport.mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        "configType",
+        release.getConfigType(),
+        "configKey",
+        release.getConfigKey()));
+    if (!Objects.equals(latestVersionNo, release.getVersionNo())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.config.release_not_latest",
+          release.getVersionNo(),
+          latestVersionNo);
+    }
+  }
+
+  private void transitionRelease(
+      String tenantId,
+      ConfigReleaseEntity release,
+      String nextStatus,
+      Instant publishedAt,
+      String operatorId) {
+    int rows = configReleaseMapper.updateConfigReleaseStatus(ConsoleMapSupport.mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_RELEASE_ID,
+        release.getId(),
+        KEY_NEXT_STATUS,
+        nextStatus,
+        "expectedStatus",
+        release.getConfigStatus(),
+        "expectedVersionNo",
+        release.getVersionNo(),
+        "publishedAt",
+        publishedAt,
+        "rolledBackAt",
+        null,
+        "updatedBy",
+        ConsoleTextSanitizer.safeInput(operatorId, 64)));
+    if (rows != 1) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config.release_concurrent_change");
+    }
   }
 }

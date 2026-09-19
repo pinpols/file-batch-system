@@ -36,6 +36,8 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     service = new DefaultConsoleConfigApprovalApplicationService(
         tenantGuard, configReleaseMapper, configApprovalMapper, configChangeLogMapper);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(1);
+    when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(1);
   }
 
   @Test

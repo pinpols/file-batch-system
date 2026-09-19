@@ -61,8 +61,9 @@ spec:
       labels:
         {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 8 }}
         batch.example.com/resource-profile: {{ $resourceProfile | quote }}
-      {{- with $root.Values.podAnnotations }}
       annotations:
+        {{- include "batch-platform.configChecksumAnnotations" $root | nindent 8 }}
+        {{- with $root.Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:

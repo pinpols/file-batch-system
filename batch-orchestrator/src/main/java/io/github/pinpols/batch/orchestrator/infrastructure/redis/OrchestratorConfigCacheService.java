@@ -264,9 +264,26 @@ public class OrchestratorConfigCacheService {
       return;
     }
     String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
-    quotaPolicyLocalCache.invalidate(key);
-    negativeCache.invalidate(key);
+    evictLocalByKey("tenant-quota-policy", key);
     redis.delete(key);
+  }
+
+  public void evictLocal(String tenantId, String type, String code) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(type) || !Texts.hasText(code)) {
+      return;
+    }
+    if ("*".equals(code)) {
+      evictLocalByType(type);
+      return;
+    }
+    evictLocalByKey(type, BatchRedisKeys.config(tenantId, type, code));
+  }
+
+  public void evictAllLocal() {
+    jobDefinitionLocalCache.invalidateAll();
+    workflowDefinitionLocalCache.invalidateAll();
+    quotaPolicyLocalCache.invalidateAll();
+    negativeCache.invalidateAll();
   }
 
   private void evictConfig(String tenantId, String type, String code) {
@@ -274,12 +291,29 @@ public class OrchestratorConfigCacheService {
       return;
     }
     String key = BatchRedisKeys.config(tenantId, type, code);
+    evictLocalByKey(type, key);
+    redis.delete(key);
+  }
+
+  private void evictLocalByType(String type) {
+    if ("job-definition".equals(type)) {
+      jobDefinitionLocalCache.invalidateAll();
+    } else if ("workflow-definition".equals(type)) {
+      workflowDefinitionLocalCache.invalidateAll();
+    } else if ("tenant-quota-policy".equals(type)) {
+      quotaPolicyLocalCache.invalidateAll();
+    }
+    negativeCache.invalidateAll();
+  }
+
+  private void evictLocalByKey(String type, String key) {
     if ("job-definition".equals(type)) {
       jobDefinitionLocalCache.invalidate(key);
     } else if ("workflow-definition".equals(type)) {
       workflowDefinitionLocalCache.invalidate(key);
+    } else if ("tenant-quota-policy".equals(type)) {
+      quotaPolicyLocalCache.invalidate(key);
     }
-    redis.delete(key);
     // R3-P2-9：失效 positive cache 时也清 negative，避免开启 disabled 配置时仍命中"已知缺失"残留
     negativeCache.invalidate(key);
   }

@@ -67,6 +67,10 @@ class ConsoleConfigControllerTest {
             "Name",
             "DRAFT",
             1,
+            "DYNAMIC_DB",
+            "IMMEDIATE_AFTER_CONFIRMATION",
+            false,
+            "NOT_RELEASED",
             "{}",
             "{\"a\":1}",
             Instant.EPOCH,
@@ -94,7 +98,7 @@ class ConsoleConfigControllerTest {
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-1")
             .contentType(APPLICATION_JSON)
             .content("""
-                    {"tenantId":"t1","operatorId":"u1","traceId":"trace-1","reason":"ok"}
+                    {"tenantId":"t1","operatorId":"u1","traceId":"trace-1","reason":"ok","expectedVersionNo":1}
                     """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
