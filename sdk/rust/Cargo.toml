@@ -2,8 +2,8 @@
 name = "batch-worker-sdk"
 version = "1.1.0"
 edition = "2021"
-# 声明的最低支持 Rust 版本(MSRV):依赖树(rdkafka/reqwest/tokio/serde)均支持,是安全的
-# 声明下限而非逐版本探测的绝对最小值;CI 用 stable 编译覆盖。收口:加 pin=1.75 的 MSRV 校验腿。
+# 核心 crate(默认 feature、零运行时依赖)的最低支持 Rust 版本。当前 HTTP/Kafka
+# 可选依赖树要求 Rust 1.86+，生产适配器 CI 因此使用 stable；详见 README。
 rust-version = "1.75"
 description = "BYO worker SDK decision core + conformance runner (Rust reference impl, zero-dependency)"
 license = "Apache-2.0"

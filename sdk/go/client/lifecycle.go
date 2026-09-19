@@ -274,6 +274,9 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 		w.logger.Printf("INFO claim idempotent (already claimed) taskId=%s", msg.TaskID)
 		return true
 	}
+	if claim.PartitionInvocationID != "" {
+		invID = claim.PartitionInvocationID
+	}
 
 	sig := NewCancellationSignal(ctx)
 	w.registry.Add(msg.TaskID, sig, invID)
@@ -306,17 +309,17 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 				if stop, ok := r.(*SdkTaskStopped); ok {
 					w.logger.Printf("INFO task stopped (cooperative cancel) taskId=%s breakPosition=%v",
 						msg.TaskID, stop.BreakPosition)
-					w.report(msg, stoppedResult(stop))
+					w.report(msg, invID, stoppedResult(stop))
 					return
 				}
 				w.logger.Printf("ERROR handler panic taskId=%s: %v", msg.TaskID, r)
-				w.report(msg, Fail(protocol.ErrorCodeExecutionFailed, fmt.Sprintf("panic: %v", r)))
+				w.report(msg, invID, Fail(protocol.ErrorCodeExecutionFailed, fmt.Sprintf("panic: %v", r)))
 			}
 		}()
 
 		// §1.8 parameters-path sensitive scan -> SECURITY_REJECTED.
 		if res, rejected := w.validator.ValidateParameters(claim.EffectiveConfig); rejected {
-			w.report(msg, res)
+			w.report(msg, invID, res)
 			return
 		}
 
@@ -333,7 +336,7 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 		if sig.IsCancellationRequested() && result.IsSuccess() {
 			result = Fail(protocol.ErrorCodeCancelled, "task cancelled")
 		}
-		w.report(msg, result)
+		w.report(msg, invID, result)
 	}()
 	// Claim succeeded and the handler is now in-flight: the offset is safe to
 	// commit (the task is durably owned via the lease; the async report lands
@@ -386,13 +389,13 @@ func ResultFromError(err error) TaskResult {
 // fresh background context (NOT rootCtx) so the terminal report still lands
 // during graceful Stop, which cancels rootCtx (§1.6 — a cancelled report would
 // otherwise lose the task outcome).
-func (w *Worker) report(msg TaskDispatchMessage, result TaskResult) {
+func (w *Worker) report(msg TaskDispatchMessage, partitionInvocationID string, result TaskResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// Fresh Idempotency-Key (distinct from claim's) so a redelivered task's
 	// report cannot replay a stale outcome (fixture 24). partitionInvocationId
 	// threaded through from claim keeps the invariant across claim→renew→report.
-	req := NewReportRequest(msg.TaskID, w.cfg.TenantID, w.cfg.WorkerCode, partitionInvocationID(msg), result)
+	req := NewReportRequest(msg.TaskID, w.cfg.TenantID, w.cfg.WorkerCode, partitionInvocationID, result)
 	if err := w.transport.Report(ctx, msg.TaskID, protocol.NewIdempotencyKey(), req); err != nil {
 		w.logger.Printf("WARN report failed taskId=%s code=%s: %v", msg.TaskID, result.ErrorCode, err)
 	}

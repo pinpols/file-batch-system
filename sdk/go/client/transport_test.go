@@ -105,6 +105,28 @@ func TestHTTPTransport_IdempotentOn409(t *testing.T) {
 	}
 }
 
+func TestHTTPTransport_ClaimDecodesPartitionInvocationID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"partitionInvocationId":"inv-from-claim"}`))
+	}))
+	defer srv.Close()
+
+	tr := NewHTTPTransport(srv.URL, WithHTTPClient(srv.Client()))
+	result, err := tr.Claim(
+		context.Background(),
+		"task-claim-invocation",
+		"idem-claim-invocation",
+		ClaimRequest{TenantID: "t1", WorkerID: "w1"},
+	)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if result.PartitionInvocationID != "inv-from-claim" {
+		t.Fatalf("claim partitionInvocationId = %q", result.PartitionInvocationID)
+	}
+}
+
 // Retry exhaustion: always 500 -> RetryExhaustedError after all attempts.
 func TestHTTPTransport_RetryExhausted(t *testing.T) {
 	var calls int32
@@ -204,7 +226,7 @@ func TestReport_FreshKeyAndPartitionInvocationId(t *testing.T) {
 	tr := NewHTTPTransport(srv.URL, WithSleep(func(time.Duration) {}))
 	w := &Worker{cfg: Config{TenantID: "t1", WorkerCode: "w1"}, transport: tr, logger: quietLogger()}
 	msg := TaskDispatchMessage{TaskID: "task-1", TenantID: "t1", RuntimeAttributes: map[string]any{"partitionInvocationId": "inv-7"}}
-	w.report(msg, Success(nil, "done"))
+	w.report(msg, "inv-7", Success(nil, "done"))
 
 	if gotInv != "inv-7" {
 		t.Fatalf("report must send partitionInvocationId=inv-7, got %q", gotInv)

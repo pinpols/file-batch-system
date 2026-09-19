@@ -12,7 +12,9 @@ The default build has **zero external dependencies** (std-only); the conformance
 runner drives all `docs/api/sdk-contract-fixtures` by routing off each fixture's
 `when` shape (never `then.expect`).
 
-**最低环境要求**:**Rust 1.75+**(edition 2021,`Cargo.toml` 的 `rust-version` 为 MSRV 声明;CI 用 stable 编译覆盖)。默认零依赖 std-only;`http`(reqwest + rustls)/ `kafka`(rdkafka)是可选 feature,启用才引入对应依赖。
+**最低环境要求**:默认 feature 的零依赖核心为 **Rust 1.75+**(edition 2021，
+`Cargo.toml` 的 `rust-version` 为核心 MSRV 声明)。启用生产 `http` 或 `kafka`
+适配器时要求 **Rust 1.86+**，该下限来自当前锁定的可选依赖树；适配器 CI 使用 stable。
 
 ## Layout
 

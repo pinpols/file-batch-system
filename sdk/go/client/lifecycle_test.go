@@ -45,7 +45,11 @@ func dispatchRecord(taskID string) Record {
 // wakeup, drain, deactivate.
 func TestWorker_StartConsumeReportStop(t *testing.T) {
 	fp := NewFakePlatform()
-	fp.ClaimResp = ClaimResult{EffectiveConfig: map[string]any{"batchSize": 10}, TraceID: "tr-1"}
+	fp.ClaimResp = ClaimResult{
+		EffectiveConfig:       map[string]any{"batchSize": 10},
+		TraceID:               "tr-1",
+		PartitionInvocationID: "inv-from-claim",
+	}
 
 	var ran bool
 	var mu sync.Mutex
@@ -84,6 +88,9 @@ func TestWorker_StartConsumeReportStop(t *testing.T) {
 	report, _ := fp.ReportFor("task-1")
 	if report.Result.ErrorCode != protocol.ErrorCodeSuccess {
 		t.Fatalf("expected SUCCESS report, got %s", report.Result.ErrorCode)
+	}
+	if report.Result.PartitionInvocationID != "inv-from-claim" {
+		t.Fatalf("report must reuse claim partitionInvocationId, got %q", report.Result.PartitionInvocationID)
 	}
 	// fixture 24: report mints a FRESH go-<uuid> key, never the Kafka delivery
 	// key and never a fixed report-{taskId} — so a redelivered task's report

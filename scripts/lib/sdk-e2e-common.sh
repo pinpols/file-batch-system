@@ -20,6 +20,7 @@
 # ── 默认值(入口可覆盖)──────────────────────────────────────────────────────
 : "${PGHOST:=localhost}"; : "${PGPORT:=15432}"; : "${PGUSER:=batch_user}"
 : "${PGDATABASE:=batch_platform}"; : "${BATCH_PLATFORM_DB_PASSWORD:=batch_pass_123}"
+: "${POSTGRES_CONTAINER:=batch-postgres-primary}"
 : "${ORCH_URL:=http://localhost:18082}"; : "${TRIGGER_URL:=http://localhost:18081}"
 : "${KAFKA_HOST_PORT:=19092}"; : "${KAFKA_CONTAINER:=batch-kafka}"; : "${TENANT:=default-tenant}"
 : "${KAFKA_CONTAINER_BIN_DIR:=/opt/kafka/bin}"
@@ -30,8 +31,15 @@ if [[ -z "${GOROOT_HINT:-}" ]]; then
     GOROOT_HINT="/usr/local/go"
   fi
 fi
-: "${SDK_E2E_JOB_CODE:=sdk_echo_demo_e2e}"
+: "${SDK_E2E_JOB_CODE:=sdk_echo_e2e_$$}"
+: "${SDK_E2E_QUEUE_CODE:=sdk_e2e_queue}"
+: "${SDK_E2E_REGISTER_WAIT_SECONDS:=120}"
+: "${SDK_E2E_INSTANCE_WAIT_SECONDS:=120}"
+: "${SDK_E2E_TERMINAL_WAIT_SECONDS:=180}"
+: "${SDK_E2E_CLEANUP_WAIT_SECONDS:=30}"
 : "${BATCH_SCRIPT_RUNTIME:=auto}"
+SDK_E2E_IDEMPOTENCY_KEY=""
+SDK_E2E_LAUNCH_SETTLED=0
 export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
 
 # repo root (库在 scripts/lib/)
@@ -49,8 +57,15 @@ KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-loca
 sdk_e2e_q_file() {
   local sql_file="$1"
   shift
-  psql -X -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
-    -v ON_ERROR_STOP=1 -tA "$@" -f "$SDK_E2E_SQL_DIR/$sql_file" 2>/dev/null
+  if command -v psql >/dev/null 2>&1; then
+    psql -X -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+      -v ON_ERROR_STOP=1 -tA "$@" -f "$SDK_E2E_SQL_DIR/$sql_file" 2>/dev/null
+  else
+    docker exec -i -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER" \
+      psql -X -h localhost -p 5432 -U "$PGUSER" -d "$PGDATABASE" \
+      -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin 2>/dev/null \
+      < "$SDK_E2E_SQL_DIR/$sql_file"
+  fi
 }
 sdk_e2e_say() { printf '\n=== %s ===\n' "$*"; }
 sdk_e2e_pass(){ printf '✅ %s\n' "$*"; }
@@ -123,12 +138,14 @@ sdk_e2e_seed_api_key() {
   printf '%s' "$raw"
 }
 
-# 建一个 worker_group=sdk-self-hosted 的 echo job(clone atomic_shell_demo)。
+# 建立自包含的 SDK echo queue + job，不依赖系统测试 seed。
 sdk_e2e_ensure_echo_job() {
   sdk_e2e_q_file upsert-echo-job.sql \
-    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" >/dev/null
+    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" \
+    -v queue_code="$SDK_E2E_QUEUE_CODE" >/dev/null
   [[ "$(sdk_e2e_q_file count-echo-job.sql \
-    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE")" == "1" ]]
+    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" \
+    -v queue_code="$SDK_E2E_QUEUE_CODE")" == "2" ]]
 }
 
 # pre-create worker 的 node-direct 派单 topic(SDK 消费 *.node.<workerCode>)。
@@ -150,12 +167,22 @@ sdk_e2e_start_worker() {
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            go run . ) >"$logf" 2>&1 & echo $! ;;
     python)
-      python -m pip install -q -e "$root/sdk/python" >/dev/null 2>&1
+      local python_bin="${SDK_E2E_PYTHON_BIN:-}"
+      if [[ -z "$python_bin" && -x "$root/sdk/python/.venv/bin/python" ]]; then
+        python_bin="$root/sdk/python/.venv/bin/python"
+      elif [[ -z "$python_bin" ]]; then
+        python_bin="$(command -v python)"
+      fi
+      if "$python_bin" -m pip --version >/dev/null 2>&1; then
+        "$python_bin" -m pip install -q -e "$root/sdk/python" >>"$logf" 2>&1
+        "$python_bin" -m pip install -q -e \
+          "$root/examples/self-hosted-sdk/sample-tenant-worker-python" >>"$logf" 2>&1
+      fi
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-python" \
-        && python -m pip install -q -e . >/dev/null 2>&1 \
-        && BATCH_SDK_BASE_URL="$ORCH_URL" BATCH_SDK_API_KEY="$raw" BATCH_SDK_TENANT_ID="$TENANT" \
+        && PYTHONPATH="$root/sdk/python/src:$root/examples/self-hosted-sdk/sample-tenant-worker-python/src${PYTHONPATH:+:$PYTHONPATH}" \
+           BATCH_SDK_BASE_URL="$ORCH_URL" BATCH_SDK_API_KEY="$raw" BATCH_SDK_TENANT_ID="$TENANT" \
            BATCH_SDK_WORKER_CODE="$wc" BATCH_SDK_KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
-           python -m sample_tenant_worker ) >"$logf" 2>&1 & echo $! ;;
+           "$python_bin" -m sample_tenant_worker ) >>"$logf" 2>&1 & echo $! ;;
     typescript)
       # SDK 的 kafka adapter(sdk/typescript/kafka)import 'kafkajs',它从 SDK 自身的
       # node_modules 解析(样例经相对路径引 SDK,样例的 node_modules 不在 SDK 解析树上),
@@ -194,8 +221,9 @@ sdk_e2e_start_worker() {
 
 # 断言 register(真 API-key auth → worker_registry 落行)。
 sdk_e2e_assert_register() {
-  local wc="$1" pid="$2" logf="$3"
-  for _ in $(seq 1 40); do
+  local wc="$1" pid="$2" logf="$3" deadline
+  deadline=$((SECONDS + SDK_E2E_REGISTER_WAIT_SECONDS))
+  while (( SECONDS < deadline )); do
     kill -0 "$pid" 2>/dev/null || { sdk_e2e_fail "worker exited early"; tail -15 "$logf"; return 1; }
     [[ "$(sdk_e2e_q_file count-worker.sql -v tenant_id="$TENANT" -v worker_code="$wc")" == "1" ]] && return 0
     sleep 3
@@ -205,20 +233,23 @@ sdk_e2e_assert_register() {
 
 # 触发 launch + 轮询全链路,设全局 STAGE_* + 打印阶段结果。
 sdk_e2e_run_chain() {
-  local raw="$1" logf="$2" idemp st inst
+  local raw="$1" logf="$2" st inst="" deadline
   STAGE_DISPATCH=0 STAGE_EXECUTE=0 STAGE_REPORT=0 STAGE_TERMINAL=0
-  idemp="sdk-e2e-$$-$(date +%s 2>/dev/null || echo 0)"
+  SDK_E2E_IDEMPOTENCY_KEY="sdk-e2e-$$-$(date +%s 2>/dev/null || echo 0)"
   curl -fsS -X POST "${TRIGGER_URL}/api/triggers/launch" \
-    -H "Authorization: Bearer ${raw}" -H "Idempotency-Key: ${idemp}" -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer ${raw}" -H "Idempotency-Key: ${SDK_E2E_IDEMPOTENCY_KEY}" -H 'Content-Type: application/json' \
     -d "{\"tenantId\":\"${TENANT}\",\"jobCode\":\"${SDK_E2E_JOB_CODE}\",\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null \
     || { sdk_e2e_fail "launch call failed"; return 1; }
-  for _ in $(seq 1 40); do
+  deadline=$((SECONDS + SDK_E2E_INSTANCE_WAIT_SECONDS))
+  while (( SECONDS < deadline )); do
     inst="$(sdk_e2e_q_file select-latest-job-instance-id.sql \
       -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE")"
     [[ -n "$inst" ]] && break; sleep 1
   done
   [[ -n "$inst" ]] || { sdk_e2e_fail "no job_instance created"; return 1; }
-  for _ in $(seq 1 40); do
+  SDK_E2E_LAUNCH_SETTLED=1
+  deadline=$((SECONDS + SDK_E2E_TERMINAL_WAIT_SECONDS))
+  while (( SECONDS < deadline )); do
     grep -qiE "echo handler|executing|claim" "$logf" && STAGE_DISPATCH=1 && STAGE_EXECUTE=1
     grep -qiE "report" "$logf" && ! grep -qiE "report failed|report.*5[0-9][0-9]|report.*error" "$logf" && STAGE_REPORT=1
     st="$(sdk_e2e_q_file select-job-instance-status.sql \
@@ -237,12 +268,37 @@ sdk_e2e_run_chain() {
   else
     sdk_e2e_fail "job not terminal-success (status=${st:-?})"
   fi
+  [[ $STAGE_TERMINAL == 1 ]]
 }
 
-# 清理探针数据(job/worker/key/topic)。
+# 等待 Trigger 的异步消息已被消费或确定放弃，避免删除定义后 Kafka 才到达。
+sdk_e2e_wait_launch_settled() {
+  local deadline
+  [[ "$SDK_E2E_LAUNCH_SETTLED" == "1" || -z "$SDK_E2E_IDEMPOTENCY_KEY" ]] && return 0
+  deadline=$((SECONDS + SDK_E2E_CLEANUP_WAIT_SECONDS))
+  while (( SECONDS < deadline )); do
+    if [[ "$(sdk_e2e_q_file count-sdk-e2e-unsettled-launch.sql \
+      -v tenant_id="$TENANT" -v idempotency_key="$SDK_E2E_IDEMPOTENCY_KEY")" == "0" ]]; then
+      SDK_E2E_LAUNCH_SETTLED=1
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+# 清理探针数据(job/worker/key/topic)。异步 launch 未收敛时保留定义，避免外键竞态。
 sdk_e2e_cleanup() {
   local wc="$1"
+  if ! sdk_e2e_wait_launch_settled; then
+    sdk_e2e_fail "launch still in flight; preserving job=${SDK_E2E_JOB_CODE} for safe recovery"
+    sdk_e2e_q_file cleanup-sdk-e2e-worker.sql \
+      -v tenant_id="$TENANT" -v worker_code="$wc" >/dev/null
+    sdk_e2e_kafka_topics --delete --topic "batch.task.dispatch.atomic.node.${wc}" 2>/dev/null
+    return 0
+  fi
   sdk_e2e_q_file cleanup-sdk-e2e.sql \
-    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" -v worker_code="$wc" >/dev/null
+    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" \
+    -v queue_code="$SDK_E2E_QUEUE_CODE" -v worker_code="$wc" >/dev/null
   sdk_e2e_kafka_topics --delete --topic "batch.task.dispatch.atomic.node.${wc}" 2>/dev/null
 }

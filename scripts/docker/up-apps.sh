@@ -7,6 +7,8 @@
 #    （read-replica 默认 enabled=true，必须把 postgres-replica 一起拉起来才不会 unhealthy）。
 # 3) 可透传额外 docker compose 参数，例如：
 #    ./scripts/docker/up-apps.sh console-api
+#    默认只重建目标服务(--no-deps)。CI/冷启动场景可设
+#    BATCH_UP_APPS_WITH_DEPS=1，让 Compose 同步拉起目标服务的健康依赖。
 # 4) 隔离容量压测：COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh
 #    若只重建控制面，须显式包含 trigger orchestrator orchestrator-benchmark-replica。
 # =========================================================
@@ -24,6 +26,7 @@ unset _DOCKER_SCRIPT_DIR
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 REQUESTED_COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
 COMPOSE_BENCHMARK="${COMPOSE_BENCHMARK:-0}"
+BATCH_UP_APPS_WITH_DEPS="${BATCH_UP_APPS_WITH_DEPS:-0}"
 
 # env-common 的默认值服务于宿主机脚本，因此 S3 默认指向 localhost:19000。
 # 容器启动入口只保留调用方或 env 文件显式提供的 endpoint；未显式配置时 unset，
@@ -77,7 +80,8 @@ if [[ "$COMPOSE_BENCHMARK" == "1" ]]; then
   compose_files+=(-f deploy/docker/compose/benchmark.yml)
 fi
 
-# 指定应用服务时下方会使用 --no-deps，Compose 因而不会重新执行已退出的 kafka-init。
+# 指定应用服务时默认使用 --no-deps，Compose 因而不会重新执行已退出的 kafka-init；
+# CI/冷启动场景可设 BATCH_UP_APPS_WITH_DEPS=1，显式让 Compose 拉起健康依赖。
 # benchmark 会提高既有 topic 的分区数，必须先完成这一步再重启 producer/consumer，
 # 否则应用会缓存旧拓扑，压测结果不可比较。Kafka 分区只能增加，回到普通 local 后
 # 仍可由较低并发的消费者继续使用，无需也不能自动缩容。
@@ -92,7 +96,7 @@ if [[ "$COMPOSE_BENCHMARK" == "1" && "$#" -gt 0 ]]; then
 fi
 
 up_args=(up -d --force-recreate)
-if [[ "$#" -gt 0 ]]; then
+if [[ "$#" -gt 0 && "$BATCH_UP_APPS_WITH_DEPS" != "1" ]]; then
   # 指定服务时只重建目标，避免为一次 profile / 镜像更新连带滚动其健康依赖。
   # 全量启动（无位置参数）仍由 Compose 根据 depends_on 拉起完整应用栈。
   up_args+=(--no-deps)

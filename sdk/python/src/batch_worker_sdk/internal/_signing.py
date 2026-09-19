@@ -41,7 +41,7 @@ def canonical_string(
     )
 
 
-def sign(  # noqa: PLR0917 — 签名字段与跨语言协议固定对齐
+def sign(
     api_key: str,
     method: str,
     path: str,

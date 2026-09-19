@@ -180,9 +180,9 @@ class TaskDispatcher:
         # thread-safe**(与 _in_flight 一致,owner 是 dispatcher 所在的
         # 唯一 asyncio loop)。
         self._cancel_signals: dict[int, CancellationSignal] = {}
-        # task_id → partitionInvocationId(可能为 None)。在 CLAIM 时从
-        # ``msg.runtimeAttributes`` 提取并缓存,供 LeaseRenewalScheduler 组装
-        # renew body 时回读(openapi TaskHeartbeatRequest 要求带上,fixture 10)。
+        # task_id → partitionInvocationId(可能为 None)。优先缓存 CLAIM 回包中
+        # 平台生成的令牌;旧协议回包不带时回退到 ``msg.runtimeAttributes``。
+        # LeaseRenewalScheduler 和 REPORT 必须复用同一个令牌。
         # 与 ``_cancel_signals`` 同生命周期:on_message 入队即建,done_callback
         # cleanup 时清。**single-event-loop only; not thread-safe**。
         self._partition_invocation_ids: dict[int, str | None] = {}
@@ -445,7 +445,7 @@ class TaskDispatcher:
             claim_body["partitionInvocationId"] = p_inv
 
         try:
-            _claim_resp, status = await self._http.claim_status(task_id, idem_claim, claim_body)
+            claim_resp, status = await self._http.claim_status(task_id, idem_claim, claim_body)
         except AuthError:
             # wire-protocol §B:401/403 视为持久错误,设 fatal 让
             # KafkaTaskConsumer 停止灌入消息;K8s liveness probe 会回收 pod。
@@ -464,6 +464,13 @@ class TaskDispatcher:
             # **不** REPORT。
             logger.info("task %s already claimed by peer (HTTP 409); skipping execution", task_id)
             return
+
+        claim_invocation_id = claim_resp.get("partitionInvocationId")
+        if claim_invocation_id is not None:
+            p_inv = str(claim_invocation_id)
+            self._partition_invocation_ids[task_id] = p_inv
+            runtime_attrs = dict(runtime_attrs)
+            runtime_attrs["partitionInvocationId"] = p_inv
 
         # 路由键 = 平台 JSON 字段 `workerType`(v2);v1 旧名 `taskType` 经回退兼容,与 Java
         # @JsonAlias("taskType") / Rust serde alias 跨语言对齐(防漂移)。平台 v2 已只发 workerType,
@@ -554,7 +561,7 @@ class TaskDispatcher:
             # 不能是裸人读串(否则 invalid input syntax for type json → report 500)。发
             # {code,message} JSON 对象,对齐内建 worker DefaultTaskExecutionWrapper 的契约。
             body["resultSummary"] = json.dumps({"code": "SUCCESS", "message": result.message or ""})
-        self._attach_report_meta(body, msg)
+        self._attach_report_meta(body, msg, task_id)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)
         except PlatformError as ex:
@@ -592,19 +599,21 @@ class TaskDispatcher:
         }
         if outputs:
             body["outputs"] = outputs
-        self._attach_report_meta(body, msg)
+        self._attach_report_meta(body, msg, task_id)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)
         except PlatformError as ex:
             logger.warning("REPORT failure failed for taskId=%s: %s", task_id, ex)
 
-    def _attach_report_meta(self, body: dict[str, Any], msg: dict[str, Any]) -> None:
+    def _attach_report_meta(self, body: dict[str, Any], msg: dict[str, Any], task_id: int) -> None:
         """给 REPORT body 补 traceId / partitionInvocationId(若存在)。"""
         trace_id = msg.get("traceId")
         if trace_id:
             body["traceId"] = trace_id
-        runtime_attrs = msg.get("runtimeAttributes") or {}
-        p_inv = runtime_attrs.get("partitionInvocationId")
+        p_inv = self._partition_invocation_ids.get(task_id)
+        if p_inv is None:
+            runtime_attrs = msg.get("runtimeAttributes") or {}
+            p_inv = runtime_attrs.get("partitionInvocationId")
         if p_inv is not None:
             body["partitionInvocationId"] = str(p_inv)
 

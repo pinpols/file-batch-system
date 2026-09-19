@@ -130,9 +130,10 @@ type HeartbeatRequest struct {
 
 // ClaimResult carries the EffectiveTaskConfig snapshot + lease bound.
 type ClaimResult struct {
-	EffectiveConfig map[string]any `json:"effectiveConfig"`
-	LeaseUntil      string         `json:"leaseUntil"`
-	TraceID         string         `json:"traceId"`
+	EffectiveConfig       map[string]any `json:"effectiveConfig"`
+	LeaseUntil            string         `json:"leaseUntil"`
+	TraceID               string         `json:"traceId"`
+	PartitionInvocationID string         `json:"partitionInvocationId"`
 	// Idempotent is set when the claim returned 409 (already claimed / reclaimed).
 	Idempotent bool `json:"-"`
 }

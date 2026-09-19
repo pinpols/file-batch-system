@@ -309,7 +309,7 @@ async def test_contract_fixture(  # noqa: PLR0911 — fixture 路由表,分支�
         await client.close()
 
 
-async def _assert_fixture(  # noqa: PLR0917 — 契约断言参数需完整保留
+async def _assert_fixture(
     client: PlatformHttpClient,
     when: dict[str, Any],
     status: int,

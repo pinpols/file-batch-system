@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -21,52 +22,43 @@ from tests.handler.conftest import get_attr, require_module
 
 # 11 个具体 handler 的 (模块 dotted path, 类名)。
 ATOMIC_HANDLERS = [
-    ("batch_worker_sdk.handler.atomic.sql", "SqlAtomicHandler"),
-    ("batch_worker_sdk.handler.atomic.shell", "ShellAtomicHandler"),
-    ("batch_worker_sdk.handler.atomic.http", "HttpAtomicHandler"),
-    ("batch_worker_sdk.handler.atomic.stored_proc", "StoredProcAtomicHandler"),
+    ("batch_worker_sdk.handler.atomic", "SqlAtomicHandler"),
+    ("batch_worker_sdk.handler.atomic", "ShellAtomicHandler"),
+    ("batch_worker_sdk.handler.atomic", "HttpAtomicHandler"),
+    ("batch_worker_sdk.handler.atomic", "StoredProcAtomicHandler"),
 ]
 BUILTIN_HANDLERS = [
-    ("batch_worker_sdk.handler.builtin.file_import", "FileImportHandler"),
-    ("batch_worker_sdk.handler.builtin.http_dispatch", "HttpDispatchHandler"),
-    ("batch_worker_sdk.handler.builtin.query_export", "QueryExportHandler"),
+    ("batch_worker_sdk.handler.builtin", "FileImportHandler"),
+    ("batch_worker_sdk.handler.builtin", "HttpDispatchHandler"),
+    ("batch_worker_sdk.handler.builtin", "QueryExportHandler"),
 ]
 TYPED_HANDLERS = [
-    ("batch_worker_sdk.handler.typed.import_handler", "SdkAbstractTypedImportHandler"),
-    ("batch_worker_sdk.handler.typed.export_handler", "SdkAbstractTypedExportHandler"),
-    ("batch_worker_sdk.handler.typed.process_handler", "SdkAbstractTypedProcessHandler"),
-    ("batch_worker_sdk.handler.typed.dispatch_handler", "SdkAbstractTypedDispatchHandler"),
+    ("batch_worker_sdk.handler.typed", "SdkAbstractTypedImportHandler"),
+    ("batch_worker_sdk.handler.typed", "SdkAbstractTypedExportHandler"),
+    ("batch_worker_sdk.handler.typed", "SdkAbstractTypedProcessHandler"),
+    ("batch_worker_sdk.handler.typed", "SdkAbstractTypedDispatchHandler"),
 ]
 ALL_HANDLERS = ATOMIC_HANDLERS + BUILTIN_HANDLERS + TYPED_HANDLERS
 
 
 def _instantiate(dotted: str, cls_name: str):
-    """无参实例化 handler;必要时用最小 fake 回退。"""
+    """构造只用于检查 Protocol 表面的轻量实例。"""
     mod = require_module(dotted)
     cls = get_attr(mod, cls_name)
-    # 具体 handler 必须能无参构造(参数由 SdkTaskContext 提供)。
-    # typed 抽象基类需要写个最小子类。
-    try:
-        return cls()
-    except TypeError:
-        # typed 抽象 → 做一个 no-op 子类把所有抽象方法填上桩;
-        # 我们只 introspect task_type 与 descriptor,不真跑 execute。
+    abstract_methods = getattr(cls, "__abstractmethods__", frozenset())
+    if abstract_methods:
 
-        class _Stub(cls):  # type: ignore[misc, valid-type]
-            def task_type(self) -> str:
-                return f"stub.{cls_name}"
+        def _stub(self: Any, *args: Any, **kwargs: Any) -> Any:
+            return None
 
-            def _stub(self, *a: Any, **kw: Any) -> Any:
-                return None
+        namespace = {name: _stub for name in abstract_methods}
+        namespace["task_type"] = lambda self: f"stub.{cls_name}"
+        return type(f"_{cls_name}ContractStub", (cls,), namespace)()
 
-            # 其余还抽象的成员用宽松桩回退。
-            def __getattr__(self, item: str) -> Any:  # pragma: no cover
-                return self._stub
-
-        try:
-            return _Stub()
-        except TypeError as exc:
-            pytest.skip(f"{cls_name}: cannot stub abstract methods ({exc})")
+    # 构造参数和真实行为已有各 handler 专属测试覆盖,这里隔离检查公共 Protocol。
+    instance = object.__new__(cls)
+    instance._config = SimpleNamespace(task_type=f"stub.{cls_name}")
+    return instance
 
 
 @pytest.mark.parametrize(("dotted", "cls_name"), ALL_HANDLERS)
