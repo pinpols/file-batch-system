@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -139,7 +140,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         request.getConfigType(),
         "configKey",
         request.getConfigKey()));
-    int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
+    int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
     configReleaseMapper.insertConfigRelease(mapOf(
         KEY_TENANT_ID,
         tenantId,
@@ -219,7 +220,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     validateJson(request.getSecretPayloadJson(), "secretPayloadJson");
     Integer latestVersionNo = secretVersionMapper.selectLatestVersionNo(
         mapOf(KEY_TENANT_ID, tenantId, "secretRef", request.getSecretRef()));
-    int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
+    int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
     // 先停用当前版本再插入新版本，保证同一 secretRef 任意时刻只有一条 currentVersion=true，
     // 两步在同一事务内执行，不会出现短暂双活窗口
     secretVersionMapper.deactivateCurrentVersion(
@@ -362,7 +363,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         release.getConfigType(),
         "configKey",
         release.getConfigKey()));
-    if (latestVersionNo != null && !Objects.equals(latestVersionNo, release.getVersionNo())) {
+    if (EmptyChecks.isNotNull(latestVersionNo)
+        && !Objects.equals(latestVersionNo, release.getVersionNo())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.config.release_not_latest",
@@ -404,7 +406,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     if (!Texts.hasText(value)) {
       return;
     }
-    if (safeParseJson(value) == null) {
+    if (EmptyChecks.isNull(safeParseJson(value))) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
     }
@@ -562,7 +564,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         configCode,
         dependentJobs.stream()
             .map(job -> new ConfigDependenciesResponse.DependentJobResponse(
-                job.id(), job.code(), job.name() == null ? "" : job.name()))
+                job.id(), job.code(), EmptyChecks.isNull(job.name()) ? "" : job.name()))
             .toList(),
         dependentJobs.size());
   }

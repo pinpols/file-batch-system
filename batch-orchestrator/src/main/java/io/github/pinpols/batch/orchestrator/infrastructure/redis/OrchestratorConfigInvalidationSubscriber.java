@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -70,7 +71,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
       MeterRegistry meterRegistry) {
     this.redisTemplate = redisTemplate;
     this.cacheService = cacheService;
-    if (meterRegistry == null) {
+    if (EmptyChecks.isNull(meterRegistry)) {
       this.receivedCounter = null;
       this.staleCounter = null;
       this.failureCounter = null;
@@ -100,7 +101,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
       return;
     }
     RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
-    if (connectionFactory == null) {
+    if (EmptyChecks.isNull(connectionFactory)) {
       throw new IllegalStateException(
           "redis connection factory is required for config invalidation subscriber");
     }
@@ -115,12 +116,16 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
 
   @Override
   public void onMessage(Message message, byte[] pattern) {
-    if (message == null || message.getBody() == null || message.getBody().length == 0) {
+    if (EmptyChecks.isNull(message)) {
+      return;
+    }
+    byte[] body = message.getBody();
+    if (EmptyChecks.isNull(body) || body.length == 0) {
       return;
     }
     ConfigCacheInvalidationEvent event;
     try {
-      String payload = new String(message.getBody(), StandardCharsets.UTF_8);
+      String payload = new String(body, StandardCharsets.UTF_8);
       event = JsonUtils.fromJsonStrict(payload, ConfigCacheInvalidationEvent.class);
       apply(event);
     } catch (RuntimeException exception) {
@@ -142,7 +147,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
           "config invalidation revision reconcile skipped: reason={}", exception.getMessage());
       return;
     }
-    if (rawRevision == null || rawRevision.isBlank()) {
+    if (EmptyChecks.isBlank(rawRevision)) {
       return;
     }
     long publishedRevision;
@@ -176,14 +181,14 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   }
 
   private void apply(ConfigCacheInvalidationEvent event) {
-    if (event == null || event.revision() <= 0 || event.keyRevision() <= 0) {
+    if (EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0) {
       increment(failureCounter);
       return;
     }
     recordLag(event.changedAt());
     String key = eventKey(event);
     Long previous = keyRevisions.getIfPresent(key);
-    if (previous != null && event.keyRevision() <= previous) {
+    if (EmptyChecks.isNotNull(previous) && event.keyRevision() <= previous) {
       increment(staleCounter);
       return;
     }
@@ -198,7 +203,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   }
 
   private void recordLag(Instant changedAt) {
-    if (eventLagTimer == null || changedAt == null) {
+    if (EmptyChecks.isNull(eventLagTimer) || EmptyChecks.isNull(changedAt)) {
       return;
     }
     long lagMillis = Math.max(0, Duration.between(changedAt, Instant.now()).toMillis());
@@ -209,7 +214,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     if (!running.compareAndSet(true, false)) {
       return;
     }
-    if (listenerContainer == null) {
+    if (EmptyChecks.isNull(listenerContainer)) {
       return;
     }
     log.info("orchestrator config invalidation subscriber stopping: source={}", source);
@@ -242,7 +247,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   }
 
   private void increment(Counter counter) {
-    if (counter != null) {
+    if (EmptyChecks.isNotNull(counter)) {
       counter.increment();
     }
   }

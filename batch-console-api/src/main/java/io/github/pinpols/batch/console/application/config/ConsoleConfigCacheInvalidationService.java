@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -70,7 +71,7 @@ public class ConsoleConfigCacheInvalidationService {
       MeterRegistry meterRegistry) {
     this.redisTemplate = redisTemplate;
     this.queryCacheService = queryCacheService;
-    if (meterRegistry == null) {
+    if (EmptyChecks.isNull(meterRegistry)) {
       this.publishSuccessCounter = null;
       this.publishFailureCounter = null;
       return;
@@ -211,8 +212,8 @@ public class ConsoleConfigCacheInvalidationService {
           safe(tenantId),
           safe(type),
           safe(code),
-          revision == null ? 0L : revision,
-          keyRevision == null ? 0L : keyRevision,
+          EmptyChecks.isNull(revision) ? 0L : revision,
+          EmptyChecks.isNull(keyRevision) ? 0L : keyRevision,
           Instant.now());
       redisTemplate.convertAndSend(INVALIDATION_CHANNEL, JsonUtils.toJson(event));
       publishedRevision.set(event.revision());
@@ -235,7 +236,7 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   private void increment(Counter counter) {
-    if (counter != null) {
+    if (EmptyChecks.isNotNull(counter)) {
       counter.increment();
     }
   }
@@ -245,7 +246,7 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   private String safe(String value) {
-    if (value == null || value.isBlank()) {
+    if (EmptyChecks.isBlank(value)) {
       return "_";
     }
     return value.replace(':', '_');
