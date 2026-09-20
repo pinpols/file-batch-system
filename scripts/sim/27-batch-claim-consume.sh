@@ -40,8 +40,8 @@ BATCH = os.environ["BATCH_NO"]
 JOB_CODE = os.environ.get("JOB_CODE", "TA_PROCESS_STAGE4_SHARDED")
 PARTITION_COUNT = int(os.environ.get("PARTITION_COUNT", "4"))
 REQUIRE_BATCH_CLAIM = os.environ.get("REQUIRE_BATCH_CLAIM", "true").lower() == "true"
-PG = os.environ.get("PG_CONTAINER", "batch-postgres-primary")
-PGU = os.environ.get("POSTGRES_USER", "batch_user")
+PG = os.environ["PG_CONTAINER"]
+PGU = os.environ["POSTGRES_USER"]
 PLAT = os.environ["PLATFORM_DB"]
 SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 

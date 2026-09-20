@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
 import io.github.pinpols.batch.testing.ObjectStoreContainer;
+import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
@@ -50,7 +51,7 @@ class PreprocessStepObjectLoadIntegrationTest {
 
   @BeforeAll
   static void startMinio() {
-    objectStore = new ObjectStoreContainer();
+    objectStore = TestObjectStoreContainers.create();
     objectStore.start();
     bucket = objectStore.getDefaultBucket();
     client = objectStore.client();

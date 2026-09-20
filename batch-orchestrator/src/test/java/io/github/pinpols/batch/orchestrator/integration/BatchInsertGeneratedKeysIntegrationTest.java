@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -33,7 +34,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * PERF(任务5) 针对性 IT：真 PG 上验证批量 SQL 的三个"纸面上说不准、必须实测"的机制点：
@@ -56,11 +56,8 @@ class BatchInsertGeneratedKeysIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-          DockerImageName.parse("postgres:17"))
-      .withDatabaseName("batch_sql_batch_it")
-      .withUsername("batch_user")
-      .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES =
+      TestPostgresContainers.create("batch_sql_batch_it");
 
   private static SingleConnectionDataSource dataSource;
   private static SqlSessionFactory sqlSessionFactory;

@@ -1,0 +1,2 @@
+# Shared dependencies for repository maintenance, governance, and code-generation scripts.
+PyYAML==6.0.3

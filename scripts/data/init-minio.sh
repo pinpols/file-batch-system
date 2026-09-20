@@ -14,9 +14,13 @@
 #     bash scripts/data/init-minio.sh
 set -eu
 
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=../lib/runtime-defaults.sh
+. "$SCRIPT_DIR/../lib/runtime-defaults.sh"
+
 alias_name="${MINIO_ALIAS_NAME:-local}"
-endpoint="${MINIO_ENDPOINT:-http://minio:9000}"
-bucket="${MINIO_BUCKET:-batch-dev}"
+endpoint="${MINIO_ENDPOINT:-$BATCH_DEFAULT_MINIO_CONTAINER_ENDPOINT}"
+bucket="${MINIO_BUCKET:-$BATCH_DEFAULT_MINIO_BUCKET}"
 
 echo "Waiting for MinIO at ${endpoint} ..."
 until mc alias set "${alias_name}" "${endpoint}" "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do

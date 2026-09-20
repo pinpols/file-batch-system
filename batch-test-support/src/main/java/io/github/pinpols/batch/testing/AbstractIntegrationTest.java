@@ -12,7 +12,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
@@ -26,47 +25,31 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
-  private static final String DEFAULT_DB_USER = "batch_user";
-  private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";
-
   // 2026-05 IT 提速:MinIO + Redis 加 .withReuse(true) 跨 JVM 复用。
   // **PG 不加 reuse**:reuse 会让 outbox_event 等表跨 run 残留,
   // 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure 等依赖 outbox 状态的 IT。
   // PG 单次启动 ~3-5s,影响有限,稳妥优先。
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer PLATFORM_POSTGRES = new PostgreSQLContainer(
-          DockerImageName.parse(TestContainerImages.POSTGRES))
-      .withDatabaseName("batch_platform")
-      .withUsername(DEFAULT_DB_USER)
-      .withPassword(DEFAULT_DB_PASSWORD)
-      .withUrlParam("sslmode", "disable")
+  private static final PostgreSQLContainer PLATFORM_POSTGRES = TestPostgresContainers.platform()
       .withInitScript("db/platform-init.sql")
       .withCommand("postgres", "-c", "max_connections=500");
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer BUSINESS_POSTGRES = new PostgreSQLContainer(
-          DockerImageName.parse(TestContainerImages.POSTGRES))
-      .withDatabaseName("batch_business")
-      .withUsername(DEFAULT_DB_USER)
-      .withPassword(DEFAULT_DB_PASSWORD)
-      .withUrlParam("sslmode", "disable")
+  private static final PostgreSQLContainer BUSINESS_POSTGRES = TestPostgresContainers.business()
       .withInitScript("db/create_biz_tables.sql")
       .withCommand("postgres", "-c", "max_connections=500");
 
   // Kafka 不加 withReuse:OutboxPublishCircuitBreakerKafkaFailureIT 等用 stopKafka/startKafka 做
   // fault injection,reuse 容器禁止 stop。Kafka 单次启动 ~5s,影响有限。
-  private static final KafkaContainer KAFKA =
-      new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA));
+  private static final KafkaContainer KAFKA = TestKafkaContainers.create();
 
   @SuppressWarnings("resource")
-  private static final ObjectStoreContainer MINIO = new ObjectStoreContainer().withReuse(true);
+  private static final ObjectStoreContainer MINIO =
+      TestObjectStoreContainers.create().withReuse(true);
 
   @SuppressWarnings("resource")
-  private static final GenericContainer<?> REDIS = new GenericContainer<>(
-          DockerImageName.parse(TestContainerImages.VALKEY))
-      .withExposedPorts(6379)
-      .withCommand("redis-server", "--appendonly", "yes")
-      .withReuse(true);
+  private static final GenericContainer<?> REDIS =
+      TestValkeyContainers.createPersistent().withReuse(true);
 
   static {
     // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
@@ -207,6 +190,6 @@ public abstract class AbstractIntegrationTest {
   }
 
   protected static int redisPort() {
-    return REDIS.getMappedPort(6379);
+    return REDIS.getMappedPort(TestValkeyContainers.REDIS_PORT);
   }
 }

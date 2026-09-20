@@ -32,7 +32,7 @@ public class KafkaConsumerConfiguration {
   @Value("${spring.kafka.consumer.max-poll-records:20}")
   private int maxPollRecords;
 
-  @Value("${batch.worker.max-concurrent-tasks:8}")
+  @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER)
   private int maxConcurrentTasks;
 
   @Value("${batch.worker.batch-claim.enabled:false}")
@@ -137,16 +137,17 @@ public class KafkaConsumerConfiguration {
     if (requiredPermits <= maxConcurrentTasks) {
       return;
     }
-    throw new IllegalStateException(
-        "batch.worker.batch-claim.enabled=true requires batch.worker.max-concurrent-tasks "
-            + ">= spring.kafka.listener.concurrency * spring.kafka.consumer.max-poll-records; got "
-            + "listener-concurrency="
-            + effectiveListenerConcurrency
-            + ", max-poll-records="
-            + maxPollRecords
-            + ", max-concurrent-tasks="
-            + maxConcurrentTasks
-            + ", required-permits="
-            + requiredPermits);
+    throw new IllegalStateException("batch.worker.batch-claim.enabled=true requires "
+        + WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+        + " "
+        + ">= spring.kafka.listener.concurrency * spring.kafka.consumer.max-poll-records; got "
+        + "listener-concurrency="
+        + effectiveListenerConcurrency
+        + ", max-poll-records="
+        + maxPollRecords
+        + ", max-concurrent-tasks="
+        + maxConcurrentTasks
+        + ", required-permits="
+        + requiredPermits);
   }
 }

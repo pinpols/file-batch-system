@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
@@ -23,7 +24,7 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
       BatchDateTimeSupport dateTimeSupport,
       AtomicWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
-      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
     super(
         workerLifecycleManager,
         heartbeatService,

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.runtime;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
@@ -28,7 +29,7 @@ public class ImportWorkerLoop extends AbstractWorkerLoop {
       BatchDateTimeSupport dateTimeSupport,
       ImportWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
-      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
     super(
         workerLifecycleManager,
         heartbeatService,

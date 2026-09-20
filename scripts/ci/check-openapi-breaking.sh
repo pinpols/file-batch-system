@@ -72,6 +72,11 @@ for spec in "${SPECS[@]}"; do
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E "in API (GET|POST|PUT|DELETE|PATCH) ${string_fix_paths} .*response.s property type/format changed from \`string\`/\`\` to \`object\`/\`\`.*\[response-property-type-changed\]" \
       >> "$clarification_ignore_tmp" || true
+  # configPayloadJson 自该端点落地起就在 Java DTO 上使用 @NotBlank，缺失请求始终返回 400；
+  # 此处只把既有运行时契约补录进 spec。精确限定 path + property，其他新增 required 仍会失败。
+  oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
+    | grep -E 'in API POST /api/console/config/releases .*request property `configPayloadJson` became required.*\[request-property-became-required\]' \
+      >> "$clarification_ignore_tmp" || true
   # 仅 ERR 级 breaking 才 fail;成功时静默(该 spec 有重复参数定义,oasdiff 会刷大量
   # request-parameter-removed 的 WARN 噪音,失败时才打全量便于定位)。
   out="$(oasdiff breaking "$base_tmp" "$spec" --fail-on ERR \

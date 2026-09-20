@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -68,7 +69,7 @@ import org.springframework.transaction.annotation.Transactional;
  * config_change_log}（operatorId / traceId / reason / 变更摘要），提供完整审计轨迹。
  *
  * <p>JSON 字段（configPayloadJson / secretPayloadJson）入库前经 {@link #validateJson}
- * 解析校验格式合法性，防止把坏 JSON 持久化到 jsonb 字段上。
+ * 解析校验格式合法性；配置发布载荷在创建时和提交审批时都会执行类型级校验。
  */
 @Service
 @RequiredArgsConstructor
@@ -81,6 +82,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private static final String KEY_TENANT_ID = "tenantId";
   private static final String KEY_GRAY_SCOPE_JSON = "grayScopeJson";
   private static final String KEY_RELEASE_ID = "releaseId";
+  private static final String EMPTY_JSON_OBJECT = "{}";
   private static final String REDACTED_SECRET_PAYLOAD = "{\"redacted\":true}";
 
   /** 配置发布状态机合法转换（nextStatus → 允许的当前状态集合）。 */
@@ -143,7 +145,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         "versionNo",
         nextVersionNo,
         KEY_GRAY_SCOPE_JSON,
-        REDACTED_SECRET_PAYLOAD,
+        null,
         "configPayloadJson",
         request.getConfigPayloadJson(),
         KEY_EFFECTIVE_FROM_AT,
@@ -534,8 +536,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         "IMMEDIATE_AFTER_CONFIRMATION",
         false,
         applyConfirmationStatus(entity.getConfigStatus()),
-        ConsoleTextSanitizer.safeDisplay(entity.getGrayScope()),
-        ConsoleTextSanitizer.safeDisplay(entity.getConfigPayload()),
+        jsonResponse(entity.getGrayScope()),
+        jsonResponse(entity.getConfigPayload()),
         entity.getEffectiveFromAt(),
         entity.getEffectiveToAt(),
         entity.getPublishedAt(),
@@ -557,6 +559,11 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     return "NOT_RELEASED";
   }
 
+  /** JSON 字符串由 Jackson 负责传输转义；HTML 转义会把引号改成实体并破坏客户端解析。 */
+  private static String jsonResponse(String value) {
+    return Texts.hasText(value) ? value : EMPTY_JSON_OBJECT;
+  }
+
   private ConsoleSecretVersionResponse toSecretVersionResponse(SecretVersionEntity entity) {
     return new ConsoleSecretVersionResponse(
         entity.getId(),
@@ -570,7 +577,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         entity.getRotationWindowEndAt(),
         entity.getEffectiveFromAt(),
         entity.getEffectiveToAt(),
-        null,
+        REDACTED_SECRET_PAYLOAD,
         ConsoleTextSanitizer.safeDisplay(entity.getRotationReason()),
         ConsoleTextSanitizer.safeDisplay(entity.getCreatedBy()),
         ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy()),

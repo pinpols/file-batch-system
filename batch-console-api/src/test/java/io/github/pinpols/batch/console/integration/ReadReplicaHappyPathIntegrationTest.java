@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.config.RoutingHints;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Collection;
@@ -26,7 +26,6 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * P2-4 happy-path IT：起独立第二个 PG 容器扮演 replica，验证 prod 默认开启 {@code read-replica.enabled=true} 下：
@@ -62,12 +61,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
   private static final String REPLICA_DB_NAME = "batch_replica";
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer REPLICA_PG = new PostgreSQLContainer(
-          DockerImageName.parse(TestContainerImages.POSTGRES))
-      .withDatabaseName(REPLICA_DB_NAME)
-      .withUsername("batch_user")
-      .withPassword("batch_pass_123")
-      .withUrlParam("sslmode", "disable")
+  private static final PostgreSQLContainer REPLICA_PG = TestPostgresContainers.create(
+          REPLICA_DB_NAME)
       // socketTimeout：query 在已建立连接上读响应的最大时长（秒）。Hikari 的 connectionTimeout
       // 只覆盖"从池里借连接"，不覆盖"连接已借出后查询读响应"。replica 容器被 pause 后，
       // 在已校验过的存量连接上跑 query 会挂死在 TCP read，需要 driver 层的 socketTimeout 回退。

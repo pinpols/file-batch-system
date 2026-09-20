@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 版本对齐校验（CI 门禁）
 #   1. 应用版本关键落点对齐（pom / load-tests / helm / OpenAPI / SDK 文档 / CHANGELOG）
-#   2. 4 个 .env 文件里每个 *_IMAGE_TAG 值一致           （基础服务版本跨环境不漂移）
+#   2. .env 文件里的每个 *_IMAGE_TAG 值一致               （基础服务版本跨环境不漂移）
+#   3. PostgreSQL/Kafka/MinIO/Valkey 的 Testcontainers 镜像与 .env.example 对齐
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -226,6 +227,41 @@ for tag in "${TAGS[@]}"; do
     FAIL=1
   else
     echo "  ✓ ${tag} = ${base}"
+  fi
+done
+
+# ─── 3. 四项核心基础设施测试镜像对齐 ─────────────────────────────
+echo ""
+echo "── 核心基础设施测试镜像（Testcontainers ↔ .env.example） ─────"
+
+TEST_IMAGE_SOURCE="$ROOT/batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestContainerImages.java"
+declare -A CORE_IMAGE_PREFIXES=(
+  [POSTGRES]="postgres"
+  [KAFKA]="apache/kafka"
+  [MINIO]="minio/minio"
+  [VALKEY]="valkey/valkey"
+)
+declare -A CORE_IMAGE_TAGS=(
+  [POSTGRES]="POSTGRES_IMAGE_TAG"
+  [KAFKA]="KAFKA_IMAGE_TAG"
+  [MINIO]="MINIO_IMAGE_TAG"
+  [VALKEY]="VALKEY_IMAGE_TAG"
+)
+
+for service in POSTGRES KAFKA MINIO VALKEY; do
+  tag_name="${CORE_IMAGE_TAGS[$service]}"
+  tag_value=$(grep -E "^${tag_name}=" "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+  expected="${CORE_IMAGE_PREFIXES[$service]}:${tag_value}"
+  actual=$(sed -nE "s/.*public static final String ${service} = \"([^\"]+)\";.*/\1/p" \
+    "$TEST_IMAGE_SOURCE")
+  if [[ -z "$actual" ]]; then
+    echo "  ✗ TestContainerImages.${service} 缺失或无法解析" >&2
+    FAIL=1
+  elif [[ "$actual" != "$expected" ]]; then
+    echo "  ✗ TestContainerImages.${service}=${actual}，应与 ${tag_name} 对齐为 ${expected}" >&2
+    FAIL=1
+  else
+    echo "  ✓ ${service} = ${actual}"
   fi
 done
 

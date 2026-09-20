@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
+import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
@@ -153,7 +154,7 @@ public class TriggerReconciler {
         // 判断主调度漂移，否则会 delete-and-add 整个 Job，连恢复 Trigger 一起删掉。
         return false;
       }
-      if ("CRON".equalsIgnoreCase(type)) {
+      if (ScheduleType.CRON.code().equalsIgnoreCase(type)) {
         if (!(quartzTrigger instanceof CronTrigger ct)) {
           return true;
         }
@@ -164,7 +165,7 @@ public class TriggerReconciler {
             EmptyChecks.isNull(ct.getTimeZone()) ? null : ct.getTimeZone().getID();
         return !Objects.equals(quartzTz, descriptor.getTimezone());
       }
-      if ("FIXED_RATE".equalsIgnoreCase(type)) {
+      if (ScheduleType.FIXED_RATE.code().equalsIgnoreCase(type)) {
         if (!(quartzTrigger instanceof SimpleTrigger st)) {
           return true;
         }

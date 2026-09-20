@@ -29,10 +29,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SQL_DIR="$ROOT/scripts/sim/sql"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
 
 PG_CONTAINER="${PG_CONTAINER:?需设置 PG_CONTAINER}"
-POSTGRES_USER="${POSTGRES_USER:-batch}"
-PG_PLATFORM_DB="${PG_PLATFORM_DB:-batch_platform}"
+POSTGRES_USER="${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}"
+PG_PLATFORM_DB="${PG_PLATFORM_DB:-$BATCH_DEFAULT_POSTGRES_DATABASE}"
 RESTORE_CMD="${RESTORE_CMD:?需设置 RESTORE_CMD(你的备份工具恢复命令;可用 RESTORE_TARGET_TIME)}"
 RTO_BUDGET_S="${RTO_BUDGET_S:-7200}"
 READY_TIMEOUT_S="${READY_TIMEOUT_S:-1800}"

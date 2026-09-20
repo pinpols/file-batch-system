@@ -17,13 +17,22 @@
 #   TENANT GOROOT_HINT
 # =============================================================================
 
+# repo root (library lives under scripts/lib/)
+SDK_E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=runtime-defaults.sh
+source "$SDK_E2E_ROOT/scripts/lib/runtime-defaults.sh"
+
 # ── 默认值(入口可覆盖)──────────────────────────────────────────────────────
-: "${PGHOST:=localhost}"; : "${PGPORT:=15432}"; : "${PGUSER:=batch_user}"
-: "${PGDATABASE:=batch_platform}"; : "${BATCH_PLATFORM_DB_PASSWORD:=batch_pass_123}"
-: "${POSTGRES_CONTAINER:=batch-postgres-primary}"
-: "${ORCH_URL:=http://localhost:18082}"; : "${TRIGGER_URL:=http://localhost:18081}"
-: "${KAFKA_HOST_PORT:=19092}"; : "${KAFKA_CONTAINER:=batch-kafka}"; : "${TENANT:=default-tenant}"
-: "${KAFKA_CONTAINER_BIN_DIR:=/opt/kafka/bin}"
+: "${PGHOST:=localhost}"; : "${PGPORT:=$BATCH_DEFAULT_POSTGRES_PORT}"
+: "${PGUSER:=$BATCH_DEFAULT_POSTGRES_USERNAME}"
+: "${PGDATABASE:=$BATCH_DEFAULT_POSTGRES_DATABASE}"
+: "${BATCH_PLATFORM_DB_PASSWORD:=$BATCH_DEFAULT_POSTGRES_PASSWORD}"
+: "${POSTGRES_CONTAINER:=$BATCH_DEFAULT_POSTGRES_CONTAINER}"
+: "${ORCH_URL:=http://localhost:$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
+: "${TRIGGER_URL:=http://localhost:$BATCH_DEFAULT_TRIGGER_PORT}"
+: "${KAFKA_HOST_PORT:=$BATCH_DEFAULT_KAFKA_HOST_PORT}"
+: "${KAFKA_CONTAINER:=$BATCH_DEFAULT_KAFKA_CONTAINER}"; : "${TENANT:=default-tenant}"
+: "${KAFKA_CONTAINER_BIN_DIR:=$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
 if [[ -z "${GOROOT_HINT:-}" ]]; then
   if command -v go >/dev/null 2>&1; then
     GOROOT_HINT="$(go env GOROOT)"
@@ -42,8 +51,6 @@ SDK_E2E_IDEMPOTENCY_KEY=""
 SDK_E2E_LAUNCH_SETTLED=0
 export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
 
-# repo root (库在 scripts/lib/)
-SDK_E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SDK_E2E_SQL_DIR="$SDK_E2E_ROOT/scripts/lib/sql"
 
 # 只引入公共地址格式化和 PostgreSQL 客户端入口，不重读环境文件；入口脚本
@@ -104,14 +111,14 @@ sdk_e2e_kafka_topics() {
       "$bin" --bootstrap-server "$KAFKA_BOOTSTRAP" "$@"
       ;;
     docker)
-      docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server kafka:29092 "$@"
+      docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server "$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP" "$@"
       ;;
     auto)
       local bin
       if bin="$(sdk_e2e_kafka_topics_bin)"; then
         "$bin" --bootstrap-server "$KAFKA_BOOTSTRAP" "$@"
       else
-        docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server kafka:29092 "$@"
+        docker exec "$KAFKA_CONTAINER" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" --bootstrap-server "$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP" "$@"
       fi
       ;;
     *) sdk_e2e_fail "BATCH_SCRIPT_RUNTIME must be one of: auto, host, docker"; return 2 ;;

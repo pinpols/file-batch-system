@@ -1,4 +1,4 @@
-.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one
+.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one python-env
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
@@ -11,6 +11,11 @@
 .PHONY: help
 
 ## ── 本地开发环境 ──────────────────────────────────────────────────────────────
+
+# 创建仓库脚本专用 Python 环境，避免修改系统 Python。
+python-env:
+	python3 -m venv .venv
+	.venv/bin/python -m pip install --requirement scripts/requirements.txt
 
 # 构建所有应用模块 jar（不启动进程）
 dev-build:

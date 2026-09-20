@@ -23,16 +23,14 @@ set -uo pipefail
 # ---- 配置(从 .env.local / .env.example 取,带默认)----
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
-for envf in "$REPO_ROOT/.env.local" "$REPO_ROOT/.env.example"; do
-  # shellcheck disable=SC1090 # 按优先级加载仓库环境文件，路径在运行时确定。
-  [[ -f "$envf" ]] && { set -a; . "$envf"; set +a; break; }
-done
+# shellcheck source=../../lib/env-common.sh
+source "$REPO_ROOT/scripts/lib/env-common.sh"
 
-PG_CONTAINER=${PG_CONTAINER:-batch-postgres-primary}
-PG_USER=${POSTGRES_USER:-batch_user}
+PG_CONTAINER=${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}
+PG_USER=${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}
 PG_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-PLATFORM_DB=${POSTGRES_DB:-batch_platform}
-BUSINESS_DB=${BUSINESS_DB_NAME:-batch_business}
+PLATFORM_DB=${POSTGRES_DB:-$BATCH_DEFAULT_POSTGRES_DATABASE}
+BUSINESS_DB=${BUSINESS_DB_NAME:-$BATCH_DEFAULT_BUSINESS_DATABASE}
 RLS_SQL="$REPO_ROOT/scripts/db/business/rls-phase-a.sql"
 DR_SQL_DIR="$REPO_ROOT/scripts/db/backup/sql"
 

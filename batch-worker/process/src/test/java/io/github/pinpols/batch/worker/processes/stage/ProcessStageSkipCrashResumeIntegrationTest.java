@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -62,8 +62,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
   private static final Long PIPELINE_INSTANCE_ID = 7001L;
   private static final Long TASK_ID = 4242L;
 
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(TestContainerImages.POSTGRES);
+  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
 
   private JdbcTemplate jdbcTemplate;
   private SqlTransformComputePlugin plugin;

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
@@ -24,11 +24,8 @@ class BatchDaySqlMigrationsIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-          DockerImageName.parse("postgres:17"))
-      .withDatabaseName("batch_day_sql_guard")
-      .withUsername("batch_user")
-      .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES =
+      TestPostgresContainers.create("batch_day_sql_guard");
 
   @Test
   void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {

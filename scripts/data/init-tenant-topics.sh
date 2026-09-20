@@ -27,8 +27,12 @@
 # =========================================================
 set -eu
 
-bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
-kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=../lib/runtime-defaults.sh
+. "$SCRIPT_DIR/../lib/runtime-defaults.sh"
+
+bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
+kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
 tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"

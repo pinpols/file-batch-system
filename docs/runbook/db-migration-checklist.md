@@ -36,10 +36,11 @@ PR 评审者要求 backfill migration 必须包含孤儿处置 SQL。
 
 ### 3. `NOT VALID` 加约束必须同 sprint 配 `VALIDATE` migration
 
-**反例**：[V124](../../db/migration/V124__r3_constraint_hardening.sql) 加 5 处 CHECK / FK `NOT VALID`，原计划运维窗口手工 `VALIDATE CONSTRAINT`，实际滞留 数周未跑；DB 长期处于"约束已加但允许新行违反"drift 状态。V125 / V126 同。R7 收尾 V127 一次性 VALIDATE。
+**反例**：[V124](../../db/migration/V124__r3_constraint_hardening.sql) 加 5 处 CHECK / FK `NOT VALID`，原计划运维窗口手工 `VALIDATE CONSTRAINT`，实际滞留数周未跑；DB 长期处于"新写入受约束、历史数据尚未核验"状态。V125 / V126 同。R7 收尾 V127 一次性 VALIDATE。
 
 **规则**：
-- 加 `NOT VALID` 必须同 sprint 内补 `VALIDATE CONSTRAINT` migration（模板见 V127）
+- 加 `NOT VALID` 必须在同次发布完成 `VALIDATE CONSTRAINT`（通常放在同一 migration，模板见 V127）
+- 只有数据库拿不到转换历史数据所需的应用密钥时，才允许由同一 Flyway 事务内的 callback 先转换，随后仍由 migration `VALIDATE`；必须配真 PG 升级 IT，且 `ApplicationReadyEvent` 守护仍要求最终零未校验约束（V210/V211 是当前唯一用例）
 - 启动期 `NotValidConstraintGuard` 扫 `pg_constraint.convalidated=false`，任何未 VALIDATE 约束都 fail-fast
 - 不能 VALIDATE（存量真的违反约束）就**不要加约束**，改 service 层断言
 

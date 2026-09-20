@@ -5,14 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 class StatefulBackendGuardIntegrationTest {
 
@@ -24,10 +23,7 @@ class StatefulBackendGuardIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startPostgres() {
-    postgres = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-        .withDatabaseName("batch_platform")
-        .withUsername("batch_user")
-        .withPassword("batch_pass_123");
+    postgres = TestPostgresContainers.platform();
     postgres.start();
     HikariConfig config = new HikariConfig();
     config.setJdbcUrl(postgres.getJdbcUrl());

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -18,7 +18,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * P2 tenant-routing 路由正确性 IT(CI 常驻,自带 Testcontainers 双 biz PG,无 env-gate)。
@@ -30,17 +29,11 @@ import org.testcontainers.utility.DockerImageName;
  */
 class BusinessMultiShardRoutingIntegrationTest {
 
-  private static final DockerImageName PG = DockerImageName.parse(TestContainerImages.POSTGRES);
+  @SuppressWarnings("resource")
+  private static final PostgreSQLContainer SHARD0 = TestPostgresContainers.business();
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer SHARD0 = new PostgreSQLContainer(PG)
-      .withDatabaseName("batch_business")
-      .withUrlParam("sslmode", "disable");
-
-  @SuppressWarnings("resource")
-  private static final PostgreSQLContainer SHARD1 = new PostgreSQLContainer(PG)
-      .withDatabaseName("batch_business")
-      .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer SHARD1 = TestPostgresContainers.business();
 
   private static HikariDataSource ds0;
   private static HikariDataSource ds1;

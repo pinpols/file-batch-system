@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -42,8 +42,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("selectSucceededStepCodes:每个 step 最新一次 run 为 SUCCESS 才可跳过")
 class PlatformFileRuntimeMapperStageSkipIntegrationTest {
 
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(TestContainerImages.POSTGRES);
+  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
 
   private JdbcTemplate jdbcTemplate;
   private SqlSessionFactory sqlSessionFactory;

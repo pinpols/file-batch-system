@@ -152,7 +152,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup build environment
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-build-env
 
       - name: Install squawk + oasdiff (迁移/契约守护工具)
@@ -189,10 +189,7 @@ jobs:
       - name: Verify generated dicts in sync
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        # codegen 依赖 PyYAML；runner 镜像通常已预装，缺失时补装（失败会由下方 import 报错暴露）
-        run: |
-          python3 -m pip install --user pyyaml >/dev/null 2>&1 || true
-          python3 scripts/codegen/gen-error-codes-dict.py --check
+        run: python3 scripts/codegen/gen-error-codes-dict.py --check
 
       - name: Verify yml ↔ docker-compose default sync
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
@@ -388,11 +385,10 @@ jobs:
         # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(CLAUDE.md 红线)。
         run: bash scripts/ci/check-db-scripts-safety.sh
 
-      - name: Version alignment (pom revision ↔ Chart appVersion ↔ load-tests)
+      - name: Version and infrastructure image alignment
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        # 校验根 pom <revision> 与 helm Chart appVersion、load-tests/pom.xml 版本字面量一致。
-        # load-tests 是独立 reactor,版本手工同步(CLAUDE.md 点名高危点)。
+        # 校验应用版本落点、环境镜像标签和四项核心 Testcontainers 镜像一致。
         run: bash scripts/ci/check-version-alignment.sh
 
       - name: Helm PrometheusRule sync (告警规则 chart 副本 ↔ canonical)

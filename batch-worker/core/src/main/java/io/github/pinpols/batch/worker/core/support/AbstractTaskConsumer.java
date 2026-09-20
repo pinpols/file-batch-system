@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
@@ -139,7 +140,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
     this.backpressure = new TaskConsumerBackpressureController(
         kafkaListenerEndpointRegistry,
         meterRegistryProvider,

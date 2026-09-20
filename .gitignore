@@ -5,6 +5,7 @@
 .env.prod
 .env.*.local
 .ruff_cache/
+.venv/
 /.remember
 .local/
 # biz 分片真凭据不入库,只提交 *.env.example 模板

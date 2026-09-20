@@ -20,10 +20,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SQL_DIR="$ROOT/scripts/sim/sql"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
 
 PG_CONTAINER="${PG_CONTAINER:?需设置 PG_CONTAINER(平台 PG 容器名)}"
-POSTGRES_USER="${POSTGRES_USER:-batch}"
-PG_PLATFORM_DB="${PG_PLATFORM_DB:-batch_platform}"
+POSTGRES_USER="${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}"
+PG_PLATFORM_DB="${PG_PLATFORM_DB:-$BATCH_DEFAULT_POSTGRES_DATABASE}"
 WORKER_CONTAINERS="${WORKER_CONTAINERS:?需设置 WORKER_CONTAINERS(空格分隔的 worker 容器名)}"
 # 回收 + 重投 + 重跑的最大等待秒数。需 ≥ lease/task 超时阈值 + 一轮重跑。
 SETTLE_TIMEOUT_S="${SETTLE_TIMEOUT_S:-180}"

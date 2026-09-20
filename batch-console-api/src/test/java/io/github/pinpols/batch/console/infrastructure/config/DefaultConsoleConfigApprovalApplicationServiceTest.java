@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -74,9 +76,28 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
 
     service.submit(10L, request);
 
+    verify(configReleaseApplyService).validate("JOB", "job-1", "{\"jobCode\":\"job-1\"}");
     verify(configApprovalMapper).insert(anyMap());
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
+  }
+
+  @Test
+  void shouldRejectSubmit_whenDraftPayloadIsMissing() {
+    ConfigReleaseEntity release = release(ConfigLifecycleStatus.DRAFT.code());
+    release.setConfigPayload(null);
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(release);
+    doThrow(new IllegalArgumentException("config payload is required"))
+        .when(configReleaseApplyService)
+        .validate(eq("JOB"), eq("job-1"), isNull());
+
+    ConfigReleaseApprovalSubmitRequest request = new ConfigReleaseApprovalSubmitRequest();
+    request.setTenantId("t1");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submit(10L, request))
+        .isInstanceOf(IllegalArgumentException.class);
+    verify(configApprovalMapper, never()).insert(anyMap());
+    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
   }
 
   @Test
@@ -142,6 +163,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     release.setTenantId("t1");
     release.setConfigType("JOB");
     release.setConfigKey("job-1");
+    release.setConfigPayload("{\"jobCode\":\"job-1\"}");
     release.setVersionNo(1);
     release.setConfigStatus(status);
     return release;

@@ -235,7 +235,7 @@ prereq() {
   set -a; . ./.env.local; set +a
   bash scripts/sim/01-init-biz.sh >"$SIM_LOG_DIR/initbiz.log" 2>&1 && ok "01-init-biz" || { c_red "  ✗ 01-init-biz(见 $SIM_LOG_DIR/initbiz.log)"; return 1; }
   # biz 角色密码本地注入(SQL 脚本不再含默认密码);本地复用本地 DB 密码。
-  local biz_pw="${POSTGRES_PASSWORD:-batch_pass_123}"
+  local biz_pw="${POSTGRES_PASSWORD:-$BATCH_DEFAULT_POSTGRES_PASSWORD}"
   docker exec -i "$PG" psql -q -U "$PGU" -d "$BIZ_DB" \
     -v writer_password="$biz_pw" -v admin_password="$biz_pw" \
     < scripts/db/business/rls-phase-a.sql >/dev/null 2>&1 && ok "rls-phase-a" || warn "rls-phase-a 跳过"

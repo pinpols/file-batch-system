@@ -247,6 +247,7 @@ services:
       KAFKA_PARTITIONS_TRIGGER_LAUNCH: ${KAFKA_PARTITIONS_TRIGGER_LAUNCH:-12}
     volumes:
       - ./scripts/data/init-kafka-topics.sh:/scripts/data/init-kafka-topics.sh:ro
+      - ./scripts/lib/runtime-defaults.sh:/scripts/lib/runtime-defaults.sh:ro
     entrypoint: ["/bin/sh", "/scripts/data/init-kafka-topics.sh"]
     restart: "no"
     networks:
@@ -313,6 +314,7 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET}
     volumes:
       - ./scripts/data/init-minio.sh:/scripts/data/init-minio.sh:ro
+      - ./scripts/lib/runtime-defaults.sh:/scripts/lib/runtime-defaults.sh:ro
     entrypoint: ["/bin/sh", "/scripts/data/init-minio.sh"]
     restart: "no"
     networks:
