@@ -62,7 +62,7 @@ public final class ConfigPackageSampleDataFactory {
   }
 
   public static Set<String> normalizeScenarios(List<String> rawScenarios) {
-    if (rawScenarios == null || rawScenarios.isEmpty()) {
+    if (EmptyChecks.isEmpty(rawScenarios)) {
       return Set.of(SCENARIO_ALL);
     }
     LinkedHashSet<String> normalized = new LinkedHashSet<>();
@@ -73,7 +73,7 @@ public final class ConfigPackageSampleDataFactory {
       }
       normalized.add(scenario);
     }
-    return normalized.isEmpty() ? Set.of(SCENARIO_ALL) : normalized;
+    return EmptyChecks.isEmpty(normalized) ? Set.of(SCENARIO_ALL) : normalized;
   }
 
   public static String normalizeScenario(String rawScenario) {

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthProfileResponse;
@@ -73,7 +74,7 @@ public class ConsoleAuthApplicationService {
   }
 
   private boolean mustChangePassword(String username) {
-    return username != null
+    return EmptyChecks.isNotNull(username)
         && userAccountService
             .findByUsername(username)
             .map(ConsoleUserAccount::mustChangePassword)
