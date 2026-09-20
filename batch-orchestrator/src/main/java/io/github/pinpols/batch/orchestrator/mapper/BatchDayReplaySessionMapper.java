@@ -44,4 +44,10 @@ public interface BatchDayReplaySessionMapper {
   /** 列出 RUNNING 状态的 session，dispatcher / reconciler 用。 */
   List<BatchDayReplaySessionEntity> selectByStatus(
       @Param("status") String status, @Param("limit") int limit);
+
+  /** UI 历史列表：按租户倒序查看最近创建的 replay session。 */
+  List<BatchDayReplaySessionEntity> selectRecentByTenant(
+      @Param("tenantId") String tenantId,
+      @Param("status") String status,
+      @Param("limit") int limit);
 }

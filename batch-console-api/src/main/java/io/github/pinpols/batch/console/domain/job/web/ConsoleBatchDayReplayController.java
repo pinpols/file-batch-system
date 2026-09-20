@@ -77,6 +77,26 @@ public class ConsoleBatchDayReplayController {
     return responseFactory.forwardOrchestrator(resp);
   }
 
+  @GetMapping("/sessions")
+  public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> list(
+      @RequestParam(value = "tenantId", required = false) String tenantId,
+      @RequestParam(value = "status", required = false) String status,
+      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    String uri = status == null || status.isBlank()
+        ? "/internal/orchestrator/batch-day-replay/sessions?tenantId={tenantId}&limit={limit}"
+        : "/internal/orchestrator/batch-day-replay/sessions?tenantId={tenantId}&limit={limit}&status={status}";
+    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> resp =
+        status == null || status.isBlank()
+            ? proxyClient().get().uri(uri, resolved, limit).retrieve().body(sessionListResponse())
+            : proxyClient()
+                .get()
+                .uri(uri, resolved, limit, status)
+                .retrieve()
+                .body(sessionListResponse());
+    return responseFactory.forwardOrchestrator(resp);
+  }
+
   @PostMapping("/sessions/{sessionId}/approve")
   @Idempotent
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
@@ -176,6 +196,12 @@ public class ConsoleBatchDayReplayController {
 
   private static ParameterizedTypeReference<CommonResponse<ConsoleBatchDayReplaySessionResponse>>
       sessionResponse() {
+    return new ParameterizedTypeReference<>() {};
+  }
+
+  private static ParameterizedTypeReference<
+          CommonResponse<List<ConsoleBatchDayReplaySessionResponse>>>
+      sessionListResponse() {
     return new ParameterizedTypeReference<>() {};
   }
 

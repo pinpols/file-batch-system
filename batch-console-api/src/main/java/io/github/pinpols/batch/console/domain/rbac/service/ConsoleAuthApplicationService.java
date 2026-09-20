@@ -9,6 +9,8 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccount;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccountServiceSupport;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -46,6 +48,7 @@ public class ConsoleAuthApplicationService {
   private final ConsoleSecurityProperties securityProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleMenuRegistry menuRegistry;
+  private final ConsoleUserAccountServiceSupport userAccountService;
 
   public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
     return loginService.login(request);
@@ -60,11 +63,21 @@ public class ConsoleAuthApplicationService {
 
   public ConsoleAuthProfileResponse profile(Authentication authentication) {
     Set<String> auths = authorities(authentication);
+    String username = username(authentication);
     return new ConsoleAuthProfileResponse(
-        username(authentication),
+        username,
         tenantId(authentication),
         auths,
-        menuRegistry.filterByAuthorities(auths));
+        menuRegistry.filterByAuthorities(auths),
+        mustChangePassword(username));
+  }
+
+  private boolean mustChangePassword(String username) {
+    return username != null
+        && userAccountService
+            .findByUsername(username)
+            .map(ConsoleUserAccount::mustChangePassword)
+            .orElse(false);
   }
 
   private String username(Authentication authentication) {

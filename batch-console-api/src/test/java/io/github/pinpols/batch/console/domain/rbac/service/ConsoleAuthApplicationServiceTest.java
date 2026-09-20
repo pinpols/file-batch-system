@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,10 +18,13 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccount;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccountServiceSupport;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +49,9 @@ class ConsoleAuthApplicationServiceTest {
   @Mock
   private ConsoleRequestMetadataResolver requestMetadataResolver;
 
+  @Mock
+  private ConsoleUserAccountServiceSupport userAccountService;
+
   private ConsoleSecurityProperties securityProperties;
   private ConsoleAuthApplicationService service;
 
@@ -60,7 +67,9 @@ class ConsoleAuthApplicationServiceTest {
         sessionRegistry,
         securityProperties,
         requestMetadataResolver,
-        new ConsoleMenuRegistry(new ConsoleMenuProperties()));
+        new ConsoleMenuRegistry(new ConsoleMenuProperties()),
+        userAccountService);
+    lenient().when(userAccountService.findByUsername(anyString())).thenReturn(Optional.empty());
   }
 
   @Test
@@ -102,6 +111,21 @@ class ConsoleAuthApplicationServiceTest {
     assertThat(response.username()).isEqualTo("alice");
     assertThat(response.tenantId()).isEqualTo("t1");
     assertThat(response.authorities()).containsExactly("ROLE_ADMIN");
+    assertThat(response.mustChangePassword()).isFalse();
+  }
+
+  @Test
+  void profile_includesMustChangePasswordFromUserAccount() {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    when(userAccountService.findByUsername("alice"))
+        .thenReturn(Optional.of(new ConsoleUserAccount(
+            "t1", "alice", "Alice", "hash", Set.of("ROLE_ADMIN"), true, true)));
+
+    ConsoleAuthProfileResponse response = service.profile(auth);
+
+    assertThat(response.mustChangePassword()).isTrue();
   }
 
   @Test

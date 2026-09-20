@@ -5,4 +5,8 @@ import java.util.List;
 import java.util.Set;
 
 public record ConsoleAuthProfileResponse(
-    String username, String tenantId, Set<String> authorities, List<MenuGroup> menus) {}
+    String username,
+    String tenantId,
+    Set<String> authorities,
+    List<MenuGroup> menus,
+    boolean mustChangePassword) {}

@@ -5,9 +5,11 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /** 生成 11-Sheet 配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
 public final class ConfigPackageSampleDataFactory {
@@ -31,25 +33,47 @@ public final class ConfigPackageSampleDataFactory {
 
   public static List<List<Map<String, Object>>> sampleSheets(String rawScenario) {
     String scenario = normalizeScenario(rawScenario);
+    return sampleSheets(List.of(scenario));
+  }
+
+  public static List<List<Map<String, Object>>> sampleSheets(List<String> rawScenarios) {
+    Set<String> scenarios = normalizeScenarios(rawScenarios);
     List<List<Map<String, Object>>> sheets = emptySheets();
-    putCommonFoundation(sheets, scenario);
-    switch (scenario) {
-      case SCENARIO_IMPORT -> putImport(sheets);
-      case SCENARIO_EXPORT -> putExport(sheets);
-      case SCENARIO_PROCESS -> putProcess(sheets);
-      case SCENARIO_DISPATCH -> putDispatch(sheets);
-      case SCENARIO_ATOMIC -> putAtomic(sheets);
-      case SCENARIO_WORKFLOW -> putWorkflow(sheets);
-      default -> {
-        putImport(sheets);
-        putExport(sheets);
-        putProcess(sheets);
-        putDispatch(sheets);
-        putAtomic(sheets);
-        putWorkflow(sheets);
+    putCommonFoundation(sheets, scenarios.size() == 1 ? scenarios.iterator().next() : SCENARIO_ALL);
+    for (String scenario : scenarios) {
+      switch (scenario) {
+        case SCENARIO_IMPORT -> putImport(sheets);
+        case SCENARIO_EXPORT -> putExport(sheets);
+        case SCENARIO_PROCESS -> putProcess(sheets);
+        case SCENARIO_DISPATCH -> putDispatch(sheets);
+        case SCENARIO_ATOMIC -> putAtomic(sheets);
+        case SCENARIO_WORKFLOW -> putWorkflow(sheets);
+        default -> {
+          putImport(sheets);
+          putExport(sheets);
+          putProcess(sheets);
+          putDispatch(sheets);
+          putAtomic(sheets);
+          putWorkflow(sheets);
+        }
       }
     }
     return sheets;
+  }
+
+  public static Set<String> normalizeScenarios(List<String> rawScenarios) {
+    if (rawScenarios == null || rawScenarios.isEmpty()) {
+      return Set.of(SCENARIO_ALL);
+    }
+    LinkedHashSet<String> normalized = new LinkedHashSet<>();
+    for (String rawScenario : rawScenarios) {
+      String scenario = normalizeScenario(rawScenario);
+      if (SCENARIO_ALL.equals(scenario)) {
+        return Set.of(SCENARIO_ALL);
+      }
+      normalized.add(scenario);
+    }
+    return normalized.isEmpty() ? Set.of(SCENARIO_ALL) : normalized;
   }
 
   public static String normalizeScenario(String rawScenario) {
