@@ -28,7 +28,7 @@ public record ConsoleAuthTokenResponse(
         null, tokenType, issuedAt, expiresAt, username, tenantId, authorities, mustChangePassword);
   }
 
-  /** 标注「首次登录强制改密」标志,保留其余字段。 */
+  /** 标注「建议更新密码」提示标志,保留其余字段。 */
   public ConsoleAuthTokenResponse withMustChangePassword(boolean flag) {
     return new ConsoleAuthTokenResponse(
         accessToken, tokenType, issuedAt, expiresAt, username, tenantId, authorities, flag);

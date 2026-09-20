@@ -33,7 +33,7 @@ curl -X POST /api/console/tenants \
     "tenantId": "acme",
     "tenantName": "ACME Corp",
     "adminUsername": "acme-admin",
-    "adminPassword": "<首登后会强制改密>",
+    "adminPassword": "<首登后会提示改密>",
     "initConfigFrom": "default",
     "initMode": "SKIP_EXISTING"
   }'
@@ -41,7 +41,7 @@ curl -X POST /api/console/tenants \
 
 返回里直接带 `readiness`(见下一步)。`initConfigFrom` 不填 = 不复制(空租户);`initMode` 默认 `SKIP_EXISTING`(不覆盖已存在配置)。
 
-> 内置/新建账号**首次登录会被强制改密**(`must_change_password`),改密接口 `POST /api/console/auth/change-password`。
+> 内置/新建账号首次登录会收到非阻断改密提醒(`must_change_password`),仍可继续使用控制台;改密接口为 `POST /api/console/auth/change-password`。
 
 ---
 

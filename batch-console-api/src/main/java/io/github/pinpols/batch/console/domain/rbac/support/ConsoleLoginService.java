@@ -72,8 +72,7 @@ public class ConsoleLoginService {
     loginProtectionService.onLoginSuccess(username);
     String tenantId = account.tenantId();
     long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
-    // 登录响应带 mustChangePassword 标记:FE 据此跳转改密页;敏感操作拦截见
-    // ConsoleMustChangePasswordGuard(改密前仅放行 auth/改密端点)。
+    // 登录响应带 mustChangePassword 提示标记；该标记不限制控制台访问或业务写操作。
     return jwtService
         .issueToken(
             account.username(),

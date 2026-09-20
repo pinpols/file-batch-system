@@ -68,7 +68,7 @@ public class ConsoleDefaultPasswordGuard {
     }
     log.warn(
         "Non-production profile: built-in console account {} still uses the factory default password admin123;"
-            + " the first login will require a password change. Production deployment must change it"
+            + " the console will recommend a password change. Production deployment must change it"
             + " (production profiles fail fast)",
         stillDefault);
   }

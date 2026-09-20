@@ -19,6 +19,6 @@ public class ConsoleUserAccountEntity {
 
   private boolean enabled;
 
-  /** 首次登录强制改密标志(V174);默认 false 保持现行为,出厂内置账号 / reset 路径置 true。 */
+  /** 建议更新密码提示标志(V174);默认 false,出厂内置账号 / reset 路径置 true。 */
   private boolean mustChangePassword;
 }
