@@ -17,9 +17,9 @@ export BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
 export BATCH_NO="${BATCH_NO:-sim-${SIM_STAGE_NAME}-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID="${RUN_ID:-${SIM_STAGE_NAME}-$(date +%Y%m%d%H%M%S)}"
 export REPORT_DIR="${REPORT_DIR:-load-tests/target/$RUN_ID}"
-export PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
+export PG_CONTAINER="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 export PG_PLATFORM_DB="${PG_PLATFORM_DB:-$POSTGRES_DB}"
-export PG_PLATFORM_USER="${PG_PLATFORM_USER:-${POSTGRES_USER:-batch_user}}"
+export PG_PLATFORM_USER="${PG_PLATFORM_USER:-${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}}"
 export PG_BUSINESS_DB="${PG_BUSINESS_DB:-$BUSINESS_DB_NAME}"
 # SIM 在本机同时运行基础设施、多个 Java 服务和故障注入进程。所有由阶段脚本触发的
 # restart.sh 都继承这个受限堆；调用方显式传入 JAVA_OPTS 时保持原样。

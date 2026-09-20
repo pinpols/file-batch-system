@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.runtime;
 
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
@@ -30,7 +31,7 @@ public class DispatchTaskConsumer extends AbstractTaskConsumer {
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       DeadLetterPublisher deadLetterPublisher,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
     super(kafkaListenerEndpointRegistry, meterRegistryProvider, maxConcurrentTasks);
     this.workerLoop = workerLoop;
     this.configuration = configuration;

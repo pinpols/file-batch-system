@@ -26,26 +26,26 @@ echo "########## 日志目录: $SIM4DAY_LOG_DIR ##########"
 echo "########## 本轮 run 标识: $SIM4DAY_RUN_ID ##########"
 
 verify_platform() {
-  docker exec -i "${PG_CONTAINER:-batch-postgres-primary}" psql \
-    -U "${POSTGRES_USER:-batch_user}" -d "${PLATFORM_DB}" -At \
+  docker exec -i "$PG_CONTAINER" psql \
+    -U "$POSTGRES_USER" -d "$PLATFORM_DB" -At \
     -v run_prefix="${SIM4DAY_RUN_ID}%" -f /dev/stdin < "$HERE/sql/verify-platform-run.sql"
 }
 
 verify_business() {
-  docker exec -i "${PG_CONTAINER:-batch-postgres-primary}" psql \
-    -U "${POSTGRES_USER:-batch_user}" -d "${BUSINESS_DB}" -At \
+  docker exec -i "$PG_CONTAINER" psql \
+    -U "$POSTGRES_USER" -d "$BUSINESS_DB" -At \
     -f /dev/stdin < "$HERE/sql/verify-business-counts.sql"
 }
 
 verify_workflow_fixtures() {
-  docker exec -i "${PG_CONTAINER:-batch-postgres-primary}" psql \
-    -U "${POSTGRES_USER:-batch_user}" -d "${BUSINESS_DB}" -At \
+  docker exec -i "$PG_CONTAINER" psql \
+    -U "$POSTGRES_USER" -d "$BUSINESS_DB" -At \
     -f /dev/stdin < "$HERE/sql/verify-workflow-fixtures.sql"
 }
 
 verify_export_files() {
-  docker exec -i "${PG_CONTAINER:-batch-postgres-primary}" psql \
-    -U "${POSTGRES_USER:-batch_user}" -d "${PLATFORM_DB}" -At \
+  docker exec -i "$PG_CONTAINER" psql \
+    -U "$POSTGRES_USER" -d "$PLATFORM_DB" -At \
     -v run_prefix="${SIM4DAY_RUN_ID}%" -f /dev/stdin < "$HERE/sql/verify-export-files.sql"
 }
 

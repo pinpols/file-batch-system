@@ -25,17 +25,28 @@ URL_PREFIX_PATTERN = re.compile(r"https?://[^\s\"']*$")
 
 def tracked_code_files() -> list[Path]:
     result = subprocess.run(
-        ["git", "ls-files", "--", *CODE_PREFIXES],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            *CODE_PREFIXES,
+        ],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
     )
-    return [
+    candidates = [
         ROOT / relative
         for relative in result.stdout.splitlines()
         if Path(relative).suffix in TEXT_SUFFIXES
     ]
+    # --cached 会在删除尚未暂存时返回索引中的旧路径；本地门禁应忽略该文件，
+    # 同时 --others 让新增但尚未暂存的源码也进入检查。CI 的已提交工作树行为保持不变。
+    return [path for path in candidates if path.is_file()]
 
 
 def main() -> int:

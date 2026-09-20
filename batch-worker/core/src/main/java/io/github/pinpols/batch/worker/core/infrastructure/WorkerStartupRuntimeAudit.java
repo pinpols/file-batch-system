@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxProperties;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRepository;
@@ -79,14 +81,17 @@ public class WorkerStartupRuntimeAudit {
       issues.add("no registered worker in runtime state");
     }
     long decommissioned = registrations.stream()
-        .filter(r -> "DECOMMISSIONED".equalsIgnoreCase(nullToEmpty(r.getStatus())))
+        .filter(r ->
+            WorkerRegistryStatus.DECOMMISSIONED.code().equalsIgnoreCase(nullToEmpty(r.getStatus())))
         .count();
     put(details, "decommissionedRegistrations", decommissioned);
     if (decommissioned > 0) {
       issues.add("registered worker status is DECOMMISSIONED");
     }
-    int maxConcurrentTasks =
-        environment.getProperty("batch.worker.max-concurrent-tasks", Integer.class, 8);
+    int maxConcurrentTasks = environment.getProperty(
+        WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY,
+        Integer.class,
+        WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS);
     put(details, "maxConcurrentTasks", maxConcurrentTasks);
     put(details, "executionPoolSize", executionProperties.getPoolSize());
     if (maxConcurrentTasks <= 0) {

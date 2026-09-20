@@ -49,7 +49,7 @@ source "$ROOT/scripts/lib/env-common.sh"
 source "$ROOT/scripts/lib/process.sh"
 
 CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
+PG_CONTAINER="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 PG_USER="${PG_USER:-$PGUSER}"
 PG_DB="${PG_DB:-$PLATFORM_DB}"
 VERIFY_TENANT_ID="${VERIFY_TENANT_ID:-$BATCH_DEFAULT_TENANT_ID}"
@@ -101,6 +101,12 @@ fi
 
 if command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   pass "${PYTHON_BIN} 可用" "$("$PYTHON_BIN" --version 2>/dev/null)"
+  if "$PYTHON_BIN" -c 'import yaml' >/dev/null 2>&1; then
+    pass "PyYAML 可用" "$("$PYTHON_BIN" -c 'import yaml; print(yaml.__version__)')"
+  else
+    fail "PyYAML 缺失" "请运行 make python-env，并设置 PYTHON_BIN=.venv/bin/python"
+    PRECHECK_FAIL=1
+  fi
 else
   fail "${PYTHON_BIN} 缺失" "本脚本用 ${PYTHON_BIN} 解析 JSON / YAML 响应"
   PRECHECK_FAIL=1

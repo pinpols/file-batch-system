@@ -17,7 +17,7 @@ runs:
     - name: Verify console OpenAPI matches controllers
       shell: bash
       run: |
-        python3 -m pip install --quiet pyyaml
+        python3 -m pip install --quiet --requirement scripts/requirements.txt
         python3 scripts/ci/check-console-openapi-paths.py
 
     - name: Setup Java
@@ -32,7 +32,7 @@ runs:
       uses: actions/cache@v5
       with:
         path: /tmp/tc-images
-        key: tc-images-${{ hashFiles('batch-test-support/src/main/java/io/github/pinpols/batch/testing/AbstractIntegrationTest.java') }}
+        key: tc-images-${{ hashFiles('batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestContainerImages.java', '.github/actions/setup-build-env/action.yml') }}
 
     - name: Restore testcontainer images from cache
       if: steps.tc-image-cache.outputs.cache-hit == 'true'
@@ -47,10 +47,10 @@ runs:
       shell: bash
       run: |
         mkdir -p /tmp/tc-images
-        for img in apache/kafka:4.1.2 postgres:17 valkey/valkey:8.1 minio/minio:RELEASE.2025-09-07T16-13-09Z; do
-          docker pull "$img" || continue
+        for img in apache/kafka:4.1.2 postgres:17 valkey/valkey:8.1 quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z; do
+          docker pull "$img"
           safe=$(echo "$img" | tr '/:' '__')
-          docker save "$img" -o "/tmp/tc-images/${safe}.tar" || true
+          docker save "$img" -o "/tmp/tc-images/${safe}.tar"
         done
 
     - name: Compile load-tests module

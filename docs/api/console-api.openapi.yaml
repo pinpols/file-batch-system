@@ -12277,7 +12277,7 @@ components:
       required: [tenantId, approvalNos]
     ConfigReleaseUpsertRequest:
       type: object
-      description: 与 BE Java DTO `ConfigReleaseUpsertRequest` 对齐(注:configPayload 在 BE 是 JSON-string,字段名 configPayloadJson)。
+      description: 与 BE Java DTO `ConfigReleaseUpsertRequest` 对齐；载荷在创建时和提交审批时均执行配置类型校验。
       properties:
         tenantId:
           type: string
@@ -12301,9 +12301,7 @@ components:
         reason:
           type: string
           maxLength: 512
-      # 运行时要求 configPayloadJson 必填。OpenAPI 不将其列入 required，是因为历史自由结构契约
-      # 已在运行时拒绝缺失载荷；若显式补充 required，oasdiff 会把契约澄清误判为线路级破坏性变更。
-      required: [tenantId, configType, configKey, configName]
+      required: [tenantId, configType, configKey, configName, configPayloadJson]
     ConfigReleaseActionRequest:
       type: object
       properties:
@@ -14665,6 +14663,7 @@ components:
           type: string
           readOnly: true
           description: 始终返回固定的 redacted JSON；不会返回持久化密钥载荷或密文。
+          example: '{"redacted":true}'
         rotationReason:
           type: string
         createdBy:

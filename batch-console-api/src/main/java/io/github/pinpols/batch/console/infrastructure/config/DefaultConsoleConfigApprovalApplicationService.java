@@ -81,6 +81,8 @@ public class DefaultConsoleConfigApprovalApplicationService
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.config_release.only_draft_can_submit");
     }
+    configReleaseApplyService.validate(
+        release.getConfigType(), release.getConfigKey(), release.getConfigPayload());
     Map<String, Object> latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
     if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");

@@ -25,7 +25,7 @@ fi
 
 SECRETS_DIR="${BIZ_SHARD_SECRETS_DIR:-secrets/biz-shards}"
 CONTAINER="batch-postgres-biz-$KEY"
-PRIMARY_NAME="${PG_CONTAINER:-batch-postgres-primary}"
+PRIMARY_NAME="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 
 # biz 角色密码:必须显式注入(SQL 脚本不再含默认密码)。本地默认复用本地 DB 密码;
 # prod 请 export BIZ_WRITER_PASSWORD / BIZ_ADMIN_PASSWORD / BIZ_READONLY_PASSWORD /

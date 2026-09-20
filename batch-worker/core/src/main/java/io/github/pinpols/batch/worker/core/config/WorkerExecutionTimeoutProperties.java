@@ -15,7 +15,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class WorkerExecutionTimeoutProperties {
 
   /**
-   * 执行 pool 线程数. 必须 ≥ {@code batch.worker.max-concurrent-tasks}, 否则 listener 拿到许可却抢不到 pool 线程会自我堵死.
+   * 执行 pool 线程数。必须不小于 {@link WorkerRuntimeConfiguration#DEFAULT_MAX_CONCURRENT_TASKS}
+   * 对应配置的实际值，否则 listener 可能拿到许可却抢不到 pool 线程。
    */
   private int poolSize = 16;
 

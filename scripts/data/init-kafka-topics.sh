@@ -35,8 +35,12 @@
 #     “运维记得单独在 broker 上配”。RF=1 时若设 min.insync>1 会让该 topic 无法写入，故 dev 默认留空。
 set -eu
 
-bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
-kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=../lib/runtime-defaults.sh
+. "$SCRIPT_DIR/../lib/runtime-defaults.sh"
+
+bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
+kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
 default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1"
 default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.dispatch.export.node.export-node-1,batch.task.dispatch.process.node.process-node-1,batch.task.dispatch.dispatch.node.dispatch-node-1,batch.task.dispatch.atomic.node.atomic-node-1"
 # 平台核心 topic 和内置 worker direct topic 永远必须存在。KAFKA_TOPICS 与

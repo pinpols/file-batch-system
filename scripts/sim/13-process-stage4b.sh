@@ -123,7 +123,7 @@ wait_success(rid1)
 
 print("==> switch source to v2 and rerun same batchKey", flush=True)
 run([
-    "docker", "exec", "-i", os.environ.get("PG_CONTAINER", "batch-postgres-primary"), "psql", "-U", os.environ.get("POSTGRES_USER", "batch_user"),
+    "docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql", "-U", os.environ["POSTGRES_USER"],
     "-d", os.environ["BUSINESS_DB"], "-v", "ON_ERROR_STOP=1", "-v", f"biz_date={BIZ}", "-f", "/dev/stdin"
 ], input=open("docs/test-data/sim-stage4b-process-source-v2.sql").read())
 

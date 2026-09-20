@@ -11,14 +11,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
-PG="${PG_CONTAINER:-batch-postgres-primary}"
-PGU="${POSTGRES_USER:-batch_user}"
-MINIO="${MINIO_CONTAINER:-batch-minio}"
+PG="$PG_CONTAINER"
+PGU="$POSTGRES_USER"
+MINIO="${MINIO_CONTAINER:-$BATCH_DEFAULT_MINIO_CONTAINER}"
 MC_ALIAS="${MC_ALIAS:-local}"
-BUCKET="${BATCH_S3_BUCKET:-batch-dev}"
+BUCKET="${BATCH_S3_BUCKET:-$BATCH_DEFAULT_MINIO_BUCKET}"
 SQL_DIR="$HERE/sql"
-KAFKA="${KAFKA_CONTAINER:-batch-kafka}"
-KAFKA_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
+KAFKA="${KAFKA_CONTAINER:-$BATCH_DEFAULT_KAFKA_CONTAINER}"
+KAFKA_BOOTSTRAP="$KAFKA_CONTAINER_BOOTSTRAP"
 
 psql_plat() { docker exec -i "$PG" psql -U "$PGU" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"; }
 psql_biz()  { docker exec -i "$PG" psql -U "$PGU" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 "$@"; }

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import java.math.BigDecimal;
 import java.sql.Date;
@@ -20,19 +20,13 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers(disabledWithoutDocker = true)
 class JdbcMappedImportCopyIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-          DockerImageName.parse(TestContainerImages.POSTGRES))
-      .withDatabaseName("batch_business")
-      .withUsername("batch_user")
-      .withPassword("batch_pass_123")
-      .withUrlParam("sslmode", "disable");
+  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.business();
 
   private DriverManagerDataSource dataSource;
   private JdbcTemplate jdbcTemplate;

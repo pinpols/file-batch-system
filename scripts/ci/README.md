@@ -124,10 +124,11 @@ bash scripts/ci/security-scan.sh --help
 
 校验 `docs/api/console-api.openapi.yaml` 中 `/api/console` 下的 **GET/POST** 路径是否与 `batch-console-api` 里 `Console*Controller` 的 `@RequestMapping` + `@GetMapping` / `@PostMapping` 一致，避免文档与实现漂移。
 
-**依赖**：Python 3、PyYAML。
+**依赖**：Python 3、PyYAML（由 `scripts/requirements.txt` 统一声明）。
 
 ```bash
-python3 -m pip install pyyaml
+make python-env
+source .venv/bin/activate
 python3 scripts/ci/check-console-openapi-paths.py
 ```
 
@@ -208,7 +209,7 @@ bash scripts/ci/check-required-java-docs.sh
 
 ## `check-version-alignment.sh`
 
-校验版本一致性:根 `pom.xml <revision>` ↔ helm `Chart.yaml appVersion`(预发态下 appVersion 合法地停在上一 GA,仅 GA 态强制相等)↔ `load-tests/pom.xml`(独立 reactor,版本手工同步,CLAUDE.md 点名高危点);并校验 `.env.*` 的 `*_IMAGE_TAG` 不漂移。接入 `pr-gate.yml` 的 `static-checks` job。
+校验版本一致性:根 `pom.xml <revision>` ↔ helm `Chart.yaml appVersion`(预发态下 appVersion 合法地停在上一 GA,仅 GA 态强制相等)↔ `load-tests/pom.xml`(独立 reactor,版本手工同步,CLAUDE.md 点名高危点);校验 `.env.*` 的 `*_IMAGE_TAG` 不漂移，并强制 PostgreSQL、Kafka、MinIO、Valkey 的 Testcontainers 镜像与 `.env.example` 对齐。接入 `pr-gate.yml` 的 `static-checks` job。
 
 ```bash
 bash scripts/ci/check-version-alignment.sh

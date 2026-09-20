@@ -12,7 +12,7 @@
 |---|---|---|---|
 | Postgres | `postgres:${POSTGRES_IMAGE_TAG}` | 15432 | 5432 |
 | Kafka (KRaft) | `apache/kafka:${KAFKA_IMAGE_TAG}` | 19092 | 9092 |
-| MinIO | `minio/minio:${MINIO_IMAGE_TAG}` | 19000 / 19001 | 9000 / 9001 |
+| MinIO | `quay.io/minio/minio:${MINIO_IMAGE_TAG}` | 19000 / 19001 | 9000 / 9001 |
 | Redis | `redis:7.4` | 16379 | 6379 |
 
 另有 2 个 init 容器：`batch-kafka-init` 建 topic、`batch-minio-init` 建 bucket。一键启停：

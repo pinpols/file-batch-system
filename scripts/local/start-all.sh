@@ -42,14 +42,14 @@ source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
 source "$ROOT/scripts/lib/process.sh"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
+PG_CONTAINER="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 PG_REPLICA_CONTAINER="${PG_REPLICA_CONTAINER:-batch-postgres-replica}"
-KAFKA_CONTAINER="${KAFKA_CONTAINER:-batch-kafka}"
+KAFKA_CONTAINER="${KAFKA_CONTAINER:-$BATCH_DEFAULT_KAFKA_CONTAINER}"
 KAFKA_INIT_CONTAINER="${KAFKA_INIT_CONTAINER:-batch-kafka-init}"
 KAFKA_UI_CONTAINER="${KAFKA_UI_CONTAINER:-batch-kafka-ui}"
-MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+MINIO_CONTAINER="${MINIO_CONTAINER:-$BATCH_DEFAULT_MINIO_CONTAINER}"
 MINIO_INIT_CONTAINER="${MINIO_INIT_CONTAINER:-batch-minio-init}"
-REDIS_CONTAINER="${REDIS_CONTAINER:-batch-valkey}"
+REDIS_CONTAINER="${REDIS_CONTAINER:-$BATCH_DEFAULT_REDIS_CONTAINER}"
 
 # 本地 dev 启动加速 JVM 参数（8 个应用模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
 #   TieredStopAtLevel=1  只做 C1 编译，跳过 C2（启动 -30~50%，稳态吞吐 -20~30%，local 无所谓）

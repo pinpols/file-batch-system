@@ -39,6 +39,7 @@ import io.github.pinpols.batch.common.enums.HolidayRollRule;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.LogType;
+import io.github.pinpols.batch.common.enums.MisfirePendingStatus;
 import io.github.pinpols.batch.common.enums.NotificationChannelType;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.enums.OutOfWindowAction;
@@ -290,6 +291,7 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("resultVersionPolicy", ResultVersionPolicy.class));
     list.add(new EnumReg<>("configVersionPolicy", ConfigVersionPolicy.class));
     list.add(new EnumReg<>("triggerRequestStatus", TriggerRequestStatus.class));
+    list.add(new EnumReg<>("misfirePendingStatus", MisfirePendingStatus.class));
     list.add(new EnumReg<>("workerStatus", WorkerRegistryStatus.class));
     list.add(new EnumReg<>("outboxPublishStatus", OutboxPublishStatus.class));
     list.add(new EnumReg<>("aiPromptCategory", AiPromptCategory.class));

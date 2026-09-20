@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.core.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.io.InputStream;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -23,7 +23,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * ADR-038 P0 mapper IT:真 PG 上验证 {@link PipelineProgressMapper#deleteByInstance} 的 SQL 形状 —— 补偿删业务行后
@@ -37,11 +36,8 @@ class PipelineProgressMapperIntegrationTest {
 
   @Container
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-          DockerImageName.parse(TestContainerImages.POSTGRES))
-      .withDatabaseName("batch_ckpt_it")
-      .withUsername("batch_user")
-      .withPassword("batch_pass_123");
+  private static final PostgreSQLContainer POSTGRES =
+      TestPostgresContainers.create("batch_ckpt_it");
 
   private static SingleConnectionDataSource dataSource;
   private static SqlSessionFactory sqlSessionFactory;

@@ -10,6 +10,8 @@ if [[ -z "${BATCH_ENV_COMMON_ROOT:-}" ]]; then
   BATCH_ENV_COMMON_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
 
+# shellcheck source=runtime-defaults.sh
+source "$BATCH_ENV_COMMON_ROOT/scripts/lib/runtime-defaults.sh"
 # shellcheck source=python-runtime.sh
 source "$BATCH_ENV_COMMON_ROOT/scripts/lib/python-runtime.sh"
 
@@ -17,7 +19,7 @@ source "$BATCH_ENV_COMMON_ROOT/scripts/lib/python-runtime.sh"
 # 所有本地启动脚本从这里取值，避免参数在各脚本中重复维护。
 export BATCH_JVM_NETWORK_OPTS="${BATCH_JVM_NETWORK_OPTS:--Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false}"
 # Kafka 官方镜像内 CLI 目录。容器镜像布局变化时只需覆盖这一处。
-export KAFKA_CONTAINER_BIN_DIR="${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}"
+export KAFKA_CONTAINER_BIN_DIR="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
 
 batch_source_env_file() {
   local env_file="${1:-${COMPOSE_ENV_FILE:-$BATCH_ENV_COMMON_ROOT/.env.local}}"
@@ -83,12 +85,12 @@ batch_load_default_env() {
   export LC_ALL="${LC_ALL:-$BATCH_LOCALE}"
   batch_configure_python_runtime
 
-  export POSTGRES_PORT="${POSTGRES_PORT:-15432}"
-  export POSTGRES_DB="${POSTGRES_DB:-batch_platform}"
-  export POSTGRES_USER="${POSTGRES_USER:-batch_user}"
-  export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-batch_pass_123}"
-  export BUSINESS_DB_NAME="${BUSINESS_DB_NAME:-batch_business}"
-  export PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
+  export POSTGRES_PORT="${POSTGRES_PORT:-$BATCH_DEFAULT_POSTGRES_PORT}"
+  export POSTGRES_DB="${POSTGRES_DB:-$BATCH_DEFAULT_POSTGRES_DATABASE}"
+  export POSTGRES_USER="${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}"
+  export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$BATCH_DEFAULT_POSTGRES_PASSWORD}"
+  export BUSINESS_DB_NAME="${BUSINESS_DB_NAME:-$BATCH_DEFAULT_BUSINESS_DATABASE}"
+  export PG_CONTAINER="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
   export BATCH_DEFAULT_TENANT_ID="${BATCH_DEFAULT_TENANT_ID:-default-tenant}"
   export BATCH_DEV_FIXTURE_TENANTS="${BATCH_DEV_FIXTURE_TENANTS:-ta,tb,tc,tx,default-tenant}"
 
@@ -100,14 +102,14 @@ batch_load_default_env() {
   export PLATFORM_DB="${PLATFORM_DB:-$POSTGRES_DB}"
   export BUSINESS_DB="${BUSINESS_DB:-$BUSINESS_DB_NAME}"
 
-  export CONSOLE_API_PORT="${CONSOLE_API_PORT:-${CONSOLE_PORT:-18080}}"
-  export TRIGGER_PORT="${TRIGGER_PORT:-18081}"
-  export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-18082}"
-  export WORKER_IMPORT_PORT="${WORKER_IMPORT_PORT:-18083}"
-  export WORKER_EXPORT_PORT="${WORKER_EXPORT_PORT:-18084}"
-  export WORKER_DISPATCH_PORT="${WORKER_DISPATCH_PORT:-18085}"
-  export WORKER_PROCESS_PORT="${WORKER_PROCESS_PORT:-18086}"
-  export WORKER_ATOMIC_PORT="${WORKER_ATOMIC_PORT:-18087}"
+  export CONSOLE_API_PORT="${CONSOLE_API_PORT:-${CONSOLE_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}"
+  export TRIGGER_PORT="${TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}"
+  export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
+  export WORKER_IMPORT_PORT="${WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}"
+  export WORKER_EXPORT_PORT="${WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}"
+  export WORKER_DISPATCH_PORT="${WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}"
+  export WORKER_PROCESS_PORT="${WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}"
+  export WORKER_ATOMIC_PORT="${WORKER_ATOMIC_PORT:-$BATCH_DEFAULT_WORKER_ATOMIC_PORT}"
 
   export CONSOLE_BASE="${CONSOLE_BASE:-http://localhost:${CONSOLE_API_PORT}}"
   export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:${TRIGGER_PORT}}"
@@ -122,16 +124,16 @@ batch_load_default_env() {
   export BATCH_INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
   export INTERNAL_SECRET="${INTERNAL_SECRET:-$BATCH_INTERNAL_SECRET}"
 
-  export MINIO_API_PORT="${MINIO_API_PORT:-19000}"
-  export MINIO_BUCKET="${MINIO_BUCKET:-${BATCH_S3_BUCKET:-batch-dev}}"
+  export MINIO_API_PORT="${MINIO_API_PORT:-$BATCH_DEFAULT_MINIO_API_PORT}"
+  export MINIO_BUCKET="${MINIO_BUCKET:-${BATCH_S3_BUCKET:-$BATCH_DEFAULT_MINIO_BUCKET}}"
   export BATCH_S3_BUCKET="${BATCH_S3_BUCKET:-$MINIO_BUCKET}"
   export BATCH_S3_ENDPOINT="${BATCH_S3_ENDPOINT:-http://localhost:${MINIO_API_PORT}}"
-  export BATCH_S3_ACCESS_KEY="${BATCH_S3_ACCESS_KEY:-${MINIO_ROOT_USER:-minioadmin}}"
-  export BATCH_S3_SECRET_KEY="${BATCH_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin123}}"
+  export BATCH_S3_ACCESS_KEY="${BATCH_S3_ACCESS_KEY:-${MINIO_ROOT_USER:-$BATCH_DEFAULT_MINIO_ACCESS_KEY}}"
+  export BATCH_S3_SECRET_KEY="${BATCH_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-$BATCH_DEFAULT_MINIO_SECRET_KEY}}"
 
-  export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-19092}"
+  export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-$BATCH_DEFAULT_KAFKA_HOST_PORT}"
   export KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
-  export KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
+  export KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 
   export BATCH_ENV_LOADED=1
 }
@@ -142,7 +144,7 @@ batch_load_default_env() {
 psql() {
   local mode="${BATCH_PG_CLIENT_MODE:-auto}"
   local psql_bin="${BATCH_PSQL_BIN:-}"
-  local container="${PG_CONTAINER:-batch-postgres-primary}"
+  local container="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
   local -a args=("$@")
   local input_file=""
   local i
@@ -231,7 +233,7 @@ batch_require_internal_secret() {
 # 将通用 PostgreSQL 配置映射到各应用的强类型配置项。
 batch_configure_local_jvm_database_env() {
   local replica_authority
-  export BATCH_PLATFORM_DB_URL="${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://$(batch_format_host_port "${PGHOST:-localhost}" "$POSTGRES_PORT")/batch_platform?reWriteBatchedInserts=true}"
+  export BATCH_PLATFORM_DB_URL="${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://$(batch_format_host_port "${PGHOST:-localhost}" "$POSTGRES_PORT")/${POSTGRES_DB}?reWriteBatchedInserts=true}"
   export BATCH_PLATFORM_DB_USERNAME="${BATCH_PLATFORM_DB_USERNAME:-$POSTGRES_USER}"
   export BATCH_PLATFORM_DB_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-$POSTGRES_PASSWORD}"
 
@@ -248,7 +250,7 @@ batch_configure_local_jvm_database_env() {
   case "${BATCH_CONSOLE_REPLICA_URL:-}" in
     ""|jdbc:postgresql://postgres-replica:*)
       replica_authority="$(batch_format_host_port "${PG_REPLICA_HOST:-localhost}" "${POSTGRES_REPLICA_PORT:-15433}")"
-      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://${replica_authority}/batch_platform?reWriteBatchedInserts=true"
+      export BATCH_CONSOLE_REPLICA_URL="jdbc:postgresql://${replica_authority}/${POSTGRES_DB}?reWriteBatchedInserts=true"
       ;;
   esac
 }

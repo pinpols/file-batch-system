@@ -2,7 +2,7 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 import java.io.InputStream;
@@ -38,8 +38,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("WorkerReportOutbox PLATFORM_PG 入队/出队/清理闭环")
 class WorkerReportOutboxPgIntegrationTest {
 
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(TestContainerImages.POSTGRES);
+  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
 
   private static final long STALE_WINDOW = 120_000L;
 

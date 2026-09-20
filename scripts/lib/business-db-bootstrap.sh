@@ -6,11 +6,14 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   exit 2
 fi
 
+# shellcheck source=runtime-defaults.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/runtime-defaults.sh"
+
 batch_bootstrap_business_database() {
   local root="$1"
   local compose_env_file="$2"
   local compose_project_name="$3"
-  local pg_container="${PG_CONTAINER:-batch-postgres-primary}"
+  local pg_container="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 
   echo "==> 启动 PostgreSQL，准备业务库 DDL/RLS..."
   COMPOSE_IGNORE_ORPHANS=1 docker compose \

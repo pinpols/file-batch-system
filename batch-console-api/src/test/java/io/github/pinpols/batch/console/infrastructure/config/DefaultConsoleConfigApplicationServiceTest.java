@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.domain.entity.ConfigChangeLogEntity;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
@@ -114,6 +115,24 @@ class DefaultConsoleConfigApplicationServiceTest {
 
     assertThat(list).hasSize(1);
     assertThat(list.get(0).id()).isEqualTo(1L);
+    assertThat(list.get(0).grayScopeJson()).isEqualTo("{}");
+    assertThat(list.get(0).configPayloadJson()).isEqualTo("{}");
+  }
+
+  @Test
+  void shouldReturnMachineReadableJson_withoutHtmlEscaping() {
+    ConfigReleaseEntity entity = release(1L, "JOB", "k", 1);
+    entity.setGrayScope("{\"tenant\":\"t1\"}");
+    entity.setConfigPayload("{\"jobCode\":\"job-1\"}");
+    when(configReleaseMapper.selectByQuery(any())).thenReturn(List.of(entity));
+
+    ConfigReleaseQueryRequest request = new ConfigReleaseQueryRequest();
+    request.setTenantId(TENANT);
+
+    ConsoleConfigReleaseResponse response = service.configReleases(request).getFirst();
+
+    assertThat(response.grayScopeJson()).isEqualTo("{\"tenant\":\"t1\"}");
+    assertThat(response.configPayloadJson()).isEqualTo("{\"jobCode\":\"job-1\"}");
   }
 
   // ── 创建配置发布单 ─────────────────────────────────────────────────────
@@ -126,7 +145,9 @@ class DefaultConsoleConfigApplicationServiceTest {
     Long versionNo = service.createConfigRelease(req);
 
     assertThat(versionNo).isEqualTo(3L);
-    verify(configReleaseMapper).insertConfigRelease(anyMap());
+    ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
+    verify(configReleaseMapper).insertConfigRelease(captor.capture());
+    assertThat(captor.getValue()).containsEntry("grayScopeJson", null);
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
   }
 
@@ -269,6 +290,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     List<ConsoleSecretVersionResponse> list = service.secretVersions(req);
     assertThat(list).hasSize(1);
     assertThat(list.getFirst().secretRef()).isEqualTo("ref");
+    assertThat(list.getFirst().secretPayloadJson()).isEqualTo("{\"redacted\":true}");
   }
 
   @Test
@@ -374,6 +396,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     when(secretVersionMapper.selectById(anyMap())).thenReturn(secret(7L, "ref"));
     ConsoleSecretVersionResponse resp = service.secretVersionDetail(TENANT, 7L);
     assertThat(resp.id()).isEqualTo(7L);
+    assertThat(resp.secretPayloadJson()).isEqualTo("{\"redacted\":true}");
   }
 
   @Test

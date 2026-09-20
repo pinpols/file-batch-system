@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +19,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Phase A · RLS 行级隔离反例测试。
@@ -52,11 +51,7 @@ class RlsTenantIsolationIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() throws Exception {
-    POSTGRES = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-        .withDatabaseName("batch_business")
-        .withUsername("batch_user")
-        .withPassword("batch_pass_123")
-        .withUrlParam("sslmode", "disable");
+    POSTGRES = TestPostgresContainers.business();
     POSTGRES.start();
 
     HikariConfig cfg = new HikariConfig();

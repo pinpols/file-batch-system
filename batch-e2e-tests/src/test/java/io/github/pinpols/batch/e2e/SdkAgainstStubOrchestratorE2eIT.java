@@ -12,7 +12,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.testkit.RecordedReport;
 import io.github.pinpols.batch.sdk.testkit.TaskDispatchMessageBuilder;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestKafkaContainers;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,7 +43,6 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * R3-6 first POC — SDK↔BE 真端到端集成测.
@@ -78,8 +77,7 @@ class SdkAgainstStubOrchestratorE2eIT {
   private static final String WORKER = "r3-6-worker";
 
   @Container
-  static final KafkaContainer KAFKA =
-      new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA));
+  static final KafkaContainer KAFKA = TestKafkaContainers.create();
 
   private static StubOrchestrator stub;
   private static Producer<String, byte[]> producer;

@@ -3,7 +3,9 @@ package io.github.pinpols.batch.trigger.service;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.enums.MisfirePendingStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
@@ -166,7 +168,7 @@ public class DefaultTriggerService implements TriggerService {
       TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(
           command.getTenantId(), command.getIdempotencyKey());
       if (EmptyChecks.isNotNull(existing)
-          && "LAUNCHED".equalsIgnoreCase(existing.getRequestStatus())) {
+          && TriggerRequestStatus.LAUNCHED.code().equalsIgnoreCase(existing.getRequestStatus())) {
         return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
       }
     }
@@ -186,15 +188,22 @@ public class DefaultTriggerService implements TriggerService {
       if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
         throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
       }
-      if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+      if (TriggerRequestStatus.REJECTED
+          .code()
+          .equalsIgnoreCase(pendingRequest.getRequestStatus())) {
         throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
       }
-      if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+      if (TriggerRequestStatus.LAUNCHED
+          .code()
+          .equalsIgnoreCase(pendingRequest.getRequestStatus())) {
         return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
       }
       // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
       int claimed = triggerRequestMapper.updateRequestStatusConditional(
-          command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
+          command.getTenantId(),
+          command.getRequestId(),
+          TriggerRequestStatus.PROCESSING.code(),
+          TriggerRequestStatus.ACCEPTED.code());
       if (claimed <= 0) {
         // 另一实例正在处理；返回当前状态，重试方需重新查询
         return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
@@ -226,7 +235,10 @@ public class DefaultTriggerService implements TriggerService {
       // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再长期停滞。
       // CAS 守卫:前态必须仍是本次刚 CAS 进入的 PROCESSING,防止并发场景下把已被其它路径推进的行覆盖。
       int launched = triggerRequestMapper.updateRequestStatusConditional(
-          command.getTenantId(), command.getRequestId(), "LAUNCHED", "PROCESSING");
+          command.getTenantId(),
+          command.getRequestId(),
+          TriggerRequestStatus.LAUNCHED.code(),
+          TriggerRequestStatus.PROCESSING.code());
       if (launched <= 0) {
         log.warn(
             "updateRequestStatusConditional(LAUNCHED) affected 0 rows; the row is no longer PROCESSING:"
@@ -340,8 +352,8 @@ public class DefaultTriggerService implements TriggerService {
     if (!command.getTenantId().equals(pending.getTenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
-    if ("REJECTED".equalsIgnoreCase(pending.getStatus())
-        || "EXPIRED".equalsIgnoreCase(pending.getStatus())) {
+    if (MisfirePendingStatus.REJECTED.code().equalsIgnoreCase(pending.getStatus())
+        || MisfirePendingStatus.EXPIRED.code().equalsIgnoreCase(pending.getStatus())) {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
     }
     Long requestId = pending.getCatchUpRequestId();
@@ -355,7 +367,9 @@ public class DefaultTriggerService implements TriggerService {
         triggerRequestMapper.selectById(requestId), "catch-up request not found");
     command.setRequestId(request.getRequestId());
     return new PendingApprovalTarget(
-        request, pending.getId(), "PENDING".equalsIgnoreCase(pending.getStatus()));
+        request,
+        pending.getId(),
+        MisfirePendingStatus.PENDING.code().equalsIgnoreCase(pending.getStatus()));
   }
 
   private String buildScheduledDedupKey(ScheduledTriggerCommand command) {

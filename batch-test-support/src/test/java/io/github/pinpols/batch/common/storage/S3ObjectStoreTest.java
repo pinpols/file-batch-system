@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.testing.ObjectStoreContainer;
+import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
@@ -38,7 +39,7 @@ class S3ObjectStoreTest {
     assumeTrue(
         DockerClientFactory.instance().isDockerAvailable(),
         "Docker unavailable; skipping MinIO IT");
-    objectStore = new ObjectStoreContainer();
+    objectStore = TestObjectStoreContainers.create();
     objectStore.start();
     bucket = objectStore.getDefaultBucket();
 

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +19,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Phase A · Strict 模式翻转 preflight 测试。
@@ -55,11 +54,7 @@ class RlsStrictModePreflightIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
-    POSTGRES = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-        .withDatabaseName("batch_business")
-        .withUsername("batch_user")
-        .withPassword("batch_pass_123")
-        .withUrlParam("sslmode", "disable");
+    POSTGRES = TestPostgresContainers.business();
     POSTGRES.start();
 
     HikariConfig cfg = new HikariConfig();

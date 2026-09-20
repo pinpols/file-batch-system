@@ -15,7 +15,7 @@ from pathlib import Path
 try:
     import yaml
 except ImportError as exc:  # pragma: no cover
-    print("Missing PyYAML. Install with: pip install pyyaml", file=sys.stderr)
+    print("Missing PyYAML. Run: make python-env", file=sys.stderr)
     raise SystemExit(2) from exc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

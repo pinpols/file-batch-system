@@ -25,19 +25,23 @@
 # =========================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../lib/runtime-defaults.sh
+source "$SCRIPT_DIR/../../lib/runtime-defaults.sh"
+
 # ---- 配置(env 注入,带合理默认)----
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 
 BACKUP_DEST=${BACKUP_DEST:?需指定 BACKUP_DEST(如 /mnt/backup 或 s3://bucket/prefix)}
 PGHOST=${PGHOST:?需指定 PGHOST(主库地址,生产连 VIP/svc 名,不连 IP)}
-PGPORT=${PGPORT:-5432}
-POSTGRES_USER=${POSTGRES_USER:-batch_user}
+PGPORT=${PGPORT:-$BATCH_DEFAULT_POSTGRES_CONTAINER_PORT}
+POSTGRES_USER=${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}
 POSTGRES_REPLICATION_USER=${POSTGRES_REPLICATION_USER:-replicator}
 export PGPASSWORD=${POSTGRES_PASSWORD:?需指定 POSTGRES_PASSWORD}
 
 # 要逻辑导出的库(两库都备 —— 只备 platform 会丢全部业务数据,见 runbook §0)。
-PLATFORM_DB=${PLATFORM_DB:-batch_platform}
-BUSINESS_DB=${BUSINESS_DB:-batch_business}
+PLATFORM_DB=${PLATFORM_DB:-$BATCH_DEFAULT_POSTGRES_DATABASE}
+BUSINESS_DB=${BUSINESS_DB:-$BATCH_DEFAULT_BUSINESS_DATABASE}
 
 # 保留策略(天)。按合规要求调。
 BASE_RETENTION_DAYS=${BASE_RETENTION_DAYS:-14}

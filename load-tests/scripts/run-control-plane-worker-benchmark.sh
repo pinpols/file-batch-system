@@ -48,8 +48,6 @@ RESET_PG_STATEMENTS_BEFORE_MEASURE="${RESET_PG_STATEMENTS_BEFORE_MEASURE:-0}"
 
 ATOMIC_JOBS_CSV="${ATOMIC_JOBS_CSV:-atomic_sql_demo}"
 KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|atomic)|orchestrator-trigger-launch}"
-KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
-KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
 BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
 PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
 # 结果业务键基数。1 表示所有请求使用同一 bizDate，专测同键重跑；大于 1 时轮换 bizDate，
@@ -339,13 +337,15 @@ run_pipeline_completion() {
   local users="$4"
   local file_ids_csv="${5:-}"
   local log_file="$LOG_DIR/${label}.log"
+  local gatling_rc
+  local -a pipeline_status
   local -a extra_args=()
   if [[ -n "$file_ids_csv" ]]; then
     extra_args+=("-Dlaunch.fileIdsCsv=${file_ids_csv}")
   fi
 
   echo "==> ${label}: job=${job_code}, users=${users}"
-  (
+  if (
     cd "$LOAD_DIR"
     mvn gatling:test \
       -Dsimulation=io.github.pinpols.batch.loadtest.simulations.LaunchPipelineCompletionSimulation \
@@ -366,20 +366,29 @@ run_pipeline_completion() {
       -Dconsole.accessToken="$TOKEN" \
       "${extra_args[@]}" \
       --batch-mode
-  ) | tee "$log_file"
+  ) | tee "$log_file"; then
+    gatling_rc=0
+  else
+    pipeline_status=("${PIPESTATUS[@]}")
+    gatling_rc="${pipeline_status[0]}"
+    [[ "$gatling_rc" -ne 0 ]] || gatling_rc="${pipeline_status[1]}"
+  fi
 
   local elapsed=0
   while [[ "$elapsed" -lt "$WAIT_TERMINAL_TIMEOUT_SECONDS" ]]; do
     local counts
-    counts="$(
-      psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
-        -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
-    )"
+    if ! counts="$(
+        psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" -v job_code="$job_code" -v run_id="$RUN_ID" \
+          -f "$LOAD_DIR/sql/worker-run-terminal-counts.sql"
+      )"; then
+      echo "==> ${label}: failed to query terminal instance counts" >&2
+      return 1
+    fi
     local total terminal success
     IFS='|' read -r total terminal success <<< "$counts"
     if [[ "$total" -ge "$users" && "$terminal" -eq "$total" ]]; then
       echo "==> ${label}: terminal ${terminal}/${total}, success ${success}/${total}"
-      [[ "$success" -eq "$total" ]] && return 0
+      [[ "$success" -eq "$total" ]] && return "$gatling_rc"
       echo "==> ${label}: $((total - success)) instance(s) ended without SUCCESS" >&2
       return 1
     fi
@@ -394,6 +403,8 @@ run_trigger_pressure() {
   local params_file="$1"
   local log_file="$LOG_DIR/trigger.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
+  local gatling_rc
+  local -a pipeline_status
 
   echo "==> trigger: job=${TRIGGER_JOB_CODE}, launch_rps=${TRIGGER_LAUNCH_RPS}, duration=${TRIGGER_DURATION_SECONDS}s"
   (
@@ -406,7 +417,7 @@ run_trigger_pressure() {
   ) &
   local sampler_pid=$!
 
-  (
+  if (
     cd "$LOAD_DIR"
     mvn gatling:test \
       -Dsimulation=io.github.pinpols.batch.loadtest.simulations.SchedulingBacklogUnderLoadSimulation \
@@ -428,15 +439,23 @@ run_trigger_pressure() {
       -Dslo.maxErrorPct="$MAX_ERROR_PCT" \
       -Dconsole.accessToken="$TOKEN" \
       --batch-mode
-  ) | tee "$log_file"
+  ) | tee "$log_file"; then
+    gatling_rc=0
+  else
+    pipeline_status=("${PIPESTATUS[@]}")
+    gatling_rc="${pipeline_status[0]}"
+    [[ "$gatling_rc" -ne 0 ]] || gatling_rc="${pipeline_status[1]}"
+  fi
 
   wait "$sampler_pid" || true
+  return "$gatling_rc"
 }
 
 run_mixed_pressure() {
   local log_file="$LOG_DIR/mixed.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
   local gatling_rc
+  local -a pipeline_status
 
   echo "==> mixed: modules=${MODULES_CSV}, duration=${TRIGGER_DURATION_SECONDS}s"
   echo "==> mixed rates: process=${PROCESS_LAUNCH_RPS}/s dispatch=${DISPATCH_LAUNCH_RPS}/s atomic=${ATOMIC_LAUNCH_RPS}/s trigger=${TRIGGER_LAUNCH_RPS}/s scheduler_read=${TRIGGER_READ_RPS}/s"
@@ -486,7 +505,9 @@ run_mixed_pressure() {
   ) | tee "$log_file"; then
     gatling_rc=0
   else
-    gatling_rc=${PIPESTATUS[0]}
+    pipeline_status=("${PIPESTATUS[@]}")
+    gatling_rc="${pipeline_status[0]}"
+    [[ "$gatling_rc" -ne 0 ]] || gatling_rc="${pipeline_status[1]}"
   fi
 
   if [[ -n "$sampler_pid" ]]; then
@@ -711,16 +732,21 @@ kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-before.txt"
 pg_pressure_snapshot "$LOG_DIR/pg-pressure-before.txt"
 pg_pressure_sampler "$LOG_DIR/pg-pressure-samples.csv" &
 PG_SAMPLER_PID=$!
+BENCHMARK_RC=0
 
 case "$CONTROL_PLANE_MODE" in
   sequential)
     if csv_contains process "$MODULES_CSV"; then
-      run_pipeline_completion process lt_process_sql_job "$PROCESS_PARAMS" "$USERS" || true
+      if ! run_pipeline_completion process lt_process_sql_job "$PROCESS_PARAMS" "$USERS"; then
+        BENCHMARK_RC=1
+      fi
     fi
 
     if csv_contains dispatch "$MODULES_CSV"; then
-      run_pipeline_completion dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$USERS" \
-        "$DISPATCH_FILE_IDS_CSV" || true
+      if ! run_pipeline_completion dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$USERS" \
+        "$DISPATCH_FILE_IDS_CSV"; then
+        BENCHMARK_RC=1
+      fi
     fi
 
     if csv_contains atomic "$MODULES_CSV"; then
@@ -728,12 +754,17 @@ case "$CONTROL_PLANE_MODE" in
       for job_code in "${ATOMIC_JOBS[@]}"; do
         job_code="$(echo "$job_code" | xargs)"
         [[ -n "$job_code" ]] || continue
-        run_pipeline_completion "atomic-${job_code}" "$job_code" "$PARAM_DIR/atomic.params.json" "$USERS" || true
+        if ! run_pipeline_completion \
+          "atomic-${job_code}" "$job_code" "$PARAM_DIR/atomic.params.json" "$USERS"; then
+          BENCHMARK_RC=1
+        fi
       done
     fi
 
     if csv_contains trigger "$MODULES_CSV"; then
-      run_trigger_pressure "$PARAM_DIR/trigger.params.json" || true
+      if ! run_trigger_pressure "$PARAM_DIR/trigger.params.json"; then
+        BENCHMARK_RC=1
+      fi
     fi
     ;;
   parallel)
@@ -756,4 +787,4 @@ pg_pressure_snapshot "$LOG_DIR/pg-pressure-after.txt"
 write_report
 
 echo "Control-plane worker benchmark report written: $REPORT"
-exit "${BENCHMARK_RC:-0}"
+exit "$BENCHMARK_RC"

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.Callable;
@@ -40,20 +41,23 @@ public class TaskExecutionPool {
   void start() {
     int size = Math.max(1, properties.getPoolSize());
     if (environment != null) {
-      int maxConcurrentTasks =
-          environment.getProperty("batch.worker.max-concurrent-tasks", Integer.class, 8);
+      int maxConcurrentTasks = environment.getProperty(
+          WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY,
+          Integer.class,
+          WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS);
       if (maxConcurrentTasks <= 0) {
-        throw new IllegalStateException(
-            "batch.worker.max-concurrent-tasks must be positive, got " + maxConcurrentTasks);
+        throw new IllegalStateException(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+            + " must be positive, got "
+            + maxConcurrentTasks);
       }
       if (size < maxConcurrentTasks) {
-        throw new IllegalStateException(
-            "batch.worker.execution.pool-size must be >= batch.worker.max-concurrent-tasks"
-                + " (poolSize="
-                + size
-                + ", maxConcurrentTasks="
-                + maxConcurrentTasks
-                + ")");
+        throw new IllegalStateException("batch.worker.execution.pool-size must be >= "
+            + WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+            + " (poolSize="
+            + size
+            + ", maxConcurrentTasks="
+            + maxConcurrentTasks
+            + ")");
       }
     }
     AtomicLong threadIndex = new AtomicLong();

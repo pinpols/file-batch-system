@@ -52,6 +52,10 @@
 - MinIO client：提供 `mc`，用于对象存储 seed 和检查。
 - `curl`、`jq`、Python 3：巡检、HTTP 调用和轻量数据处理使用。脚本默认优先找 `python3`，可通过 `PYTHON_BIN=/path/to/python3` 或 `PYTHON=/path/to/python3` 覆盖。
 
+Python 脚本依赖由 `scripts/requirements.txt` 统一管理。本地首次使用时运行 `make python-env`，然后执行
+`source .venv/bin/activate`，或将 `PYTHON_BIN=.venv/bin/python` 传给支持该变量的 Shell 脚本。不要给受 PEP 668 管理的
+系统 Python 使用 `--break-system-packages`。
+
 通用环境变量：
 
 - `BATCH_SCRIPT_RUNTIME=auto|host|docker`：支持该开关的脚本默认 `auto`。`host` 强制使用本机客户端；`docker` 强制使用 Docker 容器内客户端。

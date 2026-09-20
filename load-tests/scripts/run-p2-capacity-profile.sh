@@ -137,15 +137,16 @@ PROFILE_RC=0
 STORM_TERMINAL_VERIFIED=0
 FAIRNESS_STARTED=0
 ORCHESTRATOR_CONTAINERS=(batch-orchestrator batch-orchestrator-benchmark-replica)
+KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-$BATCH_DEFAULT_KAFKA_CONTAINER}"
+PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
 APPLICATION_STABILITY_CONTAINERS=(
   batch-trigger
   batch-orchestrator
   batch-orchestrator-benchmark-replica
   batch-worker-atomic
-  batch-postgres-primary
+  "$PG_CONTAINER_NAME"
 )
 APPLICATION_RESTART_COUNTS_BEFORE=()
-KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-batch-kafka}"
 KAFKA_RESTART_COUNT_BEFORE=""
 KAFKA_PROFILE_STARTED_AT=""
 DOCKER_ENVIRONMENT_SIGNATURE=""
@@ -327,7 +328,7 @@ require_capacity_docker_environment() {
     container_memory_signature="${container_memory_signature}${container_memory_signature:+,}${container}=${memory}"
   done
 
-  pg_data_free_kib="$(docker exec batch-postgres-primary df -Pk /var/lib/postgresql/data \
+  pg_data_free_kib="$(docker exec "$PG_CONTAINER_NAME" df -Pk /var/lib/postgresql/data \
     2>/dev/null | awk 'NR == 2 { print $4 }' || true)"
   if [[ ! "$pg_data_free_kib" =~ ^[0-9]+$ || "$pg_data_free_kib" -lt "$CAPACITY_MIN_PG_DATA_FREE_KIB" ]]; then
     echo "PostgreSQL data volume has insufficient free space for the capacity profile:" >&2
@@ -682,12 +683,12 @@ require_trigger_capacity_budget() {
   atomic_max_concurrent="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_ATOMIC_MAX_CONCURRENT_TASKS=//p' | tail -1)"
   atomic_task_client_base_urls="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_TASK_CLIENT_BASE_URLS=//p' | tail -1)"
   atomic_execution_pool="$(printf '%s\n' "$atomic_configured" | sed -n 's/^BATCH_WORKER_EXECUTION_POOL_SIZE=//p' | tail -1)"
-  atomic_topic_partitions="$(docker exec batch-kafka "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
-      --bootstrap-server kafka:29092 \
+  atomic_topic_partitions="$(docker exec "$KAFKA_CONTAINER_NAME" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
+      --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" \
       --describe --topic "batch.task.dispatch.atomic.node.${CAPACITY_ATOMIC_WORKER_CODE}" 2>/dev/null \
     | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
-  trigger_topic_partitions="$(docker exec batch-kafka "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
-      --bootstrap-server kafka:29092 \
+  trigger_topic_partitions="$(docker exec "$KAFKA_CONTAINER_NAME" "$KAFKA_CONTAINER_BIN_DIR/kafka-topics.sh" \
+      --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" \
       --describe --topic "batch.trigger.launch.v1" 2>/dev/null \
     | awk -F'PartitionCount: ' 'NF > 1 && !found { split($2, values, " "); result=values[1]; found=1 } END { print result }')"
   atomic_registered_max_concurrent="$(
@@ -763,8 +764,8 @@ require_empty_trigger_lag() {
     exit 2
   }
   local lag_stats assigned_partitions lag
-  lag_stats="$(docker exec batch-kafka "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
-      --bootstrap-server kafka:29092 \
+  lag_stats="$(docker exec "$KAFKA_CONTAINER_NAME" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
+      --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" \
       --describe --group orchestrator-trigger-launch 2>/dev/null \
     | awk '$2 == "batch.trigger.launch.v1" && $3 ~ /^[0-9]+$/ {
         partitions[$3] = 1
@@ -959,7 +960,7 @@ write_report_header() {
     echo "- Standard-baseline comparable: $([[ "$CAPACITY_ENVIRONMENT_COMPARABLE" == "1" ]] && echo yes || echo no)"
     echo "- Comparable host-load limit per CPU: ${CAPACITY_COMPARABLE_MAX_HOST_LOAD_PER_CPU}"
     echo "- Load-generator host load snapshot: ${host_load}"
-    for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" batch-postgres-primary; do
+    for container in batch-trigger "${ORCHESTRATOR_CONTAINERS[@]}" batch-worker-atomic "$KAFKA_CONTAINER_NAME" "$PG_CONTAINER_NAME"; do
       container_revision="$(docker inspect "$container" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
       echo "- Container image ${container}: $(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || echo unavailable), revision=${container_revision:-unavailable}"
     done
@@ -1005,7 +1006,7 @@ append_sql_summary() {
 capture_trigger_partition_offsets() {
   local stage="$1"
   docker exec "$KAFKA_CONTAINER_NAME" "$KAFKA_CONTAINER_BIN_DIR/kafka-get-offsets.sh" \
-    --bootstrap-server kafka:29092 \
+    --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" \
     --topic batch.trigger.launch.v1 \
     --time -1 \
     | sort -t: -k2,2n > "$LOG_DIR/trigger-launch-offsets-${stage}.txt"

@@ -19,9 +19,13 @@ if ! command -v squawk >/dev/null 2>&1; then
   exit 1
 fi
 
-# 找出相对 base 新增(A)/改动(M)的迁移文件。
+# 找出相对 base 新增(A)/改动(M)的迁移文件，并覆盖本地尚未暂存的新迁移。
+# CI 中后者为空；本地不能因为文件还没 git add 就漏掉安全扫描。
 mapfile -t changed < <(
-  git diff --name-only --diff-filter=AM "${BASE_REF}"...HEAD -- 'db/migration/*.sql' 2>/dev/null || true
+  {
+    git diff --name-only --diff-filter=AM "${BASE_REF}"...HEAD -- 'db/migration/*.sql' 2>/dev/null || true
+    git ls-files --others --exclude-standard -- 'db/migration/*.sql'
+  } | sort -u
 )
 
 if [[ "${#changed[@]}" -eq 0 ]]; then

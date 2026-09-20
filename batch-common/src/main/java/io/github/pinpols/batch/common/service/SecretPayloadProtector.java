@@ -1,6 +1,5 @@
-package io.github.pinpols.batch.console.infrastructure.config;
+package io.github.pinpols.batch.common.service;
 
-import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.nio.charset.StandardCharsets;
@@ -8,12 +7,12 @@ import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** 使用已配置的 KMS 密钥环，在持久化前加密密钥版本载荷。 */
+/** 使用平台 KMS 密钥环保护结构化密钥载荷，供配置写入和历史数据迁移复用。 */
 @Component
 @RequiredArgsConstructor
 public class SecretPayloadProtector {
 
-  static final String FORMAT = "BATCHENC_BASE64_V1";
+  public static final String FORMAT = "BATCHENC_BASE64_V1";
 
   private final BatchObjectCryptoService cryptoService;
 

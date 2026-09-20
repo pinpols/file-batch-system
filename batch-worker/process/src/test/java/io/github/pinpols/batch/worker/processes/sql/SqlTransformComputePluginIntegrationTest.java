@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -43,8 +43,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 class SqlTransformComputePluginIntegrationTest {
 
-  private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(TestContainerImages.POSTGRES);
+  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
 
   private JdbcTemplate jdbcTemplate;
   private SqlTransformComputePlugin plugin;

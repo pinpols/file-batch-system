@@ -37,9 +37,9 @@ cd "$ROOT" || exit 1
 source "$ROOT/scripts/sim/env-common.sh" 2>/dev/null || true
 SQL_FILE="$ROOT/scripts/sim/sql/quiesce-schedules.sql"
 
-PG_C="${PG_PLATFORM_CONTAINER:-batch-postgres-primary}"
-PG_U="${PG_PLATFORM_USER:-batch_user}"
-PG_D="${PG_PLATFORM_DB:-batch_platform}"
+PG_C="${PG_PLATFORM_CONTAINER:-$PG_CONTAINER}"
+PG_U="${PG_PLATFORM_USER:-$POSTGRES_USER}"
+PG_D="${PG_PLATFORM_DB:-$POSTGRES_DB}"
 
 echo "==> 静默自动 fire 的定时触发 + 清已解决死信(${PG_C}/${PG_D})"
 docker exec -i "$PG_C" psql -U "$PG_U" -d "$PG_D" -v ON_ERROR_STOP=1 \

@@ -7,7 +7,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.github.pinpols.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
 import io.github.pinpols.batch.common.tenant.routing.HashAndSiloPlacementResolver;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -20,7 +20,6 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Phase A · RLS 闭世界守护(closed-world)集成测试。
@@ -54,11 +53,7 @@ class RlsClosedWorldCheckIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
-    postgres = new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
-        .withDatabaseName("batch_business")
-        .withUsername("batch_user")
-        .withPassword("batch_pass_123")
-        .withUrlParam("sslmode", "disable");
+    postgres = TestPostgresContainers.business();
     postgres.start();
 
     HikariConfig cfg = new HikariConfig();

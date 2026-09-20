@@ -61,9 +61,17 @@ class SourceFact:
         return self.path.split("/", maxsplit=1)[0]
 
 
-def tracked_main_sources() -> list[Path]:
+def working_tree_main_sources() -> list[Path]:
     result = subprocess.run(
-        ["git", "ls-files", "--", *SOURCE_PREFIXES],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            *SOURCE_PREFIXES,
+        ],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -211,7 +219,7 @@ def resolve(path: Path) -> Path:
 
 def main() -> int:
     args = parse_args()
-    report = markdown([inspect(path) for path in tracked_main_sources()])
+    report = markdown([inspect(path) for path in working_tree_main_sources()])
     if args.output:
         output = resolve(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)

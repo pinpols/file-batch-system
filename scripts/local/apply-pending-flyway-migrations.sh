@@ -12,11 +12,13 @@
 # =========================================================
 set -uo pipefail
 
-PG="${PG_CONTAINER:-batch-postgres-primary}"
-PG_USER="${PG_USER:-batch_user}"
-PG_DB="${PG_DB:-batch_platform}"
-MIG_DIR="${MIG_DIR:-db/migration}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT_DIR/scripts/lib/env-common.sh"
+PG="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
+PG_USER="${PG_USER:-$PGUSER}"
+PG_DB="${PG_DB:-$PLATFORM_DB}"
+MIG_DIR="${MIG_DIR:-$ROOT_DIR/db/migration}"
 SQL_DIR="$ROOT_DIR/scripts/local/sql"
 
 [[ -d "$MIG_DIR" ]] || { echo "❌ $MIG_DIR not found"; exit 1; }

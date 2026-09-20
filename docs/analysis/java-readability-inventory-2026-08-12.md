@@ -7,10 +7,10 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2238 |
+| 生产 Java 源文件 | 2240 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2051 |
-| 含 Map 的源文件 | 444 |
+| `Map<String, Object>` 出现次数 | 2049 |
+| 含 Map 的源文件 | 443 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
 | `@SuppressWarnings` | 217 |
@@ -23,11 +23,11 @@
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 299 |
-| `batch-console-api` | 875 |
+| `batch-common` | 302 |
+| `batch-console-api` | 873 |
 | `batch-orchestrator` | 528 |
 | `batch-trigger` | 69 |
-| `batch-worker` | 367 |
+| `batch-worker` | 368 |
 | `sdk` | 91 |
 | `security-scan` | 9 |
 

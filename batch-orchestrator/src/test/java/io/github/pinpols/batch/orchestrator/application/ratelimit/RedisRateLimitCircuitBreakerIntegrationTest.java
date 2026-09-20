@@ -6,7 +6,7 @@ import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.redis.lettuce.Bucket4jLettuce;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
-import io.github.pinpols.batch.testing.TestContainerImages;
+import io.github.pinpols.batch.testing.TestValkeyContainers;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
@@ -21,7 +21,6 @@ import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * 真 Redis 短路熔断端到端测试：验证 #782 遗留的"慢故障下每请求叠 500ms"被熔断消除。
@@ -44,9 +43,7 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
   @DisplayName("真 Redis 停机 → 连续失败开熔断 → 后续请求短路 near-instant fail-open(不再阻塞 500ms)")
   void sustainedRealRedisFailureOpensCircuitAndStopsStalling() {
     @SuppressWarnings("resource")
-    GenericContainer<?> redis = new GenericContainer<>(
-            DockerImageName.parse(TestContainerImages.VALKEY))
-        .withExposedPorts(6379);
+    GenericContainer<?> redis = TestValkeyContainers.create();
     redis.start();
 
     RedisClient client = RedisClient.create();
@@ -58,7 +55,7 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
         .build());
     RedisURI uri = RedisURI.builder()
         .withHost(redis.getHost())
-        .withPort(redis.getMappedPort(6379))
+        .withPort(redis.getMappedPort(TestValkeyContainers.REDIS_PORT))
         .withTimeout(Duration.ofSeconds(2))
         .build();
     try (StatefulRedisConnection<String, byte[]> connection =
