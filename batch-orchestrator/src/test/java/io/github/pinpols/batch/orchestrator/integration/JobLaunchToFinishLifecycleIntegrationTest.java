@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
@@ -102,11 +103,13 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
+    String selectedWorkerCode = task.getAssignedWorkerCode();
+    assertThat(selectedWorkerCode).isNotBlank();
 
-    JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
+    JobTaskEntity claimed = assignWorkerWithRetry(task, selectedWorkerCode);
     assertThat(claimed).isNotNull();
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-    assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
+    assertThat(claimed.getAssignedWorkerCode()).isEqualTo(selectedWorkerCode);
 
     // 3) Report success —— 镜像生产:worker CLAIM 时确立的 invocationId 必须随 report 回填。
     // 服务端 assignWorker 在 CLAIM 时把 current_invocation_id 写进 partition;真 worker 持此值并在 report
@@ -159,11 +162,13 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
+    String selectedWorkerCode = task.getAssignedWorkerCode();
+    assertThat(selectedWorkerCode).isNotBlank();
 
-    JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
+    JobTaskEntity claimed = assignWorkerWithRetry(task, selectedWorkerCode);
     assertThat(claimed).isNotNull();
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-    assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
+    assertThat(claimed.getAssignedWorkerCode()).isEqualTo(selectedWorkerCode);
 
     // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
     String invocationId = jdbcTemplate.queryForObject(
@@ -188,28 +193,46 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   }
 
   /**
-   * CI 上 assignWorker 返 READY 根因:partition lease CAS 失败 → setRollbackOnly 拖走 worker_registry
-   * 刷新可见性(见 docs/archive/analysis/disabled-tests-root-cause-2026-05-21.md §1)。
+   * 长 IT 套件会保留同组的多个在线 worker，launch 可能选择早先用例留下的 worker，而不一定是本用例刚 seed 的实例。因此调用方必须使用
+   * task 快照中的 assignedWorkerCode 认领，不能假定 seed worker 就是最终路由结果。
    *
-   * <p>修复:延长重试 + 每次显式 await partition.status==READY,确保前置状态就绪再 claim, 减少 lease CAS miss 频次。最长 5s
-   * 等待,超时仍返当前 claimed 让断言拿到真实状态。
+   * <p>认领前同时等待 partition.status==READY，减少前置状态推进与 lease CAS 的瞬时竞争。最长等待 5 秒，超时仍返回当前 task，
+   * 由调用方断言输出真实状态。
    */
-  private JobTaskEntity assignWorkerWithRetry(Long taskId, String workerCode) {
-    JobTaskEntity claimed = null;
+  private JobTaskEntity assignWorkerWithRetry(JobTaskEntity task, String workerCode) {
+    JobTaskEntity claimed = task;
     long deadline = System.currentTimeMillis() + 5_000L;
     while (System.currentTimeMillis() < deadline) {
+      String partitionStatus = jdbcTemplate.queryForObject(
+          "select partition_status from batch.job_partition where tenant_id = ? and id = ?",
+          String.class,
+          TENANT,
+          task.getJobPartitionId());
+      if (!PartitionStatus.READY.code().equals(partitionStatus)) {
+        if (!sleepBeforeClaimRetry()) {
+          return claimed;
+        }
+        continue;
+      }
       LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-      claimed = taskExecutionService.assignWorker(TENANT, taskId, workerCode);
+      claimed = taskExecutionService.assignWorker(TENANT, task.getId(), workerCode);
       if (claimed != null && TaskStatus.RUNNING.code().equals(claimed.getTaskStatus())) {
         return claimed;
       }
-      try {
-        Thread.sleep(50L);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+      if (!sleepBeforeClaimRetry()) {
         return claimed;
       }
     }
     return claimed;
+  }
+
+  private boolean sleepBeforeClaimRetry() {
+    try {
+      Thread.sleep(50L);
+      return true;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return false;
+    }
   }
 }

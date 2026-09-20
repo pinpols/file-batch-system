@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import io.github.pinpols.batch.common.health.BatchHealthAutoConfiguration;
 import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
 import io.github.pinpols.batch.common.health.HikariSaturationHealthIndicator;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -37,6 +39,18 @@ class BatchCommonAutoConfigurationConditionTest {
         .withPropertyValues("batch.startup-self-check.enabled=false")
         .run(context -> {
           assertThat(context).doesNotHaveBean(BatchStartupSelfCheck.class);
+          assertThat(context).hasNotFailed();
+        });
+  }
+
+  @Test
+  void objectCryptoAutoConfigurationProvidesSecretPayloadProtector() {
+    contextRunner
+        .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
+        .withPropertyValues("spring.profiles.active=test", "batch.security.bypass-mode=true")
+        .run(context -> {
+          assertThat(context).hasSingleBean(BatchObjectCryptoService.class);
+          assertThat(context).hasSingleBean(SecretPayloadProtector.class);
           assertThat(context).hasNotFailed();
         });
   }

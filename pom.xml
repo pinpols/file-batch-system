@@ -404,6 +404,9 @@
                         <exclude>**/BatchIntegrationTest.class</exclude>
                     </excludes>
                     <systemPropertyVariables>
+                        <!-- Backend tests may use Apache POI/Java2D but never require a desktop session.
+                             Force headless mode so macOS local runs and Linux CI follow the same path. -->
+                        <java.awt.headless>true</java.awt.headless>
                         <!-- Docker Engine 29+ / Docker Desktop 4.52+ requires Docker API >= 1.44.
                              Keep this at the root so all module-level Testcontainers IT share the same probe behavior,
                              not only batch-e2e-tests. -->

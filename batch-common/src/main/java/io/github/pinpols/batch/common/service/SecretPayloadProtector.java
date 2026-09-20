@@ -5,10 +5,8 @@ import io.github.pinpols.batch.common.utils.Texts;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /** 使用平台 KMS 密钥环保护结构化密钥载荷，供配置写入和历史数据迁移复用。 */
-@Component
 @RequiredArgsConstructor
 public class SecretPayloadProtector {
 
