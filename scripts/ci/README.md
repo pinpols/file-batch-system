@@ -128,8 +128,7 @@ bash scripts/ci/security-scan.sh --help
 
 ```bash
 make python-env
-source .venv/bin/activate
-python3 scripts/ci/check-console-openapi-paths.py
+make check-openapi
 ```
 
 成功时打印路由数量并以退出码 `0` 结束；不一致时打印「仅 OpenAPI」与「仅代码」的差异并以 `1` 结束。

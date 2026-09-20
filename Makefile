@@ -1,3 +1,5 @@
+PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+
 .PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one python-env
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
@@ -166,11 +168,11 @@ ci-module:
 
 # OpenAPI 路径与 Controller 对齐校验
 check-openapi:
-	python3 scripts/ci/check-console-openapi-paths.py
+	$(PYTHON_BIN) scripts/ci/check-console-openapi-paths.py
 
 # 模块依赖边界校验
 check-deps-boundary:
-	python3 scripts/ci/check-dependency-boundaries.py
+	$(PYTHON_BIN) scripts/ci/check-dependency-boundaries.py
 
 # 版本对齐校验（pom.xml <revision> ↔ Chart.yaml appVersion；4 个 .env 的 *_IMAGE_TAG 一致）
 check-version-alignment:

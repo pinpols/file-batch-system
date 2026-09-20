@@ -10,6 +10,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT_DIR/scripts/lib/python-runtime.sh"
+batch_require_python
+
 cd "$ROOT_DIR"
 
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
@@ -533,11 +537,11 @@ fi
 if [[ "$RUN_STATIC_GATES" == true ]]; then
   run_step "Version alignment (pom.xml / Chart.yaml / .env.*)" bash scripts/ci/check-version-alignment.sh
 
-  run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
+  run_step "Dependency boundary checks" "$PYTHON_BIN" scripts/ci/check-dependency-boundaries.py
 
   run_step \
     "MyBatis generated keys return only id" \
-    python3 scripts/ci/check-mybatis-generated-key-columns.py
+    "$PYTHON_BIN" scripts/ci/check-mybatis-generated-key-columns.py
 
   # PMD 0 violation 基线达成 (2026-04-26 maturity §6 P1 #2 收尾)，让 PMD 真正阻断 CI。
   # 调试模式可显式 export BATCH_CI_SKIP_PMD_GATE=1 让 dev 本地 escape；CI 不应设此变量。

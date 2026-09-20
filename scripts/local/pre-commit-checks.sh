@@ -4,6 +4,9 @@ set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 cd "$ROOT"
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
+batch_require_python
 
 staged_files=()
 while IFS= read -r -d '' file; do
@@ -62,11 +65,11 @@ if ((workflow_changed == 1)); then
 fi
 
 if ((scripts_changed == 1)); then
-  python3 scripts/ci/check-script-governance.py
+  "$PYTHON_BIN" scripts/ci/check-script-governance.py
 fi
 if ((docs_changed == 1)); then
-  python3 scripts/ci/check-docs-structure.py
+  "$PYTHON_BIN" scripts/ci/check-docs-structure.py
 fi
-python3 scripts/ci/check-repository-hygiene.py
+"$PYTHON_BIN" scripts/ci/check-repository-hygiene.py
 
 echo "[pre-commit] 轻量门禁通过"

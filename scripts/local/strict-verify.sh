@@ -104,7 +104,7 @@ if command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   if "$PYTHON_BIN" -c 'import yaml' >/dev/null 2>&1; then
     pass "PyYAML 可用" "$("$PYTHON_BIN" -c 'import yaml; print(yaml.__version__)')"
   else
-    fail "PyYAML 缺失" "请运行 make python-env，并设置 PYTHON_BIN=.venv/bin/python"
+    fail "PyYAML 缺失" "请运行 make python-env；脚本会自动选择 .venv/bin/python"
     PRECHECK_FAIL=1
   fi
 else
