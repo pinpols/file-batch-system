@@ -5,7 +5,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -54,9 +55,10 @@ public class DefaultExportStageExecutor
 
   public DefaultExportStageExecutor(
       List<ExportStageStep> steps,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    super(runtimeRepository);
+    super(pipelineDefinitions, pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();

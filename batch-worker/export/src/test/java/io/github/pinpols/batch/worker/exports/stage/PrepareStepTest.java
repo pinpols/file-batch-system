@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
@@ -19,7 +19,8 @@ class PrepareStepTest {
   @Test
   void execute_returnsInvalid_whenTenantOrPayloadBlank() {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     ExportJobContext ctx = new ExportJobContext();
@@ -35,7 +36,8 @@ class PrepareStepTest {
   @Test
   void execute_parsesPayload_andLoadsTemplateConfig_whenTemplateCodeProvided() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig("t1", "TPL_1", ExportWorkerType.EXPORT))
@@ -79,7 +81,8 @@ class PrepareStepTest {
   @Test
   void execute_usesExistingExportPayloadFromAttributes_withoutJsonParse() {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
@@ -116,7 +119,8 @@ class PrepareStepTest {
   @Test
   void execute_failsWhenBizDateMissingFromPayloadAndContext() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     ExportPayload payload = new ExportPayload(
@@ -135,7 +139,8 @@ class PrepareStepTest {
   @Test
   void execute_addsPartitionSuffix_toAllNames_whenMultiPartition() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
@@ -173,7 +178,8 @@ class PrepareStepTest {
   @Test
   void execute_noPartitionSuffix_whenSinglePartition() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
@@ -209,7 +215,8 @@ class PrepareStepTest {
   @Test
   void execute_tagsExplicitObjectName_whenMultiPartition() throws Exception {
     ObjectMapper objectMapper = new ObjectMapper();
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformPipelineDefinitionRepository runtimeRepository =
+        mock(PlatformPipelineDefinitionRepository.class);
     PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))

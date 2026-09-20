@@ -6,13 +6,17 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -39,15 +43,21 @@ public class RegisterStep implements ExportStageStep {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformPipelineRunRepository pipelineRuns;
+  private final PlatformFileAuditRepository fileAudits;
   private final ExportDataPluginRegistry exportDataPluginRegistry;
   private final S3StorageProperties s3StorageProperties;
 
   public RegisterStep(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
+      PlatformPipelineRunRepository pipelineRuns,
+      PlatformFileAuditRepository fileAudits,
       ExportDataPluginRegistry exportDataPluginRegistry,
       S3StorageProperties s3StorageProperties) {
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
+    this.pipelineRuns = pipelineRuns;
+    this.fileAudits = fileAudits;
     this.exportDataPluginRegistry = exportDataPluginRegistry;
     this.s3StorageProperties = s3StorageProperties;
   }
@@ -92,10 +102,9 @@ public class RegisterStep implements ExportStageStep {
     String bucket = s3StorageProperties.getBucket();
     String expectedChecksum = nullableText(attrs.get("checksumValue"));
     // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）
-    if (runtimeRepository.existsFileRecordByStoragePath(
-        context.getTenantId(), bucket, objectName)) {
+    if (fileRecords.existsFileRecordByStoragePath(context.getTenantId(), bucket, objectName)) {
       Map<String, Object> existing =
-          runtimeRepository.loadFileRecordByStoragePath(context.getTenantId(), bucket, objectName);
+          fileRecords.loadFileRecordByStoragePath(context.getTenantId(), bucket, objectName);
       String existingChecksum = nullableText(existing.get("checksum_value"));
       if (Texts.hasText(expectedChecksum)
           && Texts.hasText(existingChecksum)
@@ -129,7 +138,8 @@ public class RegisterStep implements ExportStageStep {
       metadata.put("exportWithBom", attrs.get("exportWithBom"));
     }
     mergeUserMetadata(metadata, exportPayload.metadata());
-    Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+    Long fileSizeBytes = PlatformRuntimeValues.toLong(attrs.get("fileSizeBytes"));
+    Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
         .tenantId(context.getTenantId())
         .fileCode(exportPayload.fileCode())
         .bizType(
@@ -139,10 +149,7 @@ public class RegisterStep implements ExportStageStep {
         .originalFileName(fileName)
         .fileFormatType(fileFormatType)
         .charset(exportCharset(attrs))
-        .fileSizeBytes(
-            runtimeRepository.toLong(attrs.get("fileSizeBytes")) == null
-                ? 0L
-                : runtimeRepository.toLong(attrs.get("fileSizeBytes")))
+        .fileSizeBytes(EmptyChecks.isNull(fileSizeBytes) ? 0L : fileSizeBytes)
         .checksumType(String.valueOf(attrs.getOrDefault("checksumType", "SHA-256")))
         .checksumValue(nullableText(attrs.get("checksumValue")))
         .storageType("S3")
@@ -156,14 +163,13 @@ public class RegisterStep implements ExportStageStep {
         .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .metadata(metadata)
         .build());
-    Map<String, Object> fileRecord =
-        runtimeRepository.loadFileRecord(context.getTenantId(), fileId);
+    Map<String, Object> fileRecord = fileRecords.loadFileRecord(context.getTenantId(), fileId);
     attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
     attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
     context.setFileId(String.valueOf(fileId));
-    runtimeRepository.bindFileToPipelineInstance(
-        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
-    Long batchId = runtimeRepository.toLong(batch.get("id"));
+    pipelineRuns.bindFileToPipelineInstance(
+        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
+    Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         fileRecord.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
     String traceId = String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID));
@@ -180,7 +186,7 @@ public class RegisterStep implements ExportStageStep {
 
   private ExportStageResult reuseExistingFileRecord(
       ExportJobContext context, Map<?, ?> batch, Map<String, Object> existing) {
-    Long fileId = runtimeRepository.toLong(existing.get("id"));
+    Long fileId = PlatformRuntimeValues.toLong(existing.get("id"));
     if (fileId == null) {
       return ExportStageResult.failure(
           stage(),
@@ -193,11 +199,11 @@ public class RegisterStep implements ExportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, existing);
     context.setFileId(String.valueOf(fileId));
-    runtimeRepository.bindFileToPipelineInstance(
-        runtimeRepository.toLong(
+    pipelineRuns.bindFileToPipelineInstance(
+        PlatformRuntimeValues.toLong(
             context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
         fileId);
-    Long batchId = runtimeRepository.toLong(batch.get("id"));
+    Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         existing.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
     String traceId = String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
@@ -207,7 +213,7 @@ public class RegisterStep implements ExportStageStep {
     Map<String, Object> audit = new LinkedHashMap<>();
     audit.put("reason", "STORE_TO_REGISTER_RETRY");
     audit.put(KEY_OBJECT_NAME, context.getAttributes().get(KEY_OBJECT_NAME));
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType("EXPORT_REGISTER")

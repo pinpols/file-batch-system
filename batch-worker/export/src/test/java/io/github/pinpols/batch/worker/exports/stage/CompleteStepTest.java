@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -38,7 +38,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CompleteStepTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformFileAuditRepository fileAudits;
 
   @InjectMocks
   private CompleteStep step;
@@ -72,7 +75,6 @@ class CompleteStepTest {
         null,
         Map.of());
     ctx.getAttributes().put("exportPayload", payload);
-    when(runtimeRepository.toLong(any())).thenReturn(501L);
 
     ExportStageResult result = step.execute(ctx);
 
@@ -80,7 +82,7 @@ class CompleteStepTest {
     assertThat(result.stage()).isEqualTo(ExportStage.COMPLETE);
     verify(runtimeRepository).updateFileStatus(eq(501L), eq("DISPATCHING"), any());
     ArgumentCaptor<FileAuditParam> auditCaptor = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(runtimeRepository).appendAudit(auditCaptor.capture());
+    verify(fileAudits).appendAudit(auditCaptor.capture());
     FileAuditParam audit = auditCaptor.getValue();
     assertThat(audit.getOperationType()).isEqualTo("EXPORT_COMPLETE");
     assertThat(audit.getOperationResult()).isEqualTo("SUCCESS");
@@ -105,7 +107,6 @@ class CompleteStepTest {
         null,
         Map.of());
     ctx.getAttributes().put("exportPayload", payload);
-    when(runtimeRepository.toLong(any())).thenReturn(501L);
 
     ExportStageResult result = step.execute(ctx);
 
@@ -117,7 +118,6 @@ class CompleteStepTest {
   @DisplayName("无 exportPayload → 默认 GENERATED")
   void shouldDefaultToGenerated_whenNoPayloadInAttributes() {
     ExportJobContext ctx = baseContext();
-    when(runtimeRepository.toLong(any())).thenReturn(501L);
 
     ExportStageResult result = step.execute(ctx);
 
@@ -137,7 +137,7 @@ class CompleteStepTest {
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("EXPORT_COMPLETE_INVALID");
     verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-    verify(runtimeRepository, never()).appendAudit(any());
+    verify(fileAudits, never()).appendAudit(any());
   }
 
   @Test
@@ -167,7 +167,6 @@ class CompleteStepTest {
   void shouldIncludeExportSnapshotInMetadata_whenPresent() {
     ExportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, Map.of("snap", "v1"));
-    when(runtimeRepository.toLong(any())).thenReturn(501L);
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);

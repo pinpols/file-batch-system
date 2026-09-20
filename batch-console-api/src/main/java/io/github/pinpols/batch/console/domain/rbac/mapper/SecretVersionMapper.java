@@ -13,6 +13,12 @@ public interface SecretVersionMapper {
 
   Integer selectLatestVersionNo(Map<String, Object> params);
 
+  int acquireVersionLock(Map<String, Object> params);
+
+  List<SecretVersionEntity> selectUnprotectedPayloads(int limit);
+
+  int updateProtectedPayload(Map<String, Object> params);
+
   int insertSecretVersion(Map<String, Object> params);
 
   int deactivateCurrentVersion(Map<String, Object> params);

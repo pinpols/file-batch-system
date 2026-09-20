@@ -5,7 +5,9 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -21,13 +23,16 @@ import org.springframework.stereotype.Component;
 public class CompensateDispatchStep implements DispatchStageStep {
 
   private final FileDispatchRepository fileDispatchRepository;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformFileAuditRepository fileAudits;
 
   public CompensateDispatchStep(
       FileDispatchRepository fileDispatchRepository,
-      PlatformFileRuntimeRepository runtimeRepository) {
+      PlatformFileRecordRepository fileRecords,
+      PlatformFileAuditRepository fileAudits) {
     this.fileDispatchRepository = fileDispatchRepository;
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
+    this.fileAudits = fileAudits;
   }
 
   @Override
@@ -53,7 +58,7 @@ public class CompensateDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     int updated = fileDispatchRepository.markCompensated(
         context.getTenantId(),
         fileId,
@@ -69,7 +74,7 @@ public class CompensateDispatchStep implements DispatchStageStep {
           "failed to mark compensated",
           ERROR_OBJECT_MAPPER);
     }
-    runtimeRepository.updateFileStatus(
+    fileRecords.updateFileStatus(
         fileId,
         "FAILED",
         Map.of("channelCode", Objects.requireNonNullElse(dispatchPayload.channelCode(), "")));
@@ -77,7 +82,7 @@ public class CompensateDispatchStep implements DispatchStageStep {
     detailSummary.put("channelCode", dispatchPayload.channelCode());
     detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
     detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType("DISPATCH_COMPENSATE")

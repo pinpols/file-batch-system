@@ -22,10 +22,6 @@ public interface ConsoleConfigApplicationService {
 
   Long createConfigRelease(ConfigReleaseUpsertRequest request);
 
-  String publishConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
-
-  String grayConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
-
   String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
 
   List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request);

@@ -11,7 +11,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -34,7 +35,7 @@ import org.mockito.quality.Strictness;
  * code, does not propagate - infra error: step throws RuntimeException → INFRA_ERROR code, does not
  * propagate
  */
-// LENIENT 保留:setUp() 在所有用例之前预置了 runtimeRepository.toLong / startStepRun 以及
+// LENIENT 保留:setUp() 在所有用例之前预置了 startStepRun 以及
 // stubStep() 内部对 stage()/implCode()/stepCode()/stepName() 的共享 stub,
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
@@ -42,7 +43,10 @@ import org.mockito.quality.Strictness;
 class DefaultDispatchStageExecutorTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   // The step under test
   private DispatchStageStep prepareStep;
@@ -57,8 +61,7 @@ class DefaultDispatchStageExecutorTest {
   void setUp() {
     prepareStep = stubStep(DispatchStage.PREPARE);
 
-    when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+    when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
     // Provide all required stages so buildDefaultStepDefinitions() does not throw
     List<DispatchStageStep> allSteps = new ArrayList<>();
@@ -69,7 +72,8 @@ class DefaultDispatchStageExecutorTest {
       }
     }
     meterRegistry = new SimpleMeterRegistry();
-    executor = new DefaultDispatchStageExecutor(allSteps, runtimeRepository, meterRegistry);
+    executor = new DefaultDispatchStageExecutor(
+        allSteps, pipelineDefinitions, pipelineRuns, meterRegistry);
   }
 
   @Test
@@ -88,7 +92,7 @@ class DefaultDispatchStageExecutorTest {
             .counter())
         .isNotNull();
     assertThat(hasTagKey("dispatch.receipt.total", "tenant")).isFalse();
-    verify(runtimeRepository).finishStepRunSuccess(eq(STEP_RUN_ID), any());
+    verify(pipelineRuns).finishStepRunSuccess(eq(STEP_RUN_ID), any());
   }
 
   @Test
@@ -107,7 +111,7 @@ class DefaultDispatchStageExecutorTest {
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
     assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
     assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
-    verify(runtimeRepository)
+    verify(pipelineRuns)
         .finishStepRunFailure(
             eq(STEP_RUN_ID),
             eq(StageFailureCode.BUSINESS_ERROR.name()),
@@ -128,8 +132,7 @@ class DefaultDispatchStageExecutorTest {
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
     assertThat(results.get(0).message()).isEqualTo("upstream connection refused");
-    verify(runtimeRepository)
-        .finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
+    verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -148,7 +151,7 @@ class DefaultDispatchStageExecutorTest {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(runtimeRepository.loadPipelineSteps(any())).thenReturn(List.of());
+    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<DispatchStageResult> results = executor.execute(context);
 

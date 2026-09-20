@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.utils.CorrelationIds;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
@@ -44,7 +45,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
         IdGenerator.newBusinessNo("req"));
     String traceId = CorrelationIds.normalize(
         request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
-    String operatorId = request.getHeader(CommonConstants.DEFAULT_OPERATOR_ID_HEADER);
+    String operatorId = resolveOperatorId();
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
     // P1(2026-05-23 audit):与 ConsoleJwtService.hashClientIp 统一身份绑定来源,只取 RemoteAddr,
     // 不信任 X-Forwarded-For — 之前 XFF fallback 会让伪造 XFF 的请求与 JWT 绑定的 ipHash 不一致,
@@ -114,5 +115,17 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       return principal.tenantId();
     }
     return requestedTenantId;
+  }
+
+  private String resolveOperatorId() {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
+      return null;
+    }
+    if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+      return principal.username();
+    }
+    String name = authentication.getName();
+    return "anonymousUser".equals(name) ? null : name;
   }
 }

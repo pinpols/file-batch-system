@@ -7,7 +7,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.nio.file.Files;
@@ -115,18 +116,18 @@ public final class ImportStageSupport {
    * 非分片模式仍保持严格状态机。
    */
   public static void updateFileStatusRecoverAware(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
       ImportJobContext context,
       String targetStatus,
       Map<String, Object> metadata) {
     Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
     try {
-      runtimeRepository.updateFileStatus(fileId, targetStatus, metadata);
+      fileRecords.updateFileStatus(fileId, targetStatus, metadata);
     } catch (BizException exception) {
       if (exception.getCode() != ResultCode.STATE_CONFLICT
           || (!isRecoverMode(context) && !isPartitionedImport(context))
-          || !fileStatusAlreadyAtOrAfter(runtimeRepository, fileId, targetStatus)) {
+          || !fileStatusAlreadyAtOrAfter(fileRecords, fileId, targetStatus)) {
         throw exception;
       }
       log.info(
@@ -155,8 +156,8 @@ public final class ImportStageSupport {
   }
 
   private static boolean fileStatusAlreadyAtOrAfter(
-      PlatformFileRuntimeRepository runtimeRepository, Long fileId, String targetStatus) {
-    FileStatus current = FileStatus.fromCode(runtimeRepository.currentFileStatus(fileId));
+      PlatformFileRecordRepository fileRecords, Long fileId, String targetStatus) {
+    FileStatus current = FileStatus.fromCode(fileRecords.currentFileStatus(fileId));
     FileStatus target = FileStatus.fromCode(targetStatus);
     int currentRank = importPipelineRank(current);
     int targetRank = importPipelineRank(target);

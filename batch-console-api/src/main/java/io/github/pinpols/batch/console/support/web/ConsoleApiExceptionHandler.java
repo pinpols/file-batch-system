@@ -33,6 +33,7 @@ import org.springframework.web.context.request.async.AsyncRequestNotUsableExcept
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -220,9 +221,8 @@ public class ConsoleApiExceptionHandler {
     };
   }
 
-  @ExceptionHandler(NoResourceFoundException.class)
-  public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(
-      NoResourceFoundException exception) {
+  @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+  public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(Exception exception) {
     log.warn("console resource not found: {}", exception.getMessage());
     return ResponseEntity.status(404)
         .body(responseFactory.failure(ResultCode.NOT_FOUND, exception.getMessage()));

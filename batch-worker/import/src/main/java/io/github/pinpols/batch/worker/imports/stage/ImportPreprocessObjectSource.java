@@ -8,7 +8,8 @@ import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -45,17 +46,17 @@ final class ImportPreprocessObjectSource {
   private static final String ERROR_CODE_OBJECT_LOAD_FAILED =
       "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED";
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
   private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
   private final WorkerImportPayloadProperties payloadProperties;
 
   ImportPreprocessObjectSource(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
       S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore,
       WorkerImportPayloadProperties payloadProperties) {
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
     this.s3StorageProperties = s3StorageProperties;
     this.objectStore = objectStore;
     this.payloadProperties = payloadProperties;
@@ -68,9 +69,10 @@ final class ImportPreprocessObjectSource {
           "import object path is required before tenant ownership validation");
     }
     Long fileId =
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    Map<String, Object> fileRecord =
-        fileId == null ? Map.of() : runtimeRepository.loadFileRecord(context.getTenantId(), fileId);
+        PlatformRuntimeValues.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    Map<String, Object> fileRecord = EmptyChecks.isNull(fileId)
+        ? Map.of()
+        : fileRecords.loadFileRecord(context.getTenantId(), fileId);
     Object registeredPath = fileRecord.get("storage_path");
     if (registeredPath == null
         || !importPayload.storagePath().equals(String.valueOf(registeredPath))) {
@@ -149,7 +151,7 @@ final class ImportPreprocessObjectSource {
       fileMetadata.put("sourceObject", object);
       fileMetadata.put("sourceBytes", bytes);
       ImportStageSupport.updateFileStatusRecoverAware(
-          runtimeRepository, context, "PARSING", fileMetadata);
+          fileRecords, context, "PARSING", fileMetadata);
       return ImportStageResult.success(ImportStage.PREPROCESS);
     } catch (Exception ex) {
       deleteQuietly(spool);
@@ -207,7 +209,7 @@ final class ImportPreprocessObjectSource {
       fileMetadata.put("sourceObject", object);
       fileMetadata.put("rangeSlice", slice.partitionNo() + "/" + slice.partitionCount());
       ImportStageSupport.updateFileStatusRecoverAware(
-          runtimeRepository, context, "PARSING", fileMetadata);
+          fileRecords, context, "PARSING", fileMetadata);
       return ImportStageResult.success(ImportStage.PREPROCESS);
     } catch (Exception ex) {
       deleteQuietly(spool);

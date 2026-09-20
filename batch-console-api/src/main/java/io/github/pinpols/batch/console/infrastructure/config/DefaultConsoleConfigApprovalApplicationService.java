@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
@@ -17,10 +18,11 @@ import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
 import io.github.pinpols.batch.console.support.ConfigChangeLogBuilder;
 import io.github.pinpols.batch.console.support.web.ConsoleMapSupport;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.request.config.ConfigApprovalActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseApprovalSubmitRequest;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -44,7 +46,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>全程写 {@code config_change_log}（SUBMIT_APPROVAL / APPROVE / REJECT 三种 action）， 带 operator /
  * reason / detail JSON，提供完整审计轨迹。
  *
- * <p>submit 接收可选 {@code expiredAt}（ISO-8601 Instant），用于后续超期自动回滚的定时器钩子。
  */
 @Service
 @RequiredArgsConstructor
@@ -53,7 +54,7 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   private static final String PENDING_APPROVAL = ConfigLifecycleStatus.PENDING_APPROVAL.code();
 
-  // ── duplicate literal constants ─────────────────────────────────────────
+  // ── 重复使用的字段名常量 ───────────────────────────────────────────────
   private static final String STATUS_PENDING = "PENDING";
   private static final String KEY_APPROVAL_STATUS = "approvalStatus";
   private static final String KEY_TENANT_ID = "tenantId";
@@ -64,6 +65,8 @@ public class DefaultConsoleConfigApprovalApplicationService
   private final ConfigReleaseMapper configReleaseMapper;
   private final ConfigApprovalMapper configApprovalMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
+  private final ConfigReleaseApplyService configReleaseApplyService;
+  private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @Override
   @Transactional
@@ -71,6 +74,8 @@ public class DefaultConsoleConfigApprovalApplicationService
       Long releaseId, ConfigReleaseApprovalSubmitRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    acquireReleaseLock(release);
+    release = loadRelease(tenantId, releaseId);
     validateLatestVersion(tenantId, release);
     if (!ConfigLifecycleStatus.DRAFT.code().equals(release.getConfigStatus())) {
       throw BizException.of(
@@ -88,17 +93,17 @@ public class DefaultConsoleConfigApprovalApplicationService
         KEY_APPROVAL_STATUS,
         STATUS_PENDING,
         "requestedBy",
-        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+        currentOperator(),
         "reviewComment",
         ConsoleTextSanitizer.safeInput(request.getReason(), 1024),
         "expiredAt",
-        parseInstant(request.getExpiredAt())));
-    transitionRelease(tenantId, release, PENDING_APPROVAL, null, request.getOperatorId());
+        null));
+    transitionRelease(tenantId, release, PENDING_APPROVAL, null, currentOperator());
     logChange(
         tenantId,
         release,
         "SUBMIT_APPROVAL",
-        request.getOperatorId(),
+        currentOperator(),
         request.getReason(),
         Map.of(
             KEY_RELEASE_ID, releaseId,
@@ -130,32 +135,42 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_approval.not_pending");
     }
+    if (currentOperator().equals(String.valueOf(approval.get("requestedBy")))) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.config_approval.self_approval_forbidden");
+    }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    acquireReleaseLock(release);
+    release = loadRelease(tenantId, releaseId);
     validateLatestVersion(tenantId, release);
+    if (!PENDING_APPROVAL.equals(release.getConfigStatus())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_approval.release_not_pending");
+    }
     int rows = configApprovalMapper.approve(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
         tenantId,
         "id",
         approvalId,
         "reviewedBy",
-        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+        currentOperator(),
         "reviewComment",
         ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
+    configReleaseApplyService.apply(release, currentOperator(), "config-approval-" + approvalId);
     transitionRelease(
         tenantId,
         release,
         ConfigLifecycleStatus.PUBLISHED.code(),
         BatchDateTimeSupport.utcNow(),
-        request.getOperatorId());
+        currentOperator());
     logChange(
         tenantId,
         release,
         "APPROVE",
-        request.getOperatorId(),
+        currentOperator(),
         request.getReason(),
         Map.of("approvalId", approvalId, KEY_NEXT_STATUS, ConfigLifecycleStatus.PUBLISHED.code()));
     return detail(tenantId, releaseId);
@@ -172,6 +187,8 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    acquireReleaseLock(release);
+    release = loadRelease(tenantId, releaseId);
     validateLatestVersion(tenantId, release);
     int rows = configApprovalMapper.reject(ConsoleMapSupport.mapOf(
         KEY_TENANT_ID,
@@ -179,19 +196,19 @@ public class DefaultConsoleConfigApprovalApplicationService
         "id",
         approvalId,
         "reviewedBy",
-        ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+        currentOperator(),
         "reviewComment",
         ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
     transitionRelease(
-        tenantId, release, ConfigLifecycleStatus.DRAFT.code(), null, request.getOperatorId());
+        tenantId, release, ConfigLifecycleStatus.DRAFT.code(), null, currentOperator());
     logChange(
         tenantId,
         release,
         "REJECT",
-        request.getOperatorId(),
+        currentOperator(),
         request.getReason(),
         Map.of("approvalId", approvalId, KEY_NEXT_STATUS, ConfigLifecycleStatus.DRAFT.code()));
     return detail(tenantId, releaseId);
@@ -209,6 +226,16 @@ public class DefaultConsoleConfigApprovalApplicationService
         "config release not found");
   }
 
+  private void acquireReleaseLock(ConfigReleaseEntity release) {
+    configReleaseMapper.acquireVersionLock(ConsoleMapSupport.mapOf(
+        KEY_TENANT_ID,
+        release.getTenantId(),
+        "configType",
+        configReleaseApplyService.canonicalType(release.getConfigType()),
+        "configKey",
+        release.getConfigKey()));
+  }
+
   private void logChange(
       String tenantId,
       ConfigReleaseEntity release,
@@ -217,7 +244,7 @@ public class DefaultConsoleConfigApprovalApplicationService
       String reason,
       Map<String, Object> detail) {
     configChangeLogMapper.insertConfigChangeLog(
-        ConfigChangeLogBuilder.create(tenantId, operatorId, null)
+        ConfigChangeLogBuilder.create(tenantId, operatorId, currentTraceId())
             .forType(release.getConfigType())
             .withKey(release.getConfigKey())
             .versionNo(release.getVersionNo())
@@ -228,19 +255,18 @@ public class DefaultConsoleConfigApprovalApplicationService
             .build());
   }
 
-  private Instant parseInstant(String text) {
-    if (!Texts.hasText(text)) {
-      return null;
-    }
-    try {
-      return Instant.parse(text);
-    } catch (DateTimeParseException ex) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.expired_at_format");
-    }
-  }
-
   private Long longValue(Object value) {
     return ConsoleMapSupport.longValue(value);
+  }
+
+  private String currentOperator() {
+    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+    String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
+    return ConsoleTextSanitizer.safeInput(operatorId, 64);
+  }
+
+  private String currentTraceId() {
+    return ConsoleTextSanitizer.safeInput(requestMetadataResolver.current().traceId(), 128);
   }
 
   private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {

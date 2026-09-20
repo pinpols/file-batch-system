@@ -6,11 +6,11 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -30,14 +30,17 @@ import org.springframework.beans.factory.ObjectProvider;
 class PipelineCompensationHookTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineRunRepository pipelineRuns;
+
+  @Mock
+  private PlatformFileAuditRepository fileAudits;
 
   @Mock
   private ProcessingPositionStore positionStore;
 
   private PipelineCompensationHook hook(PipelineCompensator... compensators) {
     return new PipelineCompensationHook(
-        runtimeRepository, provider(compensators), new SingleValueProvider<>(positionStore));
+        pipelineRuns, fileAudits, provider(compensators), new SingleValueProvider<>(positionStore));
   }
 
   @Test
@@ -51,7 +54,7 @@ class PipelineCompensationHookTest {
 
     assertThat(triggered).isFalse();
     assertThat(compensator.calls).isZero();
-    verify(runtimeRepository, never()).markPipelineCompensating(any());
+    verify(pipelineRuns, never()).markPipelineCompensating(any());
   }
 
   @Test
@@ -64,7 +67,7 @@ class PipelineCompensationHookTest {
 
     assertThat(triggered).isFalse();
     assertThat(compensator.calls).isZero();
-    verify(runtimeRepository, never()).markPipelineCompensating(any());
+    verify(pipelineRuns, never()).markPipelineCompensating(any());
   }
 
   @Test
@@ -75,20 +78,19 @@ class PipelineCompensationHookTest {
     PipelineCompensationHook hook = hook(compensator);
     Map<String, Object> attributes = attributesWithTemplate(true);
     attributes.put(PipelineRuntimeKeys.FILE_ID, 7L);
-    when(runtimeRepository.toLong(7L)).thenReturn(7L);
 
     boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
 
     assertThat(triggered).isTrue();
     assertThat(compensator.calls).isEqualTo(1);
-    verify(runtimeRepository).markPipelineCompensating(99L);
+    verify(pipelineRuns).markPipelineCompensating(99L);
     ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(runtimeRepository).appendAudit(audit.capture());
+    verify(fileAudits).appendAudit(audit.capture());
     assertThat(audit.getValue().getOperationType()).isEqualTo("PIPELINE_COMPENSATE");
     assertThat(audit.getValue().getOperationResult()).isEqualTo("REVERSED");
     // 跨库无 1PC:位点必须在反向删业务数据前成功作废,否则第二步失败会静默缺数。
-    var ordered = inOrder(runtimeRepository, positionStore);
-    ordered.verify(runtimeRepository).markPipelineCompensating(99L);
+    var ordered = inOrder(pipelineRuns, positionStore);
+    ordered.verify(pipelineRuns).markPipelineCompensating(99L);
     ordered.verify(positionStore).deleteAllStages("t1", 99L);
   }
 
@@ -127,6 +129,7 @@ class PipelineCompensationHookTest {
     compensator.result = CompensationResult.reversed(3L, "deleted 3 rows");
     PipelineCompensationHook hook = hook(compensator);
     Map<String, Object> attributes = attributesWithTemplate(true);
+    attributes.put(PipelineRuntimeKeys.FILE_ID, 7L);
     doThrow(new IllegalStateException("platform db unavailable"))
         .when(positionStore)
         .deleteAllStages("t1", 99L);
@@ -136,7 +139,7 @@ class PipelineCompensationHookTest {
     assertThat(triggered).isTrue();
     assertThat(compensator.calls).isZero();
     ArgumentCaptor<FileAuditParam> audit = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(runtimeRepository).appendAudit(audit.capture());
+    verify(fileAudits).appendAudit(audit.capture());
     assertThat(audit.getValue().getOperationResult()).isEqualTo("FAILED");
   }
 
@@ -151,7 +154,7 @@ class PipelineCompensationHookTest {
 
     assertThat(triggered).isFalse();
     assertThat(other.calls).isZero();
-    verify(runtimeRepository, never()).markPipelineCompensating(any());
+    verify(pipelineRuns, never()).markPipelineCompensating(any());
   }
 
   @Test
@@ -175,7 +178,7 @@ class PipelineCompensationHookTest {
     boolean triggered = hook.runCompensation("t1", "IMPORT", 99L, attributes);
 
     assertThat(triggered).isTrue();
-    verify(runtimeRepository).markPipelineCompensating(99L);
+    verify(pipelineRuns).markPipelineCompensating(99L);
   }
 
   private static Map<String, Object> attributesWithTemplate(boolean compensateOnFailure) {

@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -28,13 +28,13 @@ class AckDispatchStepTest {
   private FileDispatchRepository fileDispatchRepository;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository fileRecords;
 
   private AckDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new AckDispatchStep(fileDispatchRepository, runtimeRepository);
+    step = new AckDispatchStep(fileDispatchRepository, fileRecords);
   }
 
   @Test
@@ -52,7 +52,6 @@ class AckDispatchStepTest {
 
   @Test
   void execute_succeedsAndMarksAckedWhenAcknowledgedByDispatchResult() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(1);
 
     DispatchJobContext context = buildContextWithAckedResult("R-001");
@@ -60,12 +59,11 @@ class AckDispatchStepTest {
 
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes()).containsEntry("receiptStatus", "SUCCESS");
-    verify(runtimeRepository).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
   }
 
   @Test
   void execute_routesToCompensateWhenMarkAckedFails() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(0);
 
     DispatchJobContext context = buildContextWithAckedResult("R-001");
@@ -80,7 +78,6 @@ class AckDispatchStepTest {
 
   @Test
   void execute_routesToRetryWhenMarkAckedFailsAndRetryRequested() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(0);
 
     DispatchJobContext context = buildContextWithAckedResult("R-001");
@@ -94,7 +91,6 @@ class AckDispatchStepTest {
 
   @Test
   void execute_setsPendingStatusWhenReceiptPending() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchPayload payload =
         new DispatchPayload("10", null, "CH1", null, null, null, null, null, null, null);
@@ -116,7 +112,6 @@ class AckDispatchStepTest {
 
   @Test
   void execute_fallsBackToFileIdReceiptCodeWhenBothNull() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markAcked(any(), eq(10L), any(), eq("ACK-10"))).thenReturn(1);
 
     // acknowledged=true but receiptCode=null in both payload and result
@@ -139,7 +134,6 @@ class AckDispatchStepTest {
 
   @Test
   void execute_succeedsWithoutAckWhenNeitherAcknowledgedNorPending() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchPayload payload =
         new DispatchPayload("10", null, "CH1", null, null, null, null, null, null, null);
@@ -156,7 +150,7 @@ class AckDispatchStepTest {
 
     assertThat(result.success()).isTrue();
     verify(fileDispatchRepository, never()).markAcked(any(), any(), any(), any());
-    verify(runtimeRepository).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
   }
 
   private DispatchJobContext buildContextWithAckedResult(String receiptCode) {

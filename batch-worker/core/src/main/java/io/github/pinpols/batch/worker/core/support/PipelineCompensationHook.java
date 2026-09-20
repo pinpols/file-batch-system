@@ -2,7 +2,9 @@ package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -40,7 +42,8 @@ public class PipelineCompensationHook {
 
   private static final String AUDIT_OPERATION_TYPE = "PIPELINE_COMPENSATE";
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformPipelineRunRepository pipelineRuns;
+  private final PlatformFileAuditRepository fileAudits;
   private final ObjectProvider<PipelineCompensator> compensatorProvider;
 
   /**
@@ -50,10 +53,12 @@ public class PipelineCompensationHook {
   private final ProcessingPositionStore positionStore;
 
   public PipelineCompensationHook(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineRunRepository pipelineRuns,
+      PlatformFileAuditRepository fileAudits,
       ObjectProvider<PipelineCompensator> compensatorProvider,
       ObjectProvider<ProcessingPositionStore> positionStoreProvider) {
-    this.runtimeRepository = runtimeRepository;
+    this.pipelineRuns = pipelineRuns;
+    this.fileAudits = fileAudits;
     this.compensatorProvider = compensatorProvider;
     this.positionStore = positionStoreProvider.getIfAvailable();
   }
@@ -83,9 +88,9 @@ public class PipelineCompensationHook {
         // 开了开关但该 pipeline 类型没注册 compensator:无反向动作可做,走原路径。
         return false;
       }
-      Long fileId = runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+      Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
       // ① 进入 COMPENSATING 中间态(adapter 随后落 FAILED 终态)。
-      runtimeRepository.markPipelineCompensating(pipelineInstanceId);
+      pipelineRuns.markPipelineCompensating(pipelineInstanceId);
       // ② 先作废位点,再反向删业务数据。跨库无 1PC 时必须选择这个顺序:
       //    - 位点清理失败:不执行反向删除,业务数据+位点仍一致;
       //    - 位点清理成功后反向失败:重试从头跑,由 plugin 幂等约束吸收已存数据。
@@ -217,7 +222,7 @@ public class PipelineCompensationHook {
     detail.put("reversedCount", result.reversedCount());
     detail.put("detail", result.detail());
     try {
-      runtimeRepository.appendAudit(FileAuditParam.builder()
+      fileAudits.appendAudit(FileAuditParam.builder()
           .tenantId(tenantId)
           .fileId(fileId)
           .operationType(AUDIT_OPERATION_TYPE)

@@ -264,8 +264,8 @@ INSERT INTO batch.secret_version (
     rotation_window_start_at, rotation_window_end_at, effective_from_at, effective_to_at,
     secret_payload, rotation_reason, created_by, updated_by, created_at, updated_at
 ) VALUES
-    (2503, 'default-tenant', 'DEFAULT_TEST', 'Default Test KMS Secret', 2, 'DRAFT', FALSE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:30:00+08', NULL, NULL, jsonb_build_object('keyRef', 'DEFAULT_TEST_DRAFT'), 'rotation-preview', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2504, 'tenant-finance', 'FINANCE_TEST', 'Finance Test Secret', 2, 'ROLLED_BACK', FALSE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:30:00+08', TIMESTAMPTZ '2026-03-22 09:05:00+08', TIMESTAMPTZ '2026-03-22 09:20:00+08', jsonb_build_object('keyRef', 'FINANCE_TEST_ROLLBACK'), 'rollback after validation', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:20:00+08')
+    (2503, 'default-tenant', 'DEFAULT_TEST', 'Default Test KMS Secret', 2, 'DRAFT', FALSE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:30:00+08', NULL, NULL, NULL, 'rotation-preview', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2504, 'tenant-finance', 'FINANCE_TEST', 'Finance Test Secret', 2, 'ROLLED_BACK', FALSE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:30:00+08', TIMESTAMPTZ '2026-03-22 09:05:00+08', TIMESTAMPTZ '2026-03-22 09:20:00+08', NULL, 'rollback after validation', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:20:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.config_change_log (

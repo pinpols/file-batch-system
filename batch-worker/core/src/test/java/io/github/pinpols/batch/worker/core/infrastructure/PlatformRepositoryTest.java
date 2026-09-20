@@ -13,13 +13,19 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
-class PlatformFileRuntimeRepositoryTest {
+class PlatformRepositoryTest {
 
   @Test
-  void facadeShouldPreserveConstructorAndTransactionBoundary() throws NoSuchMethodException {
-    assertThat(PlatformFileRuntimeRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
+  void focusedRepositoriesShouldPreserveConstructorsAndTransactionBoundary()
+      throws NoSuchMethodException {
+    assertThat(PlatformPipelineDefinitionRepository.class.getConstructor(
+            PlatformFileRuntimeMapper.class))
         .isNotNull();
-    assertThat(PlatformFileRuntimeRepository.class
+    assertThat(PlatformPipelineRunRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
+        .isNotNull();
+    assertThat(PlatformFileRecordRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
+        .isNotNull();
+    assertThat(PlatformFileRecordRepository.class
             .getMethod("createFileRecord", FileRecordParam.class)
             .getAnnotation(Transactional.class))
         .isNotNull();
@@ -28,7 +34,8 @@ class PlatformFileRuntimeRepositoryTest {
   @Test
   void findPipelineDefinitionShouldReadOnlyByTenantAndJobCode() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformFileRuntimeRepository repository = new PlatformFileRuntimeRepository(mapper);
+    PlatformPipelineDefinitionRepository repository =
+        new PlatformPipelineDefinitionRepository(mapper);
 
     when(mapper.selectLatestPipelineDefinitionId(anyMap())).thenReturn(4601L);
 
@@ -45,7 +52,7 @@ class PlatformFileRuntimeRepositoryTest {
   @Test
   void createPipelineInstanceShouldUseJobCodeForInstanceTable() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformFileRuntimeRepository repository = new PlatformFileRuntimeRepository(mapper);
+    PlatformPipelineRunRepository repository = new PlatformPipelineRunRepository(mapper);
 
     when(mapper.insertPipelineInstance(anyMap())).thenAnswer(invocation -> {
       Map<String, Object> paramMap = invocation.getArgument(0);
@@ -53,9 +60,8 @@ class PlatformFileRuntimeRepositoryTest {
       return 1;
     });
 
-    Long pipelineInstanceId = repository.createPipelineInstance(
-        new PlatformFileRuntimeRepository.CreatePipelineInstanceParam(
-            "tenant-a", 4601L, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
+    Long pipelineInstanceId = repository.createPipelineInstance(new CreatePipelineInstanceParam(
+        "tenant-a", 4601L, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
 
     assertThat(pipelineInstanceId).isEqualTo(5301L);
     verify(mapper)
@@ -67,7 +73,7 @@ class PlatformFileRuntimeRepositoryTest {
   @Test
   void createFileRecordShouldPreserveDedupPrecheck() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformFileRuntimeRepository repository = new PlatformFileRuntimeRepository(mapper);
+    PlatformFileRecordRepository repository = new PlatformFileRecordRepository(mapper);
     when(mapper.selectMaxFileGenerationNo(anyMap())).thenReturn(2);
     when(mapper.selectFileRecordByStoragePath(anyMap()))
         .thenReturn(Map.of("id", 77L, "checksum_value", ""));
@@ -95,7 +101,7 @@ class PlatformFileRuntimeRepositoryTest {
   @Test
   void createFileRecordShouldPreserveGenerationParameters() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformFileRuntimeRepository repository = new PlatformFileRuntimeRepository(mapper);
+    PlatformFileRecordRepository repository = new PlatformFileRecordRepository(mapper);
     when(mapper.selectMaxFileGenerationNo(anyMap())).thenReturn(2);
     when(mapper.insertFileRecord(anyMap())).thenAnswer(invocation -> {
       Map<String, Object> params = invocation.getArgument(0);

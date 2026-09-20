@@ -2,10 +2,11 @@ package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
-import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
+import io.github.pinpols.batch.worker.core.support.HeartbeatService;
+import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -17,12 +18,18 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
   private final AtomicWorkerConfiguration configuration;
 
   public AtomicWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade,
+      WorkerLifecycleManager workerLifecycleManager,
+      HeartbeatService heartbeatService,
       BatchDateTimeSupport dateTimeSupport,
       AtomicWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
       @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
-    super(workerRuntimeFacade, dateTimeSupport, maxConcurrentTasks, identityProperties);
+    super(
+        workerLifecycleManager,
+        heartbeatService,
+        dateTimeSupport,
+        maxConcurrentTasks,
+        identityProperties);
     this.configuration = configuration;
   }
 

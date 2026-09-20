@@ -19,7 +19,10 @@ import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLo
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,24 +70,26 @@ public class ConsoleConfigController {
     return responseFactory.success(applicationService.createConfigRelease(request));
   }
 
-  /** 全量发布配置。 */
+  /** 已弃用的直接发布端点，仅用于向旧客户端返回明确的终止响应。 */
+  @Deprecated
   @PostMapping("/releases/{releaseId}/publish")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<String> publishConfigRelease(
+  public ResponseEntity<Void> deprecatedPublishConfigRelease(
       @PathVariable Long releaseId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ConfigReleaseActionRequest request) {
-    return responseFactory.success(applicationService.publishConfigRelease(releaseId, request));
+      @RequestBody Map<String, Object> ignoredRequest) {
+    return ResponseEntity.status(HttpStatus.GONE).build();
   }
 
-  /** 灰度发布配置。 */
+  /** 已弃用的灰度发布端点，仅用于向旧客户端返回明确的终止响应。 */
+  @Deprecated
   @PostMapping("/releases/{releaseId}/gray")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<String> grayConfigRelease(
+  public ResponseEntity<Void> deprecatedGrayConfigRelease(
       @PathVariable Long releaseId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody ConfigReleaseActionRequest request) {
-    return responseFactory.success(applicationService.grayConfigRelease(releaseId, request));
+      @RequestBody Map<String, Object> ignoredRequest) {
+    return ResponseEntity.status(HttpStatus.GONE).build();
   }
 
   /** 回滚配置发布。 */

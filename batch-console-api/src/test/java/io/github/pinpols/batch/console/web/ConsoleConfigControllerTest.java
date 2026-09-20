@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -90,9 +88,7 @@ class ConsoleConfigControllerTest {
   }
 
   @Test
-  void shouldPublishConfigRelease() throws Exception {
-    when(configApplicationService.publishConfigRelease(anyLong(), any())).thenReturn("PUBLISHED");
-
+  void shouldReturnGoneForDeprecatedDirectPublishEndpoint() throws Exception {
     mockMvc
         .perform(post("/api/console/config/releases/1/publish")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-1")
@@ -100,11 +96,7 @@ class ConsoleConfigControllerTest {
             .content("""
                     {"tenantId":"t1","operatorId":"u1","traceId":"trace-1","reason":"ok","expectedVersionNo":1}
                     """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data").value("PUBLISHED"));
-
-    verify(configApplicationService).publishConfigRelease(anyLong(), any());
+        .andExpect(status().isGone());
   }
 
   @Test
@@ -122,7 +114,7 @@ class ConsoleConfigControllerTest {
             Instant.EPOCH,
             Instant.EPOCH,
             Instant.EPOCH,
-            "{}",
+            null,
             "reason",
             "u1",
             "u2",

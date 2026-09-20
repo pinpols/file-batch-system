@@ -4,7 +4,8 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -20,13 +21,12 @@ import org.springframework.stereotype.Component;
 public class AckDispatchStep implements DispatchStageStep {
 
   private final FileDispatchRepository fileDispatchRepository;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
 
   public AckDispatchStep(
-      FileDispatchRepository fileDispatchRepository,
-      PlatformFileRuntimeRepository runtimeRepository) {
+      FileDispatchRepository fileDispatchRepository, PlatformFileRecordRepository fileRecords) {
     this.fileDispatchRepository = fileDispatchRepository;
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
   }
 
   @Override
@@ -52,7 +52,7 @@ public class AckDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     DispatchResult dispatchResult =
         attrs.get("dispatchResult") instanceof DispatchResult result ? result : null;
     String receiptCode = dispatchPayload.receiptCode();
@@ -81,7 +81,7 @@ public class AckDispatchStep implements DispatchStageStep {
             "failed to mark acked",
             ERROR_OBJECT_MAPPER);
       }
-      runtimeRepository.updateFileStatus(
+      fileRecords.updateFileStatus(
           fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));
       attrs.put("receiptStatus", "SUCCESS");
       return DispatchStageResult.success(stage());
@@ -90,7 +90,7 @@ public class AckDispatchStep implements DispatchStageStep {
       attrs.put("receiptStatus", "PENDING");
       return DispatchStageResult.success(stage());
     }
-    runtimeRepository.updateFileStatus(
+    fileRecords.updateFileStatus(
         fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));
     return DispatchStageResult.success(stage());
   }

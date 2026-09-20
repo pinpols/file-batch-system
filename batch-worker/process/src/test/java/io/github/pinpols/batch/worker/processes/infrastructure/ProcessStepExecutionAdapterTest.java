@@ -15,7 +15,9 @@ import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -41,7 +43,13 @@ class ProcessStepExecutionAdapterTest {
   private ProcessStageExecutor processStageExecutor;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
+
+  @Mock
+  private PlatformFileRecordRepository fileRecords;
 
   @Test
   @SuppressWarnings("unchecked")
@@ -49,7 +57,9 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
 
@@ -63,12 +73,14 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(runtimeRepository.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
-    when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
-    when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
+    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
+    when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
+    when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.success(ProcessStage.PREPARE)));
     StepExecutionRequest request = new StepExecutionRequest(
@@ -87,7 +99,7 @@ class ProcessStepExecutionAdapterTest {
     verify(processStageExecutor).execute(contextCaptor.capture());
     assertThat(contextCaptor.getValue().getAttributes())
         .containsEntry("processImplCode", "dailySummary");
-    verify(runtimeRepository).markPipelineSuccess(20L, "PREPARE", "PREPARE");
+    verify(pipelineRuns).markPipelineSuccess(20L, "PREPARE", "PREPARE");
   }
 
   @Test
@@ -97,12 +109,14 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         objectMapper,
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(runtimeRepository.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
-    when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
-    when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
+    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
+    when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
+    when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.failure(
             ProcessStage.PREPARE,
@@ -121,8 +135,8 @@ class ProcessStepExecutionAdapterTest {
     assertThat(response.errorKey()).isEqualTo("error.common.invalid_argument");
     assertThat(response.errorArgs()).isEqualTo("[\"bad spec\"]");
     // 安全增量补偿默认 off（无 compensation hook bean）：失败直接 FAILED，绝不经过 COMPENSATING。
-    verify(runtimeRepository).markPipelineFailed(eq(20L), any(), any());
-    verify(runtimeRepository, never()).markPipelineCompensating(any());
+    verify(pipelineRuns).markPipelineFailed(eq(20L), any(), any());
+    verify(pipelineRuns, never()).markPipelineCompensating(any());
   }
 
   @Test
@@ -132,7 +146,9 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     ProcessJobContext context = new ProcessJobContext();
@@ -154,7 +170,9 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     ProcessJobContext context = new ProcessJobContext();

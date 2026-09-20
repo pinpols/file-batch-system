@@ -28,16 +28,12 @@ public class ConfigReleaseUpsertRequest {
   @Size(max = 256, message = "configName too long (max 256)")
   private String configName;
 
+  @NotBlank
+  @Size(max = 1048576, message = "configPayloadJson too long (max 1048576)")
   private String configPayloadJson;
-  private String grayScopeJson;
+
   private String effectiveFromAt;
   private String effectiveToAt;
-
-  @Size(max = 64, message = "operatorId too long (max 64)")
-  private String operatorId;
-
-  @Size(max = 128, message = "traceId too long (max 128)")
-  private String traceId;
 
   @Size(max = 512, message = "reason too long (max 512)")
   private String reason;

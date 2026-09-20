@@ -11,10 +11,6 @@ public class ConfigApprovalActionRequest {
   @Size(max = 64)
   private String tenantId;
 
-  @NotBlank
-  @Size(max = 64)
-  private String operatorId;
-
   @Size(max = 512)
   private String reason;
 }

@@ -5,7 +5,9 @@ import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -23,10 +25,13 @@ public class CompleteStep implements ExportStageStep {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformFileAuditRepository fileAudits;
 
-  public CompleteStep(PlatformFileRuntimeRepository runtimeRepository) {
-    this.runtimeRepository = runtimeRepository;
+  public CompleteStep(
+      PlatformFileRecordRepository fileRecords, PlatformFileAuditRepository fileAudits) {
+    this.fileRecords = fileRecords;
+    this.fileAudits = fileAudits;
   }
 
   @Override
@@ -53,7 +58,7 @@ public class CompleteStep implements ExportStageStep {
     Map<String, Object> attrs = context.getAttributes();
     ExportPayload exportPayload =
         attrs.get("exportPayload") instanceof ExportPayload payload ? payload : null;
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     String nextStatus = exportPayload != null && Boolean.TRUE.equals(exportPayload.autoDispatch())
         ? "DISPATCHING"
         : "GENERATED";
@@ -63,12 +68,12 @@ public class CompleteStep implements ExportStageStep {
     if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
       fileMetadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
-    runtimeRepository.updateFileStatus(fileId, nextStatus, fileMetadata);
+    fileRecords.updateFileStatus(fileId, nextStatus, fileMetadata);
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
     detailSummary.put("fileSizeBytes", attrs.get("fileSizeBytes"));
     detailSummary.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType("EXPORT_COMPLETE")

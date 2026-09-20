@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.OutboxDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.OutboxRetryLogMapper;
@@ -18,8 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link io.github.pinpols.batch.console.application.ConsoleOpsApplicationService}
- * 的默认实现：聚合多表计数形成运维摘要。
+ * {@link ConsoleOpsSummaryPort} 的默认实现：聚合多表计数形成运维摘要。
  *
  * <p>P1(2026-05-23 audit):{@link #summary} 内有 9 条独立 count 查询,原本无 tx 包裹, 多次走连接池可能跨多个隐式自动提交连接,read
  * 一致性无法保证。统一加 {@code @Transactional(readOnly = true)} 让全部查询在同一只读事务中,Spring 同时会路由到 readonly
@@ -28,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicationService {
+public class DefaultConsoleOpsApplicationService implements ConsoleOpsSummaryPort {
 
   private final TenantIdResolver tenantGuard;
   private final ApprovalCommandMapper approvalCommandMapper;

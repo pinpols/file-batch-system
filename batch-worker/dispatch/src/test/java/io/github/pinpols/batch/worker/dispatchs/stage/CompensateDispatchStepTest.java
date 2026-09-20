@@ -8,7 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -27,13 +28,16 @@ class CompensateDispatchStepTest {
   private FileDispatchRepository fileDispatchRepository;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository fileRecords;
+
+  @Mock
+  private PlatformFileAuditRepository fileAudits;
 
   private CompensateDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new CompensateDispatchStep(fileDispatchRepository, runtimeRepository);
+    step = new CompensateDispatchStep(fileDispatchRepository, fileRecords, fileAudits);
   }
 
   @Test
@@ -52,7 +56,6 @@ class CompensateDispatchStepTest {
 
   @Test
   void execute_failsWhenMarkCompensatedReturnsZero() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
         .thenReturn(0);
 
@@ -61,12 +64,11 @@ class CompensateDispatchStepTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_COMPENSATE_FAILED");
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(fileRecords, never()).updateFileStatus(any(), any(), any());
   }
 
   @Test
   void execute_succeedsAndUpdatesFileStatusToFailed() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
         .thenReturn(1);
 
@@ -74,7 +76,7 @@ class CompensateDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository).updateFileStatus(eq(10L), eq("FAILED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq("FAILED"), any());
   }
 
   @Test
@@ -82,7 +84,6 @@ class CompensateDispatchStepTest {
     // 回归:channelCode 为 null(DispatchPayload.channelCode 是可空 String,无 @NotBlank)时,
     // updateFileStatus 内构造 Map.of("channelCode", channelCode) 曾 NPE,把补偿冲正掩盖成 500。
     // 见 CompensateDispatchStep#execute。
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
         .thenReturn(1);
 
@@ -98,12 +99,11 @@ class CompensateDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository).updateFileStatus(eq(10L), eq("FAILED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq("FAILED"), any());
   }
 
   @Test
   void execute_writesAuditLog() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any()))
         .thenReturn(1);
 
@@ -113,7 +113,7 @@ class CompensateDispatchStepTest {
     context.getAttributes().put("externalRequestId", "ext-1");
     step.execute(context);
 
-    verify(runtimeRepository).appendAudit(any());
+    verify(fileAudits).appendAudit(any());
   }
 
   private DispatchJobContext buildContext() {

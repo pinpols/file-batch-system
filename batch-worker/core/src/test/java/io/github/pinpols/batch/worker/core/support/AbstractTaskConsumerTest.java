@@ -15,7 +15,6 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
-import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
@@ -488,17 +487,18 @@ class AbstractTaskConsumerTest {
     KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
-    WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
+    WorkerLifecycleManager lifecycleManager = mock(WorkerLifecycleManager.class);
+    HeartbeatService heartbeatService = mock(HeartbeatService.class);
     WorkerRegistration registration = mock(WorkerRegistration.class);
     when(registration.getWorkerId()).thenReturn(workerCode != null ? workerCode : "w-default");
-    when(runtimeFacade.start(any())).thenReturn(registration);
+    when(lifecycleManager.start(any())).thenReturn(registration);
 
     WorkerConfiguration cfg = workerConfiguration(workerType, workerCode);
 
     return new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport(), 8) {
+        return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport(), 8) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return cfg;

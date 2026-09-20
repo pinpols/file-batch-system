@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
@@ -34,10 +36,17 @@ public class DispatchStepExecutionAdapter
   public DispatchStepExecutionAdapter(
       DispatchStageExecutor dispatchStageExecutor,
       ObjectMapper objectMapper,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
+      PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(runtimeRepository, verifierHookProvider, compensationHookProvider);
+    super(
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
+        verifierHookProvider,
+        compensationHookProvider);
     this.dispatchStageExecutor = dispatchStageExecutor;
     this.objectMapper = objectMapper;
   }

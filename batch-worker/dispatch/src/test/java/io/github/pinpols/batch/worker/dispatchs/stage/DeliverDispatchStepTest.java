@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -34,14 +34,13 @@ class DeliverDispatchStepTest {
   private DispatchChannelGateway dispatchChannelGateway;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository fileRecords;
 
   private DeliverDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step =
-        new DeliverDispatchStep(fileDispatchRepository, dispatchChannelGateway, runtimeRepository);
+    step = new DeliverDispatchStep(fileDispatchRepository, dispatchChannelGateway, fileRecords);
   }
 
   @Test
@@ -69,7 +68,6 @@ class DeliverDispatchStepTest {
   void execute_failsWhenFilePrepareContextMissing() {
     DispatchJobContext context = buildContext();
     context.getAttributes().remove(PipelineRuntimeKeys.FILE_ID);
-    when(runtimeRepository.toLong(any())).thenReturn(null);
 
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isFalse();
@@ -94,7 +92,6 @@ class DeliverDispatchStepTest {
   void execute_incrementsAttemptWhenRecordAlreadyExists() {
     Map<String, Object> fileRecord = Map.of("id", 10L);
     Map<String, Object> channelConfig = Map.of("channel_type", "LOCAL");
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.loadLatestDispatchRecord("t1", 10L, "CH1"))
         .thenReturn(Map.of("id", 5L));
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
@@ -145,7 +142,6 @@ class DeliverDispatchStepTest {
   void execute_failsWhenInsertReturnsZero() {
     Map<String, Object> fileRecord = Map.of("id", 10L);
     Map<String, Object> channelConfig = Map.of("channel_type", "LOCAL");
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.loadLatestDispatchRecord(any(), any(), any())).thenReturn(Map.of());
     when(fileDispatchRepository.insertDispatchRecord(any())).thenReturn(0);
 
@@ -166,12 +162,11 @@ class DeliverDispatchStepTest {
     DispatchJobContext context = buildContext();
     step.execute(context);
 
-    verify(runtimeRepository).updateFileStatus(eq(10L), eq("DISPATCHING"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHING"), any());
   }
 
   @Test
   void execute_dryRunSkipsAllDispatchSideEffects() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     DispatchJobContext context = buildContext();
     context.getAttributes().put("dryRun", true);
 
@@ -183,11 +178,10 @@ class DeliverDispatchStepTest {
         .containsEntry("externalRequestId", "DRY_RUN")
         .containsEntry("receiptCode", "DRY_RUN_RECEIPT_CH1");
     verifyNoInteractions(fileDispatchRepository, dispatchChannelGateway);
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(fileRecords, never()).updateFileStatus(any(), any(), any());
   }
 
   private void setupMocksForNewRecord() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(fileDispatchRepository.loadLatestDispatchRecord(any(), any(), any())).thenReturn(Map.of());
     when(fileDispatchRepository.insertDispatchRecord(any())).thenReturn(1);
   }

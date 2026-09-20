@@ -15,7 +15,9 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
@@ -25,7 +27,9 @@ import org.junit.jupiter.api.Test;
 
 class RegisterStepTest {
 
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+  private PlatformPipelineRunRepository pipelineRuns;
+  private PlatformFileAuditRepository fileAudits;
   private ExportDataPluginRegistry exportDataPluginRegistry;
   private ExportDataPlugin exportDataPlugin;
   private S3StorageProperties s3StorageProperties;
@@ -34,12 +38,15 @@ class RegisterStepTest {
 
   @BeforeEach
   void setUp() {
-    runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    runtimeRepository = mock(PlatformFileRecordRepository.class);
+    pipelineRuns = mock(PlatformPipelineRunRepository.class);
+    fileAudits = mock(PlatformFileAuditRepository.class);
     exportDataPluginRegistry = mock(ExportDataPluginRegistry.class);
     exportDataPlugin = mock(ExportDataPlugin.class);
     s3StorageProperties = new S3StorageProperties();
     s3StorageProperties.setBucket("bucket-1");
-    step = new RegisterStep(runtimeRepository, exportDataPluginRegistry, s3StorageProperties);
+    step = new RegisterStep(
+        runtimeRepository, pipelineRuns, fileAudits, exportDataPluginRegistry, s3StorageProperties);
   }
 
   @Test
@@ -102,7 +109,6 @@ class RegisterStepTest {
     });
     when(runtimeRepository.loadFileRecord("t1", 5L))
         .thenReturn(Map.of("id", 5L, "file_generation_no", 1));
-    when(runtimeRepository.toLong(10L)).thenReturn(10L);
 
     var result = step.execute(ctx);
 
@@ -127,16 +133,13 @@ class RegisterStepTest {
         .thenReturn(true);
     when(runtimeRepository.loadFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(Map.of("id", 1L, "checksum_value", "aaa", "file_generation_no", 2));
-    when(runtimeRepository.toLong(1L)).thenReturn(1L);
-    when(runtimeRepository.toLong(99L)).thenReturn(99L);
-    when(runtimeRepository.toLong(10L)).thenReturn(10L);
     when(exportDataPluginRegistry.require("jdbc_mapped_export")).thenReturn(exportDataPlugin);
 
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.FILE_ID, 1L);
-    verify(runtimeRepository).bindFileToPipelineInstance(99L, 1L);
+    verify(pipelineRuns).bindFileToPipelineInstance(99L, 1L);
     verify(exportDataPlugin).onRegistered(any(), anyLong(), eq(2), anyString());
   }
 

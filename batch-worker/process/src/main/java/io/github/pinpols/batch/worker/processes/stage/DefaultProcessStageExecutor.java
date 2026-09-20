@@ -9,7 +9,8 @@ import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
@@ -57,10 +58,11 @@ public class DefaultProcessStageExecutor
   public DefaultProcessStageExecutor(
       List<ProcessStageStep> steps,
       List<ProcessComputePlugin> plugins,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
       ProcessMetrics metrics,
       WorkerCheckpointProperties checkpointProperties) {
-    super(runtimeRepository);
+    super(pipelineDefinitions, pipelineRuns);
     this.pluginsByImplCode = indexPlugins(plugins);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();

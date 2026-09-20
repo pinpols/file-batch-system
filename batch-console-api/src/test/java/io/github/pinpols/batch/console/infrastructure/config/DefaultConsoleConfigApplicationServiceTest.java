@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.domain.entity.ConfigChangeLogEntity;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
@@ -24,6 +25,8 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
 import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.query.ConfigChangeLogQueryRequest;
 import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
 import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
@@ -67,17 +70,34 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Mock
   private ConfigurationGovernanceCatalog governanceCatalog;
 
+  @Mock
+  private ConfigReleaseApplyService configReleaseApplyService;
+
+  @Mock
+  private SecretPayloadProtector secretPayloadProtector;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   @InjectMocks
   private DefaultConsoleConfigApplicationService service;
 
   @BeforeEach
   void setUp() {
     when(tenantGuard.resolveTenant(any())).thenReturn(TENANT);
+    lenient()
+        .when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req", "trace", TENANT, "admin", "idem", "127.0.0.1"));
+    lenient().when(secretPayloadProtector.protect(any())).thenReturn("{\"format\":\"encrypted\"}");
+    lenient()
+        .when(configReleaseApplyService.canonicalType(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     lenient().when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(1);
     lenient().when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(1);
   }
 
-  // ── configReleases ──────────────────────────────────────────────────────
+  // ── 配置发布单查询 ─────────────────────────────────────────────────────
 
   @Test
   void shouldListConfigReleases_whenQueried() {
@@ -96,7 +116,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThat(list.get(0).id()).isEqualTo(1L);
   }
 
-  // ── createConfigRelease ─────────────────────────────────────────────────
+  // ── 创建配置发布单 ─────────────────────────────────────────────────────
 
   @Test
   void shouldCreateConfigRelease_andIncrementVersion() {
@@ -147,71 +167,15 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThatThrownBy(() -> service.createConfigRelease(req)).isInstanceOf(BizException.class);
   }
 
-  // ── publish / gray / rollback ──────────────────────────────────────────
-
-  @Test
-  void shouldPublishConfigRelease_andSetPublishedAt() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
-
-    ConfigReleaseActionRequest req = actionRequest();
-    String status = service.publishConfigRelease(10L, req);
-
-    assertThat(status).isEqualTo(ConfigLifecycleStatus.PUBLISHED.code());
-    ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
-    verify(configReleaseMapper).updateConfigReleaseStatus(captor.capture());
-    assertThat(captor.getValue().get("publishedAt")).isNotNull();
-    assertThat(captor.getValue().get("rolledBackAt")).isNull();
-    verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
-  }
-
-  @Test
-  void shouldGrayConfigRelease_andUpdateScope() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
-
-    ConfigReleaseActionRequest req = actionRequest();
-    req.setGrayScopeJson("{\"percent\":10}");
-
-    String status = service.grayConfigRelease(10L, req);
-
-    assertThat(status).isEqualTo(ConfigLifecycleStatus.GRAY.code());
-    verify(configReleaseMapper).updateGrayScope(anyMap());
-    verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
-  }
-
-  @Test
-  void shouldGrayConfigRelease_skipScopeUpdateInner_whenScopeBlank() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
-
-    ConfigReleaseActionRequest req = actionRequest();
-    req.setGrayScopeJson(null);
-
-    String status = service.grayConfigRelease(10L, req);
-
-    assertThat(status).isEqualTo(ConfigLifecycleStatus.GRAY.code());
-    verify(configReleaseMapper, never()).updateGrayScope(anyMap());
-  }
+  // ── 回滚 ───────────────────────────────────────────────────────────────
 
   @Test
   void shouldThrow_whenLoadReleaseNotFound() {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(null);
 
     ConfigReleaseActionRequest req = actionRequest();
-    assertThatThrownBy(() -> service.publishConfigRelease(99L, req))
+    assertThatThrownBy(() -> service.rollbackConfigRelease(99L, req))
         .isInstanceOf(BizException.class);
-  }
-
-  @Test
-  void shouldReject_whenPublishRolledBackRelease() {
-    // 回归:ROLLED_BACK 是终态,不可再 publish「复活」。
-    ConfigReleaseEntity rolledBack = release(10L, "JOB", "k", 1);
-    rolledBack.setConfigStatus(ConfigLifecycleStatus.ROLLED_BACK.code());
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(rolledBack);
-
-    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
-        .isInstanceOf(BizException.class)
-        .extracting("code")
-        .isEqualTo(ResultCode.STATE_CONFLICT);
-    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
   }
 
   @Test
@@ -231,6 +195,9 @@ class DefaultConsoleConfigApplicationServiceTest {
     ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
     when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    ConfigReleaseEntity previous = release(9L, "JOB", "k", 0);
+    previous.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectPreviousEffective(anyMap())).thenReturn(previous);
 
     ConfigReleaseActionRequest req = actionRequest();
     String status = service.rollbackConfigRelease(10L, req);
@@ -240,13 +207,16 @@ class DefaultConsoleConfigApplicationServiceTest {
     verify(configReleaseMapper).updateConfigReleaseStatus(captor.capture());
     assertThat(captor.getValue().get("rolledBackAt")).isNotNull();
     assertThat(captor.getValue().get("publishedAt")).isNull();
+    verify(configReleaseApplyService).apply(eq(previous), eq("admin"), eq("config-rollback-10"));
   }
 
   @Test
   void shouldReject_whenExpectedVersionIsStale() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 2));
+    ConfigReleaseEntity published = release(10L, "JOB", "k", 2);
+    published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
 
-    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+    assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.STATE_CONFLICT);
@@ -258,7 +228,10 @@ class DefaultConsoleConfigApplicationServiceTest {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
     when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
 
-    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+    ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
+    published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.STATE_CONFLICT);
@@ -267,16 +240,21 @@ class DefaultConsoleConfigApplicationServiceTest {
 
   @Test
   void shouldReject_whenStatusCasLosesRace() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+    ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
+    published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    ConfigReleaseEntity previous = release(9L, "JOB", "k", 0);
+    previous.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
+    when(configReleaseMapper.selectPreviousEffective(anyMap())).thenReturn(previous);
     when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(0);
 
-    assertThatThrownBy(() -> service.publishConfigRelease(10L, actionRequest()))
+    assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.STATE_CONFLICT);
   }
 
-  // ── secretVersions / rotate ─────────────────────────────────────────────
+  // ── 密钥版本查询与轮换 ─────────────────────────────────────────────────
 
   @Test
   void shouldListSecretVersions_whenQueried() {
@@ -290,6 +268,7 @@ class DefaultConsoleConfigApplicationServiceTest {
 
     List<ConsoleSecretVersionResponse> list = service.secretVersions(req);
     assertThat(list).hasSize(1);
+    assertThat(list.getFirst().secretRef()).isEqualTo("ref");
   }
 
   @Test
@@ -334,7 +313,7 @@ class DefaultConsoleConfigApplicationServiceTest {
         .containsEntry("secretStatus", ConfigLifecycleStatus.PUBLISHED.code());
   }
 
-  // ── configChangeLogs ────────────────────────────────────────────────────
+  // ── 配置变更日志 ───────────────────────────────────────────────────────
 
   @Test
   void shouldListConfigChangeLogs() {
@@ -363,7 +342,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThat(list).hasSize(1);
   }
 
-  // ── detail / dependencies / diff ────────────────────────────────────────
+  // ── 详情、依赖关系与差异 ───────────────────────────────────────────────
 
   @Test
   void shouldReturnConfigReleaseDetail() {
@@ -377,6 +356,17 @@ class DefaultConsoleConfigApplicationServiceTest {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(null);
     assertThatThrownBy(() -> service.configReleaseDetail(TENANT, 99L))
         .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  void shouldEncryptLegacyObjectSecretPayload() {
+    SecretVersionRotateRequest req = rotateRequest();
+    req.setSecretPayloadJson(null);
+    req.setSecretPayload(Map.of("k", "legacy"));
+
+    service.rotateSecretVersion(req);
+
+    verify(secretPayloadProtector).protect("{\"k\":\"legacy\"}");
   }
 
   @Test
@@ -487,7 +477,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThat(result.statusChanged()).isFalse();
   }
 
-  // ── helpers ─────────────────────────────────────────────────────────────
+  // ── 测试辅助方法 ───────────────────────────────────────────────────────
 
   private static ConfigReleaseEntity release(Long id, String type, String key, Integer version) {
     ConfigReleaseEntity entity = new ConfigReleaseEntity();
@@ -522,11 +512,8 @@ class DefaultConsoleConfigApplicationServiceTest {
     req.setConfigKey("k");
     req.setConfigName("name");
     req.setConfigPayloadJson("{\"foo\":1}");
-    req.setGrayScopeJson("{\"percent\":10}");
     req.setEffectiveFromAt("2026-01-01T00:00:00Z");
     req.setEffectiveToAt("2026-12-31T23:59:59Z");
-    req.setOperatorId("op");
-    req.setTraceId("tr");
     req.setReason("init");
     return req;
   }
@@ -534,8 +521,6 @@ class DefaultConsoleConfigApplicationServiceTest {
   private static ConfigReleaseActionRequest actionRequest() {
     ConfigReleaseActionRequest req = new ConfigReleaseActionRequest();
     req.setTenantId(TENANT);
-    req.setOperatorId("op");
-    req.setTraceId("tr");
     req.setReason("action");
     req.setExpectedVersionNo(1);
     return req;
@@ -551,8 +536,6 @@ class DefaultConsoleConfigApplicationServiceTest {
     req.setRotationWindowEndAt("2026-01-02T00:00:00Z");
     req.setEffectiveFromAt("2026-01-01T00:00:00Z");
     req.setEffectiveToAt("2026-12-31T23:59:59Z");
-    req.setOperatorId("op");
-    req.setTraceId("tr");
     req.setReason("rotate");
     return req;
   }
@@ -562,7 +545,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     return ArgumentCaptor.forClass(Map.class);
   }
 
-  // suppress unused import warnings on eq / never if any optimizer prunes them
+  // 避免优化器裁剪调用后产生 eq / never 未使用导入告警。
   @SuppressWarnings("unused")
   private void _refs() {
     eq(0);

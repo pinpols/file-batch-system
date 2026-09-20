@@ -7,7 +7,9 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,10 +36,14 @@ public abstract class AbstractStageExecutor<
    */
   public static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  protected final PlatformFileRuntimeRepository runtimeRepository;
+  protected final PlatformPipelineDefinitionRepository pipelineDefinitions;
+  protected final PlatformPipelineRunRepository pipelineRuns;
 
-  protected AbstractStageExecutor(PlatformFileRuntimeRepository runtimeRepository) {
-    this.runtimeRepository = runtimeRepository;
+  protected AbstractStageExecutor(
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns) {
+    this.pipelineDefinitions = pipelineDefinitions;
+    this.pipelineRuns = pipelineRuns;
   }
 
   /** 执行阶段循环并返回累积结果；未配置步骤时直接返回 {@link #stepMissingFailure()}。 */
@@ -48,7 +54,7 @@ public abstract class AbstractStageExecutor<
       results.add(stepMissingFailure());
       return results;
     }
-    Long pipelineInstanceId = runtimeRepository.toLong(
+    Long pipelineInstanceId = PlatformRuntimeValues.toLong(
         context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
     // P1-7: visited-set 早期检测真正的 cycle (重访同一 stepCode),与数值 guard 双保险。
@@ -65,7 +71,7 @@ public abstract class AbstractStageExecutor<
         && !stageSkipDegradedByMultiPartition(context, pipelineInstanceId);
     Set<String> skipSafeStages = stageSkipEnabled ? skipSafeStages() : Set.of();
     Set<String> priorSucceededStepCodes = (stageSkipEnabled && !skipSafeStages.isEmpty())
-        ? runtimeRepository.loadSucceededStepCodes(pipelineInstanceId)
+        ? pipelineRuns.loadSucceededStepCodes(pipelineInstanceId)
         : Set.of();
     PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
     while (currentStep != null) {
@@ -104,10 +110,10 @@ public abstract class AbstractStageExecutor<
       }
       String lastSuccessStage =
           (String) context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE);
-      runtimeRepository.updatePipelineStage(
+      pipelineRuns.updatePipelineStage(
           pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
       injectCurrentStepAttributes(context, currentStep);
-      Long stepRunId = runtimeRepository.startStepRun(
+      Long stepRunId = pipelineRuns.startStepRun(
           pipelineInstanceId,
           currentStep.stepCode(),
           currentStep.stageCode(),
@@ -121,9 +127,9 @@ public abstract class AbstractStageExecutor<
         context
             .getAttributes()
             .put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
-        runtimeRepository.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
+        pipelineRuns.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
       } else {
-        runtimeRepository.finishStepRunFailure(
+        pipelineRuns.finishStepRunFailure(
             stepRunId,
             result.code(),
             result.message(),
@@ -175,7 +181,7 @@ public abstract class AbstractStageExecutor<
     if (keys.isEmpty() || pipelineInstanceId == null) {
       return;
     }
-    Map<String, Object> summary = runtimeRepository.loadLatestSucceededStepOutputSummary(
+    Map<String, Object> summary = pipelineRuns.loadLatestSucceededStepOutputSummary(
         pipelineInstanceId, currentStep.stepCode());
     if (summary.isEmpty()) {
       return;
@@ -230,9 +236,9 @@ public abstract class AbstractStageExecutor<
         return List.copyOf(resolved);
       }
     }
-    Long pipelineDefinitionId = runtimeRepository.toLong(
+    Long pipelineDefinitionId = PlatformRuntimeValues.toLong(
         context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
-    return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
+    return pipelineDefinitions.loadPipelineSteps(pipelineDefinitionId);
   }
 
   /**

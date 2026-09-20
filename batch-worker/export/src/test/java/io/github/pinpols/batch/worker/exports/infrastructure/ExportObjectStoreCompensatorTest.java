@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.support.CompensationResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,7 +24,7 @@ import org.springframework.beans.factory.ObjectProvider;
 class ExportObjectStoreCompensatorTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
   private BatchObjectStore objectStore;

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -57,7 +57,7 @@ public class DispatchReceiptPollScheduler {
   private final DispatchReceiptPollProperties properties;
   private final FileDispatchRepository fileDispatchRepository;
   private final ObjectMapper objectMapper;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
   private final MeterRegistry meterRegistry;
   private final BatchSecurityProperties securityProperties;
   // R2-P0-4：OkHttp 默认 0 超时（永不超时）。stale 远端 → @SchedulerLock 持锁、调度线程被阻塞 → 整 receipt 轮询死锁。
@@ -261,7 +261,7 @@ public class DispatchReceiptPollScheduler {
         meta.put("channelCode", channelCode);
         meta.put("externalRequestId", externalRequestId);
         meta.put("receiptCode", receiptCode);
-        runtimeRepository.updateFileStatus(fileId, "DISPATCHED", meta);
+        fileRecords.updateFileStatus(fileId, "DISPATCHED", meta);
         log.info(
             "dispatch receipt acknowledged: tenantId={}, fileId={}, channelCode={}, receiptCode={}",
             tenantId,

@@ -6,7 +6,8 @@ import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplateParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
@@ -50,9 +51,10 @@ public class DefaultDispatchStageExecutor
 
   public DefaultDispatchStageExecutor(
       List<DispatchStageStep> steps,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
       MeterRegistry meterRegistry) {
-    super(runtimeRepository);
+    super(pipelineDefinitions, pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();

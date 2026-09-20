@@ -6,7 +6,9 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
@@ -36,10 +38,17 @@ public class ProcessStepExecutionAdapter
   public ProcessStepExecutionAdapter(
       ProcessStageExecutor processStageExecutor,
       ObjectMapper objectMapper,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
+      PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(runtimeRepository, verifierHookProvider, compensationHookProvider);
+    super(
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
+        verifierHookProvider,
+        compensationHookProvider);
     this.processStageExecutor = processStageExecutor;
     this.objectMapper = objectMapper;
   }

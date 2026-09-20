@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.util.List;
@@ -51,10 +51,9 @@ class ImportStageSupportTest {
 
   @Test
   void updateFileStatusRecoverAwareSkipsRollbackConflictForPartitionedImport() {
-    PlatformFileRuntimeRepository repository = mock(PlatformFileRuntimeRepository.class);
+    PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    when(repository.toLong(99L)).thenReturn(99L);
     doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSING"), any());
     when(repository.currentFileStatus(99L)).thenReturn("PARSED");
 
@@ -65,9 +64,8 @@ class ImportStageSupportTest {
 
   @Test
   void updateFileStatusRecoverAwareKeepsStrictStateMachineForNormalImport() {
-    PlatformFileRuntimeRepository repository = mock(PlatformFileRuntimeRepository.class);
+    PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
-    when(repository.toLong(99L)).thenReturn(99L);
     doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSING"), any());
 
     assertThatThrownBy(() -> ImportStageSupport.updateFileStatusRecoverAware(
@@ -78,10 +76,9 @@ class ImportStageSupportTest {
 
   @Test
   void updateFileStatusRecoverAwareRejectsPartitionConflictWhenCurrentStatusIsBehindTarget() {
-    PlatformFileRuntimeRepository repository = mock(PlatformFileRuntimeRepository.class);
+    PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    when(repository.toLong(99L)).thenReturn(99L);
     doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSED"), any());
     when(repository.currentFileStatus(99L)).thenReturn("PARSING");
 

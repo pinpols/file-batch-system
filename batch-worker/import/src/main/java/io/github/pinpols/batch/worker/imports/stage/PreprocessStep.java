@@ -11,7 +11,8 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -63,7 +64,9 @@ public class PreprocessStep implements ImportStageStep {
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   /** 对象存储拉取的单文件字节上限(防 OOM)。默认 512 MiB,由 {@code batch.worker.import.max-object-bytes} 调整。 */
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+
+  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
 
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
@@ -71,13 +74,15 @@ public class PreprocessStep implements ImportStageStep {
   private final ImportPreprocessObjectSource objectSource;
 
   public PreprocessStep(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
       BatchSecurityProperties batchSecurityProperties,
       BatchObjectCryptoService cryptoService,
       S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore) {
     this(
-        runtimeRepository,
+        fileRecords,
+        pipelineDefinitions,
         batchSecurityProperties,
         cryptoService,
         s3StorageProperties,
@@ -87,18 +92,20 @@ public class PreprocessStep implements ImportStageStep {
 
   @Autowired
   public PreprocessStep(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
       BatchSecurityProperties batchSecurityProperties,
       BatchObjectCryptoService cryptoService,
       S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore,
       WorkerImportPayloadProperties payloadProperties) {
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
+    this.pipelineDefinitions = pipelineDefinitions;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
     this.payloadProperties = payloadProperties;
     this.objectSource = new ImportPreprocessObjectSource(
-        runtimeRepository, s3StorageProperties, objectStore, payloadProperties);
+        fileRecords, s3StorageProperties, objectStore, payloadProperties);
   }
 
   @Override
@@ -138,7 +145,7 @@ public class PreprocessStep implements ImportStageStep {
     }
     try {
       if (importPayload != null && Texts.hasText(importPayload.templateCode())) {
-        Map<String, Object> templateConfig = runtimeRepository.loadLatestTemplateConfig(
+        Map<String, Object> templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
             context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
         if (!templateConfig.isEmpty()) {
           attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
@@ -278,8 +285,7 @@ public class PreprocessStep implements ImportStageStep {
     if (detectedCharset != null) {
       fileMetadata.put("detectedCharset", detectedCharset);
     }
-    ImportStageSupport.updateFileStatusRecoverAware(
-        runtimeRepository, context, "PARSING", fileMetadata);
+    ImportStageSupport.updateFileStatusRecoverAware(fileRecords, context, "PARSING", fileMetadata);
     return ImportStageResult.success(stage());
   }
 

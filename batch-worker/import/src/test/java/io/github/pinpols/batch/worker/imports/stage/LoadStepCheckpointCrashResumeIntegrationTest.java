@@ -1,9 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
@@ -14,7 +12,7 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -81,7 +79,7 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
   private JdbcTemplate jdbcTemplate;
   private GenericJdbcMappedImportLoadPlugin plugin;
   private ObjectMapper objectMapper;
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
   private ImportWorkerConfiguration workerConfig;
   private final List<Path> tempPaths = new ArrayList<>();
 
@@ -112,8 +110,7 @@ class LoadStepCheckpointCrashResumeIntegrationTest {
         )
         """);
 
-    runtimeRepository = mock(PlatformFileRuntimeRepository.class);
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
+    runtimeRepository = mock(PlatformFileRecordRepository.class);
     workerConfig = new ImportWorkerConfiguration(
         "wc",
         "wt",

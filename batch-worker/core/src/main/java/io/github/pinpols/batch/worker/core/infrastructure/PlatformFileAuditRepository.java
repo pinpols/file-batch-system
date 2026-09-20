@@ -15,14 +15,16 @@ import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
 
 /** 文件错误记录与审计日志的数据访问协作者。 */
+@Repository
 @RequiredArgsConstructor
-final class PlatformFileAuditRepository {
+public class PlatformFileAuditRepository {
 
   private final PlatformFileRuntimeMapper mapper;
 
-  Long insertFileErrorRecord(FileErrorRecordParam param) {
+  public Long insertFileErrorRecord(FileErrorRecordParam param) {
     Map<String, Object> values = params(
         TENANT_ID,
         param.getTenantId(),
@@ -54,7 +56,7 @@ final class PlatformFileAuditRepository {
     return toLong(values.get(ID));
   }
 
-  List<Map<String, Object>> loadFileErrorRecords(
+  public List<Map<String, Object>> loadFileErrorRecords(
       String tenantId, Long fileId, String errorCode, String errorStage, int limit) {
     if (!Texts.hasText(tenantId) || limit <= 0) {
       return List.of();
@@ -72,7 +74,7 @@ final class PlatformFileAuditRepository {
         limit));
   }
 
-  void appendAudit(FileAuditParam param) {
+  public void appendAudit(FileAuditParam param) {
     if (param.getFileId() == null
         || !Texts.hasText(param.getTenantId())
         || !Texts.hasText(param.getOperationType())

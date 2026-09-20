@@ -180,12 +180,22 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     stopContainer("pre-destroy");
   }
 
-  private void apply(ConfigCacheInvalidationEvent event) {
+  private synchronized void apply(ConfigCacheInvalidationEvent event) {
     if (EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0) {
       increment(failureCounter);
       return;
     }
     recordLag(event.changedAt());
+    long previousGlobalRevision = appliedRevision.get();
+    if (event.revision() > previousGlobalRevision + 1) {
+      cacheService.evictAllLocal();
+      keyRevisions.invalidateAll();
+      increment(reconcileCounter);
+      log.info(
+          "config invalidation event revision gap reconciled: previousRevision={}, eventRevision={}",
+          previousGlobalRevision,
+          event.revision());
+    }
     String key = eventKey(event);
     Long previous = keyRevisions.getIfPresent(key);
     if (EmptyChecks.isNotNull(previous) && event.keyRevision() <= previous) {

@@ -5,10 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -23,13 +23,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CompleteDispatchStepTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository fileRecords;
+
+  @Mock
+  private PlatformFileAuditRepository fileAudits;
 
   private CompleteDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new CompleteDispatchStep(runtimeRepository);
+    step = new CompleteDispatchStep(fileRecords, fileAudits);
   }
 
   @Test
@@ -47,51 +50,46 @@ class CompleteDispatchStepTest {
 
   @Test
   void execute_updatesFileStatusToDispatchedWhenReceiptStatusIsSuccess() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchJobContext context = buildContext("SUCCESS", "R-001");
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
   }
 
   @Test
   void execute_doesNotUpdateFileStatusWhenReceiptNotSuccess() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchJobContext context = buildContext("PENDING", null);
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(fileRecords, never()).updateFileStatus(any(), any(), any());
   }
 
   @Test
   void execute_alwaysWritesAuditLog() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchJobContext context = buildContext("NONE", null);
     step.execute(context);
 
-    verify(runtimeRepository).appendAudit(any());
+    verify(fileAudits).appendAudit(any());
   }
 
   @Test
   void execute_includesReceiptCodeInMetadataWhenPresent() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchJobContext context = buildContext("SUCCESS", "R-001");
     context.getAttributes().put("receiptCode", "R-001");
     step.execute(context);
 
     // Just ensure no NPE and audit is written
-    verify(runtimeRepository).appendAudit(any());
+    verify(fileAudits).appendAudit(any());
   }
 
   @Test
   void execute_handlesNullReceiptStatusGracefully() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
 
     DispatchPayload payload =
         new DispatchPayload("10", null, "CH1", "target", null, null, null, null, null, null);
@@ -105,7 +103,7 @@ class CompleteDispatchStepTest {
 
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+    verify(fileRecords, never()).updateFileStatus(any(), any(), any());
   }
 
   private DispatchJobContext buildContext(String receiptStatus, String receiptCode) {

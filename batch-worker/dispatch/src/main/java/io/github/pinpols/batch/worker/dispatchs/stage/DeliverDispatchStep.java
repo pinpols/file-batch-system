@@ -4,7 +4,8 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -38,15 +39,15 @@ public class DeliverDispatchStep implements DispatchStageStep {
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
 
   public DeliverDispatchStep(
       FileDispatchRepository fileDispatchRepository,
       DispatchChannelGateway dispatchChannelGateway,
-      PlatformFileRuntimeRepository runtimeRepository) {
+      PlatformFileRecordRepository fileRecords) {
     this.fileDispatchRepository = fileDispatchRepository;
     this.dispatchChannelGateway = dispatchChannelGateway;
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
   }
 
   @Override
@@ -67,7 +68,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     @SuppressWarnings("unchecked")
     Map<String, Object> fileRecord =
         (Map<String, Object>) attrs.get(PipelineRuntimeKeys.FILE_RECORD);
@@ -99,7 +100,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
           new FileDispatchRepository.InsertDispatchParam(
               context.getTenantId(),
               fileId,
-              runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+              PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
               dispatchPayload.channelCode(),
               dispatchPayload.dispatchTarget(),
               dispatchPayload.receiptCode(),
@@ -129,7 +130,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     if (manifestRef != null) {
       manifestRef.putFileMetadata(fileMetadata);
     }
-    runtimeRepository.updateFileStatus(fileId, "DISPATCHING", fileMetadata);
+    fileRecords.updateFileStatus(fileId, "DISPATCHING", fileMetadata);
     if (!dispatchResult.success()) {
       attrs.put("retryRequested", Boolean.TRUE);
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());

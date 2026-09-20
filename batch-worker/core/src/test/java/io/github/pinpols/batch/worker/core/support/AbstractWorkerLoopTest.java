@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
@@ -30,15 +29,18 @@ import org.springframework.context.support.StaticApplicationContext;
 
 /**
  * AbstractWorkerLoop 单元测试： - ensureStarted() 是幂等的（仅注册一次） - 注册信息从 WorkerConfiguration 正确填充 -
- * doHeartbeat() 委托给 WorkerRuntimeFacade.heartbeat() - doHeartbeat() 在尚未启动时也是安全的 - shutdown() 委托给
- * WorkerRuntimeFacade.shutdown() - shutdown() 在从未启动时也是安全的
+ * doHeartbeat() 委托给 HeartbeatService - doHeartbeat() 在尚未启动时也是安全的 - shutdown() 委托给
+ * WorkerLifecycleManager - shutdown() 在从未启动时也是安全的
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AbstractWorkerLoopTest {
 
   @Mock
-  private WorkerRuntimeFacade workerRuntimeFacade;
+  private WorkerLifecycleManager workerLifecycleManager;
+
+  @Mock
+  private HeartbeatService heartbeatService;
 
   private TestWorkerLoop loop;
   private BatchDateTimeSupport dateTimeSupport;
@@ -48,12 +50,12 @@ class AbstractWorkerLoopTest {
     WorkerRegistration registration = new WorkerRegistration();
     registration.setWorkerId("test-worker-001");
     registration.setTenantId("t1");
-    when(workerRuntimeFacade.start(any())).thenReturn(registration);
+    when(workerLifecycleManager.start(any())).thenReturn(registration);
 
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
     dateTimeSupport = new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider);
-    loop = new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport);
+    loop = new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
   }
 
   @Test
@@ -62,7 +64,7 @@ class AbstractWorkerLoopTest {
 
     assertThat(result).isNotNull();
     assertThat(result.getWorkerId()).isEqualTo("test-worker-001");
-    verify(workerRuntimeFacade, times(1)).start(any());
+    verify(workerLifecycleManager, times(1)).start(any());
   }
 
   @Test
@@ -71,7 +73,7 @@ class AbstractWorkerLoopTest {
     loop.ensureStarted();
     loop.ensureStarted();
 
-    verify(workerRuntimeFacade, times(1)).start(any());
+    verify(workerLifecycleManager, times(1)).start(any());
   }
 
   @Test
@@ -79,7 +81,7 @@ class AbstractWorkerLoopTest {
     loop.ensureStarted();
 
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerRuntimeFacade).start(captor.capture());
+    verify(workerLifecycleManager).start(captor.capture());
 
     WorkerRegistration sent = captor.getValue();
     assertThat(sent.getTenantId()).isEqualTo("t1");
@@ -98,7 +100,7 @@ class AbstractWorkerLoopTest {
     loop.ensureStarted();
 
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerRuntimeFacade).start(captor.capture());
+    verify(workerLifecycleManager).start(captor.capture());
     assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code");
   }
 
@@ -107,12 +109,12 @@ class AbstractWorkerLoopTest {
     WorkerIdentityProperties identity = new WorkerIdentityProperties();
     identity.setInstanceId("pod/uid:01");
     TestWorkerLoop instanceLoop =
-        new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport, identity);
+        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, identity);
 
     instanceLoop.ensureStarted();
 
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
-    verify(workerRuntimeFacade).start(captor.capture());
+    verify(workerLifecycleManager).start(captor.capture());
     assertThat(captor.getValue().getWorkerId()).isEqualTo("fixed-worker-code-pod_uid_01");
     assertThat(captor.getValue().getWorkerCode()).isEqualTo("fixed-worker-code");
   }
@@ -122,25 +124,26 @@ class AbstractWorkerLoopTest {
     loop.ensureStarted();
     loop.doHeartbeat();
 
-    verify(workerRuntimeFacade, times(1)).heartbeat("test-worker-001");
+    verify(heartbeatService, times(1)).beat("test-worker-001");
   }
 
   @Test
   void doHeartbeat_doesNotFailBeforeStart() {
     // 创建一个尚未调用 start() 的 loop
-    TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport);
+    TestWorkerLoop freshLoop =
+        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
     // 对未启动的 loop 调用 doHeartbeat 应内部触发 ensureStarted
     // 行为：ensureStarted() 返回有效注册信息，随后心跳正常执行
     freshLoop.doHeartbeat();
 
-    verify(workerRuntimeFacade, times(1)).start(any());
-    verify(workerRuntimeFacade, times(1)).heartbeat("test-worker-001");
+    verify(workerLifecycleManager, times(1)).start(any());
+    verify(heartbeatService, times(1)).beat("test-worker-001");
   }
 
   @Test
   void doHeartbeat_continuesGracefullyWhenFacadeThrows() {
     loop.ensureStarted();
-    doThrow(new RuntimeException("network error")).when(workerRuntimeFacade).heartbeat(any());
+    doThrow(new RuntimeException("network error")).when(heartbeatService).beat(any());
 
     assertThatCode(() -> loop.doHeartbeat()).doesNotThrowAnyException();
   }
@@ -151,8 +154,8 @@ class AbstractWorkerLoopTest {
 
     loop.doHeartbeat();
 
-    verify(workerRuntimeFacade, never()).start(any());
-    verify(workerRuntimeFacade, never()).heartbeat(any());
+    verify(workerLifecycleManager, never()).start(any());
+    verify(heartbeatService, never()).beat(any());
   }
 
   @Test
@@ -160,40 +163,47 @@ class AbstractWorkerLoopTest {
     loop.ensureStarted();
     loop.shutdown();
 
-    verify(workerRuntimeFacade, times(1)).shutdown("test-worker-001");
+    verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
   }
 
   @Test
   void shutdown_isNoOp_whenNeverStarted() {
-    TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport);
+    TestWorkerLoop freshLoop =
+        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
     freshLoop.shutdown();
 
-    verify(workerRuntimeFacade, never()).shutdown(any());
+    verify(workerLifecycleManager, never()).shutdown(any());
   }
 
   @Test
   void shutdown_doesNotPropagateFacadeFailure() {
     loop.ensureStarted();
-    doThrow(new RuntimeException("shutdown failed")).when(workerRuntimeFacade).shutdown(any());
+    doThrow(new RuntimeException("shutdown failed"))
+        .when(workerLifecycleManager)
+        .shutdown(any());
 
     loop.shutdown();
 
-    verify(workerRuntimeFacade, times(1)).shutdown("test-worker-001");
+    verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
   }
 
   // ── 用于测试的最小具体子类 ──────────────────────────────
 
   private static class TestWorkerLoop extends AbstractWorkerLoop {
 
-    TestWorkerLoop(WorkerRuntimeFacade facade, BatchDateTimeSupport dateTimeSupport) {
-      super(facade, dateTimeSupport, 8);
+    TestWorkerLoop(
+        WorkerLifecycleManager lifecycleManager,
+        HeartbeatService heartbeatService,
+        BatchDateTimeSupport dateTimeSupport) {
+      super(lifecycleManager, heartbeatService, dateTimeSupport, 8);
     }
 
     TestWorkerLoop(
-        WorkerRuntimeFacade facade,
+        WorkerLifecycleManager lifecycleManager,
+        HeartbeatService heartbeatService,
         BatchDateTimeSupport dateTimeSupport,
         WorkerIdentityProperties identityProperties) {
-      super(facade, dateTimeSupport, 8, identityProperties);
+      super(lifecycleManager, heartbeatService, dateTimeSupport, 8, identityProperties);
     }
 
     @Override

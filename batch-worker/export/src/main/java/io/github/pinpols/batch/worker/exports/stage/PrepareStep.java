@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -29,11 +29,12 @@ public class PrepareStep implements ExportStageStep {
   private static final String KEY_SOURCE_PARTITIONS = "sourcePartitions";
 
   private final ObjectMapper objectMapper;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
 
-  public PrepareStep(ObjectMapper objectMapper, PlatformFileRuntimeRepository runtimeRepository) {
+  public PrepareStep(
+      ObjectMapper objectMapper, PlatformPipelineDefinitionRepository pipelineDefinitions) {
     this.objectMapper = objectMapper;
-    this.runtimeRepository = runtimeRepository;
+    this.pipelineDefinitions = pipelineDefinitions;
   }
 
   @Override
@@ -68,7 +69,7 @@ public class PrepareStep implements ExportStageStep {
           ? payload.templateCode()
           : context.getJobCode() + "_TPL";
       if (Texts.hasText(effectiveTemplateCode)) {
-        templateConfig = runtimeRepository.loadLatestTemplateConfig(
+        templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
             context.getTenantId(), effectiveTemplateCode, ExportWorkerType.EXPORT);
         if (!templateConfig.isEmpty()) {
           attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);

@@ -9,7 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -33,14 +35,26 @@ class ExportStepExecutionAdapterTest {
   private ExportStageExecutor stageExecutor;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   private ExportStepExecutionAdapter adapter;
 
   @BeforeEach
   void setUp() {
     adapter = new ExportStepExecutionAdapter(
-        stageExecutor, new ObjectMapper(), runtimeRepository, emptyProvider(), emptyProvider());
+        stageExecutor,
+        new ObjectMapper(),
+        pipelineDefinitions,
+        pipelineRuns,
+        runtimeRepository,
+        emptyProvider(),
+        emptyProvider());
   }
 
   @Test

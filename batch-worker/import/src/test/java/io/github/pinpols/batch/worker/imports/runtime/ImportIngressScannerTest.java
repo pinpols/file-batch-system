@@ -13,7 +13,8 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
 import io.github.pinpols.batch.common.storage.ObjectSummary;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import java.io.ByteArrayInputStream;
@@ -30,7 +31,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ImportIngressScannerTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformFileAuditRepository fileAudits;
 
   @Mock
   private BatchObjectStore objectStore;
@@ -65,6 +69,7 @@ class ImportIngressScannerTest {
 
     scanner = new ImportIngressScanner(
         runtimeRepository,
+        fileAudits,
         workerConfiguration,
         scannerProperties,
         s3StorageProperties,

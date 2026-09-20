@@ -15,7 +15,6 @@ import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
-import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
@@ -69,8 +68,9 @@ class AbstractTaskConsumerBackpressureTest {
       return new WorkerExecutionResult("1", true, "ok");
     });
 
-    WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
-    when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
+    WorkerLifecycleManager lifecycleManager = mock(WorkerLifecycleManager.class);
+    HeartbeatService heartbeatService = mock(HeartbeatService.class);
+    when(lifecycleManager.start(any())).thenAnswer(inv -> inv.getArgument(0));
 
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
@@ -79,7 +79,7 @@ class AbstractTaskConsumerBackpressureTest {
     AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport, 1) {
+        return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport, 1) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
@@ -220,15 +220,17 @@ class AbstractTaskConsumerBackpressureTest {
       KafkaListenerEndpointRegistry registry,
       TaskDispatchExecutor executor,
       int maxConcurrentTasks) {
-    WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
-    when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
+    WorkerLifecycleManager lifecycleManager = mock(WorkerLifecycleManager.class);
+    HeartbeatService heartbeatService = mock(HeartbeatService.class);
+    when(lifecycleManager.start(any())).thenAnswer(inv -> inv.getArgument(0));
 
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     return new AbstractTaskConsumer(registry, meterRegistryProvider, maxConcurrentTasks) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport, maxConcurrentTasks) {
+        return new AbstractWorkerLoop(
+            lifecycleManager, heartbeatService, dateTimeSupport, maxConcurrentTasks) {
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();

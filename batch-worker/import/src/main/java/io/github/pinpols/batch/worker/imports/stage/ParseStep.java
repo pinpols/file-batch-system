@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -71,29 +71,25 @@ public class ParseStep implements ImportStageStep {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
   private final ParseSupport support;
   private final Map<String, FormatParser> parsers;
   private final FormatParser defaultParser;
 
   public ParseStep(
       ObjectMapper objectMapper,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
       ImportRecordGovernanceService recordGovernanceService) {
-    this(
-        objectMapper,
-        runtimeRepository,
-        recordGovernanceService,
-        new WorkerImportPayloadProperties());
+    this(objectMapper, fileRecords, recordGovernanceService, new WorkerImportPayloadProperties());
   }
 
   @Autowired
   public ParseStep(
       ObjectMapper objectMapper,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
       ImportRecordGovernanceService recordGovernanceService,
       WorkerImportPayloadProperties payloadProperties) {
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
     this.support = new ParseSupport(objectMapper, recordGovernanceService);
     ExcelFormatParser excelParser = new ExcelFormatParser(support, payloadProperties);
     JsonFormatParser jsonParser = new JsonFormatParser(support);
@@ -180,7 +176,7 @@ public class ParseStep implements ImportStageStep {
             ERROR_OBJECT_MAPPER);
       }
       ImportStageSupport.updateFileStatusRecoverAware(
-          runtimeRepository,
+          fileRecords,
           context,
           "PARSED",
           Map.of(

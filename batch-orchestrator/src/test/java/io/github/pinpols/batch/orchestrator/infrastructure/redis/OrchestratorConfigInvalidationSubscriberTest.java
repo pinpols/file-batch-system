@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +63,15 @@ class OrchestratorConfigInvalidationSubscriberTest {
     subscriber.onMessage(message(event), null);
 
     verify(cacheService).evictLocal("t1", "job-definition", "*");
+  }
+
+  @Test
+  void eventRevisionGapClearsAllLocalCachesBeforeApplyingEvent() {
+    subscriber.onMessage(message(event(1, 1)), null);
+    subscriber.onMessage(message(event(3, 2)), null);
+
+    verify(cacheService).evictAllLocal();
+    verify(cacheService, times(2)).evictLocal("t1", "job-definition", "JOB1");
   }
 
   @Test

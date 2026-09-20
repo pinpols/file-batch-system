@@ -17,14 +17,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
 
 /** Pipeline、模板及渠道定义的数据访问协作者。 */
+@Repository
 @RequiredArgsConstructor
-final class PlatformPipelineDefinitionRepository {
+public class PlatformPipelineDefinitionRepository {
 
   private final PlatformFileRuntimeMapper mapper;
 
-  Map<String, Object> loadLatestTemplateConfig(
+  public Map<String, Object> loadLatestTemplateConfig(
       String tenantId, String templateCode, String templateType) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
@@ -34,7 +36,7 @@ final class PlatformPipelineDefinitionRepository {
     return config == null ? Map.of() : config;
   }
 
-  Map<String, Object> loadChannelConfig(String tenantId, String channelCode) {
+  public Map<String, Object> loadChannelConfig(String tenantId, String channelCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
       return Map.of();
     }
@@ -43,14 +45,14 @@ final class PlatformPipelineDefinitionRepository {
     return config == null ? Map.of() : config;
   }
 
-  Long findPipelineDefinition(String tenantId, String jobCode) {
+  public Long findPipelineDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
       return null;
     }
     return mapper.selectLatestPipelineDefinitionId(params(TENANT_ID, tenantId, "jobCode", jobCode));
   }
 
-  List<PipelineStepDefinition> loadPipelineSteps(Long pipelineDefinitionId) {
+  public List<PipelineStepDefinition> loadPipelineSteps(Long pipelineDefinitionId) {
     if (pipelineDefinitionId == null) {
       return List.of();
     }
