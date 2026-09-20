@@ -23,6 +23,7 @@
 
 ### Changed
 
+- **Console 契约补齐**：认证画像与 token 响应补充首次登录改密标识，批次日重放增加 session 历史列表，租户配置包示例模板支持多场景组合；Webhook、自定义任务类型等既有响应改用精确 OpenAPI schema，保持原路径、权限和运行语义不变。
 - **运行配置与测试基础设施统一**：PostgreSQL、Kafka、MinIO、Valkey 的 Testcontainers 创建入口和镜像版本统一管理，Shell 运行默认值集中维护并由 CI 阻止漂移；Worker 并发配置键和 Trigger/Worker 状态常量改为单一来源。密钥历史载荷迁移下沉为共享 Flyway callback，并收紧持久化约束和启动校验。
 - **容量承诺口径**：容量画像新增并行任务墙钟耗时，记录/字节吞吐统一以最早开始到最晚结束的时间跨度计算；重任务容量承诺必须结合数据量、窗口、失败率和基础设施指标，不能只按控制面 tasks/s 外推。
 - **Worker report 排空预算**：严格 10 万同代码 A/B 证明 `TASK_REPORT` 30000/min 可消除合法峰值下的 429 重试并提高 5.57% 完成吞吐；默认 report 高水位升至 30000/min，claim 保持 12000/min，Bucket4j 配置版本同步递增至 2。

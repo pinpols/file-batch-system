@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.io.IOException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -77,8 +78,9 @@ public class ConsoleTenantConfigPackageExcelController {
   @GetMapping("/sample-template")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<StreamingResponseBody> sampleTemplate(
-      @RequestParam(value = "scenario", required = false) String scenario) {
-    return tenantConfigExcelService.downloadSampleTemplate(scenario);
+      @RequestParam(value = "scenario", required = false) String scenario,
+      @RequestParam(value = "scenarios", required = false) List<String> scenarios) {
+    return tenantConfigExcelService.downloadSampleTemplate(scenario, scenarios);
   }
 
   /** 返回 11 个 Sheet 的必填、类型、枚举、默认留空行为和填写示例，供 Console 页面直接展示。 */

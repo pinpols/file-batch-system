@@ -197,14 +197,19 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> downloadSampleTemplate(String scenario) {
-    String normalizedScenario = ConfigPackageSampleDataFactory.normalizeScenario(scenario);
+  public ResponseEntity<StreamingResponseBody> downloadSampleTemplate(
+      String scenario, List<String> scenarios) {
+    List<String> rawScenarios = EmptyChecks.isNotEmpty(scenarios)
+        ? scenarios
+        : EmptyChecks.isNotBlank(scenario) ? List.of(scenario) : List.of();
+    List<String> normalizedScenarios =
+        ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios).stream().toList();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     List<List<Map<String, Object>>> sheets =
-        ConfigPackageSampleDataFactory.sampleSheets(normalizedScenario);
-    String fileName =
-        "tenant-config-package-sample-" + normalizedScenario.toLowerCase(Locale.ROOT) + ".xlsx";
+        ConfigPackageSampleDataFactory.sampleSheets(normalizedScenarios);
+    String scenarioName = String.join("-", normalizedScenarios).toLowerCase(Locale.ROOT);
+    String fileName = "tenant-config-package-sample-" + scenarioName + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
         fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
   }

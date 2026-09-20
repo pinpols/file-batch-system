@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
@@ -74,6 +75,26 @@ public class ConsoleBatchDayReplayController {
         .body(command)
         .retrieve()
         .body(new ParameterizedTypeReference<>() {});
+    return responseFactory.forwardOrchestrator(resp);
+  }
+
+  @GetMapping("/sessions")
+  public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> list(
+      @RequestParam(value = "tenantId", required = false) String tenantId,
+      @RequestParam(value = "status", required = false) String status,
+      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    boolean hasStatus = EmptyChecks.isNotBlank(status);
+    String uri = hasStatus
+        ? "/internal/orchestrator/batch-day-replay/sessions?tenantId={tenantId}&limit={limit}&status={status}"
+        : "/internal/orchestrator/batch-day-replay/sessions?tenantId={tenantId}&limit={limit}";
+    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> resp = hasStatus
+        ? proxyClient()
+            .get()
+            .uri(uri, resolved, limit, status)
+            .retrieve()
+            .body(sessionListResponse())
+        : proxyClient().get().uri(uri, resolved, limit).retrieve().body(sessionListResponse());
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -176,6 +197,12 @@ public class ConsoleBatchDayReplayController {
 
   private static ParameterizedTypeReference<CommonResponse<ConsoleBatchDayReplaySessionResponse>>
       sessionResponse() {
+    return new ParameterizedTypeReference<>() {};
+  }
+
+  private static ParameterizedTypeReference<
+          CommonResponse<List<ConsoleBatchDayReplaySessionResponse>>>
+      sessionListResponse() {
     return new ParameterizedTypeReference<>() {};
   }
 

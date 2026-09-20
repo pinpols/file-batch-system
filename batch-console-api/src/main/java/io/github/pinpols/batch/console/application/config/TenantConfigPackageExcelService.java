@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +19,8 @@ public interface TenantConfigPackageExcelService {
 
   ResponseEntity<StreamingResponseBody> downloadTemplate();
 
-  ResponseEntity<StreamingResponseBody> downloadSampleTemplate(String scenario);
+  ResponseEntity<StreamingResponseBody> downloadSampleTemplate(
+      String scenario, List<String> scenarios);
 
   TenantConfigPackageExcelGuideResponse guide();
 

@@ -40,6 +40,15 @@ class ConfigPackageWorkbookGuidanceTest {
     return new XSSFWorkbook(new ByteArrayInputStream(bytes));
   }
 
+  private XSSFWorkbook buildSampleTemplate(List<String> scenarios) throws Exception {
+    StaticMessageSource ms = new StaticMessageSource();
+    ms.setUseCodeAsDefaultMessage(true);
+    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms);
+    byte[] bytes =
+        writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets(scenarios));
+    return new XSSFWorkbook(new ByteArrayInputStream(bytes));
+  }
+
   @Test
   void sampleTemplateContainsScenarioRowsAndKeepsQueueTypeValid() throws Exception {
     try (XSSFWorkbook importWb = buildSampleTemplate("IMPORT")) {
@@ -71,6 +80,23 @@ class ConfigPackageWorkbookGuidanceTest {
       assertThat(jobSheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ATOMIC");
       assertThat(atomicWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET).getLastRowNum())
           .isZero();
+    }
+  }
+
+  @Test
+  void sampleTemplateCanCombineSelectedScenarios() throws Exception {
+    try (XSSFWorkbook wb = buildSampleTemplate(List.of("IMPORT", "PROCESS"))) {
+      Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      List<String> jobCodes = new ArrayList<>();
+      for (int i = 1; i <= jobSheet.getLastRowNum(); i++) {
+        jobCodes.add(jobSheet.getRow(i).getCell(1).getStringCellValue());
+      }
+      assertThat(jobCodes).contains("JOB_IMPORT_CUSTOMER", "JOB_PROCESS_CUSTOMER");
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)
+              .getRow(1)
+              .getCell(3)
+              .getStringCellValue())
+          .isEqualTo("MIXED");
     }
   }
 

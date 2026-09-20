@@ -1219,6 +1219,31 @@ paths:
                 type: string
                 format: binary
   /api/console/ops/batch-day-replay/sessions:
+    get:
+      tags: [Ops]
+      summary: ADR-020 批次日重放 session 历史列表
+      description: 转发到 orchestrator `GET /internal/orchestrator/batch-day-replay/sessions`，按 created_at desc / id desc 返回最近 session。
+      operationId: listBatchDayReplaySessions
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: status
+          required: false
+          schema: { type: string }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySessionList'
     post:
       tags: [Ops]
       summary: ADR-020 提交批次日重放 session
@@ -1886,7 +1911,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWebhookSubscriptionList'
     post:
       tags: [Webhooks]
       summary: Create webhook subscription
@@ -1898,35 +1923,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name, callbackUrl, eventTypes]
-              properties:
-                name:
-                  type: string
-                  maxLength: 128
-                callbackUrl:
-                  type: string
-                  maxLength: 1024
-                eventTypes:
-                  type: array
-                  items:
-                    type: string
-                    maxLength: 64
-                secret:
-                  type: string
-                  maxLength: 256
-                  writeOnly: true
-                  description: HMAC signing secret; accepted on write and never returned by subscription responses.
-                enabled:
-                  type: boolean
-                  default: true
+              $ref: '#/components/schemas/CreateWebhookRequest'
       responses:
         '200':
           description: Created subscription
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWebhookSubscription'
   /api/console/webhooks/{id}:
     get:
       tags: [Webhooks]
@@ -1946,7 +1950,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWebhookSubscription'
     put:
       tags: [Webhooks]
       summary: Update webhook subscription
@@ -1964,28 +1968,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [callbackUrl, eventTypes]
-              properties:
-                callbackUrl:
-                  type: string
-                eventTypes:
-                  type: array
-                  items:
-                    type: string
-                secret:
-                  type: string
-                  writeOnly: true
-                  description: HMAC signing secret; accepted on write and never returned by subscription responses.
-                enabled:
-                  type: boolean
+              $ref: '#/components/schemas/UpdateWebhookRequest'
       responses:
         '200':
           description: Updated subscription
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWebhookSubscription'
     delete:
       tags: [Webhooks]
       summary: Delete webhook subscription
@@ -2031,7 +2021,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWebhookDeliveryLogList'
   /api/console/tags:
     get:
       tags: [ResourceTags]
@@ -2741,15 +2731,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code: { type: string }
-                  message: { type: string }
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
+                $ref: '#/components/schemas/CommonResponseMyWorkerList'
   /api/console/my-workers/count:
     get:
       tags: [Workers]
@@ -2842,13 +2824,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  code: { type: string }
-                  message: { type: string }
-                  data:
-                    type: object
-                    additionalProperties: true
+                $ref: '#/components/schemas/CommonResponseCustomTaskType'
         '404':
           description: Task type not found for tenant
   /api/console/workers/fingerprints:
@@ -9582,11 +9558,20 @@ paths:
         - name: scenario
           in: query
           required: false
-          description: Scenario filter. ALL keeps all sample scenarios.
+          description: Legacy single scenario filter. ALL keeps all sample scenarios.
           schema:
             type: string
             enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]
             default: ALL
+        - name: scenarios
+          in: query
+          required: false
+          description: Multi-select scenario filter. Repeat the parameter for multiple scenarios; ALL keeps all sample scenarios.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]
       responses:
         '200':
           description: Scenario sample Excel template with 11 data sheets
@@ -14291,7 +14276,10 @@ components:
           description: 按当前用户 authorities 过滤后的侧边栏菜单树，由后端 ConsoleMenuRegistry 下发，前端不再硬编码。
           items:
             $ref: '#/components/schemas/ConsoleMenuGroup'
-      required: [username, tenantId, authorities, menus]
+        mustChangePassword:
+          type: boolean
+          description: 首次登录/重置后强制改密标志；true 时 FE 应跳改密页。
+      required: [username, tenantId, authorities, menus, mustChangePassword]
     ConsoleMenuGroup:
       type: object
       description: 侧边栏菜单分组。
@@ -16816,6 +16804,162 @@ components:
           format: int32
       required: [uploadToken, tenantId, resourceQueueInserted, resourceQueueUpdated, businessCalendarInserted, businessCalendarUpdated, batchWindowInserted, batchWindowUpdated, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
 
+    CreateWebhookRequest:
+      type: object
+      required: [name, callbackUrl, eventTypes]
+      properties:
+        name:
+          type: string
+          maxLength: 128
+        callbackUrl:
+          type: string
+          maxLength: 1024
+        eventTypes:
+          type: array
+          items:
+            type: string
+            maxLength: 64
+        secret:
+          type: string
+          maxLength: 256
+          writeOnly: true
+          nullable: true
+          description: HMAC signing secret; accepted on write and never returned by subscription responses.
+        enabled:
+          type: boolean
+          nullable: true
+          default: true
+    UpdateWebhookRequest:
+      type: object
+      required: [callbackUrl, eventTypes]
+      properties:
+        callbackUrl:
+          type: string
+          maxLength: 1024
+        eventTypes:
+          type: array
+          items:
+            type: string
+            maxLength: 64
+        secret:
+          type: string
+          maxLength: 256
+          writeOnly: true
+          nullable: true
+          description: HMAC signing secret; accepted on write and never returned by subscription responses.
+        enabled:
+          type: boolean
+          nullable: true
+    WebhookSubscriptionResponse:
+      type: object
+      required: [id, tenantId, name, callbackUrl, eventTypes]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        name: { type: string }
+        callbackUrl: { type: string }
+        eventTypes:
+          type: string
+          description: Comma-separated event type list as persisted by ConsoleWebhookService.
+        enabled: { type: boolean, nullable: true }
+        createdBy: { type: string, nullable: true }
+        updatedBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    WebhookDeliveryLogResponse:
+      type: object
+      required: [id, tenantId, subscriptionId, eventType, deliveryStatus, attempt, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        subscriptionId: { type: integer, format: int64 }
+        eventType: { type: string }
+        payloadJson: { type: string, nullable: true }
+        httpStatus: { type: integer, format: int32, nullable: true }
+        responseBody: { type: string, nullable: true }
+        deliveryStatus: { $ref: '#/components/schemas/WebhookDeliveryStatus' }
+        attempt: { type: integer, format: int32 }
+        nextRetryAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    CommonResponseWebhookSubscription:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/WebhookSubscriptionResponse' }
+    CommonResponseWebhookSubscriptionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/WebhookSubscriptionResponse' }
+    CommonResponseWebhookDeliveryLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/WebhookDeliveryLogResponse' }
+    CustomTaskTypeResponse:
+      type: object
+      required: [id, tenantId, taskTypeCode, displayName, descriptor, descriptorVersion, source, status]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        taskTypeCode: { type: string }
+        displayName: { type: string }
+        descriptor:
+          type: string
+          description: Full custom task descriptor JSON string declared by SDK worker.
+        descriptorVersion: { type: string }
+        source: { type: string }
+        declaredByWorkerCode: { type: string, nullable: true }
+        status: { type: string }
+        firstDeclaredAt: { type: string, format: date-time, nullable: true }
+        lastDeclaredAt: { type: string, format: date-time, nullable: true }
+    CommonResponseCustomTaskType:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/CustomTaskTypeResponse' }
+    CommonResponseCustomTaskTypeList:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/CustomTaskTypeResponse' }
+    MyWorkerResponse:
+      type: object
+      required: [id, tenantId, workerCode, workerGroup, status, heartbeatAt]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        workerCode: { type: string }
+        workerGroup: { type: string }
+        status: { type: string }
+        heartbeatAt: { type: string, format: date-time }
+        currentLoad: { type: integer, format: int32, nullable: true }
+        maxConcurrent: { type: integer, format: int32, nullable: true }
+        drainStartedAt: { type: string, format: date-time, nullable: true }
+        drainDeadlineAt: { type: string, format: date-time, nullable: true }
+    CommonResponseMyWorkerList:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/MyWorkerResponse' }
+
     # ── 补充枚举 schema（前端类型安全）──────────────────────────
     TriggerStatus:
       type: string
@@ -16939,6 +17083,14 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/BatchDayReplaySession' }
+    CommonResponseBatchDayReplaySessionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/BatchDayReplaySession' }
     BatchDayReplayEntry:
       type: object
       description: ADR-020 批次日重放 entry 投影（console 透传 orchestrator 实体）。

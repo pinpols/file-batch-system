@@ -228,6 +228,16 @@ public class BatchDayReplayService {
     return loadOrThrow(tenantId, sessionId);
   }
 
+  /** 查询 replay session 历史列表；Controller 只负责 HTTP 参数，租户约束留在应用层。 */
+  @Transactional(readOnly = true)
+  public List<BatchDayReplaySessionEntity> listSessions(String tenantId, String status, int limit) {
+    if (!Texts.hasText(tenantId) || limit <= 0) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
+    }
+    int safeLimit = Math.min(limit, 200);
+    return sessionMapper.selectRecentByTenant(tenantId, defaultIfBlank(status, null), safeLimit);
+  }
+
   /** 查询 replay entry 进度列表；Controller 只负责 HTTP 参数，查询约束留在应用层。 */
   @Transactional(readOnly = true)
   public List<BatchDayReplayEntryEntity> listEntries(
