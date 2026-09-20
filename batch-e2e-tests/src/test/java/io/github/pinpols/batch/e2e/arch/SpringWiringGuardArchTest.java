@@ -4,6 +4,7 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
 import java.util.List;
 import java.util.Set;
@@ -12,6 +13,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Import;
 
 /**
  * Spring 装配守护 — 防 P0/P1-B 已踩过的 2 类 main-red:
@@ -78,5 +80,16 @@ class SpringWiringGuardArchTest {
             + " NoSuchBean 启动失败,见 2026-07-09 main-red):"
             + uncovered
             + " → 在 E2eConsoleImportApplication.basePackages 里补齐,或移动 bean 到已扫描包。");
+  }
+
+  @Test
+  void e2eConsoleAppImportsSharedSecretPayloadProtector() {
+    Import imports = E2eConsoleImportApplication.class.getAnnotation(Import.class);
+
+    Assertions.assertNotNull(imports, "E2eConsoleImportApplication must declare @Import");
+    Assertions.assertTrue(
+        List.of(imports.value()).contains(SecretPayloadProtector.class),
+        "E2eConsoleImportApplication must import SecretPayloadProtector because its explicit "
+            + "ComponentScan does not include batch-common services");
   }
 }
