@@ -13,7 +13,7 @@ public final class TestContainerImages {
   public static final String VALKEY = "valkey/valkey:8.1";
 
   /** Keep in sync with .env.example MINIO_IMAGE_TAG and docker-compose.yml. */
-  public static final String MINIO = "minio/minio:RELEASE.2025-09-07T16-13-09Z";
+  public static final String MINIO = "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z";
 
   private TestContainerImages() {}
 }

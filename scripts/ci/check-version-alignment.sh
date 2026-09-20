@@ -238,7 +238,7 @@ TEST_IMAGE_SOURCE="$ROOT/batch-test-support/src/main/java/io/github/pinpols/batc
 declare -A CORE_IMAGE_PREFIXES=(
   [POSTGRES]="postgres"
   [KAFKA]="apache/kafka"
-  [MINIO]="minio/minio"
+  [MINIO]="quay.io/minio/minio"
   [VALKEY]="valkey/valkey"
 )
 declare -A CORE_IMAGE_TAGS=(
