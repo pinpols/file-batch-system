@@ -215,7 +215,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource);
     for (ConfigPackageSheetSpecs.SheetDef sheet : specs.build()) {
       List<TenantConfigPackageExcelGuideResponse.ColumnGuide> columns = new ArrayList<>();
-      String sheetAppliesTo = ConfigPackageExcelWorkbookWriter.appliesToFor(sheet.name(), "");
+      String sheetAppliesTo = appliesToFor(sheet.name(), "");
       for (String column : sheet.columns()) {
         ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
         boolean required = EmptyChecks.isNotNull(guide) && guide.required();
@@ -223,14 +223,14 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             column,
             required,
             EmptyChecks.isNotNull(guide) && guide.readOnly(),
-            ConfigPackageExcelWorkbookWriter.guideLevelFor(sheet.name(), column, required),
+            guideLevelFor(sheet.name(), column, required),
             EmptyChecks.isNull(guide) ? "" : guide.formatHint(),
             EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues(),
             EmptyChecks.isNull(guide) ? "" : guide.description(),
             EmptyChecks.isNull(guide) ? "" : guide.example(),
-            ConfigPackageExcelWorkbookWriter.fillExampleFor(sheet.name(), column, guide),
-            ConfigPackageExcelWorkbookWriter.defaultBehaviorFor(column, guide),
-            ConfigPackageExcelWorkbookWriter.appliesToFor(sheet.name(), column)));
+            fillExampleFor(sheet.name(), column, guide),
+            defaultBehaviorFor(column, guide),
+            appliesToFor(sheet.name(), column)));
       }
       sheets.add(new TenantConfigPackageExcelGuideResponse.SheetGuide(
           sheet.name(), sheetAppliesTo, columns));

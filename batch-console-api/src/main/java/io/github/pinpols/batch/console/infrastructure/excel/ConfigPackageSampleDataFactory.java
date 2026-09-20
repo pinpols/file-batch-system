@@ -18,6 +18,12 @@ public final class ConfigPackageSampleDataFactory {
   private static final String QUEUE = "demo-queue";
   private static final String CHANNEL = "demo-sftp";
   private static final String VERSION = "1";
+  private static final String SCENARIO_ALL = "ALL";
+  private static final String SCENARIO_IMPORT = "IMPORT";
+  private static final String SCENARIO_EXPORT = "EXPORT";
+  private static final String SCENARIO_PROCESS = "PROCESS";
+  private static final String SCENARIO_DISPATCH = "DISPATCH";
+  private static final String SCENARIO_WORKFLOW = "WORKFLOW";
   private static final int SHEET_COUNT = 11;
 
   private ConfigPackageSampleDataFactory() {}
@@ -27,11 +33,11 @@ public final class ConfigPackageSampleDataFactory {
     List<List<Map<String, Object>>> sheets = emptySheets();
     putCommonFoundation(sheets, scenario);
     switch (scenario) {
-      case "IMPORT" -> putImport(sheets);
-      case "EXPORT" -> putExport(sheets);
-      case "PROCESS" -> putProcess(sheets);
-      case "DISPATCH" -> putDispatch(sheets);
-      case "WORKFLOW" -> putWorkflow(sheets);
+      case SCENARIO_IMPORT -> putImport(sheets);
+      case SCENARIO_EXPORT -> putExport(sheets);
+      case SCENARIO_PROCESS -> putProcess(sheets);
+      case SCENARIO_DISPATCH -> putDispatch(sheets);
+      case SCENARIO_WORKFLOW -> putWorkflow(sheets);
       default -> {
         putImport(sheets);
         putExport(sheets);
@@ -45,12 +51,15 @@ public final class ConfigPackageSampleDataFactory {
 
   public static String normalizeScenario(String rawScenario) {
     if (EmptyChecks.isBlank(rawScenario)) {
-      return "ALL";
+      return SCENARIO_ALL;
     }
     return switch (rawScenario.trim().toUpperCase(Locale.ROOT)) {
-      case "IMPORT", "EXPORT", "PROCESS", "DISPATCH", "WORKFLOW" ->
-        rawScenario.trim().toUpperCase(Locale.ROOT);
-      default -> "ALL";
+      case SCENARIO_IMPORT,
+          SCENARIO_EXPORT,
+          SCENARIO_PROCESS,
+          SCENARIO_DISPATCH,
+          SCENARIO_WORKFLOW -> rawScenario.trim().toUpperCase(Locale.ROOT);
+      default -> SCENARIO_ALL;
     };
   }
 
@@ -65,7 +74,7 @@ public final class ConfigPackageSampleDataFactory {
   private static void putCommonFoundation(List<List<Map<String, Object>>> sheets, String scenario) {
     String queueType =
         switch (scenario) {
-          case "IMPORT", "EXPORT", "DISPATCH" -> scenario;
+          case SCENARIO_IMPORT, SCENARIO_EXPORT, SCENARIO_DISPATCH -> scenario;
           default -> "MIXED";
         };
     sheets
@@ -148,9 +157,9 @@ public final class ConfigPackageSampleDataFactory {
   private static void putImport(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_IMPORT_CUSTOMER";
     String tpl = "TPL_IMPORT_CUSTOMER";
-    sheets.get(5).add(fileTemplate(tpl, "客户导入模板", "IMPORT", null));
-    sheets.get(3).add(job(job, "客户导入", "IMPORT", "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(6).add(pipeline(job, "客户导入流水线", "IMPORT"));
+    sheets.get(5).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null));
+    sheets.get(3).add(job(job, "客户导入", SCENARIO_IMPORT, "{\"templateCode\":\"" + tpl + "\"}"));
+    sheets.get(6).add(pipeline(job, "客户导入流水线", SCENARIO_IMPORT));
     sheets.get(7).add(step(job, "RECEIVE", "接收文件", "RECEIVE", 1, "fileReceive", "{}"));
     sheets.get(7).add(step(job, "PARSE", "解析文件", "PARSE", 2, "csvParser", "{}"));
     sheets
@@ -162,9 +171,9 @@ public final class ConfigPackageSampleDataFactory {
   private static void putExport(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_EXPORT_CUSTOMER";
     String tpl = "TPL_EXPORT_CUSTOMER";
-    sheets.get(5).add(fileTemplate(tpl, "客户导出模板", "EXPORT", "customer_${batchDate}.csv"));
-    sheets.get(3).add(job(job, "客户导出", "EXPORT", "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(6).add(pipeline(job, "客户导出流水线", "EXPORT"));
+    sheets.get(5).add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}.csv"));
+    sheets.get(3).add(job(job, "客户导出", SCENARIO_EXPORT, "{\"templateCode\":\"" + tpl + "\"}"));
+    sheets.get(6).add(pipeline(job, "客户导出流水线", SCENARIO_EXPORT));
     sheets.get(7).add(step(job, "PREPARE", "准备导出", "PREPARE", 1, "exportPrepare", "{}"));
     sheets
         .get(7)
@@ -181,8 +190,8 @@ public final class ConfigPackageSampleDataFactory {
 
   private static void putProcess(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_PROCESS_CUSTOMER";
-    sheets.get(3).add(job(job, "客户汇总加工", "PROCESS", "{}"));
-    sheets.get(6).add(pipeline(job, "客户汇总加工流水线", "PROCESS"));
+    sheets.get(3).add(job(job, "客户汇总加工", SCENARIO_PROCESS, "{}"));
+    sheets.get(6).add(pipeline(job, "客户汇总加工流水线", SCENARIO_PROCESS));
     sheets
         .get(7)
         .add(
@@ -222,15 +231,15 @@ public final class ConfigPackageSampleDataFactory {
             300,
             COL_ENABLED,
             true));
-    sheets.get(3).add(job(job, "客户文件派发", "DISPATCH", "{}"));
-    sheets.get(6).add(pipeline(job, "客户文件派发流水线", "DISPATCH"));
+    sheets.get(3).add(job(job, "客户文件派发", SCENARIO_DISPATCH, "{}"));
+    sheets.get(6).add(pipeline(job, "客户文件派发流水线", SCENARIO_DISPATCH));
     sheets
         .get(7)
         .add(step(
             job,
-            "DISPATCH",
+            SCENARIO_DISPATCH,
             "派发文件",
-            "DISPATCH",
+            SCENARIO_DISPATCH,
             1,
             "sftpDispatch",
             "{\"channelCode\":\"" + CHANNEL + "\"}"));
@@ -328,13 +337,13 @@ public final class ConfigPackageSampleDataFactory {
         ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
         "\\",
         ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
-        "IMPORT".equals(type) ? 1 : 0,
+        SCENARIO_IMPORT.equals(type) ? 1 : 0,
         ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
         "[{\"name\":\"customerNo\",\"targetColumn\":\"customer_no\",\"type\":\"STRING\",\"required\":true}]",
         ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET,
         "{}",
         ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL,
-        "EXPORT".equals(type)
+        SCENARIO_EXPORT.equals(type)
             ? "SELECT customer_no FROM biz.customer_account WHERE tenant_id = :tenantId"
             : "",
         ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA,

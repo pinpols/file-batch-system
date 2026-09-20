@@ -599,16 +599,16 @@ public class ConfigPackageExcelWorkbookWriter {
     if (guide.readOnly()) {
       return "系统导出字段；导入模板通常不用填写。";
     }
-    if (ConfigPackageExcelValidator.COL_TENANT_ID.equals(colName)) {
+    if (COL_TENANT_ID.equals(colName)) {
       return "可留空；系统使用当前登录/选择租户。";
     }
-    if (ConfigPackageExcelValidator.COL_ENABLED.equals(colName)) {
+    if (COL_ENABLED.equals(colName)) {
       return "可留空；通常按启用处理，需禁用时填 FALSE。";
     }
-    if (ConfigPackageExcelValidator.COL_VERSION.equals(colName)) {
+    if (COL_VERSION.equals(colName)) {
       return "可留空；通常按版本 1 处理。";
     }
-    if (ConfigPackageExcelValidator.COL_DESCRIPTION.equals(colName)) {
+    if (COL_DESCRIPTION.equals(colName)) {
       return "可留空；仅作为备注。";
     }
     if (EmptyChecks.isNotNull(guide.description()) && guide.description().contains("留空默认")) {
