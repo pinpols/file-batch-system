@@ -2731,7 +2731,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseCustomTaskTypeList'
+                $ref: '#/components/schemas/CommonResponseMyWorkerList'
   /api/console/my-workers/count:
     get:
       tags: [Workers]
@@ -16816,7 +16816,6 @@ components:
           maxLength: 1024
         eventTypes:
           type: array
-          minItems: 1
           items:
             type: string
             maxLength: 64
@@ -16839,7 +16838,6 @@ components:
           maxLength: 1024
         eventTypes:
           type: array
-          minItems: 1
           items:
             type: string
             maxLength: 64
@@ -16923,12 +16921,14 @@ components:
         firstDeclaredAt: { type: string, format: date-time, nullable: true }
         lastDeclaredAt: { type: string, format: date-time, nullable: true }
     CommonResponseCustomTaskType:
+      type: object
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data: { $ref: '#/components/schemas/CustomTaskTypeResponse' }
     CommonResponseCustomTaskTypeList:
+      type: object
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
@@ -16936,6 +16936,29 @@ components:
             data:
               type: array
               items: { $ref: '#/components/schemas/CustomTaskTypeResponse' }
+    MyWorkerResponse:
+      type: object
+      required: [id, tenantId, workerCode, workerGroup, status, heartbeatAt]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        workerCode: { type: string }
+        workerGroup: { type: string }
+        status: { type: string }
+        heartbeatAt: { type: string, format: date-time }
+        currentLoad: { type: integer, format: int32, nullable: true }
+        maxConcurrent: { type: integer, format: int32, nullable: true }
+        drainStartedAt: { type: string, format: date-time, nullable: true }
+        drainDeadlineAt: { type: string, format: date-time, nullable: true }
+    CommonResponseMyWorkerList:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/MyWorkerResponse' }
 
     # ── 补充枚举 schema（前端类型安全）──────────────────────────
     TriggerStatus:
