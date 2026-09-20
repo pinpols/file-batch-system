@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractObjectStoreRunCompensator;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
 import org.springframework.beans.factory.ObjectProvider;
@@ -18,9 +18,9 @@ import org.springframework.stereotype.Component;
 public class DispatchObjectStoreCompensator extends AbstractObjectStoreRunCompensator {
 
   public DispatchObjectStoreCompensator(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
       ObjectProvider<BatchObjectStore> objectStoreProvider) {
-    super(runtimeRepository, objectStoreProvider);
+    super(fileRecords, objectStoreProvider);
   }
 
   @Override

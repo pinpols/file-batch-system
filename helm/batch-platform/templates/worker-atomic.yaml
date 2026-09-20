@@ -33,8 +33,9 @@ spec:
     metadata:
       labels:
         {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 8 }}
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- include "batch-platform.configChecksumAnnotations" . | nindent 8 }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:

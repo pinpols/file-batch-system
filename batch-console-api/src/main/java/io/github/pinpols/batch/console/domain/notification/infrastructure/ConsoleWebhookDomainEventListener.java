@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
 import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * 将控制台实时领域事件桥接到 webhook 分发器。
@@ -25,7 +28,9 @@ public class ConsoleWebhookDomainEventListener {
   private final WebhookDispatcher webhookDispatcher;
   private final SubscriptionRuleWebhookDispatcher subscriptionRuleWebhookDispatcher;
 
-  @EventListener
+  // 外部通知只能观察到已提交事实。异步执行同时避免查询订阅、落投递记录占用原请求线程。
+  @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
     if (event == null || event.tenantId() == null || event.tenantId().isBlank()) {
       return;

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
 import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,7 +31,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TaskDispatchExecutor {
 
-  private final WorkerRuntimeFacade workerRuntimeFacade;
+  private final TaskExecutionWrapper taskExecutionWrapper;
 
   /** Kafka 只负责把任务送到 worker，实际执行前仍然要回 Orchestrator 做 CLAIM。 */
   public WorkerExecutionResult execute(TaskDispatchMessage message, String workerId) {
@@ -38,11 +39,11 @@ public class TaskDispatchExecutor {
       return null;
     }
     Optional<EffectiveTaskConfig> claimed =
-        workerRuntimeFacade.claim(message.tenantId(), message.taskId(), workerId);
+        taskExecutionWrapper.claim(message.tenantId(), message.taskId(), workerId);
     if (claimed.isEmpty()) {
       return null;
     }
-    return workerRuntimeFacade.execute(buildTask(message, workerId, claimed.get()));
+    return taskExecutionWrapper.execute(buildTask(message, workerId, claimed.get()));
   }
 
   /**
@@ -86,7 +87,7 @@ public class TaskDispatchExecutor {
       return List.of();
     }
     Map<Long, TaskClaimResult> claimedById = new LinkedHashMap<>();
-    for (TaskClaimResult r : workerRuntimeFacade.claimBatch(items)) {
+    for (TaskClaimResult r : taskExecutionWrapper.claimBatch(items)) {
       if (r != null && r.taskId() != null) {
         claimedById.put(r.taskId(), r);
       }
@@ -105,7 +106,7 @@ public class TaskDispatchExecutor {
       putExecutionMdc(message, workerId);
       try {
         WorkerExecutionResult result =
-            workerRuntimeFacade.execute(buildTask(message, workerId, claim.config()));
+            taskExecutionWrapper.execute(buildTask(message, workerId, claim.config()));
         detailedResults.add(BatchItemExecution.completed(messageIndex, message, result));
       } catch (Exception ex) {
         detailedResults.add(BatchItemExecution.failed(messageIndex, message, ex));

@@ -1,13 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -27,13 +26,13 @@ class PrepareDispatchStepTest {
   private FileDispatchRepository fileDispatchRepository;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineRunRepository pipelineRuns;
 
   private PrepareDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new PrepareDispatchStep(new ObjectMapper(), fileDispatchRepository, runtimeRepository);
+    step = new PrepareDispatchStep(new ObjectMapper(), fileDispatchRepository, pipelineRuns);
   }
 
   @Test
@@ -99,7 +98,6 @@ class PrepareDispatchStepTest {
     Map<String, Object> channelRow = Map.of("channel_type", "LOCAL", "channel_code", "CH1");
     when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(fileRecord);
     when(fileDispatchRepository.loadChannel("t1", "CH1")).thenReturn(channelRow);
-    when(runtimeRepository.toLong(any())).thenReturn(100L);
 
     DispatchJobContext context = buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\"}");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 100L);
@@ -110,7 +108,7 @@ class PrepareDispatchStepTest {
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).isEqualTo(10L);
     assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG)).isNotNull();
-    verify(runtimeRepository).bindFileToPipelineInstance(100L, 10L);
+    verify(pipelineRuns).bindFileToPipelineInstance(100L, 10L);
   }
 
   @Test
@@ -119,7 +117,6 @@ class PrepareDispatchStepTest {
     Map<String, Object> channelRow = Map.of("channel_type", "LOCAL");
     when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(fileRecord);
     when(fileDispatchRepository.loadChannel("t1", "CH1")).thenReturn(channelRow);
-    when(runtimeRepository.toLong(any())).thenReturn(100L);
 
     DispatchJobContext context =
         buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\",\"forceRetry\":true}");
@@ -136,7 +133,6 @@ class PrepareDispatchStepTest {
     Map<String, Object> channelRow = Map.of("channel_type", "LOCAL");
     when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(fileRecord);
     when(fileDispatchRepository.loadChannel("t1", "CH1")).thenReturn(channelRow);
-    when(runtimeRepository.toLong(any())).thenReturn(100L);
 
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");

@@ -20,16 +20,16 @@ from tests.handler.conftest import get_attr, make_ctx, require_module
 
 
 def _run(handler: Any, ctx: SdkTaskContext) -> SdkTaskResult:
-    """调 execute() —— 同步(Java 风格)/异步都兼容。"""
+    """调用异步 execute()。"""
     result: Any = handler.execute(ctx)
     if asyncio.iscoroutine(result):
-        result = asyncio.get_event_loop().run_until_complete(result)
+        result = asyncio.run(result)
     assert isinstance(result, SdkTaskResult)
     return result
 
 
 def test_atomic_abstract_calls_do_invoke_exactly_once() -> None:
-    mod = require_module("batch_worker_sdk.handler.abstract_atomic")
+    mod = require_module("batch_worker_sdk.handler")
     base = get_attr(mod, "SdkAbstractAtomicHandler")
 
     calls: list[str] = []
@@ -38,7 +38,7 @@ def test_atomic_abstract_calls_do_invoke_exactly_once() -> None:
         def task_type(self) -> str:
             return "atomic.echo"
 
-        def _do_invoke(self, ctx: SdkTaskContext) -> Any:
+        async def _do_invoke(self, ctx: SdkTaskContext) -> Any:
             calls.append("_do_invoke")
             return {"echoed": True}
 
@@ -49,7 +49,7 @@ def test_atomic_abstract_calls_do_invoke_exactly_once() -> None:
 
 
 def test_import_abstract_hook_order() -> None:
-    mod = require_module("batch_worker_sdk.handler.abstract_import")
+    mod = require_module("batch_worker_sdk.handler")
     base = get_attr(mod, "SdkAbstractImportHandler")
 
     calls: list[str] = []
@@ -58,17 +58,18 @@ def test_import_abstract_hook_order() -> None:
         def task_type(self) -> str:
             return "import.test"
 
-        def _open_source(self, ctx: SdkTaskContext) -> None:
+        async def _open_source(self, ctx: SdkTaskContext) -> None:
             calls.append("_open_source")
 
-        def _read_rows(self, ctx: SdkTaskContext):
+        async def _read_rows(self, ctx: SdkTaskContext):
             calls.append("_read_rows")
-            return iter([{"id": 1}, {"id": 2}, {"id": 3}])
+            for row in ({"id": 1}, {"id": 2}, {"id": 3}):
+                yield row
 
-        def _load_batch(self, ctx: SdkTaskContext, batch: list[Any]) -> None:
+        async def _load_batch(self, ctx: SdkTaskContext, batch: list[Any]) -> None:
             calls.append(f"_load_batch(n={len(batch)})")
 
-        def _close_source(self, ctx: SdkTaskContext) -> None:
+        async def _close_source(self, ctx: SdkTaskContext) -> None:
             calls.append("_close_source")
 
     result = _run(_Import(), make_ctx())
@@ -81,7 +82,7 @@ def test_import_abstract_hook_order() -> None:
 
 
 def test_export_abstract_hook_order() -> None:
-    mod = require_module("batch_worker_sdk.handler.abstract_export")
+    mod = require_module("batch_worker_sdk.handler")
     base = get_attr(mod, "SdkAbstractExportHandler")
 
     calls: list[str] = []
@@ -91,18 +92,19 @@ def test_export_abstract_hook_order() -> None:
         def task_type(self) -> str:
             return "export.test"
 
-        def _open_destination(self, ctx: SdkTaskContext) -> None:
+        async def _open_destination(self, ctx: SdkTaskContext) -> None:
             calls.append("_open_destination")
 
-        def _query_rows(self, ctx: SdkTaskContext):
+        async def _query_rows(self, ctx: SdkTaskContext):
             calls.append("_query_rows")
-            return iter([{"id": 1}, {"id": 2}])
+            for row in ({"id": 1}, {"id": 2}):
+                yield row
 
-        def _write_row(self, ctx: SdkTaskContext, row: Any) -> None:
+        async def _write_row(self, ctx: SdkTaskContext, row: Any) -> None:
             calls.append("_write_row")
             rows_seen.append(row)
 
-        def _close_destination(self, ctx: SdkTaskContext) -> None:
+        async def _close_destination(self, ctx: SdkTaskContext) -> None:
             calls.append("_close_destination")
 
     result = _run(_Export(), make_ctx())
@@ -115,7 +117,7 @@ def test_export_abstract_hook_order() -> None:
 
 
 def test_process_abstract_hook_order() -> None:
-    mod = require_module("batch_worker_sdk.handler.abstract_process")
+    mod = require_module("batch_worker_sdk.handler")
     base = get_attr(mod, "SdkAbstractProcessHandler")
 
     calls: list[str] = []
@@ -124,28 +126,34 @@ def test_process_abstract_hook_order() -> None:
         def task_type(self) -> str:
             return "process.test"
 
-        def _open_input(self, ctx: SdkTaskContext):
+        async def _open_input(self, ctx: SdkTaskContext):
             calls.append("_open_input")
-            return iter([{"v": 1}, {"v": 2}])
+            for row in ({"v": 1}, {"v": 2}):
+                yield row
 
-        def _transform(self, ctx: SdkTaskContext, row: Any) -> Any:
+        async def _transform(self, ctx: SdkTaskContext, row: Any) -> Any:
             calls.append("_transform")
             return {"v": row["v"] * 10}
 
-        def _write_output(self, ctx: SdkTaskContext, batch: list[Any]) -> None:
+        async def _write_output(self, ctx: SdkTaskContext, output: Any) -> None:
             calls.append("_write_output")
 
     result = _run(_Process(), make_ctx())
     assert calls[0] == "_open_input"
     assert calls.count("_transform") == 2
     assert "_write_output" in calls
-    # _write_output 必须晚于所有 _transform。
-    assert calls.index("_write_output") > max(i for i, c in enumerate(calls) if c == "_transform")
+    assert calls == [
+        "_open_input",
+        "_transform",
+        "_write_output",
+        "_transform",
+        "_write_output",
+    ]
     assert isinstance(result, SdkTaskResult)
 
 
 def test_dispatch_abstract_hook_order() -> None:
-    mod = require_module("batch_worker_sdk.handler.abstract_dispatch")
+    mod = require_module("batch_worker_sdk.handler")
     base = get_attr(mod, "SdkAbstractDispatchHandler")
 
     calls: list[str] = []
@@ -154,11 +162,12 @@ def test_dispatch_abstract_hook_order() -> None:
         def task_type(self) -> str:
             return "dispatch.test"
 
-        def _resolve_targets(self, ctx: SdkTaskContext) -> list[str]:
+        async def _resolve_targets(self, ctx: SdkTaskContext):
             calls.append("_resolve_targets")
-            return ["target-a", "target-b", "target-c"]
+            for target in ("target-a", "target-b", "target-c"):
+                yield target
 
-        def _dispatch_to_target(self, ctx: SdkTaskContext, target: str) -> Any:
+        async def _dispatch_to_target(self, ctx: SdkTaskContext, target: str) -> Any:
             calls.append(f"_dispatch_to_target({target})")
             return {"target": target, "ok": True}
 
@@ -176,14 +185,14 @@ def test_dispatch_abstract_hook_order() -> None:
 def test_base_template_catches_exception_and_returns_failure() -> None:
     """SdkAbstractTaskHandler.execute() 必须捕获 hook 异常并转成
     SdkTaskResult.fail(Java ADR-036 契约)。"""
-    mod = require_module("batch_worker_sdk.handler.abstract_atomic")
+    mod = require_module("batch_worker_sdk.handler")
     base = get_attr(mod, "SdkAbstractAtomicHandler")
 
     class _Boom(base):  # type: ignore[misc, valid-type]
         def task_type(self) -> str:
             return "atomic.boom"
 
-        def _do_invoke(self, ctx: SdkTaskContext) -> Any:
+        async def _do_invoke(self, ctx: SdkTaskContext) -> Any:
             raise RuntimeError("kaboom")
 
     result = _run(_Boom(), make_ctx())
@@ -195,25 +204,18 @@ def test_base_template_catches_exception_and_returns_failure() -> None:
     )
 
 
-def test_typed_dispatch_handler_protocol_attached() -> None:
-    """4 个 typed 基类也必须满足 SdkTypedTaskHandler Protocol。"""
-    typed_mod = require_module("batch_worker_sdk.handler.typed.typed_task_handler")
-    typed_protocol = get_attr(typed_mod, "SdkTypedTaskHandler")
+def test_typed_handlers_share_async_template_base() -> None:
+    """4 个 typed 基类必须复用统一的异步模板方法。"""
+    handler_mod = require_module("batch_worker_sdk.handler")
+    template_base = get_attr(handler_mod, "SdkAbstractTaskHandler")
 
     typed_bases = [
-        ("batch_worker_sdk.handler.typed.import_handler", "SdkAbstractTypedImportHandler"),
-        ("batch_worker_sdk.handler.typed.export_handler", "SdkAbstractTypedExportHandler"),
-        ("batch_worker_sdk.handler.typed.process_handler", "SdkAbstractTypedProcessHandler"),
-        ("batch_worker_sdk.handler.typed.dispatch_handler", "SdkAbstractTypedDispatchHandler"),
+        ("batch_worker_sdk.handler.typed", "SdkAbstractTypedImportHandler"),
+        ("batch_worker_sdk.handler.typed", "SdkAbstractTypedExportHandler"),
+        ("batch_worker_sdk.handler.typed", "SdkAbstractTypedProcessHandler"),
+        ("batch_worker_sdk.handler.typed", "SdkAbstractTypedDispatchHandler"),
     ]
     for dotted, cls_name in typed_bases:
         mod = require_module(dotted)
         cls = get_attr(mod, cls_name)
-        # 走一遍 MRO:typed protocol 要么作为基类,要么通过
-        # @runtime_checkable 结构化检查存在。
-        is_subclass_or_structural = (
-            issubclass(cls, typed_protocol) if isinstance(typed_protocol, type) else True
-        )
-        assert is_subclass_or_structural, (
-            f"{cls_name} does not subclass / satisfy {typed_protocol!r}"
-        )
+        assert issubclass(cls, template_base), f"{cls_name} does not reuse the async template"

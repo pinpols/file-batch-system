@@ -11,13 +11,6 @@ public class ConfigReleaseApprovalSubmitRequest {
   @Size(max = 64)
   private String tenantId;
 
-  @NotBlank
-  @Size(max = 64)
-  private String operatorId;
-
   @Size(max = 512)
   private String reason;
-
-  @Size(max = 64)
-  private String expiredAt;
 }

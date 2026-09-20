@@ -64,8 +64,8 @@ public class WeComNotificationSender implements NotificationSender {
   }
 
   @Override
-  public boolean supports(String channelType) {
-    return "WECOM".equalsIgnoreCase(channelType);
+  public String channelType() {
+    return "WECOM";
   }
 
   @Override

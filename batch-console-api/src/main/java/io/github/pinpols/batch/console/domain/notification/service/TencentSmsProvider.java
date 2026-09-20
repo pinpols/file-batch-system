@@ -79,8 +79,8 @@ public class TencentSmsProvider implements SmsProvider {
   }
 
   @Override
-  public boolean supports(String provider) {
-    return "tencent".equalsIgnoreCase(provider);
+  public String providerCode() {
+    return "tencent";
   }
 
   @Override

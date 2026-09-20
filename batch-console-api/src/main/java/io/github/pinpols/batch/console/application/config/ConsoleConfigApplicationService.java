@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
 import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
 import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.web.response.config.ConfigGovernanceItemResponse;
 import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
@@ -17,11 +18,9 @@ public interface ConsoleConfigApplicationService {
 
   List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request);
 
+  List<ConfigGovernanceItemResponse> configGovernanceCatalog();
+
   Long createConfigRelease(ConfigReleaseUpsertRequest request);
-
-  String publishConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
-
-  String grayConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
 
   String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
 

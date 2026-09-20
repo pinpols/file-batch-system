@@ -16,7 +16,7 @@ import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -48,7 +48,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class LoadStepTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
   private ImportLoadPlugin plugin;
@@ -122,7 +122,6 @@ class LoadStepTest {
     Path parsed = writeNdjson(List.of(row("C001")));
 
     ImportJobContext ctx = streamingContext(validated, parsed);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
     when(plugin.loadChunk(any(), any())).thenAnswer(inv -> ((List<?>) inv.getArgument(1)).size());
 
     ImportStageResult result = loadStep.execute(ctx);
@@ -171,7 +170,6 @@ class LoadStepTest {
     tempPaths.add(validated);
     ImportJobContext ctx = streamingContext(validated, null);
     ctx.getAttributes().put("skippedCount", 5L);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
 
     ImportStageResult result = loadStep.execute(ctx);
 
@@ -208,7 +206,6 @@ class LoadStepTest {
     Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
     ImportJobContext ctx = streamingContext(validated, null);
     ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
 
     ImportStageResult result = loadStep.execute(ctx);
 
@@ -222,7 +219,6 @@ class LoadStepTest {
   void shouldDryRun_returnZero_whenValidatedPathMissing() {
     ImportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
 
     ImportStageResult result = loadStep.execute(ctx);
 
@@ -246,7 +242,6 @@ class LoadStepTest {
     ctx.getAttributes()
         .put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("load_target_ref", "custom_plugin"));
 
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
     when(custom.loadChunk(any(), any())).thenReturn(1);
 
     ImportStageResult result = loadStep.execute(ctx);
@@ -265,7 +260,6 @@ class LoadStepTest {
     when(payload.bizType()).thenReturn("CUST");
     when(payload.templateCode()).thenReturn("T1");
     ctx.getAttributes().put("importPayload", payload);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
     when(plugin.loadChunk(any(), any())).thenReturn(1);
 
     loadStep.execute(ctx);
@@ -283,7 +277,6 @@ class LoadStepTest {
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);
     ctx.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, Map.of("file_name", "src.csv"));
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
     when(plugin.loadChunk(any(), any())).thenReturn(1);
 
     loadStep.execute(ctx);

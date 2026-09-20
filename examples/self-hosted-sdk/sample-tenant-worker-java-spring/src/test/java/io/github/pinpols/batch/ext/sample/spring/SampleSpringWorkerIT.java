@@ -31,8 +31,8 @@ import org.springframework.test.context.DynamicPropertySource;
       "batch.worker-sdk.tenant-id=tenant-a",
       "batch.worker-sdk.worker-code=spring-worker-1",
       "batch.worker-sdk.kafka-group-id=spring-worker-1",
-      "batch.worker-sdk.heartbeat-interval=2s",
-      "batch.worker-sdk.lease-renew-interval=2s",
+      "batch.worker-sdk.heartbeat-interval=20s",
+      "batch.worker-sdk.lease-renew-interval=5s",
       "batch.worker-sdk.kafka-poll-interval=100ms",
       "batch.worker-sdk.max-concurrent-tasks=2"
     })

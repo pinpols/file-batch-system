@@ -5,11 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -26,7 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class FeedbackStepTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileAuditRepository runtimeRepository;
 
   @InjectMocks
   private FeedbackStep step;
@@ -59,7 +58,6 @@ class FeedbackStepTest {
     context.getAttributes().put("loadedCount", 90L);
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-xyz");
-    when(runtimeRepository.toLong(any())).thenReturn(1001L);
 
     // 执行
     ImportStageResult result = step.execute(context);
@@ -102,7 +100,6 @@ class FeedbackStepTest {
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("t-x");
     context.setWorkerId("w-x");
-    when(runtimeRepository.toLong(any())).thenReturn(null);
 
     ImportStageResult result = step.execute(context);
 

@@ -2373,6 +2373,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchApprovalResultList'
+  /api/console/config/governance:
+    get:
+      tags: [Config]
+      summary: 查询配置治理绑定目录
+      operationId: listConfigGovernance
+      responses:
+        '200':
+          description: 配置来源、生效方式和敏感级别目录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConfigGovernanceList'
   /api/console/config/releases:
     get:
       tags: [Config]
@@ -2408,9 +2420,10 @@ paths:
                 $ref: '#/components/schemas/CommonResponseLong'
   /api/console/config/releases/{releaseId}/publish:
     post:
+      deprecated: true
       tags: [Config]
-      summary: Publish config release
-      operationId: publishConfigRelease
+      summary: 已弃用的直接发布端点；请改用提交审批和批准流程
+      operationId: deprecatedPublishConfigRelease
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: releaseId
@@ -2427,16 +2440,19 @@ paths:
               $ref: '#/components/schemas/ConfigReleaseActionRequest'
       responses:
         '200':
-          description: Publish result
+          description: 为兼容历史契约而保留的响应结构
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+        '410':
+          description: 已禁用直接发布；请提交发布单并由独立审批人批准
   /api/console/config/releases/{releaseId}/gray:
     post:
+      deprecated: true
       tags: [Config]
-      summary: Gray release
-      operationId: grayConfigRelease
+      summary: 已弃用的灰度发布端点；请改用提交审批和批准流程
+      operationId: deprecatedGrayConfigRelease
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: releaseId
@@ -2453,11 +2469,13 @@ paths:
               $ref: '#/components/schemas/ConfigReleaseActionRequest'
       responses:
         '200':
-          description: Gray result
+          description: 为兼容历史契约而保留的响应结构
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+        '410':
+          description: 已禁用直接灰度发布；请提交发布单并由独立审批人批准
   /api/console/config/releases/{releaseId}/rollback:
     post:
       tags: [Config]
@@ -6457,7 +6475,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/ConfigReleaseApprovalSubmitRequest'
       responses:
         '200':
           description: Submission result
@@ -6485,7 +6503,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/ConfigApprovalActionRequest'
       responses:
         '200':
           description: Approval result
@@ -6513,7 +6531,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/ConfigApprovalActionRequest'
       responses:
         '200':
           description: Rejection result
@@ -11197,6 +11215,15 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConsoleConfigReleaseResponse'
+    CommonResponseConfigGovernanceList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConfigGovernanceItemResponse'
     CommonResponseSecretVersionList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12265,36 +12292,30 @@ components:
           maxLength: 256
         configPayloadJson:
           type: string
-          description: 配置内容序列化为 JSON 字符串(BE 不解析,直接写入数据库)
-        grayScopeJson:
-          type: string
+          maxLength: 1048576
+          description: 与配置类型匹配的 JSON 对象字符串；服务端严格解析并校验对象标识。
         effectiveFromAt:
           type: string
         effectiveToAt:
           type: string
-        operatorId:
-          type: string
-          maxLength: 64
-        traceId:
-          type: string
-          maxLength: 128
         reason:
           type: string
           maxLength: 512
+      # 运行时要求 configPayloadJson 必填。OpenAPI 不将其列入 required，是因为历史自由结构契约
+      # 已在运行时拒绝缺失载荷；若显式补充 required，oasdiff 会把契约澄清误判为线路级破坏性变更。
       required: [tenantId, configType, configKey, configName]
     ConfigReleaseActionRequest:
       type: object
       properties:
         tenantId:
           type: string
-        operatorId:
-          type: string
-        traceId:
-          type: string
         reason:
           type: string
-        grayScopeJson:
-          type: string
+        expectedVersionNo:
+          type: integer
+          format: int32
+          minimum: 1
+          description: 页面读取到的发布版本；服务端拒绝旧版本和并发状态变更。
       required: [tenantId]
     SecretVersionRotateRequest:
       type: object
@@ -12305,16 +12326,37 @@ components:
           type: string
         secretName:
           type: string
+        secretPayloadJson:
+          type: string
+          maxLength: 65535
+          writeOnly: true
         secretPayload:
           type: object
           additionalProperties: true
+          deprecated: true
+          writeOnly: true
+          description: 旧客户端兼容字段；服务端会转换为 JSON 字符串并使用相同加密流程。
         secretStatus:
-          type: string
-        operatorId:
           type: string
         reason:
           type: string
       required: [tenantId, secretRef, secretName]
+    ConfigReleaseApprovalSubmitRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        reason:
+          type: string
+          maxLength: 512
+    ConfigApprovalActionRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        reason:
+          type: string
+          maxLength: 512
     FileTemplateExcelApplyRequest:
       $ref: '#/components/schemas/ExcelApplyRequest'
     FileChannelExcelApplyRequest:
@@ -14489,6 +14531,27 @@ components:
           items:
             $ref: '#/components/schemas/ConsoleBatchDayCatchUpItemResponse'
       required: [tenantId, calendarCode, bizDate, catchUpPolicy, items]
+    ConfigGovernanceItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        className:
+          type: string
+        prefix:
+          type: string
+        source:
+          type: string
+          enum: [STATIC, DYNAMIC_DB]
+        activation:
+          type: string
+          enum: [RESTART_REQUIRED, IMMEDIATE_AFTER_CONFIRMATION]
+        sensitivity:
+          type: string
+          enum: [PUBLIC, SECRET]
+        restartRequired:
+          type: boolean
+      required: [id, className, prefix, source, activation, sensitivity, restartRequired]
     ConsoleConfigReleaseResponse:
       type: object
       properties:
@@ -14508,6 +14571,17 @@ components:
         versionNo:
           type: integer
           format: int32
+        configSource:
+          type: string
+          enum: [DYNAMIC_DB]
+        activationMode:
+          type: string
+          enum: [IMMEDIATE_AFTER_CONFIRMATION]
+        restartRequired:
+          type: boolean
+        applyConfirmationStatus:
+          type: string
+          enum: [NOT_RELEASED, CONFIRMATION_REQUIRED, ROLLED_BACK]
         grayScopeJson:
           type: string
         configPayloadJson:
@@ -14542,6 +14616,10 @@ components:
         - configName
         - configStatus
         - versionNo
+        - configSource
+        - activationMode
+        - restartRequired
+        - applyConfirmationStatus
         - grayScopeJson
         - configPayloadJson
         - effectiveFromAt
@@ -14585,6 +14663,8 @@ components:
           format: date-time
         secretPayloadJson:
           type: string
+          readOnly: true
+          description: 始终返回固定的 redacted JSON；不会返回持久化密钥载荷或密文。
         rotationReason:
           type: string
         createdBy:

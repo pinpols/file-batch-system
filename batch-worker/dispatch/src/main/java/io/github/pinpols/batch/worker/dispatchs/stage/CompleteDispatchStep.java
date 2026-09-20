@@ -5,7 +5,9 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -21,10 +23,13 @@ public class CompleteDispatchStep implements DispatchStageStep {
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_RECEIPT_CODE = "receiptCode";
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformFileAuditRepository fileAudits;
 
-  public CompleteDispatchStep(PlatformFileRuntimeRepository runtimeRepository) {
-    this.runtimeRepository = runtimeRepository;
+  public CompleteDispatchStep(
+      PlatformFileRecordRepository fileRecords, PlatformFileAuditRepository fileAudits) {
+    this.fileRecords = fileRecords;
+    this.fileAudits = fileAudits;
   }
 
   @Override
@@ -50,7 +55,7 @@ public class CompleteDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     String receiptStatus = String.valueOf(attrs.getOrDefault("receiptStatus", "NONE"));
     if ("SUCCESS".equalsIgnoreCase(receiptStatus)) {
       Map<String, Object> fileMetadata = new LinkedHashMap<>();
@@ -58,7 +63,7 @@ public class CompleteDispatchStep implements DispatchStageStep {
       if (attrs.get(KEY_RECEIPT_CODE) != null) {
         fileMetadata.put(KEY_RECEIPT_CODE, attrs.get(KEY_RECEIPT_CODE));
       }
-      runtimeRepository.updateFileStatus(fileId, "DISPATCHED", fileMetadata);
+      fileRecords.updateFileStatus(fileId, "DISPATCHED", fileMetadata);
     }
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put("channelCode", dispatchPayload.channelCode());
@@ -66,7 +71,7 @@ public class CompleteDispatchStep implements DispatchStageStep {
     detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
     detailSummary.put(KEY_RECEIPT_CODE, attrs.get(KEY_RECEIPT_CODE));
     detailSummary.put("receiptStatus", receiptStatus);
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType("DISPATCH_COMPLETE")

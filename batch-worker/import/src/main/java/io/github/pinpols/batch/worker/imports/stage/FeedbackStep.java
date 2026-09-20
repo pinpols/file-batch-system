@@ -3,7 +3,8 @@ package io.github.pinpols.batch.worker.imports.stage;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -20,10 +21,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class FeedbackStep implements ImportStageStep {
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileAuditRepository fileAudits;
 
-  public FeedbackStep(PlatformFileRuntimeRepository runtimeRepository) {
-    this.runtimeRepository = runtimeRepository;
+  public FeedbackStep(PlatformFileAuditRepository fileAudits) {
+    this.fileAudits = fileAudits;
   }
 
   @Override
@@ -42,7 +43,7 @@ public class FeedbackStep implements ImportStageStep {
       return ImportStageResult.success(stage());
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put(
         PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
@@ -54,7 +55,7 @@ public class FeedbackStep implements ImportStageStep {
         PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
         attrs.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
     detailSummary.put("pipelineInstanceId", attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType("IMPORT_FEEDBACK")

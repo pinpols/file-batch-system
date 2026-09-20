@@ -14,7 +14,7 @@ import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -50,7 +50,7 @@ class LoadStepCheckpointTest {
   private static final long PIPELINE_INSTANCE_ID = 7001L;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
   private ImportLoadPlugin plugin;
@@ -105,7 +105,6 @@ class LoadStepCheckpointTest {
     Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
     ImportJobContext ctx = streamingContext(validated);
     ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
     when(plugin.loadChunk(any(), any())).thenReturn(1);
 
     ImportStageResult result = loadStep.execute(ctx);
@@ -125,7 +124,6 @@ class LoadStepCheckpointTest {
     ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
         .thenReturn(ProcessingPosition.completed(2L));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     ImportStageResult result = loadStep.execute(ctx);
 
@@ -147,7 +145,6 @@ class LoadStepCheckpointTest {
     when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
         .thenReturn(ProcessingPosition.empty());
     when(plugin.loadChunk(any(), any())).thenReturn(2).thenReturn(1);
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     ImportStageResult result = loadStep.execute(ctx);
 
@@ -180,7 +177,6 @@ class LoadStepCheckpointTest {
     when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
         .thenReturn(new ProcessingPosition("2", 2L, false));
     when(plugin.loadChunk(any(), any())).thenReturn(2);
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     ImportStageResult result = loadStep.execute(ctx);
 
@@ -207,7 +203,6 @@ class LoadStepCheckpointTest {
     ImportJobContext ctx = streamingContext(validated);
     ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
     ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
     when(plugin.loadChunk(any(), any())).thenReturn(2);
 
     ImportStageResult result = loadStep.execute(ctx);
@@ -227,7 +222,6 @@ class LoadStepCheckpointTest {
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);
     // 不放 PIPELINE_INSTANCE_ID
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
     when(plugin.loadChunk(any(), any())).thenReturn(1);
 
     ImportStageResult result = loadStep.execute(ctx);

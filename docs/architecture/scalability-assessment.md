@@ -42,7 +42,7 @@
 | **`job_partition` 单表** | 没分区表（PG partitioning），全靠普通索引 | 单表 5000 万行查询开始抖（取决于 WHERE 复杂度） | `WaitingPartitionDispatchScheduler` 扫表变慢 → 调度滞后 |
 | **`outbox_event` 无清理** | 没看到自动归档/删除 PUBLISHED 事件的机制 | 1 亿行后即使有索引也开始慢 | poller select latency 急剧膨胀 → publish 滞后 → 整链路变慢 |
 | **`DefaultWorkerSelector` 实时查 DB** | 每次派发都 `SELECT worker_registry WHERE status='ONLINE'` | worker 数 < 几百 OK | 万级 worker 时该 query 成热点 |
-| **`OrchestratorConfigCacheService` 无主动失效** | 改 `default_params` 必须重启 orchestrator 才生效（本周踩过） | 配置变更频率低就行 | 多实例集群想做"灰度更新一个 job"基本不可能 |
+| **配置缓存主动失效已补齐** | Console 写配置后在 `afterCommit` 删除共享 Redis 并发布 `batch:config:invalidation`，Orchestrator 多实例订阅后清本地近缓存；另有 revision reconciliation 兜底 | 配置变更不再依赖重启；仍需看 `applied_revision` 与 `published_revision` 指标确认多实例追平 | 后续若做通用配置中心，再补实例 ACK / 快照闭环 |
 | **历史数据治理是手工脚本** | `cleanup-historical-failures.sql` 是 `psql -f` 跑 | 单实例可控 | 海量场景必须自动化（带 watermark 的归档作业），否则一年后整库变废 |
 | **Worker 内重试不跨 worker** | DISPATCH retry 是同 partition 同 worker 重新走 | 单点失败容忍度有限 | worker 节点本身慢/坏时，retry 全在同节点没用 |
 | **batch_business 直连查询** | EXPORT worker 直接 `SELECT FROM biz.*`，无 read replica 路由 | 几千 QPS OK | 海量 export 时业务主库被查崩 |

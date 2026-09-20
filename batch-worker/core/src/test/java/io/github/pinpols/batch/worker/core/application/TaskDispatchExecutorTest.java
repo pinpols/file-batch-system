@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,24 +28,24 @@ import org.mockito.ArgumentCaptor;
  */
 class TaskDispatchExecutorTest {
 
-  private WorkerRuntimeFacade workerRuntimeFacade;
+  private TaskExecutionWrapper taskExecutionWrapper;
   private TaskDispatchExecutor executor;
 
   @BeforeEach
   void setUp() {
-    workerRuntimeFacade = mock(WorkerRuntimeFacade.class);
-    executor = new TaskDispatchExecutor(workerRuntimeFacade);
+    taskExecutionWrapper = mock(TaskExecutionWrapper.class);
+    executor = new TaskDispatchExecutor(taskExecutionWrapper);
   }
 
   @Test
   void shouldReturnNullWhenClaimDenied() {
     TaskDispatchMessage message = sampleMessage();
-    when(workerRuntimeFacade.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
+    when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
 
     WorkerExecutionResult result = executor.execute(message, "w1");
 
     assertThat(result).isNull();
-    verify(workerRuntimeFacade, never()).execute(any());
+    verify(taskExecutionWrapper, never()).execute(any());
   }
 
   @Test
@@ -83,13 +84,13 @@ class TaskDispatchExecutorTest {
         null,
         null,
         "inv-fresh");
-    when(workerRuntimeFacade.claim("t1", 42L, "w1")).thenReturn(Optional.of(fresh));
-    when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
+    when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.of(fresh));
+    when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 
     executor.execute(message, "w1");
 
     ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
-    verify(workerRuntimeFacade).execute(captor.capture());
+    verify(taskExecutionWrapper).execute(captor.capture());
     PulledTask task = captor.getValue();
     // task key 从 message 读(自带,无需 claim 重复)
     assertThat(task.getTaskId()).isEqualTo("42");
@@ -120,7 +121,7 @@ class TaskDispatchExecutorTest {
     assertThat(executor.execute(null, "w1")).isNull();
     assertThat(executor.execute(sampleMessage(), null)).isNull();
     assertThat(executor.execute(sampleMessage(), "")).isNull();
-    verify(workerRuntimeFacade, never()).claim(any(), any(), any());
+    verify(taskExecutionWrapper, never()).claim(any(), any(), any());
   }
 
   @Test
@@ -128,17 +129,17 @@ class TaskDispatchExecutorTest {
     TaskDispatchMessage m1 = messageWithTaskId(1L);
     TaskDispatchMessage m2 = messageWithTaskId(2L);
     // claim-batch:taskId 1 领到(含 config),taskId 2 没领到
-    when(workerRuntimeFacade.claimBatch(any()))
+    when(taskExecutionWrapper.claimBatch(any()))
         .thenReturn(List.of(
             new TaskClaimResult(1L, true, freshCfg(1L)), new TaskClaimResult(2L, false, null)));
-    when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("1", true, ""));
+    when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("1", true, ""));
 
     List<WorkerExecutionResult> results = executor.executeBatch(List.of(m1, m2), "w1");
 
     assertThat(results).hasSize(1); // 只执行领到的 taskId 1
-    verify(workerRuntimeFacade).claimBatch(any()); // 一次 claim-batch
+    verify(taskExecutionWrapper).claimBatch(any()); // 一次 claim-batch
     ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
-    verify(workerRuntimeFacade).execute(captor.capture());
+    verify(taskExecutionWrapper).execute(captor.capture());
     assertThat(captor.getValue().getTaskId()).isEqualTo("1");
   }
 
@@ -147,7 +148,7 @@ class TaskDispatchExecutorTest {
     assertThat(executor.executeBatch(List.of(), "w1")).isEmpty();
     assertThat(executor.executeBatch(null, "w1")).isEmpty();
     assertThat(executor.executeBatch(List.of(sampleMessage()), "")).isEmpty();
-    verify(workerRuntimeFacade, never()).claimBatch(any());
+    verify(taskExecutionWrapper, never()).claimBatch(any());
   }
 
   private static EffectiveTaskConfig freshCfg(Long taskId) {

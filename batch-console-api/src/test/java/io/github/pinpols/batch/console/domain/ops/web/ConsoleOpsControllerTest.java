@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -24,8 +24,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 class ConsoleOpsControllerTest {
 
-  private final ConsoleOpsApplicationService opsApplicationService =
-      mock(ConsoleOpsApplicationService.class);
+  private final ConsoleOpsSummaryPort opsApplicationService = mock(ConsoleOpsSummaryPort.class);
   private final ConsoleOutboxOpsApplicationService outboxOpsService =
       mock(ConsoleOutboxOpsApplicationService.class);
   private final ConsoleKafkaLagQueryService kafkaLagQueryService =

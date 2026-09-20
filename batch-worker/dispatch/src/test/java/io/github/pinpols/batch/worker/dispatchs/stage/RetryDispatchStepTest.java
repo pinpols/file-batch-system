@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -30,14 +29,11 @@ class RetryDispatchStepTest {
   @Mock
   private DispatchChannelGateway dispatchChannelGateway;
 
-  @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
-
   private RetryDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new RetryDispatchStep(fileDispatchRepository, dispatchChannelGateway, runtimeRepository);
+    step = new RetryDispatchStep(fileDispatchRepository, dispatchChannelGateway);
   }
 
   @Test
@@ -70,7 +66,6 @@ class RetryDispatchStepTest {
 
   @Test
   void execute_succeedsAndRoutesToAckWhenRetrySucceeds() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(true, "ext-retry", "R-retry", true, false, "ok", null));
     when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
@@ -88,7 +83,6 @@ class RetryDispatchStepTest {
 
   @Test
   void execute_failsAndRoutesToCompensateWhenRetryFails() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(false, null, null, false, false, "network error", null));
     when(fileDispatchRepository.markFailed(any(), any(), any(), any(), any())).thenReturn(1);
@@ -105,7 +99,6 @@ class RetryDispatchStepTest {
 
   @Test
   void execute_failsWhenMarkSentAfterRetryReturnsZero() {
-    when(runtimeRepository.toLong(any())).thenReturn(10L);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(true, "ext-retry", "R-retry", true, false, "ok", null));
     when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))

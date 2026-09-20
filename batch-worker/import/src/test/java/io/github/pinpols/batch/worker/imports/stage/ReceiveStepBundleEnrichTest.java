@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.LinkedHashMap;
@@ -23,7 +25,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ReceiveStepBundleEnrichTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   @Mock
   private BatchSecurityProperties batchSecurityProperties;
@@ -34,6 +42,8 @@ class ReceiveStepBundleEnrichTest {
   void setUp() {
     receiveStep = new ReceiveStep(
         runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         batchSecurityProperties,
         new ObjectMapper(),
         new WorkerImportPayloadProperties());

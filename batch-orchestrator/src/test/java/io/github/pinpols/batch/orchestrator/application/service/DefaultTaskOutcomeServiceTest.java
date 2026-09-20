@@ -33,7 +33,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -86,7 +86,7 @@ class DefaultTaskOutcomeServiceTest {
   RetryGovernanceService retryGovernanceService;
 
   @Mock
-  StateMachine<Object> stateMachine;
+  LifecycleEventMapper<Object> lifecycleEventMapper;
 
   @Mock
   WorkflowDagService workflowDagService;
@@ -118,7 +118,7 @@ class DefaultTaskOutcomeServiceTest {
         workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
     DefaultTaskOutcomeCollaborators collaborators = new DefaultTaskOutcomeCollaborators(
         retryGovernanceService,
-        stateMachine,
+        lifecycleEventMapper,
         workflowDagService,
         workflowNodeDispatchServiceProvider,
         workflowTerminalOutboxService,
@@ -242,7 +242,7 @@ class DefaultTaskOutcomeServiceTest {
     when(jobTaskMapper.finishTask(any())).thenReturn(task);
     when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any()))
         .thenReturn(progressedInstance);
-    when(stateMachine.transition(any(), anyString()))
+    when(lifecycleEventMapper.map(any(), anyString()))
         .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
 
@@ -314,7 +314,7 @@ class DefaultTaskOutcomeServiceTest {
         .thenReturn(progressedInstance);
     when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
         .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L));
-    when(stateMachine.transition(any(), anyString()))
+    when(lifecycleEventMapper.map(any(), anyString()))
         .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
 

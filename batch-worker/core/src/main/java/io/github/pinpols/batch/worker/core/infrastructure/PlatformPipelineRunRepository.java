@@ -23,15 +23,17 @@ import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Repository;
 
 /** Pipeline 实例与步骤运行记录的数据访问协作者。 */
+@Repository
 @RequiredArgsConstructor
 @Slf4j
-final class PlatformPipelineRunRepository {
+public class PlatformPipelineRunRepository {
 
   private final PlatformFileRuntimeMapper mapper;
 
-  Long createPipelineInstance(PlatformFileRuntimeRepository.CreatePipelineInstanceParam param) {
+  public Long createPipelineInstance(CreatePipelineInstanceParam param) {
     if (!Texts.hasText(param.tenantId()) || param.pipelineDefinitionId() == null) {
       return null;
     }
@@ -58,14 +60,15 @@ final class PlatformPipelineRunRepository {
     return toLong(values.get(ID));
   }
 
-  void bindFileToPipelineInstance(Long pipelineInstanceId, Long fileId) {
+  public void bindFileToPipelineInstance(Long pipelineInstanceId, Long fileId) {
     if (pipelineInstanceId != null && fileId != null) {
       mapper.bindFileToPipelineInstance(
           params(PIPELINE_INSTANCE_ID, pipelineInstanceId, FILE_ID, fileId));
     }
   }
 
-  void updatePipelineStage(Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
+  public void updatePipelineStage(
+      Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId != null) {
       mapper.updatePipelineStage(params(
           PIPELINE_INSTANCE_ID,
@@ -77,7 +80,8 @@ final class PlatformPipelineRunRepository {
     }
   }
 
-  void markPipelineSuccess(Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
+  public void markPipelineSuccess(
+      Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId != null) {
       mapper.markPipelineSuccess(params(
           PIPELINE_INSTANCE_ID,
@@ -91,7 +95,7 @@ final class PlatformPipelineRunRepository {
     }
   }
 
-  void markPipelineCompensating(Long pipelineInstanceId) {
+  public void markPipelineCompensating(Long pipelineInstanceId) {
     if (pipelineInstanceId != null) {
       mapper.markPipelineCompensating(params(
           PIPELINE_INSTANCE_ID,
@@ -101,7 +105,8 @@ final class PlatformPipelineRunRepository {
     }
   }
 
-  void markPipelineFailed(Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
+  public void markPipelineFailed(
+      Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId != null) {
       mapper.markPipelineFailed(params(
           PIPELINE_INSTANCE_ID,
@@ -115,7 +120,7 @@ final class PlatformPipelineRunRepository {
     }
   }
 
-  Set<String> loadSucceededStepCodes(Long pipelineInstanceId) {
+  public Set<String> loadSucceededStepCodes(Long pipelineInstanceId) {
     if (pipelineInstanceId == null) {
       return Set.of();
     }
@@ -124,7 +129,7 @@ final class PlatformPipelineRunRepository {
     return stepCodes == null || stepCodes.isEmpty() ? Set.of() : new HashSet<>(stepCodes);
   }
 
-  Map<String, Object> loadLatestSucceededStepOutputSummary(
+  public Map<String, Object> loadLatestSucceededStepOutputSummary(
       Long pipelineInstanceId, String stepCode) {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode)) {
       return Map.of();
@@ -148,7 +153,7 @@ final class PlatformPipelineRunRepository {
     }
   }
 
-  Long startStepRun(
+  public Long startStepRun(
       Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {
       return null;
@@ -178,16 +183,16 @@ final class PlatformPipelineRunRepository {
     return null;
   }
 
-  void finishStepRunSuccess(Long stepRunId, Object outputSummary) {
+  public void finishStepRunSuccess(Long stepRunId, Object outputSummary) {
     finishStepRun(stepRunId, "SUCCESS", null, null, outputSummary);
   }
 
-  void finishStepRunFailure(
+  public void finishStepRunFailure(
       Long stepRunId, String errorCode, String errorMessage, Object outputSummary) {
     finishStepRunFailure(stepRunId, errorCode, errorMessage, null, null, outputSummary);
   }
 
-  void finishStepRunFailure(
+  public void finishStepRunFailure(
       Long stepRunId,
       String errorCode,
       String errorMessage,

@@ -348,6 +348,33 @@ async def test_partition_invocation_id_cached_at_claim(httpx_mock: HTTPXMock) ->
         await http.close()
 
 
+async def test_partition_invocation_id_from_claim_is_used_for_report(
+    httpx_mock: HTTPXMock,
+) -> None:
+    """v2 消息不带 invocation id 时,report 必须复用 claim 返回的新值。"""
+    cfg = _cfg()
+    httpx_mock.add_response(
+        url=cfg.base_url + "/internal/tasks/6/claim",
+        status_code=200,
+        json={"partitionInvocationId": "inv-from-claim"},
+    )
+    httpx_mock.add_response(
+        url=cfg.base_url + "/internal/tasks/6/report",
+        status_code=200,
+        json={},
+    )
+    http = PlatformHttpClient(cfg)
+    handler = _RecordingHandler("echo", SdkTaskResult.success_with())
+    dispatcher = TaskDispatcher(cfg, http, handlers={"echo": handler})
+    try:
+        await dispatcher.on_message(_msg(task_id=6))
+        await asyncio.gather(*list(dispatcher._in_flight.values()), return_exceptions=True)
+        report = next(r for r in httpx_mock.get_requests() if r.url.path.endswith("/report"))
+        assert json.loads(report.content)["partitionInvocationId"] == "inv-from-claim"
+    finally:
+        await http.close()
+
+
 async def test_unsupported_schema_version_drops(
     caplog: pytest.LogCaptureFixture, httpx_mock: HTTPXMock
 ) -> None:

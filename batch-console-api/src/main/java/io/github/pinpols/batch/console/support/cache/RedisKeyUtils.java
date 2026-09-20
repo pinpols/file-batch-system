@@ -31,9 +31,20 @@ public final class RedisKeyUtils {
    * @param redisTemplate Redis 模板
    * @param pattern Redis glob pattern,例如 {@code "console:cache:meta:*"}
    * @param batchSize 单次 SCAN count + 单次 DEL 上限,推荐 500
-   * @return 成功删除的 key 数;SCAN/DEL 失败返回已成功删除的累计数(不抛)
+   * @return 成功删除的 key 数;SCAN/DEL 失败返回 0(不抛)
    */
   public static long scanAndDelete(
+      StringRedisTemplate redisTemplate, String pattern, int batchSize) {
+    try {
+      return scanAndDeleteOrThrow(redisTemplate, pattern, batchSize);
+    } catch (RuntimeException ex) {
+      // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 回退。
+      return 0L;
+    }
+  }
+
+  /** 与 {@link #scanAndDelete} 相同，但 Redis 异常直接抛出，适合需要把失败纳入一致性决策的调用方。 */
+  public static long scanAndDeleteOrThrow(
       StringRedisTemplate redisTemplate, String pattern, int batchSize) {
     if (pattern == null || pattern.isBlank()) {
       return 0L;
@@ -41,8 +52,8 @@ public final class RedisKeyUtils {
     int safeBatch = batchSize <= 0 ? 500 : batchSize;
     ScanOptions options =
         ScanOptions.scanOptions().match(pattern).count(safeBatch).build();
-    long deleted = 0L;
     try (Cursor<String> cursor = redisTemplate.scan(options)) {
+      long deleted = 0L;
       List<String> batch = new ArrayList<>(safeBatch);
       while (cursor.hasNext()) {
         batch.add(cursor.next());
@@ -54,11 +65,8 @@ public final class RedisKeyUtils {
       if (!batch.isEmpty()) {
         deleted += deleteBatch(redisTemplate, batch);
       }
-    } catch (RuntimeException ex) {
-      // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 回退。
       return deleted;
     }
-    return deleted;
   }
 
   private static long deleteBatch(StringRedisTemplate redisTemplate, List<String> keys) {

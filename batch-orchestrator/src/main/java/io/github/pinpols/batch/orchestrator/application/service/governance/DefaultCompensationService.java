@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -29,6 +30,7 @@ import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +40,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * 补偿指令统一入口：按 {@code compensationType} 路由到 6 种处理器（JOB / STEP / PARTITION / FILE / BATCH / DLQ），
+ * 补偿指令统一入口：按 {@code compensationType} 路由到 6 种内部操作（JOB / STEP / PARTITION / FILE / BATCH / DLQ），
  * 并把命令生命周期（RUNNING → SUCCESS/FAILED）与补偿日志写入串在同一事务内。
  *
  * <p>关键不变量：
@@ -48,7 +50,7 @@ import org.springframework.stereotype.Service;
  *       DataIntegrityViolationException} 转为 {@code CONFLICT}），处理并发提交的 TOCTOU。
  *   <li><b>状态必达</b>：handler 抛异常时必须更新命令状态为 FAILED 并写 {@code job_execution_log}， 然后再
  *       rethrow；缺任何一步会让命令停留在 RUNNING 造成"残留补偿"。
- *   <li><b>路由表在构造期构建</b>：{@link #handlersByType} 是不可变 Map，避免分派时 if-chain 并保证 O(1)。
+ *   <li><b>路由表在构造期构建</b>：{@link #operationsByType} 是不可变 Map，避免分派时 if-chain 并保证 O(1)。
  * </ul>
  */
 @Slf4j
@@ -67,8 +69,18 @@ public class DefaultCompensationService implements CompensationService {
   private final TaskExecutionService taskExecutionService;
   private final CompensationTransactionExecutor transactionExecutor;
 
-  /** 路由表：compensationType → handler。构造时一次性构建；O(1) 查找。 */
-  private final Map<String, CompensationHandler> handlersByType = Map.of(
+  /** 本类内部的路由函数，不对外伪装成可插拔 SPI；类型新增仍由统一事务入口维护。 */
+  @FunctionalInterface
+  private interface CompensationOperation {
+    Map<String, Object> execute(
+        CompensationSubmitCommand command,
+        String commandNo,
+        String traceId,
+        CompensationCommandEntity entity);
+  }
+
+  /** 路由表：compensationType → operation。构造时一次性构建；O(1) 查找。 */
+  private final Map<String, CompensationOperation> operationsByType = Map.of(
       "JOB", this::rerunJob,
       "STEP", this::rerunStep,
       "PARTITION", this::retryPartition,
@@ -261,14 +273,14 @@ public class DefaultCompensationService implements CompensationService {
       String traceId,
       CompensationCommandEntity entity) {
     String compensationType = normalizeType(command.compensationType());
-    CompensationHandler handler = handlersByType.get(compensationType);
-    if (handler == null) {
+    CompensationOperation operation = operationsByType.get(compensationType);
+    if (EmptyChecks.isNull(operation)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.common.invalid_argument_detail",
           "unsupported compensationType: " + command.compensationType());
     }
-    return handler.handle(command, commandNo, traceId, entity);
+    return operation.execute(command, commandNo, traceId, entity);
   }
 
   private Map<String, Object> rerunJob(
@@ -641,7 +653,9 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   private String normalizeType(String compensationType) {
-    return compensationType == null ? null : compensationType.trim().toUpperCase();
+    return EmptyChecks.isNull(compensationType)
+        ? null
+        : compensationType.trim().toUpperCase(Locale.ROOT);
   }
 
   private String resolveErrorCode(Exception exception) {

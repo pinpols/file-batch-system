@@ -11,7 +11,9 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -56,7 +58,8 @@ public class ImportRecordGovernanceService {
   private static final String KEY_VALIDATE_FAILED_COUNT = "validateFailedCount";
 
   private final ImportSkipProperties skipProperties;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformFileAuditRepository fileAudits;
   private final ImportErrorOutputStorage errorOutputStorage;
   private final BatchSecurityProperties batchSecurityProperties;
 
@@ -191,7 +194,7 @@ public class ImportRecordGovernanceService {
       return;
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     if (fileId == null || !Texts.hasText(context.getTenantId())) {
       return;
     }
@@ -223,8 +226,8 @@ public class ImportRecordGovernanceService {
     if (Texts.hasText(errorOutputPath)) {
       metadata.put("errorOutputPath", errorOutputPath);
     }
-    runtimeRepository.updateFileMetadata(fileId, metadata);
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileRecords.updateFileMetadata(fileId, metadata);
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType("BAD_RECORD_GOVERNANCE")
@@ -305,11 +308,11 @@ public class ImportRecordGovernanceService {
       }
     }
 
-    Long fileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     Long pipelineInstanceId =
-        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     Long pipelineStepRunId =
-        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
+        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
     Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
     boolean errorLineMask = false;
     String maskingRuleSet = null;
@@ -328,7 +331,7 @@ public class ImportRecordGovernanceService {
     Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
     Object safePayload =
         errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
-    runtimeRepository.insertFileErrorRecord(FileErrorRecordParam.builder()
+    fileAudits.insertFileErrorRecord(FileErrorRecordParam.builder()
         .tenantId(context.getTenantId())
         .fileId(fileId)
         .pipelineInstanceId(pipelineInstanceId)

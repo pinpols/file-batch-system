@@ -11,7 +11,8 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
 import io.github.pinpols.batch.testing.ObjectStoreContainer;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -75,9 +76,10 @@ class PreprocessStepObjectLoadIntegrationTest {
   private PreprocessStep newStep(String registeredPath) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true); // 跳过解密,下载的明文直通 pipeline
-    PlatformFileRuntimeRepository runtimeRepo = mock(PlatformFileRuntimeRepository.class);
-    when(runtimeRepo.toLong(any())).thenReturn(1L);
-    when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
+    PlatformFileRecordRepository runtimeRepo = mock(PlatformFileRecordRepository.class);
+    PlatformPipelineDefinitionRepository pipelineDefinitions =
+        mock(PlatformPipelineDefinitionRepository.class);
+    when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     // 归属校验:loadFileRecord 返回本租户登记的 storage_path,使该对象路径被放行。
     when(runtimeRepo.loadFileRecord(any(), any()))
         .thenReturn(Map.of("storage_path", registeredPath));
@@ -85,6 +87,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     props.setBucket(bucket);
     return new PreprocessStep(
         runtimeRepo,
+        pipelineDefinitions,
         security,
         mock(BatchObjectCryptoService.class),
         props,

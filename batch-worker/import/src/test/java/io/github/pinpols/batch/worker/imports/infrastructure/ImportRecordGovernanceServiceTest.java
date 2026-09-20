@@ -13,7 +13,8 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -38,7 +39,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ImportRecordGovernanceServiceTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformFileAuditRepository fileAudits;
 
   @Mock
   private ImportErrorOutputStorage errorOutputStorage;
@@ -55,7 +59,7 @@ class ImportRecordGovernanceServiceTest {
 
   private ImportRecordGovernanceService buildService(ImportSkipProperties props) {
     return new ImportRecordGovernanceService(
-        props, runtimeRepository, errorOutputStorage, batchSecurityProperties);
+        props, runtimeRepository, fileAudits, errorOutputStorage, batchSecurityProperties);
   }
 
   private ImportSkipProperties props(
@@ -176,7 +180,6 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldRecordSkippedRecord_incrementsSkippedAndStageScopedCounters() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     service.recordSkippedRecord(ctx, ImportStage.PARSE, 10L, "E1", "msg-1", Map.of("k", "v"));
@@ -196,7 +199,7 @@ class ImportRecordGovernanceServiceTest {
 
     ArgumentCaptor<FileErrorRecordParam> captor =
         ArgumentCaptor.forClass(FileErrorRecordParam.class);
-    verify(runtimeRepository).insertFileErrorRecord(captor.capture());
+    verify(fileAudits).insertFileErrorRecord(captor.capture());
     FileErrorRecordParam param = captor.getValue();
     assertThat(param.getTenantId()).isEqualTo("tenant-A");
     assertThat(param.getFileId()).isEqualTo(99L);
@@ -209,7 +212,6 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldRecordFailedRecord_incrementsFailedAndStashesLastBadRecord() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     service.recordFailedRecord(ctx, ImportStage.VALIDATE, 5L, "EFAIL", "boom", "raw");
@@ -217,13 +219,12 @@ class ImportRecordGovernanceServiceTest {
     assertThat(ctx.getAttributes()).containsEntry("failedCount", 1L);
     assertThat(ctx.getAttributes()).containsEntry("validateFailedCount", 1L);
     assertThat(ctx.getAttributes()).containsKey("lastBadRecord");
-    verify(runtimeRepository).insertFileErrorRecord(any());
+    verify(fileAudits).insertFileErrorRecord(any());
   }
 
   @Test
   void shouldFlagManualReview_whenSkippedAndActionIsManualReview() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "MANUAL_REVIEW", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E1", "m", "raw");
@@ -233,7 +234,6 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldMaskErrorPayload_whenTemplateConfigEnablesMasking() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     ctx.getAttributes()
@@ -245,7 +245,7 @@ class ImportRecordGovernanceServiceTest {
 
     ArgumentCaptor<FileErrorRecordParam> captor =
         ArgumentCaptor.forClass(FileErrorRecordParam.class);
-    verify(runtimeRepository).insertFileErrorRecord(captor.capture());
+    verify(fileAudits).insertFileErrorRecord(captor.capture());
     // masking 经过 ContentMaskingUtils 处理；这里只断言原始 message 被替换（非 null 且不等于原文）
     assertThat(captor.getValue().getErrorMessage()).isNotNull();
   }
@@ -254,7 +254,6 @@ class ImportRecordGovernanceServiceTest {
   void shouldDisableMasking_whenBypassModeOn() {
     batchSecurityProperties.setBypassMode(true);
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     ctx.getAttributes()
@@ -263,7 +262,7 @@ class ImportRecordGovernanceServiceTest {
 
     ArgumentCaptor<FileErrorRecordParam> captor =
         ArgumentCaptor.forClass(FileErrorRecordParam.class);
-    verify(runtimeRepository).insertFileErrorRecord(captor.capture());
+    verify(fileAudits).insertFileErrorRecord(captor.capture());
     assertThat(captor.getValue().getErrorMessage()).isEqualTo("raw-msg");
   }
 
@@ -272,13 +271,12 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldRecordThresholdViolation_andSetSkipFlag() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     service.recordThresholdViolation(ctx, ImportStage.VALIDATE, "THRESH", "exceeded");
 
     assertThat(ctx.getAttributes()).containsEntry("skipThresholdExceeded", true);
-    verify(runtimeRepository).insertFileErrorRecord(any());
+    verify(fileAudits).insertFileErrorRecord(any());
   }
 
   // ── finalizeErrorOutput ──
@@ -291,14 +289,13 @@ class ImportRecordGovernanceServiceTest {
     service.finalizeErrorOutput(ctx);
 
     verifyNoInteractions(errorOutputStorage);
-    verify(runtimeRepository, never()).appendAudit(any());
+    verify(fileAudits, never()).appendAudit(any());
     verify(runtimeRepository, never()).updateFileMetadata(anyLong(), any());
   }
 
   @Test
   void shouldFinalizeErrorOutput_writesFileMetadataAndAudit() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
     when(errorOutputStorage.writeErrorOutput(eq("tenant-A"), eq("99"), any()))
         .thenReturn("s3://bucket/file");
 
@@ -324,7 +321,7 @@ class ImportRecordGovernanceServiceTest {
         .containsEntry("errorOutputPath", "s3://bucket/file");
 
     ArgumentCaptor<FileAuditParam> auditCaptor = ArgumentCaptor.forClass(FileAuditParam.class);
-    verify(runtimeRepository).appendAudit(auditCaptor.capture());
+    verify(fileAudits).appendAudit(auditCaptor.capture());
     assertThat(auditCaptor.getValue().getOperationType()).isEqualTo("BAD_RECORD_GOVERNANCE");
     assertThat(auditCaptor.getValue().getFileId()).isEqualTo(99L);
   }
@@ -332,7 +329,6 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldSkipErrorFileWrite_whenSinkIsErrorTableOnly() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "ERROR_TABLE"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     service.recordFailedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
@@ -345,10 +341,10 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldSkipFinalize_whenFileIdMissing() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenReturn(null);
 
     ImportJobContext ctx = context();
-    // 注入一条 bad record，但 fileId 解析为 null
+    ctx.getAttributes().remove(PipelineRuntimeKeys.FILE_ID);
+    // 注入一条 bad record，但不提供 fileId。
     ctx.getAttributes()
         .put(
             "badRecords",
@@ -366,7 +362,6 @@ class ImportRecordGovernanceServiceTest {
   @Test
   void shouldReplaceBadRecordsList_whenContainsForeignType() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLongAnswer(inv.getArgument(0)));
 
     ImportJobContext ctx = context();
     // 注入混入异型对象的旧列表

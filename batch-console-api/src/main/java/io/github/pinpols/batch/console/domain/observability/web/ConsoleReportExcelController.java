@@ -39,6 +39,7 @@ public class ConsoleReportExcelController {
 
   /** 导出密钥版本 Excel。 */
   @GetMapping("/secrets")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public ResponseEntity<StreamingResponseBody> secrets(
       @ModelAttribute SecretVersionQueryRequest request) {
     return applicationService.exportSecretVersions(request);

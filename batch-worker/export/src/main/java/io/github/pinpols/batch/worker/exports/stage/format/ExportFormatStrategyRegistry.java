@@ -2,7 +2,9 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -21,22 +23,21 @@ public class ExportFormatStrategyRegistry {
 
   public ExportFormatStrategyRegistry(List<ExportFormatStrategy> strategies) {
     this.strategiesByType = strategies.stream()
-        .collect(
-            Collectors.toUnmodifiableMap(s -> s.formatType().toUpperCase(), Function.identity()));
+        .collect(Collectors.toUnmodifiableMap(
+            s -> s.formatType().toUpperCase(Locale.ROOT), Function.identity()));
   }
 
   /**
-   * 按格式类型查找策略，格式类型为空或未注册时回退到 {@code "JSON"}。
+   * 按格式类型查找策略。仅空值沿用历史默认 {@code "JSON"}；显式但未知的格式必须快速失败，避免产出内容与文件契约不一致。
    *
    * @param fileFormatType 格式类型标识
    * @return 对应的策略实现
    */
   public ExportFormatStrategy resolve(String fileFormatType) {
-    if (fileFormatType == null || fileFormatType.isBlank()) {
+    if (EmptyChecks.isBlank(fileFormatType)) {
       return require("JSON");
     }
-    ExportFormatStrategy strategy = strategiesByType.get(fileFormatType.trim().toUpperCase());
-    return strategy != null ? strategy : require("JSON");
+    return require(fileFormatType);
   }
 
   /**
@@ -47,9 +48,9 @@ public class ExportFormatStrategyRegistry {
    * @throws io.github.pinpols.batch.common.exception.BizException 未找到策略时抛出
    */
   public ExportFormatStrategy require(String fileFormatType) {
-    ExportFormatStrategy strategy =
-        strategiesByType.get(fileFormatType == null ? "" : fileFormatType.trim().toUpperCase());
-    if (strategy == null) {
+    ExportFormatStrategy strategy = strategiesByType.get(
+        EmptyChecks.isNull(fileFormatType) ? "" : fileFormatType.trim().toUpperCase(Locale.ROOT));
+    if (EmptyChecks.isNull(strategy)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);
     }

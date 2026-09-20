@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.core.application.WorkerRuntimeFacade;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
@@ -48,7 +47,8 @@ import org.springframework.context.event.EventListener;
 @Slf4j
 public abstract class AbstractWorkerLoop {
 
-  private final WorkerRuntimeFacade workerRuntimeFacade;
+  private final WorkerLifecycleManager workerLifecycleManager;
+  private final HeartbeatService heartbeatService;
   private final BatchDateTimeSupport dateTimeSupport;
   private final WorkerIdentityProperties identityProperties;
   private final int maxConcurrentTasks;
@@ -60,18 +60,26 @@ public abstract class AbstractWorkerLoop {
   private boolean failFastOnStartup;
 
   protected AbstractWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade,
+      WorkerLifecycleManager workerLifecycleManager,
+      HeartbeatService heartbeatService,
       BatchDateTimeSupport dateTimeSupport,
       int maxConcurrentTasks) {
-    this(workerRuntimeFacade, dateTimeSupport, maxConcurrentTasks, new WorkerIdentityProperties());
+    this(
+        workerLifecycleManager,
+        heartbeatService,
+        dateTimeSupport,
+        maxConcurrentTasks,
+        new WorkerIdentityProperties());
   }
 
   protected AbstractWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade,
+      WorkerLifecycleManager workerLifecycleManager,
+      HeartbeatService heartbeatService,
       BatchDateTimeSupport dateTimeSupport,
       int maxConcurrentTasks,
       WorkerIdentityProperties identityProperties) {
-    this.workerRuntimeFacade = workerRuntimeFacade;
+    this.workerLifecycleManager = workerLifecycleManager;
+    this.heartbeatService = heartbeatService;
     this.dateTimeSupport = dateTimeSupport;
     this.maxConcurrentTasks = maxConcurrentTasks;
     this.identityProperties = identityProperties;
@@ -124,7 +132,7 @@ public abstract class AbstractWorkerLoop {
       if (stopping.get()) {
         return;
       }
-      workerRuntimeFacade.heartbeat(current.getWorkerId());
+      heartbeatService.beat(current.getWorkerId());
     } catch (Exception ex) {
       log.warn(
           "{} worker heartbeat unavailable: {} ({})",
@@ -163,7 +171,7 @@ public abstract class AbstractWorkerLoop {
           Stream.concat(cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
               .distinct()
               .toList());
-      WorkerRegistration startedRegistration = workerRuntimeFacade.start(workerRegistration);
+      WorkerRegistration startedRegistration = workerLifecycleManager.start(workerRegistration);
       registration.set(startedRegistration);
       started.set(true);
       log.info(
@@ -181,7 +189,7 @@ public abstract class AbstractWorkerLoop {
     WorkerRegistration current = registration.get();
     if (current != null) {
       try {
-        workerRuntimeFacade.shutdown(current.getWorkerId());
+        workerLifecycleManager.shutdown(current.getWorkerId());
       } catch (Exception ex) {
         log.warn(
             "{} worker shutdown signal failed: {} ({})",

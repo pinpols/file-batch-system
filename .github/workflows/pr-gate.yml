@@ -241,6 +241,11 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-feature-switch-registry.py
 
+      - name: Verify configuration governance registry
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: python3 scripts/ci/check-config-governance.py
+
       - name: Verify Helm env switch sync
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

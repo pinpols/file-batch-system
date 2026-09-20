@@ -15,7 +15,8 @@
 | 前端包管理 | npm lockfile | `../batch-console/package-lock.json` | CI 使用 `npm ci`，禁止混用 yarn/pnpm lockfile |
 | Python SDK | Python 3.12+ | `sdk/python/README.md`、CI | async-only，依赖由 SDK 自身工具链管理 |
 | Go SDK | Go 1.25+ | `sdk/go/go.mod`、CI | core 与 Kafka nested module 分离 |
-| Rust SDK | Rust 1.75+ | `sdk/rust/Cargo.toml`、CI | edition 2021；HTTP/Kafka 为可选 feature |
+| Rust SDK 核心 | Rust 1.75+ | `sdk/rust/Cargo.toml` | edition 2021；默认 feature、零运行时依赖 |
+| Rust SDK HTTP/Kafka 适配器 | Rust 1.86+ | 锁定依赖树、CI stable | `http`/`kafka` 为可选 feature；真链路使用此档 |
 | TypeScript SDK | Node 22.x | `sdk/typescript/package.json`、CI | 使用 Node 22 原生 type-stripping |
 | PostgreSQL | 本地/Compose 17；发布兼容下限需按 migration gate 证明 | `.env.example`、Compose、发布 runbook | 新能力以 PG 17 验证；不能把“理论兼容下限”当作当前实测基线 |
 | Kafka | Compose 4.1.2；生产按兼容矩阵 | `.env.example`、Compose | 生产需确认 KRaft、topic replication 和客户端兼容性 |

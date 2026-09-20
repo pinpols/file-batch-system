@@ -1,31 +1,44 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
- * 按 channelType 解析 {@link NotificationSender} 的注册表。注入容器内全部 sender 实现， 首个 {@code
- * supports(type)==true} 者胜出；无匹配返回 null（上层显式告警跳过，绝不静默丢弃）。
+ * 按 channelType 解析 {@link NotificationSender} 的注册表。构造期校验渠道键非空且唯一，避免多个实现支持同一渠道时由 Spring Bean
+ * 顺序隐式决定路由结果；无匹配返回 null（上层显式告警跳过，绝不静默丢弃）。
  */
 @Component
 public class NotificationSenderRegistry {
 
-  private final List<NotificationSender> senders;
+  private final Map<String, NotificationSender> sendersByType;
 
   public NotificationSenderRegistry(List<NotificationSender> senders) {
-    this.senders = List.copyOf(senders);
+    Map<String, NotificationSender> registered = new LinkedHashMap<>();
+    for (NotificationSender sender : senders) {
+      String channelType = normalize(sender.channelType());
+      if (EmptyChecks.isNull(channelType)) {
+        throw new IllegalStateException("NotificationSender channelType must not be blank: "
+            + sender.getClass().getName());
+      }
+      NotificationSender duplicate = registered.putIfAbsent(channelType, sender);
+      if (EmptyChecks.isNotNull(duplicate)) {
+        throw new IllegalStateException("duplicate NotificationSender channelType: " + channelType);
+      }
+    }
+    this.sendersByType = Map.copyOf(registered);
   }
 
   /** 解析能处理 channelType 的 sender；无则 null。 */
   public NotificationSender resolve(String channelType) {
-    if (channelType == null || channelType.isBlank()) {
-      return null;
-    }
-    for (NotificationSender sender : senders) {
-      if (sender.supports(channelType)) {
-        return sender;
-      }
-    }
-    return null;
+    String normalized = normalize(channelType);
+    return EmptyChecks.isNull(normalized) ? null : sendersByType.get(normalized);
+  }
+
+  private static String normalize(String value) {
+    return EmptyChecks.isBlank(value) ? null : value.trim().toUpperCase(Locale.ROOT);
   }
 }

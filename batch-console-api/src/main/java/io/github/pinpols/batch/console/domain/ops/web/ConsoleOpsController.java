@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.application.ConsoleOpsApplicationService;
+import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
 import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleKafkaConsumerLagResponse;
@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleOpsController {
 
-  private final ConsoleOpsApplicationService opsApplicationService;
+  private final ConsoleOpsSummaryPort opsApplicationService;
   private final ConsoleOutboxOpsApplicationService outboxOpsService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleKafkaLagQueryService kafkaLagQueryService;

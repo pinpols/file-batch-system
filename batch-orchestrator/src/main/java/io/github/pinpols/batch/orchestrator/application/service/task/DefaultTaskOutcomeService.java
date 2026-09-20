@@ -26,7 +26,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.annotation.Timed;
@@ -88,7 +88,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   @Component
   public record DefaultTaskOutcomeCollaborators(
       RetryGovernanceService retryGovernanceService,
-      StateMachine<Object> stateMachine,
+      LifecycleEventMapper<Object> lifecycleEventMapper,
       WorkflowDagService workflowDagService,
       ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
       WorkflowTerminalOutboxService workflowTerminalOutboxService,
@@ -190,7 +190,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         new TaskOutcomeParentTaskSignaler(),
         new TaskOutcomeWorkflowFinalizer(
             workflowMappers,
-            collaborators.stateMachine(),
+            collaborators.lifecycleEventMapper(),
             collaborators.workflowTerminalOutboxService()));
   }
 

@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -25,15 +26,15 @@ public class PrepareDispatchStep implements DispatchStageStep {
 
   private final ObjectMapper objectMapper;
   private final FileDispatchRepository fileDispatchRepository;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformPipelineRunRepository pipelineRuns;
 
   public PrepareDispatchStep(
       ObjectMapper objectMapper,
       FileDispatchRepository fileDispatchRepository,
-      PlatformFileRuntimeRepository runtimeRepository) {
+      PlatformPipelineRunRepository pipelineRuns) {
     this.objectMapper = objectMapper;
     this.fileDispatchRepository = fileDispatchRepository;
-    this.runtimeRepository = runtimeRepository;
+    this.pipelineRuns = pipelineRuns;
   }
 
   @Override
@@ -101,8 +102,9 @@ public class PrepareDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
       attrs.put("retryRequested", Boolean.TRUE.equals(payload.forceRetry()));
       attrs.put("receiptStatus", channelConfig.getOrDefault("receipt_policy", "NONE"));
-      runtimeRepository.bindFileToPipelineInstance(
-          runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
+      pipelineRuns.bindFileToPipelineInstance(
+          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+          fileId);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareDispatchStep.class, "catch:Exception", ex);
 

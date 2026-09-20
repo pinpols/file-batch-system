@@ -8,7 +8,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.util.HashMap;
@@ -24,7 +26,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ReceiveStepPayloadSizeLimitTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   @Mock
   private BatchSecurityProperties batchSecurityProperties;
@@ -37,7 +45,12 @@ class ReceiveStepPayloadSizeLimitTest {
         new io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties();
     payloadProps.setMaxPayloadSizeMb(1);
     receiveStep = new ReceiveStep(
-        runtimeRepository, batchSecurityProperties, new ObjectMapper(), payloadProps);
+        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
+        batchSecurityProperties,
+        new ObjectMapper(),
+        payloadProps);
     // 强制 1 MB（绕开 heap-ratio 计算结果可能更小的情况）
     ReflectionTestUtils.setField(receiveStep, "maxPayloadSizeBytes", 1L * 1024 * 1024);
   }
@@ -89,7 +102,6 @@ class ReceiveStepPayloadSizeLimitTest {
 
   @Test
   void execute_sameTraceUsesTaskIdToKeepGeneratedStoragePathUnique() {
-    when(runtimeRepository.toLong(null)).thenReturn(null);
     when(runtimeRepository.createFileRecord(any())).thenReturn(101L, 102L);
     ImportJobContext first = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"a\"}");
     first.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "shared-trace");

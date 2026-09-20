@@ -1,35 +1,30 @@
 name: sdk-orchestrator-e2e
 
 # =============================================================================
-# BYO SDK 样例 worker × 真 orchestrator 端到端(nightly / 非阻塞)
+# BYO SDK 样例 worker × 真 orchestrator 端到端(nightly / 非 required check)
 #
 # 补 SDK 测试最大缺口:per-PR 的 sdk-contract-parity / live-transport 只打 fake HTTP
 # stub + 真 Kafka;真实 orchestrator 的鉴权 / worker 注册 / 心跳 directive 往返从未
 # 被覆盖。本 wf 起真 orchestrator + trigger + 基础设施,让一个真实样例 worker
 # (examples/self-hosted-sdk/sample-tenant-worker-<lang>)用真 API-key 连真 orchestrator。
 #
-# 断言分两阶段(见 scripts/ci/run-sdk-orchestrator-e2e.sh):
-#   A 硬断言(路由无关):worker 用真 API-key 注册 + 心跳 → worker_registry 落行。
-#     ⇒ 直接覆盖审计点名的"真鉴权/注册/心跳从未测,只有 fake stub"。
-#   B best-effort:触发 launch + 轮询 job_instance,首跑摸排派单链路(只记录不硬挂)。
+# 全链路均为硬断言:API-key 注册 + launch + dispatch + claim + execute +
+# report + terminal。fixture 自包含,不依赖 system-test seed。
 #
-# **非阻塞**:本 wf **不**进分支保护 required checks。v1 触发 = nightly cron + 手动
-# (workflow_dispatch);PR-path 触发待首跑校准后再加。e2e 真栈本就不适合当每-PR
+# **非 required check**:本 wf 不进分支保护。单次运行内五种语言均为硬门禁，
+# 任一语言未到 terminal SUCCESS 都会使工作流失败。触发方式 = nightly cron + 手动
+# (workflow_dispatch)。e2e 真栈不适合当每-PR
 # 硬门禁(~数分钟启动 + 偶发 flaky)。
 #
-# ⚠ 首跑摸排:全栈无法在开发机本地起(已知 mac JDK25 fat-jar loader 卡死 + 需整套
-# docker);本 wf 基于已验证的 up-apps.sh 启动 + load-system-test-data.sh 播种构建,
-# 首次 workflow_dispatch 运行用于校准阶段 B 的派单路由(SDK 消费 tenant 通配 +
-# 与内建 worker 竞争 claim)。诊断(容器日志 / DB 行 / worker 日志)失败时全量打印。
+# 本 wf 使用自包含的 queue/job fixture，不依赖 system-test seed，也不与内建 worker
+# 竞争 claim。诊断(容器日志 / DB 行 / worker 日志)失败时全量打印。
 # =============================================================================
 
 on:
   schedule:
     - cron: '0 18 * * *'   # 每日 02:00 Asia/Shanghai(UTC 18:00)
   workflow_dispatch:
-  # 注:v1 仅 schedule + 手动。pull_request(改 sdk/examples 路径)触发待首次
-  # workflow_dispatch 跑通、阶段 B 派单路由校准后再加(否则每个 SDK PR 都会看到一
-  # 条尚未校准的红 e2e check)。本 lane 始终**非阻塞**(不进分支保护 required checks)。
+  # 真栈启动成本较高，因此只做 schedule + 手动；PR 使用分层的 SDK 快速门禁。
 
 permissions:
   contents: read
@@ -43,13 +38,6 @@ jobs:
     name: sdk e2e (${{ matrix.lang }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # 非阻塞腿(continue-on-error)——go/python 是已校准的阻塞信号,其余先 non-blocking 起步:
-    #   java   :#649 GA 对齐,runner 已支持真往返(register/claim/report),绿稳后转阻塞。
-    #   typescript / rust:runner 现已补齐这两语言的 build/start case(真往返,非占位),
-    #     首次真打平台故仍 non-blocking,让「TS/Rust 从未打过真 orchestrator」
-    #     这一审计缺口在矩阵里显性化 + 有明确收口路径,而不是无声缺席。runner 补齐 case 后即转真跑;
-    #     真跑绿稳(+ sdk-live-transport flake 治理见文件尾注)后再逐腿去掉 continue-on-error 转必需。
-    continue-on-error: ${{ matrix.lang == 'java' || matrix.lang == 'typescript' || matrix.lang == 'rust' }}
     strategy:
       fail-fast: false
       matrix:
@@ -92,9 +80,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Set up Rust
+      - name: Set up Rust (stable; HTTP/Kafka adapters require 1.86+)
         if: matrix.lang == 'rust'
-        uses: dtolnay/rust-toolchain@1.75.0
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Prepare env file
         # .env.example 故意不含 3 个 :? required 密钥(BATCH_PLATFORM/BUSINESS_DB_PASSWORD、
@@ -126,7 +114,7 @@ jobs:
         # orchestrator 自带 Flyway(compose 未对它 disable),启动即迁移 batch.* 全 schema。
         # trigger 的 Flyway 是 disabled,依赖 orchestrator 先迁好,故 orchestrator 先起、
         # 等它 healthy(= 迁移完成)再起 trigger。compose build 在 runner 上构建镜像(较慢)。
-        run: bash scripts/docker/up-apps.sh orchestrator
+        run: BATCH_UP_APPS_WITH_DEPS=1 bash scripts/docker/up-apps.sh orchestrator
 
       - name: Wait for orchestrator health (schema migrated)
         run: |
@@ -137,7 +125,7 @@ jobs:
           curl -fsS http://localhost:18082/actuator/health | grep -q '"status":"UP"' || { echo "orchestrator not UP"; docker logs batch-orchestrator --tail 120 || true; exit 1; }
 
       - name: Boot trigger (schema ready)
-        run: bash scripts/docker/up-apps.sh trigger
+        run: BATCH_UP_APPS_WITH_DEPS=1 bash scripts/docker/up-apps.sh trigger
 
       - name: Wait for orchestrator + trigger health
         run: |
@@ -149,20 +137,13 @@ jobs:
           done
           curl -fsS http://localhost:18082/actuator/health | grep -q '"status":"UP"' || { echo "orchestrator not UP"; docker logs batch-orchestrator --tail 80 || true; exit 1; }
 
-      - name: Seed system test data (best-effort; stage B needs job defs)
-        # 阶段 A(注册断言)不依赖 seed;阶段 B 的 atomic_shell_demo job 需 platform_seed。
-        # MinIO/business 部分在 CI 偶有缺工具,失败不阻断(阶段 A 仍跑)。
-        run: |
-          bash scripts/data/load-system-test-data.sh || echo "WARN: seed partial (stage B may be limited)"
-
       # rust 腿:kafka feature(rdkafka)需 cmake、OpenSSL 与 libcurl 头文件。
       - name: Install native dependencies for rust kafka build
         if: matrix.lang == 'rust'
         run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev
 
       - name: Run SDK × real-orchestrator e2e (${{ matrix.lang }})
-        # runner 现已支持全部五语言(go|python|java|typescript|rust)真往返;typescript/rust
-        # 首次真打平台,仍 continue-on-error 非阻塞(见 job 级 continue-on-error),绿稳后逐腿转必需。
+        # 五语言使用同一套自包含 fixture 和硬断言。
         run: bash scripts/ci/run-sdk-orchestrator-e2e.sh "${{ matrix.lang }}"
 
       - name: Dump container logs on failure

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
@@ -60,7 +60,7 @@ public class ValidateStep implements ImportStageStep {
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
   private final ImportRecordGovernanceService recordGovernanceService;
   private final ImportDataQualityService dataQualityService;
   private final ImportWorkerConfiguration workerConfiguration;
@@ -190,7 +190,7 @@ public class ValidateStep implements ImportStageStep {
     }
     try {
       Map<String, Object> fileRecord =
-          runtimeRepository.loadFileRecord(context.getTenantId(), Long.valueOf(fileIdRaw.trim()));
+          fileRecords.loadFileRecord(context.getTenantId(), Long.valueOf(fileIdRaw.trim()));
       Object metadataJson = fileRecord == null ? null : fileRecord.get("metadata_json");
       if (metadataJson == null) {
         return;
@@ -389,7 +389,7 @@ public class ValidateStep implements ImportStageStep {
         .getAttributes()
         .put(PipelineRuntimeKeys.IMPORT_CUSTOMER_PAYLOAD_COUNT, loadedCandidateCount);
     ImportStageSupport.updateFileStatusRecoverAware(
-        runtimeRepository,
+        fileRecords,
         context,
         "VALIDATED",
         Map.of(

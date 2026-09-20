@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -31,19 +31,19 @@ class DispatchReceiptPollSchedulerTest {
 
   private DispatchReceiptPollProperties properties;
   private FileDispatchRepository fileDispatchRepository;
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository fileRecords;
   private DispatchReceiptPollScheduler scheduler;
 
   @BeforeEach
   void setUp() {
     properties = new DispatchReceiptPollProperties();
     fileDispatchRepository = mock(FileDispatchRepository.class);
-    runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    fileRecords = mock(PlatformFileRecordRepository.class);
     scheduler = new DispatchReceiptPollScheduler(
         properties,
         fileDispatchRepository,
         new ObjectMapper(),
-        runtimeRepository,
+        fileRecords,
         new SimpleMeterRegistry(),
         new BatchSecurityProperties());
     scheduler.initializeMeters();

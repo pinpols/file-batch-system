@@ -12,7 +12,8 @@ import io.github.pinpols.batch.testing.TestContainerImages;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -41,7 +42,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>用**真实 PG(Testcontainers)** 跑 {@link SqlTransformComputePlugin} 的 WAP staging → target 发布, 驱动完整
  * {@link DefaultProcessStageExecutor} 跨两次 attempt(同稳定 {@code process-<taskId>} 键 = 同 staging)。
- * {@link PlatformFileRuntimeRepository} 用 mock 模拟持久到平台库的 {@code pipeline_step_run}——{@code
+ * {@link PlatformPipelineRunRepository} 用 mock 模拟持久到平台库的 {@code pipeline_step_run}——{@code
  * loadSucceededStepCodes} 返回上一 attempt 已成功的 stepCode 集,即 P1 读取侧的输入。
  *
  * <p>验证三条 P1 契约:
@@ -66,7 +67,8 @@ class ProcessStageSkipCrashResumeIntegrationTest {
 
   private JdbcTemplate jdbcTemplate;
   private SqlTransformComputePlugin plugin;
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private PlatformPipelineRunRepository pipelineRuns;
   private DriverManagerDataSource dataSource;
 
   @BeforeAll
@@ -125,9 +127,9 @@ class ProcessStageSkipCrashResumeIntegrationTest {
         """);
     seedSource();
 
-    runtimeRepository = mock(PlatformFileRuntimeRepository.class);
-    lenient().when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
-    lenient().when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(9999L);
+    pipelineDefinitions = mock(PlatformPipelineDefinitionRepository.class);
+    pipelineRuns = mock(PlatformPipelineRunRepository.class);
+    lenient().when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(9999L);
   }
 
   @AfterEach
@@ -169,7 +171,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     jdbcTemplate.execute("delete from biz.order_event");
 
     // ── Attempt 2:开关开,COMPUTE/VALIDATE 已成功 → 跳过,直达 COMMIT 复用 staging ──
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
         .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
     DefaultProcessStageExecutor executorSkip = newExecutor(enabledStageSkip());
     ProcessJobContext attempt2 = newContext(stepsThrough(ProcessStage.FEEDBACK));
@@ -201,7 +203,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
     // 若 COMPUTE 正确重跑,pre-DELETE 清掉 STALE + 从空源 re-SELECT → staging 空 → target 空。
     jdbcTemplate.execute("delete from biz.order_event");
 
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
     DefaultProcessStageExecutor executorSkip = newExecutor(enabledStageSkip());
     ProcessJobContext context = newContext(stepsThrough(ProcessStage.FEEDBACK));
     List<ProcessStageResult> results = executorSkip.execute(context);
@@ -224,7 +226,12 @@ class ProcessStageSkipCrashResumeIntegrationTest {
         new CommitStep(),
         new FeedbackStep(ProcessMetrics.noop()));
     return new DefaultProcessStageExecutor(
-        steps, List.of(plugin), runtimeRepository, ProcessMetrics.noop(), checkpointProps);
+        steps,
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        checkpointProps);
   }
 
   private ProcessJobContext newContext(List<PipelineStepDefinition> steps) {

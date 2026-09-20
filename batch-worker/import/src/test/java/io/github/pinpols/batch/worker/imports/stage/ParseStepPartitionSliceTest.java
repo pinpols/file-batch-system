@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -44,10 +44,9 @@ class ParseStepPartitionSliceTest {
 
   @BeforeEach
   void setUp() {
-    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PlatformFileRecordRepository runtimeRepository = mock(PlatformFileRecordRepository.class);
     ImportRecordGovernanceService recordGovernanceService =
         mock(ImportRecordGovernanceService.class);
-    when(runtimeRepository.toLong(any())).thenReturn(1L);
     when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
     when(recordGovernanceService.isSkippable(any())).thenReturn(false);
     parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);

@@ -13,9 +13,11 @@ public interface ConfigReleaseMapper {
 
   Integer selectLatestVersionNo(Map<String, Object> params);
 
+  int acquireVersionLock(Map<String, Object> params);
+
+  ConfigReleaseEntity selectPreviousEffective(Map<String, Object> params);
+
   int insertConfigRelease(Map<String, Object> params);
 
   int updateConfigReleaseStatus(Map<String, Object> params);
-
-  int updateGrayScope(Map<String, Object> params);
 }

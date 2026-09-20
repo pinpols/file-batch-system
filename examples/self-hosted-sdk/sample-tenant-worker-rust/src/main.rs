@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::panic::AssertUnwindSafe;
 use std::process;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -183,8 +183,10 @@ fn main() {
     // real transport, driven by the SDK's `HeartbeatScheduler` /
     // `LeaseRenewalScheduler`. They observe the same `stop_flag` and exit on stop.
     let heartbeat_thread = spawn_heartbeat(
+        cfg.tenant_id.clone(),
         cfg.worker_code.clone(),
         transport.clone(),
+        Arc::clone(&in_flight_tasks),
         Arc::clone(&stop_flag),
     );
     let lease_thread = spawn_lease_renewal(
@@ -196,13 +198,10 @@ fn main() {
     );
 
     // ── (6) Run loop: poll Kafka until the stop flag flips. ────────────────
-    // `in_flight` would be incremented/decremented around real task execution;
-    // here it stays 0 (the echo handler returns synchronously) but is plumbed
-    // so backpressure (§1.5) reflects real concurrency once execution is async.
-    let in_flight = Arc::new(AtomicI64::new(0));
+    // 背压和心跳共用 lease-renewal registry，避免独立计数器与真实任务漂移。
     let if_read = {
-        let in_flight = Arc::clone(&in_flight);
-        move || in_flight.load(Ordering::SeqCst)
+        let in_flight = Arc::clone(&in_flight_tasks);
+        move || in_flight.lock().map_or(0, |tasks| tasks.len() as i64)
     };
     let keep_running = {
         let stop_flag = Arc::clone(&stop_flag);
@@ -234,16 +233,32 @@ fn main() {
 /// the whole worker drains + deactivates. The interval is dynamically updated from
 /// `nextHeartbeatHint` by the SDK scheduler (§1.3).
 fn spawn_heartbeat(
+    tenant_id: String,
     worker_code: String,
     transport: ReqwestTransport,
+    in_flight: InFlight,
     stop_flag: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let mut sched = HeartbeatScheduler::new(&worker_code, transport);
         while !stop_flag.load(Ordering::SeqCst) {
-            // The heartbeat body a production worker sends (status + capacity);
-            // the SDK defaults `protocolVersion` on register, not here.
-            let raw = sched.tick(r#"{"status":"RUNNING"}"#);
+            // 心跳必须携带租户和 worker 身份。平台会校验 API-Key 绑定的租户，
+            // 不能只发送状态字段。
+            let heartbeat_body = build_body(
+                &[
+                    ("tenantId", json_str(&tenant_id)),
+                    ("workerCode", json_str(&worker_code)),
+                    ("status", json_str("RUNNING")),
+                    (
+                        "currentLoad",
+                        serde_json::Value::from(
+                            in_flight.lock().map_or(0, |tasks| tasks.len() as i64),
+                        ),
+                    ),
+                ],
+                &None,
+            );
+            let raw = sched.tick(&heartbeat_body);
             let parsed = parse_heartbeat(&raw.body);
             let tick = sched.apply(raw.status, &parsed);
             if let Some(decision) = &tick.decision {
@@ -473,6 +488,11 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
             }
         }
 
+        // v2 dispatch 不携带 partitionInvocationId；该令牌由平台在 claim 时生成。
+        // renew/report 必须复用 claim 回包中的值，否则平台会以 409 拒绝旧令牌。
+        let partition_invocation_id =
+            claim_partition_invocation_id(&claim_resp.body, &msg.partition_invocation_id);
+
         // ── 2. EXECUTE the business handler. (TaskContext has a private field,
         // so build it via the constructor + builders, not a struct literal.)
         let tenant = if msg.tenant_id.is_empty() {
@@ -481,13 +501,13 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
             msg.tenant_id.clone()
         };
         let mut ctx = TaskContext::new(&task_id, &tenant, &msg.task_type)
-            .with_partition_invocation_id(msg.partition_invocation_id.clone());
+            .with_partition_invocation_id(partition_invocation_id.clone());
         ctx.parameters = extract_params(msg);
         ctx.progress = Box::new(NoopProgressReporter);
 
         // Register in the in-flight set so the lease-renewal loop keeps this task's
         // lease alive and can deliver `cancelRequested` to `ctx.cancellation`.
-        self.register_in_flight(&task_id, &ctx, &msg.partition_invocation_id);
+        self.register_in_flight(&task_id, &ctx, &partition_invocation_id);
 
         // Guard the business handler with `catch_unwind` so a panicking handler is
         // mapped to a fail REPORT (errorCode EXECUTION_FAILED) rather than killing
@@ -535,7 +555,7 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
         if !success {
             fields.push(("errorCode", json_str(&result.error_code)));
         }
-        let report_body = build_body(&fields, &msg.partition_invocation_id);
+        let report_body = build_body(&fields, &partition_invocation_id);
         let report_resp = self.transport.report(&task_id, &report_body);
         match classify_response(&report_resp, 0) {
             TransportOutcome::Success | TransportOutcome::IdempotentSuccess => Ok(()),
@@ -585,6 +605,21 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     } else {
         "<non-string panic payload>".to_string()
     }
+}
+
+/// 从 claim 回包读取平台生成的 invocation 令牌。旧平台未返回该字段时，
+/// 回退到 dispatch 消息中的值，以保持 v1 协议兼容。
+fn claim_partition_invocation_id(body: &str, fallback: &Option<String>) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("partitionInvocationId")
+                .and_then(serde_json::Value::as_str)
+                .filter(|id| !id.is_empty())
+                .map(String::from)
+        })
+        .or_else(|| fallback.clone())
 }
 
 /// Build a compact JSON object body from ordered (key, value) pairs, appending
@@ -713,4 +748,26 @@ fn install_sigterm_hook(_stop_flag: Arc<AtomicBool>) {
 
 fn log(msg: &str) {
     println!("[sample-worker] INFO {msg}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::claim_partition_invocation_id;
+
+    #[test]
+    fn claim_invocation_id_takes_precedence_over_dispatch_value() {
+        let fallback = Some("dispatch-id".to_string());
+
+        assert_eq!(
+            claim_partition_invocation_id(r#"{"partitionInvocationId":"claim-id"}"#, &fallback),
+            Some("claim-id".to_string())
+        );
+    }
+
+    #[test]
+    fn claim_invocation_id_falls_back_for_legacy_response() {
+        let fallback = Some("dispatch-id".to_string());
+
+        assert_eq!(claim_partition_invocation_id("{}", &fallback), fallback);
+    }
 }

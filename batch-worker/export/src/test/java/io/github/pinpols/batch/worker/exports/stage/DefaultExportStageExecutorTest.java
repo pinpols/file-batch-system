@@ -11,7 +11,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -36,7 +37,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * code, does not propagate - infra error: step throws RuntimeException → INFRA_ERROR code, does not
  * propagate
  */
-// LENIENT 保留:setUp() 在所有用例之前预置了 runtimeRepository.toLong / startStepRun 以及
+// LENIENT 保留:setUp() 在所有用例之前预置了 startStepRun 以及
 // stubStep() 内部对 stage()/implCode()/stepCode()/stepName() 的共享 stub,
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
@@ -44,7 +45,10 @@ import org.springframework.beans.factory.ObjectProvider;
 class DefaultExportStageExecutorTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   // The step under test
   private ExportStageStep prepareStep;
@@ -60,8 +64,7 @@ class DefaultExportStageExecutorTest {
     prepareStep = stubStep(ExportStage.PREPARE);
     meterRegistry = new SimpleMeterRegistry();
 
-    when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+    when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
     // Provide all required stages so buildDefaultStepDefinitions() does not throw
     List<ExportStageStep> allSteps = new ArrayList<>();
@@ -74,7 +77,8 @@ class DefaultExportStageExecutorTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    executor = new DefaultExportStageExecutor(allSteps, runtimeRepository, meterRegistryProvider);
+    executor = new DefaultExportStageExecutor(
+        allSteps, pipelineDefinitions, pipelineRuns, meterRegistryProvider);
   }
 
   @Test
@@ -94,7 +98,7 @@ class DefaultExportStageExecutorTest {
             .counter())
         .isNotNull();
     assertThat(hasTagKey("export.file.rows.total", "tenant")).isFalse();
-    verify(runtimeRepository).finishStepRunSuccess(eq(STEP_RUN_ID), any());
+    verify(pipelineRuns).finishStepRunSuccess(eq(STEP_RUN_ID), any());
   }
 
   @Test
@@ -111,7 +115,7 @@ class DefaultExportStageExecutorTest {
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
     assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
     assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
-    verify(runtimeRepository)
+    verify(pipelineRuns)
         .finishStepRunFailure(
             eq(STEP_RUN_ID),
             eq(StageFailureCode.BUSINESS_ERROR.name()),
@@ -132,8 +136,7 @@ class DefaultExportStageExecutorTest {
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
     assertThat(results.get(0).message()).isEqualTo("connection timeout");
-    verify(runtimeRepository)
-        .finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
+    verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -152,7 +155,7 @@ class DefaultExportStageExecutorTest {
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(runtimeRepository.loadPipelineSteps(any())).thenReturn(List.of());
+    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<ExportStageResult> results = executor.execute(context);
 

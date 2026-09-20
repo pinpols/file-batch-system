@@ -15,7 +15,8 @@ import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
@@ -33,37 +34,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-// LENIENT 保留:setUp() 预置了 runtimeRepository.toLong / startStepRun 共享 stub,
+// LENIENT 保留:setUp() 预置了 startStepRun 共享 stub,
 // 但 defaultStepDefinitions / 缺 PREPARE bean 直接抛错等用例并不触达这些 stub,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultProcessStageExecutorTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   private static final Long PIPELINE_INSTANCE_ID = 100L;
   private static final Long STEP_RUN_ID = 200L;
 
   @BeforeEach
   void setUp() {
-    // 真实转换而非恒返 PIPELINE_INSTANCE_ID:多分区守卫要用 toLong 读 PARTITION_COUNT,
-    // 恒返 100 会让守卫把任何 attribute 都当 partitionCount=100 误降级。
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> realToLong(inv.getArgument(0)));
-    when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
-  }
-
-  private static Long realToLong(Object value) {
-    if (value == null) {
-      return null;
-    }
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (value instanceof String string && !string.isBlank()) {
-      return Long.valueOf(string);
-    }
-    return null;
+    when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
   }
 
   @Test
@@ -71,7 +59,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -103,7 +92,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -144,7 +134,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -177,7 +168,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -194,7 +186,7 @@ class DefaultProcessStageExecutorTest {
     assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
     assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
     assertThat(results.get(0).errorArgs()).isEqualTo("[\"bad spec\"]");
-    verify(runtimeRepository)
+    verify(pipelineRuns)
         .finishStepRunFailure(
             eq(STEP_RUN_ID),
             eq(StageFailureCode.BUSINESS_ERROR.name()),
@@ -213,7 +205,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -239,7 +232,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -261,7 +255,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -282,13 +277,14 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
     ProcessJobContext context = newContext();
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(runtimeRepository.loadPipelineSteps(any())).thenReturn(List.of());
+    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<ProcessStageResult> results = executor.execute(context);
 
@@ -304,7 +300,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -336,7 +333,12 @@ class DefaultProcessStageExecutorTest {
     }
     // executor 构造期会因 buildDefaultStepDefinitions 缺 PREPARE bean 抛 IllegalStateException
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> new DefaultProcessStageExecutor(
-            incomplete, List.of(), runtimeRepository, ProcessMetrics.noop(), disabledStageSkip()))
+            incomplete,
+            List.of(),
+            pipelineDefinitions,
+            pipelineRuns,
+            ProcessMetrics.noop(),
+            disabledStageSkip()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("missing process step bean for stage");
   }
@@ -347,7 +349,7 @@ class DefaultProcessStageExecutorTest {
   void stageSkip_skipsPriorSucceededComputeAndValidate_stillRunsCommitAndFeedback() {
     // 上一 attempt COMPUTE + VALIDATE 已成功(pipeline_step_run 有 SUCCESS 记录),COMMIT 前崩溃重派。
     // 开关开:跳过 COMPUTE/VALIDATE(不重算),COMMIT/FEEDBACK 恒跑(原子发布决策每次重做)。
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
         .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
@@ -355,7 +357,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         enabledStageSkip());
 
@@ -382,10 +385,9 @@ class DefaultProcessStageExecutorTest {
   void stageSkip_carriesForwardWatermarkFromPriorSuccessOutputSummary() {
     // P1-1:跳过 COMPUTE 时,须从上次 SUCCESS 的 output_summary 回灌 highWaterMarkOut / processedCount 到
     // attributes,否则 report 水位 null → 下周期 INCREMENTAL 重读重发。
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
         .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
-    when(runtimeRepository.loadLatestSucceededStepOutputSummary(
-            PIPELINE_INSTANCE_ID, "PROCESS_COMPUTE"))
+    when(pipelineRuns.loadLatestSucceededStepOutputSummary(PIPELINE_INSTANCE_ID, "PROCESS_COMPUTE"))
         .thenReturn(Map.of("highWaterMarkOut", "20260708120000", "processedCount", 42));
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
@@ -393,7 +395,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         enabledStageSkip());
 
@@ -414,7 +417,7 @@ class DefaultProcessStageExecutorTest {
   @Test
   void stageSkip_runsFullPipeline_whenNoPriorSuccess() {
     // 首次运行(无历史 SUCCESS 记录):即使开关开,也全量跑(回归保护)。
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
@@ -422,7 +425,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         enabledStageSkip());
 
@@ -449,7 +453,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         disabledStageSkip());
 
@@ -463,14 +468,14 @@ class DefaultProcessStageExecutorTest {
     assertThat(results).hasSize(5);
     verify(plugin).compute(context);
     verify(plugin).validate(context);
-    verify(runtimeRepository, never()).loadSucceededStepCodes(any());
+    verify(pipelineRuns, never()).loadSucceededStepCodes(any());
   }
 
   @Test
   void stageSkip_neverSkipsCommit_evenIfPriorCommitSucceeded() {
     // COMMIT 不在 skip-safe 集:即便历史上 COMMIT 也成功过(极端场景),重派仍重跑 COMMIT
     // (原子发布幂等:staging 已清则发布 0 行),绝不因"曾成功"跳过发布决策。
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
         .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE", "PROCESS_COMMIT"));
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
@@ -478,7 +483,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         enabledStageSkip());
 
@@ -509,7 +515,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         enabledStageSkip());
 
@@ -524,13 +531,13 @@ class DefaultProcessStageExecutorTest {
     assertThat(results).hasSize(5); // 全量跑,零跳过
     verify(plugin).compute(context); // COMPUTE 未被兄弟 SUCCESS 误跳
     verify(plugin).validate(context);
-    verify(runtimeRepository, never()).loadSucceededStepCodes(any()); // 降级后甚至不查历史
+    verify(pipelineRuns, never()).loadSucceededStepCodes(any()); // 降级后甚至不查历史
   }
 
   @Test
   void stageSkip_singlePartition_partitionCountOne_stillSkips() {
     // 边界:partitionCount=1(显式单分区)不触发降级,跳过逻辑照常生效。
-    when(runtimeRepository.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
+    when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))
         .thenReturn(Set.of("PROCESS_COMPUTE", "PROCESS_VALIDATE"));
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
@@ -538,7 +545,8 @@ class DefaultProcessStageExecutorTest {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
         List.of(plugin),
-        runtimeRepository,
+        pipelineDefinitions,
+        pipelineRuns,
         ProcessMetrics.noop(),
         enabledStageSkip());
 

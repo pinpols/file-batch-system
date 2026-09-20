@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,7 +12,7 @@ import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -51,7 +50,7 @@ class LoadStepCheckpointPrecheckTest {
   private static final long PIPELINE_INSTANCE_ID = 8002L;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
   private ImportLoadPlugin plugin;
@@ -106,7 +105,6 @@ class LoadStepCheckpointPrecheckTest {
     when(plugin.loadChunk(any(), any())).thenReturn(1);
     when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
         .thenReturn(ProcessingPosition.empty());
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);
@@ -123,7 +121,6 @@ class LoadStepCheckpointPrecheckTest {
   void enabled_nonePlugin_rejects() throws Exception {
     checkpointProps.setEnabled(true);
     when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.NONE);
-    lenient().when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);
@@ -142,7 +139,6 @@ class LoadStepCheckpointPrecheckTest {
   void enabled_unknownPlugin_rejects() throws Exception {
     checkpointProps.setEnabled(true);
     when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
-    lenient().when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);
@@ -206,7 +202,6 @@ class LoadStepCheckpointPrecheckTest {
     checkpointProps.setEnabled(false);
     // 即使 plugin 报 NONE,关闭开关时也跑;default UNKNOWN 同理(不 stub)
     when(plugin.loadChunk(any(), any())).thenReturn(1);
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);

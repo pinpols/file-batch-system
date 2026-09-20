@@ -80,8 +80,8 @@ public class AliyunSmsProvider implements SmsProvider {
   }
 
   @Override
-  public boolean supports(String provider) {
-    return "aliyun".equalsIgnoreCase(provider);
+  public String providerCode() {
+    return "aliyun";
   }
 
   @Override

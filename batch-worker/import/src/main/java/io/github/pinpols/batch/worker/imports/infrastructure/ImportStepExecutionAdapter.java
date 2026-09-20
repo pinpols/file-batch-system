@@ -3,7 +3,9 @@ package io.github.pinpols.batch.worker.imports.infrastructure;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
@@ -24,7 +26,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>以 {@code @Primary} 覆盖 {@code batch-worker-core} 中的 no-op 默认适配器。 Pipeline 类型为 {@code
  * IMPORT}，初始阶段为 {@code RECEIVE}； 成功响应消息格式为 {@code "imported N row(s)"}； 失败时通过 {@link
- * PlatformFileRuntimeRepository#updateFileStatus} 将文件状态推进为 {@code FAILED}。
+ * PlatformFileRecordRepository#updateFileStatus} 将文件状态推进为 {@code FAILED}。
  */
 @Primary
 @Component
@@ -35,10 +37,17 @@ public class ImportStepExecutionAdapter
 
   public ImportStepExecutionAdapter(
       ImportStageExecutor importStageExecutor,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
+      PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(runtimeRepository, verifierHookProvider, compensationHookProvider);
+    super(
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
+        verifierHookProvider,
+        compensationHookProvider);
     this.importStageExecutor = importStageExecutor;
   }
 

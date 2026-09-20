@@ -9,7 +9,8 @@ import io.github.pinpols.batch.common.config.BatchKmsProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -33,7 +34,7 @@ class PreprocessStepKmsDecryptTest {
   private static final String PLAINTEXT = "{\"customerNo\":\"C001\",\"customerName\":\"Alice\"}";
 
   private BatchObjectCryptoService cryptoService;
-  private PlatformFileRuntimeRepository runtimeRepo;
+  private PlatformFileRecordRepository runtimeRepo;
   private PreprocessStep preprocessStep;
 
   @BeforeEach
@@ -47,13 +48,15 @@ class PreprocessStepKmsDecryptTest {
 
     cryptoService = new BatchObjectCryptoService(security, kms);
 
-    runtimeRepo = mock(PlatformFileRuntimeRepository.class);
-    when(runtimeRepo.toLong(any())).thenReturn(1L);
-    when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
+    runtimeRepo = mock(PlatformFileRecordRepository.class);
+    PlatformPipelineDefinitionRepository pipelineDefinitions =
+        mock(PlatformPipelineDefinitionRepository.class);
+    when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
     preprocessStep = new PreprocessStep(
         runtimeRepo,
+        pipelineDefinitions,
         security,
         cryptoService,
         mock(io.github.pinpols.batch.common.config.S3StorageProperties.class),

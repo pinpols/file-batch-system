@@ -55,8 +55,8 @@ public class EmailNotificationSender implements NotificationSender {
   }
 
   @Override
-  public boolean supports(String channelType) {
-    return CHANNEL_TYPE_EMAIL.equalsIgnoreCase(channelType);
+  public String channelType() {
+    return CHANNEL_TYPE_EMAIL;
   }
 
   @Override

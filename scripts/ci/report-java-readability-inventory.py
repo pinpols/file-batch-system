@@ -72,7 +72,9 @@ def tracked_main_sources() -> list[Path]:
     return sorted(
         ROOT / relative
         for relative in result.stdout.splitlines()
-        if relative.endswith(".java") and "/src/main/java/" in relative
+        if relative.endswith(".java")
+        and "/src/main/java/" in relative
+        and (ROOT / relative).is_file()
     )
 
 

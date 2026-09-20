@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -28,14 +28,13 @@ import org.junit.jupiter.api.Test;
 class ParseStepStreamingTest {
 
   private ParseStep parseStep;
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
   private ImportRecordGovernanceService recordGovernanceService;
 
   @BeforeEach
   void setUp() {
-    runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    runtimeRepository = mock(PlatformFileRecordRepository.class);
     recordGovernanceService = mock(ImportRecordGovernanceService.class);
-    when(runtimeRepository.toLong(any())).thenReturn(1L);
     // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
     when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
     when(recordGovernanceService.isSkippable(any())).thenReturn(false);

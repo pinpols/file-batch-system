@@ -6,7 +6,7 @@ import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalO
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -30,15 +30,15 @@ final class TaskOutcomeWorkflowFinalizer {
       List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
 
   private final OrchestratorWorkflowMappers workflowMappers;
-  private final StateMachine<Object> stateMachine;
+  private final LifecycleEventMapper<Object> lifecycleEventMapper;
   private final WorkflowTerminalOutboxService terminalOutboxService;
 
   TaskOutcomeWorkflowFinalizer(
       OrchestratorWorkflowMappers workflowMappers,
-      StateMachine<Object> stateMachine,
+      LifecycleEventMapper<Object> lifecycleEventMapper,
       WorkflowTerminalOutboxService terminalOutboxService) {
     this.workflowMappers = workflowMappers;
-    this.stateMachine = stateMachine;
+    this.lifecycleEventMapper = lifecycleEventMapper;
     this.terminalOutboxService = terminalOutboxService;
   }
 
@@ -49,7 +49,7 @@ final class TaskOutcomeWorkflowFinalizer {
         context.dagContinues(),
         Boolean.TRUE.equals(context.workflowRun().getDryRun()));
     String workflowStatus =
-        stateMachine.transition(context.workflowRun(), workflowEvent).toState();
+        lifecycleEventMapper.map(context.workflowRun(), workflowEvent).toState();
     Instant workflowFinishedAt = context.jobFullyComplete() ? context.finishedAt() : null;
     int updated =
         workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()

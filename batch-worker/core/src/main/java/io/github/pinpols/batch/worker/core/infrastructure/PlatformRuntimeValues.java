@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Platform 文件运行态 Mapper 的值转换与参数构造工具。 */
-final class PlatformRuntimeValues {
+public final class PlatformRuntimeValues {
 
   static final String PIPELINE_DEFINITION_ID = "pipelineDefinitionId";
   static final String PIPELINE_INSTANCE_ID = "pipelineInstanceId";
@@ -27,7 +27,7 @@ final class PlatformRuntimeValues {
     return values;
   }
 
-  static Long toLong(Object value) {
+  public static Long toLong(Object value) {
     if (value instanceof Number number) {
       return number.longValue();
     }
@@ -47,7 +47,7 @@ final class PlatformRuntimeValues {
     return null;
   }
 
-  static Instant toInstant(Object value) {
+  public static Instant toInstant(Object value) {
     return value instanceof Timestamp timestamp ? timestamp.toInstant() : null;
   }
 

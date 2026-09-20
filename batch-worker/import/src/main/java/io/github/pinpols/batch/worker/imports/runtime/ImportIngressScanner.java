@@ -12,7 +12,9 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import java.io.InputStream;
@@ -61,7 +63,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ImportIngressScanner {
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformFileAuditRepository fileAudits;
   private final ImportWorkerConfiguration workerConfiguration;
   private final ImportScannerProperties scannerProperties;
   private final S3StorageProperties s3StorageProperties;
@@ -156,7 +159,7 @@ public class ImportIngressScanner {
       return;
     }
     // 幂等:trigger 记录以清单对象路径为 storage_path,已登记则跳过 → 同一导出清单只发射一次
-    if (runtimeRepository.existsFileRecordByStoragePath(
+    if (fileRecords.existsFileRecordByStoragePath(
         resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
       return;
     }
@@ -175,7 +178,7 @@ public class ImportIngressScanner {
     metadata.put("bundleExportTemplates", manifest.exportTemplateCodes());
     // 自完整到达组:requiredFileSet = 本 trigger 记录自身文件名 → 组(大小 1)立即满足条件触发
     putArrivalMetadata(metadata, manifest.fileGroupCode(), fileName);
-    runtimeRepository.createFileRecord(FileRecordParam.builder()
+    fileRecords.createFileRecord(FileRecordParam.builder()
         .tenantId(resolvedTenant)
         .fileCode(null)
         .bizType(scannerProperties.getDefaultBizType())
@@ -276,7 +279,7 @@ public class ImportIngressScanner {
           snapshot.objectName());
       return;
     }
-    if (runtimeRepository.existsFileRecordByStoragePath(
+    if (fileRecords.existsFileRecordByStoragePath(
         resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
       // ADR-040 Phase2:数据文件先到、清单后到 —— 对已登记成员回填 required_file_set(幂等)
       backfillBatchManifestArrival(snapshot, resolvedTenant, batchManifests);
@@ -323,7 +326,7 @@ public class ImportIngressScanner {
     if (matchedBatch != null) {
       putBundleMetadata(metadata, matchedBatch, fileName);
     }
-    Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+    Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
         .tenantId(resolvedTenant)
         .fileCode(null)
         .bizType(scannerProperties.getDefaultBizType())
@@ -352,7 +355,7 @@ public class ImportIngressScanner {
     if (scannerProperties.getArrival().isEnabled()
         && Texts.hasText(effectiveGroupCode)
         && Texts.hasText(effectiveRequiredFileSet)) {
-      runtimeRepository.appendAudit(FileAuditParam.builder()
+      fileAudits.appendAudit(FileAuditParam.builder()
           .fileId(fileId)
           .tenantId(resolvedTenant)
           .operationType("ARRIVAL_REGISTER")
@@ -367,7 +370,7 @@ public class ImportIngressScanner {
               "arrivalState", "WAITING_ARRIVAL"))
           .build());
     }
-    runtimeRepository.appendAudit(FileAuditParam.builder()
+    fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(resolvedTenant)
         .operationType("RECEIVE_SCAN")
@@ -602,12 +605,12 @@ public class ImportIngressScanner {
     if (matched == null) {
       return;
     }
-    Map<String, Object> fileRecord = runtimeRepository.loadFileRecordByStoragePath(
+    Map<String, Object> fileRecord = fileRecords.loadFileRecordByStoragePath(
         tenantId, s3StorageProperties.getBucket(), snapshot.objectName());
     if (EmptyChecks.isEmpty(fileRecord)) {
       return;
     }
-    Long fileId = runtimeRepository.toLong(fileRecord.get("id"));
+    Long fileId = PlatformRuntimeValues.toLong(fileRecord.get("id"));
     if (fileId == null) {
       return;
     }
@@ -621,7 +624,7 @@ public class ImportIngressScanner {
     if (metadata.isEmpty()) {
       return;
     }
-    runtimeRepository.updateFileMetadata(fileId, metadata);
+    fileRecords.updateFileMetadata(fileId, metadata);
     log.info(
         "batch manifest backfilled arrival group for registered file: tenantId={}, fileId={},"
             + " fileGroupCode={}",

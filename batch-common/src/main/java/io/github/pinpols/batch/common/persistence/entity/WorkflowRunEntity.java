@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import lombok.Data;
 
-// #8-1: 实现 Stateful 接口，消除 DefaultStateMachine 中的反射回退路径
+// 实现 Stateful，让生命周期事件映射器通过编译期契约读取状态，避免反射猜测 getter。
 @Data
 public class WorkflowRunEntity implements Stateful {
 

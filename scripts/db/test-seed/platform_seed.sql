@@ -169,8 +169,8 @@ INSERT INTO batch.secret_version (
     rotation_window_start_at, rotation_window_end_at, effective_from_at, effective_to_at,
     secret_payload, rotation_reason, created_by, updated_by, created_at, updated_at
 ) VALUES
-    (2501, 'default-tenant', 'DEFAULT_TEST', 'Default Test KMS Secret', 1, 'PUBLISHED', TRUE, TIMESTAMPTZ '2026-03-22 00:00:00+08', TIMESTAMPTZ '2026-03-22 23:59:59+08', TIMESTAMPTZ '2026-03-22 00:00:00+08', NULL, jsonb_build_object('keyRef', 'DEFAULT_TEST'), 'bootstrap', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2502, 'tenant-finance', 'FINANCE_TEST', 'Finance Test Secret', 1, 'GRAY', FALSE, TIMESTAMPTZ '2026-03-22 01:00:00+08', TIMESTAMPTZ '2026-03-22 02:00:00+08', TIMESTAMPTZ '2026-03-22 01:00:00+08', NULL, jsonb_build_object('keyRef', 'FINANCE_TEST'), 'rotation-preview', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
+    (2501, 'default-tenant', 'DEFAULT_TEST', 'Default Test KMS Secret', 1, 'PUBLISHED', TRUE, TIMESTAMPTZ '2026-03-22 00:00:00+08', TIMESTAMPTZ '2026-03-22 23:59:59+08', TIMESTAMPTZ '2026-03-22 00:00:00+08', NULL, NULL, 'bootstrap', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2502, 'tenant-finance', 'FINANCE_TEST', 'Finance Test Secret', 1, 'GRAY', FALSE, TIMESTAMPTZ '2026-03-22 01:00:00+08', TIMESTAMPTZ '2026-03-22 02:00:00+08', TIMESTAMPTZ '2026-03-22 01:00:00+08', NULL, NULL, 'rotation-preview', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
 
 INSERT INTO batch.config_change_log (
     id, tenant_id, config_type, config_key, version_no, change_action, change_result, operator_type, operator_id, trace_id, change_summary, created_at

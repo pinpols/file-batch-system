@@ -45,6 +45,7 @@
 | # | 文件 | 作用 |
 |---|---|---|
 | 15 | [feature-switches.md](./feature-switches.md) | 跨模块能力开关索引、默认值、风险和回滚 |
+| 16 | [config-governance.md](./config-governance.md) | 配置分类、生效方式、滚动重启、版本 CAS 与实例确认边界 |
 | 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED / DIRECT_ONLY）切换 |
 | 17a | [stateful-backend-cutover.md](./stateful-backend-cutover.md) | Quota / Report Outbox / Object Storage 有状态后端切换守卫与 SOP |
 

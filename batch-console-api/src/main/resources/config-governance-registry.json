@@ -1,0 +1,958 @@
+{
+  "schemaVersion": 1,
+  "description": "生产源码配置治理登记表；由 scripts/ci/check-config-governance.py 维护。source 与 activation 是正交维度，SECRET 是敏感级别，不冒充生效方式。",
+  "configurationProperties": [
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchKafkaProducerProperties.java#BatchKafkaProducerProperties",
+      "className": "BatchKafkaProducerProperties",
+      "prefix": "spring.kafka.producer",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchKmsProperties.java#BatchKmsProperties",
+      "className": "BatchKmsProperties",
+      "prefix": "batch.security.kms",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchPgSessionProperties.java#BatchPgSessionProperties",
+      "className": "BatchPgSessionProperties",
+      "prefix": "batch.datasource.pg-session",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchSchedulingProperties.java#BatchSchedulingProperties",
+      "className": "BatchSchedulingProperties",
+      "prefix": "batch.scheduling",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchSecurityProperties.java#BatchSecurityProperties",
+      "className": "BatchSecurityProperties",
+      "prefix": "batch.security",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchTimezoneProperties.java#BatchTimezoneProperties",
+      "className": "BatchTimezoneProperties",
+      "prefix": "batch.timezone",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BusinessDataSourceProperties.java#BusinessDataSourceProperties",
+      "className": "BusinessDataSourceProperties",
+      "prefix": "batch.datasource.business",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/BusinessRoutingProperties.java#BusinessRoutingProperties",
+      "className": "BusinessRoutingProperties",
+      "prefix": "batch.datasource.business.routing",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/FilesystemStorageProperties.java#FilesystemStorageProperties",
+      "className": "FilesystemStorageProperties",
+      "prefix": "batch.storage.filesystem",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/ObjectStoreEncryptionProperties.java#ObjectStoreEncryptionProperties",
+      "className": "ObjectStoreEncryptionProperties",
+      "prefix": "batch.storage.encryption",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/OrchestratorClientProperties.java#OrchestratorClientProperties",
+      "className": "OrchestratorClientProperties",
+      "prefix": "batch.orchestrator",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/S3StorageProperties.java#S3StorageProperties",
+      "className": "S3StorageProperties",
+      "prefix": "batch.storage.s3",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/config/StorageBackendGuardProperties.java#StorageBackendGuardProperties",
+      "className": "StorageBackendGuardProperties",
+      "prefix": "batch.storage.backend-guard",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/health/BatchStartupSelfCheckProperties.java#BatchStartupSelfCheckProperties",
+      "className": "BatchStartupSelfCheckProperties",
+      "prefix": "batch.startup-self-check",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/health/HikariSaturationProperties.java#HikariSaturationProperties",
+      "className": "HikariSaturationProperties",
+      "prefix": "batch.health.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamCircuitBreakerProperties.java#DownstreamCircuitBreakerProperties",
+      "className": "DownstreamCircuitBreakerProperties",
+      "prefix": "batch.resilience.downstream",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/rls/RlsProperties.java#RlsProperties",
+      "className": "RlsProperties",
+      "prefix": "batch.rls",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-common/src/main/java/io/github/pinpols/batch/common/spi/task/BatchWorkerAtomicProperties.java#BatchWorkerAtomicProperties",
+      "className": "BatchWorkerAtomicProperties",
+      "prefix": "batch.worker.atomic",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/AlertEscalationNotifyProperties.java#AlertEscalationNotifyProperties",
+      "className": "AlertEscalationNotifyProperties",
+      "prefix": "batch.alert.escalation.notify",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/AlertmanagerNotifyProperties.java#AlertmanagerNotifyProperties",
+      "className": "AlertmanagerNotifyProperties",
+      "prefix": "batch.console.alertmanager",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/CaptchaProperties.java#CaptchaProperties",
+      "className": "CaptchaProperties",
+      "prefix": "batch.console.captcha",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleAiProperties.java#ConsoleAiProperties",
+      "className": "ConsoleAiProperties",
+      "prefix": "batch.console.ai",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleAtomicWorkerClientProperties.java#ConsoleAtomicWorkerClientProperties",
+      "className": "ConsoleAtomicWorkerClientProperties",
+      "prefix": "batch.console.atomic-worker",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleInternalRequestProperties.java#ConsoleInternalRequestProperties",
+      "className": "ConsoleInternalRequestProperties",
+      "prefix": "batch.console.internal-request",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleMaintenanceProperties.java#ConsoleMaintenanceProperties",
+      "className": "ConsoleMaintenanceProperties",
+      "prefix": "batch.console.maintenance",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleMenuProperties.java#ConsoleMenuProperties",
+      "className": "ConsoleMenuProperties",
+      "prefix": "batch.console.menu",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleOrchestratorClientProperties.java#ConsoleOrchestratorClientProperties",
+      "className": "ConsoleOrchestratorClientProperties",
+      "prefix": "batch.console.orchestrator",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsolePushProperties.java#ConsolePushProperties",
+      "className": "ConsolePushProperties",
+      "prefix": "batch.console.push",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleRateLimitProperties.java#ConsoleRateLimitProperties",
+      "className": "ConsoleRateLimitProperties",
+      "prefix": "batch.console.security.rate-limit",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleRealtimeProperties.java#ConsoleRealtimeProperties",
+      "className": "ConsoleRealtimeProperties",
+      "prefix": "batch.console.realtime",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityProperties.java#ConsoleSecurityProperties",
+      "className": "ConsoleSecurityProperties",
+      "prefix": "batch.console.security",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleTriggerClientProperties.java#ConsoleTriggerClientProperties",
+      "className": "ConsoleTriggerClientProperties",
+      "prefix": "batch.console.trigger",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/LoginProtectionProperties.java#LoginProtectionProperties",
+      "className": "LoginProtectionProperties",
+      "prefix": "batch.console.login-protection",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/NotificationProperties.java#NotificationProperties",
+      "className": "NotificationProperties",
+      "prefix": "batch.console.notification",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ReadReplicaProperties.java#ReadReplicaProperties",
+      "className": "ReadReplicaProperties",
+      "prefix": "batch.console.read-replica",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/SmsProperties.java#SmsProperties",
+      "className": "SmsProperties",
+      "prefix": "batch.console.sms",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/WebhookRelayProperties.java#WebhookRelayProperties",
+      "className": "WebhookRelayProperties",
+      "prefix": "batch.webhook.relay",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/forensic/ForensicExportProperties.java#ForensicExportProperties",
+      "className": "ForensicExportProperties",
+      "prefix": "batch.forensic",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/trigger/TriggerLaunchReconcilerProperties.java#TriggerLaunchReconcilerProperties",
+      "className": "TriggerLaunchReconcilerProperties",
+      "prefix": "batch.trigger.launch.reconcile",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/AlertEscalationProperties.java#AlertEscalationProperties",
+      "className": "AlertEscalationProperties",
+      "prefix": "batch.alert.escalation",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/AlertmanagerEmitProperties.java#AlertmanagerEmitProperties",
+      "className": "AlertmanagerEmitProperties",
+      "prefix": "batch.alert.am-emit",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/AssetFreshnessPolicyProperties.java#AssetFreshnessPolicyProperties",
+      "className": "AssetFreshnessPolicyProperties",
+      "prefix": "batch.asset-freshness",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/BatchDayDryRunProperties.java#BatchDayDryRunProperties",
+      "className": "BatchDayDryRunProperties",
+      "prefix": "batch.replay.dry-run",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/BatchDayReplayDispatchProperties.java#BatchDayReplayDispatchProperties",
+      "className": "BatchDayReplayDispatchProperties",
+      "prefix": "batch.replay.dispatch",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/BatchMqTopicsProperties.java#BatchMqTopicsProperties",
+      "className": "BatchMqTopicsProperties",
+      "prefix": "batch.mq.topics",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/BundleBatchClaimProperties.java#BundleBatchClaimProperties",
+      "className": "BundleBatchClaimProperties",
+      "prefix": "batch.task.batch-claim",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/CrossDayDependencyReconcileProperties.java#CrossDayDependencyReconcileProperties",
+      "className": "CrossDayDependencyReconcileProperties",
+      "prefix": "batch.workflow.cross-day-dep",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/FileGovernanceProperties.java#FileGovernanceProperties",
+      "className": "FileGovernanceProperties",
+      "prefix": "batch.file-governance",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalRequestProperties.java#InternalRequestProperties",
+      "className": "InternalRequestProperties",
+      "prefix": "batch.worker.internal-request",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/MqRoutingProperties.java#MqRoutingProperties",
+      "className": "MqRoutingProperties",
+      "prefix": "batch.mq.routing",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OpenLineageProperties.java#OpenLineageProperties",
+      "className": "OpenLineageProperties",
+      "prefix": "batch.openlineage",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OrchestratorConfigCacheProperties.java#OrchestratorConfigCacheProperties",
+      "className": "OrchestratorConfigCacheProperties",
+      "prefix": "batch.orchestrator.config-cache",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OutboxArchiveProperties.java#OutboxArchiveProperties",
+      "className": "OutboxArchiveProperties",
+      "prefix": "batch.outbox.archive",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OutboxProperties.java#OutboxProperties",
+      "className": "OutboxProperties",
+      "prefix": "batch.outbox",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/PartitionLeaseProperties.java#PartitionLeaseProperties",
+      "className": "PartitionLeaseProperties",
+      "prefix": "batch.partition-lease",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/PersistenceGranularityProperties.java#PersistenceGranularityProperties",
+      "className": "PersistenceGranularityProperties",
+      "prefix": "batch.orchestrator.persistence-granularity",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/QuotaProperties.java#QuotaProperties",
+      "className": "QuotaProperties",
+      "prefix": "batch.quota",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/RateLimitProperties.java#RateLimitProperties",
+      "className": "RateLimitProperties",
+      "prefix": "batch.rate-limit",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/ResourceSchedulerProperties.java#ResourceSchedulerProperties",
+      "className": "ResourceSchedulerProperties",
+      "prefix": "batch.resource-scheduler",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/ResultVersionRetentionProperties.java#ResultVersionRetentionProperties",
+      "className": "ResultVersionRetentionProperties",
+      "prefix": "batch.result-version.retention",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/RetryGovernanceProperties.java#RetryGovernanceProperties",
+      "className": "RetryGovernanceProperties",
+      "prefix": "batch.retry",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/SensorProperties.java#SensorProperties",
+      "className": "SensorProperties",
+      "prefix": "batch.sensor",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/SlaGovernanceProperties.java#SlaGovernanceProperties",
+      "className": "SlaGovernanceProperties",
+      "prefix": "batch.sla",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/SuccessInstanceArchiveProperties.java#SuccessInstanceArchiveProperties",
+      "className": "SuccessInstanceArchiveProperties",
+      "prefix": "batch.job-instance.archive",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/TimeoutEnforcerProperties.java#TimeoutEnforcerProperties",
+      "className": "TimeoutEnforcerProperties",
+      "prefix": "batch.timeout",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/TriggerConsumerProperties.java#TriggerConsumerProperties",
+      "className": "TriggerConsumerProperties",
+      "prefix": "batch.trigger.consumer",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkerDrainProperties.java#WorkerDrainProperties",
+      "className": "WorkerDrainProperties",
+      "prefix": "batch.worker.drain",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkerRegistryProperties.java#WorkerRegistryProperties",
+      "className": "WorkerRegistryProperties",
+      "prefix": "batch.worker.registry",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowArchiveProperties.java#WorkflowArchiveProperties",
+      "className": "WorkflowArchiveProperties",
+      "prefix": "batch.workflow.archive",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowValidatorReconcileProperties.java#WorkflowValidatorReconcileProperties",
+      "className": "WorkflowValidatorReconcileProperties",
+      "prefix": "batch.workflow.validator",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/health/OutboxLagHealthProperties.java#OutboxLagHealthProperties",
+      "className": "OutboxLagHealthProperties",
+      "prefix": "batch.orchestrator.health.outbox",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/WorkerSelectorCacheProperties.java#WorkerSelectorCacheProperties",
+      "className": "WorkerSelectorCacheProperties",
+      "prefix": "batch.scheduler.worker-cache",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/security/RequestSigningProperties.java#RequestSigningProperties",
+      "className": "RequestSigningProperties",
+      "prefix": "batch.request-signing",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerKafkaProperties.java#TriggerKafkaProperties",
+      "className": "TriggerKafkaProperties",
+      "prefix": "batch.trigger.kafka",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerOutboxRelayProperties.java#TriggerOutboxRelayProperties",
+      "className": "TriggerOutboxRelayProperties",
+      "prefix": "batch.trigger.outbox",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerRuntimeProperties.java#TriggerRuntimeProperties",
+      "className": "TriggerRuntimeProperties",
+      "prefix": "batch.trigger.runtime",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/config/AtomicWorkerConfiguration.java#AtomicWorkerConfiguration",
+      "className": "AtomicWorkerConfiguration",
+      "prefix": "batch.worker.atomic",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpExecutorProperties.java#HttpExecutorProperties",
+      "className": "HttpExecutorProperties",
+      "prefix": "batch.worker.executors.http",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/shell/ShellExecutorProperties.java#ShellExecutorProperties",
+      "className": "ShellExecutorProperties",
+      "prefix": "batch.worker.executors.shell",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/spark/SparkSubmitExecutorProperties.java#SparkSubmitExecutorProperties",
+      "className": "SparkSubmitExecutorProperties",
+      "prefix": "batch.worker.executors.spark-submit",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/sql/SqlExecutorProperties.java#SqlExecutorProperties",
+      "className": "SqlExecutorProperties",
+      "prefix": "batch.worker.executors.sql",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/storedproc/StoredProcExecutorProperties.java#StoredProcExecutorProperties",
+      "className": "StoredProcExecutorProperties",
+      "prefix": "batch.worker.executors.stored-proc",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/OrchestratorTaskClientProperties.java#OrchestratorTaskClientProperties",
+      "className": "OrchestratorTaskClientProperties",
+      "prefix": "batch.worker.task-client",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerBatchClaimProperties.java#WorkerBatchClaimProperties",
+      "className": "WorkerBatchClaimProperties",
+      "prefix": "batch.worker.batch-claim",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerCheckpointProperties.java#WorkerCheckpointProperties",
+      "className": "WorkerCheckpointProperties",
+      "prefix": "batch.worker.checkpoint",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerExecutionTimeoutProperties.java#WorkerExecutionTimeoutProperties",
+      "className": "WorkerExecutionTimeoutProperties",
+      "prefix": "batch.worker.execution",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerIdentityProperties.java#WorkerIdentityProperties",
+      "className": "WorkerIdentityProperties",
+      "prefix": "batch.worker.identity",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerKafkaSubscribeProperties.java#WorkerKafkaSubscribeProperties",
+      "className": "WorkerKafkaSubscribeProperties",
+      "prefix": "batch.worker.kafka",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerLeaseProperties.java#WorkerLeaseProperties",
+      "className": "WorkerLeaseProperties",
+      "prefix": "batch.worker.lease",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerWatchdogSchedulerProperties.java#WorkerWatchdogSchedulerProperties",
+      "className": "WorkerWatchdogSchedulerProperties",
+      "prefix": "batch.worker.watchdog-scheduler",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxProperties.java#WorkerReportOutboxProperties",
+      "className": "WorkerReportOutboxProperties",
+      "prefix": "batch.worker.report-outbox",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/config/DispatchChannelHealthProperties.java#DispatchChannelHealthProperties",
+      "className": "DispatchChannelHealthProperties",
+      "prefix": "batch.worker.dispatch.health",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/config/DispatchCircuitBreakerProperties.java#DispatchCircuitBreakerProperties",
+      "className": "DispatchCircuitBreakerProperties",
+      "prefix": "batch.worker.dispatch.circuit-breaker",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/config/DispatchReceiptPollProperties.java#DispatchReceiptPollProperties",
+      "className": "DispatchReceiptPollProperties",
+      "prefix": "batch.worker.dispatch.receipt-poll",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/config/DispatchRuntimeProperties.java#DispatchRuntimeProperties",
+      "className": "DispatchRuntimeProperties",
+      "prefix": "batch.worker.dispatch.runtime",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/config/DispatchWorkerConfiguration.java#DispatchWorkerConfiguration",
+      "className": "DispatchWorkerConfiguration",
+      "prefix": "batch.worker.dispatch",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/config/HttpDispatchChannelProperties.java#HttpDispatchChannelProperties",
+      "className": "HttpDispatchChannelProperties",
+      "prefix": "batch.worker.dispatch.http-channel",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/BusinessDataSourceConfiguration.java#exportBusinessHikariConfig",
+      "className": "exportBusinessHikariConfig",
+      "prefix": "batch.datasource.business.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/ExportWorkerConfiguration.java#ExportWorkerConfiguration",
+      "className": "ExportWorkerConfiguration",
+      "prefix": "batch.worker.export",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/JdbcMappedExportSecurityProperties.java#JdbcMappedExportSecurityProperties",
+      "className": "JdbcMappedExportSecurityProperties",
+      "prefix": "batch.worker.export.jdbc-mapped",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/PlatformDataSourceConfiguration.java#exportPlatformHikariConfig",
+      "className": "exportPlatformHikariConfig",
+      "prefix": "spring.datasource.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/SqlTemplateExportSecurityProperties.java#SqlTemplateExportSecurityProperties",
+      "className": "SqlTemplateExportSecurityProperties",
+      "prefix": "batch.worker.export.sql-template",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/BusinessDataSourceConfiguration.java#importBusinessHikariConfig",
+      "className": "importBusinessHikariConfig",
+      "prefix": "batch.datasource.business.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/ImportScannerProperties.java#ImportScannerProperties",
+      "className": "ImportScannerProperties",
+      "prefix": "batch.worker.import.scanner",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/ImportSkipProperties.java#ImportSkipProperties",
+      "className": "ImportSkipProperties",
+      "prefix": "batch.worker.import.skip",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/ImportWorkerConfiguration.java#ImportWorkerConfiguration",
+      "className": "ImportWorkerConfiguration",
+      "prefix": "batch.worker.import",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/JdbcMappedImportSecurityProperties.java#JdbcMappedImportSecurityProperties",
+      "className": "JdbcMappedImportSecurityProperties",
+      "prefix": "batch.worker.import.jdbc-mapped",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/PlatformDataSourceConfiguration.java#importPlatformHikariConfig",
+      "className": "importPlatformHikariConfig",
+      "prefix": "spring.datasource.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/WorkerImportPayloadProperties.java#WorkerImportPayloadProperties",
+      "className": "WorkerImportPayloadProperties",
+      "prefix": "batch.worker.import",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingCleanupProperties.java#ProcessStagingCleanupProperties",
+      "className": "ProcessStagingCleanupProperties",
+      "prefix": "batch.worker.process.staging-cleanup",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/config/BusinessDataSourceConfiguration.java#processBusinessHikariConfig",
+      "className": "processBusinessHikariConfig",
+      "prefix": "batch.datasource.business.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/config/PlatformDataSourceConfiguration.java#processPlatformHikariConfig",
+      "className": "processPlatformHikariConfig",
+      "prefix": "spring.datasource.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/config/ProcessWorkerConfiguration.java#ProcessWorkerConfiguration",
+      "className": "ProcessWorkerConfiguration",
+      "prefix": "batch.worker.process",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputeSecurityProperties.java#SqlTransformComputeSecurityProperties",
+      "className": "SqlTransformComputeSecurityProperties",
+      "prefix": "batch.worker.process.sql-transform",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
+      "id": "sdk/java/spring/src/main/java/io/github/pinpols/batch/sdk/autoconfigure/BatchWorkerSdkProperties.java#BatchWorkerSdkProperties",
+      "className": "BatchWorkerSdkProperties",
+      "prefix": "batch.worker-sdk",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    }
+  ],
+  "dynamicDbFamilies": [
+    {
+      "key": "business-calendar",
+      "source": "DYNAMIC_DB",
+      "activation": "IMMEDIATE_AFTER_CONFIRMATION"
+    },
+    {
+      "key": "batch-window",
+      "source": "DYNAMIC_DB",
+      "activation": "IMMEDIATE_AFTER_CONFIRMATION"
+    },
+    {
+      "key": "job-definition",
+      "source": "DYNAMIC_DB",
+      "activation": "IMMEDIATE_AFTER_CONFIRMATION"
+    },
+    {
+      "key": "workflow-definition",
+      "source": "DYNAMIC_DB",
+      "activation": "IMMEDIATE_AFTER_CONFIRMATION"
+    },
+    {
+      "key": "tenant-quota-policy",
+      "source": "DYNAMIC_DB",
+      "activation": "IMMEDIATE_AFTER_CONFIRMATION"
+    },
+    {
+      "key": "config-release",
+      "source": "DYNAMIC_DB",
+      "activation": "IMMEDIATE_AFTER_CONFIRMATION"
+    }
+  ]
+}

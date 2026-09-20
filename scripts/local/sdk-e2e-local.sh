@@ -13,11 +13,14 @@
 # 用法:
 #   bash scripts/local/sdk-e2e-local.sh go
 #   bash scripts/local/sdk-e2e-local.sh python
+#   bash scripts/local/sdk-e2e-local.sh java
+#   bash scripts/local/sdk-e2e-local.sh typescript
+#   bash scripts/local/sdk-e2e-local.sh rust
 #   KEEP=1 bash scripts/local/sdk-e2e-local.sh go     # 不清理探针(调试)
 # =============================================================================
 set -uo pipefail
 
-LANG_ID="${1:?usage: sdk-e2e-local.sh <go|python|typescript>}"
+LANG_ID="${1:?usage: sdk-e2e-local.sh <go|python|java|typescript|rust>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/sdk-e2e-common.sh
 # shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
@@ -39,7 +42,7 @@ sdk_e2e_check_stack || { echo "  → start the stack first (host jars or scripts
 
 sdk_e2e_say "1. seed api-key + echo job"
 RAW="$(sdk_e2e_seed_api_key "$WC")"
-sdk_e2e_ensure_echo_job || { sdk_e2e_fail "could not create ${SDK_E2E_JOB_CODE} (run scripts/data/load-system-test-data.sh for atomic_shell_demo seed)"; exit 1; }
+sdk_e2e_ensure_echo_job || { sdk_e2e_fail "could not create self-contained ${SDK_E2E_JOB_CODE} fixture"; exit 1; }
 sdk_e2e_pass "api-key + ${SDK_E2E_JOB_CODE} ready"
 
 sdk_e2e_say "2. pre-create node-direct dispatch topic"

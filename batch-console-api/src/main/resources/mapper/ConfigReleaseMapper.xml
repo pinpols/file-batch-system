@@ -55,6 +55,25 @@
           and config_key = #{configKey}
     </select>
 
+    <select id="acquireVersionLock" resultType="int">
+        select 1
+        from pg_advisory_xact_lock(
+            hashtextextended(concat_ws('|', 'config-release', #{tenantId}, #{configType}, #{configKey}), 0)
+        )
+    </select>
+
+    <select id="selectPreviousEffective" resultMap="ConfigReleaseResultMap">
+        select *
+        from batch.config_release
+        where tenant_id = #{tenantId}
+          and config_type = #{configType}
+          and config_key = #{configKey}
+          and version_no &lt; #{versionNo}
+          and config_status in ('PUBLISHED', 'GRAY')
+        order by version_no desc, id desc
+        limit 1
+    </select>
+
     <insert id="insertConfigRelease">
         insert into batch.config_release (
             tenant_id, config_type, config_key, config_name, config_status, version_no,
@@ -77,13 +96,8 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{releaseId}
+          and version_no = #{expectedVersionNo}
+          and config_status = #{expectedStatus}
     </update>
 
-    <update id="updateGrayScope">
-        update batch.config_release
-        set gray_scope = #{grayScopeJson,jdbcType=VARCHAR}::jsonb,
-            updated_at = current_timestamp
-        where tenant_id = #{tenantId}
-          and id = #{releaseId}
-    </update>
 </mapper>

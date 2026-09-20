@@ -147,7 +147,7 @@ public final class TaskOutcomeInstanceProgressor {
         dagContinues,
         TaskOutcomeStatePolicy.isDryRun(jobInstance));
     String instanceStatus =
-        collaborators.stateMachine().transition(jobInstance, instanceEvent).toState();
+        collaborators.lifecycleEventMapper().map(jobInstance, instanceEvent).toState();
     if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
         jobInstance.getInstanceStatus(),
         instanceEvent,

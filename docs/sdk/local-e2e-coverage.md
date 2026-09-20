@@ -22,12 +22,15 @@ SDK 自托管 worker 是 **BYO 通用**的:它的 wire 路径(register → 消�
 
 ## 怎么跑
 
-前置:本地真栈已起(orchestrator :18082 + trigger :18081 + postgres :15432 + kafka),
-平台库已迁 schema,且 `atomic_shell_demo` 种子已 load(`scripts/data/load-system-test-data.sh`)。
+前置:本地真栈已起(orchestrator :18082 + trigger :18081 + postgres :15432 + kafka)，
+平台库已完成迁移。脚本会创建独立 queue/job fixture，不依赖 system-test seed。
 
 ```bash
 bash scripts/local/sdk-e2e-local.sh go          # 单语言
 bash scripts/local/sdk-e2e-local.sh python
+bash scripts/local/sdk-e2e-local.sh java
+bash scripts/local/sdk-e2e-local.sh typescript
+bash scripts/local/sdk-e2e-local.sh rust
 KEEP=1 bash scripts/local/sdk-e2e-local.sh go   # 不清理探针(调试)
 ```
 
@@ -46,10 +49,10 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 | 语言 | 样例是否接 kafka 消费 | register | full chain | 备注 |
 |---|---|---|---|---|
 | Go | ✅ 已接(kafka adapter) | ✅ | ✅ **terminal SUCCESS** | #655 + #2/#3/#4 全修,本地实测绿(参照实现) |
-| Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #5(补 base-ATOMIC handler)全修,本地实测绿 |
+| Python | ✅ 已接(auto-build) | ✅ | ✅ **terminal SUCCESS** | #2(auto node-direct pattern+consumer)/#3/#4 + 样例依赖名 + #6(补 base-ATOMIC handler)全修,本地实测绿 |
 | TypeScript | ✅ 已接(kafkajs adapter) | ✅ | ✅ **terminal SUCCESS** | #2(node-direct regex)+#4(report-json)+样例 import 路径(off-by-one)+harness 装 SDK kafkajs +样例 transport 补 tenantId/workerCode(claim 404 根因:HttpTransport 缺这俩→claim body tenantId=undefined→selectById(null)→404)全修,本地实测绿 |
-| Java | ✅ 已接(SDK consumer) | ✅(#655) | ✅ **terminal SUCCESS** | #2(样例默认 pattern 改 node-direct)+#4(TaskDispatcher report resultSummary 发 {code,message} JSON 对象,生产路径是 Map 非 ReportRequest record——record 是 conformance 漂移)+#5(已有 AtomicBaseEchoHandler)全修,本地实测绿;样例非 Spring Boot fat-jar(maven-jar-plugin+lib/ classpath),启动不卡嵌套 loader |
-| Rust | ✅ 已接(rdkafka + reqwest) | ✅ | ✅ **terminal SUCCESS** | 样例从 illustrative stub 改造成真连:启用 `http` feature 用真 `ReqwestTransport` + 真调 `Worker::start()` 注册 + `HandlerBridge` 写出 claim→execute→report 回路;#2(`kafka.rs` `topic_regex` 改 node-direct,改对应 2 单测 + broker 集成测 topic)+ #4(report resultSummary 发 {code,message} JSON 对象)+ 样例 SDK path off-by-one(`../../`→`../../../`,同 Go/TS 同款坑)全修。本机实测绿(`cargo` 在 `~/.cargo/bin` 此前没上 PATH;`cmake` 经 `brew install`;CDN 封锁已解,crate 可拉) |
+| Java | ✅ 已接(SDK consumer) | ✅(#655) | ✅ **terminal SUCCESS** | #2(样例默认 pattern 改 node-direct)+#4(TaskDispatcher report resultSummary 发 {code,message} JSON 对象,生产路径是 Map 非 ReportRequest record——record 是 conformance 漂移)+#6(已有 AtomicBaseEchoHandler)全修,本地实测绿;样例非 Spring Boot fat-jar(maven-jar-plugin+lib/ classpath),启动不卡嵌套 loader |
+| Rust | ✅ 已接(rdkafka + reqwest) | ✅ | ✅ **terminal SUCCESS** | 真 `ReqwestTransport` + `Worker::start()` + claim→execute→report；使用 claim 回包的 invocation token，heartbeat 载荷与平台 DTO 对齐 |
 
 > **Rust 历史"本地编不了"已破**:`cargo`/`rustc` 1.96 一直装着只是没在 PATH(`~/.cargo/bin`);`cmake`(rdkafka 硬依赖)`brew install cmake` 即得;曾经的 crate CDN 封锁现已解除。⇒ Rust 现可本地全链路实测,不再只能 CI 验。
 
@@ -69,8 +72,9 @@ SDK 的 wire 契约此前只对 fixture / fake stub 验过,从没对真 orchestr
 | 2 | 消费 topic | SDK 订阅 `batch.task.dispatch.<tenant>.*`(tenant-first),orchestrator 派发 `...<workerType>.node.<workerCode>`(base-first)→ 收不到任何任务 | **五语言全已修**(node-direct,对齐内建 worker `AbstractTaskConsumer.topicPattern()`) |
 | 3 | 派单报文解码 | orchestrator 发 `taskId` 是 JSON number(BIGINT),Go 结构体期望 string → decode 失败 | **Go 已修**(本 PR,tolerant number/string);其余语言待核 |
 | 4 | report | `result_summary` 是 jsonb 列(`#{resultSummary}::jsonb`),SDK 发裸人读串("echoed 0 param(s)")→ `invalid input syntax for type json` → report 500。须发 JSON 对象(对齐内建 worker `DefaultTaskExecutionWrapper` 的 `{code,message}`) | **五语言全已修**(注意 Java 生产路径是 dispatcher 的 Map、Rust 是样例 `HandlerBridge` 的 report body,均非 conformance 的请求构建器——那是 fixture 驱动的决策核,按 fixture 原样回显) |
+| 5 | claim/report | v2 dispatch 不携带 `partitionInvocationId`，平台在 claim 时生成；Go/Python/Rust 曾继续使用 dispatch 空值，report 被 409 拒绝 | **已修**：三种语言均缓存并复用 claim 回包令牌，已有单测和真链路验证 |
 
-### #5 handler 路由键(wire 之外,新发现)
+### #6 handler 路由键(wire 之外,新发现)
 
 Go 样例用**单个 catch-all handler**(`NewWorker(..., handler)`),与 workerType 无关 → terminal 绿。
 Python(及 Java)用 **handler map**,dispatcher 按 `msg.workerType` 路由。但 ATOMIC 任务的
@@ -91,5 +95,5 @@ keyed-handler 的 SDK(Python/Java)补了 base-workerType handler;单 handler 模
 workerType 无关天然规避;Rust 样例由 illustrative stub 改造成真连(`ReqwestTransport` +
 `start()` + claim→execute→report 回路)。
 「SDK wire 契约重校」专项至此收口:#1(workerGroup)/#2(node-direct topic)/#3(taskId 解码)/
-#4(report resultSummary JSON)五语言全修齐。本地全链路脚本(`sdk-e2e-local.sh <lang>`,lang ∈
+#4(report resultSummary JSON)/#5(claim invocation token)已收口。本地全链路脚本(`sdk-e2e-local.sh <lang>`,lang ∈
 {go,python,typescript,java,rust})是它的验收工具。

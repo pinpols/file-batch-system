@@ -5,7 +5,10 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
@@ -47,10 +50,17 @@ public class ExportStepExecutionAdapter
   public ExportStepExecutionAdapter(
       ExportStageExecutor exportStageExecutor,
       ObjectMapper objectMapper,
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
+      PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    super(runtimeRepository, verifierHookProvider, compensationHookProvider);
+    super(
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
+        verifierHookProvider,
+        compensationHookProvider);
     this.exportStageExecutor = exportStageExecutor;
     this.objectMapper = objectMapper;
   }
@@ -84,8 +94,8 @@ public class ExportStepExecutionAdapter
 
   @Override
   protected List<ExportStageResult> executeStages(ExportJobContext context) {
-    Long pipelineInstanceId = runtimeRepository()
-        .toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    Long pipelineInstanceId = PlatformRuntimeValues.toLong(
+        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
       return exportStageExecutor.execute(context);
     }

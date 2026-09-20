@@ -1,5 +1,11 @@
 BEGIN;
 
+-- Shared sequences are synchronized below. Serialize only fixture preparation so
+-- concurrent load-test runs cannot reset a sequence behind another transaction.
+SELECT pg_advisory_xact_lock(
+  hashtext('batch-load-tests:prepare-worker-load-business')::bigint
+);
+
 SELECT setval(pg_get_serial_sequence('biz.settlement_batch', 'id'), COALESCE((SELECT max(id) FROM biz.settlement_batch), 1), true);
 SELECT setval(pg_get_serial_sequence('biz.settlement_detail', 'id'), COALESCE((SELECT max(id) FROM biz.settlement_detail), 1), true);
 SELECT setval(pg_get_serial_sequence('biz.customer_account', 'id'), COALESCE((SELECT max(id) FROM biz.customer_account), 1), true);

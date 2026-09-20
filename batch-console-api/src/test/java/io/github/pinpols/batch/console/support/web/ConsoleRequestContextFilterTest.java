@@ -77,6 +77,25 @@ class ConsoleRequestContextFilterTest {
     ConsoleRequestMetadata metadata = (ConsoleRequestMetadata)
         request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
     assertThat(metadata.tenantId()).isEqualTo("tenant-a");
+    assertThat(metadata.operatorId()).isEqualTo("admin");
+  }
+
+  @Test
+  void shouldIgnoreClientSuppliedOperatorHeader() throws Exception {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")),
+            "secret",
+            Set.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+    MockHttpServletRequest request = baseRequest();
+    request.addHeader(CommonConstants.DEFAULT_OPERATOR_ID_HEADER, "forged-operator");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    filter.doFilter(request, response, noOpChain(new AtomicBoolean()));
+
+    ConsoleRequestMetadata metadata = (ConsoleRequestMetadata)
+        request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
+    assertThat(metadata.operatorId()).isEqualTo("admin");
   }
 
   @Test

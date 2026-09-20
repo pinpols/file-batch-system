@@ -10,7 +10,8 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -26,7 +27,8 @@ import org.junit.jupiter.api.Test;
  */
 class PreprocessStepEncodingTest {
 
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
   private PreprocessStep step;
   private Map<String, Object> templateConfig;
 
@@ -34,14 +36,15 @@ class PreprocessStepEncodingTest {
   void setUp() {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);
-    runtimeRepository = mock(PlatformFileRuntimeRepository.class);
-    when(runtimeRepository.toLong(any())).thenReturn(1L);
-    when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
+    runtimeRepository = mock(PlatformFileRecordRepository.class);
+    pipelineDefinitions = mock(PlatformPipelineDefinitionRepository.class);
+    when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any()))
         .thenAnswer(invocation -> templateConfig == null ? Map.of() : templateConfig);
     S3StorageProperties props = new S3StorageProperties();
     props.setBucket("bucket-1");
     step = new PreprocessStep(
         runtimeRepository,
+        pipelineDefinitions,
         security,
         mock(BatchObjectCryptoService.class),
         props,

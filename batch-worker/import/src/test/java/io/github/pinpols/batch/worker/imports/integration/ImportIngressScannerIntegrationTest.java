@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
 import java.net.URI;
@@ -60,7 +60,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   private ImportIngressScanner scanner;
 
   @Autowired
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
 
   @Test
   void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {

@@ -12,7 +12,8 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
@@ -62,7 +63,7 @@ public class LoadStep implements ImportStageStep {
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   private final ImportLoadPluginRegistry importLoadPluginRegistry;
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
   private final ImportWorkerConfiguration workerConfiguration;
   private final ObjectMapper objectMapper;
   // ADR-038 P2:续跑位点(默认禁用,开关 batch.worker.checkpoint.enabled=true 才生效)
@@ -322,7 +323,7 @@ public class LoadStep implements ImportStageStep {
     if (checkpointDegradedByMultiPartition(context)) {
       return null;
     }
-    Long pipelineInstanceId = runtimeRepository.toLong(
+    Long pipelineInstanceId = PlatformRuntimeValues.toLong(
         context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     if (pipelineInstanceId == null || pipelineInstanceId <= 0L) {
       return null;
@@ -428,7 +429,7 @@ public class LoadStep implements ImportStageStep {
     attrs.put(KEY_LOADED_COUNT, loadedCount);
     attrs.put(KEY_SUCCESS_COUNT, numberValue(attrs.get(KEY_SUCCESS_COUNT)) + loadedCount);
     ImportStageSupport.updateFileStatusRecoverAware(
-        runtimeRepository,
+        fileRecords,
         context,
         "LOADED",
         Map.of(
@@ -502,7 +503,7 @@ public class LoadStep implements ImportStageStep {
 
   private ImportStageResult markLoaded(ImportJobContext context, long loadedCount) {
     ImportStageSupport.updateFileStatusRecoverAware(
-        runtimeRepository,
+        fileRecords,
         context,
         "LOADED",
         Map.of(

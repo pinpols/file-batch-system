@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -44,7 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ValidateStepTest {
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
   private ImportRecordGovernanceService governance;
@@ -138,7 +138,6 @@ class ValidateStepTest {
     when(qualityService.beginValidation(any(), eq(3L), any())).thenReturn(session);
     when(qualityService.validateChunkRows(any(), any(), anyLong())).thenReturn(Map.of());
     when(governance.withinThreshold(any())).thenReturn(true);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
 
     ImportStageResult result = step.execute(ctx);
 
@@ -214,7 +213,6 @@ class ValidateStepTest {
     when(governance.isSkippable("ROW_BAD")).thenReturn(true);
     when(governance.shouldFailOnSkip("ROW_BAD")).thenReturn(false);
     when(governance.withinThreshold(any())).thenReturn(true);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
 
     ImportStageResult result = step.execute(ctx);
 
@@ -288,7 +286,6 @@ class ValidateStepTest {
     when(qualityService.validateChunkRows(any(), any(), anyLong())).thenReturn(Map.of());
     // post-loop 检查超阈值
     when(governance.withinThreshold(any())).thenReturn(false);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
 
     ImportStageResult result = step.execute(ctx);
 

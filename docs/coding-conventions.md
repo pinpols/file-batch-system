@@ -574,9 +574,8 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 | 子包                 | 用途                     | 形态建议                                                                                                |
 | ------------------ | ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `**pipeline`**     | Pipeline 定义、步骤注册、执行上下文 | **定义/配置加载结果**可用 `@Data class`（字段需陆续填充）；**窄元组**（如步骤键、阶段结果）用 `record`。接口 + 实现（`PipelineExecutor`）可同包。 |
 | `**scheduler`**    | 资源调度决策、配额策略            | 决策对象多为「多字段、逐步填空」：`@Data class` 更常见；策略枚举/纯函数放 `common` 若跨模块复用。                                       |
-| `**statemachine**` | 状态迁移表、状态机描述            | **迁移边、小事件**：`record`；**有行为的机**可用 `class`。                                                           |
+| `**statemachine**` | 生命周期事件映射、类型化状态迁移表      | **迁移边、小事件**：`record`；只有真正校验「起态 + 事件 + 终态」矩阵的组件才命名为 StateMachine。                                  |
 | `**value`**        | DB 语义包装（如 JSONB 原始串）   | `**final class**` + 静态 `of` + 正确 `equals`/`hashCode`，避免与 `String` 混用语义。                             |
 
 
@@ -1287,7 +1286,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 **参照实现：** `DefaultCompensationService`
 
 ```java
-private final Map<String, CompensationHandler> handlersByType = Map.of(
+private final Map<String, CompensationOperation> operationsByType = Map.of(
         "JOB",       this::rerunJob,
         "STEP",      this::rerunStep,
         "PARTITION", this::retryPartition,
@@ -1297,9 +1296,9 @@ private final Map<String, CompensationHandler> handlersByType = Map.of(
 );
 
 private Map<String, Object> execute(...) {
-    CompensationHandler handler = handlersByType.get(compensationType);
-    if (handler == null) throw new BizException(...);
-    return handler.handle(command, commandNo, traceId, entity);
+    CompensationOperation operation = operationsByType.get(compensationType);
+    if (operation == null) throw new BizException(...);
+    return operation.execute(command, commandNo, traceId, entity);
 }
 ```
 

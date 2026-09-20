@@ -149,7 +149,9 @@ STRICT=1 STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
 
 `prepare-worker-load-data.sh` 生成的 IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户替换成唯一值，避免并发下重复文件名、重复 customerNo、重复 process batchKey 影响结论。
 Dispatch 压测会按虚拟用户数创建独立文件记录，并为每档压力分配不重叠的 `fileId`，避免共享文件状态竞争污染吞吐和失败率。
-每轮 Worker 压测的本地夹具位于 `target/worker-load-data/<RUN_ID>`；多个入口并行执行时不会覆盖对方的 payload 或 `run.env`。
+每轮 Worker 压测的本地夹具位于 `target/worker-load-data/<RUN_ID>`；多个入口并行执行时不会覆盖对方的 payload 或 `run.env`。共享模板和序列的准备事务使用数据库 advisory lock，仅串行化造数阶段，避免并发 `setval` 回拨序列；压测流量仍可并行执行。
+控制面混合压测会根据各模块速率和持续时间计算期望 launch 数，根据 Dispatch 请求数预建唯一文件记录，并自包含准备只读 Atomic SQL 作业。每个 trigger request 都必须关联实例，且所有实例最终为 `SUCCESS`；仅有部分实例进入终态不再视为通过。
+Process 故障画像重启本地 Worker 时会通过公共环境转换函数使用宿主机 PostgreSQL/Redis 地址，避免把 Compose 服务名传给本地 JVM。
 
 `RUN_ID` 最长 53 个字符；夹具会追加最长的 `-SETTLEMENT` 后缀并写入 `varchar(64)`。所有造数入口会在写文件或数据库前校验，P2 容量画像还会校验追加 `-10w` 后的派生标识。
 

@@ -133,5 +133,6 @@ batch-common/src/main/java/io/github/pinpols/batch/common/enums/
 
 ## 7. 未来工作
 
-- 考虑提取 `StateMachineEngine<T extends DictEnum>` 通用框架，集中校验"非法状态转移"（目前由各 service 散落 if-else 校验）
+- 不引入一个接收任意实体的“万能状态机”。`LifecycleEventMapper` 只负责把受支持事件翻译为候选状态，未知事件快速失败；最终合法前态由各聚合 Mapper 的 expected-status CAS 保证
+- 具有完整领域矩阵的状态继续使用类型化实现，例如 `FileStateMachine`；当某个聚合的迁移规则继续增长时，为该聚合单独建立显式转换矩阵
 - `pipeline_instance.COMPENSATING` 与 `compensation_command` 的关系建议增强文档（目前两者更新不在一个事务内，靠最终一致性回退）

@@ -222,7 +222,14 @@ class PlatformHttpClient:
             return {}
         timestamp = str(int(time.time() * 1000))
         nonce = str(uuid.uuid4())
-        signature = _signing.sign(self.config.api_key, method, path, timestamp, nonce, body_bytes)
+        signature = _signing.sign(
+            self.config.api_key,
+            method=method,
+            path=path,
+            timestamp=timestamp,
+            nonce=nonce,
+            body=body_bytes,
+        )
         return {
             "X-Batch-Timestamp": timestamp,
             "X-Batch-Nonce": nonce,

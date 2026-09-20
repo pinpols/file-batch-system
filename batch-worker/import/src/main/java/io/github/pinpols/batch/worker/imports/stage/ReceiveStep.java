@@ -8,7 +8,10 @@ import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -47,7 +50,9 @@ public class ReceiveStep implements ImportStageStep {
   private static final Set<String> RESERVED_METADATA_KEYS =
       Set.of("templateCode", "sourceType", "headerRows", "footerRows", "taskId", "withHeader");
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private final PlatformPipelineRunRepository pipelineRuns;
   private final BatchSecurityProperties batchSecurityProperties;
   private final ObjectMapper objectMapper;
   private final WorkerImportPayloadProperties payloadProperties;
@@ -55,11 +60,15 @@ public class ReceiveStep implements ImportStageStep {
   private long maxPayloadSizeBytes;
 
   public ReceiveStep(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      PlatformPipelineRunRepository pipelineRuns,
       BatchSecurityProperties batchSecurityProperties,
       ObjectMapper objectMapper,
       WorkerImportPayloadProperties payloadProperties) {
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
+    this.pipelineDefinitions = pipelineDefinitions;
+    this.pipelineRuns = pipelineRuns;
     this.batchSecurityProperties = batchSecurityProperties;
     this.objectMapper = objectMapper;
     this.payloadProperties = payloadProperties;
@@ -120,7 +129,7 @@ public class ReceiveStep implements ImportStageStep {
     }
     ImportPayload importPayload = resolvePayload(context);
     Map<String, Object> attrs = context.getAttributes();
-    Long existingFileId = runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Long existingFileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     if (existingFileId == null) {
       String traceId =
           String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId()));
@@ -138,7 +147,7 @@ public class ReceiveStep implements ImportStageStep {
       mergeSecurityMetadata(
           metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
       mergeUserMetadata(metadata, importPayload.metadata());
-      Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+      Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
           .tenantId(context.getTenantId())
           .fileCode(importPayload.fileCode())
           .bizType(defaultText(importPayload.bizType(), context.getJobCode()))
@@ -166,9 +175,10 @@ public class ReceiveStep implements ImportStageStep {
       attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
       attrs.put(
           PipelineRuntimeKeys.FILE_RECORD,
-          runtimeRepository.loadFileRecord(context.getTenantId(), fileId));
-      runtimeRepository.bindFileToPipelineInstance(
-          runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
+          fileRecords.loadFileRecord(context.getTenantId(), fileId));
+      pipelineRuns.bindFileToPipelineInstance(
+          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+          fileId);
       context.setFileId(String.valueOf(fileId));
     } else {
       // ADR-046 文件束:复用 scanner 预建的 file_record(orchestrator 把 partition.source_file_id
@@ -222,8 +232,8 @@ public class ReceiveStep implements ImportStageStep {
     if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
     }
-    Map<String, Object> template =
-        runtimeRepository.loadLatestTemplateConfig(tenantId, templateCode, ImportWorkerType.IMPORT);
+    Map<String, Object> template = pipelineDefinitions.loadLatestTemplateConfig(
+        tenantId, templateCode, ImportWorkerType.IMPORT);
     if (template == null || template.isEmpty()) {
       return Map.of();
     }

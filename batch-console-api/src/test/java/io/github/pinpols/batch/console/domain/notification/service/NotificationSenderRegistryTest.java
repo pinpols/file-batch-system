@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
@@ -40,5 +42,18 @@ class NotificationSenderRegistryTest {
     assertThat(registry.resolve("WECHAT")).isNull();
     assertThat(registry.resolve(null)).isNull();
     assertThat(registry.resolve(" ")).isNull();
+  }
+
+  @Test
+  @DisplayName("重复渠道键在启动期快速失败")
+  void shouldRejectDuplicateChannelType() {
+    NotificationSender first = mock(NotificationSender.class);
+    NotificationSender second = mock(NotificationSender.class);
+    when(first.channelType()).thenReturn("WECOM");
+    when(second.channelType()).thenReturn("wecom");
+
+    assertThatThrownBy(() -> new NotificationSenderRegistry(List.of(first, second)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("duplicate NotificationSender channelType: WECOM");
   }
 }

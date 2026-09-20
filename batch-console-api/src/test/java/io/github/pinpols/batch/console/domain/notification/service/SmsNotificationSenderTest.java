@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -23,6 +25,11 @@ class SmsNotificationSenderTest {
   private SmsProvider aliyunProvider;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+
+  @BeforeEach
+  void setUp() {
+    when(aliyunProvider.providerCode()).thenReturn("aliyun");
+  }
 
   private NotificationMessage message(String configJson) {
     WebhookEventPayload payload =
@@ -61,7 +68,6 @@ class SmsNotificationSenderTest {
 
   @Test
   void noMatchingProviderImpl_fails() {
-    when(aliyunProvider.supports("tencent")).thenReturn(false);
     WebhookDeliveryResult r =
         newSender("tencent").send(message("{\"phoneNumbers\":\"+8613800000000\"}"));
     assertThat(r.success()).isFalse();
@@ -70,7 +76,6 @@ class SmsNotificationSenderTest {
 
   @Test
   void delegatesToMatchingProvider() {
-    when(aliyunProvider.supports("aliyun")).thenReturn(true);
     when(aliyunProvider.send(anyList(), any())).thenReturn(WebhookDeliveryResult.ok());
     WebhookDeliveryResult r =
         newSender("aliyun").send(message("{\"phoneNumbers\":\"+8613800000000,+8613800000001\"}"));
@@ -79,5 +84,16 @@ class SmsNotificationSenderTest {
         .send(
             List.of("+8613800000000", "+8613800000001"),
             message("{\"phoneNumbers\":\"+8613800000000,+8613800000001\"}"));
+  }
+
+  @Test
+  void duplicateProviderCodeFailsFast() {
+    SmsProvider duplicate = org.mockito.Mockito.mock(SmsProvider.class);
+    when(duplicate.providerCode()).thenReturn("ALIYUN");
+
+    assertThatThrownBy(() -> new SmsNotificationSender(
+            List.of(aliyunProvider, duplicate), new SmsProperties(), objectMapper))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("duplicate SmsProvider providerCode: aliyun");
   }
 }

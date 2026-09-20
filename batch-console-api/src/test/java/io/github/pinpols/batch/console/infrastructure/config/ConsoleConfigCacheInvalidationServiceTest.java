@@ -3,11 +3,17 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.Iterator;
@@ -21,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,10 +39,15 @@ class ConsoleConfigCacheInvalidationServiceTest {
   @Mock
   private ConsoleQueryCacheService queryCacheService;
 
+  @Mock
+  private ValueOperations<String, String> valueOperations;
+
   private ConsoleConfigCacheInvalidationService service;
 
   @BeforeEach
   void setUp() {
+    lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    lenient().when(valueOperations.increment(anyString())).thenReturn(1L);
     service = new ConsoleConfigCacheInvalidationService(redisTemplate, queryCacheService);
   }
 
@@ -47,10 +59,40 @@ class ConsoleConfigCacheInvalidationServiceTest {
   }
 
   @Test
+  void evictJobDefinitionPublishesInvalidationEvent() {
+    ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+
+    service.evictJobDefinition("t1", "JOB1");
+
+    verify(redisTemplate)
+        .convertAndSend(
+            eq(ConsoleConfigCacheInvalidationService.INVALIDATION_CHANNEL),
+            payloadCaptor.capture());
+    ConfigCacheInvalidationEvent event =
+        JsonUtils.fromJsonStrict(payloadCaptor.getValue(), ConfigCacheInvalidationEvent.class);
+    assertThat(event.tenantId()).isEqualTo("t1");
+    assertThat(event.type()).isEqualTo("job-definition");
+    assertThat(event.code()).isEqualTo("JOB1");
+    assertThat(event.revision()).isEqualTo(1L);
+    assertThat(event.keyRevision()).isEqualTo(1L);
+  }
+
+  @Test
   void evictWorkflowDefinitionDeletesKeyImmediatelyWhenNoActiveTransaction() {
     service.evictWorkflowDefinition("t1", "WF1");
 
     verify(redisTemplate).delete("config:t1:workflow-definition:WF1");
+  }
+
+  @Test
+  void evictDoesNotPublishWhenRedisDeleteFails() {
+    doThrow(new RuntimeException("redis down"))
+        .when(redisTemplate)
+        .delete("config:t1:job-definition:JOB1");
+
+    service.evictJobDefinition("t1", "JOB1");
+
+    verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
   }
 
   @Test
@@ -109,5 +151,6 @@ class ConsoleConfigCacheInvalidationServiceTest {
     service.evictAllJobDefinitions("t1");
 
     verify(redisTemplate, never()).delete(anyCollection());
+    verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
   }
 }

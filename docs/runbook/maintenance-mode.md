@@ -38,7 +38,7 @@ BATCH_CONSOLE_MAINTENANCE_MESSAGE="批处理收尾中,暂停写操作"
 BATCH_CONSOLE_MAINTENANCE_ENABLED=false
 ```
 
-Spring Boot `@ConfigurationProperties` 在容器重启后生效(scope = singleton),**这些 env 是启动期 binding,不支持热更**。如需热更,后续可补 `@RefreshScope` + `actuator/refresh`。
+Spring Boot `@ConfigurationProperties` 在容器重启后生效(scope = singleton),**这些 env 是启动期 binding,不支持热更**。变更由 Helm checksum 触发滚动更新；禁止局部添加 `@RefreshScope`，动态需求必须走数据库版本、缓存失效和实例确认链路。
 
 ### 3.2 docker-compose / Helm
 

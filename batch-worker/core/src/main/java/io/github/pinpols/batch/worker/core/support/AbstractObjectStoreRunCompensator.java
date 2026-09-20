@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -26,13 +26,13 @@ import org.springframework.beans.factory.ObjectProvider;
 @Slf4j
 public abstract class AbstractObjectStoreRunCompensator implements PipelineCompensator {
 
-  private final PlatformFileRuntimeRepository runtimeRepository;
+  private final PlatformFileRecordRepository fileRecords;
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
 
   protected AbstractObjectStoreRunCompensator(
-      PlatformFileRuntimeRepository runtimeRepository,
+      PlatformFileRecordRepository fileRecords,
       ObjectProvider<BatchObjectStore> objectStoreProvider) {
-    this.runtimeRepository = runtimeRepository;
+    this.fileRecords = fileRecords;
     this.objectStoreProvider = objectStoreProvider;
   }
 
@@ -92,7 +92,7 @@ public abstract class AbstractObjectStoreRunCompensator implements PipelineCompe
       Map<String, Object> typed = (Map<String, Object>) map;
       return typed;
     }
-    return runtimeRepository.loadFileRecord(tenantId, fileId);
+    return fileRecords.loadFileRecord(tenantId, fileId);
   }
 
   private static String stringValue(Object value) {

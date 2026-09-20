@@ -8,7 +8,9 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -31,14 +33,25 @@ class ImportStepExecutionAdapterTest {
   private ImportStageExecutor stageExecutor;
 
   @Mock
-  private PlatformFileRuntimeRepository runtimeRepository;
+  private PlatformFileRecordRepository runtimeRepository;
+
+  @Mock
+  private PlatformPipelineDefinitionRepository pipelineDefinitions;
+
+  @Mock
+  private PlatformPipelineRunRepository pipelineRuns;
 
   private ImportStepExecutionAdapter adapter;
 
   @BeforeEach
   void setUp() {
     adapter = new ImportStepExecutionAdapter(
-        stageExecutor, runtimeRepository, emptyProvider(), emptyProvider());
+        stageExecutor,
+        pipelineDefinitions,
+        pipelineRuns,
+        runtimeRepository,
+        emptyProvider(),
+        emptyProvider());
   }
 
   @Test

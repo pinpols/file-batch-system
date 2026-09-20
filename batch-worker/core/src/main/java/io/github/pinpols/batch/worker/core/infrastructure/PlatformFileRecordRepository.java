@@ -16,15 +16,18 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 文件记录及文件状态的数据访问协作者。 */
+@Repository
 @RequiredArgsConstructor
 @Slf4j
-final class PlatformFileRecordRepository {
+public class PlatformFileRecordRepository {
 
   private final PlatformFileRuntimeMapper mapper;
 
-  Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
+  public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
     if (!Texts.hasText(tenantId) || fileId == null) {
       return Map.of();
     }
@@ -32,7 +35,8 @@ final class PlatformFileRecordRepository {
     return row == null ? Map.of() : row;
   }
 
-  boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
+  public boolean existsFileRecordByStoragePath(
+      String tenantId, String storageBucket, String storagePath) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return false;
     }
@@ -41,7 +45,7 @@ final class PlatformFileRecordRepository {
     return count != null && count > 0;
   }
 
-  Map<String, Object> loadFileRecordByStoragePath(
+  public Map<String, Object> loadFileRecordByStoragePath(
       String tenantId, String storageBucket, String storagePath) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return Map.of();
@@ -51,7 +55,8 @@ final class PlatformFileRecordRepository {
     return row == null ? Map.of() : row;
   }
 
-  Long createFileRecord(FileRecordParam param) {
+  @Transactional
+  public Long createFileRecord(FileRecordParam param) {
     String tenantId = param.getTenantId();
     String fileCode = param.getFileCode();
     String fileCategory = param.getFileCategory();
@@ -168,7 +173,7 @@ final class PlatformFileRecordRepository {
     }
   }
 
-  void updateFileStatus(Long fileId, String fileStatus, Object metadata) {
+  public void updateFileStatus(Long fileId, String fileStatus, Object metadata) {
     if (fileId == null || !Texts.hasText(fileStatus)) {
       return;
     }
@@ -181,11 +186,11 @@ final class PlatformFileRecordRepository {
         params(FILE_ID, fileId, "fileStatus", fileStatus, "metadataJson", toJson(metadata)));
   }
 
-  String currentFileStatus(Long fileId) {
+  public String currentFileStatus(Long fileId) {
     return fileId == null ? null : mapper.selectFileStatus(params(FILE_ID, fileId));
   }
 
-  void updateFileMetadata(Long fileId, Object metadata) {
+  public void updateFileMetadata(Long fileId, Object metadata) {
     if (fileId != null) {
       mapper.updateFileRecordMetadata(params(FILE_ID, fileId, "metadataJson", toJson(metadata)));
     }

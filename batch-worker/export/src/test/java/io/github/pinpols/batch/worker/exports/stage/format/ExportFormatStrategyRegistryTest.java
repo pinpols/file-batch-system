@@ -74,12 +74,15 @@ class ExportFormatStrategyRegistryTest {
   }
 
   @Test
-  @DisplayName("resolve(): 未知格式类型 → fallback 到 JSON")
-  void shouldFallbackToJson_whenFormatTypeUnknown() {
+  @DisplayName("resolve(): 显式未知格式类型 → 快速失败")
+  void shouldRejectUnknownFormatType() {
     ExportFormatStrategy json = stub("JSON");
     ExportFormatStrategyRegistry registry = newRegistry(json);
 
-    assertThat(registry.resolve("PARQUET")).isSameAs(json);
+    assertThatThrownBy(() -> registry.resolve("PARQUET"))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
   }
 
   @Test
