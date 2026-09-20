@@ -92,7 +92,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   private final Counter timeoutCounter;
   private final Counter threadLeakedCounter;
   // R3-P2-5：之前 executionTimer 用 Tags.empty()，4 类 worker 共享一条时间序列。
-  // 改为按 workerType 维度懒加载 cache → Grafana 可分别看 import/export/process/dispatch 各自分位。
+  // 改为按 workerType 维度懒加载 cache → Grafana 可分别看五类 worker 各自分位。
   private final MeterRegistry meterRegistry;
   private final Map<String, Timer> executionTimerByType = new ConcurrentHashMap<>();
 

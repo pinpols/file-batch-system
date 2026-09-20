@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 import io.github.pinpols.batch.console.infrastructure.config.TenantConfigInitApplyHandlers.ApplyContext;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse.ItemStats;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

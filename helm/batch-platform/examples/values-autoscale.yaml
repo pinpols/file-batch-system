@@ -2,7 +2,7 @@
 # 前提：集群已装 KEDA operator（helm install keda kedacore/keda -n keda）
 #
 # 策略：
-#   - Worker（import/export/process/dispatch）：KEDA 按 Kafka consumer lag 扩缩
+#   - 五类 Worker（import/export/process/dispatch/atomic）：KEDA 按 Kafka consumer lag 扩缩
 #   - Console-api：CPU HPA
 #   - Orchestrator：sharding.mode=dynamic + CPU HPA（默认）；
 #                   或改 keda 按 Outbox backlog 扩（需先创建 Secret，见下方注释）

@@ -5,10 +5,10 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse.ReadinessItem;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse;
-import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse.ReadinessItem;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +39,7 @@ public class ConsoleTenantReadinessService {
   /** quickstart 文档路径(由主进程另建);readiness 只在 docRef 里引用,不负责生成。 */
   private static final String DOC_QUICKSTART = "docs/runbook/first-tenant-config-quickstart.md";
 
-  /** 配置模板内字段说明 / 四类Worker示例 sheet 的口径引用。 */
+  /** 配置模板内字段说明 / 五类Worker示例 sheet 的口径引用。 */
   private static final String DOC_FIELD_GUIDE = DOC_QUICKSTART + " #字段说明 / 配置模板『字段说明』sheet";
 
   private final TenantMapper tenantMapper;
@@ -88,7 +88,7 @@ public class ConsoleTenantReadinessService {
               + (missingQuery ? "default_query_sql(EXPORT 导出 SQL)" : "")
               + (missingQuery && missingMappings ? " 和 " : "")
               + (missingMappings ? "field_mappings(字段映射)" : "")
-              + "；结构参考『四类Worker示例』sheet 与『字段说明』的填写示例列。";
+              + "；结构参考『五类Worker示例』sheet 与『字段说明』的填写示例列。";
           blocking.add(new ReadinessItem("template", reason.trim(), code, hint, DOC_FIELD_GUIDE));
         } else {
           warnings.add(new ReadinessItem(

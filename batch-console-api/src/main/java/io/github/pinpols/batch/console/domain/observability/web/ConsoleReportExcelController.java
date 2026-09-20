@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
+import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigReleaseQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.OutboxDeliveryLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
-import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.ConfigChangeLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
-import io.github.pinpols.batch.console.web.query.OutboxDeliveryLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.OutboxRetryLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
-import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;

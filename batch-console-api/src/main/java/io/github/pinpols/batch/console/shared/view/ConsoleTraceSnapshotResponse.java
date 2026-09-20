@@ -1,14 +1,14 @@
 package io.github.pinpols.batch.console.shared.view;
 
-import io.github.pinpols.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
-import io.github.pinpols.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobExecutionLogResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
+import io.github.pinpols.batch.console.domain.audit.application.contract.response.ConsoleOperationAuditResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileRecordResponse;
+import io.github.pinpols.batch.console.domain.governance.application.contract.response.ConsoleDeadLetterTaskResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobExecutionLogResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeRunResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowRunResponse;
 import java.util.List;
 
 public record ConsoleTraceSnapshotResponse(

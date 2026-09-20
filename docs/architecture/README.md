@@ -8,7 +8,7 @@
 
 | # | 文件 | 作用 | 何时看 |
 |---|---|---|---|
-| 01 | [project-structure.md](./project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK、文档与脚本目录边界 | 入门 / 加模块 / 查目录归属 |
+| 01 | [project-structure.md](./project-structure.md) | 当前 Maven reactor、平台运行时模块、Console 分层、SDK、文档与脚本目录边界 | 入门 / 加模块 / 查目录归属 |
 | 02 | [system-flow-overview.md](./system-flow-overview.md) | 端到端业务流程总览（10+ Mermaid 图，含 BFF / 观测栈 / Workflow DAG / DLQ 子图） | 入门必看 |
 | 03 | [core-model.md](./core-model.md) | 实例 / 状态 / 上下文 / 恢复模型的单一权威定义 | 写 orchestrator 状态机相关代码前 |
 | 04 | [runtime-module-communication.md](./runtime-module-communication.md) | trigger / orchestrator / worker / console-api 模块间运行时通信拓扑 | 排查跨模块调用问题 |

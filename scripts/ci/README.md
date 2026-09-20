@@ -11,7 +11,7 @@
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-no-enable-preview.sh` |
 | 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
-| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-feature-switch-registry.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
+| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
@@ -128,8 +128,7 @@ bash scripts/ci/security-scan.sh --help
 
 ```bash
 make python-env
-source .venv/bin/activate
-python3 scripts/ci/check-console-openapi-paths.py
+make check-openapi
 ```
 
 成功时打印路由数量并以退出码 `0` 结束；不一致时打印「仅 OpenAPI」与「仅代码」的差异并以 `1` 结束。
@@ -161,6 +160,16 @@ python3 scripts/ci/check-helm-env-sync.py
 ```
 
 成功时打印 `Helm BATCH_* env 与应用消费入口一致` 并以退出码 `0` 结束；违反约束时列出未知变量或缺失入口并以 `1` 结束。
+
+## `check-five-worker-parity.py`
+
+校验 Import / Export / Process / Dispatch / Atomic 五类内建 Worker 在 topic、租户 ACL、Kafka lag 告警、消费路由、sim 恢复和配置包示例中的横向完整性。Pipeline stage 仍只覆盖前四类；Atomic 是单任务执行器，并由独立隔离模板部署。
+
+```bash
+python3 scripts/ci/check-five-worker-parity.py
+```
+
+成功时打印 `Five-worker parity check passed` 并以退出码 `0` 结束；缺任一 Worker 或破坏 Atomic/Pipeline 边界时列出具体文件并以 `1` 结束。
 
 ## `check-config-governance.py`
 

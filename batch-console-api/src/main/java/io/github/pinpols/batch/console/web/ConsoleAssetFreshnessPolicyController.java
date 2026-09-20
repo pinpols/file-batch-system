@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
+import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.service.ConsoleAssetFreshnessPolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -39,20 +39,23 @@ public class ConsoleAssetFreshnessPolicyController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<List<AssetFreshnessPolicyEntity>> list(
+  public CommonResponse<List<AssetFreshnessPolicyResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam(value = "assetCode", required = false) String assetCode,
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "limit", required = false, defaultValue = "100") @Min(1) @Max(500)
           Integer limit) {
-    return responseFactory.success(policyService.list(tenantId, assetCode, enabled, limit));
+    return responseFactory.success(policyService.list(tenantId, assetCode, enabled, limit).stream()
+        .map(AssetFreshnessPolicyResponse::from)
+        .toList());
   }
 
   @GetMapping("/{id}")
-  public CommonResponse<AssetFreshnessPolicyEntity> get(
+  public CommonResponse<AssetFreshnessPolicyResponse> get(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @PathVariable("id") Long id) {
-    return responseFactory.success(policyService.get(tenantId, id));
+    return responseFactory.success(
+        AssetFreshnessPolicyResponse.from(policyService.get(tenantId, id)));
   }
 
   @PostMapping

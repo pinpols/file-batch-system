@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
-import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;

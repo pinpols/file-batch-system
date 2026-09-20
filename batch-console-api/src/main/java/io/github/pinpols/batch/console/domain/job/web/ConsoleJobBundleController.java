@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
-import io.github.pinpols.batch.console.domain.job.web.request.JobBundleCreateRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.JobBundleImportRequest;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleExportResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobBundleResultResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleCreateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleImportRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleExportResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleResultResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;

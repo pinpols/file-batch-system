@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

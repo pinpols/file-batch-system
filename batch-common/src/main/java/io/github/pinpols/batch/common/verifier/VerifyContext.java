@@ -10,7 +10,7 @@ import lombok.Builder;
  * <p>不持有领域对象——只传 ID + 必要的属性快照，让 verifier 自己回 DB / 对象存储拿真值， 避免 SPI 接口与领域模型耦合。
  *
  * @param tenantId 租户 ID
- * @param jobType job 类型（IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW）
+ * @param jobType job 类型（GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/ATOMIC/WORKFLOW/文件束类型）
  * @param jobInstanceId job_instance.id
  * @param taskId job_task.id（可空，stage 级 verifier 可能在 task 创建前就跑）
  * @param stageCode stage 业务码（如 EXPORT_FETCH / DISPATCH_DISPATCH），与 worker 内部 step 对齐

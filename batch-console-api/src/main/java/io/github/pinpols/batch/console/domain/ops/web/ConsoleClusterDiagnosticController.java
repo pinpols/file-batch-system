@@ -2,12 +2,12 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleClusterDiagnosticResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleInstanceDiagnosisResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleOutboxHealthResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleShedLockStatusResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleTerminalChildrenHealthResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerConsistencyResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerConsistencyResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

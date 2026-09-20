@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;

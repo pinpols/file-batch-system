@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.application;
 
-import io.github.pinpols.batch.console.web.query.AuditLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.ConfigChangeLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
-import io.github.pinpols.batch.console.web.query.OutboxDeliveryLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.OutboxRetryLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
-import io.github.pinpols.batch.console.web.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigReleaseQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.OutboxDeliveryLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 

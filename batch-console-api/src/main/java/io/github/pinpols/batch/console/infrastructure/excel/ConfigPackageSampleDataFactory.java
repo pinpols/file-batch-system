@@ -23,6 +23,7 @@ public final class ConfigPackageSampleDataFactory {
   private static final String SCENARIO_EXPORT = "EXPORT";
   private static final String SCENARIO_PROCESS = "PROCESS";
   private static final String SCENARIO_DISPATCH = "DISPATCH";
+  private static final String SCENARIO_ATOMIC = "ATOMIC";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
   private static final int SHEET_COUNT = 11;
 
@@ -37,12 +38,14 @@ public final class ConfigPackageSampleDataFactory {
       case SCENARIO_EXPORT -> putExport(sheets);
       case SCENARIO_PROCESS -> putProcess(sheets);
       case SCENARIO_DISPATCH -> putDispatch(sheets);
+      case SCENARIO_ATOMIC -> putAtomic(sheets);
       case SCENARIO_WORKFLOW -> putWorkflow(sheets);
       default -> {
         putImport(sheets);
         putExport(sheets);
         putProcess(sheets);
         putDispatch(sheets);
+        putAtomic(sheets);
         putWorkflow(sheets);
       }
     }
@@ -58,6 +61,7 @@ public final class ConfigPackageSampleDataFactory {
           SCENARIO_EXPORT,
           SCENARIO_PROCESS,
           SCENARIO_DISPATCH,
+          SCENARIO_ATOMIC,
           SCENARIO_WORKFLOW -> rawScenario.trim().toUpperCase(Locale.ROOT);
       default -> SCENARIO_ALL;
     };
@@ -244,6 +248,17 @@ public final class ConfigPackageSampleDataFactory {
             "sftpDispatch",
             "{\"channelCode\":\"" + CHANNEL + "\"}"));
     sheets.get(7).add(step(job, "ACK", "等待回执", "ACK", 2, "dispatchAck", "{}"));
+  }
+
+  /** Atomic 是单任务执行器，不创建 pipeline_definition / pipeline_step_definition。 */
+  private static void putAtomic(List<List<Map<String, Object>>> sheets) {
+    sheets
+        .get(3)
+        .add(job(
+            "JOB_ATOMIC_SQL_CHECK",
+            "原子 SQL 健康检查",
+            SCENARIO_ATOMIC,
+            "{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}"));
   }
 
   private static void putWorkflow(List<List<Map<String, Object>>> sheets) {

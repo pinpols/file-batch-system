@@ -59,6 +59,7 @@
 | `batch-trigger` | 256-512M | G1(显式) | 默认 512M | 轻量 I/O,默认够 |
 | `batch-orchestrator` | 1-2G | **Generational ZGC** | 默认 512M | 状态机大量短命对象,需要 sub-ms pause |
 | `batch-worker-{import,export,process,dispatch}` | 1-2G | G1(显式) | **1G** | 大文件流,direct 要扩 |
+| `batch-worker-atomic` | 512M-1G | G1(显式) | 默认 512M | 短任务为主；按 HTTP 响应上限和 SQL 并发定容，保持独立安全隔离 |
 | `batch-console-api` | 768M-1.5G | G1(显式) | 默认 512M | HTTP + SSE,中等 |
 
 **Orchestrator 用 ZGC 的判断依据**:状态机 transition 链路每次生成大量短命对象(event / record / DTO),G1 容易 promote 到 old gen 触发 200ms+ Stop-the-world。ZGenerational(JDK 21+)在 1-2G heap 上 pause < 1ms,代价是吞吐 -10% 但**调度延迟换比 10% CPU 值**。

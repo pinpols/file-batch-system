@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.AtomicTaskConfigResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskConfigService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -39,11 +40,13 @@ public class ConsoleAtomicTaskConfigController {
 
   /** GET /api/console/ops/atomic-task-configs?taskType=sql — 列本租户 + taskType 下已保存的配置。 */
   @GetMapping
-  public CommonResponse<List<AtomicTaskConfigEntity>> list(
+  public CommonResponse<List<AtomicTaskConfigResponse>> list(
       @RequestParam("taskType") String taskType,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(configService.listByTaskType(resolved, taskType));
+    return responseFactory.success(configService.listByTaskType(resolved, taskType).stream()
+        .map(AtomicTaskConfigResponse::from)
+        .toList());
   }
 
   /**
@@ -53,12 +56,12 @@ public class ConsoleAtomicTaskConfigController {
    * operatorId 自动填充,不接受外部传入。
    */
   @PostMapping
-  public CommonResponse<AtomicTaskConfigEntity> create(@RequestBody CreateRequest request) {
+  public CommonResponse<AtomicTaskConfigResponse> create(@RequestBody CreateRequest request) {
     String resolved = tenantGuard.resolveTenant(request.tenantId());
     String operator = resolveOperator();
     AtomicTaskConfigEntity created = configService.create(
         resolved, request.taskType(), request.name(), request.parameters(), operator);
-    return responseFactory.success(created);
+    return responseFactory.success(AtomicTaskConfigResponse.from(created));
   }
 
   private String resolveOperator() {

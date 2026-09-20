@@ -1,16 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
-import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.application.contract.request.ops.CreateWebhookRequest;
+import io.github.pinpols.batch.console.application.contract.request.ops.UpdateWebhookRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.WebhookDeliveryLogResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.WebhookSubscriptionResponse;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import io.github.pinpols.batch.console.web.request.ops.CreateWebhookRequest;
-import io.github.pinpols.batch.console.web.request.ops.UpdateWebhookRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -39,31 +39,38 @@ public class ConsoleWebhookController {
 
   @GetMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
-  public CommonResponse<List<WebhookSubscriptionEntity>> list(
+  public CommonResponse<List<WebhookSubscriptionResponse>> list(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(webhookService.listSubscriptions(tenantId));
+    return responseFactory.success(webhookService.listSubscriptions(tenantId).stream()
+        .map(WebhookSubscriptionResponse::from)
+        .toList());
   }
 
   @GetMapping("/delivery-logs")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
-  public CommonResponse<List<WebhookDeliveryLogEntity>> deliveryLogs(
+  public CommonResponse<List<WebhookDeliveryLogResponse>> deliveryLogs(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
     return responseFactory.success(
-        webhookService.deliveryLogs(tenantId, subscriptionId, Math.min(Math.max(limit, 1), 200)));
+        webhookService
+            .deliveryLogs(tenantId, subscriptionId, Math.min(Math.max(limit, 1), 200))
+            .stream()
+            .map(WebhookDeliveryLogResponse::from)
+            .toList());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
-  public CommonResponse<WebhookSubscriptionEntity> detail(
+  public CommonResponse<WebhookSubscriptionResponse> detail(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    return responseFactory.success(webhookService.getSubscription(tenantId, id));
+    return responseFactory.success(
+        WebhookSubscriptionResponse.from(webhookService.getSubscription(tenantId, id)));
   }
 
   @PostMapping
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<WebhookSubscriptionEntity> create(
+  public CommonResponse<WebhookSubscriptionResponse> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateWebhookRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
     CreateSubscriptionCommand createCommand = CreateSubscriptionCommand.builder()
@@ -75,12 +82,13 @@ public class ConsoleWebhookController {
         .enabled(request.enabled() == null || request.enabled())
         .operator(operator)
         .build();
-    return responseFactory.success(webhookService.createSubscription(createCommand));
+    return responseFactory.success(
+        WebhookSubscriptionResponse.from(webhookService.createSubscription(createCommand)));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
-  public CommonResponse<WebhookSubscriptionEntity> update(
+  public CommonResponse<WebhookSubscriptionResponse> update(
       @RequestParam("tenantId") String tenantId,
       @PathVariable Long id,
       @Valid @RequestBody UpdateWebhookRequest request) {
@@ -94,7 +102,8 @@ public class ConsoleWebhookController {
         .enabled(request.enabled() == null || request.enabled())
         .operator(operator)
         .build();
-    return responseFactory.success(webhookService.updateSubscription(updateCommand));
+    return responseFactory.success(
+        WebhookSubscriptionResponse.from(webhookService.updateSubscription(updateCommand)));
   }
 
   @DeleteMapping("/{id}")

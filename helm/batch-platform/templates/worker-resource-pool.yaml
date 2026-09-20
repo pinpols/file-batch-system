@@ -17,9 +17,9 @@
 }}
 {{- range $pool := .Values.workerResourcePools }}
 {{- $name := required "workerResourcePools[].name is required" $pool.name | lower | replace "_" "-" }}
-{{- $wt := required "workerResourcePools[].workerType is required (import|export|process|dispatch)" $pool.workerType | lower }}
+{{- $wt := required "workerResourcePools[].workerType is required (Pipeline only: import|export|process|dispatch; atomic uses its isolated template)" $pool.workerType | lower }}
 {{- $meta := get $typeMeta $wt }}
-{{- if not $meta }}{{ fail (printf "workerResourcePools: unknown workerType %q (expect import|export|process|dispatch)" $wt) }}{{- end }}
+{{- if not $meta }}{{ fail (printf "workerResourcePools: unknown workerType %q (expect Pipeline worker import|export|process|dispatch; atomic uses workerAtomic)" $wt) }}{{- end }}
 {{- $component := printf "worker-%s-pool-%s" $wt $name | trunc 48 | trimSuffix "-" }}
 {{- $port := $meta.port | int }}
 {{- $workerCode := $pool.workerCode | default (printf "%s-%s" $wt $name) }}

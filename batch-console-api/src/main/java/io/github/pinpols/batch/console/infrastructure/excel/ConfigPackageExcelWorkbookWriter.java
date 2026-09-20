@@ -164,7 +164,7 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createReadmeSheet(wb, locale);
       supplementWriter.createFillOrderSheet(wb, sheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
-      supplementWriter.createFourWorkerExampleSheet(wb);
+      supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
@@ -198,7 +198,7 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createReadmeSheet(wb, locale);
       supplementWriter.createFillOrderSheet(wb, sheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
-      supplementWriter.createFourWorkerExampleSheet(wb);
+      supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
@@ -523,7 +523,7 @@ public class ConfigPackageExcelWorkbookWriter {
   /**
    * 字段说明 sheet「适用 Worker」列。先查 per-column 覆盖（少数 worker-specific 字段），未命中走 per-sheet 默认。
    *
-   * <p>Worker 缩写：I=IMPORT / E=EXPORT / P=PROCESS / D=DISPATCH / G=GENERAL / W=WORKFLOW；ALL = 全部。
+   * <p>Worker 缩写：I=IMPORT / E=EXPORT / P=PROCESS / D=DISPATCH / A=ATOMIC / G=GENERAL / W=WORKFLOW；ALL = 全部。
    */
   public static String appliesToFor(String sheetName, String colName) {
     String override = APPLIES_TO_OVERRIDE.getOrDefault(sheetName, Map.of()).get(colName);
@@ -536,7 +536,7 @@ public class ConfigPackageExcelWorkbookWriter {
       Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
       Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
       Map.entry(BATCH_WINDOW_SHEET, "ALL（任意 Job/Node 引用时必填）"),
-      Map.entry(JOB_SHEET, "ALL（5 类 Worker + WORKFLOW 共用）"),
+      Map.entry(JOB_SHEET, "ALL（5 类 Worker + GENERAL / WORKFLOW 共用）"),
       Map.entry(CHANNEL_SHEET, "DISPATCH 主；IMPORT.RECEIVE 次"),
       Map.entry(FILE_TEMPLATE_SHEET, "IMPORT / EXPORT（DISPATCH 引用上游产物时间接用）"),
       Map.entry(PIPELINE_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type）"),
@@ -555,7 +555,7 @@ public class ConfigPackageExcelWorkbookWriter {
           JOB_SHEET,
           Map.of(
               COL_JOB_TYPE,
-              "决定本作业 Worker：GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW",
+              "决定本作业 Worker：GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/ATOMIC/WORKFLOW",
               COL_EXECUTION_HANDLER,
               "GENERAL（普通任务）执行 bean 名；其他 worker 不用",
               COL_DEFAULT_PARAMS,

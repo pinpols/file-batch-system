@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelApplyResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelGuideResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelApplyResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelGuideResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.IOException;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;

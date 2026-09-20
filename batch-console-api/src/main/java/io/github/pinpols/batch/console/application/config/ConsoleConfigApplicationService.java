@@ -1,17 +1,17 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.domain.ops.web.request.SecretVersionRotateRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigReleaseQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigReleaseActionRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigReleaseUpsertRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigGovernanceItemResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigReleaseDiffResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
 import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
-import io.github.pinpols.batch.console.web.query.ConfigChangeLogQueryRequest;
-import io.github.pinpols.batch.console.web.query.ConfigReleaseQueryRequest;
-import io.github.pinpols.batch.console.web.query.SecretVersionQueryRequest;
-import io.github.pinpols.batch.console.web.request.config.ConfigReleaseActionRequest;
-import io.github.pinpols.batch.console.web.request.config.ConfigReleaseUpsertRequest;
-import io.github.pinpols.batch.console.web.response.config.ConfigDependenciesResponse;
-import io.github.pinpols.batch.console.web.response.config.ConfigGovernanceItemResponse;
-import io.github.pinpols.batch.console.web.response.config.ConfigReleaseDiffResponse;
-import io.github.pinpols.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
-import io.github.pinpols.batch.console.web.response.config.ConsoleConfigReleaseResponse;
 import java.util.List;
 
 public interface ConsoleConfigApplicationService {

@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerFingerprintMapper;
-import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;

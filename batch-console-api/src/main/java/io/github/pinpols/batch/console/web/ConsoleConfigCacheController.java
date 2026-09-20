@@ -2,9 +2,9 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.application.contract.response.CacheEvictionResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import io.github.pinpols.batch.console.web.response.CacheEvictionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;

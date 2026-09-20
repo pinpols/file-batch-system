@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleWorkerFingerprintQueryService;
-import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

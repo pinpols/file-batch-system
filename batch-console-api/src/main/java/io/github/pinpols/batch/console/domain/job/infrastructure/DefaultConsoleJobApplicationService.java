@@ -4,11 +4,11 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApplicat
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayCatchUpRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.domain.job.view.DryRunTriggerResult;
-import io.github.pinpols.batch.console.domain.job.web.request.BatchDayCatchUpRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchTriggerEntryResponse;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;

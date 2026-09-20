@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import java.util.List;
 import org.springframework.stereotype.Component;
 

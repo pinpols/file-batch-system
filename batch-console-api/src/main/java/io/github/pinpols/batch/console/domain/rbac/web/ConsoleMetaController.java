@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
-import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleMetaEnumItem;
-import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleMetaOption;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaEnumItem;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaOption;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import java.util.Map;

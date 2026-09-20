@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
+import io.github.pinpols.batch.console.application.contract.response.BusinessTenantPlacementResponse;
 import io.github.pinpols.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
 import io.github.pinpols.batch.console.service.ConsoleBusinessTenantPlacementService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -41,8 +41,10 @@ public class ConsoleBusinessTenantPlacementController {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping
-  public CommonResponse<List<BusinessTenantPlacementEntity>> list() {
-    return responseFactory.success(placementService.list());
+  public CommonResponse<List<BusinessTenantPlacementResponse>> list() {
+    return responseFactory.success(placementService.list().stream()
+        .map(BusinessTenantPlacementResponse::from)
+        .toList());
   }
 
   @PutMapping

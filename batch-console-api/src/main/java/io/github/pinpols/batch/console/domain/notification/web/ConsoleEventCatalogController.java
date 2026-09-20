@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleEventTopicResponse;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleEventTypeResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTopicResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTypeResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import java.util.Locale;

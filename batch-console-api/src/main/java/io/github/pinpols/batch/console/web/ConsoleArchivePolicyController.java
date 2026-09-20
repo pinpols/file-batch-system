@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.entity.ArchivePolicyEntity;
+import io.github.pinpols.batch.console.application.contract.response.ArchivePolicyResponse;
 import io.github.pinpols.batch.console.domain.param.ArchivePolicyUpsertParam;
 import io.github.pinpols.batch.console.service.ConsoleArchivePolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -36,8 +36,11 @@ public class ConsoleArchivePolicyController {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping
-  public CommonResponse<List<ArchivePolicyEntity>> list(@RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(archivePolicyService.list(tenantId));
+  public CommonResponse<List<ArchivePolicyResponse>> list(
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(archivePolicyService.list(tenantId).stream()
+        .map(ArchivePolicyResponse::from)
+        .toList());
   }
 
   @PutMapping

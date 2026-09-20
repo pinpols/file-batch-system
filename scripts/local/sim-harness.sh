@@ -285,7 +285,7 @@ verify_data() {
 # 每个阶段前做一次轻量健康检查;若核心服务不健康,用本地小堆参数拉起,避免后续
 # import worker 只看到 Kafka 但注册不到 orchestrator 而空转。
 ensure_core_runtime() {
-  local ports=("$ORCHESTRATOR_PORT" "$CONSOLE_API_PORT" "$TRIGGER_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT")
+  local ports=("$ORCHESTRATOR_PORT" "$CONSOLE_API_PORT" "$TRIGGER_PORT" "$WORKER_IMPORT_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT")
   local p code unhealthy=0
   for p in "${ports[@]}"; do
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/actuator/health" 2>/dev/null || true)
@@ -297,7 +297,7 @@ ensure_core_runtime() {
   log="$SIM_LOG_DIR/restart-core-$(date +%Y%m%d%H%M%S).log"
   echo "  [core-runtime] unhealthy(:$p health=${code:-000}), restart core services → $log"
   JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS}" SKIP_CDS=1 \
-    bash scripts/local/restart.sh trigger orchestrator console worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1
+    bash scripts/local/restart.sh trigger orchestrator console worker-import worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1
   for p in "${ports[@]}"; do
     for _ in $(seq 1 90); do
       code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:$p/actuator/health" 2>/dev/null || true)

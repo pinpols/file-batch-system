@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleMyWorkerQueryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
@@ -31,9 +31,11 @@ public class ConsoleMyWorkerController {
 
   /** GET /api/console/my-workers?tenantId=xxx — 列出本租户所有自托管 worker(无分页,通常 ≤ 几十个)。 */
   @GetMapping
-  public CommonResponse<List<WorkerRegistryEntity>> list(
+  public CommonResponse<List<WorkerRegistryResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.listSelfHosted(tenantId));
+    return responseFactory.success(queryService.listSelfHosted(tenantId).stream()
+        .map(WorkerRegistryResponse::from)
+        .toList());
   }
 
   /** GET /api/console/my-workers/count?tenantId=xxx — 本租户自托管 worker 计数(仪表盘卡片用)。 */

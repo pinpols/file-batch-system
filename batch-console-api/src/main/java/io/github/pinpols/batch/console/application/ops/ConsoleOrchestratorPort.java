@@ -6,9 +6,9 @@ import io.github.pinpols.batch.console.application.ops.response.ConsolePartition
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;

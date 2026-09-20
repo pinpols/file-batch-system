@@ -1,15 +1,15 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleAlertTrendResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleExecutionProgressResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleJobStatsResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleSlaComplianceResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleSlaReportResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleTenantUsageResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleTriggerStatsResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleWorkerLoadResponse;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleDashboardQueryService;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleAlertTrendResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleExecutionProgressResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleJobStatsResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSlaComplianceResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSlaReportResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleTenantUsageResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleTriggerStatsResponse;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleWorkerLoadResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

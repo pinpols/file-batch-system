@@ -25,6 +25,12 @@
 
 set -uo pipefail
 
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+cd "$ROOT" || exit 2
+# shellcheck source=../lib/python-runtime.sh
+source "$ROOT/scripts/lib/python-runtime.sh"
+batch_require_python
+
 # ── 参数解析 ─────────────────────────────────────────────
 BASE_REF="origin/main"
 SKIP_BUILD=0
@@ -123,10 +129,10 @@ info "检查 0:轻量契约门禁"
 info "──────────────────────────────────────"
 
 if [[ -n "$BASE_REF" ]]; then
-  if ! python3 scripts/ci/check-empty-checks.py --base "$BASE_REF"; then
+  if ! "$PYTHON_BIN" scripts/ci/check-empty-checks.py --base "$BASE_REF"; then
     errors=$((errors+1))
   fi
-  if ! python3 scripts/ci/check-readiness-doc-sync.py --base "$BASE_REF"; then
+  if ! "$PYTHON_BIN" scripts/ci/check-readiness-doc-sync.py --base "$BASE_REF"; then
     errors=$((errors+1))
   fi
 else
@@ -134,19 +140,19 @@ else
 fi
 
 if [[ -f ".trivyignore" ]]; then
-  if ! python3 scripts/ci/check-trivy-ignore-expiry.py; then
+  if ! "$PYTHON_BIN" scripts/ci/check-trivy-ignore-expiry.py; then
     errors=$((errors+1))
   fi
 fi
 
-if ! python3 scripts/ci/check-env-file-shell-safety.py; then
+if ! "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py; then
   errors=$((errors+1))
 fi
 
 READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"
 if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; then
   if [[ -f "scripts/ci/report-java-readability-inventory.py" && -f "$READABILITY_INVENTORY" ]]; then
-    if python3 scripts/ci/report-java-readability-inventory.py --output "$READABILITY_INVENTORY"; then
+    if "$PYTHON_BIN" scripts/ci/report-java-readability-inventory.py --output "$READABILITY_INVENTORY"; then
       if git diff --quiet -- "$READABILITY_INVENTORY"; then
         ok "Java readability inventory 已同步"
       else

@@ -7,12 +7,17 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 batch_configure_python_runtime() {
+  local runtime_root
+  runtime_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || return 2
+
   if [[ -n "${PYTHON_BIN:-}" ]]; then
     export PYTHON_BIN
     return 0
   fi
   if [[ -n "${PYTHON:-}" ]]; then
     export PYTHON_BIN="$PYTHON"
+  elif [[ -x "$runtime_root/.venv/bin/python" ]]; then
+    export PYTHON_BIN="$runtime_root/.venv/bin/python"
   elif command -v python3 >/dev/null 2>&1; then
     export PYTHON_BIN="python3"
   elif command -v python >/dev/null 2>&1; then

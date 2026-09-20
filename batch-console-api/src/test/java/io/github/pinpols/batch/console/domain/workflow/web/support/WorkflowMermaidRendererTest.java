@@ -2,9 +2,9 @@ package io.github.pinpols.batch.console.domain.workflow.web.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

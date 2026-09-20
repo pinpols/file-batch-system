@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.service;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleKafkaConsumerLagResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.ArrayList;
 import java.util.Collection;

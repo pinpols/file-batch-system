@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.contract.request.ops.CreateWebhookRequest;
+import io.github.pinpols.batch.console.application.contract.request.ops.UpdateWebhookRequest;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.CreateSubscriptionCommand;
@@ -19,8 +21,6 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import io.github.pinpols.batch.console.web.request.ops.CreateWebhookRequest;
-import io.github.pinpols.batch.console.web.request.ops.UpdateWebhookRequest;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

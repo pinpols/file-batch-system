@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
-import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCopyRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionCreateRequest;
-import io.github.pinpols.batch.console.domain.job.web.request.JobDefinitionUpdateRequest;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleJobDefinitionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCopyRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCreateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionUpdateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobDefinitionResponse;
 import java.util.List;
 
 /** 作业定义应用服务：管理作业定义的 CRUD 操作。 */

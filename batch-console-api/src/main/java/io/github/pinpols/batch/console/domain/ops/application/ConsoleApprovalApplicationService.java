@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.application;
 
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleBatchApprovalResultResponse;
 import java.util.List;
 
 /** 控制台审批应用服务：单条审批通过/拒绝及批量审批。 */

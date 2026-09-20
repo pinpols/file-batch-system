@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
 import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsolePipelineProgressDirtyEventResponse;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;

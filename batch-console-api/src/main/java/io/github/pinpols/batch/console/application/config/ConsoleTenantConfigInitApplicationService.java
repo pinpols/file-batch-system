@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 
 /**
  * 租户配置批量初始化应用服务。

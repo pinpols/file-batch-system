@@ -10,7 +10,7 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFail
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleForensicExportResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;

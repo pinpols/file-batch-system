@@ -183,7 +183,7 @@ groups:
       # 暴露 kafka_consumergroup_lag 指标。各 batch worker 使用的消费组为
       # batch-worker-import、batch-worker-export、batch-worker-process、batch-worker-dispatch、batch-worker-atomic。
       - alert: BatchKafkaConsumerLagHigh
-        expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|process|dispatch)"} > 1000
+        expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|process|dispatch|atomic)"} > 1000
         for: 10m
         labels:
           severity: warning

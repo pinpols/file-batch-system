@@ -71,7 +71,8 @@
 1. **冻结写入**:把 orchestrator/trigger/worker 停掉,避免 split-brain(主库一会儿可能回来)
    ```bash
    docker compose stop batch-orchestrator batch-trigger \
-     batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch
+     batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch \
+     batch-worker-atomic
    # console-api 可暂留(读 replica 即可)
    ```
 
@@ -96,7 +97,8 @@
 4. **重启业务模块**
    ```bash
    docker compose up -d batch-orchestrator batch-trigger \
-     batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch
+     batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch \
+     batch-worker-atomic
    # 等 60s 确认
    curl -sSf http://localhost:18082/actuator/health | jq .status   # 期望 UP
    ```

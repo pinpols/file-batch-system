@@ -1915,6 +1915,8 @@ paths:
                 secret:
                   type: string
                   maxLength: 256
+                  writeOnly: true
+                  description: HMAC signing secret; accepted on write and never returned by subscription responses.
                 enabled:
                   type: boolean
                   default: true
@@ -1973,6 +1975,8 @@ paths:
                     type: string
                 secret:
                   type: string
+                  writeOnly: true
+                  description: HMAC signing secret; accepted on write and never returned by subscription responses.
                 enabled:
                   type: boolean
       responses:
@@ -9581,7 +9585,7 @@ paths:
           description: Scenario filter. ALL keeps all sample scenarios.
           schema:
             type: string
-            enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, WORKFLOW]
+            enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]
             default: ALL
       responses:
         '200':
@@ -10196,7 +10200,7 @@ components:
         hint:
           type: string
           nullable: true
-          description: 怎么填的可操作提示(如「在配置模板 file_template_config sheet 填 default_query_sql,参考『四类Worker示例』」)。
+          description: 怎么填的可操作提示(如「在配置模板 file_template_config sheet 填 default_query_sql,参考『五类Worker示例』」)。
         docRef:
           type: string
           nullable: true
@@ -13321,6 +13325,9 @@ components:
           maxLength: 128
         jobType:
           type: string
+          description: >-
+            作业类型。当前支持 GENERAL、IMPORT、EXPORT、PROCESS、DISPATCH、ATOMIC、WORKFLOW、
+            BUNDLE_IMPORT、BUNDLE_EXPORT、BUNDLE_DISPATCH；服务端按公共 JobType 词表校验。
         scheduleType:
           type: string
         jobName:

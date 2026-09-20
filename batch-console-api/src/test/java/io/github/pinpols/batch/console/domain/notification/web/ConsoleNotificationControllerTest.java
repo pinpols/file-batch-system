@@ -17,10 +17,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
-import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpdateRequest;
-import io.github.pinpols.batch.console.domain.notification.web.request.NotificationChannelUpsertRequest;
-import io.github.pinpols.batch.console.domain.notification.web.request.SubscriptionRuleUpsertRequest;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleNotificationChannelResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.SubscriptionRuleUpsertRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationChannelResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;

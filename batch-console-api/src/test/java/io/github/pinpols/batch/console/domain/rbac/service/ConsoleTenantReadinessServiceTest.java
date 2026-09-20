@@ -14,8 +14,8 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
-import io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

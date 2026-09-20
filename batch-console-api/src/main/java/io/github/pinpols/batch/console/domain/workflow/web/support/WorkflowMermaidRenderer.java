@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.web.support;
 
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;

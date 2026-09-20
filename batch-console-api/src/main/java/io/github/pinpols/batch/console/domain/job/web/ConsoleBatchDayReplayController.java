@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.job.web.request.BatchDayReplaySubmitRequest;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayEntryResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplayPreviewResponse;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleBatchDayReplaySessionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
