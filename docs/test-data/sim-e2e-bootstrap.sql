@@ -412,7 +412,7 @@ SET query_param_schema = '{
     load_target_ref = 'jdbc_mapped',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'ta'
-  AND template_code IN ('TA_IMPORT_CUSTOMER_TPL','TA_IMPORT_ORDER_TPL');
+  AND template_code IN ('ta_import_customer_tpl','ta_import_order_tpl');
 
 UPDATE batch.file_template_config
 SET query_param_schema = '{
@@ -435,7 +435,7 @@ SET query_param_schema = '{
     load_target_ref = 'jdbc_mapped',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'tb'
-  AND template_code = 'TB_IMPORT_TRANSACTION_TPL';
+  AND template_code = 'tb_import_transaction_tpl';
 
 UPDATE batch.file_template_config
 SET query_param_schema = '{
@@ -456,7 +456,7 @@ SET query_param_schema = '{
     load_target_ref = 'jdbc_mapped',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'tc'
-  AND template_code = 'TC_IMPORT_RISK_SCORE_TPL';
+  AND template_code = 'tc_import_risk_score_tpl';
 
 -- 旧 Excel/seed 可能把规则写成数组、把默认日历写成连字符；当前配置码
 -- 统一使用小写下划线，基础租户也必须与克隆租户一致。
@@ -485,7 +485,7 @@ SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, custo
     export_data_ref = 'sql_template_export',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'ta'
-  AND template_code = 'TA_EXPORT_REPORT_TPL';
+  AND template_code = 'ta_export_report_tpl';
 
 UPDATE batch.file_template_config
 SET default_query_sql = 'SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark FROM biz.transaction WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
@@ -493,7 +493,7 @@ SET default_query_sql = 'SELECT id, tenant_id, txn_no, account_no, txn_type, amo
     export_data_ref = 'sql_template_export',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'tb'
-  AND template_code = 'TB_EXPORT_STATEMENT_TPL';
+  AND template_code = 'tb_export_statement_tpl';
 
 UPDATE batch.file_template_config
 SET default_query_sql = 'SELECT id, tenant_id, entity_id, entity_type, score_value, score_band, score_date FROM biz.risk_score WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
@@ -501,7 +501,7 @@ SET default_query_sql = 'SELECT id, tenant_id, entity_id, entity_type, score_val
     export_data_ref = 'sql_template_export',
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'tc'
-  AND template_code = 'TC_EXPORT_RISK_ALERT_TPL';
+  AND template_code = 'tc_export_risk_alert_tpl';
 
 UPDATE batch.job_definition
 SET default_params = m.params,
@@ -510,27 +510,27 @@ FROM (
     VALUES
       ('ta', 'TA_IMPORT_CUSTOMER',
         jsonb_build_object(
-          'templateCode', 'TA_IMPORT_CUSTOMER_TPL',
+          'templateCode', 'ta_import_customer_tpl',
           'content', 'customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status' || E'\n'
                      || 'WF-CUST-000001,工作流客户1,PERSONAL,WFID000001,13900000001,wf1@sim.com,ACTIVE' || E'\n')),
       ('ta', 'TA_IMPORT_ORDER',
         jsonb_build_object(
-          'templateCode', 'TA_IMPORT_ORDER_TPL',
+          'templateCode', 'ta_import_order_tpl',
           'content', 'customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status' || E'\n'
                      || 'WF-ORDER-000001,工作流订单客户1,PERSONAL,WFOD000001,13900000002,wfo1@sim.com,ACTIVE' || E'\n')),
-      ('ta', 'TA_EXPORT_REPORT', jsonb_build_object('templateCode', 'TA_EXPORT_REPORT_TPL')),
+      ('ta', 'TA_EXPORT_REPORT', jsonb_build_object('templateCode', 'ta_export_report_tpl')),
       ('tb', 'TB_IMPORT_TRANSACTION',
         jsonb_build_object(
-          'templateCode', 'TB_IMPORT_TRANSACTION_TPL',
+          'templateCode', 'tb_import_transaction_tpl',
           'content', 'txn_no,account_no,txn_type,amount,currency_code,txn_date,remark' || E'\n'
                      || 'WF-TB-TXN-000001,WFACC000001,DEPOSIT,101.00,CNY,2026-06-08,wf-default' || E'\n')),
-      ('tb', 'TB_EXPORT_STATEMENT', jsonb_build_object('templateCode', 'TB_EXPORT_STATEMENT_TPL')),
+      ('tb', 'TB_EXPORT_STATEMENT', jsonb_build_object('templateCode', 'tb_export_statement_tpl')),
       ('tc', 'TC_IMPORT_RISK_SCORE',
         jsonb_build_object(
-          'templateCode', 'TC_IMPORT_RISK_SCORE_TPL',
+          'templateCode', 'tc_import_risk_score_tpl',
           'content', 'entity_id,entity_type,score_value,score_band,score_date' || E'\n'
                      || 'WF-ENT-000001,ACCOUNT,701,MEDIUM,2026-06-08' || E'\n')),
-      ('tc', 'TC_EXPORT_RISK_ALERT', jsonb_build_object('templateCode', 'TC_EXPORT_RISK_ALERT_TPL'))
+      ('tc', 'TC_EXPORT_RISK_ALERT', jsonb_build_object('templateCode', 'tc_export_risk_alert_tpl'))
 ) AS m(tenant_id, job_code, params)
 WHERE batch.job_definition.tenant_id = m.tenant_id
   AND batch.job_definition.job_code = m.job_code;
@@ -541,7 +541,7 @@ SET node_params = m.params,
 FROM batch.workflow_definition wd,
      (VALUES
        ('NODE_EXPORT',
-        jsonb_build_object('templateCode', 'TC_EXPORT_RISK_ALERT_TPL')),
+        jsonb_build_object('templateCode', 'tc_export_risk_alert_tpl')),
        ('NODE_DISPATCH',
         jsonb_build_object(
           'fileId', '$.nodes.NODE_EXPORT.output.fileId',
@@ -560,7 +560,7 @@ FROM batch.workflow_definition wd,
        ('BRANCH_B',
         jsonb_build_object(
           'branch', 'B',
-          'templateCode', 'TC_EXPORT_RISK_ALERT_TPL')),
+          'templateCode', 'tc_export_risk_alert_tpl')),
        ('BRANCH_C',
         jsonb_build_object(
           'branch', 'C',
@@ -884,7 +884,7 @@ SET step_name = EXCLUDED.step_name,
 -- 11. Stage 3 export 业务分支:补 JSON / FIXED_WIDTH / EXCEL / bad SQL 模板。
 --     复用 TA_EXPORT_REPORT job,通过 params.templateCode 切换模板,避免增加 fixture job 数量。
 -- ----------------------------------------------------------------------------
--- 11.0 源模板 TA_EXPORT_REPORT_TPL:原由 03 console Excel 配置包导入建立。sim 不跑 03 时缺失,
+-- 11.0 源模板 ta_export_report_tpl:原由 03 console Excel 配置包导入建立。sim 不跑 03 时缺失,
 --      导致下方 source_template CTE 为空 → export 衍生模板克隆 0 行 → 所有 export stage(9/12/18)
 --      报 "export_data_ref is required"。此处自包含补齐基础源模板(关键 export 配置仍由下方
 --      export_matrix / 克隆 SELECT 的硬编码提供),脱离 03 依赖;03 真跑时 DO NOTHING 保留其权威版本。
@@ -901,7 +901,7 @@ INSERT INTO batch.file_template_config (
     content_encryption_enabled, download_requires_approval, export_data_ref, load_target_ref, is_deleted
 )
 VALUES
-  ('ta', 'TA_EXPORT_REPORT_TPL', '客户报表导出基础源模板', 'EXPORT', 'TA_EXPORT_REPORT',
+  ('ta', 'ta_export_report_tpl', '客户报表导出基础源模板', 'EXPORT', 'TA_EXPORT_REPORT',
    'JSON', 'UTF-8', 'UTF-8', false, E'\n',
    null, null, null, 0, 1, 0,
    null, null, 'NONE', 'NONE', 'NONE',
@@ -919,7 +919,7 @@ WITH source_template AS (
     SELECT *
     FROM batch.file_template_config
     WHERE tenant_id = 'ta'
-      AND template_code = 'TA_EXPORT_REPORT_TPL'
+      AND template_code = 'ta_export_report_tpl'
       AND version = 1
 ), export_matrix AS (
     SELECT *

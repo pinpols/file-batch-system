@@ -45,6 +45,8 @@ batch:
       capability-tags:
       - report
       - workflow
+      - STATEMENT
+      - RISK
       file-processing:
         streaming-enabled: true
         # 2026-06 导出 benchmark 本地推荐值:1000w DELIMITED 单片实测 GENERATE 67.691s。

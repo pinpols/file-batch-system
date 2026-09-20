@@ -67,19 +67,19 @@ def risk_row(i):
 IMPORTS = {
     "ta": (
         "TA_IMPORT_CUSTOMER",
-        "TA_IMPORT_CUSTOMER_TPL",
+        "ta_import_customer_tpl",
         "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status",
         customer_row,
     ),
     "tb": (
         "TB_IMPORT_TRANSACTION",
-        "TB_IMPORT_TRANSACTION_TPL",
+        "tb_import_transaction_tpl",
         "txn_no,account_no,txn_type,amount,currency_code,txn_date,remark",
         transaction_row,
     ),
     "tc": (
         "TC_IMPORT_RISK_SCORE",
-        "TC_IMPORT_RISK_SCORE_TPL",
+        "tc_import_risk_score_tpl",
         "entity_id,entity_type,score_value,score_band,score_date",
         risk_row,
     ),

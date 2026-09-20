@@ -53,7 +53,7 @@ def markdown_anchors(document: Path) -> set[str]:
     return anchors
 
 
-def check_directory_indexes(errors: list[str]) -> None:
+def check_directory_indexes(errors: list[str], known_paths: set[Path]) -> None:
     root_index = (DOCS / "README.md").read_text(encoding="utf-8")
     for directory in sorted(path for path in DOCS.iterdir() if path.is_dir()):
         if directory.name not in INDEX_EXEMPT and not (directory / "README.md").is_file():
@@ -65,7 +65,11 @@ def check_directory_indexes(errors: list[str]) -> None:
             continue
         index_text = index.read_text(encoding="utf-8")
         for document in sorted(directory.glob("*.md")):
-            if document.name != "README.md" and document.name not in index_text:
+            if (
+                document.name != "README.md"
+                and document.resolve() in known_paths
+                and document.name not in index_text
+            ):
                 errors.append(
                     f"directory index does not mention document: {document.relative_to(ROOT)}"
                 )
@@ -74,7 +78,10 @@ def check_directory_indexes(errors: list[str]) -> None:
 def check_internal_links(errors: list[str]) -> None:
     known_paths = versionable_paths()
     anchor_cache: dict[Path, set[str]] = {}
-    documents = [ROOT / "README.md", *sorted(DOCS.rglob("*.md"))]
+    documents = [
+        ROOT / "README.md",
+        *(path for path in sorted(DOCS.rglob("*.md")) if path.resolve() in known_paths),
+    ]
     for document in documents:
         if "archive" in document.relative_to(ROOT).parts:
             continue
@@ -127,7 +134,7 @@ def check_residual_files(errors: list[str]) -> None:
 
 def main() -> int:
     errors: list[str] = []
-    check_directory_indexes(errors)
+    check_directory_indexes(errors, versionable_paths())
     check_internal_links(errors)
     check_residual_files(errors)
     if errors:

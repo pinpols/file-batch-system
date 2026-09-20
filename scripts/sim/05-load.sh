@@ -56,17 +56,17 @@ def txn_row(i):  return f"TB-TXN-{i:06d},ACC{i:010d},DEPOSIT,{100+i}.50,CNY,{BIZ
 def risk_row(i): return f"ENT-{i:06d},ACCOUNT,{500+i%400},{'LOW' if i%2 else 'MEDIUM'},{BIZ}"
 
 IMPORTS = {
-  "ta": [("TA_IMPORT_CUSTOMER", "TA_IMPORT_CUSTOMER_TPL",
+  "ta": [("TA_IMPORT_CUSTOMER", "ta_import_customer_tpl",
           "customer_no,customer_name,customer_type,certificate_no,mobile_no,email,status", cust_row)],
-  "tb": [("TB_IMPORT_TRANSACTION", "TB_IMPORT_TRANSACTION_TPL",
+  "tb": [("TB_IMPORT_TRANSACTION", "tb_import_transaction_tpl",
           "txn_no,account_no,txn_type,amount,currency_code,txn_date,remark", txn_row)],
-  "tc": [("TC_IMPORT_RISK_SCORE", "TC_IMPORT_RISK_SCORE_TPL",
+  "tc": [("TC_IMPORT_RISK_SCORE", "tc_import_risk_score_tpl",
           "entity_id,entity_type,score_value,score_band,score_date", risk_row)],
 }
 EXPORTS = {
-  "ta": [("TA_EXPORT_REPORT", "TA_EXPORT_REPORT_TPL")],
-  "tb": [("TB_EXPORT_STATEMENT", "TB_EXPORT_STATEMENT_TPL")],
-  "tc": [("TC_EXPORT_RISK_ALERT", "TC_EXPORT_RISK_ALERT_TPL")],
+  "ta": [("TA_EXPORT_REPORT", "ta_export_report_tpl")],
+  "tb": [("TB_EXPORT_STATEMENT", "tb_export_statement_tpl")],
+  "tc": [("TC_EXPORT_RISK_ALERT", "tc_export_risk_alert_tpl")],
 }
 # dispatch:job -> [channelCode...](派发到 mockserver 的 HTTP 渠道,需 fileId + channelCode)
 DISPATCHES = {

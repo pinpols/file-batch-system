@@ -68,20 +68,22 @@ kafka_lag_snapshot() {
     kafka_cli="$(command -v kafka-consumer-groups.sh)"
   fi
 
-  if [[ "$BATCH_SCRIPT_RUNTIME" != "docker" && -n "${kafka_cli:-}" ]]; then
-    "$kafka_cli" --bootstrap-server "$KAFKA_HOST_BOOTSTRAP" --describe --all-groups 2>/dev/null \
-      | awk -v re="$group_regex" 'NR==1 || $1 ~ re {print}' \
-      || echo "kafka lag unavailable: host kafka-consumer-groups.sh failed"
-    return 0
+  if [[ -n "${kafka_cli:-}" ]]; then
+    if output="$(
+      "$kafka_cli" --bootstrap-server "$KAFKA_HOST_BOOTSTRAP" --describe --all-groups 2>&1
+    )"; then
+      printf '%s\n' "$output" | awk -v re="$group_regex" 'NR==1 || $1 ~ re {print}'
+      return 0
+    fi
+    echo "kafka lag via host CLI failed; trying container CLI" >&2
   fi
 
   kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
-  if [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]]; then
-    output="$(
+  if [[ -n "$kafka_container" ]]; then
+    if output="$(
       docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
-        --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>&1 || true
-    )"
-    if [[ "$output" != *"No such file"* && "$output" != *"executable file not found"* && "$output" != *"Error:"* ]]; then
+        --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>&1
+    )"; then
       printf '%s\n' "$output" | awk -v re="$group_regex" 'NR==1 || $1 ~ re {print}'
       return 0
     fi

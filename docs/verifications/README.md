@@ -8,6 +8,7 @@
 | 文档 | 范围 |
 |---|---|
 | [worker-local-runtime-performance-2026-09-14.md](./worker-local-runtime-performance-2026-09-14.md) | 本地 JVM Worker 严格阶梯、混合压力与故障恢复复测 |
+| [worker-local-runtime-performance-2026-09-20.md](./worker-local-runtime-performance-2026-09-20.md) | 最新本地构建、BE acceptance、sim 全场景与 30 秒 mixed 严格复测 |
 | [heavy-workload-guarantees-2026-09-14.md](./heavy-workload-guarantees-2026-09-14.md) | 重任务容量、资源池、长任务、下游健康和墙钟吞吐保障 |
 | [control-plane-100k-throughput-optimization-2026-09-12.md](./control-plane-100k-throughput-optimization-2026-09-12.md) | 控制面 10 万任务吞吐 |
 | [batch-day-dry-run-verification-2026-09-11.md](./batch-day-dry-run-verification-2026-09-11.md) | 整批量日 dry-run |

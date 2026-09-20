@@ -48,6 +48,8 @@ batch:
       capability-tags:
       - delivery
       - ORDER
+      - STATEMENT
+      - REVIEW
   datasource:
     business:
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}

@@ -40,6 +40,10 @@ source "$ROOT_DIR/scripts/lib/process.sh"
 # shellcheck source=../lib/python-runtime.sh
 source "$ROOT_DIR/scripts/lib/python-runtime.sh"
 
+# 完整本地验收使用宿主 JVM。历史 Compose 应用容器即使处于 stopped 状态仍保留
+# compose.service 标签；若使用 auto，restart.sh 会把这些旧容器误判为当前运行模式。
+export BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-host}"
+
 # FE_DIR:默认走 sibling 仓相对路径(本仓和 batch-console 平级)。
 # 别人 clone 仓库到不同位置 / Linux 上跑,环境变量 export FE_DIR=/path 覆盖。
 FE_DIR="${FE_DIR:-$ROOT_DIR/../batch-console}"
