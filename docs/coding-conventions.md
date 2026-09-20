@@ -1209,6 +1209,8 @@ batch-console-api       ← 控制台 BFF（面向前端）
 - `LocalDate` 只承载业务日期或批量日，不承载时间点语义；不要把 `LocalDate` 当成 UTC 零点持久化。
 - Cron / fixed-rate 计算必须使用作业配置时区或业务日历时区，缺省时走平台默认业务时区；计算出的 fire time、data interval 起止统一用 `Instant` 传递。
 - 用户展示和文件名格式化必须先明确时区，再格式化；禁止依赖 Jackson、JVM default timezone 或操作系统 locale 的隐式格式。
+- 前端时间展示统一使用公共 datetime 工具，展示时区按“用户偏好 > `VITE_DISPLAY_TIMEZONE` > 浏览器 IANA 时区”解析；禁止在页面中直接调用 `Date#getHours`、`toLocaleString` 或 `Intl.DateTimeFormat`。
+- `batch.timezone.default-zone` 为空时使用平台默认值；配置为非法 IANA 时区必须启动失败，不得静默回退，以免账期边界发生偏移。
 
 批量日补充约定：
 
