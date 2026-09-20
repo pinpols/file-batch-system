@@ -45,6 +45,8 @@ batch:
       capability-tags:
       - ingest
       - CUSTOMER
+      - TRANSACTION
+      - RISK
       file-processing:
         streaming-enabled: true
         page-size: 1000

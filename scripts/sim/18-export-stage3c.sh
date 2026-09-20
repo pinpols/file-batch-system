@@ -100,12 +100,12 @@ launch("ta", "TA_EXPORT_REPORT_STATIC", rid_ta, ta_params)
 
 print("==> launch tb/tc multi-tenant", flush=True)
 launch("tb", "TB_EXPORT_STATEMENT", rid_tb, {
-    "templateCode": "TB_EXPORT_STATEMENT_TPL",
+    "templateCode": "tb_export_statement_tpl",
     "batchNo": BATCH + "-tb",
     "bizType": "STATEMENT",
 })
 launch("tc", "TC_EXPORT_RISK_ALERT", rid_tc, {
-    "templateCode": "TC_EXPORT_RISK_ALERT_TPL",
+    "templateCode": "tc_export_risk_alert_tpl",
     "batchNo": BATCH + "-tc",
     "bizType": "RISK",
 })

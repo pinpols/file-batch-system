@@ -54,6 +54,14 @@ if [[ -f "$COMPOSE_ENV_FILE" ]]; then
   set +a
 fi
 batch_configure_local_jvm_runtime_env
+BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
+case "$BATCH_SCRIPT_RUNTIME" in
+  auto|host|docker) ;;
+  *)
+    echo "ERROR: BATCH_SCRIPT_RUNTIME must be auto, host, or docker; got '$BATCH_SCRIPT_RUNTIME'" >&2
+    exit 2
+    ;;
+esac
 export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
 export LANG="$BATCH_LOCALE"
 export LC_ALL="$BATCH_LOCALE"
@@ -205,6 +213,8 @@ compose_app_file() {
 
 is_containerized_module() {
   local name="$1" container
+  [[ "$BATCH_SCRIPT_RUNTIME" == "host" ]] && return 1
+  [[ "$BATCH_SCRIPT_RUNTIME" == "docker" ]] && return 0
   container="$(container_name_for "$name")" || return 1
   docker info >/dev/null 2>&1 || return 1
   # 故障注入会先 kill Compose 容器再调用本脚本恢复；此时容器是 stopped，

@@ -117,20 +117,21 @@ check_kafka_lag() {
   elif command -v kafka-consumer-groups.sh >/dev/null 2>&1; then
     kafka_cli="$(command -v kafka-consumer-groups.sh)"
   fi
-  if [[ "$BATCH_SCRIPT_RUNTIME" != "docker" && -n "${kafka_cli:-}" ]]; then
+  if [[ -n "${kafka_cli:-}" ]]; then
     lag="$(
       "$kafka_cli" --bootstrap-server "$KAFKA_HOST_BOOTSTRAP" \
         --describe --all-groups 2>/dev/null \
         | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
-    )"
-  else
+    )" || lag=""
+  fi
+  if [[ -z "${lag:-}" ]]; then
     kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
-    [[ "$BATCH_SCRIPT_RUNTIME" != "host" && -n "$kafka_container" ]] || return
+    [[ -n "$kafka_container" ]] || return
     lag="$(
       docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
         --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>/dev/null \
         | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
-    )"
+    )" || lag=""
   fi
   if [[ -z "$lag" ]]; then return; fi
   if (( lag > KAFKA_LAG_THRESHOLD )); then

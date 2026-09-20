@@ -210,8 +210,8 @@ reset() {
 
 # all 的 reset 必须在控制面静默时执行。应用保持运行会在 TRUNCATE CASCADE
 # 获取表锁的同时继续写 job/outbox，导致清理事务之间互相等待并产生死锁。
-# 只停止 Compose 管理的应用容器；基础设施、数据卷和配置不受影响，后续
-# ensure_core_runtime 会按原有路径恢复控制面。
+# 先停止 Compose 管理的应用容器；host 模式再停止宿主 JVM。基础设施、数据卷
+# 和配置不受影响，后续 ensure_core_runtime 会按调用方指定的运行模式恢复控制面。
 quiesce_runtime_for_reset() {
   local compose_env="${COMPOSE_ENV_FILE:-$ROOT/.env.local}"
   local compose_app="$ROOT/deploy/docker/compose/app.yml"
@@ -224,6 +224,9 @@ quiesce_runtime_for_reset() {
   if docker info >/dev/null 2>&1 && [[ "${BATCH_DEPLOY_MODE:-container}" == "container" ]]; then
     echo "== reset 前暂停应用写入(保留基础设施) =="
     "${compose_args[@]}" >/dev/null
+  fi
+  if [[ "${BATCH_SCRIPT_RUNTIME:-auto}" == "host" ]]; then
+    STOP_WAIT_SEC="${STOP_WAIT_SEC:-5}" bash scripts/local/stop-all.sh >/dev/null
   fi
 }
 
@@ -243,18 +246,14 @@ prereq() {
     -v readonly_password="$biz_pw" -v readonly_all_password="$biz_pw" \
     < scripts/db/business/diagnostic-readonly-role.sql >/dev/null 2>&1 && ok "只读角色" || warn "只读角色 跳过"
 
-  echo "== prereq:平台 seed(atomic job + refresh_metrics procedure)=="
-  # Stage 07/16/21 atomic 场景依赖 platform_seed 的 atomic_*_demo job(default-tenant)与
-  # batch.refresh_metrics() procedure;这俩是 definition(reset 保留),但 fresh 库 / 清过
-  # definition 时缺失会致 atomic stage 整片 REJECTED。幂等(ON CONFLICT / CREATE OR REPLACE),每轮装配。
-  docker exec -i "$PG" psql -q -U "$PGU" -d "$PLAT_DB" -v ON_ERROR_STOP=1 \
-    < scripts/db/test-seed/platform_seed.sql >"$SIM_LOG_DIR/platform-seed.log" 2>&1 \
-    && ok "platform_seed(atomic/procedure)" \
-    || { c_red "  ✗ platform_seed(见 $SIM_LOG_DIR/platform-seed.log)"; return 1; }
+  echo "== prereq:原子任务 job + refresh_metrics procedure =="
+  # Stage 07/16/21 只需要四个 atomic job 和示例 procedure。不要在已有环境重放整份
+  # platform_seed.sql；其固定 ID 可能与租户导入产生的自然键记录不同并触发唯一键冲突。
+  sim_platform_sql ensure-sim-atomic-prerequisites.sql -q >"$SIM_LOG_DIR/atomic-prerequisites.log" 2>&1 \
+    && ok "atomic prerequisites" \
+    || { c_red "  ✗ atomic prerequisites(见 $SIM_LOG_DIR/atomic-prerequisites.log)"; return 1; }
 
-  # platform_seed 同时带有供治理页面展示的历史 retry 样例。它们不是 sim 的输入，
-  # 但 WAITING 且 next_retry_at 已过期时会被真实 scheduler 反复重派，污染后续阶段的
-  # Kafka/报告时序；仅清理已经过期的 WAITING 样例，保留 seed 定义和未到期运行态。
+  # 清理已经过期的 WAITING 样例，避免历史数据被 scheduler 反复重派并污染场景时序。
   sim_platform_sql delete-expired-waiting-retries.sql -q >/dev/null \
     && ok "清理 platform_seed 过期 retry 样例" \
     || { c_red "  ✗ platform_seed 过期 retry 清理失败"; return 1; }
@@ -346,11 +345,22 @@ restart_import() {
     skip) extra="-Dbatch.worker.checkpoint.enabled=false -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" ;;
     checkpoint) extra="-Dbatch.worker.checkpoint.enabled=true" ;;
   esac
+  if [[ "${BATCH_SCRIPT_RUNTIME:-auto}" == "host" ]]; then
+    JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS} $extra" \
+      bash scripts/local/restart.sh worker-import >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1
+    for _ in $(seq 1 40); do
+      curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
+        | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
+      sleep 3
+    done
+    echo "  [worker-import:$mode NOT ready] 见 $SIM_LOG_DIR/worker-import-${mode}.log" >&2
+    return 1
+  fi
   # 容器模式不能按 18083 查 PID；Docker 端口代理被误杀会连带终止 Docker
   # daemon。restart.sh 会检测受管容器并改用 Compose 重建指定服务。
   local compose_service
   compose_service="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' batch-worker-import 2>/dev/null || true)"
-  if [[ "$compose_service" == "worker-import" ]]; then
+  if [[ "${BATCH_SCRIPT_RUNTIME:-auto}" != "host" && "$compose_service" == "worker-import" ]]; then
     local checkpoint_enabled=false skip_enabled=false skip_max=0 error_sink=BOTH
     if [[ "$mode" == checkpoint ]]; then
       checkpoint_enabled=true
