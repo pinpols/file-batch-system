@@ -14,6 +14,7 @@
 
 ### Added
 
+- **租户配置包 Excel 易用性**：新增 11-Sheet 字段填写说明 API，返回必填、只读、类型、枚举、默认/留空行为、示例和适用范围；新增 `ALL / IMPORT / EXPORT / PROCESS / DISPATCH / WORKFLOW` 场景化示例模板下载，同时保留完整 11-Sheet 全量导入契约。
 - **重任务执行保障**：新增平台全局活跃作业事务级硬上限、租户/资源队列共享派发 QPS、Dispatch 下游健康准入，以及 CPU/内存/IO 专用 Worker 资源池；稳定池代码与 Pod 实例身份分离，资源画像、WAITING 重派和 claim CAS 保持同一契约。
 - **整批量日 Dry-run**：批量日重放 session 支持历史实例与调度计划两类演练候选，完整透传 dry-run、计划快照、独立幂等键和 Worker capability；Console、OpenAPI、五语言 SDK、Compose/Helm 开关同步完成，默认关闭。
 - **Spring Boot 运行时治理**：补充启动失败诊断（FailureAnalyzer）、配置边界校验、自动装配条件测试、生命周期 phase、readiness/drain 状态和脱敏 `batchruntime` 诊断端点；Feature Switch registry 成为配置登记与 CI 校验入口。
@@ -45,6 +46,7 @@
 
 ### Fixed
 
+- 修复无效 `batch.timezone.default-zone` 静默回退的问题，启动期改为 fail-fast；`SecretPayloadProtector` 改由 common auto-configuration 注册并补装配测试，避免公共模块 Bean 扫描边界漂移；稳定 launch lifecycle IT 的 worker claim 前置状态等待和 worker 选择假设。
 - 修复配置发布审批只更新发布单、不落运行时配置的问题；发布与回滚现复用严格配置应用事务，禁止同人审批和直接发布，版本分配使用规范化类型锁。密钥版本载荷改为加密存储并从查询/导出中脱敏，补充历史明文迁移、唯一约束及多节点迁移兼容；Redis 配置失效事件检测到版本缺口时执行全量本地缓存协调。
 - 修复 Gatling 百分比严格比较无法表达零错误率的问题；Worker 严格压力测试现使用失败数断言并以 `0%` 为默认门槛，Dispatch 并发场景为每个虚拟用户分配独立文件夹具。压测数据按 `RUN_ID` 隔离，共享造数事务防止序列回拨；混合压力要求所有入口请求关联实例并全量成功，Process 故障画像重启本地 JVM 时统一转换依赖地址。
 - 为本地 MinIO/Valkey 和生产 Redis HA 增加内存、持久化与 `noeviction` 边界，避免依赖进程无界占用宿主资源或静默淘汰正确性键。

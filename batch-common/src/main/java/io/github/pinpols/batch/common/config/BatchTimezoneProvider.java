@@ -47,7 +47,7 @@ public class BatchTimezoneProvider {
   /**
    * 平台默认业务时区。
    *
-   * <p>来自 batch.timezone.default-zone。配置为空或非法时，回退 Asia/Shanghai。永远非 null。
+   * <p>来自 batch.timezone.default-zone。配置为空时使用 Asia/Shanghai；配置非法时应用启动失败，避免账期静默换日。
    */
   public ZoneId defaultZone() {
     return defaultZone;
@@ -89,12 +89,9 @@ public class BatchTimezoneProvider {
     try {
       return ZoneId.of(configured);
     } catch (DateTimeException invalid) {
-      log.warn(
-          "invalid batch.timezone.default-zone='{}', falling back to {}: {}",
-          configured,
-          FALLBACK_ZONE,
-          invalid.getMessage());
-      return FALLBACK_ZONE;
+      throw new IllegalStateException(
+          "invalid batch.timezone.default-zone='" + configured + "'; use a valid IANA timezone",
+          invalid);
     }
   }
 }

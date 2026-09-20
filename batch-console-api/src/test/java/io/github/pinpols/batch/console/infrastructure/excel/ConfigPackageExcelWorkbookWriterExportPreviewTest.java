@@ -40,6 +40,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
 
   private static final List<String> SUPPLEMENT_SHEET_NAMES = List.of(
       ConsoleExcelStyles.SHEET_NAME_README,
+      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FOUR_WORKER,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE,

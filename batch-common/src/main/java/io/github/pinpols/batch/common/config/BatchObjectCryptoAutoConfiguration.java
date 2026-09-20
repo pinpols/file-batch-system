@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import java.util.Base64;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
@@ -20,6 +22,13 @@ public class BatchObjectCryptoAutoConfiguration {
       Environment environment) {
     validateKmsKeysNotWeakInProd(kmsProperties, environment);
     return new BatchObjectCryptoService(securityProperties, kmsProperties);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public SecretPayloadProtector secretPayloadProtector(
+      BatchObjectCryptoService batchObjectCryptoService) {
+    return new SecretPayloadProtector(batchObjectCryptoService);
   }
 
   /**

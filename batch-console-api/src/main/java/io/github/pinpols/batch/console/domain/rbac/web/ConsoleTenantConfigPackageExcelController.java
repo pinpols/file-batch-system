@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigPackageExcelPatchRequest;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelApplyResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelGuideResponse;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
 import jakarta.validation.Valid;
@@ -70,6 +71,21 @@ public class ConsoleTenantConfigPackageExcelController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<StreamingResponseBody> template() {
     return tenantConfigExcelService.downloadTemplate();
+  }
+
+  /** 下载带示例数据的场景化配置包模板，完整 11-Sheet 结构不变。 */
+  @GetMapping("/sample-template")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  public ResponseEntity<StreamingResponseBody> sampleTemplate(
+      @RequestParam(value = "scenario", required = false) String scenario) {
+    return tenantConfigExcelService.downloadSampleTemplate(scenario);
+  }
+
+  /** 返回 11 个 Sheet 的必填、类型、枚举、默认留空行为和填写示例，供 Console 页面直接展示。 */
+  @GetMapping("/guide")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  public CommonResponse<TenantConfigPackageExcelGuideResponse> guide() {
+    return responseFactory.success(tenantConfigExcelService.guide());
   }
 
   /**
