@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleSchedulerCommandResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleSchedulerCommandResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
@@ -16,7 +17,6 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertP
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
-import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

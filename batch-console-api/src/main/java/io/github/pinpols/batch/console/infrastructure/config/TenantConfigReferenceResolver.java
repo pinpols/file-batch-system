@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

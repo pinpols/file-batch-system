@@ -2,12 +2,12 @@ package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import io.github.pinpols.batch.console.web.request.ops.AlertActionRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

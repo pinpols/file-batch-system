@@ -14,7 +14,7 @@
 
 ### Added
 
-- **租户配置包 Excel 易用性**：新增 11-Sheet 字段填写说明 API，返回必填、只读、类型、枚举、默认/留空行为、示例和适用范围；新增 `ALL / IMPORT / EXPORT / PROCESS / DISPATCH / WORKFLOW` 场景化示例模板下载，同时保留完整 11-Sheet 全量导入契约。
+- **租户配置包 Excel 易用性**：新增 11-Sheet 字段填写说明 API，返回必填、只读、类型、枚举、默认/留空行为、示例和适用范围；新增 `ALL / IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC / WORKFLOW` 场景化示例模板下载，同时保留完整 11-Sheet 全量导入契约。
 - **重任务执行保障**：新增平台全局活跃作业事务级硬上限、租户/资源队列共享派发 QPS、Dispatch 下游健康准入，以及 CPU/内存/IO 专用 Worker 资源池；稳定池代码与 Pod 实例身份分离，资源画像、WAITING 重派和 claim CAS 保持同一契约。
 - **整批量日 Dry-run**：批量日重放 session 支持历史实例与调度计划两类演练候选，完整透传 dry-run、计划快照、独立幂等键和 Worker capability；Console、OpenAPI、五语言 SDK、Compose/Helm 开关同步完成，默认关闭。
 - **Spring Boot 运行时治理**：补充启动失败诊断（FailureAnalyzer）、配置边界校验、自动装配条件测试、生命周期 phase、readiness/drain 状态和脱敏 `batchruntime` 诊断端点；Feature Switch registry 成为配置登记与 CI 校验入口。

@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
-import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
-import io.github.pinpols.batch.console.domain.observability.web.response.ConsoleSystemParameterValueResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleSystemParameterValueResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.SystemParameterResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -35,9 +35,11 @@ public class ConsoleSystemParameterController {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping
-  public CommonResponse<List<SystemParameterEntity>> list(
+  public CommonResponse<List<SystemParameterResponse>> list(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(parameterService.list(tenantId));
+    return responseFactory.success(parameterService.list(tenantId).stream()
+        .map(SystemParameterResponse::from)
+        .toList());
   }
 
   @GetMapping("/value")

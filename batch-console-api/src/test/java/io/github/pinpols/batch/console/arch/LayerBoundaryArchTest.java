@@ -14,12 +14,8 @@ import org.junit.jupiter.api.Test;
  * docs/architecture/project-structure.md）。本测试只冻结当前已为 0 违规的方向，
  * 防止新代码重新引入；存量违规不在本测试内硬性清零，逐步迁移。
  *
- * <p>已知存量违规（本测试显式放行，待清理）：
- *
- * <ul>
- *   <li>domain.&lt;ctx&gt;.infrastructure → domain.&lt;ctx&gt;.web 约 10 处（应用服务直接引用 web
- *       DTO，属"存量慢慢挪"范围，暂不冻结）
- * </ul>
+ * <p>HTTP 请求、查询和响应契约统一放在对应 context 的 {@code application.contract} 包，应用层和基础设施层不得重新依赖
+ * {@code web.request/query/response}。Controller 仍位于 {@code web}，只负责 HTTP 适配和契约转换。
  */
 class LayerBoundaryArchTest {
 
@@ -48,6 +44,18 @@ class LayerBoundaryArchTest {
         .dependOnClassesThat()
         .resideInAPackage("..infrastructure..")
         .because("web 层禁止直接依赖基础设施实现（仅允许经 application 接口）")
+        .check(CLASSES);
+  }
+
+  @Test
+  void applicationAndInfrastructureMustNotDependOnWebContracts() {
+    noClasses()
+        .that()
+        .resideInAnyPackage("..application..", "..infrastructure..", "..service..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage("..web.request..", "..web.query..", "..web.response..")
+        .because("应用层和基础设施层只能依赖 application.contract，不得耦合 HTTP DTO 包")
         .check(CLASSES);
   }
 }

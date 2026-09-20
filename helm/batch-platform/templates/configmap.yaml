@@ -31,6 +31,7 @@ data:
   BATCH_WORKER_EXPORT_PORT: {{ .Values.workerExport.port | quote }}
   BATCH_WORKER_PROCESS_PORT: {{ .Values.workerProcess.port | quote }}
   BATCH_WORKER_DISPATCH_PORT: {{ .Values.workerDispatch.port | quote }}
+  BATCH_WORKER_ATOMIC_PORT: {{ .Values.workerAtomic.port | quote }}
 
   # ── Object Storage (S3) ─────────────────────────────────────────────────────
   BATCH_S3_ENDPOINT: {{ .Values.objectStorage.endpoint | quote }}

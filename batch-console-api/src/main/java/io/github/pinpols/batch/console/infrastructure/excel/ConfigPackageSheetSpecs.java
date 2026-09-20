@@ -715,7 +715,7 @@ public final class ConfigPackageSheetSpecs {
                 GUIDE_ENUM,
                 GUIDE_IMPORT,
                 // 与 JobType enum / ConfigPackageExcelValidator.JOB_TYPES 对齐：
-                // GENERAL / IMPORT / EXPORT / PROCESS / DISPATCH / WORKFLOW
+                // 直接从 JobType 生成，包含五类 Worker、GENERAL/WORKFLOW 与文件束类型。
                 JOB_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
         Map.entry(COL_QUEUE_CODE, optionalColumn("资源队列编码。", GUIDE_STR, "import-queue")),

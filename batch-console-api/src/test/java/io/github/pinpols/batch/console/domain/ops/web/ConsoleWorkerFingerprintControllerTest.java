@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.ReasonCode;
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility.Status;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleWorkerFingerprintQueryService;
-import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintResponse;
-import io.github.pinpols.batch.console.domain.ops.web.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.time.Instant;
 import java.util.List;

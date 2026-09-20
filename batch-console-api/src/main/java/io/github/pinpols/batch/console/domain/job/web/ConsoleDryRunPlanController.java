@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.job.web.request.DryRunPlanRequest;
-import io.github.pinpols.batch.console.domain.job.web.response.ConsoleDryRunPlanResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.DryRunPlanRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;

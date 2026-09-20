@@ -2,11 +2,11 @@ package io.github.pinpols.batch.console.domain.audit.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
-import io.github.pinpols.batch.console.domain.audit.web.response.AiChatResponse;
+import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
-import io.github.pinpols.batch.console.web.request.auth.AiChatRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;

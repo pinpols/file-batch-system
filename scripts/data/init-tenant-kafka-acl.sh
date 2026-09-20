@@ -32,7 +32,7 @@ bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:?required}"
 admin_config="${ADMIN_CONFIG:?required, e.g. /tmp/admin-client.properties}"
 tenant_id="${TENANT_ID:?required}"
 tenant_password="${TENANT_PASSWORD:?required, 32+ chars random}"
-worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch}"
+worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
 
 # 与 init-tenant-topics.sh 保持一致的 sanitize 规则

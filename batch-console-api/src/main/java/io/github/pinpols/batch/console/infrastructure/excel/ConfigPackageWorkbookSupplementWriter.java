@@ -26,15 +26,15 @@ class ConfigPackageWorkbookSupplementWriter {
   private static final int README_LINE_COUNT = 86;
   static final String SHEET_NAME_FILL_ORDER = "填写顺序";
   static final String SHEET_NAME_DEPENDENCY = "依赖说明";
-  static final String SHEET_NAME_FOUR_WORKER = "四类Worker示例";
+  static final String SHEET_NAME_FIVE_WORKER = "五类Worker示例";
   static final String SHEET_NAME_BUNDLE = "文件束示例";
   private static final String READONLY_SHEET_HINT =
       "本 sheet 为只读说明，不参与导入解析与 apply；请复制片段到对应数据 sheet 后修改。";
 
   static final String[] DEPENDENCY_HEADERS = GUIDANCE.sheet("dependency").headers();
   static final List<String[]> DEPENDENCY_ROWS = GUIDANCE.sheet("dependency").rows();
-  static final String[] FOUR_WORKER_HEADERS = GUIDANCE.sheet("fourWorker").headers();
-  static final List<String[]> FOUR_WORKER_ROWS = GUIDANCE.sheet("fourWorker").rows();
+  static final String[] FIVE_WORKER_HEADERS = GUIDANCE.sheet("fiveWorker").headers();
+  static final List<String[]> FIVE_WORKER_ROWS = GUIDANCE.sheet("fiveWorker").rows();
   static final String[] BUNDLE_HEADERS = GUIDANCE.sheet("bundle").headers();
   static final List<String[]> BUNDLE_ROWS = GUIDANCE.sheet("bundle").rows();
 
@@ -109,8 +109,8 @@ class ConfigPackageWorkbookSupplementWriter {
     createReadOnlyTableSheet(wb, SHEET_NAME_DEPENDENCY, DEPENDENCY_HEADERS, DEPENDENCY_ROWS);
   }
 
-  void createFourWorkerExampleSheet(Workbook wb) {
-    createReadOnlyTableSheet(wb, SHEET_NAME_FOUR_WORKER, FOUR_WORKER_HEADERS, FOUR_WORKER_ROWS);
+  void createFiveWorkerExampleSheet(Workbook wb) {
+    createReadOnlyTableSheet(wb, SHEET_NAME_FIVE_WORKER, FIVE_WORKER_HEADERS, FIVE_WORKER_ROWS);
   }
 
   void createBundleExampleSheet(Workbook wb) {

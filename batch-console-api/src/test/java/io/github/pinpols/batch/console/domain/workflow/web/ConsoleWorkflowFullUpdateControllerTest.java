@@ -16,7 +16,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
-import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;

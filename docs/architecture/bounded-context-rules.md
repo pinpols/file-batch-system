@@ -34,6 +34,15 @@
 4. **SpiPort 显式端口**:对外暴露的 SPI 接口放发布方 context,实现由消费方 context 提供
    (反向依赖反转),用 Spring DI 装配。
 
+## Context 内部包约定
+
+- `domain.<ctx>.web` 只放 Controller、SSE/HTTP 适配和 Web 专用支持代码。
+- `domain.<ctx>.application.contract.{request,query,response}` 放该 context 的应用契约，供
+  Controller、应用服务和基础设施实现共同使用。
+- 顶层 `application.contract` 仅用于跨 context 的 Console 契约；新增业务契约应优先放入所属 context。
+- 应用层、基础设施层和服务层禁止重新依赖 `web.request/query/response`，由
+  `LayerBoundaryArchTest` 固化。
+
 **禁止**:
 - 直接 import `io.github.pinpols.batch.console.domain.<other-ctx>.*` 下的具体类
 - 把 shared 当无边界容器塞业务逻辑(代码审查 reject)
@@ -52,12 +61,24 @@ public class LegacyCrossContextHelper { ... }
 - metric 测试单独统计豁免数,**不计入** violation 总数,但会打印 `suppressed edges: N`
 - 评审纪律:每个豁免都要在注释里写「为什么 + 何时清理」
 
-## 当前状态(2026-08-03)
+## 当前状态(2026-09-20)
 
-- `domain/<ctx>/` 子包尚未拉齐(当前是 `domain/{command,entity,param,query,view}` 横切布局)
+- Console 契约已从 `web.request/query/response` 收敛到各 context 的 `application.contract`；Controller
+  保留在 `web` 作为 HTTP 适配层。
+- Console 存量职责矩阵已固化到 [`project-structure.md`](project-structure.md)；`web`、`application.contract`、
+  `application`、`domain`、`infrastructure` 和存量 `service` 的职责不再靠口头约定维护。
+- Controller 不再直接暴露持久化 Entity；敏感字段由 Response DTO 投影显式排除。当前已覆盖原有
+  Console Controller 存量响应，不新增兼容性破坏的路由或字段改名。
 - 守护测试已切换为严格门禁,当前跨 context 直接依赖为 `0` 条
 - metric 测试持续输出违规矩阵,用于迁移进度和边界回归核对
 - Stage 1 已完成;后续新增跨 context 直接依赖必须直接失败
+
+本地复扫证据（2026-09-20）：
+
+- `./mvnw -pl batch-console-api -am test`：`1371` tests, `0` failures, `0` errors。
+- `check-console-openapi-paths.py`：`379` 条 `/api/console` 路由一致。
+- `git diff --check`：通过。
+- 旧 `console.web.request/query/response` 引用：`0`；字面量反斜杠目录残留：`0`。
 
 ## 升级路径
 

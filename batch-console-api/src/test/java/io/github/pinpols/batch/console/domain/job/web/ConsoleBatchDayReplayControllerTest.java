@@ -16,7 +16,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.job.web.request.BatchDayReplaySubmitRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;

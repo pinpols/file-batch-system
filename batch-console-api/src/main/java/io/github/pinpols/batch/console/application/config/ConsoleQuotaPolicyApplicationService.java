@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.web.request.config.QuotaPolicySaveRequest;
-import io.github.pinpols.batch.console.web.response.config.QuotaPolicyResponse;
+import io.github.pinpols.batch.console.application.contract.request.config.QuotaPolicySaveRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.QuotaPolicyResponse;
 
 /** 配额策略应用服务：管理租户配额策略的 CRUD 及启停操作。 */
 public interface ConsoleQuotaPolicyApplicationService {

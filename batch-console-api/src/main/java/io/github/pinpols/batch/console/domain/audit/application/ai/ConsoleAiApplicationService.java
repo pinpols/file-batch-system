@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
-import io.github.pinpols.batch.console.domain.audit.web.response.AiChatResponse;
-import io.github.pinpols.batch.console.web.request.auth.AiChatRequest;
+import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
+import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */
 public interface ConsoleAiApplicationService {

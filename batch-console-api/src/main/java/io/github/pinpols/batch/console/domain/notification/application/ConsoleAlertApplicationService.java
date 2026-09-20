@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.application;
 
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
-import io.github.pinpols.batch.console.web.request.ops.AlertActionRequest;
+import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
 
 /** 控制台告警治理应用服务：确认、静默、关闭告警。 */
 public interface ConsoleAlertApplicationService {

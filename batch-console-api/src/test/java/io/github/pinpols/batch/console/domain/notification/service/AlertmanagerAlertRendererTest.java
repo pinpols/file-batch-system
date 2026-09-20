@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerAlert;
-import io.github.pinpols.batch.console.domain.notification.web.request.AlertmanagerWebhookPayload;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

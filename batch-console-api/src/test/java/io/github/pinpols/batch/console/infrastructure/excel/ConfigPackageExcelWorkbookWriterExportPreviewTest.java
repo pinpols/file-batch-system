@@ -42,7 +42,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConsoleExcelStyles.SHEET_NAME_README,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY,
-      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FOUR_WORKER,
+      ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE,
       ConsoleExcelStyles.SHEET_NAME_GUIDE,
       ConsoleExcelStyles.SHEET_NAME_VALIDATION);

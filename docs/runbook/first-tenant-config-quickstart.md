@@ -57,7 +57,7 @@ curl -X POST /api/console/tenants \
       "item": "template",
       "reason": "template IMP-CUSTOMER-CSV missing field_mappings / query_param_schema",
       "ref": "IMP-CUSTOMER-CSV",
-      "hint": "在配置模板 file_template_config sheet 填 field_mappings 和 query_param_schema,参考『四类Worker示例』",
+      "hint": "在配置模板 file_template_config sheet 填 field_mappings 和 query_param_schema,参考『五类Worker示例』",
       "docRef": "docs/runbook/first-tenant-config-quickstart.md#3-填模板核心"
     }
   ],
@@ -159,7 +159,7 @@ WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)
 `GET /api/console/config/tenant-package/excel/template` 下载一个**带引导的空白工作簿**:
 
 - 「**字段说明**」sheet:每个字段的 必填★ / 类型 / 可选值枚举 / 说明 / 示例 / **填写示例**(完整可抄片段)/ 适用 Worker;枚举列是**下拉**。
-- 「**四类Worker示例**」sheet:IMPORT/EXPORT/PROCESS/DISPATCH 各一份**填好的整行范例**,照着改。
+- 「**五类Worker示例**」sheet:IMPORT/EXPORT/PROCESS/DISPATCH/ATOMIC 各一份**填好的整行范例**；ATOMIC 行明确只填 `job_definition`，不创建 Pipeline。
 - 「**依赖说明**」sheet:job→template/channel/queue 引用关系 + DB fallback 规则。
 
 填完上传:`POST .../tenant-package/excel`(upload)→ `.../preview/{token}`(**预览,一次性列出字段错/SQL 错/跨 sheet 引用错**)→ `.../apply`(确认写入)。

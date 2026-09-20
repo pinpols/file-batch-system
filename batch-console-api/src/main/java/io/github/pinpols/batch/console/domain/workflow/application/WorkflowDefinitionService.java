@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.application;
 
-import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
-import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
-import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
-import io.github.pinpols.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionVersionSummaryResponse;
 import java.util.List;
 
 /** 工作流定义应用服务：管理工作流定义的 CRUD 及 DAG 校验操作。 */

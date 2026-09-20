@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.domain.notification.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushSubscribeRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushUnsubscribeRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsolePushVapidPublicKeyResponse;
 import io.github.pinpols.batch.console.domain.notification.service.ConsolePushSubscriptionService;
-import io.github.pinpols.batch.console.domain.notification.web.request.ConsolePushSubscribeRequest;
-import io.github.pinpols.batch.console.domain.notification.web.request.ConsolePushUnsubscribeRequest;
-import io.github.pinpols.batch.console.domain.notification.web.response.ConsolePushVapidPublicKeyResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.servlet.http.HttpServletRequest;

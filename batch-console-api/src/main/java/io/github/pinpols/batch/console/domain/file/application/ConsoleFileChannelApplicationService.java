@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.domain.file.application;
 
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.console.domain.file.web.query.FileChannelQueryRequest;
-import io.github.pinpols.batch.console.domain.file.web.request.FileChannelCreateRequest;
-import io.github.pinpols.batch.console.domain.file.web.request.FileChannelUpdateRequest;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelCreateRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelUpdateRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileChannelResponse;
 
 /**
  * 文件通道应用服务：管理文件通道配置的 CRUD 及启停操作。

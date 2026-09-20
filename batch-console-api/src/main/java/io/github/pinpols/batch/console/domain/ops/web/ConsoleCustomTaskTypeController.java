@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.CustomTaskTypeResponse;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -34,9 +34,11 @@ public class ConsoleCustomTaskTypeController {
    * 倒序）。
    */
   @GetMapping
-  public CommonResponse<List<CustomTaskTypeEntity>> list(
+  public CommonResponse<List<CustomTaskTypeResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.listActive(tenantId));
+    return responseFactory.success(queryService.listActive(tenantId).stream()
+        .map(CustomTaskTypeResponse::from)
+        .toList());
   }
 
   /** GET /api/console/custom-task-types/count?tenantId=xxx — 本租户 ACTIVE 自定义 taskType 计数。 */
@@ -51,9 +53,10 @@ public class ConsoleCustomTaskTypeController {
    * 全文）。
    */
   @GetMapping("/{taskTypeCode}")
-  public CommonResponse<CustomTaskTypeEntity> detail(
+  public CommonResponse<CustomTaskTypeResponse> detail(
       @PathVariable("taskTypeCode") String taskTypeCode,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    return responseFactory.success(queryService.detail(tenantId, taskTypeCode));
+    return responseFactory.success(
+        CustomTaskTypeResponse.from(queryService.detail(tenantId, taskTypeCode)));
   }
 }

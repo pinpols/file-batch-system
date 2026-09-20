@@ -30,9 +30,9 @@
    ```bash
    docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
      --bootstrap-server kafka:29092 --list
-   # 重点关注 4 个 worker group + orchestrator-trigger-launch:
+   # 重点关注 5 个 worker group + orchestrator-trigger-launch:
    #   batch-worker-import / batch-worker-export
-   #   batch-worker-process / batch-worker-dispatch
+   #   batch-worker-process / batch-worker-dispatch / batch-worker-atomic
    #   orchestrator-trigger-launch
    docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
      --bootstrap-server kafka:29092 --describe --group batch-worker-import
@@ -40,8 +40,8 @@
    重点列:`LAG`(积压),`CONSUMER-ID`(`-` 表示没人接),`STATE`(`Stable` / `PreparingRebalance` / `CompletingRebalance`)。
 
 2. **确认哪个 topic / partition 卡住**
-   - 9 个核心 topic(`docker-compose.yml` → `init-kafka-topics.sh`):
-     - `batch.task.dispatch.import` / `.export` / `.process` / `.dispatch`(orchestrator → worker)
+   - 10 个核心 topic(`docker-compose.yml` → `init-kafka-topics.sh`):
+     - `batch.task.dispatch.import` / `.export` / `.process` / `.dispatch` / `.atomic`(orchestrator → worker)
      - `batch.task.result`(worker → orchestrator)
      - `batch.task.retry` / `batch.task.dead-letter`
      - `batch.trigger.launch.v1`(trigger → orchestrator)
@@ -116,7 +116,8 @@
 1. 停所有 consumer:
    ```bash
    docker compose stop batch-orchestrator batch-trigger \
-     batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch
+     batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch \
+     batch-worker-atomic
    ```
 2. 重启 broker:`docker compose restart kafka`,等 healthcheck 通过(`docker compose ps kafka` STATUS=healthy)
 3. (极端)删 group offset,从最新开始消费 — **会丢未完成任务,只在 dev / 演练环境用**:

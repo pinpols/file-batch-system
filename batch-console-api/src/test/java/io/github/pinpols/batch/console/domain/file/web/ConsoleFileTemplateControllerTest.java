@@ -18,7 +18,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileProjectionMapper;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileProjectionMapper;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

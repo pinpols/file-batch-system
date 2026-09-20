@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleConfigApprovalDetailResponse;
-import io.github.pinpols.batch.console.web.request.config.ConfigApprovalActionRequest;
-import io.github.pinpols.batch.console.web.request.config.ConfigReleaseApprovalSubmitRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigApprovalActionRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigReleaseApprovalSubmitRequest;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleConfigApprovalDetailResponse;
 
 public interface ConsoleConfigApprovalApplicationService {
 

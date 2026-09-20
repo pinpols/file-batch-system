@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.web.response.ops.LineageEvidenceResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.bind.annotation.GetMapping;

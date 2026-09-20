@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
-import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;

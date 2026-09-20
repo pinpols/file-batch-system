@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
-import io.github.pinpols.batch.console.domain.job.web.request.CompensateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.CompensationPayload;

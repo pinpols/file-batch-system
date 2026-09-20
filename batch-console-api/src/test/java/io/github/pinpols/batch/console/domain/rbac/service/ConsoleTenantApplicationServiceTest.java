@@ -239,9 +239,8 @@ class ConsoleTenantApplicationServiceTest {
     when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);
     when(passwordHasher.encode(any())).thenReturn("hash");
     when(readinessService.check("acme"))
-        .thenReturn(
-            new io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse(
-                "acme", true, List.of(), List.of()));
+        .thenReturn(new io.github.pinpols.batch.console.domain.rbac.application.contract.response
+            .TenantReadinessResponse("acme", true, List.of(), List.of()));
 
     var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
         "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
@@ -321,9 +320,8 @@ class ConsoleTenantApplicationServiceTest {
     when(passwordHasher.encode(any())).thenReturn("hash");
     when(configCopyService.copy(any(), eq("admin"), any())).thenReturn(null);
     when(readinessService.check("acme"))
-        .thenReturn(
-            new io.github.pinpols.batch.console.domain.rbac.web.response.TenantReadinessResponse(
-                "acme", true, List.of(), List.of()));
+        .thenReturn(new io.github.pinpols.batch.console.domain.rbac.application.contract.response
+            .TenantReadinessResponse("acme", true, List.of(), List.of()));
 
     var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
         "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");

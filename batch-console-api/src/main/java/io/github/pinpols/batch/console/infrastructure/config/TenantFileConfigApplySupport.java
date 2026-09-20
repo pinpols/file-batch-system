@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

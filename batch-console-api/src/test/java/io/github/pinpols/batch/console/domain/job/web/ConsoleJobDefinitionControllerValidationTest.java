@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -60,13 +61,19 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   private String createBody(String jobCode) {
+    return createBody(jobCode, "GENERAL");
+  }
+
+  private String createBody(String jobCode, String jobType) {
     return "{"
         + "\"tenantId\":\"ta\","
         + "\"jobCode\":\""
         + jobCode
         + "\","
         + "\"jobName\":\"test\","
-        + "\"jobType\":\"GENERAL\","
+        + "\"jobType\":\""
+        + jobType
+        + "\","
         + "\"scheduleType\":\"MANUAL\""
         + "}";
   }
@@ -127,6 +134,31 @@ class ConsoleJobDefinitionControllerValidationTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
     verify(service).create(ArgumentMatchers.any());
+  }
+
+  @Test
+  void acceptsEveryJobTypeDeclaredByTheSharedEnum() throws Exception {
+    when(service.create(ArgumentMatchers.any())).thenReturn(null);
+
+    for (JobType jobType : JobType.values()) {
+      mockMvc
+          .perform(post("/api/console/job-definitions")
+              .contentType(APPLICATION_JSON)
+              .content(createBody("JOB_" + jobType.code(), jobType.code())))
+          .andExpect(status().isOk());
+    }
+  }
+
+  @Test
+  void rejectsUnknownJobTypeBeforePersistence() throws Exception {
+    mockMvc
+        .perform(post("/api/console/job-definitions")
+            .contentType(APPLICATION_JSON)
+            .content(createBody("JOB_UNKNOWN", "UNKNOWN")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+    verify(service, never()).create(ArgumentMatchers.any());
   }
 
   @Test

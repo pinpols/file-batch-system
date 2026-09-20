@@ -405,6 +405,11 @@ jobs:
         # 防止 OTLP 管道、Collector 队列/脱敏、Docker 日志上限或 JVM 诊断卷回归。
         run: python3 scripts/ci/check-observability-contract.py
 
+      - name: Five-worker configuration parity
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: python3 scripts/ci/check-five-worker-parity.py
+
       - name: Local log lifecycle contract
         if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

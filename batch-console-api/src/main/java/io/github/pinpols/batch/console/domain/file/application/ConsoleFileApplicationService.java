@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.domain.file.application;
 
-import io.github.pinpols.batch.console.domain.file.web.request.ArchiveFileRequest;
-import io.github.pinpols.batch.console.domain.file.web.request.DeleteFileRequest;
-import io.github.pinpols.batch.console.domain.file.web.request.FileArrivalGroupActionRequest;
-import io.github.pinpols.batch.console.domain.file.web.request.PresignDownloadFileRequest;
-import io.github.pinpols.batch.console.domain.file.web.request.RedispatchFileRequest;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePresignUploadResponse;
-import io.github.pinpols.batch.console.web.response.file.ConsolePresignDownloadResponse;
+import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.ArchiveFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.DeleteFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileArrivalGroupActionRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.RedispatchFileRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。 */

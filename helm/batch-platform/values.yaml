@@ -845,7 +845,7 @@ tenantWorkerPools: []
 #
 # workerResourcePools:
 #   - name: import-memory
-#     workerType: import             # import | export | process | dispatch
+#     workerType: import             # 仅 Pipeline Worker:import | export | process | dispatch；Atomic 必须用独立隔离模板
 #     tenantId: default-tenant       # 可选；专租户资源池填写目标 tenantId
 #     resourceProfile: memory-heavy
 #     capabilityTags: [large-file]

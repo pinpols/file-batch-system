@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BusinessCalendarSpec;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -12,7 +13,6 @@ import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertPa
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest.BusinessCalendarSpec;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

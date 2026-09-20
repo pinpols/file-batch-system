@@ -41,7 +41,7 @@ orchestrator 派单 topic 由 `batch-orchestrator/.../infrastructure/mq/BatchTop
 **权威命名**(同 [`runbook/per-tenant-worker-onboarding.md` §1](../runbook/per-tenant-worker-onboarding.md)):
 
 ```
-base:       batch.task.dispatch.{taskType}                # taskType ∈ import|export|process|dispatch|spi
+base:       batch.task.dispatch.{taskType}                # taskType ∈ import|export|process|dispatch|atomic
 per-tenant: batch.task.dispatch.{taskType}.{tenantId}     # ← 注意是 taskType 在前
 例:          batch.task.dispatch.import.bigcorp
 ```

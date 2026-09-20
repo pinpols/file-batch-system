@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ApiKeyResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleApiKeyCreateResponse;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
-import io.github.pinpols.batch.console.domain.rbac.web.response.ConsoleApiKeyCreateResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -40,15 +40,16 @@ public class ConsoleApiKeyController {
 
   /** 列出租户下所有 API Key（不含明文密钥）。 */
   @GetMapping
-  public CommonResponse<List<ApiKeyEntity>> list(@RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(apiKeyService.list(tenantId));
+  public CommonResponse<List<ApiKeyResponse>> list(@RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        apiKeyService.list(tenantId).stream().map(ApiKeyResponse::from).toList());
   }
 
   /** 查看 API Key 详情。 */
   @GetMapping("/{id}")
-  public CommonResponse<ApiKeyEntity> detail(
+  public CommonResponse<ApiKeyResponse> detail(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    return responseFactory.success(apiKeyService.detail(tenantId, id));
+    return responseFactory.success(ApiKeyResponse.from(apiKeyService.detail(tenantId, id)));
   }
 
   /** 创建 API Key，返回明文密钥（仅此一次可见）。双击/重试可能创建多把密钥 → 强制幂等。 */

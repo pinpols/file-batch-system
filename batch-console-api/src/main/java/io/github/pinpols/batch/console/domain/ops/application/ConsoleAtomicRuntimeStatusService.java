@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.application;
 
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleAtomicRuntimeStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicRuntimeStatusPayload;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicWorkerInternalRestClient;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAtomicRuntimeStatusResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;

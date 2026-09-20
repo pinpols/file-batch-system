@@ -8,7 +8,7 @@
 说明：
 
 - 图上的表表示“对端服务最终读写的核心表”，不代表发起方一定直连这些表。
-- `batch-worker-core` 是 `dispatch/import/export` 三类 worker 共享的基础库，不是独立部署模块，所以图里只画具体 worker 进程。
+- `batch-worker-core` 是 `import/export/process/dispatch` 四类 pipeline worker 和 `atomic` 专用 SPI 共享的基础库，不是独立部署模块，所以图里只画具体 worker 进程。
 - 图里保留高信号表，不把所有辅助表、全部状态字段和每个 mapper 细节都展开。
 
 ## 总览图

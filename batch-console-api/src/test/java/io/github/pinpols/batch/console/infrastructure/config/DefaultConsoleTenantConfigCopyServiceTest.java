@@ -10,6 +10,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
@@ -28,10 +32,6 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
-import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigBatchInitRequest;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

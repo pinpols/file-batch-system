@@ -104,7 +104,7 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 | `填写说明` | 面向用户的填写入口说明 | 说明 9+2 范围、导入流程、可选 sheet、注意事项 |
 | `依赖说明` | 单独说明跨 sheet / 数据库依赖关系 | 新增；按依赖来源、字段、目标、是否允许库中已有、错误示例组织 |
 | `字段说明` | 每个字段的必填、填写层级、类型、枚举、示例、填写示例 | 第一列按 sheet 合并单元格；用“填写层级”区分必填/常用/高级；跨 sheet 关联关系放到 `依赖说明` |
-| `四类Worker示例` | 展示 IMPORT / EXPORT / PROCESS / DISPATCH 的典型配置组合 | 新增；仅说明用途，不参与导入解析 |
+| `五类Worker示例` | 展示 IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC 的典型配置组合 | 新增；仅说明用途，不参与导入解析；ATOMIC 无 Pipeline |
 | `校验` | preview 时输出错误 | 保持现有错误输出能力，建议增加错误级别和关联目标 |
 
 ### `依赖说明` Sheet 结构
@@ -177,15 +177,15 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 | `file_template_config` | `query_param_schema` | 选填 | 常用 | JSON |  | 模板运行参数 | `{...}` | IMPORT/EXPORT | `{"jdbcMappedImport":{"schema":"biz","table":"customer_account"}}` |
 | `file_template_config` | `default_query_sql` | 选填 | 高级 | SQL | SELECT | 导出查询 SQL | `select id,...` | EXPORT | `select id, tenant_id, settlement_no from biz.settlement_detail where tenant_id = :tenantId order by id asc` |
 
-## `四类Worker示例` Sheet
+## `五类Worker示例` Sheet
 
-建议新增只读说明 sheet `四类Worker示例`，用于给配置人员提供“最小可运行组合”的参考。该 sheet 不参与上传解析和 apply，避免示例行被误当成真实配置。
+建议新增只读说明 sheet `五类Worker示例`，用于给配置人员提供“最小可运行组合”的参考。该 sheet 不参与上传解析和 apply，避免示例行被误当成真实配置。IMPORT / EXPORT / PROCESS / DISPATCH 使用 Pipeline；ATOMIC 仅配置 `job_definition`，不得伪造 Pipeline stage。
 
 建议列：
 
 | 列名 | 说明 |
 |---|---|
-| `worker_type` | `IMPORT / EXPORT / PROCESS / DISPATCH` |
+| `worker_type` | `IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC` |
 | `job_type` | 对应 `job_definition.job_type` |
 | `pipeline_type` | 对应 `pipeline_definition.pipeline_type` |
 | `stage_chain` | 典型 stage 顺序 |
@@ -505,7 +505,7 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 | `字段说明` 第一列按 sheet 合并 | 降低重复文本，便于快速定位字段组 |
 | `字段说明` 末尾加 `关联关系说明` | 对 `queue_code / templateCode / channelCode / job_code / workflow_code` 等引用字段写清目标 |
 | `字段说明` 增加 `填写示例` | 区分短示例和可直接参考的真实业务填写片段 |
-| 增加 `四类Worker示例` sheet | 展示 IMPORT / EXPORT / PROCESS / DISPATCH 的最小可运行配置组合，降低新用户理解成本 |
+| 增加 `五类Worker示例` sheet | 展示 IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC 的最小可运行配置组合，降低新用户理解成本 |
 | JSON / SQL 列加宽并启用换行 | `default_params / step_params / config_json / query_param_schema / default_query_sql` 不应只有 18 宽 |
 | 为 JSON / SQL 字段加输入提示 | 写明必须是合法 JSON、SQL 仅允许 SELECT |
 | 增加 `示例` 或 `样例行` 策略 | 可选做法：模板保持空白，但另导出 example workbook；或者在每个 sheet 第 2 行放示例并标识可删除 |
@@ -533,7 +533,7 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 5. 扩展 `ConfigPackageExcelWorkbookWriter`：新增 `file_template_config / resource_queue / business_calendar / batch_window` 数据 sheet（共 11 个数据 sheet）。**移除 `alert_routing_config` sheet 输出**。
 6. 新增 `依赖说明` sheet。
 7. 改造 `字段说明` sheet：第一列按 sheet 合并单元格，末尾新增 `填写示例` 和 `关联关系说明`；environment-specific 字段加 `[env-specific]` 前缀。
-8. 新增 `四类Worker示例` sheet：只做说明，不参与导入解析。
+8. 新增 `五类Worker示例` sheet：只做说明，不参与导入解析。
 9. 扩展 `ConfigPackageExcelValidator`：调用 P0 步骤抽出的 `Workbook*RowParser`，增加 4 类 sheet 的单表校验与跨引用索引。
 10. 扩展 `DefaultConsoleTenantConfigPackageExcelApplicationService`：解析、preview、apply、export 支持 11 sheet。
 11. **业务表存在性检查独立连接**：声明 `@Transactional(propagation = NOT_SUPPORTED)` 标注，避免卷入配置表事务。
@@ -549,7 +549,7 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 - 字段说明合并单元格测试。
 - 字段说明 `填写示例` / `关联关系说明` / `[env-specific]` 前缀测试。
 - `依赖说明` 内容测试。
-- `四类Worker示例` 内容测试 + enum 一致性 CI 断言。
+- `五类Worker示例` 内容测试 + enum 一致性 CI 断言。
 - Import 表名 / Export SQL 随合包导入测试。
 - 引用不存在时 preview 报错测试。
 - 11 sheet 数据全空（仅表头）的解析测试，确认不抛异常。

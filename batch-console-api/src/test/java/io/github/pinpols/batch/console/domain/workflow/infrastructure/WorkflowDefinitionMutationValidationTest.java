@@ -17,13 +17,13 @@ import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEvent
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
-import io.github.pinpols.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;

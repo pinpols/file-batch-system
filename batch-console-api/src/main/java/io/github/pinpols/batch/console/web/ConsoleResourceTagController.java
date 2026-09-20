@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
+import io.github.pinpols.batch.console.application.contract.response.ResourceTagResponse;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleResourceTagService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -36,20 +36,25 @@ public class ConsoleResourceTagController {
 
   /** 查询指定资源的所有标签。 */
   @GetMapping
-  public CommonResponse<List<ResourceTagEntity>> listByResource(
+  public CommonResponse<List<ResourceTagResponse>> listByResource(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("resourceType") @NotBlank String resourceType,
       @RequestParam("resourceCode") @NotBlank String resourceCode) {
-    return responseFactory.success(tagService.listByResource(tenantId, resourceType, resourceCode));
+    return responseFactory.success(
+        tagService.listByResource(tenantId, resourceType, resourceCode).stream()
+            .map(ResourceTagResponse::from)
+            .toList());
   }
 
   /** 按标签键（可选值）反查资源。 */
   @GetMapping("/search")
-  public CommonResponse<List<ResourceTagEntity>> searchByTag(
+  public CommonResponse<List<ResourceTagResponse>> searchByTag(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("tagKey") @NotBlank String tagKey,
       @RequestParam(value = "tagValue", required = false) String tagValue) {
-    return responseFactory.success(tagService.listByTagKey(tenantId, tagKey, tagValue));
+    return responseFactory.success(tagService.listByTagKey(tenantId, tagKey, tagValue).stream()
+        .map(ResourceTagResponse::from)
+        .toList());
   }
 
   /** 列出租户下所有已使用的标签键。 */

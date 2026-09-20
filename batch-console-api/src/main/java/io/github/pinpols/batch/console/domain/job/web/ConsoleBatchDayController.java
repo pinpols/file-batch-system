@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
-import io.github.pinpols.batch.console.domain.job.web.request.BatchDayOperateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayOperateRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;

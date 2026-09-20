@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.application;
 
-import io.github.pinpols.batch.console.domain.ops.web.request.DrainWorkerRequest;
-import io.github.pinpols.batch.console.domain.ops.web.request.ForceOfflineWorkerRequest;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleWorkerClaimedTaskResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.DrainWorkerRequest;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.ForceOfflineWorkerRequest;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerClaimedTaskResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import java.util.List;
 

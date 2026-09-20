@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.web.request.config.ConfigSyncBundlePayload;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigCopyRequest.ConfigType;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigMatrixRequest;
-import io.github.pinpols.batch.console.web.request.config.TenantConfigPreviewRequest;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigBatchInitResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigDiffPreviewResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigMatrixResponse;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigMatrixRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPreviewRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
 import java.util.Set;
 
 /**

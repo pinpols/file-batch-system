@@ -19,7 +19,7 @@
 orchestrator `BatchTopicResolver` 在 TENANT 模式下，在 base topic 后**追加 `.{tenantId}`**：
 
 ```
-base:          batch.task.dispatch.{type}          # type = import|export|process|dispatch|spi
+base:          batch.task.dispatch.{type}          # type = import|export|process|dispatch|atomic
 per-tenant:    batch.task.dispatch.{type}.{tenantId}
 例：           batch.task.dispatch.import.bigcorp
 ```

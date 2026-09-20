@@ -13,7 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 配置包 Excel 的「展示性内容」外置加载器：把 EXAMPLE_* 示例片段与 3 张只读说明 sheet（依赖说明 / 四类Worker示例 / 文件束示例）的表头与数据行 从
+ * 配置包 Excel 的「展示性内容」外置加载器：把 EXAMPLE_* 示例片段与 3 张只读说明 sheet（依赖说明 / 五类Worker示例 / 文件束示例）的表头与数据行 从
  * classpath 资源 {@code /config-package-guidance.json} 读入，避免在 {@link
  * ConfigPackageExcelWorkbookWriter} 内硬编码大段中文文案与示例 JSON。
  *

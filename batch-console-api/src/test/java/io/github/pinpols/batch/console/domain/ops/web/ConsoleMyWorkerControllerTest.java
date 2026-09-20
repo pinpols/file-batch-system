@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleMyWorkerQueryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -31,13 +32,15 @@ class ConsoleMyWorkerControllerTest {
     WorkerRegistryEntity w = new WorkerRegistryEntity();
     w.setWorkerCode("sdk-1");
     when(queryService.listSelfHosted("tx")).thenReturn(List.of(w));
-    when(responseFactory.success(List.of(w))).thenReturn(CommonResponse.success(List.of(w)));
+    WorkerRegistryResponse expected = WorkerRegistryResponse.from(w);
+    when(responseFactory.success(List.of(expected)))
+        .thenReturn(CommonResponse.success(List.of(expected)));
 
-    CommonResponse<List<WorkerRegistryEntity>> resp = controller.list("tx");
+    CommonResponse<List<WorkerRegistryResponse>> resp = controller.list("tx");
 
     assertThat(resp.data())
         .hasSize(1)
-        .extracting(WorkerRegistryEntity::getWorkerCode)
+        .extracting(WorkerRegistryResponse::workerCode)
         .contains("sdk-1");
   }
 

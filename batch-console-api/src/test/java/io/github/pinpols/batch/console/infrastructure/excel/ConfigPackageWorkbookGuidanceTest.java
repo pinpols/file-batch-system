@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticMessageSource;
 
 /**
- * 配置引导防漂移单测:锁定 {@link ConfigPackageExcelWorkbookWriter} 生成的模板里 ① 新增的「四类Worker示例」「依赖说明」只读 sheet 存在且
- * 表头/行数与设计一致; ② 「字段说明」sheet 新增「填写示例」列且最难字段给出真实非空片段(import vs export 两套结构都覆盖); ③ 四类Worker示例的
+ * 配置引导防漂移单测:锁定 {@link ConfigPackageExcelWorkbookWriter} 生成的模板里 ① 新增的「五类Worker示例」「依赖说明」只读 sheet 存在且
+ * 表头/行数与设计一致; ② 「字段说明」sheet 新增「填写示例」列且最难字段给出真实非空片段(import vs export 两套结构都覆盖); ③ 五类Worker示例的
  * worker_type / pipeline_type 与后端 enum 集合一致(enum 新增成员而示例未同步即挂)。
  */
 class ConfigPackageWorkbookGuidanceTest {
@@ -64,6 +64,14 @@ class ConfigPackageWorkbookGuidanceTest {
               .getStringCellValue())
           .isEqualTo("MIXED");
     }
+    try (XSSFWorkbook atomicWb = buildSampleTemplate("ATOMIC")) {
+      Sheet jobSheet = atomicWb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue())
+          .isEqualTo("JOB_ATOMIC_SQL_CHECK");
+      assertThat(jobSheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ATOMIC");
+      assertThat(atomicWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET).getLastRowNum())
+          .isZero();
+    }
   }
 
   @Test
@@ -102,31 +110,32 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void fourWorkerExampleSheetExistsWithFourRowsAndHeaders() throws Exception {
+  void fiveWorkerExampleSheetExistsWithFiveRowsAndHeaders() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
-      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FOUR_WORKER);
-      assertThat(sheet).as("四类Worker示例 sheet 必须存在").isNotNull();
-      // row0 = 提示行, row1 = 表头, row2..row5 = 4 类 worker
+      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER);
+      assertThat(sheet).as("五类Worker示例 sheet 必须存在").isNotNull();
+      // row0 = 提示行, row1 = 表头, row2..row6 = 5 类 worker
       Row header = sheet.getRow(1);
       List<String> headerValues = new ArrayList<>();
-      for (int c = 0; c < ConfigPackageWorkbookSupplementWriter.FOUR_WORKER_HEADERS.length; c++) {
+      for (int c = 0; c < ConfigPackageWorkbookSupplementWriter.FIVE_WORKER_HEADERS.length; c++) {
         headerValues.add(header.getCell(c).getStringCellValue());
       }
       assertThat(headerValues)
-          .containsExactly(ConfigPackageWorkbookSupplementWriter.FOUR_WORKER_HEADERS);
-      assertThat(ConfigPackageWorkbookSupplementWriter.FOUR_WORKER_ROWS).hasSize(4);
+          .containsExactly(ConfigPackageWorkbookSupplementWriter.FIVE_WORKER_HEADERS);
+      assertThat(ConfigPackageWorkbookSupplementWriter.FIVE_WORKER_ROWS).hasSize(5);
       List<String> workerTypes = new ArrayList<>();
       List<String> pipelineTypes = new ArrayList<>();
-      for (int r = 0; r < 4; r++) {
+      for (int r = 0; r < 5; r++) {
         Row row = sheet.getRow(2 + r);
         workerTypes.add(row.getCell(0).getStringCellValue());
         pipelineTypes.add(row.getCell(2).getStringCellValue());
       }
-      assertThat(workerTypes).containsExactly("IMPORT", "EXPORT", "PROCESS", "DISPATCH");
-      // pipeline_type / worker_type 必须都是合法 enum code(enum 新增/改名而示例未同步即挂)。
+      assertThat(workerTypes).containsExactly("IMPORT", "EXPORT", "PROCESS", "DISPATCH", "ATOMIC");
+      // Atomic 无 Pipeline，其余 pipeline_type / worker_type 必须都是合法 enum code。
       Set<String> pipelineCodes = DictEnum.codes(PipelineType.class);
       Set<String> jobCodes = DictEnum.codes(JobType.class);
-      assertThat(pipelineTypes).allMatch(pipelineCodes::contains);
+      assertThat(pipelineTypes.subList(0, 4)).allMatch(pipelineCodes::contains);
+      assertThat(pipelineTypes.get(4)).isEqualTo("不适用");
       assertThat(workerTypes).allMatch(jobCodes::contains);
     }
   }

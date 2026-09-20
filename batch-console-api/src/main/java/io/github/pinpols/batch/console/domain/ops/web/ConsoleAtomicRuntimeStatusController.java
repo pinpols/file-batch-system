@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleAtomicRuntimeStatusService;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAtomicRuntimeStatusResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleAtomicRuntimeStatusResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

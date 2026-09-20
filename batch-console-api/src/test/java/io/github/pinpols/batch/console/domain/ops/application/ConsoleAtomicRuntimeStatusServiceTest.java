@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.ops.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleAtomicRuntimeStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicRuntimeStatusPayload;
-import io.github.pinpols.batch.console.domain.ops.web.response.ConsoleAtomicRuntimeStatusResponse;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 

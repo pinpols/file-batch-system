@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.web.response.config.ConfigGovernanceItemResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigGovernanceItemResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;

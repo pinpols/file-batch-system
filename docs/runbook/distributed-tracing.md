@@ -116,7 +116,7 @@ public class MyService {
 ### 3.3 命名约定
 
 - 格式 `<module>.<domain>.<action>` 全小写 + dot 分隔
-- module: `orch` / `trigger` / `worker.import` / `worker.export` / `worker.process` / `worker.dispatch` / `console`
+- module: `orch` / `trigger` / `worker.import` / `worker.export` / `worker.process` / `worker.dispatch` / `worker.atomic` / `console`
 - 例：`orch.launch` / `worker.import.parse` / `console.config.publish`
 
 ---

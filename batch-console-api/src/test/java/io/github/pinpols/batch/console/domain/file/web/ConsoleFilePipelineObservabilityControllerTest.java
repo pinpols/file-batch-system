@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
-import io.github.pinpols.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

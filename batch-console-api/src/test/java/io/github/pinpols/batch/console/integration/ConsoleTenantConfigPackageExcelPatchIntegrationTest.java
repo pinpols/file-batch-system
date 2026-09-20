@@ -5,11 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse.ErrorRowDto;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
-import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse.ErrorRowDto;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.LinkedHashMap;

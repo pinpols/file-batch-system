@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.CustomTaskTypeResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -39,13 +40,15 @@ class ConsoleCustomTaskTypeControllerTest {
   void listResolvesTenantAndQueriesActiveOnly() {
     CustomTaskTypeEntity e = entity("tenant_tx_import");
     when(queryService.listActive("tx")).thenReturn(List.of(e));
-    when(responseFactory.success(List.of(e))).thenReturn(CommonResponse.success(List.of(e)));
+    CustomTaskTypeResponse expected = CustomTaskTypeResponse.from(e);
+    when(responseFactory.success(List.of(expected)))
+        .thenReturn(CommonResponse.success(List.of(expected)));
 
-    CommonResponse<List<CustomTaskTypeEntity>> resp = controller.list("tx");
+    CommonResponse<List<CustomTaskTypeResponse>> resp = controller.list("tx");
 
     assertThat(resp.data())
         .hasSize(1)
-        .extracting(CustomTaskTypeEntity::getTaskTypeCode)
+        .extracting(CustomTaskTypeResponse::taskTypeCode)
         .contains("tenant_tx_import");
   }
 
@@ -61,9 +64,10 @@ class ConsoleCustomTaskTypeControllerTest {
   void detailReturnsEntityWhenFound() {
     CustomTaskTypeEntity e = entity("tenant_tx_import");
     when(queryService.detail("tx", "tenant_tx_import")).thenReturn(e);
-    when(responseFactory.success(e)).thenReturn(CommonResponse.success(e));
+    CustomTaskTypeResponse expected = CustomTaskTypeResponse.from(e);
+    when(responseFactory.success(expected)).thenReturn(CommonResponse.success(expected));
 
-    assertThat(controller.detail("tenant_tx_import", "tx").data().getTaskTypeCode())
+    assertThat(controller.detail("tenant_tx_import", "tx").data().taskTypeCode())
         .isEqualTo("tenant_tx_import");
   }
 
