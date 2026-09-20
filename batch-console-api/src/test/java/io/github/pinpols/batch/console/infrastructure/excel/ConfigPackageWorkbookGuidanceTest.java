@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -28,6 +29,76 @@ class ConfigPackageWorkbookGuidanceTest {
     ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms);
     byte[] bytes = writer.buildTemplateWorkbook();
     return new XSSFWorkbook(new ByteArrayInputStream(bytes));
+  }
+
+  private XSSFWorkbook buildSampleTemplate(String scenario) throws Exception {
+    StaticMessageSource ms = new StaticMessageSource();
+    ms.setUseCodeAsDefaultMessage(true);
+    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms);
+    byte[] bytes =
+        writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets(scenario));
+    return new XSSFWorkbook(new ByteArrayInputStream(bytes));
+  }
+
+  @Test
+  void sampleTemplateContainsScenarioRowsAndKeepsQueueTypeValid() throws Exception {
+    try (XSSFWorkbook importWb = buildSampleTemplate("IMPORT")) {
+      assertThat(importWb
+              .getSheet(ConfigPackageExcelValidator.JOB_SHEET)
+              .getRow(1)
+              .getCell(1)
+              .getStringCellValue())
+          .isEqualTo("JOB_IMPORT_CUSTOMER");
+      assertThat(importWb
+              .getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
+              .getRow(1)
+              .getCell(1)
+              .getStringCellValue())
+          .isEqualTo("TPL_IMPORT_CUSTOMER");
+    }
+    try (XSSFWorkbook processWb = buildSampleTemplate("PROCESS")) {
+      assertThat(processWb
+              .getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)
+              .getRow(1)
+              .getCell(3)
+              .getStringCellValue())
+          .isEqualTo("MIXED");
+    }
+  }
+
+  @Test
+  void fillOrderSheetExistsWithRequiredColumnsAndDefaultHint() throws Exception {
+    try (XSSFWorkbook wb = buildTemplate()) {
+      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER);
+      assertThat(sheet).as("填写顺序 sheet 必须存在").isNotNull();
+      Row header = sheet.getRow(1);
+      assertThat(header.getCell(0).getStringCellValue()).isEqualTo("顺序");
+      assertThat(header.getCell(1).getStringCellValue()).isEqualTo("Sheet");
+      assertThat(header.getCell(4).getStringCellValue()).isEqualTo("关键必填列");
+      assertThat(header.getCell(6).getStringCellValue()).isEqualTo("留空/默认提示");
+
+      Row firstData = sheet.getRow(2);
+      assertThat(firstData.getCell(1).getStringCellValue())
+          .isEqualTo(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
+      assertThat(firstData.getCell(1).getHyperlink().getAddress())
+          .isEqualTo("'" + ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET + "'!A1");
+      assertThat(firstData.getCell(4).getStringCellValue()).contains("queue_code", "queue_name");
+      assertThat(firstData.getCell(6).getStringCellValue()).contains("字段说明");
+    }
+  }
+
+  @Test
+  void dataSheetsHaveExcelFriendlyRequiredColumnValidation() throws Exception {
+    try (XSSFWorkbook wb = buildTemplate()) {
+      Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      List<String> formulas = new ArrayList<>();
+      for (DataValidation validation : jobSheet.getDataValidations()) {
+        formulas.add(validation.getValidationConstraint().getFormula1());
+      }
+      assertThat(formulas)
+          .contains("LEN(TRIM(B2))>0") // job_code
+          .contains("LEN(TRIM(C2))>0"); // job_name
+    }
   }
 
   @Test
@@ -124,9 +195,13 @@ class ConfigPackageWorkbookGuidanceTest {
       assertThat(sheet).isNotNull();
       Row header = sheet.getRow(0);
       assertThat(header.getCell(3).getStringCellValue()).isEqualTo("填写层级");
-      // 第 10 列(index 9)= 填写示例
-      assertThat(header.getCell(9).getStringCellValue()).isEqualTo("填写示例");
+      // 第 10 列(index 9)= 默认值/留空行为；第 11 列(index 10)= 填写示例
+      assertThat(header.getCell(9).getStringCellValue()).isEqualTo("默认值/留空行为");
+      assertThat(header.getCell(10).getStringCellValue()).isEqualTo("填写示例");
+      assertThat(rowOf(sheet, "queue_code").getCell(1).getHyperlink().getAddress())
+          .isEqualTo("'" + ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET + "'!A1");
       assertThat(rowOf(sheet, "template_code").getCell(3).getStringCellValue()).isEqualTo("必填");
+      assertThat(rowOf(sheet, "template_code").getCell(9).getStringCellValue()).contains("必须填写");
       assertThat(rowOf(sheet, "field_mappings").getCell(3).getStringCellValue()).isEqualTo("常用");
       assertThat(rowOf(sheet, "encrypt_type").getCell(3).getStringCellValue()).isEqualTo("高级");
       assertThat(rowOf(sheet, "header_rows").getCell(6).getStringCellValue()).contains("留空默认 0");
@@ -153,7 +228,7 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   private static String fillExampleOf(Sheet sheet, String colName) {
-    return rowOf(sheet, colName).getCell(9).getStringCellValue();
+    return rowOf(sheet, colName).getCell(10).getStringCellValue();
   }
 
   private static Row rowOf(Sheet sheet, String colName) {

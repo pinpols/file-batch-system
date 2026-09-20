@@ -121,7 +121,7 @@ import org.springframework.context.MessageSource;
  * <p>该类看起来行数较多是刻意的：它是配置包协议的“单一事实源”，不是把多个业务流程塞进一个服务。导入校验、模板生成和错误定位都从这里读取规则，
  * 集中维护可以避免同一个 sheet 在不同链路出现列顺序或必填语义漂移；新增 sheet 应优先新增规格，而不是在各个校验器里复制条件。
  */
-final class ConfigPackageSheetSpecs {
+public final class ConfigPackageSheetSpecs {
 
   private static final String EMPTY = "";
 
@@ -284,17 +284,17 @@ final class ConfigPackageSheetSpecs {
 
   private final MessageSource messageSource;
 
-  ConfigPackageSheetSpecs(MessageSource messageSource) {
+  public ConfigPackageSheetSpecs(MessageSource messageSource) {
     this.messageSource = messageSource;
   }
 
-  record SheetDef(
+  public record SheetDef(
       String name,
       List<String> columns,
       Map<String, ColumnGuide> guides,
       BiConsumer<Sheet, Locale> validationApplier) {}
 
-  List<SheetDef> build() {
+  public List<SheetDef> build() {
     return List.of(
         new SheetDef(
             RESOURCE_QUEUE_SHEET,

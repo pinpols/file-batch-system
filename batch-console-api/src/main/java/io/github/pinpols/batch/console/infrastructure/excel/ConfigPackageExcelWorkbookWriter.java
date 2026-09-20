@@ -9,6 +9,7 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.w
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.infrastructure.config.DefaultTenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
@@ -26,11 +27,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import org.apache.poi.common.usermodel.HyperlinkType;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.DataValidationConstraint;
+import org.apache.poi.ss.usermodel.DataValidationHelper;
+import org.apache.poi.ss.usermodel.Hyperlink;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.context.MessageSource;
@@ -153,6 +162,7 @@ public class ConfigPackageExcelWorkbookWriter {
         writeDataSheet(wb, def, sheetDataList.get(i), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
+      supplementWriter.createFillOrderSheet(wb, sheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFourWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
@@ -186,6 +196,7 @@ public class ConfigPackageExcelWorkbookWriter {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
+      supplementWriter.createFillOrderSheet(wb, sheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFourWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
@@ -280,6 +291,7 @@ public class ConfigPackageExcelWorkbookWriter {
       }
     }
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
+    applyRequiredColumnValidations(def, sheet);
     setWidths(sheet, def.columns());
   }
 
@@ -303,8 +315,35 @@ public class ConfigPackageExcelWorkbookWriter {
       }
     }
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
+    applyRequiredColumnValidations(def, sheet);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
     setWidths(sheet, def.columns());
+  }
+
+  private static void applyRequiredColumnValidations(
+      ConfigPackageSheetSpecs.SheetDef def, Sheet sheet) {
+    DataValidationHelper helper = sheet.getDataValidationHelper();
+    for (int c = 0; c < def.columns().size(); c++) {
+      String columnName = def.columns().get(c);
+      ConsoleExcelStyles.ColumnGuide guide = def.guides().get(columnName);
+      if (EmptyChecks.isNull(guide)
+          || !guide.required()
+          || EmptyChecks.isNotEmpty(guide.allowedValues())) {
+        continue;
+      }
+      String excelColumn = CellReference.convertNumToColString(c);
+      DataValidationConstraint constraint =
+          helper.createCustomConstraint("LEN(TRIM(" + excelColumn + "2))>0");
+      CellRangeAddressList range =
+          new CellRangeAddressList(1, ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW, c, c);
+      DataValidation validation = helper.createValidation(constraint, range);
+      validation.setEmptyCellAllowed(false);
+      validation.setShowErrorBox(true);
+      validation.createErrorBox("必填字段", columnName + " 是必填列，请填写后再继续。");
+      validation.createPromptBox("必填字段", "请填写 " + columnName + "。");
+      validation.setShowPromptBox(true);
+      sheet.addValidationData(validation);
+    }
   }
 
   private void applyValidations(
@@ -376,7 +415,8 @@ public class ConfigPackageExcelWorkbookWriter {
     sheet.setColumnWidth(6, 18000); // 说明
     sheet.setColumnWidth(7, 7000); // 示例
     sheet.setColumnWidth(8, 8000); // 适用 Worker
-    sheet.setColumnWidth(9, 20000); // 填写示例（完整可抄片段）
+    sheet.setColumnWidth(9, 9000); // 默认值 / 留空行为
+    sheet.setColumnWidth(10, 20000); // 填写示例（完整可抄片段）
   }
 
   private GuideStyles buildGuideStyles(Workbook wb) {
@@ -393,7 +433,8 @@ public class ConfigPackageExcelWorkbookWriter {
   private static void writeGuideHeader(Sheet sheet, CellStyle headStyle) {
     Row header = sheet.createRow(0);
     header.setHeightInPoints(22);
-    String[] headers = {"所属 Sheet", "列名", "必填", "填写层级", "类型", "可选值", "说明", "示例", "适用 Worker", "填写示例"
+    String[] headers = {
+      "所属 Sheet", "列名", "必填", "填写层级", "类型", "可选值", "说明", "示例", "适用 Worker", "默认值/留空行为", "填写示例"
     };
     for (int i = 0; i < headers.length; i++) {
       Cell c = header.createCell(i);
@@ -404,9 +445,13 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private void writeGuideRow(Row row, GuideRowData rowData, GuideStyles styles) {
     ConsoleExcelStyles.ColumnGuide guide = rowData.guide();
-    boolean isRequired = guide != null && guide.required();
+    boolean isRequired = EmptyChecks.isNotNull(guide) && guide.required();
     writeGuideCell(row, 0, rowData.sectionLabel(), styles.body());
+    if (EmptyChecks.isNotBlank(rowData.sectionLabel())) {
+      addSheetLink(row.getCell(0), rowData.sheetName());
+    }
     writeGuideCell(row, 1, rowData.columnName(), styles.body());
+    addSheetLink(row.getCell(1), rowData.sheetName());
     writeGuideCell(
         row, 2, isRequired ? "★ 必填" : "选填", isRequired ? styles.required() : styles.optional());
     writeGuideCell(
@@ -422,9 +467,16 @@ public class ConfigPackageExcelWorkbookWriter {
     writeGuideCell(
         row, 7, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
     writeGuideCell(
-        row, 8, rowData.appliesTo() == null ? EMPTY : rowData.appliesTo(), styles.body());
+        row,
+        8,
+        EmptyChecks.isNull(rowData.appliesTo()) ? EMPTY : rowData.appliesTo(),
+        styles.body());
+    writeGuideCell(row, 9, defaultBehaviorFor(rowData.columnName(), guide), styles.body());
     writeGuideCell(
-        row, 9, rowData.fillExample() == null ? EMPTY : rowData.fillExample(), styles.body());
+        row,
+        10,
+        EmptyChecks.isNull(rowData.fillExample()) ? EMPTY : rowData.fillExample(),
+        styles.body());
   }
 
   private record GuideRowData(
@@ -435,7 +487,7 @@ public class ConfigPackageExcelWorkbookWriter {
       String appliesTo,
       String fillExample) {}
 
-  private static String guideLevelFor(String sheetName, String colName, boolean required) {
+  public static String guideLevelFor(String sheetName, String colName, boolean required) {
     if (required) {
       return GUIDE_LEVEL_REQUIRED;
     }
@@ -451,7 +503,7 @@ public class ConfigPackageExcelWorkbookWriter {
    * 「填写示例」列：完整可直接复制改写的片段，区别于第 7 列短「示例」。 对最难填的 JSON/SQL 字段给真实非空结构（提取自 e2e fixture），import vs export
    * 两套结构都覆盖；其他字段回退到短示例。
    */
-  private static String fillExampleFor(
+  public static String fillExampleFor(
       String sheetName, String colName, ConsoleExcelStyles.ColumnGuide guide) {
     String override = ConfigPackageSheetSpecs.FILL_EXAMPLE_OVERRIDE
         .getOrDefault(sheetName, Map.of())
@@ -462,7 +514,7 @@ public class ConfigPackageExcelWorkbookWriter {
     return guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example);
   }
 
-  private static String guideOrEmpty(
+  public static String guideOrEmpty(
       ConsoleExcelStyles.ColumnGuide guide,
       Function<ConsoleExcelStyles.ColumnGuide, String> getter) {
     return guide == null ? EMPTY : getter.apply(guide);
@@ -473,7 +525,7 @@ public class ConfigPackageExcelWorkbookWriter {
    *
    * <p>Worker 缩写：I=IMPORT / E=EXPORT / P=PROCESS / D=DISPATCH / G=GENERAL / W=WORKFLOW；ALL = 全部。
    */
-  private static String appliesToFor(String sheetName, String colName) {
+  public static String appliesToFor(String sheetName, String colName) {
     String override = APPLIES_TO_OVERRIDE.getOrDefault(sheetName, Map.of()).get(colName);
     if (override != null) return override;
     return APPLIES_TO_SHEET_DEFAULT.getOrDefault(sheetName, "ALL");
@@ -530,11 +582,42 @@ public class ConfigPackageExcelWorkbookWriter {
               "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）",
               "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
 
-  private static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
-    if (guide == null || guide.allowedValues().isEmpty()) {
+  public static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
+    if (EmptyChecks.isNull(guide) || EmptyChecks.isEmpty(guide.allowedValues())) {
       return EMPTY;
     }
     return String.join(" / ", guide.allowedValues());
+  }
+
+  public static String defaultBehaviorFor(String colName, ConsoleExcelStyles.ColumnGuide guide) {
+    if (EmptyChecks.isNull(guide)) {
+      return EMPTY;
+    }
+    if (guide.required()) {
+      return "必须填写；留空会在预览阶段报错。";
+    }
+    if (guide.readOnly()) {
+      return "系统导出字段；导入模板通常不用填写。";
+    }
+    if (ConfigPackageExcelValidator.COL_TENANT_ID.equals(colName)) {
+      return "可留空；系统使用当前登录/选择租户。";
+    }
+    if (ConfigPackageExcelValidator.COL_ENABLED.equals(colName)) {
+      return "可留空；通常按启用处理，需禁用时填 FALSE。";
+    }
+    if (ConfigPackageExcelValidator.COL_VERSION.equals(colName)) {
+      return "可留空；通常按版本 1 处理。";
+    }
+    if (ConfigPackageExcelValidator.COL_DESCRIPTION.equals(colName)) {
+      return "可留空；仅作为备注。";
+    }
+    if (EmptyChecks.isNotNull(guide.description()) && guide.description().contains("留空默认")) {
+      return "可留空；按说明中的默认值处理。";
+    }
+    if (EmptyChecks.isBlank(guide.example())) {
+      return "可留空；不覆盖现有可选配置。";
+    }
+    return "可留空；建议值/常用值：" + guide.example() + "。";
   }
 
   private record GuideStyles(
@@ -544,5 +627,12 @@ public class ConfigPackageExcelWorkbookWriter {
     Cell cell = row.createCell(col);
     cell.setCellValue(value);
     cell.setCellStyle(style);
+  }
+
+  private static void addSheetLink(Cell cell, String targetSheetName) {
+    CreationHelper creationHelper = cell.getSheet().getWorkbook().getCreationHelper();
+    Hyperlink link = creationHelper.createHyperlink(HyperlinkType.DOCUMENT);
+    link.setAddress("'" + targetSheetName.replace("'", "''") + "'!A1");
+    cell.setHyperlink(link);
   }
 }

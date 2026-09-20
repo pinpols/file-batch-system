@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
@@ -30,8 +31,11 @@ import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelVa
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSampleDataFactory;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSheetSpecs;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import io.github.pinpols.batch.console.support.excel.ConsoleSingleSheetExcelImportSupport;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
@@ -40,6 +44,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
 import io.github.pinpols.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelApplyResponse;
+import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelGuideResponse;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse.ErrorRowDto;
 import io.github.pinpols.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse.IssueDto;
@@ -51,6 +56,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -188,6 +194,48 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
         "tenant-config-package-template.xlsx",
         out -> writer.writeTemplateWorkbook(out, implRegistry));
+  }
+
+  @Override
+  public ResponseEntity<StreamingResponseBody> downloadSampleTemplate(String scenario) {
+    String normalizedScenario = ConfigPackageSampleDataFactory.normalizeScenario(scenario);
+    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
+    List<List<Map<String, Object>>> sheets =
+        ConfigPackageSampleDataFactory.sampleSheets(normalizedScenario);
+    String fileName =
+        "tenant-config-package-sample-" + normalizedScenario.toLowerCase(Locale.ROOT) + ".xlsx";
+    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+        fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
+  }
+
+  @Override
+  public TenantConfigPackageExcelGuideResponse guide() {
+    List<TenantConfigPackageExcelGuideResponse.SheetGuide> sheets = new ArrayList<>();
+    ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource);
+    for (ConfigPackageSheetSpecs.SheetDef sheet : specs.build()) {
+      List<TenantConfigPackageExcelGuideResponse.ColumnGuide> columns = new ArrayList<>();
+      String sheetAppliesTo = ConfigPackageExcelWorkbookWriter.appliesToFor(sheet.name(), "");
+      for (String column : sheet.columns()) {
+        ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
+        boolean required = EmptyChecks.isNotNull(guide) && guide.required();
+        columns.add(new TenantConfigPackageExcelGuideResponse.ColumnGuide(
+            column,
+            required,
+            EmptyChecks.isNotNull(guide) && guide.readOnly(),
+            ConfigPackageExcelWorkbookWriter.guideLevelFor(sheet.name(), column, required),
+            EmptyChecks.isNull(guide) ? "" : guide.formatHint(),
+            EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues(),
+            EmptyChecks.isNull(guide) ? "" : guide.description(),
+            EmptyChecks.isNull(guide) ? "" : guide.example(),
+            ConfigPackageExcelWorkbookWriter.fillExampleFor(sheet.name(), column, guide),
+            ConfigPackageExcelWorkbookWriter.defaultBehaviorFor(column, guide),
+            ConfigPackageExcelWorkbookWriter.appliesToFor(sheet.name(), column)));
+      }
+      sheets.add(new TenantConfigPackageExcelGuideResponse.SheetGuide(
+          sheet.name(), sheetAppliesTo, columns));
+    }
+    return new TenantConfigPackageExcelGuideResponse(sheets);
   }
 
   /**

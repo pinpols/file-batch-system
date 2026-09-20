@@ -9569,6 +9569,40 @@ paths:
               schema:
                 type: string
                 format: binary
+  /api/console/config/tenant-package/excel/sample-template:
+    get:
+      tags: [Config]
+      summary: Download scenario sample tenant config package Excel template
+      operationId: downloadTenantConfigPackageExcelSampleTemplate
+      parameters:
+        - name: scenario
+          in: query
+          required: false
+          description: Scenario filter. ALL keeps all sample scenarios.
+          schema:
+            type: string
+            enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, WORKFLOW]
+            default: ALL
+      responses:
+        '200':
+          description: Scenario sample Excel template with 11 data sheets
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/tenant-package/excel/guide:
+    get:
+      tags: [Config]
+      summary: Return 11-sheet tenant config package field guide
+      operationId: getTenantConfigPackageExcelGuide
+      responses:
+        '200':
+          description: Field guide for required columns, defaults, formats, enums, and examples
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelGuide'
   /api/console/config/tenant-package/excel/upload:
     post:
       tags: [Config]
@@ -16490,6 +16524,16 @@ components:
         data:
           $ref: '#/components/schemas/TenantConfigPackageExcelPreviewResponse'
       required: [code, message, data]
+    CommonResponseTenantConfigPackageExcelGuide:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TenantConfigPackageExcelGuideResponse'
+      required: [code, message, data]
     CommonResponseTenantConfigPackageExcelApply:
       type: object
       properties:
@@ -16567,6 +16611,54 @@ components:
           type: integer
           format: int32
       required: [uploadToken, fileName, resourceQueueRows, businessCalendarRows, batchWindowRows, jobRows, fileChannelRows, fileTemplateRows, pipelineRows, pipelineStepRows, workflowDefinitionRows, workflowNodeRows, workflowEdgeRows]
+    TenantConfigPackageExcelGuideResponse:
+      type: object
+      properties:
+        sheets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigPackageSheetGuide'
+      required: [sheets]
+    TenantConfigPackageSheetGuide:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        appliesTo:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigPackageColumnGuide'
+      required: [sheetName, appliesTo, columns]
+    TenantConfigPackageColumnGuide:
+      type: object
+      properties:
+        columnName:
+          type: string
+        required:
+          type: boolean
+        readOnly:
+          type: boolean
+        guideLevel:
+          type: string
+        format:
+          type: string
+        allowedValues:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        example:
+          type: string
+        fillExample:
+          type: string
+        defaultBehavior:
+          type: string
+        appliesTo:
+          type: string
+      required: [columnName, required, readOnly, guideLevel, format, allowedValues, description, example, fillExample, defaultBehavior, appliesTo]
     TenantConfigPackageExcelPreviewResponse:
       type: object
       properties:
