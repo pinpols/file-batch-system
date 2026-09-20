@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,7 +34,7 @@ public class ExportFormatStrategyRegistry {
    * @return 对应的策略实现
    */
   public ExportFormatStrategy resolve(String fileFormatType) {
-    if (fileFormatType == null || fileFormatType.isBlank()) {
+    if (EmptyChecks.isBlank(fileFormatType)) {
       return require("JSON");
     }
     return require(fileFormatType);
@@ -48,8 +49,8 @@ public class ExportFormatStrategyRegistry {
    */
   public ExportFormatStrategy require(String fileFormatType) {
     ExportFormatStrategy strategy = strategiesByType.get(
-        fileFormatType == null ? "" : fileFormatType.trim().toUpperCase(Locale.ROOT));
-    if (strategy == null) {
+        EmptyChecks.isNull(fileFormatType) ? "" : fileFormatType.trim().toUpperCase(Locale.ROOT));
+    if (EmptyChecks.isNull(strategy)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);
     }

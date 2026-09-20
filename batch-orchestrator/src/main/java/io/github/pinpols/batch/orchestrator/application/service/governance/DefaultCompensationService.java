@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -273,7 +274,7 @@ public class DefaultCompensationService implements CompensationService {
       CompensationCommandEntity entity) {
     String compensationType = normalizeType(command.compensationType());
     CompensationOperation operation = operationsByType.get(compensationType);
-    if (operation == null) {
+    if (EmptyChecks.isNull(operation)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.common.invalid_argument_detail",
@@ -652,7 +653,9 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   private String normalizeType(String compensationType) {
-    return compensationType == null ? null : compensationType.trim().toUpperCase(Locale.ROOT);
+    return EmptyChecks.isNull(compensationType)
+        ? null
+        : compensationType.trim().toUpperCase(Locale.ROOT);
   }
 
   private String resolveErrorCode(Exception exception) {

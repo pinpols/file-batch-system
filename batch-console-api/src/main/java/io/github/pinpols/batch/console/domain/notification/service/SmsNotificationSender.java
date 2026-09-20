@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -45,11 +46,11 @@ public class SmsNotificationSender implements NotificationSender {
       return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
     }
     String providerName = properties.getProvider();
-    if (providerName == null || providerName.isBlank() || "none".equalsIgnoreCase(providerName)) {
+    if (EmptyChecks.isBlank(providerName) || "none".equalsIgnoreCase(providerName)) {
       return WebhookDeliveryResult.failure(null, "sms provider not configured");
     }
     SmsProvider provider = resolve(providerName);
-    if (provider == null) {
+    if (EmptyChecks.isNull(provider)) {
       log.warn(
           "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
           providerName,
@@ -67,13 +68,13 @@ public class SmsNotificationSender implements NotificationSender {
     Map<String, SmsProvider> registered = new LinkedHashMap<>();
     for (SmsProvider provider : providers) {
       String code = provider.providerCode();
-      if (code == null || code.isBlank()) {
+      if (EmptyChecks.isBlank(code)) {
         throw new IllegalStateException(
             "SmsProvider providerCode must not be blank: " + provider.getClass().getName());
       }
       String normalized = code.trim().toLowerCase(Locale.ROOT);
       SmsProvider duplicate = registered.putIfAbsent(normalized, provider);
-      if (duplicate != null) {
+      if (EmptyChecks.isNotNull(duplicate)) {
         throw new IllegalStateException("duplicate SmsProvider providerCode: " + normalized);
       }
     }
@@ -82,12 +83,12 @@ public class SmsNotificationSender implements NotificationSender {
 
   private List<String> parsePhoneNumbers(String configJson) {
     List<String> result = new ArrayList<>();
-    if (configJson == null || configJson.isBlank()) {
+    if (EmptyChecks.isBlank(configJson)) {
       return result;
     }
     try {
       JsonNode node = objectMapper.readTree(configJson).get("phoneNumbers");
-      if (node == null || node.isNull()) {
+      if (EmptyChecks.isNull(node) || node.isNull()) {
         return result;
       }
       for (String raw : node.asText().split(",")) {

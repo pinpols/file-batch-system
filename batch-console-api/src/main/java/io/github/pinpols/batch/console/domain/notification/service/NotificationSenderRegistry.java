@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -19,12 +20,12 @@ public class NotificationSenderRegistry {
     Map<String, NotificationSender> registered = new LinkedHashMap<>();
     for (NotificationSender sender : senders) {
       String channelType = normalize(sender.channelType());
-      if (channelType == null) {
+      if (EmptyChecks.isNull(channelType)) {
         throw new IllegalStateException("NotificationSender channelType must not be blank: "
             + sender.getClass().getName());
       }
       NotificationSender duplicate = registered.putIfAbsent(channelType, sender);
-      if (duplicate != null) {
+      if (EmptyChecks.isNotNull(duplicate)) {
         throw new IllegalStateException("duplicate NotificationSender channelType: " + channelType);
       }
     }
@@ -34,10 +35,10 @@ public class NotificationSenderRegistry {
   /** 解析能处理 channelType 的 sender；无则 null。 */
   public NotificationSender resolve(String channelType) {
     String normalized = normalize(channelType);
-    return normalized == null ? null : sendersByType.get(normalized);
+    return EmptyChecks.isNull(normalized) ? null : sendersByType.get(normalized);
   }
 
   private static String normalize(String value) {
-    return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
+    return EmptyChecks.isBlank(value) ? null : value.trim().toUpperCase(Locale.ROOT);
   }
 }

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.statemachine;
 
 import io.github.pinpols.batch.common.persistence.Stateful;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
@@ -40,7 +41,7 @@ public class DefaultLifecycleEventMapper<T> implements LifecycleEventMapper<T> {
     if (target instanceof Stateful stateful && Texts.hasText(stateful.getStatus())) {
       return stateful.getStatus();
     }
-    String targetType = target == null ? "null" : target.getClass().getName();
+    String targetType = EmptyChecks.isNull(target) ? "null" : target.getClass().getName();
     throw new IllegalArgumentException(
         "Cannot resolve lifecycle status from " + targetType + ": use String, Enum or Stateful");
   }
