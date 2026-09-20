@@ -24,7 +24,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -64,8 +64,8 @@ class DefaultPartitionDispatchServiceTest {
     when(globalJobAdmission.hasCapacity()).thenReturn(true);
     workflowNodeDispatchService = mock(WorkflowNodeDispatchService.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
-    StateMachine<Object> stateMachine = mock(StateMachine.class);
-    when(stateMachine.transition(any(), any()))
+    LifecycleEventMapper<Object> lifecycleEventMapper = mock(LifecycleEventMapper.class);
+    when(lifecycleEventMapper.map(any(), any()))
         .thenReturn(new StateTransition(
             JobInstanceStatus.CREATED.code(), "START", JobInstanceStatus.RUNNING.code()));
     service = new DefaultPartitionDispatchService(
@@ -74,7 +74,7 @@ class DefaultPartitionDispatchServiceTest {
         partitionLifecycleService,
         taskExecutionService,
         taskDispatchOutboxService,
-        stateMachine,
+        lifecycleEventMapper,
         globalJobAdmission,
         workflowNodeDispatchService,
         jobInstanceMapper,

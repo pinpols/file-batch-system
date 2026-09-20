@@ -7,16 +7,16 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2252 |
+| 生产 Java 源文件 | 2236 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2052 |
-| 含 Map 的源文件 | 446 |
+| `Map<String, Object>` 出现次数 | 2051 |
+| 含 Map 的源文件 | 444 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
-| `@SuppressWarnings` | 218 |
-| 含 suppression 的源文件 | 165 |
+| `@SuppressWarnings` | 217 |
+| 含 suppression 的源文件 | 164 |
 | `@Configuration` 类 | 47 |
-| 大于等于 700 行的源文件 | 9 |
+| 大于等于 700 行的源文件 | 10 |
 | `PMD.ExcessiveParameterList` 显式例外 | 34 |
 
 ## 模块源文件
@@ -25,9 +25,9 @@
 |---|---:|
 | `batch-common` | 299 |
 | `batch-console-api` | 875 |
-| `batch-orchestrator` | 540 |
+| `batch-orchestrator` | 526 |
 | `batch-trigger` | 69 |
-| `batch-worker` | 369 |
+| `batch-worker` | 367 |
 | `sdk` | 91 |
 | `security-scan` | 9 |
 
@@ -49,6 +49,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 715 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 711 |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 709 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 704 |
 
 ## Public Map 契约候选
 

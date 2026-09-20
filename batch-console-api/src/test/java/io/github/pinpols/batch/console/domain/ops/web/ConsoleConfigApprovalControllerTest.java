@@ -145,13 +145,13 @@ class ConsoleConfigApprovalControllerTest {
   }
 
   @Test
-  void approveShouldRejectMissingOperatorId() throws Exception {
-    // @NotBlank operatorId
+  void approveShouldRejectMissingTenantId() throws Exception {
+    // 操作人来自认证上下文；请求体只校验租户绑定。
     mockMvc
         .perform(post("/api/console/config/approvals/100/approve")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
             .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\"}"))
+            .content("{}"))
         .andExpect(status().isBadRequest());
   }
 }

@@ -54,8 +54,8 @@ public class TwilioSmsProvider implements SmsProvider {
   }
 
   @Override
-  public boolean supports(String provider) {
-    return "twilio".equalsIgnoreCase(provider);
+  public String providerCode() {
+    return "twilio";
   }
 
   @Override

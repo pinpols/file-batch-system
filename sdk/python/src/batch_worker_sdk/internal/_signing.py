@@ -43,6 +43,7 @@ def canonical_string(
 
 def sign(
     api_key: str,
+    *,
     method: str,
     path: str,
     timestamp: str,

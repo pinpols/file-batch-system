@@ -69,8 +69,8 @@ public class DingTalkNotificationSender implements NotificationSender {
   }
 
   @Override
-  public boolean supports(String channelType) {
-    return "DINGTALK".equalsIgnoreCase(channelType);
+  public String channelType() {
+    return "DINGTALK";
   }
 
   @Override

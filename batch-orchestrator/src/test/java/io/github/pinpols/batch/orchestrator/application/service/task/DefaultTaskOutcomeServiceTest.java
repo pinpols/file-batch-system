@@ -20,7 +20,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Orchest
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -98,7 +98,7 @@ class DefaultTaskOutcomeServiceTest {
   private RetryGovernanceService retryGovernanceService;
 
   @Mock
-  private StateMachine<Object> stateMachine;
+  private LifecycleEventMapper<Object> lifecycleEventMapper;
 
   @Mock
   private WorkflowDagService workflowDagService;
@@ -144,7 +144,7 @@ class DefaultTaskOutcomeServiceTest {
     DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators collaborators =
         new DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators(
             retryGovernanceService,
-            stateMachine,
+            lifecycleEventMapper,
             workflowDagService,
             nodeDispatchProvider,
             workflowTerminalOutboxService,

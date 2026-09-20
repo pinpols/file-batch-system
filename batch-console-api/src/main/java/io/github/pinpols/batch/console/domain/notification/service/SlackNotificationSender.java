@@ -65,8 +65,8 @@ public class SlackNotificationSender implements NotificationSender {
   }
 
   @Override
-  public boolean supports(String channelType) {
-    return "SLACK".equalsIgnoreCase(channelType);
+  public String channelType() {
+    return "SLACK";
   }
 
   @Override

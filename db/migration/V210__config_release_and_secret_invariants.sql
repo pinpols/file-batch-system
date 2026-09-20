@@ -50,3 +50,6 @@ ALTER TABLE batch.secret_version
             AND length(secret_payload ->> 'ciphertext') >= 32
         )
     ) NOT VALID;
+
+ALTER TABLE batch.secret_version
+    VALIDATE CONSTRAINT ck_secret_version_payload_protected;

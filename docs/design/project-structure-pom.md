@@ -52,55 +52,26 @@ batch-platform
 
 #### 文件链路扩展设计在模块中的落位建议
 
-为了支撑导入 / 导出 / 分发链路的“固定阶段骨架 + 配置驱动 + 插件扩展”，建议在模块中增加如下代码落位约定：
+导入 / 导出 / 加工 / 分发链路采用“控制面保存定义、Worker 执行阶段”的单一落位约定：
 
 ```text
 batch-orchestrator
-└── src/main/java/.../pipeline
-    ├── definition
-    │   ├── PipelineDefinition.java
-    │   └── PipelineStepDefinition.java
-    ├── engine
-    │   ├── PipelineExecutor.java
-    │   ├── ExecutionContext.java
-    │   └── StepRegistry.java
-    └── repository
-        ├── PipelineDefinitionRepository.java
-        ├── PipelineStepDefinitionRepository.java
-        └── PipelineInstanceRepository.java
+└── src/main/java/.../
+    ├── mapper                 # PipelineDefinition / StepDefinition 配置读写
+    └── application/service    # 编排、路由、状态推进，不在本进程执行 Worker 步骤
 
 batch-worker-core
-└── src/main/java/.../executor
-    ├── WorkerTaskExecutor.java
-    ├── WorkerExecutionContext.java
-    └── WorkerLeaseManager.java
+└── src/main/java/.../
+    ├── support
+    │   ├── ExecutionContext.java
+    │   ├── AbstractStageExecutor.java
+    │   └── AbstractStepBeanRegistrar.java
+    └── mapper/StepRegistryMapper.java
 
-batch-worker-import
-└── src/main/java/.../pipeline/importing
-    ├── step
-    │   ├── UnzipStep.java
-    │   ├── CsvParseStep.java
-    │   ├── HeaderValidateStep.java
-    │   └── BatchLoadStep.java
-    └── mapper
-
-batch-worker-export
-└── src/main/java/.../pipeline/exporting
-    ├── step
-    │   ├── QueryDataStep.java
-    │   ├── GenerateCsvStep.java
-    │   ├── UploadMinioStep.java
-    │   └── RegisterAssetStep.java
-    └── mapper
-
-batch-worker-dispatch
-└── src/main/java/.../pipeline/dispatch
-    ├── step
-    │   ├── SftpDispatchStep.java
-    │   ├── ApiPushStep.java
-    │   ├── MailDispatchStep.java
-    │   └── PollAckStep.java
-    └── mapper
+batch-worker-{import,export,process,dispatch}
+└── src/main/java/.../
+    ├── stage                  # 业务阶段实现
+    └── infrastructure/*StepBeanRegistrar.java
 ```
 
 **落位规则**：
@@ -108,7 +79,7 @@ batch-worker-dispatch
 - 链路模板主表、步骤配置表、链路实例主记录属于定义态/轻聚合配置，建议放在 `batch-orchestrator`，**与运行态相同**走 MyBatis Mapper
 - 步骤运行日志、导入/导出/分发结果回写、日志检索、回执查询属于运行态，建议在对应 Worker 中使用 MyBatis
 - 控制台检索接口走 MyBatis 查询 **record** / **View**，与配置维护同一持久化栈
-- 具体步骤实现放在各业务 Worker；步骤注册、统一执行入口、上下文与监控放在 `batch-worker-core` 或 `batch-orchestrator`
+- 具体步骤实现放在各业务 Worker；步骤注册、统一执行入口、上下文与监控只放在 `batch-worker-core`
 - 不建议在控制台模块直接实现步骤逻辑，控制台只做配置维护、查询与运维入口
 
 **统一落位原则**：
@@ -1743,7 +1714,7 @@ batch-orchestrator
     │       ├── WorkflowDagService.java        (接口)
     │       ├── WorkflowOrchestrationService.java (接口)
     │       ├── Default***.java                ← 各接口的 Default 实现
-    │       └── CompensationHandler.java
+    │       └── DefaultCompensationService.java ← 内部路由函数，不暴露伪 SPI
     ├── config
     ├── controller
     │   ├── LaunchController.java
@@ -1835,8 +1806,7 @@ batch-worker-import
     │   ├── CustomerAccountImportRepository.java
     │   └── ImportStepExecutionAdapter.java
     ├── route
-    │   ├── DefaultImportWorkerRouteAdapter.java
-    │   └── ImportWorkerRouteAdapter.java
+    │   └── DefaultImportWorkerRouteAdapter.java ← implements worker-core WorkerRouteAdapter
     ├── runtime
     │   ├── ImportTaskConsumer.java
     │   └── ImportWorkerLoop.java
@@ -1874,8 +1844,7 @@ batch-worker-export
     │   ├── MinioExportStorage.java
     │   └── SettlementExportRepository.java
     ├── route
-    │   ├── DefaultExportWorkerRouteAdapter.java
-    │   └── ExportWorkerRouteAdapter.java
+    │   └── DefaultExportWorkerRouteAdapter.java ← implements worker-core WorkerRouteAdapter
     ├── runtime
     │   ├── ExportTaskConsumer.java
     │   └── ExportWorkerLoop.java

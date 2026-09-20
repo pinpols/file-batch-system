@@ -28,7 +28,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.StateMachine;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
@@ -66,7 +66,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   private final PartitionLifecycleService partitionLifecycleService;
   private final TaskExecutionService taskExecutionService;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
-  private final StateMachine<Object> stateMachine;
+  private final LifecycleEventMapper<Object> lifecycleEventMapper;
   private final GlobalJobAdmission globalJobAdmission;
   private final WorkflowNodeDispatchService workflowNodeDispatchService;
   private final JobInstanceMapper jobInstanceMapper;
@@ -217,7 +217,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
         .tenantId(jobInstance.getTenantId())
         .id(jobInstance.getId())
-        .instanceStatus(stateMachine.transition(jobInstance, "START").toState())
+        .instanceStatus(lifecycleEventMapper.map(jobInstance, "START").toState())
         .expectedPartitionCount(partitionCount)
         .startedAt(startedAt)
         .expectedVersion(jobInstance.getVersion())
@@ -231,7 +231,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       workflowRunMapper.markRunning(
           jobInstance.getTenantId(),
           workflowRun.getId(),
-          stateMachine.transition(workflowRun, "START").toState(),
+          lifecycleEventMapper.map(workflowRun, "START").toState(),
           workflowRun.getCurrentNodeCode(),
           startedAt);
     }

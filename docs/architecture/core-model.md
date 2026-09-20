@@ -304,15 +304,12 @@ job_instance.expected_       ──┘                ↓
 
 ### 5.2 当前代码里的上下文形态
 
-当前仓库已经存在两种相关形态：
+运行时上下文统一由 Worker core 的
+[`ExecutionContext`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
+承载；Orchestrator 只负责编排、路由和状态推进，不再维护重复的执行上下文模型。旧名 `PipelineContext`
+仅保留为兼容语义和历史检索词，仓库里不再新增该类型。
 
-1. Orchestrator 侧的 [`ExecutionContext`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)
-2. Worker core 侧的 [`ExecutionContext`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)
-3. 旧名 `PipelineContext` 仅保留为兼容语义和历史检索词，仓库里不再新增该类型
-
-它们的共同点是：
-- 都携带 tenant / job / worker 等基础信息
-- 都依赖可变属性袋传递阶段间数据
+该上下文携带 tenant / job / worker 等基础信息，并通过可变属性袋传递阶段间数据。
 
 命名约束：
 - 新文档、新 DTO、新接口说明统一使用 `ExecutionContext`
@@ -321,7 +318,8 @@ job_instance.expected_       ──┘                ↓
 
 兼容层说明：
 - 当前仍保留少量 `pipelineCode` 兼容入口，这是刻意保留的兼容层，不视为漏改
-- 典型落点见 [`ExecutionContext.java`](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/pipeline/ExecutionContext.java)、[`AbstractPipelineStepExecutionAdapter.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)（原 `PipelineDefinitionModel.java` 为零引用死代码，2026-07-09 已删除）
+- 执行上下文和步骤执行统一落在 worker-core；控制面曾存在的无调用 `PipelineExecutor`/`StepRegistry` 第二套抽象已删除，避免把配置模型误当成本地执行引擎
+- 典型落点见 [`ExecutionContext.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/ExecutionContext.java)、[`AbstractPipelineStepExecutionAdapter.java`](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java)
 
 ### 5.3 统一上下文的推荐结构
 

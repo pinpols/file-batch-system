@@ -769,16 +769,14 @@ filePipelines:
 
 ```mermaid
 flowchart TD
-    A[PipelineDefinition] --> B[PipelineExecutor]
-    B --> C[StepRegistry]
-    C --> D[Receiver/Preprocessor/Parser]
-    C --> E[Validator/Loader]
-    C --> F[DataProvider/FileGenerator/StorageWriter]
-    C --> G[ChannelAdapter/AckHandler/RetryStrategy]
-    B --> H[ExecutionContext]
+    A[PipelineDefinition] --> B[Orchestrator Task/Outbox]
+    B --> C[Worker AbstractPipelineStepExecutionAdapter]
+    C --> D[AbstractStageExecutor]
+    D --> E[Import/Export/Process/Dispatch Stage Beans]
+    C --> H[ExecutionContext]
     H --> I[file_record]
-    H --> J[task_instance]
-    H --> K[审计/监控/回执]
+    H --> J[pipeline_instance / pipeline_step_run]
+    C --> K[Task Result / 审计 / 指标]
 ```
 
 #### 核心抽象建议
@@ -786,11 +784,11 @@ flowchart TD
 | 抽象 | 作用 |
 |---|---|
 | `PipelineDefinition` | 定义某类文件链路模板，包含链路类型、步骤顺序、启停配置 |
-| `PipelineStepDefinition` | 定义步骤编码、阶段、实现类、参数、超时、重试策略 |
+| `PipelineStepDefinition` | 定义步骤编码、阶段、实现编码、参数、超时、重试策略 |
 | `ExecutionContext` | 承载文件资产、任务实例、租户、trace、业务参数、临时变量 |
-| `PipelineStep` | 统一步骤 SPI，业务步骤通过实现该接口接入 |
-| `StepRegistry` | 管理步骤编码与实现映射，支持按模块注册 |
-| `PipelineExecutor` | 按配置顺序执行步骤，并统一处理日志、异常、回写、监控 |
+| 各 Worker Stage SPI | Import/Export/Process/Dispatch 按自己的阶段语义提供窄接口，避免万能 Step 接口 |
+| `batch.step_registry` | 启动时登记实现编码，供 Console 配置校验；不是第二套运行时执行器 |
+| `AbstractPipelineStepExecutionAdapter` / `AbstractStageExecutor` | Worker 内加载定义、按顺序执行阶段并统一处理日志、异常、回写和监控 |
 
 #### 与统一核心模型对齐
 
@@ -801,17 +799,19 @@ flowchart TD
 - `run_mode` 是运行时上下文意图，不是任务状态；当前只要求进入 payload、worker context、命令载荷与应用日志，不要求进入主状态表。
 - `attempt` 不是主运行态一等实体；业务层继续使用 `retry_count`，outbox / delivery 层使用 `publish_attempt`、`retry_attempt`、`delivery_attempt` 这类附属计数字段。
 - `workerCode` 表示稳定 worker 注册 / 路由标识，`workerGroup` 表示调度分组；`workerId` 不再作为新的主命名扩散。
-- `Step` 用于编排、审计和步骤级执行镜像，`Stage` 用于 worker 内部阶段执行；两者不视为同义词。
+- `StepDefinition` 是控制面配置和审计镜像，`Stage` 是 Worker 内部执行语义；控制面不持有本地 Step 实现。
 - `CompensationSubmitCommand` / `ApprovalCommand` 是命令对象，不是状态字段，也不是主运行态模型。
 
 #### 推荐 SPI 形式
 
 ```java
-public interface PipelineStep {
-    String stepCode();
-    StepResult execute(ExecutionContext context);
+public interface ImportStageStep {
+    String implCode();
+    ImportStageResult execute(ImportJobContext context, PipelineStepDefinition definition);
 }
 ```
+
+其它 Worker 使用自己的窄 Stage SPI，不新增一套 Orchestrator 本地执行 SPI。
 
 #### 适合配置的能力
 
@@ -844,32 +844,31 @@ public interface PipelineStep {
 
 ### 9.7 链路执行引擎设计
 
-链路执行引擎建议由 `batch-orchestrator` 负责模板解析与调度，由各 Worker 负责实际步骤执行。核心职责如下：
+链路执行由 `batch-orchestrator` 负责实例编排与任务派发，各 Worker 负责模板加载和实际阶段执行。核心职责如下：
 
-1. 根据 `PipelineDefinition` 解析出当前文件对应的链路模板
-2. 生成 `pipeline_instance` 并写入初始状态
-3. 将当前步骤、上下文和参数投递到目标 Worker
-4. 按步骤回执推进 `last_success_stage` 与 `current_stage`
-5. 统一记录 `pipeline_step_run`、指标、审计和错误码
-6. 在失败时按恢复点决定重试、补偿、死信还是人工接管
+1. Orchestrator 根据 Job/Workflow 生成任务并通过 Outbox 投递到目标 Worker
+2. Worker 从平台库读取已 provision 的 `PipelineDefinition`，创建 `pipeline_instance`
+3. Worker 的 Stage Executor 按步骤定义解析本模块实现并顺序执行
+4. Worker 在同一执行链中推进 `last_success_stage` / `current_stage` 并记录 `pipeline_step_run`
+5. Worker 通过任务结果回报成功或失败，Orchestrator 使用状态 CAS 推进实例
+6. 失败按恢复点进入重试、补偿、死信或人工接管
 
 #### 执行时序建议
 
 ```mermaid
 sequenceDiagram
     participant O as Orchestrator
-    participant E as PipelineExecutor
-    participant R as StepRegistry
+    participant K as Kafka/Outbox
     participant W as Worker
     participant DB as PostgreSQL
 
-    O->>DB: 创建 pipeline_instance
-    O->>E: 加载模板并准备执行
-    E->>R: 按 step_code 获取实现
-    E->>W: 投递步骤任务
-    W->>DB: 回写 pipeline_step_run
-    W-->>E: 返回 StepResult
-    E->>DB: 更新 current_stage / last_success_stage
+    O->>K: 事务 Outbox 投递任务
+    K->>W: Worker 领取任务
+    W->>DB: 加载定义并创建 pipeline_instance
+    W->>W: 按 impl_code 解析并执行 Stage Bean
+    W->>DB: 回写 pipeline_step_run/current_stage
+    W-->>O: 上报 Task Result
+    O->>DB: CAS 推进 Job/Workflow 状态
 ```
 
 #### 恢复点建议

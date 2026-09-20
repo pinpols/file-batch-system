@@ -304,13 +304,22 @@ async def test_contract_fixture(  # noqa: PLR0911 — fixture 路由表,分支�
 
     client = PlatformHttpClient(cfg)
     try:
-        await _assert_fixture(client, when, status, body, cfg, httpx_mock, fixture_id)
+        await _assert_fixture(
+            client,
+            when=when,
+            status=status,
+            body=body,
+            cfg=cfg,
+            httpx_mock=httpx_mock,
+            fixture_id=fixture_id,
+        )
     finally:
         await client.close()
 
 
 async def _assert_fixture(
     client: PlatformHttpClient,
+    *,
     when: dict[str, Any],
     status: int,
     body: dict[str, Any] | None,

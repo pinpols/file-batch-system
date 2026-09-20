@@ -66,7 +66,7 @@
 - ✅ DefaultWorkerDrainGovernanceService、DefaultWorkflowDagService
 - ✅ DefaultLaunchService、DefaultScheduleForwarder
 - ✅ KafkaOutboxPublisher、DatabaseIdempotencyGuard（单元测试）
-- ✅ DefaultStateMachine、DefaultStepRegistry、DefaultPipelineExecutor
+- ✅ 生命周期事件映射、worker 阶段注册与执行主链路
 - ✅ 5 个 Web Controller、2 个缓存服务
 - ✅ PartitionLeaseReclaimScheduler、OutboxPollScheduler 等 8 个 Scheduler
 - 🔶 25 个集成测试覆盖大量场景

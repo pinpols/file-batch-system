@@ -370,18 +370,16 @@ Step 可声明：
 
 不要改成单一固定队列模型。
 
-### 8.4 Pipeline 与 Step 抽象固定
+### 8.4 Pipeline 与 Step 执行边界固定
 
-必须围绕以下抽象建模：
+必须围绕以下真实运行链路建模：
 
-- `PipelineDefinition`
-- `PipelineContext`
-- `PipelineExecutor`
-- `Step SPI`
-- `StepRegistry`
-- `StepResult`
+- 数据库 `pipeline_definition` / `pipeline_step_definition` 保存配置真相
+- worker-core `ExecutionContext` / `AbstractStageExecutor` 维护阶段生命周期与公共不变量
+- 各 Worker 的步骤 Bean registrar 把实现登记到平台 step registry
+- Orchestrator 只做编排、路由和状态推进，不再维护一套无生产消费者的本地 `PipelineExecutor` / `Step SPI`
 
-不要擅自发明另一套同义抽象替代这一套。
+不要在控制面和 Worker 侧各建一套同义执行引擎。
 
 ---
 
@@ -648,8 +646,7 @@ Step 可声明：
 - 重试 / 补偿 / 死信处理
 - 事务边界
 - Outbox / MQ 一致性
-- PipelineExecutor
-- Step SPI
+- Worker 阶段执行与步骤注册
 - 复杂 SQL
 
 ### 13.3 日志规则

@@ -112,7 +112,7 @@
 - 支持文件等待策略、文件组到齐启动、半文件防护、完整性校验与内容校验双重准入；
 - 支持分隔符文件、定长文件、Excel 扩展、XML/JSON 扩展，以及编码/BOM/换行规则治理；
 - 已纳入导出半文件保护、对象 Key 可反推业务批次、元数据补登记与重分发能力；
-- 通过 PipelineDefinition、StepRegistry、PipelineExecutor 等抽象实现可配置扩展。
+- 通过数据库中的 PipelineDefinition/StepDefinition、worker-core 阶段执行骨架及各 Worker 的步骤 Bean 注册实现可配置扩展；控制面不保留无生产实现的第二套 PipelineExecutor。
 
 评估结论：**文件链路能力已达到平台级，属于方案的特色能力之一。**
 

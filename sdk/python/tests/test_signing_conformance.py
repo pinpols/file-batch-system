@@ -39,7 +39,14 @@ def test_empty_body_sha256_matches_golden() -> None:
 
 
 def test_signature_matches_golden() -> None:
-    sig = _signing.sign(_API_KEY, _METHOD, _PATH, _TIMESTAMP, _NONCE, _BODY)
+    sig = _signing.sign(
+        _API_KEY,
+        method=_METHOD,
+        path=_PATH,
+        timestamp=_TIMESTAMP,
+        nonce=_NONCE,
+        body=_BODY,
+    )
     assert sig == _GOLDEN_SIGNATURE
     assert re.fullmatch(r"[0-9a-f]{64}", sig)
 
@@ -51,5 +58,12 @@ def test_canonical_string_shape() -> None:
 
 def test_method_is_uppercased() -> None:
     # UPPER(method) —— 小写 method 必须产出与大写相同的签名。
-    lower = _signing.sign(_API_KEY, "post", _PATH, _TIMESTAMP, _NONCE, _BODY)
+    lower = _signing.sign(
+        _API_KEY,
+        method="post",
+        path=_PATH,
+        timestamp=_TIMESTAMP,
+        nonce=_NONCE,
+        body=_BODY,
+    )
     assert lower == _GOLDEN_SIGNATURE

@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -19,20 +22,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class SmsNotificationSender implements NotificationSender {
 
-  private final List<SmsProvider> providers;
+  private final Map<String, SmsProvider> providersByCode;
   private final SmsProperties properties;
   private final ObjectMapper objectMapper;
 
   public SmsNotificationSender(
       List<SmsProvider> providers, SmsProperties properties, ObjectMapper objectMapper) {
-    this.providers = List.copyOf(providers);
+    this.providersByCode = indexProviders(providers);
     this.properties = properties;
     this.objectMapper = objectMapper;
   }
 
   @Override
-  public boolean supports(String channelType) {
-    return "SMS".equalsIgnoreCase(channelType);
+  public String channelType() {
+    return "SMS";
   }
 
   @Override
@@ -57,12 +60,24 @@ public class SmsNotificationSender implements NotificationSender {
   }
 
   private SmsProvider resolve(String providerName) {
+    return providersByCode.get(providerName.trim().toLowerCase(Locale.ROOT));
+  }
+
+  private static Map<String, SmsProvider> indexProviders(List<SmsProvider> providers) {
+    Map<String, SmsProvider> registered = new LinkedHashMap<>();
     for (SmsProvider provider : providers) {
-      if (provider.supports(providerName)) {
-        return provider;
+      String code = provider.providerCode();
+      if (code == null || code.isBlank()) {
+        throw new IllegalStateException(
+            "SmsProvider providerCode must not be blank: " + provider.getClass().getName());
+      }
+      String normalized = code.trim().toLowerCase(Locale.ROOT);
+      SmsProvider duplicate = registered.putIfAbsent(normalized, provider);
+      if (duplicate != null) {
+        throw new IllegalStateException("duplicate SmsProvider providerCode: " + normalized);
       }
     }
-    return null;
+    return Map.copyOf(registered);
   }
 
   private List<String> parsePhoneNumbers(String configJson) {
