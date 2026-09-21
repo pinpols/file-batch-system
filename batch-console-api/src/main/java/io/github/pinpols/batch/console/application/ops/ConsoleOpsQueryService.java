@@ -355,6 +355,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   private ConsoleOutboxRetryLogResponse toOutboxRetryResponse(Map<String, Object> row) {
     return new ConsoleOutboxRetryLogResponse(
         longValue(row, "id"),
+        longValue(row, "outbox_event_id"),
         stringValue(row, "tenant_id"),
         stringValue(row, "event_type"),
         stringValue(row, "event_key"),

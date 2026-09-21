@@ -3,6 +3,7 @@
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.OutboxRetryLogMapper">
     <select id="selectByQuery" resultType="map">
         select id,
+               outbox_event_id,
                tenant_id,
                null as event_type,
                event_key,

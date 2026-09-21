@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record ConsoleOutboxRetryLogResponse(
     Long id,
+    Long outboxEventId,
     String tenantId,
     String eventType,
     String eventKey,

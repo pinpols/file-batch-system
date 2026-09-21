@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-21 | **运营概览与 Outbox 重投契约对齐**：`GET /api/console/ops/summary` 允许菜单已开放的 `ROLE_TENANT_USER` 读取租户摘要；`ConsoleOutboxRetryLogResponse` 新增 `outboxEventId`，前端重投必须传关联的 `outbox_event.id`，不再误用重试日志自身 `id`。 |
 | 2026-09-21 | **改密标志收敛为非阻断提醒**：`mustChangePassword=true` 仅提示用户尽快更新密码，不再限制页面访问或业务写操作；自助改密仍清除标志并使旧会话失效，生产环境仍拒绝使用内置默认密码启动。wire 字段与端点不变。 |
 | 2026-09-21 | **Console 契约缺口补齐**：新增批次日重放 session 历史列表 `GET /api/console/ops/batch-day-replay/sessions`；认证 profile/token 补充 `mustChangePassword`；租户配置包示例模板支持重复 `scenarios` 多选参数；Webhook、自定义任务类型等既有响应收敛为精确 schema，运行路径与权限语义不变。 |
 | 2026-09-20 | **租户配置包 Excel 友好度增强**：`GET /api/console/config/tenant-package/excel/guide` 返回 11 张配置表字段说明，包含必填、只读、类型、枚举、默认/留空行为、示例和适用范围；新增 `GET /api/console/config/tenant-package/excel/sample-template?scenario=ALL\|IMPORT\|EXPORT\|PROCESS\|DISPATCH\|ATOMIC\|WORKFLOW` 下载场景化示例模板。原 11-Sheet 全量模板、上传、预览、应用契约保持不变。 |
