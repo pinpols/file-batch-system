@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.application;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -7,6 +8,7 @@ import io.github.pinpols.batch.console.domain.audit.application.contract.query.O
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
+import io.github.pinpols.batch.console.domain.audit.support.AuditParamRedactor;
 import io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
@@ -30,6 +32,7 @@ public class OperationAuditQueryService {
 
   private final OperationAuditMapper mapper;
   private final TenantIdResolver tenantGuard;
+  private final ObjectMapper objectMapper;
 
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
@@ -81,7 +84,7 @@ public class OperationAuditQueryService {
         r.result(),
         r.errorCode(),
         r.errorMessage(),
-        r.paramsJson(),
+        AuditParamRedactor.redactJson(objectMapper, r.paramsJson()),
         r.traceId(),
         r.requestId(),
         r.ipHash(),

@@ -228,7 +228,8 @@ public class AuditAspect {
     }
     if (snapshot.isEmpty()) return null;
     try {
-      String json = objectMapper.writeValueAsString(snapshot);
+      String json = objectMapper.writeValueAsString(
+          AuditParamRedactor.toRedactedTree(objectMapper, snapshot));
       if (json.length() <= MAX_PARAMS_JSON_BYTES) {
         return json;
       }

@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-21
+- **ADR-032 精确角色授权**：Console 菜单项和分组可声明 `authorities` 白名单，用于表达 AUDITOR、TENANT_USER 等无法由单调 `VIEWER / TENANT_ADMIN / ADMIN` 层级准确描述的能力；精确白名单优先，未配置时继续按 `minRole` 回退，分组默认由过滤后仍有可见子项决定是否展示。
+
 ### 2026-09-14
 - **ADR-027/ADR-042 重任务边界落地**：资源画像只负责把任务路由到稳定 Worker 池，Kubernetes 继续负责节点与 Pod 调度；`workerPoolCode` 与具体 `workerCode` 实例身份分离，专用池仅消费自己的 direct topic。平台以 PostgreSQL 事务锁实施全局活跃作业硬上限，以租户/队列并发、共享 QPS、Worker 负载和 Dispatch 渠道健康构成统一准入链；生产不得关闭全局硬上限。明确仍不把 WAITING 描述成无限队列，也不以本地队列替代 Kafka、不自研 Kubernetes Scheduler；WAITING 存储硬上限和任务派发 Kafka lag gate 继续作为 ADR-042 独立增强。
 - **重任务容量承诺口径**：并行任务以墙钟跨度计算 records/s 与 MB/s，累计任务耗时仅用于估算资源成本；上线承诺必须同时给出数据量、批量窗口、p95、失败率、PG WAL/IO、Kafka lag 和 Worker 饱和度证据，控制面 tasks/s 不得直接外推重任务 SLA。

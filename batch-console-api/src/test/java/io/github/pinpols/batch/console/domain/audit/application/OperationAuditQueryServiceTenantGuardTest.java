@@ -8,14 +8,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
+import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +54,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   @BeforeEach
   void setUp() {
     tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
-    service = new OperationAuditQueryService(mapper, tenantGuard);
+    service = new OperationAuditQueryService(mapper, tenantGuard, new ObjectMapper());
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
@@ -190,5 +193,41 @@ class OperationAuditQueryServiceTenantGuardTest {
             any(),
             eq(null),
             eq(new PageRequest(1, 10)));
+  }
+
+  @Test
+  void shouldRedactHistoricalCredentialsBeforeReturningAuditRows() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
+    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(1L);
+    when(mapper.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(List.of(new AuditRow(
+            1L,
+            "ta",
+            "user",
+            "alice",
+            "user.create",
+            "admin",
+            "ROLE_ADMIN",
+            "SUCCESS",
+            null,
+            null,
+            "{\"request\":{\"username\":\"alice\",\"password\":\"admin123\"}}",
+            "trace-1",
+            "request-1",
+            null,
+            null,
+            1,
+            Instant.parse("2026-09-21T00:00:00Z"))));
+    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+    req.setPageNo(1);
+    req.setPageSize(10);
+    req.setTenantId("ta");
+
+    String params = service.query(req).items().getFirst().params();
+
+    assertThat(params).contains("alice", "[REDACTED]").doesNotContain("admin123");
   }
 }

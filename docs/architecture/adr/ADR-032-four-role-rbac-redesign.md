@@ -52,11 +52,13 @@
 
 ### 菜单注册表
 
-`ConsoleMenuRegistry` 维持 3 档显示等级 (`VIEWER < TENANT_ADMIN < ADMIN`),`resolveRole` 由 `authorities` 推导:
+`ConsoleMenuRegistry` 保留 3 档显示等级 (`VIEWER < TENANT_ADMIN < ADMIN`) 作为默认规则，`resolveRole` 由 `authorities` 推导:
 
 - `ROLE_ADMIN` → `ADMIN`
 - `ROLE_TENANT_ADMIN` → `TENANT_ADMIN`
 - `ROLE_AUDITOR` / `ROLE_TENANT_USER` / `ROLE_USER` → `VIEWER`
+
+权限能力不是严格的等级继承关系（例如 AUDITOR 可看审计配置，但 TENANT_USER 不可看）。菜单项可通过 `authorities` 精确列出允许的 Spring authority；配置后覆盖 `minRole`。分组未配置 `authorities` 时不再先按组 `minRole` 拦截，而是由过滤后是否仍有可见子项决定展示，避免父级配置遮蔽合法子路由。前端本地导航和路由 `meta.permissions` 使用同一角色集合，后端菜单仍是最终 allowlist。
 
 调整:`/governance/queues` 从 `ADMIN` 下放为 `TENANT_ADMIN`(队列/窗口/日历是租户级配置 CRUD);`/ops/diagnostic` 保持 `ADMIN`(有 outbox cleanup / republish 等破坏性副作用)。
 

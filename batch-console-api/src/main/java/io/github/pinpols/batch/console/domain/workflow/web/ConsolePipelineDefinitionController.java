@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/pipeline-definitions")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
 @RequiredArgsConstructor
 @Idempotent
 public class ConsolePipelineDefinitionController {
@@ -35,6 +35,8 @@ public class ConsolePipelineDefinitionController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER', 'ROLE_USER')")
   public CommonResponse<PageResponse<ConsolePipelineDefinitionListItemResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "jobCode", required = false) String jobCode,
@@ -56,6 +58,8 @@ public class ConsolePipelineDefinitionController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER', 'ROLE_USER')")
   public CommonResponse<PipelineDefinitionDetailResponse> detail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(pipelineDefinitionService.detail(id, tenantId));
