@@ -100,7 +100,7 @@ public class ConsoleUserAccountService {
     return toResponse(userAccountMapper.selectById(id));
   }
 
-  /** 管理员重置他人密码:置 must_change_password=true,要求被重置者下次登录强制改密;并踢掉其现有会话。 */
+  /** 管理员重置他人密码:置 must_change_password=true,提醒被重置者尽快改密;并踢掉其现有会话。 */
   public void resetPassword(long id, String newPassword) {
     Map<String, Object> account = assertExists(id);
     assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
@@ -109,7 +109,7 @@ public class ConsoleUserAccountService {
   }
 
   /**
-   * 本人改密(首登强制改密的落地路径):校验旧密码,写新密码并清除 must_change_password 标志。
+   * 本人改密:校验旧密码,写新密码并清除 must_change_password 提示标志。
    *
    * <p>username 由已认证 principal 注入(controller 取 {@code authentication.principal.username}), 不接受客户端指定
    * —— 防止越权改他人密码。旧密码错误 / 新旧相同一律拒绝。

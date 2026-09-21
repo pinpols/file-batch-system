@@ -196,10 +196,10 @@ public class ConsoleAuthController {
   }
 
   /**
-   * 本人改密(首登强制改密落地路径)。
+   * 本人改密。
    *
-   * <p>username 取自已认证 principal,不接受客户端指定;校验旧密码 → 写新密码 → 清除 must_change_password 标志 →
-   * 踢旧会话(强制用新密码重登)。 此端点在 must_change 期间必须可达(见 {@code ConsoleMustChangePasswordGuard} 白名单)。
+   * <p>username 取自已认证 principal,不接受客户端指定;校验旧密码 → 写新密码 → 清除 must_change_password 提示标志 →
+   * 踢旧会话(强制用新密码重登)。
    */
   @PostMapping("/change-password")
   @PreAuthorize("isAuthenticated()")

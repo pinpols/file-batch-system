@@ -93,7 +93,7 @@ class ConsoleUserAccountControllerTest {
 
     service.resetPassword(42L, "newSecurePass");
 
-    // 管理员 reset 置 must_change_password=true,要求被重置者下次登录强制改密
+    // 管理员 reset 置 must_change_password=true,提醒被重置者尽快改密
     verify(userAccountMapper).updatePasswordHashAndMustChange(42L, "$argon2id$...", true);
     verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
   }

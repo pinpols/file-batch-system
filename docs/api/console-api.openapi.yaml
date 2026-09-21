@@ -234,11 +234,11 @@ paths:
   /api/console/auth/change-password:
     post:
       tags: [Auth]
-      summary: Change own password (first-login forced change landing path)
+      summary: Change own password
       description: |
         本人改密:username 取自已认证 principal(不接受 body 指定)。校验旧密码 → 写新密码 →
-        清除 must_change_password 标志 → 踢旧会话(强制用新密码重登)。
-        must_change_password=true 期间此端点必须可达(改密守护白名单)。
+        清除 must_change_password 提示标志 → 踢旧会话(强制用新密码重登)。
+        must_change_password 仅用于提醒,不会限制控制台访问或业务写操作。
         旧密码错误 401;新旧密码相同 400。
       operationId: changeOwnPassword
       security:
@@ -14251,7 +14251,7 @@ components:
             type: string
         mustChangePassword:
           type: boolean
-          description: 首次登录强制改密标志;true 时 FE 应跳改密页,改密前敏感(写)操作被守护拦截为 403。
+          description: 建议更新密码提示标志;true 时 FE 显示非阻断提醒,不限制控制台访问或业务写操作。
       required: [tokenType, issuedAt, expiresAt, username, tenantId, authorities, mustChangePassword]
     ConsoleSseTicketResponse:
       type: object
@@ -14278,7 +14278,7 @@ components:
             $ref: '#/components/schemas/ConsoleMenuGroup'
         mustChangePassword:
           type: boolean
-          description: 首次登录/重置后强制改密标志；true 时 FE 应跳改密页。
+          description: 首次登录/重置后建议更新密码提示标志；true 时 FE 显示非阻断提醒。
       required: [username, tenantId, authorities, menus, mustChangePassword]
     ConsoleMenuGroup:
       type: object

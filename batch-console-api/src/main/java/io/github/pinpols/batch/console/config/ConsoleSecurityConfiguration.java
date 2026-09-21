@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMustChangePasswordGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityHeadersWriter;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
@@ -77,7 +76,6 @@ public class ConsoleSecurityConfiguration {
       ConsoleAuthenticationFilter consoleAuthenticationFilter,
       ConsoleRateLimitFilter consoleRateLimitFilter,
       MaintenanceModeFilter maintenanceModeFilter,
-      ConsoleMustChangePasswordGuard mustChangePasswordGuard,
       ConsoleSecurityResponseWriter responseWriter,
       ConsoleSecurityHeadersWriter securityHeadersWriter,
       CorsConfigurationSource consoleCorsConfigurationSource) {
@@ -85,7 +83,6 @@ public class ConsoleSecurityConfiguration {
         consoleAuthenticationFilter,
         consoleRateLimitFilter,
         maintenanceModeFilter,
-        mustChangePasswordGuard,
         responseWriter,
         securityHeadersWriter,
         consoleCorsConfigurationSource);
@@ -98,7 +95,6 @@ public class ConsoleSecurityConfiguration {
     ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
     ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
     MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();
-    ConsoleMustChangePasswordGuard mustChangePasswordGuard = components.mustChangePasswordGuard();
     ConsoleSecurityResponseWriter responseWriter = components.responseWriter();
     ConsoleSecurityHeadersWriter securityHeadersWriter = components.securityHeadersWriter();
     CorsConfigurationSource consoleCorsConfigurationSource = components.corsConfigurationSource();
@@ -167,8 +163,6 @@ public class ConsoleSecurityConfiguration {
         .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
         .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
-        // 首登强制改密守护:认证之后拦截 must_change 账号的一切写操作(白名单除外)。
-        .addFilterAfter(mustChangePasswordGuard, ConsoleRateLimitFilter.class)
         .build();
   }
 
@@ -200,7 +194,6 @@ public class ConsoleSecurityConfiguration {
       ConsoleAuthenticationFilter authenticationFilter,
       ConsoleRateLimitFilter rateLimitFilter,
       MaintenanceModeFilter maintenanceModeFilter,
-      ConsoleMustChangePasswordGuard mustChangePasswordGuard,
       ConsoleSecurityResponseWriter responseWriter,
       ConsoleSecurityHeadersWriter securityHeadersWriter,
       CorsConfigurationSource corsConfigurationSource) {}

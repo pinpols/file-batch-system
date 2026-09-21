@@ -43,7 +43,7 @@ public interface ConsoleUserAccountMapper {
 
   int updateEnabled(@Param("id") long id, @Param("enabled") boolean enabled);
 
-  /** 改密 / reset 时同步设置 must_change_password 标志(true=要求下次登录改密,false=清除)。 */
+  /** 改密 / reset 时同步设置 must_change_password 标志(true=提示尽快改密,false=清除)。 */
   int updatePasswordHashAndMustChange(
       @Param("id") long id,
       @Param("passwordHash") String passwordHash,
