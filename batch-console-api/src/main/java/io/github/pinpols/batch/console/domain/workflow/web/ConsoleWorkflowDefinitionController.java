@@ -57,14 +57,14 @@ public class ConsoleWorkflowDefinitionController {
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<WorkflowDefinitionDetailResponse> create(
       @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
     return responseFactory.success(workflowDefinitionService.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<WorkflowDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
     return responseFactory.success(workflowDefinitionService.update(id, request));
@@ -72,7 +72,7 @@ public class ConsoleWorkflowDefinitionController {
 
   /** 启用/禁用工作流定义。 */
   @PatchMapping("/{id}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> patch(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());

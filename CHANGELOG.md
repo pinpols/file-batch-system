@@ -23,6 +23,7 @@
 
 ### Changed
 
+- **Console 菜单与角色边界**：菜单注册表支持精确 `authorities` 白名单，前后端统一 ADMIN、TENANT_ADMIN、AUDITOR、TENANT_USER 和兼容 USER 的入口及写操作边界；未配置白名单的既有菜单继续按 `minRole` 回退。
 - **密码更新提示语义**：`mustChangePassword` 从强制改密守卫收敛为非阻断提醒；账号可继续访问页面和执行已授权操作，自助改密仍清除提示并使旧会话失效，生产环境仍禁止内置默认密码启动。
 - **Console 契约补齐**：认证画像与 token 响应补充首次登录改密标识，批次日重放增加 session 历史列表，租户配置包示例模板支持多场景组合；Webhook、自定义任务类型等既有响应改用精确 OpenAPI schema，保持原路径、权限和运行语义不变。
 - **运行配置与测试基础设施统一**：PostgreSQL、Kafka、MinIO、Valkey 的 Testcontainers 创建入口和镜像版本统一管理，Shell 运行默认值集中维护并由 CI 阻止漂移；Worker 并发配置键和 Trigger/Worker 状态常量改为单一来源。密钥历史载荷迁移下沉为共享 Flyway callback，并收紧持久化约束和启动校验。
@@ -48,6 +49,7 @@
 
 ### Fixed
 
+- 修复操作审计参数可能持久化并返回密码、令牌或密钥的问题：写入和查询路径统一递归脱敏，V212 清理历史密码字段；同时将 V174 恢复为误改前内容，并收紧迁移门禁为仅允许精确恢复基线父版本，避免 Flyway checksum 漂移。
 - 修复无效 `batch.timezone.default-zone` 静默回退的问题，启动期改为 fail-fast；`SecretPayloadProtector` 改由 common auto-configuration 注册并补装配测试，避免公共模块 Bean 扫描边界漂移；稳定 launch lifecycle IT 的 worker claim 前置状态等待和 worker 选择假设。
 - 修复配置发布审批只更新发布单、不落运行时配置的问题；发布与回滚现复用严格配置应用事务，禁止同人审批和直接发布，版本分配使用规范化类型锁。密钥版本载荷改为加密存储并从查询/导出中脱敏，补充历史明文迁移、唯一约束及多节点迁移兼容；Redis 配置失效事件检测到版本缺口时执行全量本地缓存协调。
 - 修复 Gatling 百分比严格比较无法表达零错误率的问题；Worker 严格压力测试现使用失败数断言并以 `0%` 为默认门槛，Dispatch 并发场景为每个虚拟用户分配独立文件夹具。压测数据按 `RUN_ID` 隔离，共享造数事务防止序列回拨；混合压力要求所有入口请求关联实例并全量成功，Process 故障画像重启本地 JVM 时统一转换依赖地址。

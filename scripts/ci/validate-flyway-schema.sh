@@ -8,7 +8,8 @@
 # 3) 空文件 / 全注释文件:防开发者只 commit 文件名忘 SQL 主体
 # 4) BOM / CRLF:防 Windows 编辑器引入,Flyway 计算 checksum 时与 LF 不一致
 # 5) 已 commit 的 V## 文件被改动(checksum drift):git diff base..HEAD 检查 db/migration/V##
-#    如果某个 V## 在 base 已存在 + HEAD 内容变了,失败 — Flyway 启动时会因 checksum mismatch 拒绝迁移
+#    如果某个 V## 在 base 已存在 + HEAD 内容变了,失败 — Flyway 启动时会因 checksum mismatch 拒绝迁移。
+#    唯一例外:HEAD 精确恢复为 base 的父提交版本,用于撤销刚误合入主线的 checksum 漂移。
 #    新增的 V## 文件不算漂移
 #
 # 不做(留给 IT 阶段或 ops):
@@ -93,16 +94,28 @@ echo "✅ No BOM / CRLF in migration files"
 # 仅在 git 仓库里 + 有 BASE_REF 时跑
 if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/null 2>&1; then
   drifted=""
+  restored=""
   while IFS= read -r changed; do
     [[ -z "$changed" ]] && continue
     if [[ "$changed" =~ ^${MIGRATION_DIR}/V[0-9]+__.+\.sql$ ]]; then
       # 文件在 BASE_REF 已存在 → 不允许修改
       if git cat-file -e "$BASE_REF:$changed" 2>/dev/null; then
+        # 允许把刚在 base 中误改的 migration 精确恢复为 base^ 内容。只比较完整 blob,
+        # 不允许在恢复时顺带修改任何 SQL 或注释。
+        if git cat-file -e "$BASE_REF^:$changed" 2>/dev/null \
+          && git diff --quiet "$BASE_REF^" HEAD -- "$changed"; then
+          restored="${restored:+$restored$'\n'}   - $changed"
+          continue
+        fi
         drifted="${drifted:+$drifted$'\n'}   - $changed"
       fi
     fi
   done < <(git diff --name-only "$BASE_REF...HEAD" 2>/dev/null)
 
+  if [[ -n "$restored" ]]; then
+    echo "⚠️  migration checksum restored exactly to $BASE_REF^:"
+    echo "$restored"
+  fi
   if [[ -n "$drifted" ]]; then
     echo "❌ ERROR: existing migration file(s) modified in this PR (Flyway checksum drift):"
     echo "$drifted"
