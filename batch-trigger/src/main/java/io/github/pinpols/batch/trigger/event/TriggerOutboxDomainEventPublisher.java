@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.trigger.event;
 
+import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -54,18 +56,12 @@ public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
         event.tenantId(), event.eventKey(), event.traceId(), JsonUtils.toJson(event.payload()));
   }
 
-  /**
-   * 性能优化入口:调用方已有 JSON 串(如 {@link io.github.pinpols.batch.common.dto.LaunchEnvelope} 序列化结果) 时直接传入,跳过
-   * DomainEvent.payload Map ↔ record 来回两次序列化。
-   *
-   * <p>语义与 {@link #publish(DomainEvent)} 等价 — 都是同事务写入 trigger_outbox_event 一行。
-   *
-   * <p>同样要求 {@code @Transactional(propagation = MANDATORY)} 守护 — 必须在 trigger_request 同事务内调用,防止
-   * outbox 事件与父记录不一致。
-   */
+  /** 写入 trigger launch 信封，并在持久化异步边界捕获当前 W3C 链路上下文。 */
   @Transactional(propagation = Propagation.MANDATORY)
-  public Long publishRaw(String tenantId, String requestId, String traceId, String payloadJson) {
-    return insertOutboxEvent(tenantId, requestId, traceId, payloadJson);
+  public Long publishLaunch(
+      String tenantId, String requestId, String traceId, LaunchEnvelope envelope) {
+    LaunchEnvelope persisted = envelope.withTraceContext(OtelTracePropagation.captureCurrent());
+    return insertOutboxEvent(tenantId, requestId, traceId, JsonUtils.toJson(persisted));
   }
 
   private Long insertOutboxEvent(

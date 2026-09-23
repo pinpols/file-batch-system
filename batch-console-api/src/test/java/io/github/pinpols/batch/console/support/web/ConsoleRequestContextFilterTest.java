@@ -32,7 +32,8 @@ class ConsoleRequestContextFilterTest {
   @BeforeEach
   void setUp() {
     BatchMdc.clear();
-    filter = new ConsoleRequestContextFilter(new ConsoleSecurityResponseWriter(new ObjectMapper()));
+    filter = new ConsoleRequestContextFilter(
+        new ConsoleSecurityResponseWriter(new ObjectMapper().findAndRegisterModules()));
     ReflectionTestUtils.setField(filter, "applicationName", "batch-console-api");
     SecurityContextHolder.clearContext();
   }
@@ -54,6 +55,11 @@ class ConsoleRequestContextFilterTest {
     assertThat(chainCalled).isFalse();
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
     assertThat(response.getContentAsString()).contains(ResultCode.FORBIDDEN.name());
+    assertThat(response.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER)).isEqualTo("req-001");
+    assertThat(response.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER)).isEqualTo("trace-001");
+    assertThat(response.getContentAsString())
+        .contains("\"requestId\":\"req-001\"")
+        .contains("\"traceId\":\"trace-001\"");
     // i18n 迁移后:Filter 通过 ExceptionHandler 翻译,zh_CN 默认 Locale 渲染为"租户不匹配"。
     assertThat(response.getContentAsString()).contains("租户不匹配");
   }

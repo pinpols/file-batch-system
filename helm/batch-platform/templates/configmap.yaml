@@ -76,6 +76,13 @@ data:
   BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS: {{ (((.Values.consoleApi).security).rateLimit).redisCircuitOpenSeconds | default 15 | quote }}
   BATCH_CONSOLE_AI_ENABLED: {{ ((.Values.consoleApi).ai).enabled | default false | quote }}
   BATCH_CONSOLE_AI_PROVIDER: {{ ((.Values.consoleApi).ai).provider | default "anthropic" | quote }}
+  BATCH_CONSOLE_VIRTUAL_THREADS_ENABLED: {{ ((.Values.consoleApi).virtualThreads).enabled | default false | quote }}
+  BATCH_DATA_QUALITY_MODE: {{ ((.Values.orchestrator).dataQuality).mode | default "ENFORCE" | quote }}
+  BATCH_OPENLINEAGE_ENABLED: {{ ((.Values.orchestrator).openLineage).enabled | default false | quote }}
+  BATCH_OPENLINEAGE_ENDPOINT: {{ ((.Values.orchestrator).openLineage).endpoint | default "" | quote }}
+  BATCH_OPENLINEAGE_NAMESPACE: {{ ((.Values.orchestrator).openLineage).namespace | default "file-batch-system" | quote }}
+  BATCH_OPENLINEAGE_CONSUMER_GROUP_ID: {{ ((.Values.orchestrator).openLineage).consumerGroupId | default "batch-openlineage-emitter" | quote }}
+  BATCH_OPENLINEAGE_RETRY_BACKOFF_MS: {{ ((.Values.orchestrator).openLineage).retryBackoffMs | default 5000 | quote }}
   BATCH_SCHEDULER_WORKER_CACHE_ENABLED: {{ (.Values.orchestrator.workerCache).enabled | default true | quote }}
   BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED: {{ (.Values.orchestrator.persistenceGranularity).enabled | default false | quote }}
   BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).compactMaxItems | default 100000 | quote }}

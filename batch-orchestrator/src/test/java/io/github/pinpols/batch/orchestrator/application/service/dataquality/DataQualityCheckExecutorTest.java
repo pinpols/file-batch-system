@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
+import io.github.pinpols.batch.orchestrator.config.DataQualityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -30,6 +31,7 @@ class DataQualityCheckExecutorTest {
   private DataQualityCheckMapper checkMapper;
   private NamedParameterJdbcTemplate jdbcTemplate;
   private DataQualityCheckExecutor executor;
+  private DataQualityProperties properties;
 
   @BeforeEach
   void setUp() {
@@ -39,7 +41,8 @@ class DataQualityCheckExecutorTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<NamedParameterJdbcTemplate> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(jdbcTemplate);
-    executor = new DataQualityCheckExecutor(ruleMapper, checkMapper, provider);
+    properties = new DataQualityProperties();
+    executor = new DataQualityCheckExecutor(ruleMapper, checkMapper, provider, properties);
   }
 
   @Test
@@ -147,6 +150,48 @@ class DataQualityCheckExecutorTest {
     // ROW_LEVEL v1.0 走 SPI sink，executor 端记 SKIPPED；不阻 EFFECTIVE
     assertThat(outcome.status()).isEqualTo(GateStatus.PASS);
     assertThat(outcome.findings().get(0).status()).isEqualTo("SKIPPED");
+  }
+
+  @Test
+  void offModeDoesNotLoadOrExecuteRules() {
+    properties.setMode(DataQualityProperties.Mode.OFF);
+
+    var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
+
+    assertThat(outcome.status()).isEqualTo(GateStatus.NO_RULES);
+    verify(ruleMapper, never()).selectEnabledByBusinessKey(anyString(), anyString());
+    verify(checkMapper, never()).insert(any());
+  }
+
+  @Test
+  void shadowModeRecordsBlockerButDoesNotBlockPromotion() {
+    properties.setMode(DataQualityProperties.Mode.SHADOW);
+    DataQualityRuleEntity rule =
+        rule("CROSS_TOTAL", "CROSS_TABLE", "BLOCKER", "SELECT 0", "{\"min\":1}");
+    when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
+    when(jdbcTemplate.queryForObject(
+            anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
+        .thenReturn(0);
+
+    var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
+
+    assertThat(outcome.status()).isEqualTo(GateStatus.WARN);
+    assertThat(outcome.findings().get(0).status()).isEqualTo("FAIL");
+    verify(checkMapper).insert(any(DataQualityCheckEntity.class));
+  }
+
+  @Test
+  void crossDayRuleUsesValidatedScalarSqlPath() {
+    DataQualityRuleEntity rule =
+        rule("CROSS_DAY_TOTAL", "CROSS_DAY", "BLOCKER", "SELECT 5", "{\"expected\":5}");
+    when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
+    when(jdbcTemplate.queryForObject(
+            anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
+        .thenReturn(5);
+
+    var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
+
+    assertThat(outcome.status()).isEqualTo(GateStatus.PASS);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -138,7 +139,7 @@ class DefaultTriggerServiceTest {
     assertThat(response.traceId()).isEqualTo("existing-trace");
     verify(triggerRequestMapper, never()).insert(any());
     verify(triggerOutboxPublisher, never())
-        .publishRaw(anyString(), anyString(), anyString(), anyString());
+        .publishLaunch(anyString(), anyString(), anyString(), any(LaunchEnvelope.class));
   }
 
   @Test
@@ -170,7 +171,7 @@ class DefaultTriggerServiceTest {
     assertThat(approved.traceId()).isEqualTo("trace-pending");
     // 同事务内：CAS PROCESSING → INSERT outbox → 更新 LAUNCHED
     verify(triggerOutboxPublisher)
-        .publishRaw(eq("t1"), eq("req-pending"), eq("trace-pending"), anyString());
+        .publishLaunch(eq("t1"), eq("req-pending"), eq("trace-pending"), any(LaunchEnvelope.class));
     verify(triggerRequestMapper)
         .updateRequestStatusConditional("t1", "req-pending", "LAUNCHED", "PROCESSING");
   }
@@ -211,7 +212,7 @@ class DefaultTriggerServiceTest {
     assertThat(approved.traceId()).isEqualTo("trace-linked");
     verify(triggerMisfirePendingMapper).approve(10L, "trigger-api");
     verify(triggerOutboxPublisher)
-        .publishRaw(eq("t1"), eq("req-linked"), eq("trace-linked"), anyString());
+        .publishLaunch(eq("t1"), eq("req-linked"), eq("trace-linked"), any(LaunchEnvelope.class));
     verify(triggerRequestMapper)
         .updateRequestStatusConditional("t1", "req-linked", "LAUNCHED", "PROCESSING");
   }
@@ -232,7 +233,7 @@ class DefaultTriggerServiceTest {
         .hasMessageContaining("not_catch_up");
 
     verify(triggerOutboxPublisher, never())
-        .publishRaw(anyString(), anyString(), anyString(), anyString());
+        .publishLaunch(anyString(), anyString(), anyString(), any(LaunchEnvelope.class));
   }
 
   @Test
@@ -260,7 +261,7 @@ class DefaultTriggerServiceTest {
     assertThat(response.traceId()).isEqualTo("trace-skip");
     verify(triggerRequestMapper, never()).insert(any());
     verify(triggerOutboxPublisher, never())
-        .publishRaw(anyString(), anyString(), anyString(), anyString());
+        .publishLaunch(anyString(), anyString(), anyString(), any(LaunchEnvelope.class));
   }
 
   @Test
@@ -295,7 +296,7 @@ class DefaultTriggerServiceTest {
     // 既不落 trigger_request 也不发 outbox(未 fire)
     verify(triggerRequestMapper, never()).insert(any());
     verify(triggerOutboxPublisher, never())
-        .publishRaw(anyString(), anyString(), anyString(), anyString());
+        .publishLaunch(anyString(), anyString(), anyString(), any(LaunchEnvelope.class));
   }
 
   @Test
@@ -383,7 +384,7 @@ class DefaultTriggerServiceTest {
 
     verify(triggerRequestMapper, never()).insert(any());
     verify(triggerOutboxPublisher, never())
-        .publishRaw(anyString(), anyString(), anyString(), anyString());
+        .publishLaunch(anyString(), anyString(), anyString(), any(LaunchEnvelope.class));
   }
 
   @Test

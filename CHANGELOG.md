@@ -23,6 +23,9 @@
 
 ### Changed
 
+- **Trace 诊断与异步传播边界**：Trigger 和 Task Dispatch 的既有 Outbox 信封保存最小 W3C `traceparent` / `tracestate`，Relay 在 Kafka send 时恢复父上下文；业务 `traceId` 仍是最长 128 字符的持久化精确检索键，不参与幂等、租户或状态机语义。Console 401/403 同步返回关联 ID，Trace 快照补充截断领域和工作流节点运行数据；OTLP 仅承载 traces/logs，metrics 继续由 Prometheus 拉取。
+- **工作流终态血缘可靠投递**：工作流状态机仍仅在业务事务内写 Outbox，Relay 将终态 payload 投递到独立 Kafka topic，OpenLineage 消费者仅在 HTTP 2xx 后提交 offset；端点故障只形成血缘积压，不回压或改写业务状态。
+- **数据质量门禁运行模式**：新增 `ENFORCE`、`SHADOW`、`OFF` 三档配置；默认保持既有阻断语义，灰度模式继续执行并留痕但不阻断结果生效，关闭模式跳过规则查询与执行。跨表、跨日标量规则复用受限 SQL 校验路径。
 - **Console 菜单与角色边界**：菜单注册表支持精确 `authorities` 白名单，前后端统一 ADMIN、TENANT_ADMIN、AUDITOR、TENANT_USER 和兼容 USER 的入口及写操作边界；未配置白名单的既有菜单继续按 `minRole` 回退。
 - **密码更新提示语义**：`mustChangePassword` 从强制改密守卫收敛为非阻断提醒；账号可继续访问页面和执行已授权操作，自助改密仍清除提示并使旧会话失效，生产环境仍禁止内置默认密码启动。
 - **Console 契约补齐**：认证画像与 token 响应补充首次登录改密标识，批次日重放增加 session 历史列表，租户配置包示例模板支持多场景组合；Webhook、自定义任务类型等既有响应改用精确 OpenAPI schema，保持原路径、权限和运行语义不变。

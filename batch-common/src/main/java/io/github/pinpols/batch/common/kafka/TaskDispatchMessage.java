@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.common.kafka;
 
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import java.time.Instant;
 
 /**
  * Kafka task 派发消息。
  *
- * <p>schema v2(P1-2.2 起):瘦身只保留 task key + 路由元数据,业务字段(payload/businessKey/taskSeq/ highWaterMarkIn
+ * <p>schema v2(P1-2.2 起):瘦身只保留 task key + 路由元数据,业务字段(payload/businessKey/taskSeq/highWaterMarkIn
  * 等)统一走 worker CLAIM 时返回的 {@link io.github.pinpols.batch.common.dto.EffectiveTaskConfig} 实时读
  * DB,确保管理员改 retry/timeout/payload 等配置后立即生效,不再受队列里旧消息延迟。
  *
@@ -56,7 +57,47 @@ public record TaskDispatchMessage(
      */
     Integer partitionNo,
     /** 本次 job 的逻辑分片总数。与 {@link #partitionNo} 一起用于稳定分散 Kafka 分区。 */
-    Integer partitionCount) {
+    Integer partitionCount,
+    /** 可选 W3C 传输上下文，用于恢复持久化异步边界；与业务 traceId 相互独立，不提升 schema 主版本。 */
+    W3cTraceContext traceContext) {
+
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public TaskDispatchMessage(
+      String schemaVersion,
+      String tenantId,
+      Long jobInstanceId,
+      Long jobPartitionId,
+      Long taskId,
+      String instanceNo,
+      String jobCode,
+      String workerType,
+      String selectedWorkerId,
+      String priorityBand,
+      String traceId,
+      String idempotencyKey,
+      Instant dispatchAt,
+      SchedulingContext schedulingContext,
+      Integer partitionNo,
+      Integer partitionCount) {
+    this(
+        schemaVersion,
+        tenantId,
+        jobInstanceId,
+        jobPartitionId,
+        taskId,
+        instanceNo,
+        jobCode,
+        workerType,
+        selectedWorkerId,
+        priorityBand,
+        traceId,
+        idempotencyKey,
+        dispatchAt,
+        schedulingContext,
+        partitionNo,
+        partitionCount,
+        null);
+  }
 
   @SuppressWarnings("PMD.ExcessiveParameterList")
   public TaskDispatchMessage(
@@ -89,6 +130,7 @@ public record TaskDispatchMessage(
         idempotencyKey,
         dispatchAt,
         schedulingContext,
+        null,
         null,
         null);
   }

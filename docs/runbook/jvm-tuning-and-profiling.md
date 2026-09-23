@@ -111,8 +111,10 @@ workerDispatch:
 ### 1.4 Spring Boot 4 / JDK 21 新机制
 
 **Virtual threads(Project Loom)**:
-- console-api 适合开(纯 HTTP / SSE,IO 阻塞型);在 `application-prod.yml` 加 `spring.threads.virtual.enabled: true`
-- worker / orchestrator 谨慎:底下 Kafka client / JDBC 有 native pin,VT 可能反而退化
+- Console API 已提供 `BATCH_CONSOLE_VIRTUAL_THREADS_ENABLED` 实验开关，默认关闭；仅在 A/B
+  压测证明 p95/p99、Hikari 等待和 SSE 稳定性均不退化后按环境灰度开启。
+- worker / orchestrator 不接该开关：Kafka client、JDBC 与本地执行池存在 pinning 和容量上限，不能用
+  虚拟线程绕过连接池、信号量或 pre-claim 背压。
 
 **AppCDS / 动态 CDS(JDK 21)**:启动快 30-50%
 （AOT cache 为 JDK 24+ 特性,当前平台 JDK 21 不适用,保留备未来升级）
@@ -284,7 +286,7 @@ tar czf /tmp/diag-$(date +%s).tar.gz /tmp/{sysprops,flags,threads,heap,histo,nmt
 - [ ] `helm/batch-platform/templates/configmap.yaml` 拼接 `JAVA_OPTS = javaOpts + javaOptsExtra`
 - [ ] `helm/batch-platform/templates/*-deployment.yaml` 给每个 service mount `/var/log/app` PVC 或 emptyDir(否则 heap dump / GC log / JFR 丢)
 - [ ] Dockerfile.app 加 `RUN mkdir -p /var/log/app /var/cache/app && apt-get install async-profiler`(可选 sidecar 代替)
-- [ ] Spring Boot 4 console-api 开虚拟线程:`spring.threads.virtual.enabled: true`
+- [x] Console API 提供默认关闭的虚拟线程实验开关；生产启用仍需 A/B 性能报告
 - [ ] `docs/runbook/jvm-tuning-and-profiling.md` 即本文加进 `docs/runbook/README.md` 索引
 
 ---

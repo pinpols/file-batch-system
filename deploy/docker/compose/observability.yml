@@ -93,11 +93,24 @@ services:
       - batch-network
 
   # ── OTel Collector ────────────────────────────────────────────────
+  otel-collector-init:
+    logging: *observability-logging
+    image: alpine:${ALPINE_IMAGE_TAG:-3.20}
+    container_name: batch-otel-collector-init
+    restart: "no"
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol && chown -R 10001:10001 /var/lib/otelcol"]
+    volumes:
+      - otel-collector-data:/var/lib/otelcol
+    networks:
+      - batch-network
+
   otel-collector:
     logging: *observability-logging
     image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.127.0}
     container_name: batch-otel-collector
     restart: unless-stopped
+    user: "10001:10001"
     command: ["--config=/etc/otelcol/config.yaml"]
     environment:
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-local}
@@ -110,9 +123,14 @@ services:
     networks:
       - batch-network
     depends_on:
-      - jaeger
-      - tempo
-      - loki
+      otel-collector-init:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_started
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
 
   # ── 仪表盘 ───────────────────────────────────────────────────────
   grafana:

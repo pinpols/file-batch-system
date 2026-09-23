@@ -57,7 +57,7 @@ class ConsoleSecurityConfigurationTest {
         properties,
         batchSecurityProperties,
         jwtService,
-        new ConsoleSecurityResponseWriter(new ObjectMapper()),
+        new ConsoleSecurityResponseWriter(new ObjectMapper().findAndRegisterModules()),
         mock(SseTicketService.class));
     SecurityContextHolder.clearContext();
   }

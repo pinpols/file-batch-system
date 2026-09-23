@@ -3,9 +3,9 @@
 # up.sh - 一键启动本地观测栈
 # 说明：
 # 1) 默认使用 .env.local。
-# 2) 只启动 deploy/docker/compose/observability.yml 的 observability profile。
+# 2) 合并基础设施定义与观测叠加文件，只启动观测服务。
 # 3) 业务容器请先通过 scripts/docker/up-apps.sh 或 scripts/local/start-all.sh 启动。
-# 4) 可透传额外 docker compose 参数，例如：
+# 4) 可指定要启动的观测服务，例如：
 #    ./scripts/docker/observability/up.sh prometheus grafana
 # =========================================================
 set -euo pipefail
@@ -31,14 +31,34 @@ fi
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 export COMPOSE_PROJECT_NAME
 OBS_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
+OBSERVABILITY_SERVICES=(
+  prometheus alertmanager jaeger tempo loki otel-collector grafana
+  redis-exporter postgres-exporter kafka-exporter node-exporter cadvisor
+)
 
 if ! docker network inspect "$OBS_NETWORK_NAME" >/dev/null 2>&1; then
   docker network create "$OBS_NETWORK_NAME" >/dev/null
 fi
 
-docker compose \
-  --project-name "$COMPOSE_PROJECT_NAME" \
-  --env-file "$COMPOSE_ENV_FILE" \
-  -f deploy/docker/compose/observability.yml \
-  --profile observability \
-  up -d "$@"
+if [[ $# -gt 0 ]]; then
+  OBSERVABILITY_SERVICES=("$@")
+fi
+
+COMPOSE=(
+  docker compose
+  --project-name "$COMPOSE_PROJECT_NAME"
+  --env-file "$COMPOSE_ENV_FILE"
+  -f docker-compose.yml
+  -f deploy/docker/compose/observability.yml
+)
+
+# --no-deps 保证本脚本不会顺带接管 PostgreSQL、Kafka、Valkey 等基础设施生命周期。
+# Collector 的命名卷权限仍需先同步初始化，避免非 root 进程启动后无法写队列目录。
+for service in "${OBSERVABILITY_SERVICES[@]}"; do
+  if [[ "$service" == "otel-collector" ]]; then
+    "${COMPOSE[@]}" run --rm --no-deps otel-collector-init
+    break
+  fi
+done
+
+"${COMPOSE[@]}" up -d --no-deps "${OBSERVABILITY_SERVICES[@]}"

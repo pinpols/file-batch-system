@@ -64,6 +64,15 @@ management:
         batch.trigger.launch.consume.duration: true
 
 batch:
+  data-quality:
+    # ENFORCE 保持既有阻断语义；SHADOW 执行并留痕但不阻断结果生效；OFF 完全跳过。
+    mode: ${BATCH_DATA_QUALITY_MODE:ENFORCE}
+  openlineage:
+    enabled: ${BATCH_OPENLINEAGE_ENABLED:false}
+    endpoint: ${BATCH_OPENLINEAGE_ENDPOINT:}
+    namespace: ${BATCH_OPENLINEAGE_NAMESPACE:file-batch-system}
+    consumer-group-id: ${BATCH_OPENLINEAGE_CONSUMER_GROUP_ID:batch-openlineage-emitter}
+    retry-backoff-ms: ${BATCH_OPENLINEAGE_RETRY_BACKOFF_MS:5000}
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
   orchestrator:
     persistence-granularity:

@@ -10,12 +10,16 @@ import io.github.pinpols.batch.common.kafka.BatchMessageType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.observability.OtelTracePropagation;
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
+import io.opentelemetry.context.Scope;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +32,7 @@ import java.util.concurrent.Executor;
 import org.apache.kafka.common.utils.Utils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 /**
@@ -106,9 +111,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       }
       String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
       String kafkaKey = dispatchKafkaKey(event, dispatchMessage);
-      return kafkaTemplate
-          .send(targetTopic, kafkaKey, event.getPayloadJson())
-          .toCompletableFuture()
+      return sendWithTraceContext(
+              targetTopic,
+              kafkaKey,
+              event.getPayloadJson(),
+              EmptyChecks.isNull(dispatchMessage) ? null : dispatchMessage.traceContext())
           .handleAsync(
               (result, ex) -> {
                 if (ex == null) {
@@ -206,16 +213,26 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             deliveryLogExecutor);
   }
 
+  private CompletableFuture<SendResult<String, String>> sendWithTraceContext(
+      String topic, String key, String payload, W3cTraceContext traceContext) {
+    try (Scope ignored = OtelTracePropagation.restore(traceContext)) {
+      return kafkaTemplate.send(topic, key, payload).toCompletableFuture();
+    }
+  }
+
   /**
    * R6 P0-4：event_type → 专用 topic 映射。命中即走专用 topic，未命中走 fallback。
    *
-   * <p>当前覆盖：{@code verifier.failure.v1}（ADR-030 §F 失败事件，运维告警面板独立订阅）。
+   * <p>当前覆盖：{@code verifier.failure.v1}（运维告警）与 {@code WORKFLOW_TERMINAL}（可靠血缘投递）。
    */
   private static final Set<String> VERIFIER_FAILURE_EVENT_TYPES = Set.of("verifier.failure.v1");
 
   private static String resolveDedicatedTopic(String eventType) {
     if (eventType != null && VERIFIER_FAILURE_EVENT_TYPES.contains(eventType)) {
       return BatchTopics.VERIFIER_FAILURE_V1;
+    }
+    if ("WORKFLOW_TERMINAL".equals(eventType)) {
+      return BatchTopics.WORKFLOW_TERMINAL_V1;
     }
     return null;
   }
