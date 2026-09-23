@@ -142,6 +142,8 @@ make check-openapi
 - `batch-common` 不得新增对象存储、OTEL exporter、AI SDK、Excel 处理等运行时重依赖
 - 全业务模块不得引入 `spring-boot-starter-data-jdbc`（持久层统一 MyBatis；见 ADR-001）
 - `batch-console-api` 与 `batch-orchestrator` 须在运行时 POM 中同时出现 `spring-boot-starter-jdbc` 与 `mybatis-spring-boot-starter`（脚本会校验）
+- 生产模块不得从其他模块的源码树加载 Maven resource；共享测试资源必须通过 `batch-test-support` 提供
+- 纯测试模块 `batch-e2e-tests` 对仓内模块的依赖必须全部使用 `test` scope
 
 ```bash
 python3 scripts/ci/check-dependency-boundaries.py

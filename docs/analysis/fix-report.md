@@ -161,7 +161,7 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 **DB 改动落位状态**（见 hardening-backlog-v4#V4-P0-1）：
 - ✅ 3 张新表：`biz.transaction` / `biz.risk_score` / `biz.risk_alert` → 已写入 `scripts/db/business/create_biz_tables.sql`（含索引 + CHECK 约束）
-- ✅ 3 条 tb/tc 模板（`IMP-TRANSACTION-CSV` / `IMP-RISK-SCORE-JSON` / `EXP-RISK-ALERT-JSON`）`query_param_schema` / `default_query_sql` → 已写入 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql` 的 UPDATE 块
+- ✅ 3 条 tb/tc 模板（`IMP-TRANSACTION-CSV` / `IMP-RISK-SCORE-JSON` / `EXP-RISK-ALERT-JSON`）`query_param_schema` / `default_query_sql` → 已写入 `batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql` 的 UPDATE 块
 - ❓ `default-tenant/exp_settlement_csv_v1`（workflow SETTLE 用） → 源头不在 seed（live DB 是 created_by='system'，可能由 Console 上传/租户初始化服务产生），留到 P1-1 批次
 - ❌ 2 条 `resource_queue` 行 `resource_tag` 清空 → 临时绕行，**不入种子**；根治靠 P0-2（worker 心跳带 capability_tags）
 - ❌ 3 条 `job_definition` 行 `enabled=false` → 运维临时动作，**不入种子**

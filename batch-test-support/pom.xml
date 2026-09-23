@@ -91,6 +91,9 @@
     <build>
         <resources>
             <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
                 <directory>${project.basedir}/../batch-common/src/test/resources</directory>
                 <includes>
                     <include>db/platform-init.sql</include>

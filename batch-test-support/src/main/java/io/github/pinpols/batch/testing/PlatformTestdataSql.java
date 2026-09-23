@@ -3,8 +3,7 @@ package io.github.pinpols.batch.testing;
 /**
  * 平台库集成/E2E 测试用 SQL 种子在 classpath 上的路径。
  *
- * <p>脚本实体文件由 {@code batch-e2e-tests} 维护（{@code src/test/resources/db/testdata/}）， orchestrator
- * 等模块通过 Maven {@code testResource} 引入同一路径，避免重复副本。
+ * <p>脚本实体文件随 {@code batch-test-support} 资源包发布，消费模块通过 test scope 依赖从 classpath 加载，避免跨模块源码目录引用。
  */
 public final class PlatformTestdataSql {
 

@@ -9,7 +9,7 @@
 > - Stage 1：[`V72__add_workflow_node_run_output.sql`](../../../db/migration/V72__add_workflow_node_run_output.sql) ✅；worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String, Object>`）✅
 > - Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest` ✅（`batch-orchestrator/.../application/workflow/`）
 > - Stage 3：集成在 `WorkflowNodePayloadBuilder`（设计稿假想集成点 `DefaultSchedulePlanBuilder`，实现选了 payload 装配点更准确）✅
-> - Stage 4：测试 seed `batch-e2e-tests/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` 演示 ✅
+> - Stage 4：测试 seed `batch-test-support/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` 演示 ✅
 >
 > Fail-mode 错误码 `error.workflow.param_ref_invalid` 已实现并 i18n 双语落地。下面"决策（提案，待落地）" / "实施分阶段" 段保留作为历史决策追溯。
 

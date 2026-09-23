@@ -73,7 +73,7 @@
 
 ## 4) 测试数据 seed 脚本（模块内）
 
-- **目录**：`batch-e2e-tests/src/test/resources/db/testdata/`（平台种子集中维护；`batch-orchestrator` 集成测试经 POM `testResource` 引入 `multi-tenant-seed.sql`）
+- **目录**：`batch-test-support/src/main/resources/db/testdata/`（跨模块平台种子集中维护；消费模块通过 test scope 依赖从 classpath 加载）
 - **典型文件**：
   - `import-template-config-seed.sql`
   - `export-template-config-seed.sql`

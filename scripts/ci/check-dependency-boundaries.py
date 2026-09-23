@@ -20,6 +20,20 @@ def list_dependencies(pom_path: Path) -> list[tuple[str, str, str | None]]:
     return result
 
 
+def list_resource_directories(pom_path: Path) -> list[str]:
+    root = ET.parse(pom_path).getroot()
+    paths = (
+        "./m:build/m:resources/m:resource/m:directory",
+        "./m:build/m:testResources/m:testResource/m:directory",
+    )
+    return [
+        directory.text.strip()
+        for path in paths
+        for directory in root.findall(path, NS)
+        if directory.text and directory.text.strip()
+    ]
+
+
 def runtime_dependencies(module: str) -> set[tuple[str, str]]:
     pom_path = ROOT / module / "pom.xml"
     return {
@@ -72,6 +86,22 @@ def main() -> int:
                     f"{module} must not depend on SDK artifact {artifact_id} at runtime "
                     "(SDK is tenant-facing, platform modules may only use it in tests)"
                 )
+
+        for directory in list_resource_directories(ROOT / module / "pom.xml"):
+            normalized = directory.replace("\\", "/")
+            if "../" in normalized and "/src/" in normalized:
+                errors.append(
+                    f"{module} must not load resources from another module source tree: {directory}; "
+                    "publish shared test resources through batch-test-support"
+                )
+
+    for group_id, artifact_id, scope in list_dependencies(ROOT / "batch-e2e-tests/pom.xml"):
+        if group_id == "io.github.pinpols.batch" and scope != "test":
+            scope_label = scope or "compile"
+            errors.append(
+                "batch-e2e-tests is a pure test module; internal dependency "
+                f"{artifact_id} must use test scope, found {scope_label}"
+            )
 
     grandfathered_common_runtime = {
         ("software.amazon.awssdk", "s3"),

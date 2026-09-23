@@ -5,6 +5,7 @@
 - 业务模块只能以 `test` scope 依赖它。
 - 应用运行时 classpath 不得包含该 artifact。
 - 共享支撑类放在 `src/main/java`，以便消费模块的测试源码引用。
+- 跨模块共享的测试资源放在 `src/main/resources`，由消费模块通过测试 classpath 加载。
 - 本模块自身的测试用于验证 `batch-common` 集成能力和故障注入基线。
 
 运行应用镜像打包时可使用 `-Dmaven.test.skip=true`；正常 CI 测试门禁仍必须编译并执行测试。
