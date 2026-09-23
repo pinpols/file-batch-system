@@ -135,9 +135,8 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 
 ### 应用有 stdout、Loki 无日志
 
-1. 确认 `MANAGEMENT_OPENTELEMETRY_ENABLED=true`。该总开关同时控制 OTLP metrics、traces 和 logs；
-   关闭时三类 exporter 都不会创建后台发送任务，不能只关闭 OpenTelemetry SDK 而保留 Micrometer
-   `OtlpMeterRegistry`。
+1. 确认 `MANAGEMENT_OPENTELEMETRY_ENABLED=true`。该总开关控制 OTLP traces 和 logs；metrics 固定由
+   Prometheus 拉取 `/actuator/prometheus`，应用不创建 OTLP `OtlpMeterRegistry`。
 2. 确认依赖中同时存在 Starter 和 OTel Logback appender。
 3. 检查 Collector `otelcol_exporter_send_failed_log_records`、队列容量和 Loki 拒收指标。
 4. 检查 Loki schema v13 与 `allow_structured_metadata=true`。
@@ -162,6 +161,8 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 ### Collector 重启后积压丢失
 
 - Docker 检查 `otel-collector-data` named volume。
+- 本地脚本会先运行一次性 `otel-collector-init`，把命名卷目录归属设置为 Collector 的 10001 用户；
+  若手工启动叠加文件，也必须合并根 `docker-compose.yml`，不要单独解析观测 overlay。
 - Helm 内置 Collector 使用 `emptyDir`，仅保证容器重启，不保证 Pod 重建；需要持久保证时切外部
   Collector 并使用持久卷或受管遥测网关。
 

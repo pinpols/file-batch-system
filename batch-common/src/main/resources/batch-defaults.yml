@@ -185,12 +185,12 @@ management:
     # Spring Boot 内置 Kafka health indicator（仅 worker / orchestrator 有 KafkaTemplate）
     kafka:
       enabled: true
-  # Micrometer OTLP metrics 有独立的自动配置开关；只关闭 OpenTelemetry SDK 不会阻止它创建
-  # OtlpMeterRegistry。三类 exporter 必须与总开关同源，避免未部署 Collector 时后台持续重试。
+  # 指标主通道是 /actuator/prometheus，由 Prometheus 主动拉取。Collector 当前只接 traces/logs，
+  # 因此固定关闭 Micrometer OTLP metrics，避免向不存在的 /v1/metrics 管道持续发送。
   otlp:
     metrics:
       export:
-        enabled: ${MANAGEMENT_OPENTELEMETRY_ENABLED:false}
+        enabled: false
   # ── 分布式追踪 ──────────────────────────────────────────────────
   tracing:
     sampling:
@@ -200,7 +200,7 @@ management:
       otlp:
         enabled: ${MANAGEMENT_OPENTELEMETRY_ENABLED:false}
   # ── Spring Boot 4 OpenTelemetry / OTLP 导出───────────────────
-  # MANAGEMENT_OPENTELEMETRY_ENABLED 是唯一总开关，默认关闭以避免本地重试噪音。
+  # MANAGEMENT_OPENTELEMETRY_ENABLED 是 traces/logs 总开关，默认关闭以避免本地重试噪音。
   opentelemetry:
     enabled: ${MANAGEMENT_OPENTELEMETRY_ENABLED:false}
     resource-attributes:

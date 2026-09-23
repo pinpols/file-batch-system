@@ -7,23 +7,23 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2254 |
+| 生产 Java 源文件 | 2256 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2070 |
 | 含 Map 的源文件 | 444 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
-| `@SuppressWarnings` | 217 |
+| `@SuppressWarnings` | 218 |
 | 含 suppression 的源文件 | 164 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 10 |
-| `PMD.ExcessiveParameterList` 显式例外 | 34 |
+| `PMD.ExcessiveParameterList` 显式例外 | 35 |
 
 ## 模块源文件
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 302 |
+| `batch-common` | 304 |
 | `batch-console-api` | 887 |
 | `batch-orchestrator` | 528 |
 | `batch-trigger` | 69 |
@@ -101,7 +101,7 @@
 |---|---:|
 | `batch-common/src/main/java/io/github/pinpols/batch/common/dto/LaunchRequest.java` | 2 |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/dto/WorkerHeartbeatDto.java` | 2 |
-| `batch-common/src/main/java/io/github/pinpols/batch/common/kafka/TaskDispatchMessage.java` | 1 |
+| `batch-common/src/main/java/io/github/pinpols/batch/common/kafka/TaskDispatchMessage.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/mapper/OperationAuditMapper.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java` | 1 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/mapper/ConsoleApiKeyMapper.java` | 1 |

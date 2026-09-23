@@ -10,12 +10,16 @@ import io.github.pinpols.batch.common.kafka.BatchMessageType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.observability.OtelTracePropagation;
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
+import io.opentelemetry.context.Scope;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +32,7 @@ import java.util.concurrent.Executor;
 import org.apache.kafka.common.utils.Utils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 /**
@@ -106,9 +111,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       }
       String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
       String kafkaKey = dispatchKafkaKey(event, dispatchMessage);
-      return kafkaTemplate
-          .send(targetTopic, kafkaKey, event.getPayloadJson())
-          .toCompletableFuture()
+      return sendWithTraceContext(
+              targetTopic,
+              kafkaKey,
+              event.getPayloadJson(),
+              EmptyChecks.isNull(dispatchMessage) ? null : dispatchMessage.traceContext())
           .handleAsync(
               (result, ex) -> {
                 if (ex == null) {
@@ -204,6 +211,13 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
               throw new CompletionException(ex);
             },
             deliveryLogExecutor);
+  }
+
+  private CompletableFuture<SendResult<String, String>> sendWithTraceContext(
+      String topic, String key, String payload, W3cTraceContext traceContext) {
+    try (Scope ignored = OtelTracePropagation.restore(traceContext)) {
+      return kafkaTemplate.send(topic, key, payload).toCompletableFuture();
+    }
   }
 
   /**

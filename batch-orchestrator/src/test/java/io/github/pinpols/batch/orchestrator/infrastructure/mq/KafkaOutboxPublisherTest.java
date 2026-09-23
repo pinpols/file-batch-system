@@ -9,7 +9,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
@@ -17,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
+import io.opentelemetry.api.trace.Span;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -94,6 +98,43 @@ class KafkaOutboxPublisherTest {
     assertThat(publishFuture).isCompletedWithValue(true);
     verify(kafkaTemplate)
         .send(eq("batch.task.dispatch.export"), eq("t1:IT_JOB:it-instance-001:1"), anyString());
+  }
+
+  @Test
+  void dispatchTopicRestoresPersistedTraceContextDuringKafkaSend() {
+    String traceId = "33333333333333333333333333333333";
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "dispatch-key-trace");
+    TaskDispatchMessage message =
+        JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
+    event.setPayloadJson(JsonUtils.toJson(new TaskDispatchMessage(
+        message.schemaVersion(),
+        message.tenantId(),
+        message.jobInstanceId(),
+        message.jobPartitionId(),
+        message.taskId(),
+        message.instanceNo(),
+        message.jobCode(),
+        message.workerType(),
+        message.selectedWorkerId(),
+        message.priorityBand(),
+        message.traceId(),
+        message.idempotencyKey(),
+        message.dispatchAt(),
+        message.schedulingContext(),
+        message.partitionNo(),
+        message.partitionCount(),
+        new W3cTraceContext("00-" + traceId + "-4444444444444444-01", null))));
+    String[] activeTraceId = new String[1];
+    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenAnswer(invocation -> {
+      activeTraceId[0] = Span.current().getSpanContext().getTraceId();
+      return CompletableFuture.completedFuture(null);
+    });
+
+    CompletableFuture<Boolean> publishFuture = publisher.publish(event);
+
+    assertThat(publishFuture).isCompletedWithValue(true);
+    assertThat(activeTraceId[0]).isEqualTo(traceId);
   }
 
   @Test
@@ -185,9 +226,8 @@ class KafkaOutboxPublisherTest {
     return event;
   }
 
-  private static io.github.pinpols.batch.common.kafka.TaskDispatchMessage partitionedMessage(
-      int partitionNo, int partitionCount) {
-    return new io.github.pinpols.batch.common.kafka.TaskDispatchMessage(
+  private static TaskDispatchMessage partitionedMessage(int partitionNo, int partitionCount) {
+    return new TaskDispatchMessage(
         "v2",
         "t1",
         1L,

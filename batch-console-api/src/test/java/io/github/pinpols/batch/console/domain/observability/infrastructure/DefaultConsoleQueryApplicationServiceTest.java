@@ -140,6 +140,17 @@ class DefaultConsoleQueryApplicationServiceTest {
         .isEqualTo(Instant.parse("2026-08-02T01:00:00Z"));
   }
 
+  @Test
+  void traceSnapshot_reportsDomainsTruncatedBySnapshotLimit() {
+    stubEmptyPages();
+    when(jobQueryService.jobInstances(any()))
+        .thenReturn(new PageResponse<>(201, 1, 200, List.of()));
+
+    ConsoleTraceSnapshotResponse response = service.traceSnapshot("t1", "trace-1");
+
+    assertThat(response.truncatedDomains()).containsExactly("jobInstances");
+  }
+
   @SuppressWarnings({"rawtypes", "unchecked"})
   private void stubEmptyPages() {
     PageResponse empty = new PageResponse(0, 1, 200, List.of());

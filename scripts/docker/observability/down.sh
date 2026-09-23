@@ -26,10 +26,18 @@ if [[ -n "$REQUESTED_COMPOSE_PROJECT_NAME" ]]; then
 fi
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 export COMPOSE_PROJECT_NAME
+OBSERVABILITY_SERVICES=(
+  prometheus alertmanager jaeger tempo loki otel-collector otel-collector-init grafana
+  redis-exporter postgres-exporter kafka-exporter node-exporter cadvisor
+)
+
+if [[ $# -gt 0 ]]; then
+  OBSERVABILITY_SERVICES=("$@")
+fi
 
 docker compose \
   --project-name "$COMPOSE_PROJECT_NAME" \
   --env-file "$COMPOSE_ENV_FILE" \
+  -f docker-compose.yml \
   -f deploy/docker/compose/observability.yml \
-  --profile observability \
-  stop
+  stop "${OBSERVABILITY_SERVICES[@]}"

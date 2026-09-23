@@ -25,6 +25,10 @@ public final class BatchMdc {
     }
   }
 
+  public static String get(String key) {
+    return EmptyChecks.isNull(key) ? null : MDC.get(key);
+  }
+
   public static void remove(String key) {
     if (key != null) {
       MDC.remove(key);
