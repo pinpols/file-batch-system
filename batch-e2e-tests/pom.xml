@@ -20,6 +20,7 @@
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-orchestrator</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <!-- ADR-010 Stage 5 Layer 2: trigger 模块依赖,供 E2eTriggerApplication scaffold 拉 trigger bean
              (TriggerOutboxRelay / KafkaTriggerEventPublisher / TriggerOutboxEventMapper 等)。
@@ -29,36 +30,43 @@
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-trigger</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-console-api</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-import</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-export</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-process</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-dispatch</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-atomic</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <!-- R3-6 first POC: SDK + testkit dispatch builder, 用于 SdkAgainstStubOrchestratorE2eIT
              起真 SDK + 真 testcontainers Kafka,验证 SDK↔BE wire 协议端到端。本 IT 不起 orchestrator

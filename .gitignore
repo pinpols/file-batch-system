@@ -6,6 +6,8 @@
 .env.*.local
 .ruff_cache/
 .venv/
+__pycache__/
+*.py[cod]
 /.remember
 .local/
 # biz 分片真凭据不入库,只提交 *.env.example 模板

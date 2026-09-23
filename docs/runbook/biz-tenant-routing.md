@@ -215,7 +215,7 @@ scripts/local/verify-biz-shard.sh
 > HASH 选 tenant_id 的关键好处:所有 biz UNIQUE 本就含 tenant_id → **只重建 PK,不动 UNIQUE/ON CONFLICT/模板** = 幂等中性。
 > RANGE 时序表里,risk_score/risk_alert 的 UNIQUE 加日期不影响幂等(score_date 本就在;risk_alert 不 upsert);
 > **唯一动幂等语义的是 transaction**:UNIQUE 加 `txn_date`,模板 `conflictColumns` 同步成 `[tenant_id, txn_no, txn_date]`
-> (改动点:`batch-e2e-tests/.../multi-tenant-seed.sql` ×3、`docs/test-data/sim-e2e-bootstrap.sql`、手工 seed `sim-stage3c-export-source.sql`)。
+> (改动点:`batch-test-support/.../multi-tenant-seed.sql` ×3、`docs/test-data/sim-e2e-bootstrap.sql`、手工 seed `sim-stage3c-export-source.sql`)。
 > **prod 自定义模板**:用户侧 `IMP-TRANSACTION-CSV` 的 conflictColumns 须同样加 `txn_date`,否则 ON CONFLICT 不匹配新约束。
 
 全 6 表已落地并在真实 PG 验证(幂等/FK/HASH 路由/RANGE 落分区)。

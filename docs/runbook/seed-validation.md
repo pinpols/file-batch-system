@@ -25,7 +25,7 @@ docker cp scripts/db/test-seed/business_seed.sql batch-postgres:/tmp/
 docker exec batch-postgres psql -U batch_user -d batch_business -f /tmp/business_seed.sql
 
 # 3. 多租户种子（ta/tb/tc — STRICT=0 默认覆盖需要）
-docker cp batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql batch-postgres:/tmp/
+docker cp batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql batch-postgres:/tmp/
 docker exec batch-postgres psql -U batch_user -d batch_platform -f /tmp/multi-tenant-seed.sql
 ```
 

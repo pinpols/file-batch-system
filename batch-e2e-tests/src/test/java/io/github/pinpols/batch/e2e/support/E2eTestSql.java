@@ -21,7 +21,7 @@ public final class E2eTestSql {
       "classpath:db/testdata/export-template-config-seed.sql";
 
   /**
-   * 平台库 t2/t3 多租户种子（{@code batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql}）。
+   * 平台库多租户种子，由 {@code batch-test-support} 通过测试 classpath 提供。
    */
   public static final String MULTI_TENANT_SEED = PlatformTestdataSql.MULTI_TENANT_SEED;
 }

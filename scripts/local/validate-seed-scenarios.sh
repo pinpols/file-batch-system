@@ -30,7 +30,7 @@
 #     ./scripts/local/validate-seed-scenarios.sh
 #
 # 前置: 需先加载 multi-tenant-seed 才覆盖 ta/tb/tc 场景:
-#   docker cp batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql \
+#   docker cp batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql \
 #     "$PG_CONTAINER":/tmp/ && docker exec "$PG_CONTAINER" \
 #     psql -U "$PG_USER" -d "$PG_DB" -f /tmp/multi-tenant-seed.sql
 #
