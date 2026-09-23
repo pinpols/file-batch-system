@@ -77,6 +77,11 @@ batch.data_quality_check         -- 一次 job 的 DQ 检查实例
 | `CROSS_TABLE` | `sum(detail.amt) = (SELECT total FROM summary)` | 数据团队 |
 | `CROSS_DAY` | `today.opening_balance = yesterday.closing_balance` | 业务方 |
 
+运行模式由 `batch.data-quality.mode` 统一控制：`ENFORCE` 保持 BLOCKER 阻断结果生效；
+`SHADOW` 执行同一规则并写检查记录，但将门禁结果降为 WARN；`OFF` 不加载规则。默认
+`ENFORCE`，因此升级不会静默改变既有结果版本语义。`TABLE_LEVEL`、`CROSS_TABLE`、
+`CROSS_DAY` 均使用受限的只读标量 SQL 路径；`ROW_LEVEL` 继续由 Worker/SPI 汇总写入。
+
 ### Gate 链路
 
 ```

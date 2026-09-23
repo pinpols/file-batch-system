@@ -195,6 +195,31 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: spring.threads.virtual.enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_VIRTUAL_THREADS_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.data-quality.mode
+    module: orchestrator
+    env:
+      - BATCH_DATA_QUALITY_MODE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.openlineage.enabled
+    module: orchestrator
+    env:
+      - BATCH_OPENLINEAGE_ENABLED
+      - BATCH_OPENLINEAGE_ENDPOINT
+      - BATCH_OPENLINEAGE_NAMESPACE
+      - BATCH_OPENLINEAGE_CONSUMER_GROUP_ID
+      - BATCH_OPENLINEAGE_RETRY_BACKOFF_MS
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.worker.atomic.enabled-task-types
     module: worker-atomic
     env:

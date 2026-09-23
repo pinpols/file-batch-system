@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.CorrelationIds;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.FileChainQueryRequest;
@@ -77,6 +78,8 @@ import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemRe
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -152,10 +155,12 @@ public class ConsoleQueryController {
     return responseFactory.success(applicationService.executionLogs(request));
   }
 
-  /** GET /trace-snapshot — 按 traceId 聚合查询排障快照。 */
+  /** GET /trace-snapshot — 按完整 traceId 精确聚合查询排障快照。 */
   @GetMapping("/trace-snapshot")
   public CommonResponse<ConsoleTraceSnapshotResponse> traceSnapshot(
-      @RequestParam("tenantId") String tenantId, @RequestParam("traceId") String traceId) {
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("traceId") @NotBlank @Size(max = CorrelationIds.MAX_HEADER_ID_LENGTH)
+          String traceId) {
     return responseFactory.success(applicationService.traceSnapshot(tenantId, traceId));
   }
 

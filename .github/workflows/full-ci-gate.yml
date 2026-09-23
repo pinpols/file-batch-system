@@ -118,6 +118,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-five-worker-parity.py
 
+      - name: Verify KEDA autoscaling contracts
+        shell: bash
+        run: python3 scripts/ci/check-keda-autoscaling.py
+
       - name: Verify production Helm overlay safety
         shell: bash
         run: python3 scripts/ci/check-production-overlay-safety.py

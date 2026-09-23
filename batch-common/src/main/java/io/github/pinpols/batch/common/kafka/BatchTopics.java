@@ -17,6 +17,9 @@ public final class BatchTopics {
   /** ADR-010: trigger → orchestrator 异步 launch 事件 topic(版本化,协议演进时升 v2)。 */
   public static final String TRIGGER_LAUNCH_V1 = "batch.trigger.launch.v1";
 
+  /** workflow 终态事务 Outbox 的可靠血缘/监控事件。 */
+  public static final String WORKFLOW_TERMINAL_V1 = "batch.workflow.terminal.v1";
+
   /**
    * ADR-030 §F: ContentVerifier 失败事件专用 topic。worker 上报 verifierFailures → orchestrator 同事务写
    * outbox_event (event_type=verifier.failure.v1) → relay 到此专用 topic，让运维订阅做告警面板 / SLO，避免和通用 outbox

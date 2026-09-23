@@ -11,7 +11,7 @@
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-no-enable-preview.sh` |
 | 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
-| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
+| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
@@ -167,6 +167,14 @@ python3 scripts/ci/check-helm-env-sync.py
 
 ```bash
 python3 scripts/ci/check-five-worker-parity.py
+```
+
+## `check-keda-autoscaling.py`
+
+校验五类内建 Worker 的 KEDA ScaledObject、Kafka topic/consumer group、冷却参数、HPA 互斥和优雅停机模板保持一致。该守护只验证静态部署契约，不能替代 staging 的扩缩容、rebalance 和 lease 回收演练。
+
+```bash
+python3 scripts/ci/check-keda-autoscaling.py
 ```
 
 成功时打印 `Five-worker parity check passed` 并以退出码 `0` 结束；缺任一 Worker 或破坏 Atomic/Pipeline 边界时列出具体文件并以 `1` 结束。

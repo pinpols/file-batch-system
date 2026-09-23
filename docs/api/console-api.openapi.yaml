@@ -3624,7 +3624,8 @@ paths:
   /api/console/queries/trace-snapshot:
     get:
       tags: [Queries]
-      summary: Query cross-domain trace snapshot
+      summary: 查询跨领域 Trace 诊断快照
+      description: 使用完整业务 traceId 精确匹配，不支持前缀或模糊查询。
       operationId: queryTraceSnapshot
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -3634,7 +3635,7 @@ paths:
           schema: { type: string, maxLength: 128 }
       responses:
         '200':
-          description: Cross-domain trace snapshot
+          description: 跨领域 Trace 诊断快照
           content:
             application/json:
               schema:
@@ -13920,7 +13921,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleTraceTimelineItem'
-      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, files, filePipelines, auditLogs, operationAudits, executionLogs, outboxDeliveries, alerts, deadLetters, timeline]
+        truncatedDomains:
+          type: array
+          description: 因单领域最多返回 200 条而发生截断的响应字段名。
+          items:
+            type: string
+      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, files, filePipelines, auditLogs, operationAudits, executionLogs, outboxDeliveries, alerts, deadLetters, timeline, truncatedDomains]
     ConsoleTraceTimelineItem:
       type: object
       properties:

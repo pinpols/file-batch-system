@@ -138,6 +138,9 @@ consoleApi:
   ai:
     enabled: false
     provider: "anthropic"
+  virtualThreads:
+    # 实验开关：只作用于 Console API。完成 A/B 压测前保持关闭。
+    enabled: false
   security:
     rateLimit:
       expensiveOpUserLimitPerMinute: 10
@@ -273,6 +276,14 @@ trigger:
 # ── orchestrator ───────────────────────────────────────────────────────────────
 
 orchestrator:
+  dataQuality:
+    mode: "ENFORCE"
+  openLineage:
+    enabled: false
+    endpoint: ""
+    namespace: "file-batch-system"
+    consumerGroupId: "batch-openlineage-emitter"
+    retryBackoffMs: 5000
   # 状态机大量短命对象,用 Generational ZGC sub-ms pause(JDK 21+)
   # 代价:吞吐 -10% 换调度延迟稳定。详见 docs/runbook/jvm-tuning-and-profiling.md §1.2
   javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"

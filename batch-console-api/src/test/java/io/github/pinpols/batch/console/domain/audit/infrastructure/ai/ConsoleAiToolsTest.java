@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -181,6 +182,42 @@ class ConsoleAiToolsTest {
   void getClusterDiagnosticsHandlesEmptyResult() {
     when(diagnosticService.diagnose(TENANT)).thenReturn(null);
     assertThat(tools().getClusterDiagnostics()).isNotBlank();
+  }
+
+  @Test
+  void diagnoseJobInstanceUsesTenantBoundReadOnlyDiagnostic() {
+    Map<String, Object> instance = new LinkedHashMap<>();
+    instance.put("id", 42L);
+    instance.put("instanceStatus", "RUNNING");
+    Map<String, Object> summary = new LinkedHashMap<>();
+    summary.put("partitionStatusCounts", List.of());
+    summary.put("taskStatusCounts", List.of());
+    summary.put("outboxStatusCounts", List.of());
+    summary.put("onlineWorkersForGroup", 2L);
+    Map<String, Object> finding = new LinkedHashMap<>();
+    finding.put("severity", "WARN");
+    finding.put("reasonCode", "TASK_STALE");
+    finding.put("message", "task heartbeat is stale");
+    finding.put("suggestedActions", List.of("检查 worker 日志"));
+    finding.put("evidence", Map.of());
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("tenantId", TENANT);
+    row.put("jobInstanceId", 42L);
+    row.put("healthy", false);
+    row.put("instance", instance);
+    row.put("summary", summary);
+    row.put("findings", List.of(finding));
+    when(diagnosticService.instanceDiagnosis(TENANT, 42L))
+        .thenReturn(ConsoleInstanceDiagnosisResponse.from(row));
+
+    String output = tools().diagnoseJobInstance(42L);
+
+    assertThat(output)
+        .contains("jobInstanceId=42")
+        .contains("healthy=false")
+        .contains("TASK_STALE")
+        .contains("检查 worker 日志");
+    verify(diagnosticService).instanceDiagnosis(TENANT, 42L);
   }
 
   private ConsoleAlertEventResponse alert(

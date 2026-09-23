@@ -9,9 +9,11 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
+import io.opentelemetry.api.trace.Span;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Map;
@@ -77,7 +79,26 @@ class KafkaTriggerEventPublisherTest {
     assertThat(sent.key()).isEqualTo("tenant-a:req-1");
     assertThat(headerValue(sent, "X-Trace-Id")).isEqualTo("trace-1");
     assertThat(headerValue(sent, "X-Tenant-Id")).isEqualTo("tenant-a");
-    assertThat(headerValue(sent, "X-Envelope-Version")).isEqualTo("1");
+    assertThat(headerValue(sent, "X-Envelope-Version")).isEqualTo("2");
+  }
+
+  @Test
+  void publish_withPersistedTraceContext_restoresParentDuringKafkaSend() {
+    String traceId = "11111111111111111111111111111111";
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-trace")
+        .withTraceContext(new W3cTraceContext("00-" + traceId + "-2222222222222222-01", null));
+    String[] activeTraceId = new String[1];
+    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any()))
+        .thenAnswer(invocation -> {
+          activeTraceId[0] = Span.current().getSpanContext().getTraceId();
+          return CompletableFuture.completedFuture(sendResult(0, 101L));
+        });
+
+    TriggerEventPublisher.PublishResult result = publisher.publish(
+        BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-trace", envelope, "business-trace");
+
+    assertThat(result.success()).isTrue();
+    assertThat(activeTraceId[0]).isEqualTo(traceId);
   }
 
   @Test
