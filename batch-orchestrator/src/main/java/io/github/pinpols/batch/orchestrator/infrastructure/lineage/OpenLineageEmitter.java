@@ -11,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -105,7 +106,7 @@ public class OpenLineageEmitter {
       Thread.currentThread().interrupt();
       recordLineageMetric("interrupted", terminalStatus);
       throw new IllegalStateException("OpenLineage delivery interrupted", ex);
-    } catch (java.io.IOException ex) {
+    } catch (IOException ex) {
       recordLineageMetric("error", terminalStatus);
       throw new IllegalStateException("OpenLineage delivery failed", ex);
     }

@@ -161,7 +161,7 @@ public class ConsoleAiTools {
     if (EmptyChecks.isNull(diagnosis)) {
       return "未找到实例诊断数据:jobInstanceId=" + jobInstanceId;
     }
-    String findings = diagnosis.findings().isEmpty()
+    String findings = EmptyChecks.isEmpty(diagnosis.findings())
         ? "无异常发现"
         : diagnosis.findings().stream()
             .map(finding -> finding.severity()
@@ -177,7 +177,7 @@ public class ConsoleAiTools {
         + " healthy="
         + diagnosis.healthy()
         + " status="
-        + (diagnosis.instance() == null ? "-" : diagnosis.instance().instanceStatus())
+        + (EmptyChecks.isNull(diagnosis.instance()) ? "-" : diagnosis.instance().instanceStatus())
         + " onlineWorkersForGroup="
         + (EmptyChecks.isNull(diagnosis.summary())
             ? "-"
