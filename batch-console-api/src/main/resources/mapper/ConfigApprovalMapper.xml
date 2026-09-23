@@ -4,17 +4,17 @@
 
     <select id="selectLatestByRelease" resultType="map">
         SELECT id,
-               tenant_id AS tenantId,
-               release_id AS releaseId,
-               approval_status AS approvalStatus,
-               requested_by AS requestedBy,
-               requested_at AS requestedAt,
-               reviewed_by AS reviewedBy,
-               reviewed_at AS reviewedAt,
-               review_comment AS reviewComment,
-               expired_at AS expiredAt,
-               created_at AS createdAt,
-               updated_at AS updatedAt
+               tenant_id AS "tenantId",
+               release_id AS "releaseId",
+               approval_status AS "approvalStatus",
+               requested_by AS "requestedBy",
+               requested_at AS "requestedAt",
+               reviewed_by AS "reviewedBy",
+               reviewed_at AS "reviewedAt",
+               review_comment AS "reviewComment",
+               expired_at AS "expiredAt",
+               created_at AS "createdAt",
+               updated_at AS "updatedAt"
           FROM batch.config_approval
          WHERE tenant_id = #{tenantId}
            AND release_id = #{releaseId}
@@ -24,17 +24,17 @@
 
     <select id="selectById" resultType="map">
         SELECT id,
-               tenant_id AS tenantId,
-               release_id AS releaseId,
-               approval_status AS approvalStatus,
-               requested_by AS requestedBy,
-               requested_at AS requestedAt,
-               reviewed_by AS reviewedBy,
-               reviewed_at AS reviewedAt,
-               review_comment AS reviewComment,
-               expired_at AS expiredAt,
-               created_at AS createdAt,
-               updated_at AS updatedAt
+               tenant_id AS "tenantId",
+               release_id AS "releaseId",
+               approval_status AS "approvalStatus",
+               requested_by AS "requestedBy",
+               requested_at AS "requestedAt",
+               reviewed_by AS "reviewedBy",
+               reviewed_at AS "reviewedAt",
+               review_comment AS "reviewComment",
+               expired_at AS "expiredAt",
+               created_at AS "createdAt",
+               updated_at AS "updatedAt"
           FROM batch.config_approval
          WHERE tenant_id = #{tenantId}
            AND id = #{id}

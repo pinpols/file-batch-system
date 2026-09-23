@@ -15523,6 +15523,10 @@ components:
         id:
           type: integer
           format: int64
+        outboxEventId:
+          type: integer
+          format: int64
+          description: 关联的 outbox_event.id；重投接口必须使用该值，而不是重试日志 id。
         tenantId:
           type: string
         eventType:
@@ -15545,7 +15549,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, eventType, eventKey, retryStatus, retryCount, retryPolicy, nextRetryAt, createdAt, updatedAt]
+      required: [id, outboxEventId, tenantId, eventType, eventKey, retryStatus, retryCount, retryPolicy, nextRetryAt, createdAt, updatedAt]
     ConsoleOutboxDeliveryLogResponse:
       type: object
       properties:

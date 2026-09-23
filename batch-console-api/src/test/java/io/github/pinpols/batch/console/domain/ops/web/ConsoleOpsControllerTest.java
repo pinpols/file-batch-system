@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -66,5 +68,14 @@ class ConsoleOpsControllerTest {
         .andExpect(jsonPath("$.data.pendingApprovals").value(1))
         .andExpect(jsonPath("$.data.openAlerts").value(2))
         .andExpect(jsonPath("$.data.criticalAlerts").value(3));
+  }
+
+  @Test
+  void shouldAllowTenantUserToReadSummary() throws Exception {
+    PreAuthorize authorization = ConsoleOpsController.class
+        .getMethod("summary", String.class)
+        .getAnnotation(PreAuthorize.class);
+
+    assertThat(authorization.value()).contains("ROLE_TENANT_USER");
   }
 }

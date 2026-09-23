@@ -42,6 +42,8 @@ public class ConsoleOpsController {
 
   /** 租户运维摘要（Redis 缓存 10s，避免多用户同时刷导致 DB 重复聚合）。 */
   @GetMapping("/summary")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<ConsoleOpsSummaryResponse> summary(
       @RequestParam @NotBlank String tenantId) {
     return responseFactory.success(opsApplicationService.summary(tenantId));

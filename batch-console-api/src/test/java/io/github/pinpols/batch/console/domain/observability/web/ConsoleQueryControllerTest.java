@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.resp
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.web.ConsoleQueryController;
@@ -335,12 +336,30 @@ class ConsoleQueryControllerTest {
 
   @Test
   void shouldReturnOutboxRetriesPage() throws Exception {
-    when(queryApplicationService.outboxRetries(any())).thenReturn(emptyPage());
+    when(queryApplicationService.outboxRetries(any()))
+        .thenReturn(new PageResponse<>(
+            1,
+            1,
+            20,
+            List.of(new ConsoleOutboxRetryLogResponse(
+                31L,
+                41L,
+                "t1",
+                "JOB_FAILED",
+                "event-1",
+                "FAILED",
+                2,
+                "EXPONENTIAL",
+                Instant.EPOCH,
+                Instant.EPOCH,
+                Instant.EPOCH))));
 
     mockMvc
         .perform(get("/api/console/queries/outbox-retries").param("tenantId", "t1"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.total").value(0));
+        .andExpect(jsonPath("$.data.total").value(1))
+        .andExpect(jsonPath("$.data.items[0].id").value(31))
+        .andExpect(jsonPath("$.data.items[0].outboxEventId").value(41));
   }
 
   @Test
