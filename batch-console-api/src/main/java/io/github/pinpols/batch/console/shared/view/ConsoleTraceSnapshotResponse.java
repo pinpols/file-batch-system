@@ -24,4 +24,5 @@ public record ConsoleTraceSnapshotResponse(
     List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
     List<ConsoleAlertEventResponse> alerts,
     List<ConsoleDeadLetterTaskResponse> deadLetters,
-    List<ConsoleTraceTimelineItem> timeline) {}
+    List<ConsoleTraceTimelineItem> timeline,
+    List<String> truncatedDomains) {}

@@ -14,15 +14,17 @@ import org.springframework.context.annotation.Bean;
  * 提供 {@code @Observed} 注解的 AOP 拦截支持，把业务方法包成 Micrometer Observation。Observation 自动桥接到 {@code
  * spring-boot-starter-opentelemetry} 装配的 OTel SDK，再通过 OTLP 推到 Collector。
  *
- * <p>未提供 {@link ObservedAspect} bean 时，业务代码上的 {@code @Observed} 注解会被静默忽略；Spring Boot 4.x 的 {@code
- * ObservationAutoConfiguration} 仅创建 {@link ObservationRegistry}，不创建 aspect（设计上留给应用决定）。
+ * <p>未提供 {@link ObservedAspect} bean 时，业务代码上的 {@code @Observed} 注解会被静默忽略；Spring Boot 4.x 仅在显式开启
+ * {@code management.observations.annotations.enabled} 时创建 aspect，平台默认由本配置兜底。
  *
  * <p>详见 {@code docs/architecture/adr/ADR-013-distributed-tracing.md} + {@code
  * docs/runbook/distributed-tracing.md}。
  */
 @AutoConfiguration(
-    afterName =
-        "org.springframework.boot.opentelemetry.autoconfigure.OpenTelemetrySdkAutoConfiguration")
+    afterName = {
+      "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration",
+      "org.springframework.boot.opentelemetry.autoconfigure.OpenTelemetrySdkAutoConfiguration"
+    })
 @ConditionalOnClass({ObservationRegistry.class, ObservedAspect.class})
 @ConditionalOnBean(ObservationRegistry.class)
 public class BatchObservabilityAutoConfiguration {

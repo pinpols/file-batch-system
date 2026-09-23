@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.dto;
 
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import java.time.Instant;
 
 /**
@@ -14,24 +15,39 @@ import java.time.Instant;
  * <ul>
  *   <li>{@code dedupKey} — trigger 已计算过的 dedup key,避免 orchestrator 重复算
  *   <li>{@code sourceFireTime} — Quartz 实际 fire 时刻,supports 链路审计与 latency 统计
- *   <li>{@code envelopeVersion} — 协议演进时 consumer 兼容多版本(v1 现行)
+ *   <li>{@code envelopeVersion} — 协议演进时 consumer 兼容多版本(v2 现行)
+ *   <li>{@code traceContext} — 持久化异步边界所需的 W3C 传输上下文；不承载业务身份
  * </ul>
  *
  * @param launchRequest 完整的 launch
  *     命令参数(tenantId/jobCode/bizDate/triggerType/requestId/traceId/params)
  * @param dedupKey trigger 端已计算的去重 key(orchestrator 仍会通过 uk_job_instance_tenant_dedup 回退)
  * @param sourceFireTime trigger 实际 fire 时刻,UTC instant
- * @param envelopeVersion 协议版本号,当前 1
+ * @param envelopeVersion 协议版本号,当前 2
  */
 public record LaunchEnvelope(
-    LaunchRequest launchRequest, String dedupKey, Instant sourceFireTime, int envelopeVersion) {
+    LaunchRequest launchRequest,
+    String dedupKey,
+    Instant sourceFireTime,
+    int envelopeVersion,
+    W3cTraceContext traceContext) {
 
   /** 当前协议版本。 */
-  public static final int CURRENT_VERSION = 1;
+  public static final int CURRENT_VERSION = 2;
+
+  /** 保留 v1 源码兼容入口，供测试和不跨持久化边界的调用方使用。 */
+  public LaunchEnvelope(
+      LaunchRequest launchRequest, String dedupKey, Instant sourceFireTime, int envelopeVersion) {
+    this(launchRequest, dedupKey, sourceFireTime, envelopeVersion, null);
+  }
 
   /** 工厂方法:用当前版本号 + now() 构造,业务路径默认调用此方法。 */
   public static LaunchEnvelope of(
       LaunchRequest launchRequest, String dedupKey, Instant sourceFireTime) {
-    return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, CURRENT_VERSION);
+    return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, CURRENT_VERSION, null);
+  }
+
+  public LaunchEnvelope withTraceContext(W3cTraceContext context) {
+    return new LaunchEnvelope(launchRequest, dedupKey, sourceFireTime, envelopeVersion, context);
   }
 }

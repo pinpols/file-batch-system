@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.observation.annotation.Observed;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -164,6 +165,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   @Override
+  @Observed(name = "worker.task.execute", contextualName = "worker.task.execute")
   public WorkerExecutionResult execute(PulledTask task) {
     Map<String, Object> executionContext = buildExecutionContext(task);
     StepExecutionRequest request = new StepExecutionRequest(

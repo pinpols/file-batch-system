@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.infrastructure.lineage.OpenLineageEmitter;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,8 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * workflow_run 终态事件 outbox 写入。
@@ -31,7 +28,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class WorkflowTerminalOutboxService {
 
   private final DomainEventPublisher domainEventPublisher;
-  private final OpenLineageEmitter openLineageEmitter;
 
   /** workflow_run 终态枚举集合（白名单），调用方先行判断后再触发本写入。 */
   public static boolean isTerminal(String runStatus) {
@@ -50,12 +46,22 @@ public class WorkflowTerminalOutboxService {
       return;
     }
     Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("schemaVersion", "v1");
+    payload.put("schemaVersion", "v2");
     payload.put("tenantId", workflowRun.getTenantId());
     payload.put("workflowRunId", workflowRun.getId());
     payload.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
     payload.put("relatedJobInstanceId", workflowRun.getRelatedJobInstanceId());
     payload.put("runStatus", terminalStatus);
+    payload.put(
+        "bizDate",
+        EmptyChecks.isNull(workflowRun.getBizDate())
+            ? null
+            : workflowRun.getBizDate().toString());
+    payload.put(
+        "startedAt",
+        EmptyChecks.isNull(workflowRun.getStartedAt())
+            ? null
+            : workflowRun.getStartedAt().toString());
     payload.put("finishedAt", EmptyChecks.isNull(finishedAt) ? null : finishedAt.toString());
     payload.put("traceId", workflowRun.getTraceId());
 
@@ -66,23 +72,5 @@ public class WorkflowTerminalOutboxService {
         .payload(payload)
         .traceId(workflowRun.getTraceId())
         .build());
-
-    // P1 OpenLineage:终态真提交后 fire-and-forget emit 血缘 RunEvent。
-    // 注册 afterCommit 同步,避免事务回滚时发出假血缘;emitter 内部 disabled 即 no-op,不阻塞主链。
-    emitLineageAfterCommit(workflowRun, terminalStatus, finishedAt);
-  }
-
-  private void emitLineageAfterCommit(
-      WorkflowRunEntity workflowRun, String terminalStatus, Instant finishedAt) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      openLineageEmitter.emitWorkflowTerminal(workflowRun, terminalStatus, finishedAt);
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-      @Override
-      public void afterCommit() {
-        openLineageEmitter.emitWorkflowTerminal(workflowRun, terminalStatus, finishedAt);
-      }
-    });
   }
 }

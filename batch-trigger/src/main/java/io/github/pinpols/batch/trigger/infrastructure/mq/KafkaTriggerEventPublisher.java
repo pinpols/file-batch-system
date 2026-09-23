@@ -2,10 +2,12 @@ package io.github.pinpols.batch.trigger.infrastructure.mq;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
+import io.opentelemetry.context.Scope;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -14,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 /**
@@ -75,8 +78,11 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
             HEADER_ENVELOPE_VERSION,
             String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
     try {
-      return triggerKafkaTemplate
-          .send(producerRecord)
+      CompletableFuture<SendResult<String, String>> sendFuture;
+      try (Scope ignored = OtelTracePropagation.restore(envelope.traceContext())) {
+        sendFuture = triggerKafkaTemplate.send(producerRecord);
+      }
+      return sendFuture
           .orTimeout(kafkaProperties.getSendTimeoutSeconds(), java.util.concurrent.TimeUnit.SECONDS)
           .handle((result, throwable) -> toPublishResult(topic, messageKey, result, throwable));
     } catch (RuntimeException ex) {
@@ -102,10 +108,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   }
 
   private PublishResult toPublishResult(
-      String topic,
-      String messageKey,
-      org.springframework.kafka.support.SendResult<String, String> result,
-      Throwable throwable) {
+      String topic, String messageKey, SendResult<String, String> result, Throwable throwable) {
     if (EmptyChecks.isNull(throwable)) {
       log.debug(
           "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",

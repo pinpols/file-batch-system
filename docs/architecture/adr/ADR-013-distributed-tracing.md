@@ -20,14 +20,18 @@
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | OTel 桥接 + 导出    | `batch-common`：Starter 装配 SDK/provider/exporter；官方 Logback appender + `OpenTelemetryLogbackBridge` 接入应用日志 |
 | `@Observed` AOP | `BatchObservabilityAutoConfiguration` → `ObservedAspect` bean                                                                                                                                          |
-| 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；metrics、traces、logs exporter 统一跟随 `MANAGEMENT_OPENTELEMETRY_ENABLED`，各 OTLP endpoint 指向 Collector |
-| 种子 manual span  | `orch.launch`、`orch.partition.dispatch`、`orch.workflow.param-resolve`（后续按需追加）                                                                                                                          |
+| 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；traces/logs exporter 跟随 `MANAGEMENT_OPENTELEMETRY_ENABLED`，metrics 固定由 Prometheus 拉取 |
+| 业务 span  | `orch.launch`、`orch.partition.dispatch`、`orch.workflow.param-resolve`、`worker.task.execute` |
 | 业务 trace ↔ OTel | `OtelTraceContext.currentTraceIdOrNull()`；`IdGenerator.newTraceId()` 优先当前 OTel span traceId（详见 §后果）                                                                                                    |
 
 
 ## 决策（摘要）
 
 **采用 Micrometer Observation + OpenTelemetry 桥接**：依赖与导出走 Boot 管理的 OTLP；观测语义用 `@Observed` + 自动 instrument（HTTP/Kafka/JDBC 等）；业务持久化 `trace_id` 与运行时 TraceContext 的对齐见 §后果「已实现」小节。
+
+持久化异步边界只在现有 `LaunchEnvelope` 与 `TaskDispatchMessage` 中附带可选
+`traceparent` / `tracestate`，Outbox relay 在调用 Kafka send 时恢复远端父上下文。该字段是传输元数据，
+不参与幂等、状态机、租户或业务关联；不持久化 baggage，避免用户与安全属性进入消息载荷。
 
 ## 自动 instrument 覆盖（零业务改动获得）
 
@@ -64,6 +68,7 @@ Spring Boot 4.x + 已加依赖后自动获得：
 **已实现（记入档案 · 2026-05-03）**：
 
 - 业务持久化 `trace_id` 与 OTel traceId **入口对齐**：`OtelTraceContext.currentTraceIdOrNull()`；`IdGenerator.newTraceId()` 优先取当前 OTel span 的 traceId（32 hex）；无 OTel context 时 fallback UUID。HTTP/Kafka 自动 instrument 建立 current span 后，新建业务的 `trace_id` 与 Jaeger/Tempo 查询一致。**反向**（仅用外部传入的业务 trace_id 覆盖 OTel TraceContext）按 OTel SDK 惯例不做 — 外部传入值仍可走 baggage / MDC / 日志并行关联。
+- trigger Outbox 与 task dispatch Outbox 会保存最小 W3C 上下文并在 relay 发送时恢复，跨数据库提交后仍可由 Kafka producer/consumer 自动 instrumentation 延续同一 OTel trace；业务 `trace_id` 继续作为持久化检索键，两者职责不互换。
 
 **采样策略**：应用端使用 100% head sampling，Collector 使用 tail sampling
 全量保留错误/慢链路，普通成功链路保留 10%。
@@ -86,3 +91,4 @@ Spring Boot 4.x + 已加依赖后自动获得：
 | 2026-05-03 | **本 ADR**：补 ObservedAspect bean + 3 个种子 manual span，闭环可用                                                                |
 | 2026-05-03 | **业务 trace_id 桥接**：`OtelTraceContext` + `IdGenerator.newTraceId()` 优先用 OTel current span traceId，业务字段与 OTel timeline 一致 |
 | 2026-09-12 | 切换 Spring Boot 4 官方 OTel starter；补齐 Logback→OTel 桥接；增加持久队列、重试、脱敏、tail sampling 和管道告警 |
+| 2026-09-23 | 补齐两处 Outbox 持久化异步边界的 W3C 上下文传播；明确业务 traceId 与 OTel 上下文分工，metrics 保持 Prometheus 单一主通道 |

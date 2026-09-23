@@ -165,7 +165,6 @@ def main() -> int:
     master_switch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}"
     for path in (
         ("management", "opentelemetry", "enabled"),
-        ("management", "otlp", "metrics", "export", "enabled"),
         ("management", "tracing", "export", "otlp", "enabled"),
         ("management", "logging", "export", "otlp", "enabled"),
     ):
@@ -173,6 +172,13 @@ def main() -> int:
             errors.append(
                 f"{'.'.join(path)} must follow MANAGEMENT_OPENTELEMETRY_ENABLED"
             )
+    metrics_export = nested(
+        defaults, "management", "otlp", "metrics", "export", "enabled"
+    )
+    if metrics_export is not False:
+        errors.append(
+            "management.otlp.metrics.export.enabled must stay false; Prometheus owns metrics"
+        )
     for deprecated_signal in ("tracing", "logging"):
         if nested(defaults, "management", "otlp", deprecated_signal) is not None:
             errors.append(

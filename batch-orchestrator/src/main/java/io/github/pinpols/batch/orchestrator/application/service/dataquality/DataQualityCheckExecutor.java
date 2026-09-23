@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.RuleFinding;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
+import io.github.pinpols.batch.orchestrator.config.DataQualityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -66,6 +67,7 @@ public class DataQualityCheckExecutor {
   private final DataQualityRuleMapper ruleMapper;
   private final DataQualityCheckMapper checkMapper;
   private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
+  private final DataQualityProperties properties;
 
   /**
    * 执行 DQ gate。规则集为空时返回 {@link GateStatus#NO_RULES}（与现有行为一致 — 无规则不阻塞）。
@@ -74,6 +76,9 @@ public class DataQualityCheckExecutor {
    * @param businessKey 由 ResultVersionWriter 算出的 business_key（如 {@code job:DAILY_PNL:2026-05-07}）
    */
   public DataQualityGateOutcome execute(JobInstanceEntity instance, String businessKey) {
+    if (properties.getMode() == DataQualityProperties.Mode.OFF) {
+      return DataQualityGateOutcome.noRules();
+    }
     if (instance == null
         || instance.getId() == null
         || !Texts.hasText(instance.getTenantId())
@@ -105,6 +110,15 @@ public class DataQualityCheckExecutor {
 
     GateStatus status =
         anyBlocker ? GateStatus.BLOCKED : (anyWarn ? GateStatus.WARN : GateStatus.PASS);
+    if (properties.getMode() == DataQualityProperties.Mode.SHADOW && status == GateStatus.BLOCKED) {
+      log.warn(
+          "DQ blocker findings observed in SHADOW mode; result promotion remains unchanged:"
+              + " tenantId={}, jobInstanceId={}, businessKey={}",
+          instance.getTenantId(),
+          instance.getId(),
+          businessKey);
+      status = GateStatus.WARN;
+    }
     return DataQualityGateOutcome.builder().status(status).findings(findings).build();
   }
 
@@ -116,8 +130,8 @@ public class DataQualityCheckExecutor {
     try {
       String status =
           switch (type) {
-            case "TABLE_LEVEL" -> executeTableLevel(instance, rule);
-            case "ROW_LEVEL", "CROSS_TABLE", "CROSS_DAY" ->
+            case "TABLE_LEVEL", "CROSS_TABLE", "CROSS_DAY" -> executeScalarSqlRule(instance, rule);
+            case "ROW_LEVEL" ->
               // v1.0 暂占位：业务方走 SPI sink 直接写 data_quality_check；
               // 这里返回 PASS 让 gate 不强阻（避免误伤）— 真实失败由 sink 已落 FAIL 行驱动。
               "SKIPPED";
@@ -154,7 +168,7 @@ public class DataQualityCheckExecutor {
    * 含 {@code --} 等即可注入。NamedParameterJdbcTemplate 改用 JDBC bind 参数后， 即使 rule.expression 由 admin
    * 写库，注入面也被驱动层兜住。
    */
-  private String executeTableLevel(JobInstanceEntity instance, DataQualityRuleEntity rule) {
+  private String executeScalarSqlRule(JobInstanceEntity instance, DataQualityRuleEntity rule) {
     NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
     if (jdbcTemplate == null) {
       throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());

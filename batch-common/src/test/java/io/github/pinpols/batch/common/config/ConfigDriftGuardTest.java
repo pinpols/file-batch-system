@@ -129,14 +129,14 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void openTelemetryMasterSwitchControlsEveryExporter() throws IOException {
+  void openTelemetryMasterSwitchControlsTraceAndLogExporters() throws IOException {
     Map<String, Object> flat = flatten(loadYaml(baselineYml()));
     String masterSwitch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}";
 
     assertThat(flat)
-        .as("关闭 OpenTelemetry 总开关时，metrics/traces/logs 都不能继续后台连接 Collector")
+        .as("指标由 Prometheus 拉取；OpenTelemetry 总开关只控制 traces/logs")
         .containsEntry("management.opentelemetry.enabled", masterSwitch)
-        .containsEntry("management.otlp.metrics.export.enabled", masterSwitch)
+        .containsEntry("management.otlp.metrics.export.enabled", false)
         .containsEntry("management.tracing.export.otlp.enabled", masterSwitch)
         .containsEntry("management.logging.export.otlp.enabled", masterSwitch);
   }

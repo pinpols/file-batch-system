@@ -14,7 +14,6 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
@@ -269,13 +268,12 @@ public class DefaultTriggerService implements TriggerService {
   /**
    * 收敛到 {@link TriggerOutboxDomainEventPublisher} 的唯一 trigger_outbox_event 写入入口。
    *
-   * <p>之前主路径直接 mapper.insert(buildOutboxEntity),抽象未真正收敛字段语义会持续漂移。 现在统一走 publisher.publishRaw
-   * 路径(性能等价 — 都是 LaunchEnvelope JSON 一次序列化, 跳过 DomainEvent.payload Map ↔ record 来回转换)。
+   * <p>之前主路径直接 mapper.insert(buildOutboxEntity),抽象未真正收敛字段语义会持续漂移。现在统一走 publisher.publishLaunch
+   * 路径，由 Outbox 写入边界一次性补齐传输层链路上下文。
    */
   private void publishLaunchOutbox(LaunchRequest r, String dedupKey) {
-    String payloadJson =
-        JsonUtils.toJson(LaunchEnvelope.of(r, dedupKey, BatchDateTimeSupport.utcNow()));
-    triggerOutboxPublisher.publishRaw(r.tenantId(), r.requestId(), r.traceId(), payloadJson);
+    LaunchEnvelope envelope = LaunchEnvelope.of(r, dedupKey, BatchDateTimeSupport.utcNow());
+    triggerOutboxPublisher.publishLaunch(r.tenantId(), r.requestId(), r.traceId(), envelope);
   }
 
   private TriggerRequestEntity buildAcceptedEntity(LaunchRequest r, String dedupKey) {

@@ -40,11 +40,15 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
-    String requestId = CorrelationIds.normalize(
-        request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
+    String requestId = resolveCorrelationId(
+        request,
+        response,
+        CommonConstants.DEFAULT_REQUEST_ID_HEADER,
         IdGenerator.newBusinessNo("req"));
-    String traceId = CorrelationIds.normalize(
-        request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
+    String traceId = resolveCorrelationId(
+        request, response, CommonConstants.DEFAULT_TRACE_ID_HEADER, IdGenerator.newTraceId());
+    response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
+    response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
     String operatorId = resolveOperatorId();
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
     // P1(2026-05-23 audit):与 ConsoleJwtService.hashClientIp 统一身份绑定来源,只取 RemoteAddr,
@@ -63,8 +67,6 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     ConsoleRequestMetadata metadata = new ConsoleRequestMetadata(
         requestId, traceId, tenantId, operatorId, idempotencyKey, clientIp);
     request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
-    response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
-    response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
     Map<String, String> previousContext = BatchMdc.snapshot();
     try {
       BatchMdc.put(StructuredLogField.SERVICE, applicationName);
@@ -85,6 +87,17 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     } finally {
       BatchMdc.restore(previousContext);
     }
+  }
+
+  private static String resolveCorrelationId(
+      HttpServletRequest request,
+      HttpServletResponse response,
+      String headerName,
+      String fallback) {
+    String existing = CorrelationIds.normalize(response.getHeader(headerName));
+    return EmptyChecks.isNotNull(existing)
+        ? existing
+        : CorrelationIds.normalize(request.getHeader(headerName), fallback);
   }
 
   private String resolveTenantId(HttpServletResponse response, String requestedTenantId) {

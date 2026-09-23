@@ -13,6 +13,7 @@
 
 - ✅ 用自然语言查**已有**的运维只读信息:job 实例状态、执行日志、最近失败实例等(经受控的只读 `@Tool` 暴露,等价于把现有只读 REST 查询包装成对话)
 - ✅ 答「这个任务为什么失败 / 去哪看日志 / 哪些实例最近红了」这类**指路 + 取数**问题
+- ✅ 调用租户绑定的只读实例诊断，汇总分区、任务、Outbox、Worker 容量与既有发现项
 - ✅ 默认**关闭**(`batch.console.ai.enabled=false`),开启需显式配 anthropic/openai api-key,否则启动 fail-fast
 - ✅ 全程经 `@PreAuthorize` 鉴权 + 审计(`ConsoleAiAuditLogMapper`)+ prompt guard,与其它 console 操作同权限模型
 

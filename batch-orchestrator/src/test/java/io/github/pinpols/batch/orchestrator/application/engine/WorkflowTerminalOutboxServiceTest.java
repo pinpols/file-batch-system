@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.infrastructure.lineage.OpenLineageEmitter;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,14 +33,11 @@ class WorkflowTerminalOutboxServiceTest {
   @Mock
   private DomainEventPublisher domainEventPublisher;
 
-  @Mock
-  private OpenLineageEmitter openLineageEmitter;
-
   private WorkflowTerminalOutboxService service;
 
   @BeforeEach
   void setUp() {
-    service = new WorkflowTerminalOutboxService(domainEventPublisher, openLineageEmitter);
+    service = new WorkflowTerminalOutboxService(domainEventPublisher);
   }
 
   // ===== isTerminal =====
@@ -104,6 +100,7 @@ class WorkflowTerminalOutboxServiceTest {
     assertThat(event.eventKey()).isEqualTo("ta:workflow:100:terminal");
     assertThat(event.tenantId()).isEqualTo("ta");
     assertThat(event.payload())
+        .containsEntry("schemaVersion", "v2")
         .containsEntry("runStatus", "SUCCESS")
         .containsEntry("workflowRunId", 100L)
         .containsEntry("finishedAt", "2026-05-20T10:00:00Z");

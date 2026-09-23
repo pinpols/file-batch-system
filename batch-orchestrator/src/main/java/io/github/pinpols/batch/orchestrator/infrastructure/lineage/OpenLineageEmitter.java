@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
@@ -10,7 +11,6 @@ import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -26,24 +26,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * OpenLineage 血缘 emitter(v0.1)。在 workflow_run 终态 emit 一条 spec-compliant OpenLineage RunEvent
- * (COMPLETE / FAIL),fire-and-forget 异步 POST 到 {@link OpenLineageProperties#getEndpoint()}。
+ * OpenLineage 血缘 emitter。在可靠 Kafka 消费者收到 workflow 终态事件后，同步 POST 一条 OpenLineage
+ * RunEvent；仅 HTTP 2xx 才允许消费者提交 offset。
  *
- * <p><b>不引 openlineage-java 客户端</b>:SB4 + JDK25 兼容性未验,且事件格式是文档化的 JSON,用 Jackson 手搓 spec-compliant
+ * <p><b>不引 openlineage-java 客户端</b>:SB4 + JDK 21 兼容性未验,且事件格式是文档化的 JSON,用 Jackson 生成 spec-compliant
  * payload + JDK HttpClient 发送即可,零新依赖。后续要 facets / Marquez 深度集成再换官方 client。
- *
- * <p><b>绝不阻塞主链</b>:disabled 时方法直接 return;enabled 时提交到独立线程池,池满({@link
- * RejectedExecutionException})即丢,所有异常 swallow。血缘是 observability,丢几条不影响业务正确性。
  *
  * <p>runId 由 workflow_run id 确定性派生(name-based UUID),将来补 START 事件时与 COMPLETE 同 runId 成对。
  */
@@ -59,7 +51,6 @@ public class OpenLineageEmitter {
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   private final ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider;
   private final HttpClient httpClient;
-  private final ExecutorService executor;
 
   public OpenLineageEmitter(
       OpenLineageProperties props,
@@ -72,65 +63,27 @@ public class OpenLineageEmitter {
       this.httpClient = HttpClient.newBuilder()
           .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMs()))
           .build();
-      ThreadPoolExecutor pool = new ThreadPoolExecutor(
-          1,
-          Math.max(1, props.getEmitThreads()),
-          30L,
-          TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(256),
-          r -> {
-            Thread t = new Thread(r, "openlineage-emit");
-            t.setDaemon(true);
-            return t;
-          },
-          new ThreadPoolExecutor.AbortPolicy());
-      this.executor = pool;
       log.info(
           "OpenLineageEmitter enabled: endpoint={}, namespace={}",
           props.getEndpoint(),
           props.getNamespace());
     } else {
       this.httpClient = null;
-      this.executor = null;
     }
   }
 
-  /** workflow_run 进入终态时调用。disabled / 非终态 / endpoint 空 → no-op。 */
-  public void emitWorkflowTerminal(
+  /**
+   * 可靠消费者使用的同步发送入口。只有端点返回 2xx 才正常返回；调用方据此提交 Kafka offset。
+   *
+   * @throws IllegalStateException 配置未就绪、HTTP 非 2xx 或传输失败
+   */
+  public void emitWorkflowTerminalReliably(
       WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
-    if (executor == null || run == null || terminalStatus == null) {
-      return;
+    if (EmptyChecks.isNull(httpClient)
+        || EmptyChecks.isNull(run)
+        || EmptyChecks.isNull(terminalStatus)) {
+      throw new IllegalStateException("OpenLineage endpoint is not configured");
     }
-    try {
-      executor.execute(() -> sendQuietly(run, terminalStatus, finishedAt));
-    } catch (RejectedExecutionException ex) {
-      // 池满:丢弃 + 计数,不回压主链。
-      recordLineageMetric("rejected", terminalStatus);
-      SwallowedExceptionLogger.info(
-          OpenLineageEmitter.class, "catch:RejectedExecutionException", ex);
-    }
-  }
-
-  /** 停机时有限等待已入队 emit drain，避免 daemon 线程直接丢弃队列。 */
-  @PreDestroy
-  public void shutdown() {
-    if (executor == null) {
-      return;
-    }
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn("OpenLineageEmitter executor did not drain within 5s; forcing interruption");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException ex) {
-      SwallowedExceptionLogger.info(OpenLineageEmitter.class, "catch:InterruptedException", ex);
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  private void sendQuietly(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
     try {
       String body =
           JsonUtils.toJson(buildRunEvent(run, terminalStatus, finishedAt, datasetsFor(run)));
@@ -140,21 +93,21 @@ public class OpenLineageEmitter {
           .header("Content-Type", "application/json")
           .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
           .build();
-      HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-      int sc = resp.statusCode();
-      if (sc >= 200 && sc < 300) {
-        recordLineageMetric("success", terminalStatus);
-      } else {
+      HttpResponse<Void> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
         recordLineageMetric("http_error", terminalStatus);
-        log.warn("OpenLineage emit non-2xx: status={}, workflowRunId={}", sc, run.getId());
+        throw new IllegalStateException(
+            "OpenLineage endpoint returned HTTP " + response.statusCode());
       }
+      recordLineageMetric("success", terminalStatus);
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       recordLineageMetric("interrupted", terminalStatus);
-      SwallowedExceptionLogger.info(OpenLineageEmitter.class, "catch:InterruptedException", ex);
-    } catch (RuntimeException | java.io.IOException ex) {
+      throw new IllegalStateException("OpenLineage delivery interrupted", ex);
+    } catch (java.io.IOException ex) {
       recordLineageMetric("error", terminalStatus);
-      SwallowedExceptionLogger.warn(OpenLineageEmitter.class, "catch:emit", ex);
+      throw new IllegalStateException("OpenLineage delivery failed", ex);
     }
   }
 

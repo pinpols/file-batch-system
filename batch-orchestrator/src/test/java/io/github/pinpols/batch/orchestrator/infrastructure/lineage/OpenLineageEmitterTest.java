@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -13,7 +12,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -52,20 +50,6 @@ class OpenLineageEmitterTest {
     e.setStartedAt(Instant.parse("2026-05-30T01:00:00Z"));
     e.setRunStatus(status);
     return e;
-  }
-
-  @Test
-  void disabled_emitIsNoOp() {
-    @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> meterProvider = mock(ObjectProvider.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<OpenLineageDatasetMapper> datasetProvider = mock(ObjectProvider.class);
-    OpenLineageEmitter emitter =
-        new OpenLineageEmitter(props(false, ""), meterProvider, datasetProvider);
-
-    emitter.emitWorkflowTerminal(run("SUCCESS"), "SUCCESS", Instant.now());
-
-    verifyNoInteractions(meterProvider, datasetProvider);
   }
 
   @Test
@@ -148,18 +132,6 @@ class OpenLineageEmitterTest {
   }
 
   @Test
-  void shutdownStopsExecutorWhenEnabled() throws ReflectiveOperationException {
-    OpenLineageEmitter emitter = new OpenLineageEmitter(
-        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
-    ExecutorService executor = executorOf(emitter);
-
-    assertThat(executor.isShutdown()).isFalse();
-    emitter.shutdown();
-
-    assertThat(executor.isShutdown()).isTrue();
-  }
-
-  @Test
   void deterministicRunId_isStableAndUuid() {
     String a = OpenLineageEmitter.deterministicRunId(42L);
     String b = OpenLineageEmitter.deterministicRunId(42L);
@@ -188,12 +160,5 @@ class OpenLineageEmitterTest {
         storagePath,
         "GENERATED",
         "trace-abc");
-  }
-
-  private static ExecutorService executorOf(OpenLineageEmitter emitter)
-      throws ReflectiveOperationException {
-    var field = OpenLineageEmitter.class.getDeclaredField("executor");
-    field.setAccessible(true);
-    return (ExecutorService) field.get(emitter);
   }
 }

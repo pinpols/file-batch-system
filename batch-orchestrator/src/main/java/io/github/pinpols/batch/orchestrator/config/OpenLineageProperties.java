@@ -7,9 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * OpenLineage 血缘 emitter 配置。默认关闭 —— 仅在显式 {@code batch.openlineage.enabled=true} 且配了 {@code
  * endpoint} 时才真正向外发血缘事件。
  *
- * <p>v0.1 在 workflow_run 终态(SUCCESS / FAILED / TERMINATED)各 emit 一条 OpenLineage RunEvent (COMPLETE
- * / FAIL),fire-and-forget 异步 POST 到 {@code endpoint}(如 Marquez {@code
- * http://marquez:5000/api/v1/lineage}),失败 swallow,绝不阻塞工作流状态机主链。
+ * <p>workflow 终态经事务 Outbox 投递到独立 Kafka topic；血缘消费者仅在 endpoint 返回 2xx 后提交 offset。
+ * endpoint 故障不会进入工作流状态事务，但会保留血缘积压等待恢复。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.openlineage")
@@ -33,6 +32,9 @@ public class OpenLineageProperties {
   /** HTTP 请求超时(毫秒)。 */
   private int requestTimeoutMs = 3000;
 
-  /** 异步发送线程池大小;血缘是 best-effort,池满即丢(不回压主链)。 */
-  private int emitThreads = 2;
+  /** 可靠消费者组。独立于业务消费者，端点失败只阻塞血缘 topic。 */
+  private String consumerGroupId = "batch-openlineage-emitter";
+
+  /** HTTP 发送失败后的 Kafka 分区暂停时间。 */
+  private long retryBackoffMs = 5000L;
 }

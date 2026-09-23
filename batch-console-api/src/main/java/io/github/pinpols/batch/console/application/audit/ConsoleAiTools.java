@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.application.audit;
 
 import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxHealthResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
@@ -99,7 +101,7 @@ public class ConsoleAiTools {
           + "Outbox 投递健康、终态实例遗留活跃子项。用于解读『任务卡住 / stuck / 不推进 / 定时任务不跑 / "
           + "worker 失联 / 事件积压』等集群面问题,判断卡点在哪一层并给处置建议。无需任何参数。")
   public String getClusterDiagnostics() {
-    if (diagnosticService == null) {
+    if (EmptyChecks.isNull(diagnosticService)) {
       return "集群诊断服务当前不可用(诊断能力未装配)。";
     }
     ConsoleClusterDiagnosticResponse diagnostics = diagnosticService.diagnose(tenantId);
@@ -145,6 +147,43 @@ public class ConsoleAiTools {
         + value(terminal.healthy())
         + " terminalInstancesWithActiveChildren="
         + value(terminal.terminalInstancesWithActiveChildren());
+  }
+
+  @Tool(
+      description =
+          "深度诊断指定 job 实例的分区、任务、Outbox、Worker 容量和异常发现项。" + "用户询问某个实例卡住、长时间运行或失败根因时调用；只读，不执行重跑或修复。")
+  public String diagnoseJobInstance(@ToolParam(description = "job 实例 id(数字)") long jobInstanceId) {
+    if (EmptyChecks.isNull(diagnosticService)) {
+      return "实例诊断服务当前不可用。";
+    }
+    ConsoleInstanceDiagnosisResponse diagnosis =
+        diagnosticService.instanceDiagnosis(tenantId, jobInstanceId);
+    if (EmptyChecks.isNull(diagnosis)) {
+      return "未找到实例诊断数据:jobInstanceId=" + jobInstanceId;
+    }
+    String findings = diagnosis.findings().isEmpty()
+        ? "无异常发现"
+        : diagnosis.findings().stream()
+            .map(finding -> finding.severity()
+                + ":"
+                + finding.reasonCode()
+                + " "
+                + finding.message()
+                + " 建议="
+                + String.join(";", finding.suggestedActions()))
+            .collect(Collectors.joining("\n"));
+    return "[实例诊断] jobInstanceId="
+        + diagnosis.jobInstanceId()
+        + " healthy="
+        + diagnosis.healthy()
+        + " status="
+        + (diagnosis.instance() == null ? "-" : diagnosis.instance().instanceStatus())
+        + " onlineWorkersForGroup="
+        + (EmptyChecks.isNull(diagnosis.summary())
+            ? "-"
+            : diagnosis.summary().onlineWorkersForGroup())
+        + "\n"
+        + findings;
   }
 
   @Tool(
