@@ -58,7 +58,8 @@ public class AtomicTaskDispatchSimulation extends Simulation {
               "triggerType": "API",
               "params": %s
             }
-            """.formatted(
+            """
+                .formatted(
                     GatlingConfig.TENANT_ID,
                     SPI_JOB_CODE,
                     GatlingConfig.BIZ_DATE,

@@ -138,6 +138,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY "Java 可读性约定" -- python3 scripts/ci/check-java-readability.py
 
+      - name: Verify Java text block style
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" -- python3 scripts/ci/check-java-text-block-style.py
+
       - name: Verify Java readability inventory
         shell: bash
         run: python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md

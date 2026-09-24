@@ -68,7 +68,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     String bucket = s3Bucket();
 
     // 上传一个最小化的 CSV 到 MinIO
-    byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
+    byte[] content = """
+        id,name
+        1,Alice
+        """.getBytes(StandardCharsets.UTF_8);
     S3Client client = s3Client();
     client.putObject(
         PutObjectRequest.builder()
@@ -98,7 +101,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     String objectName = "ingress/it-scan-already-known.csv";
     String bucket = s3Bucket();
 
-    byte[] content = "id,name\n2,Bob\n".getBytes(StandardCharsets.UTF_8);
+    byte[] content = """
+        id,name
+        2,Bob
+        """.getBytes(StandardCharsets.UTF_8);
     S3Client client = s3Client();
     client.putObject(
         PutObjectRequest.builder()
@@ -151,7 +157,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
             .contentType("application/json")
             .build(),
         RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
-    byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
+    byte[] content = """
+        id,name
+        1,Alice
+        """.getBytes(StandardCharsets.UTF_8);
     client.putObject(
         PutObjectRequest.builder()
             .bucket(bucket)
@@ -183,7 +192,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     String manifestObject = "ingress/bundle-late-manifest-it-" + suffix + ".batch.json";
     S3Client client = s3Client();
 
-    byte[] content = "id,name\n3,Carol\n".getBytes(StandardCharsets.UTF_8);
+    byte[] content = """
+        id,name
+        3,Carol
+        """.getBytes(StandardCharsets.UTF_8);
     client.putObject(
         PutObjectRequest.builder()
             .bucket(bucket)

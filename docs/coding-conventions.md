@@ -40,6 +40,26 @@ cargo fmt --manifest-path sdk/rust/Cargo.toml --all
 
 提交前使用对应的 `--check` / `format:check` 命令；纯格式化变更必须与业务逻辑分开提交。
 
+### 0.2 多行字符串与文本块
+
+多行 SQL、JSON、XML、Lua、Markdown fixture 优先使用 Java text block：
+
+```java
+String payload = """
+    {
+      "tenantId": "t1",
+      "jobCode": "IMPORT_DAILY"
+    }
+    """;
+```
+
+不要为了使用新语法而机械替换签名串、canonical request、协议拼接、Redis key、metric name、
+header、错误码、短日志模板、循环生成的 CSV/Mermaid/PEM，或已经由 `String.join("\n", ...)`
+清晰表达的聚合。
+
+文本块的结束 `"""` 必须独立占一行；如果需要保持旧字符串“没有末尾换行”的语义，可以使用
+`.stripTrailing()`。文本块仍交给 Spotless / palantir-java-format 排版，不和 formatter 对抗。
+
 ---
 
 ## 1. 方法参数约束
