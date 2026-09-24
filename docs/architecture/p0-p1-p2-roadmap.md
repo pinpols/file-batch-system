@@ -2,7 +2,7 @@
 
 # P0 / P1 / P2 演进路线图(2026-05-29)
 
-> 基于 [代码行统计](../stats/loc-2026-05-29.md) + 跟 DolphinScheduler / Azkaban 对比识别的核心缺陷。
+> 基于 [历史代码行统计](../stats/archive/loc-2026-05-29.md) + 跟 DolphinScheduler / Azkaban 对比识别的核心缺陷。
 >
 > **优先级判定**:P0 = 业务扩展瓶颈;P1 = 故障 blast radius;P2 = 业务团队自服务能力。
 
