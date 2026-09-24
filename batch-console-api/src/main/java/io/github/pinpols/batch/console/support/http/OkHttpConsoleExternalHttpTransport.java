@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 
 /** Console 的 OkHttp 出站适配器；业务 provider 仅依赖 {@link OutboundHttpTransport}。 */
 @Component
+@ConsoleOutboundTransport
 public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport {
 
   private static final int MAX_RESPONSE_BYTES = 1024 * 1024;

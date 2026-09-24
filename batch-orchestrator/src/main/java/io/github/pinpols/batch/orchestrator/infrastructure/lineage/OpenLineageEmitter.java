@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -60,7 +61,7 @@ public class OpenLineageEmitter {
       OpenLineageProperties props,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
       ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider,
-      OutboundHttpTransport httpTransport) {
+      @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
     this.props = props;
     this.meterRegistryProvider = meterRegistryProvider;
     this.datasetMapperProvider = datasetMapperProvider;

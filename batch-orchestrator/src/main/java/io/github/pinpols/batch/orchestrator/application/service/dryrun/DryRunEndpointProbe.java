@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.security.BlockedAddressException;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -23,7 +24,7 @@ final class DryRunEndpointProbe {
 
   private final OutboundHttpTransport httpTransport;
 
-  DryRunEndpointProbe(OutboundHttpTransport httpTransport) {
+  DryRunEndpointProbe(@OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
     this.httpTransport = httpTransport;
   }
 

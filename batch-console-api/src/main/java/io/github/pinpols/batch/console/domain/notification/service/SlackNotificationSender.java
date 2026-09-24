@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -40,7 +41,8 @@ public class SlackNotificationSender implements NotificationSender {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  public SlackNotificationSender(ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
+  public SlackNotificationSender(
+      ObjectMapper objectMapper, @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;
   }

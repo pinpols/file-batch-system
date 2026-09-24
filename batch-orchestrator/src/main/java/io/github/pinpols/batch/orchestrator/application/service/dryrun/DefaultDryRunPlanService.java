@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -70,7 +71,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
       ObjectProvider<S3Client> s3ClientProvider,
       ObjectProvider<S3StorageProperties> s3PropertiesProvider,
-      OutboundHttpTransport httpTransport) {
+      @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
     this.configCacheService = configCacheService;
     this.schedulePlanBuilder = schedulePlanBuilder;
     this.workflowNodeMapper = workflowNodeMapper;

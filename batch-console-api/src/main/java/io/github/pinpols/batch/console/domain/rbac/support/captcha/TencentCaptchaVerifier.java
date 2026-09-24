@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -64,7 +65,7 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   public TencentCaptchaVerifier(
       CaptchaProperties properties,
       ObjectMapper objectMapper,
-      OutboundHttpTransport httpTransport) {
+      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;

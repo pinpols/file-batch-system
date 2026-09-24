@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 
 /** Orchestrator 的 OkHttp 出站适配器。 */
 @Component
+@OrchestratorOutboundTransport
 public class OkHttpOrchestratorExternalHttpTransport implements OutboundHttpTransport {
 
   private static final int MAX_RESPONSE_BYTES = 1024 * 1024;

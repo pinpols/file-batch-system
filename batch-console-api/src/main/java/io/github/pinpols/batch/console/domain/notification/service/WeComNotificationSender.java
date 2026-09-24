@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.time.Duration;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +39,8 @@ public class WeComNotificationSender implements NotificationSender {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  public WeComNotificationSender(ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
+  public WeComNotificationSender(
+      ObjectMapper objectMapper, @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;
   }

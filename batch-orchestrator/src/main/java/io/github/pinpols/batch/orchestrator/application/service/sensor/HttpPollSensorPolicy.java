@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -67,7 +68,9 @@ public class HttpPollSensorPolicy implements SensorPolicy {
 
   @Autowired
   public HttpPollSensorPolicy(
-      SensorProperties props, ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
+      SensorProperties props,
+      ObjectMapper objectMapper,
+      @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
     this.props = props;
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;
