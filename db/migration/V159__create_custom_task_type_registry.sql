@@ -13,7 +13,7 @@
 --   descriptor 全文存 JSONB(随 SDK 演进不需频繁加列);仅把查询/索引需要的
 --   字段(task_type_code / display_name / descriptor_version / source / status)提为顶层列。
 --
---   archive 镜像 — CLAUDE.md 红线(热表 batch.* 与 archive.*_archive 1:1),
+--   archive 镜像 — docs/agent-baseline.md 红线(热表 batch.* 与 archive.*_archive 1:1),
 --   LIKE INCLUDING ALL 与 V71 风格一致,并登记到 ArchiveSchemaDriftCheck.ARCHIVED_TABLES。
 -- =========================================================
 
@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_custom_task_type_registry_tenant_status
     ON batch.custom_task_type_registry (tenant_id, status);
 
 -- ---------------------------------------------------------
--- archive 镜像(CLAUDE.md 红线;LIKE INCLUDING ALL 与 V71 一致)
+-- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V71 一致)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS archive.custom_task_type_registry_archive
     (LIKE batch.custom_task_type_registry INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);

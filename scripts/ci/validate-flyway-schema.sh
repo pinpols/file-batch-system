@@ -9,7 +9,8 @@
 # 4) BOM / CRLF:防 Windows 编辑器引入,Flyway 计算 checksum 时与 LF 不一致
 # 5) 已 commit 的 V## 文件被改动(checksum drift):git diff base..HEAD 检查 db/migration/V##
 #    如果某个 V## 在 base 已存在 + HEAD 内容变了,失败 — Flyway 启动时会因 checksum mismatch 拒绝迁移。
-#    唯一例外:HEAD 精确恢复为 base 的父提交版本,用于撤销刚误合入主线的 checksum 漂移。
+#    例外 1:HEAD 精确恢复为 base 的父提交版本,用于撤销刚误合入主线的 checksum 漂移。
+#    例外 2:无存量库时允许基线重发,但必须 SQL 语义不变且精确匹配版本化 SHA-256 清单。
 #    新增的 V## 文件不算漂移
 #
 # 不做(留给 IT 阶段或 ops):
@@ -18,8 +19,20 @@
 # =========================================================
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/ci/lib/migration-rebaseline.sh
+source "$ROOT_DIR/scripts/ci/lib/migration-rebaseline.sh"
+
 MIGRATION_DIR="${1:-db/migration}"
-BASE_REF="${BASE_REF:-${GITHUB_BASE_REF:-origin/main}}"
+if [[ -n "${BASE_REF:-}" ]]; then
+  BASE_REF="$BASE_REF"
+elif [[ -n "${GUARD_BASE:-}" ]]; then
+  BASE_REF="$GUARD_BASE"
+elif [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+  BASE_REF="origin/$GITHUB_BASE_REF"
+else
+  BASE_REF="origin/main"
+fi
 
 if [[ ! -d "$MIGRATION_DIR" ]]; then
   echo "❌ ERROR: migration dir not found: $MIGRATION_DIR"
@@ -95,6 +108,7 @@ echo "✅ No BOM / CRLF in migration files"
 if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/null 2>&1; then
   drifted=""
   restored=""
+  rebaselined=""
   while IFS= read -r changed; do
     [[ -z "$changed" ]] && continue
     if [[ "$changed" =~ ^${MIGRATION_DIR}/V[0-9]+__.+\.sql$ ]]; then
@@ -103,18 +117,33 @@ if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/nu
         # 允许把刚在 base 中误改的 migration 精确恢复为 base^ 内容。只比较完整 blob,
         # 不允许在恢复时顺带修改任何 SQL 或注释。
         if git cat-file -e "$BASE_REF^:$changed" 2>/dev/null \
-          && git diff --quiet "$BASE_REF^" HEAD -- "$changed"; then
+          && git show "$BASE_REF^:$changed" | cmp -s - "$changed"; then
           restored="${restored:+$restored$'\n'}   - $changed"
+          continue
+        fi
+        if is_authorized_migration_rebaseline "$changed" \
+          && migration_sql_semantics_unchanged "$BASE_REF" "$changed"; then
+          rebaselined="${rebaselined:+$rebaselined$'\n'}   - $changed"
           continue
         fi
         drifted="${drifted:+$drifted$'\n'}   - $changed"
       fi
     fi
-  done < <(git diff --name-only "$BASE_REF...HEAD" 2>/dev/null)
+  done < <(
+    {
+      git diff --name-only "$BASE_REF...HEAD" 2>/dev/null || true
+      git diff --name-only --diff-filter=M -- "$MIGRATION_DIR/V*.sql"
+      git diff --cached --name-only --diff-filter=M -- "$MIGRATION_DIR/V*.sql"
+    } | sort -u
+  )
 
   if [[ -n "$restored" ]]; then
     echo "⚠️  migration checksum restored exactly to $BASE_REF^:"
     echo "$restored"
+  fi
+  if [[ -n "$rebaselined" ]]; then
+    echo "⚠️  migration baseline republish authorized by exact hash; recreate databases before deployment:"
+    echo "$rebaselined"
   fi
   if [[ -n "$drifted" ]]; then
     echo "❌ ERROR: existing migration file(s) modified in this PR (Flyway checksum drift):"

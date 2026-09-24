@@ -11,6 +11,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/ci/lib/migration-rebaseline.sh
+source "$ROOT_DIR/scripts/ci/lib/migration-rebaseline.sh"
 
 BASE_REF="${1:-${SQUAWK_BASE_REF:-origin/main}}"
 
@@ -24,6 +26,8 @@ fi
 mapfile -t changed < <(
   {
     git diff --name-only --diff-filter=AM "${BASE_REF}"...HEAD -- 'db/migration/*.sql' 2>/dev/null || true
+    git diff --name-only --diff-filter=M -- 'db/migration/*.sql'
+    git diff --cached --name-only --diff-filter=M -- 'db/migration/*.sql'
     git ls-files --others --exclude-standard -- 'db/migration/*.sql'
   } | sort -u
 )
@@ -33,10 +37,26 @@ if [[ "${#changed[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-echo "ℹ️  对 ${#changed[@]} 个新增/改动迁移跑 squawk:"
-printf '   - %s\n' "${changed[@]}"
+lint_targets=()
+for file in "${changed[@]}"; do
+  if git cat-file -e "$BASE_REF:$file" 2>/dev/null \
+    && is_authorized_migration_rebaseline "$file" \
+    && migration_sql_semantics_unchanged "$BASE_REF" "$file"; then
+    echo "⚠️  跳过已精确授权且 SQL 语义未变的基线重发文件:$file"
+    continue
+  fi
+  lint_targets+=("$file")
+done
+
+if [[ "${#lint_targets[@]}" -eq 0 ]]; then
+  echo "✅ 本次迁移改动均为已授权的注释基线重发,无需运行 squawk"
+  exit 0
+fi
+
+echo "ℹ️  对 ${#lint_targets[@]} 个新增/改动迁移跑 squawk:"
+printf '   - %s\n' "${lint_targets[@]}"
 echo
 
 # squawk 命中危险规则即非零退出 → fail PR。
-squawk "${changed[@]}"
+squawk "${lint_targets[@]}"
 echo "✅ 迁移安全 lint 通过"
