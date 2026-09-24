@@ -15,9 +15,9 @@ public final class OrchestratorWireMockSupport {
   private OrchestratorWireMockSupport() {}
 
   public static void ensureStarted() {
-    if (STATE.get() == null) {
+    if (STATE.get() == null) { // empty-check: allow - test double
       synchronized (OrchestratorWireMockSupport.class) {
-        if (STATE.get() == null) {
+        if (STATE.get() == null) { // empty-check: allow - test double
           try {
             HttpServer httpServer = HttpServer.create(new InetSocketAddress(0), 0);
             httpServer.createContext("/internal/", exchange -> {
@@ -35,7 +35,7 @@ public final class OrchestratorWireMockSupport {
           }
           Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             ServerState state = STATE.getAndSet(null);
-            if (state != null) {
+            if (state != null) { // empty-check: allow - test double
               state.server().stop(0);
             }
           }));
@@ -53,7 +53,7 @@ public final class OrchestratorWireMockSupport {
 
   private static String baseUrl() {
     ServerState state = STATE.get();
-    if (state == null) {
+    if (state == null) { // empty-check: allow - test double
       throw new IllegalStateException("orchestrator stub server is not started");
     }
     return state.baseUrl();

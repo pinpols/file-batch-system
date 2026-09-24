@@ -475,7 +475,9 @@ public class ConfigPackageExcelWorkbookWriter {
     writeGuideCell(
         row,
         9,
-        guide == null ? EMPTY : defaultBehaviorFor(rowData.columnName(), guide),
+        guide == null // empty-check: allow - Sonar S2259
+            ? EMPTY
+            : defaultBehaviorFor(rowData.columnName(), guide),
         styles.body());
     writeGuideCell(
         row,

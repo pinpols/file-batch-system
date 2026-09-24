@@ -260,11 +260,11 @@ public record SqlTransformComputeSpec(
   }
 
   private static WriteMode parseWriteMode(Object raw) {
-    if (raw == null) {
+    if (raw == null) { // empty-check: allow - Sonar S2259
       return WriteMode.INSERT;
     }
     String value = text(raw);
-    if (value == null || value.isBlank()) {
+    if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
       return WriteMode.INSERT;
     }
     String normalized = value.trim().toUpperCase(Locale.ROOT);
@@ -278,11 +278,11 @@ public record SqlTransformComputeSpec(
   }
 
   private static EmptyResultPolicy parseEmptyResultPolicy(Object raw) {
-    if (raw == null) {
+    if (raw == null) { // empty-check: allow - Sonar S2259
       return EmptyResultPolicy.SUCCESS;
     }
     String value = text(raw);
-    if (value == null || value.isBlank()) {
+    if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
       return EmptyResultPolicy.SUCCESS;
     }
     String normalized = value.trim().toUpperCase(Locale.ROOT);
@@ -295,11 +295,11 @@ public record SqlTransformComputeSpec(
   }
 
   private static StagingMode parseStagingMode(Object raw) {
-    if (raw == null) {
+    if (raw == null) { // empty-check: allow - Sonar S2259
       return StagingMode.JSONB;
     }
     String value = text(raw);
-    if (value == null || value.isBlank()) {
+    if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
       return StagingMode.JSONB;
     }
     String normalized = value.trim().toUpperCase(Locale.ROOT);

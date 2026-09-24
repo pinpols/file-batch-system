@@ -287,15 +287,17 @@ public class ParseStep implements ImportStageStep {
   }
 
   private boolean recordTypeMatches(Map<String, Object> template, String trailerLine) {
-    if (template == null) {
+    if (template == null) { // empty-check: allow - Sonar S2259
       return true;
     }
     Object marker = template.get("recordType");
     if (marker == null) {
       marker = template.get("record_type");
     }
-    String expected = marker == null ? null : String.valueOf(marker).trim();
-    if (expected == null || expected.isBlank()) {
+    String expected = marker == null // empty-check: allow - Sonar S2259
+        ? null
+        : String.valueOf(marker).trim();
+    if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
       return true;
     }
     String delimiter = strOr(template.get("delimiter"), ",");

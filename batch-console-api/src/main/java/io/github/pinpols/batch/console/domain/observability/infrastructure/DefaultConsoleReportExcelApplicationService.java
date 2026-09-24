@@ -268,7 +268,10 @@ public class DefaultConsoleReportExcelApplicationService
               .filter(item -> item.getName().equals(header))
               .findFirst()
               .orElse(null);
-          values.add(component == null ? null : component.getAccessor().invoke(row));
+          values.add(
+              component == null // empty-check: allow - Sonar S2259
+                  ? null
+                  : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {
         throw BizException.of(

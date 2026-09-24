@@ -21,7 +21,7 @@ public final class OtelTracePropagation {
   private static final TextMapGetter<Map<String, String>> GETTER = new TextMapGetter<>() {
     @Override
     public Iterable<String> keys(Map<String, String> carrier) {
-      if (carrier == null) {
+      if (carrier == null) { // empty-check: allow - Sonar S2259
         return List.of();
       }
       return carrier.keySet();
@@ -29,7 +29,7 @@ public final class OtelTracePropagation {
 
     @Override
     public String get(@Nullable Map<String, String> carrier, String key) {
-      return carrier == null ? null : carrier.get(key);
+      return carrier == null ? null : carrier.get(key); // empty-check: allow - Sonar S2259
     }
   };
 

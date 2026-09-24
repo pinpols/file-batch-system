@@ -59,10 +59,12 @@ public class ConsoleConfigCacheInvalidationService {
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.redisTemplate = redisTemplate;
     this.queryCacheService = queryCacheService;
-    MeterRegistry meterRegistry =
-        meterRegistryProvider == null ? null : meterRegistryProvider.getIfAvailable();
-    Metrics metrics =
-        meterRegistry == null ? Metrics.empty() : createMetrics(meterRegistry, publishedRevision);
+    MeterRegistry meterRegistry = meterRegistryProvider == null // empty-check: allow - Sonar S2259
+        ? null
+        : meterRegistryProvider.getIfAvailable();
+    Metrics metrics = meterRegistry == null // empty-check: allow - Sonar S2259
+        ? Metrics.empty()
+        : createMetrics(meterRegistry, publishedRevision);
     this.publishSuccessCounter = metrics.successCounter();
     this.publishFailureCounter = metrics.failureCounter();
   }

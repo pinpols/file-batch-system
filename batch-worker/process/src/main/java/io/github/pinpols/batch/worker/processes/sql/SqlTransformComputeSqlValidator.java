@@ -112,7 +112,7 @@ public class SqlTransformComputeSqlValidator {
   /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
   private static void checkTopLevelLimit(Select select, long maxLimitRows) {
     Long limit = topLimitOf(select);
-    if (limit == null) {
+    if (limit == null) { // empty-check: allow - Sonar S2259
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ERR_KEY,

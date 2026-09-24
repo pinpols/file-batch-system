@@ -53,7 +53,7 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     }
 
     Integer managementPort = environment.getProperty("management.server.port", Integer.class);
-    if (managementPort == null) {
+    if (managementPort == null) { // empty-check: allow - Sonar S2259
       throw new IllegalStateException(
           "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
     }

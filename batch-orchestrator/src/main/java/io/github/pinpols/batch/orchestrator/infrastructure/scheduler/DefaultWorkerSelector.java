@@ -153,7 +153,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         : workerRegistryMapper.selectByTenantAndStatus(
             tenantId, WorkerRegistryStatus.ONLINE.code());
     WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
-    if (cache == null) {
+    if (cache == null) { // empty-check: allow - Sonar S2259
       return loader.get();
     }
     return cache.getOrLoad(tenantId, workerGroup, loader);

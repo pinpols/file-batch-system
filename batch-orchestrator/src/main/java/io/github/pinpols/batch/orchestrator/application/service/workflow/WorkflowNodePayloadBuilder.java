@@ -124,7 +124,7 @@ public class WorkflowNodePayloadBuilder {
       if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
         continue;
       }
-      if (latest == null || isFinishedLater(p, latest)) {
+      if (latest == null || isFinishedLater(p, latest)) { // empty-check: allow - Sonar S2259
         latest = p;
       }
     }
@@ -132,15 +132,16 @@ public class WorkflowNodePayloadBuilder {
   }
 
   private static boolean isFinishedLater(JobPartitionEntity p, JobPartitionEntity reference) {
-    return p.getFinishedAt() != null
-        && reference.getFinishedAt() != null
+    return p.getFinishedAt() != null // empty-check: allow - Sonar S2259
+        && reference.getFinishedAt() != null // empty-check: allow - Sonar S2259
         && p.getFinishedAt().isAfter(reference.getFinishedAt());
   }
 
   @SuppressWarnings("unchecked")
   private static void mergeWhitelistedOutputFields(
       Map<String, Object> payload, JobPartitionEntity latestSuccess) {
-    if (latestSuccess == null || latestSuccess.getOutputSummary() == null) {
+    if (latestSuccess == null // empty-check: allow - Sonar S2259
+        || latestSuccess.getOutputSummary() == null) { // empty-check: allow - Sonar S2259
       return;
     }
     try {
