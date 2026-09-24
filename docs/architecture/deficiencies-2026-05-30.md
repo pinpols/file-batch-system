@@ -168,7 +168,7 @@
 
 ## 复算 / 验证
 
-- 代码行数据源:[loc-2026-05-29.md](../stats/loc-2026-05-29.md)
+- 代码行数据源:[归档快照](../stats/archive/loc-2026-05-29.md)
 - ConsolePushProperties 风格违规来源:本次 session 修 commit `c46dd05c`
 - Trigger 服务 hung 来源:本次 session restart `bxjx6vgdy`(2 天未察觉)
 - e2e batch-day-replay 失败来源:本次 session 跑 `bq26nm3lg`(20 fail 列表)

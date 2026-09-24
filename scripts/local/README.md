@@ -28,6 +28,7 @@
   - `--e2e`：仅 E2E 测试（`*E2eIT`）
   - `--all`：单元 + 集成 + E2E 全量
   - `-- <mvn args>`：透传 Maven 参数
+- `restore-script-execute-bits.sh`：按 Git 已记录的 `100755` 模式一键恢复脚本执行位；详见[脚本执行权限 Runbook](../../docs/runbook/script-execution-permissions.md)
 - `docker-path.sh`：工具函数，确保 docker 在 PATH 中（供其他脚本 source）
 
 ## 运行前提
