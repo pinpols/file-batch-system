@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.orchestrator.application.service.dryrun;
 
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.security.BlockedAddressException;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
-import java.net.InetAddress;
 import java.net.URI;
-import java.net.UnknownHostException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -21,14 +21,10 @@ final class DryRunEndpointProbe {
   private static final Set<String> ENDPOINT_PARAM_KEYS =
       Set.of("endpointUrl", "callbackUrl", "channelEndpoint", "dispatchTarget");
 
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  DryRunEndpointProbe() {
-    this(HttpClient.newBuilder().connectTimeout(HTTP_PROBE_TIMEOUT).build());
-  }
-
-  DryRunEndpointProbe(HttpClient httpClient) {
-    this.httpClient = httpClient;
+  DryRunEndpointProbe(OutboundHttpTransport httpTransport) {
+    this.httpTransport = httpTransport;
   }
 
   int probe(Map<String, Object> params, List<DryRunFinding> findings) {
@@ -67,15 +63,15 @@ final class DryRunEndpointProbe {
             url));
         return true;
       }
-      if (!endpointEgressAllowed(key, url, host, findings)) {
-        return true;
-      }
-      HttpRequest request = HttpRequest.newBuilder(probeUri)
-          .method("HEAD", HttpRequest.BodyPublishers.noBody())
-          .timeout(HTTP_PROBE_TIMEOUT)
-          .build();
-      HttpResponse<Void> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+      // Probe 本身必须保持 fail-closed；transport 侧会在真正建连时再次校验同一规则，
+      // 避免测试替身或未来其他实现意外绕过 dry-run 的 SSRF 结论。
+      DnsResolveGuard.resolveAllAndValidate(host);
+      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.head(
+          probeUri.toString(),
+          Map.of(),
+          HTTP_PROBE_TIMEOUT,
+          HTTP_PROBE_TIMEOUT,
+          OutboundAddressPolicy.GUARDED));
       int status = response.statusCode();
       if (status >= 200 && status < 500) {
         findings.add(DryRunFinding.pass(
@@ -85,14 +81,13 @@ final class DryRunEndpointProbe {
             "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, url));
       }
       return true;
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
+    } catch (BlockedAddressException ex) {
       findings.add(DryRunFinding.warn(
-          "EXEC_ENDPOINT_PROBE_INTERRUPTED",
+          "EXEC_ENDPOINT_BLOCKED",
           SCOPE_EXECUTION,
-          key + " probe interrupted; remaining endpoint probes skipped",
+          key + " target rejected by egress security policy; reachability probe skipped",
           url));
-      return false;
+      return true;
     } catch (Exception ex) {
       findings.add(DryRunFinding.warn(
           "EXEC_ENDPOINT_UNREACHABLE",
@@ -100,30 +95,6 @@ final class DryRunEndpointProbe {
           key + " probe failed: " + ex.getMessage(),
           url));
       return true;
-    }
-  }
-
-  private boolean endpointEgressAllowed(
-      String key, String url, String host, List<DryRunFinding> findings) {
-    try {
-      for (InetAddress address : InetAddress.getAllByName(host)) {
-        if (DnsResolveGuard.isBlocked(address)) {
-          findings.add(DryRunFinding.warn(
-              "EXEC_ENDPOINT_BLOCKED",
-              SCOPE_EXECUTION,
-              key + " target rejected by egress security policy; reachability probe skipped",
-              url));
-          return false;
-        }
-      }
-      return true;
-    } catch (UnknownHostException ex) {
-      findings.add(DryRunFinding.warn(
-          "EXEC_ENDPOINT_UNREACHABLE",
-          SCOPE_EXECUTION,
-          key + " host unresolvable; reachability probe skipped",
-          url));
-      return false;
     }
   }
 }

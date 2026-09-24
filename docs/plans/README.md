@@ -21,6 +21,7 @@
 | 批量日与结算 | [整批量日 dry-run](./batch-day-dry-run-enhancement-plan-2026-09-08.md)、[结算差距治理](./settlement-gap-remediation-roadmap-2026-06-20.md) |
 | SDK 与前端 | [SDK roadmap](./sdk-roadmap-2026-h2.md)、[roadmap 进度](./sdk-roadmap-2026-h2-progress.md)、[FE 工作清单](./fe-worklist-2026-h2-atomic-sdk.md) |
 | 可观测与扩展 | [Alertmanager 迁移](./alertmanager-migration-plan-2026-07.md)、[AI 接入](./ai-integration-plan-2026-07.md) |
+| 网络与外部 HTTP | [IPv6 Happy Eyeballs 渐进落地](./ipv6-happy-eyeballs-rollout-2026-09.md) |
 
 历史验证基础设施计划：
 

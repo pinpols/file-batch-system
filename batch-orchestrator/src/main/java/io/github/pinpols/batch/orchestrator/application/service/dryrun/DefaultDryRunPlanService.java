@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -68,7 +69,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       BatchTimezoneProvider timezoneProvider,
       ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
       ObjectProvider<S3Client> s3ClientProvider,
-      ObjectProvider<S3StorageProperties> s3PropertiesProvider) {
+      ObjectProvider<S3StorageProperties> s3PropertiesProvider,
+      OutboundHttpTransport httpTransport) {
     this.configCacheService = configCacheService;
     this.schedulePlanBuilder = schedulePlanBuilder;
     this.workflowNodeMapper = workflowNodeMapper;
@@ -76,7 +78,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     this.timezoneProvider = timezoneProvider;
     this.sqlProbe = new DryRunSqlProbe(jdbcTemplateProvider);
     this.objectStorageProbe = new DryRunObjectStorageProbe(s3ClientProvider, s3PropertiesProvider);
-    this.endpointProbe = new DryRunEndpointProbe();
+    this.endpointProbe = new DryRunEndpointProbe(httpTransport);
   }
 
   @Override

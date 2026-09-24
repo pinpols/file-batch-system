@@ -29,6 +29,12 @@
 - `localhost` 是本地开发默认值，不代表固定 IPv4；需要固定协议族时由部署环境使用 `127.0.0.1` 或 `[::1]` 明确指定。
 - Java 运行时统一注入 `-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=false`：保留双栈，不强制禁用 IPv6；当 DNS 同时返回 IPv4/IPv6 时优先 IPv4。容器由 `deploy/docker/entrypoint.sh` 统一追加，裸 JVM 和 Sim 由公共变量 `BATCH_JVM_NETWORK_OPTS` 注入。
 - 这只是地址选择偏好，不是连接失败降级策略；连接超时、重试和业务错误仍由 HTTP 客户端/调用方处理。对端单栈 IPv6 时 JVM 仍可使用 IPv6，对端仅 IPv4 时保持既有 IPv4 连接。
+- 平台自有 Java 外部 HTTP 逐步统一到 [`OutboundHttpTransport`](../../batch-common/src/main/java/io/github/pinpols/batch/common/http/OutboundHttpTransport.java)：业务层只依赖窄契约，Console/Orchestrator 由应用级 OkHttp 5 适配器提供双栈连接能力。实施边界见 [`IPv6 Happy Eyeballs 渐进落地方案`](../plans/ipv6-happy-eyeballs-rollout-2026-09.md)。
+- 上述 JVM 地址偏好只约束 JDK 默认连接栈。OkHttp 5 开启 `fastFallback` 后会把 A/AAAA 候选交错为 IPv6-first，并在首连接未完成约 250ms 后竞速 IPv4；因此不能用 `preferIPv6Addresses=false` 推断 OkHttp 的首连接地址族。
+- 租户可配置地址使用 `GUARDED`，任一 A/AAAA 结果受限即整体拒绝；Alertmanager/OpenLineage 等受控运维地址使用 `TRUSTED`，以兼容 ClusterIP 和 Compose 私网服务名。不得把租户 URL 标为 `TRUSTED`。
+- `GUARDED` 同样校验 IPv4/IPv6 字面量，并固定使用通过校验的单次 DNS 地址快照；该路径禁用系统代理，防止代理端二次解析形成 DNS rebinding。需要企业出口代理时应新增独立的可信代理配置，不得直接给租户 URL 恢复系统代理。
+- SSRF 受限范围除私网、回环和链路本地外，还包括 `0.0.0.0/8`、`100.64.0.0/10`、`198.18.0.0/15`、文档/协议保留 IPv4 网段及其 IPv4-mapped IPv6 形式。
+- OkHttp 的连接回退不等于业务重试。通用 transport 关闭隐式连接重试和重定向，业务重试、幂等判断仍归短信、通知、Worker 等原领域所有。
 
 ## 验证
 

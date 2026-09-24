@@ -96,7 +96,7 @@ public class DispatchReceiptPollScheduler {
         if (securityProperties.isBypassMode()) {
           return SYSTEM.lookup(hostname);
         }
-        return List.of(DnsResolveGuard.resolveAndValidate(hostname));
+        return DnsResolveGuard.resolveAllAndValidate(hostname);
       }
     };
   }

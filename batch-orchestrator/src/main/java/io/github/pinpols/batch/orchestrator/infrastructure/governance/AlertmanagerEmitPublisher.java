@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
@@ -10,11 +14,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PreDestroy;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +25,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,8 +40,8 @@ import org.springframework.stereotype.Component;
  * <p><b>事务边界</b>：调用方（{@code DefaultAlertEventService.emit}）在 {@code
  * TransactionSynchronization.afterCommit} 里调本 publisher，保证事务回滚时 AM 不会收到幽灵告警。
  *
- * <p>参照 {@code OpenLineageEmitter} 的 fire-and-forget 形态：不引 AM 官方 client，JDK HttpClient + Jackson 手搓
- * PostableAlert（AM openapi v2）。
+ * <p>参照 {@code OpenLineageEmitter} 的 fire-and-forget 形态：不引 AM 官方 client，通过平台出站 transport + Jackson
+ * 生成 PostableAlert（AM openapi v2）。
  */
 @Slf4j
 @Component
@@ -52,18 +52,19 @@ public class AlertmanagerEmitPublisher {
 
   private final AlertmanagerEmitProperties props;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
   private final ExecutorService executor;
   private final String alertsUri;
 
+  @Autowired
   public AlertmanagerEmitPublisher(
-      AlertmanagerEmitProperties props, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      AlertmanagerEmitProperties props,
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      OutboundHttpTransport httpTransport) {
     this.props = props;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.httpTransport = httpTransport;
     if (props.isEnabled() && Texts.hasText(props.getEndpoint())) {
-      this.httpClient = HttpClient.newBuilder()
-          .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMillis()))
-          .build();
       ThreadPoolExecutor pool = new ThreadPoolExecutor(
           1,
           Math.max(1, props.getEmitThreads()),
@@ -80,7 +81,6 @@ public class AlertmanagerEmitPublisher {
       this.alertsUri = stripTrailingSlash(props.getEndpoint()) + ALERTS_PATH;
       log.info("AlertmanagerEmitPublisher enabled: endpoint={}", props.getEndpoint());
     } else {
-      this.httpClient = null;
       this.executor = null;
       this.alertsUri = null;
       log.info("AlertmanagerEmitPublisher disabled (am-emit.enabled=false or endpoint blank)");
@@ -130,25 +130,23 @@ public class AlertmanagerEmitPublisher {
   private void sendQuietly(AlertEventEntity entity) {
     try {
       String body = JsonUtils.toJson(List.of(buildPostableAlert(entity)));
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(alertsUri))
-          .timeout(Duration.ofMillis(props.getTimeoutMillis()))
-          .header("Content-Type", "application/json")
-          .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-          .build();
-      HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-      int sc = resp.statusCode();
-      if (sc >= 200 && sc < 300) {
+      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+          alertsUri,
+          Map.of(),
+          body,
+          "application/json; charset=utf-8",
+          Duration.ofMillis(props.getConnectTimeoutMillis()),
+          Duration.ofMillis(props.getTimeoutMillis()),
+          OutboundAddressPolicy.TRUSTED));
+      if (response.isSuccessful()) {
         recordEmitMetric("success");
       } else {
         recordEmitMetric("http_error");
-        log.warn("am_emit non-2xx: status={} alertType={}", sc, entity.getAlertType());
+        log.warn(
+            "am_emit non-2xx: status={} alertType={}",
+            response.statusCode(),
+            entity.getAlertType());
       }
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      recordEmitMetric("interrupted");
-      SwallowedExceptionLogger.info(
-          AlertmanagerEmitPublisher.class, "catch:InterruptedException", ex);
     } catch (RuntimeException | java.io.IOException ex) {
       recordEmitMetric("failed");
       SwallowedExceptionLogger.warn(AlertmanagerEmitPublisher.class, "catch:am_emit", ex);

@@ -341,13 +341,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   /**
    * 判定一个 {@link InetAddress} 是否属于必须拒绝的网段。收敛到 batch-common 的 canonical {@link
-   * DnsResolveGuard#isBlocked(InetAddress)}(覆盖回环 / 私网 / link-local / IPv4-mapped-IPv6 / <b>fc00::/7
-   * ULA</b> 等,原本地私有副本漏了 ULA,导致 {@code fd00:ec2::254} 等 IPv6 metadata 被放行)。额外保留 any-local ({@code
-   * 0.0.0.0} / {@code ::})与组播判定——canonical guard 未覆盖这两类。 package-private 以便单测直接对 IP literal
-   * 校验,无需联网。
+   * DnsResolveGuard#isBlocked(InetAddress)}（覆盖回环、私网、link-local、IPv4-mapped-IPv6、<b>fc00::/7
+   * ULA</b>、any-local 与组播等；原本地私有副本漏了 ULA，导致 {@code fd00:ec2::254} 等 IPv6 metadata
+   * 被放行）。package-private 以便单测直接对 IP literal 校验，无需联网。
    */
   static boolean isBlockedAddress(InetAddress addr) {
-    return DnsResolveGuard.isBlocked(addr) || addr.isAnyLocalAddress() || addr.isMulticastAddress();
+    return DnsResolveGuard.isBlocked(addr);
   }
 
   /** 简化 glob:{@code *} = 匹配 0+ 个非 {@code .} 字符;其他字符精确。 */

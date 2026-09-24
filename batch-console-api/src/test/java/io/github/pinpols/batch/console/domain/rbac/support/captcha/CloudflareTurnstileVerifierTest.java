@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,7 +21,7 @@ class CloudflareTurnstileVerifierTest {
     final AtomicInteger postCalls = new AtomicInteger();
 
     StubVerifier(CaptchaProperties properties, String cannedJson) {
-      super(properties, new ObjectMapper());
+      super(properties, new ObjectMapper(), failOnRequest());
       this.cannedJson = cannedJson;
     }
 
@@ -77,7 +78,7 @@ class CloudflareTurnstileVerifierTest {
   @DisplayName("postForm 异常 → 保守判失败")
   void postFormThrows_fails() {
     CloudflareTurnstileVerifier verifier =
-        new CloudflareTurnstileVerifier(properties, new ObjectMapper()) {
+        new CloudflareTurnstileVerifier(properties, new ObjectMapper(), failOnRequest()) {
           @Override
           protected String postForm(String url, String body) {
             throw new RuntimeException("network down");

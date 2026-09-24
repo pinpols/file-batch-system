@@ -2,16 +2,18 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -34,12 +36,16 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
   private final CaptchaProperties properties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public CloudflareTurnstileVerifier(CaptchaProperties properties, ObjectMapper objectMapper) {
+  @Autowired
+  public CloudflareTurnstileVerifier(
+      CaptchaProperties properties,
+      ObjectMapper objectMapper,
+      OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -77,13 +83,14 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
 
   /** 执行 application/x-www-form-urlencoded POST,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
   protected String postForm(String url, String body) throws IOException, InterruptedException {
-    HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .timeout(REQUEST_TIMEOUT)
-        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-        .build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+        url,
+        Map.of(),
+        body,
+        "application/x-www-form-urlencoded; charset=utf-8",
+        CONNECT_TIMEOUT,
+        REQUEST_TIMEOUT,
+        OutboundAddressPolicy.GUARDED));
     return response.body();
   }
 

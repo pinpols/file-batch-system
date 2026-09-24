@@ -224,6 +224,17 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 `HIST-1` 4 个 E2E ConditionTimeout 失败已修（2026-05-01 校验：`docs/testing/e2e-coverage.md:151` "全套 E2E 无已知失败"）。
 
+### M. IPv6 Happy Eyeballs 渐进治理 · P1
+
+权威方案：[`../plans/ipv6-happy-eyeballs-rollout-2026-09.md`](../plans/ipv6-happy-eyeballs-rollout-2026-09.md)。本事项采用 transport 抽象和应用级适配器，不做全工程直接替换。
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| **HE-1 ~ HE-4** | 平台 transport、JDK 外部调用迁移、全地址 SSRF、既有 OkHttp DNS 对齐 | ✅ 已完成 |
+| **HE-5** | IPv4/IPv6 黑洞与单栈/双栈故障注入 | ✅ 本地已完成，staging 证据归 HE-7 |
+| **HE-6** | Java SDK 可选 OkHttp transport | 🟡 暂缓，真实租户需求触发 |
+| **HE-7** | staging DNS/路由/NetworkPolicy/出口代理验证 | 🔒 外部阻塞 |
+
 ---
 
 ## 四、🟡 半成

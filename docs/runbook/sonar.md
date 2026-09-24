@@ -19,12 +19,20 @@
 ### 命令
 
 ```bash
-./scripts/dev/sonar-scan.sh               # 全量：先跑测试 + JaCoCo，再扫描
+./scripts/dev/sonar-scan.sh --full        # 全量：先跑测试 + JaCoCo，再扫描（默认模式）
+./scripts/dev/sonar-scan.sh --incremental # 只编译不跑测试，以 origin/main 为基线导出变更行报告
+./scripts/dev/sonar-scan.sh --incremental --with-tests # 同时运行测试并刷新 JaCoCo
+./scripts/dev/sonar-scan.sh --incremental --base-ref <ref> # 指定增量基线
+./scripts/dev/sonar-scan.sh --incremental --base-ref HEAD  # 只看当前未提交/未跟踪变更
 ./scripts/dev/sonar-scan.sh --skip-build  # 跳过构建，复用已有 target/site/jacoco/jacoco.xml
 ./scripts/dev/sonar-scan.sh --stop        # 停止并删除 SonarQube 容器
 ```
 
 脚本内置流程：起容器 → 等待 UP → 生成一次性分析 token → 应用自定义 quality profile → 跑分析 → 导出报告。
+
+`--incremental` 不会裁剪 Sonar 的静态分析上下文：它只执行全 reactor 的 `test-compile`，不运行测试，然后以 Git merge-base 到当前工作树的新增/修改 Java 行过滤报告。增量模式使用独立项目键 `<projectKey>-incremental`，且不采集覆盖率，避免污染全量项目的 JaCoCo 基线。需要同时验证覆盖率时显式增加 `--with-tests`。
+
+增量文件集同时覆盖分支提交、暂存/未暂存修改和未跟踪 Java 文件。基线默认是 `origin/main`，也可用 `SONAR_BASE_REF` 或 `--base-ref` 覆盖。
 
 ### 输出
 
@@ -32,6 +40,10 @@
 |---|---|
 | `reports/sonar/<timestamp>/sonar-report.md` | 摘要：整体指标（NCLOC / Bug / Vulnerability / Security Hotspot / Code Smell / 技术债 / 重复率 / 覆盖率）+ 各模块 BLOCKER~INFO 分布 + BLOCKER 明细 |
 | `reports/sonar/<timestamp>/sonar-report.csv` | 全量 issue 明细（severity / type / 组件 / 行号 / 规则 / 描述 / 状态 / effort） |
+| `reports/sonar/<timestamp>/sonar-incremental-report.md` | 增量模式摘要，仅统计 Git 变更行上的 OPEN Issue 与待审 Security Hotspot |
+| `reports/sonar/<timestamp>/sonar-incremental-report.csv` | 增量 OPEN Issue 明细 |
+| `reports/sonar/<timestamp>/sonar-incremental-hotspots.csv` | 增量待审 Security Hotspot 明细 |
+| `reports/sonar/<timestamp>/sonar-changed-lines.json` | 增量基线、merge-base 和文件行区间，供审计复核 |
 | `reports/sonar/latest` | 软链，始终指向最近一次扫描 |
 
 报告目录是本地产物（gitignored），不提交；需要留档时把关键结果整理到 `docs/verifications/sonar-report-YYYY-MM-DD.md`（仓库已有多份历史快照）。
@@ -71,7 +83,8 @@
 |---|---|
 | 端口 9001 被占用 | `SONAR_PORT=9002 ./scripts/dev/sonar-scan.sh` |
 | 容器 3 分钟未就绪 | 脚本会自动打印 `docker logs sonarqube-batch --tail 30`，据此排查镜像拉取 / 内存 |
-| `--skip-build` 报 “No JaCoCo XML report found” | 先不带 `--skip-build` 跑一次，或手动执行 `mvn clean test org.jacoco:jacoco-maven-plugin:0.8.14:report --projects '!batch-e2e-tests'` |
+| 全量模式 `--skip-build` 报 “No JaCoCo XML report found” | 先不带 `--skip-build` 跑一次，或手动执行 `mvn clean test org.jacoco:jacoco-maven-plugin:0.8.14:report --projects '!batch-e2e-tests'` |
+| 增量模式提示找不到基线 | 先 `git fetch` 对应远端，或通过 `--base-ref <本地可解析 ref>` 指定基线 |
 | 报告指标出现 `?` | 服务端分析任务未成功完成，查看脚本输出的 task id 与 `docker logs` |
 | 扫描完想清理 | `./scripts/dev/sonar-scan.sh --stop` |
 

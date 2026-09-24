@@ -559,8 +559,8 @@ final class RemoteFilesystemDispatchSupport {
           .build();
       if (dnsGuardEnabled) {
         String probeHost = URI.create(endpoint).getHost();
-        InetAddress resolved = DnsResolveGuard.resolveAndValidate(probeHost);
-        client = client.newBuilder().dns(hostname -> List.of(resolved)).build();
+        List<InetAddress> resolved = DnsResolveGuard.resolveAllAndValidate(probeHost);
+        client = client.newBuilder().dns(hostname -> resolved).build();
       }
       Request request = new Request.Builder().url(endpoint).head().build();
       try (Response response = client.newCall(request).execute()) {

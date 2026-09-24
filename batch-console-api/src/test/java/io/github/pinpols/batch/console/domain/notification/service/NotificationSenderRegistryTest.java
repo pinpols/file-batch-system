@@ -1,13 +1,12 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,14 +15,13 @@ import org.junit.jupiter.api.Test;
 class NotificationSenderRegistryTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private final SsrfGuardedDns ssrfGuardedDns =
-      new SsrfGuardedDns(mock(BatchSecurityProperties.class));
 
   @Test
   @DisplayName("WECOM 渠道解析到 WeComNotificationSender（规范渠道值,大小写不敏感）")
   void shouldResolveWecomChannelToWeComSender() {
     // arrange
-    WeComNotificationSender weComSender = new WeComNotificationSender(objectMapper, ssrfGuardedDns);
+    WeComNotificationSender weComSender =
+        new WeComNotificationSender(objectMapper, failOnRequest());
     NotificationSenderRegistry registry = new NotificationSenderRegistry(List.of(weComSender));
 
     // act / assert：WECOM 是 DDL CHECK/白名单/DictEnum 的规范值，必须能解析到企微 sender。
@@ -36,7 +34,7 @@ class NotificationSenderRegistryTest {
   void shouldNotResolveLegacyWechatValue() {
     // arrange
     NotificationSenderRegistry registry = new NotificationSenderRegistry(
-        List.of(new WeComNotificationSender(objectMapper, ssrfGuardedDns)));
+        List.of(new WeComNotificationSender(objectMapper, failOnRequest())));
 
     // act / assert
     assertThat(registry.resolve("WECHAT")).isNull();
