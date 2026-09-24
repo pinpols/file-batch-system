@@ -25,7 +25,7 @@
 
 ### Changed
 
-- **1.0.0 迁移基线重发**：在确认无共享或生产数据库使用旧 checksum 后，将 11 个历史迁移注释中的旧 `CLAUDE.md` 名称统一替换为权威 `docs/agent-baseline.md`；精确 SHA-256 清单和 SQL 语义比较仅授权本次注释变更。部署必须重建空库后重新执行 Flyway，禁止对已有库执行 `flyway repair` 迁移该基线。
+- **1.0.0 迁移基线重发**：在确认无共享或生产数据库使用旧 checksum 后，将 11 个历史迁移注释统一指向权威 `docs/agent-baseline.md`；基线重发后，CI 已恢复严格禁止修改历史迁移。部署必须重建空库后重新执行 Flyway，禁止对已有库执行 `flyway repair` 迁移该基线。
 - **测试模块依赖边界**：多模块共享的多租户 SQL 种子迁入 `batch-test-support` 资源包，消费模块统一通过测试 classpath 加载；移除 Orchestrator 对 E2E 源码目录的反向引用，并将 `batch-e2e-tests` 的应用模块依赖明确限制为 test scope。
 - **Trace 诊断与异步传播边界**：Trigger 和 Task Dispatch 的既有 Outbox 信封保存最小 W3C `traceparent` / `tracestate`，Relay 在 Kafka send 时恢复父上下文；业务 `traceId` 仍是最长 128 字符的持久化精确检索键，不参与幂等、租户或状态机语义。Console 401/403 同步返回关联 ID，Trace 快照补充截断领域和工作流节点运行数据；OTLP 仅承载 traces/logs，metrics 继续由 Prometheus 拉取。
 - **工作流终态血缘可靠投递**：工作流状态机仍仅在业务事务内写 Outbox，Relay 将终态 payload 投递到独立 Kafka topic，OpenLineage 消费者仅在 HTTP 2xx 后提交 offset；端点故障只形成血缘积压，不回压或改写业务状态。
