@@ -1,6 +1,7 @@
 # 与 docker-compose.yml 叠加以 `--profile apps` 启动 Java 服务。
 # 宿主机端口由 .env 中
-# CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射。
+# CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射；
+# ORCHESTRATOR_BIND_IP / WORKER_IMPORT_BIND_IP 默认回环地址，需外部访问时显式配置。
 # R7-A4-P1: 容器内端口统一 18080–18086，与 Helm values.yaml 对齐；之前是 8080–8086 → 18080–18086 host-only 重映射，
 # 排障/管理脚本在 compose vs K8s 行为分叉。统一后 actuator / logs / SSH 进容器排查所有指向 1808X。
 # 库地址、Kafka、MinIO 使用 Docker 网络名（postgres-primary:5432、kafka:29092、minio:9000）；15432 仅宿主机映射。
@@ -348,7 +349,7 @@ services:
       MANAGEMENT_SERVER_PORT: 18082
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     ports:
-      - "${ORCHESTRATOR_PORT:-18082}:18082"
+      - "${ORCHESTRATOR_BIND_IP:-127.0.0.1}:${ORCHESTRATOR_PORT:-18082}:18082"
     networks:
       - batch-network
     healthcheck:
@@ -405,7 +406,7 @@ services:
       SERVER_PORT: 18083
       MANAGEMENT_SERVER_PORT: 18083
     ports:
-      - "${WORKER_IMPORT_PORT:-18083}:18083"
+      - "${WORKER_IMPORT_BIND_IP:-127.0.0.1}:${WORKER_IMPORT_PORT:-18083}:18083"
     networks:
       - batch-network
     healthcheck:

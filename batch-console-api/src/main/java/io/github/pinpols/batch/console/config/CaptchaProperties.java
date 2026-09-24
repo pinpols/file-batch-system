@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -8,7 +9,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <ul>
  *   <li>{@code none} —— 默认,不做验证码(仅失败退避层生效)
- *   <li>{@code selfhosted} —— 自建滑块 + 后端时序/位置校验(不外联,保底)
  *   <li>{@code cloudflare} —— Cloudflare Turnstile(裸 HTTP siteverify,无云签名)
  *   <li>{@code tencent} —— 腾讯天御(TC3-HMAC-SHA256 验票,需外联)
  *   <li>{@code aliyun} —— 阿里云验证码 2.0(ACS3-HMAC-SHA256 验票,需外联)
@@ -24,23 +24,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.captcha")
 public class CaptchaProperties {
 
-  /** 验证码 provider:none|selfhosted|tencent|aliyun。默认 none。 */
+  /** 验证码 provider:none|cloudflare|tencent|aliyun。默认 none。 */
   private String provider = "none";
 
-  /** 前端公开标识(站点 key / appId),经 /captcha/config 下发给 FE。selfhosted 可空。 */
+  /** 前端公开标识(站点 key / appId),经 /captcha/config 下发给 FE。 */
   private String siteKey = "";
 
   /** 服务端密钥(secret / appSecretKey),仅后端校验用,<b>绝不下发 FE</b>。 */
   private String secretKey = "";
-
-  /** 自建滑块:缺口命中容差(像素),提交位置与目标位置差 ≤ 该值算通过。默认 5。 */
-  private int selfhostedTolerancePx = 5;
-
-  /** 自建滑块:挑战有效期(秒),超时作废。默认 120。 */
-  private int selfhostedChallengeTtlSeconds = 120;
-
-  /** 自建滑块:最短人类滑动耗时(毫秒),低于此判为脚本秒过。默认 300。 */
-  private long selfhostedMinElapsedMillis = 300L;
 
   /** 腾讯天御:CaptchaAppId(数字);siteKey 复用为前端 CaptchaAppId 字符串。 */
   private long tencentAppId = 0L;
@@ -74,4 +65,12 @@ public class CaptchaProperties {
 
   /** 阿里云验证码场景 SceneId(控制台创建场景后获得),校验入参。 */
   private String aliyunSceneId = "";
+
+  @PostConstruct
+  void rejectInsecureSelfHostedProvider() {
+    if ("selfhosted".equalsIgnoreCase(provider)) {
+      throw new IllegalStateException(
+          "batch.console.captcha.provider=selfhosted is not supported; configure a verified CAPTCHA provider");
+    }
+  }
 }

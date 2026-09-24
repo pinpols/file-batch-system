@@ -66,7 +66,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       return;
     }
 
-    String path = request.getRequestURI();
+    String path = request.getServletPath();
     String method = request.getMethod();
 
     // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────

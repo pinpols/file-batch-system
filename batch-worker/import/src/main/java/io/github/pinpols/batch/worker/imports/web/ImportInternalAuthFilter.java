@@ -41,12 +41,6 @@ public class ImportInternalAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
-    String uri = request.getRequestURI();
-    if (uri == null || !uri.startsWith("/internal/")) {
-      chain.doFilter(request, response);
-      return;
-    }
-
     if (securityProperties.isBypassMode()) {
       chain.doFilter(request, response);
       return;

@@ -62,6 +62,8 @@
 | MinIO API | `http://localhost:19000` |
 | MinIO Console | `http://localhost:19001` |
 
+Orchestrator 和 import worker 管理端口默认只绑定 `127.0.0.1`，用于防止内部 API 暴露到外部网卡。需要远程访问时，设置 `ORCHESTRATOR_BIND_IP` 或 `WORKER_IMPORT_BIND_IP`，并在主机防火墙限制来源地址；这两个服务仍要求内部凭据。
+
 ## 启动观测栈
 
 ```bash

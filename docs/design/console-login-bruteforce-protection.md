@@ -48,10 +48,10 @@
 ```java
 public interface CaptchaVerifier { CaptchaResult verify(String token, String clientIp); }
 // 实现各一类,@ConditionalOnProperty 按配置只装一个:
-//   NoopCaptchaVerifier(默认,不验=通过) / SelfHostedSliderVerifier(自建滑块,不外联)
+//   NoopCaptchaVerifier(默认,不验=通过)
 //   TencentCaptchaVerifier(天御) / AliyunCaptchaVerifier(阿里)
 ```
-- 配置驱动:`batch.console.captcha.provider = none|selfhosted|tencent|aliyun` + 各 provider 密钥块。**切已接入 provider = 改一行配置,零代码改动。**
+- 配置驱动:`batch.console.captcha.provider = none|cloudflare|tencent|aliyun` + 各 provider 密钥块。**切已接入 provider = 改一行配置,零代码改动。**
 - 前端配置驱动:后端 `GET /api/console/captcha/config` 返回 `{provider, sitekey, enabled}`,前端动态加载对应 widget。
 - 开闭:**切换已接入 provider 纯配置;接入全新 provider = 加一个实现类 + 前端加一段 widget 适配**。
 
@@ -64,19 +64,16 @@ batch.console.login-protection:
   backoff-step-millis: 200       # 退避 = 200ms × 失败数
   backoff-cap-millis: 2000       # 封顶 2s
 batch.console.captcha:
-  provider: none                 # none|selfhosted|tencent|aliyun
-  # tencent/aliyun/selfhosted 各自配置块
+  provider: none                 # none|cloudflare|tencent|aliyun
+  # 各 provider 的配置块
 ```
 
 ## 5. 验证码选型决策(已拍板)
 
 - **形态 = 图片拖动滑块**(UX 好、移动友好),但**必须带后端风控**——裸滑块(只校验缺口位置)能被轨迹模拟破解,强度在背后行为风控。
 - **不用传统图形验证码**(扭曲字符):OCR/打码平台秒破、UX 差,已淘汰。
-- **优先级**:
-  1. **能外联第三方** → **腾讯天御 / 阿里云验证码**(国内可达好、无感+滑块、厂商风控)。国内服务**按量计费但有免费额度**;console 登录是 risk-based 低频(内部运维用户),量极小,**成本≈0(大概率免费额度内)**。
-  2. **Cloudflare Turnstile** 完全免费但**国内可达性不稳**,国内部署不推荐。
-  3. **合规/网络禁外联** → 自建滑块 + 后端轨迹/时序校验(弱一档,~1-2 周工时 + 需持续维护;定位是"抬门槛"非"真壁垒",配合 IP 限流 + 失败退避做纵深)。
-- **通用框架让选型不阻塞**:v1 实装 `none`(默认,等效旁路) + `selfhosted`(保底,不外联、可本地跑可测);`tencent`/`aliyun` 是**冻结的"加一个实现类"扩展点**——SPI(`CaptchaVerifier`)+ 配置(`provider` + 密钥块)已就位,接入只需新增一个实现类 + 配 `provider=tencent`,**不动既有代码**。未先实装第三方是因其需真实账号密钥 + 外联才能联调/测,留到具备条件时按 SPI 补即可,不阻塞 v1 上线。
+- **选择**:能外联时使用已接入的腾讯天御、阿里云验证码或 Cloudflare Turnstile。自建滑块会公开目标位置，已从应用中移除；旧配置 `provider=selfhosted` 会使服务启动失败。
+- `none` 仅代表不执行验证码校验，不能作为人机验证使用。启用登录风控验证码前，应配置一个真实 provider。
 
 ## 6. DDoS 边界(独立线,本文不重复)
 
@@ -86,8 +83,8 @@ batch.console.captcha:
 
 ## 7. 落地范围
 
-- **后端(本仓 batch-console-api)** —— **本次已落地**:`LoginFailureTracker`(失败计数 + 退避)+ `LoginProtectionService`(risk-based 触发、不锁账号)+ `CaptchaVerifier` SPI(实装 `none`/`selfhosted`,`tencent`/`aliyun` 扩展点)+ `ConsoleCaptchaController`(`/captcha/config` + `/captcha/challenge`)+ `LoginProtectionProperties`/`CaptchaProperties` 配置 + `ResultCode.CAPTCHA_REQUIRED` + 单测。集成进 `ConsoleLoginService`(密码校验前 captcha 关、失败后记数退避、成功清零)。
-- **前端(batch-console 仓)**:按 `/captcha/config` 动态渲染 widget(自建滑块组件 / 天御 SDK)。后端出接口契约。
+- **后端(本仓 batch-console-api)** —— `LoginFailureTracker`(失败计数 + 退避)+ `LoginProtectionService`(risk-based 触发、不锁账号)+ `CaptchaVerifier` SPI(第三方 provider)+ `ConsoleCaptchaController`(`/captcha/config`)+ 登录防护配置。集成进 `ConsoleLoginService`(密码校验前校验、失败后记数退避、成功清零)。
+- **前端(batch-console 仓)**:按 `/captcha/config` 动态渲染已配置的第三方 widget。后端出接口契约。
 - **默认全关**(`login-protection.enabled=false` + `captcha.provider=none`),逐环境开启,对现有部署零影响。
 
 ## 8. 与现有工作/文档的关系

@@ -198,24 +198,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleCaptchaConfig'
-  /api/console/captcha/challenge:
-    get:
-      tags: [Auth]
-      summary: Issue a self-hosted slider captcha challenge (pre-login)
-      operationId: issueConsoleCaptchaChallenge
-      security: []
-      description: |
-        Self-hosted provider only: issues a single-use slider challenge {challengeId, gap}.
-        Returns 404 for any other provider (third-party providers handle challenges via their own SDK).
-      responses:
-        '200':
-          description: Slider challenge
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseMapStringObject'
-        '404':
-          description: Captcha challenge is not available for the current provider
   /api/console/auth/token:
     post:
       tags: [Auth]
@@ -14339,7 +14321,7 @@ components:
             Optional risk-based captcha credential. Required only after the account/IP failure
             count crosses the threshold (login-protection enabled). Non-secret; always sent as a
             top-level plaintext field even on the encrypted login path. Format depends on the
-            provider (self-hosted: "challengeId:position"; third-party: its ticket/randstr).
+            provider-specific token returned by the configured third-party CAPTCHA service.
       required: [username, password]
     ConsoleFileOperationResponse:
       type: object

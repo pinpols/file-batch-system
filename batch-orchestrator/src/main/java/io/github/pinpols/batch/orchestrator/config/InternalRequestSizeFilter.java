@@ -44,8 +44,7 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
 
     long max = properties.getMaxBodyBytes();
-    String uri = request.getRequestURI();
-    if (max <= 0 || uri == null || !uri.startsWith("/internal/") || !isWriteMethod(request)) {
+    if (max <= 0 || !isWriteMethod(request)) {
       chain.doFilter(request, response);
       return;
     }

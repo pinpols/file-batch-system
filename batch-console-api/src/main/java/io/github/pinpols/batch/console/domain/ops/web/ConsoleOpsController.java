@@ -51,6 +51,7 @@ public class ConsoleOpsController {
 
   /** Kafka consumer group 积压查询。 */
   @GetMapping("/kafka-lag")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR')")
   public CommonResponse<List<ConsoleKafkaConsumerLagResponse>> kafkaConsumerLag(
       @RequestParam(value = "groupId", required = false) String groupId) {
     return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));

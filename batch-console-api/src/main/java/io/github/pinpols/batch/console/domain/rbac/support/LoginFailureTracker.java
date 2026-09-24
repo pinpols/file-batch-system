@@ -30,6 +30,7 @@ public class LoginFailureTracker {
 
   private static final String ACCOUNT_KEY_PREFIX = "login:fail:account:";
   private static final String IP_KEY_PREFIX = "login:fail:ip:";
+  private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit:";
 
   /** ZADD member + 清窗口外 + EXPIRE,返回窗口内计数。KEYS[1]=key ARGV: now, windowStart, member, ttlSeconds。 */
   private static final DefaultRedisScript<Long> RECORD_SCRIPT;
@@ -71,7 +72,7 @@ public class LoginFailureTracker {
 
   /** 登录成功:清零该账号失败计数(IP 计数保留——IP 是共享资源)。 */
   public void clearAccount(String username) {
-    redisTemplate.delete(ACCOUNT_KEY_PREFIX + normalize(username));
+    redisTemplate.delete(RATE_LIMIT_KEY_PREFIX + ACCOUNT_KEY_PREFIX + normalize(username));
   }
 
   private long recordFailureAttempt(String key) {
@@ -80,7 +81,7 @@ public class LoginFailureTracker {
     long ttlSeconds = (windowMillis() / 1000) + 1;
     Long count = redisTemplate.execute(
         RECORD_SCRIPT,
-        List.of("rate_limit:" + key),
+        List.of(RATE_LIMIT_KEY_PREFIX + key),
         String.valueOf(now),
         String.valueOf(windowStart),
         UUID.randomUUID().toString(),
@@ -91,7 +92,7 @@ public class LoginFailureTracker {
   private long count(String key) {
     long windowStart = dateTimeSupport.currentEpochMillis() - windowMillis();
     Long count = redisTemplate.execute(
-        COUNT_SCRIPT, List.of("rate_limit:" + key), String.valueOf(windowStart));
+        COUNT_SCRIPT, List.of(RATE_LIMIT_KEY_PREFIX + key), String.valueOf(windowStart));
     return count == null ? 0L : count;
   }
 

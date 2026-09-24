@@ -27,9 +27,11 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
   private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
   private final OkHttpClient okHttpClient;
+  private final BatchSecurityProperties securityProperties;
 
   public HttpDispatchChannelAdapter(
       HttpDispatchChannelProperties properties, BatchSecurityProperties securityProperties) {
+    this.securityProperties = securityProperties;
     // 一次性把 OkHttpClient 构造好（含 callTimeout 回退 + 自定义 Dns）并复用：
     // 1) 每次 dispatch 调用 newBuilder().dns(...).build() 会让 connection / dispatcher /
     //    thread pool 被重建，复用价值归零，高并发下还会泄漏线程；
@@ -52,6 +54,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
         .callTimeout(properties.getCallTimeoutMillis(), TimeUnit.MILLISECONDS)
         .dns(guardedDns)
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build();
   }
 
@@ -99,6 +103,9 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
     Request request = builder.build();
     try {
+      if (!securityProperties.isBypassMode()) {
+        DnsResolveGuard.resolveAllAndValidate(request.url().host());
+      }
       // S-2.6: DNS 解析 + IP 校验在构造期注入的 Dns 实现里完成，这里直接复用单例 Client
       try (Response response = okHttpClient.newCall(request).execute()) {
         if (!response.isSuccessful()) {

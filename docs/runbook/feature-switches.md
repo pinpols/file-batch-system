@@ -27,7 +27,7 @@
 | 正确性 | `batch.resource-scheduler.default-exceeded-strategy` | QUEUE_DEFER | 超限策略；REJECT 是旧行为，可回退 |
 | 安全 | `batch.request-signing.enabled` | false | 内部写请求签名防重放；灰度必须先升 SDK |
 | 安全 | `batch.console.ai.enabled` | false | Console AI 入口总开关 |
-| 安全 | `batch.console.captcha.provider` | none | 登录验证码（none/selfhosted/tencent/aliyun） |
+| 安全 | `batch.console.captcha.provider` | none | 登录验证码（none/cloudflare/tencent/aliyun；selfhosted 已禁用） |
 | 弹性 | `batch.quota.redis.failure-mode` | FAIL_CLOSED | Redis 故障时配额行为；生产禁止 FAIL_OPEN |
 | 弹性 | `batch.console.read-replica.enabled` | true | 读副本路由；无从库部署建议显式关闭 |
 
@@ -73,7 +73,7 @@
 | `batch.replay.dry-run.enabled` | `true` / `false` | **false** | 整批量日无副作用演练；开启前必须完成五类 Worker 隔离验收 | P1 | `BATCH_REPLAY_DRY_RUN_ENABLED` | ❌ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
 | `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
-| `batch.console.captcha.provider` | `none` / `selfhosted` / `tencent` / `aliyun` | **none** | 登录验证码实现；任一时刻只装一个；tencent/aliyun 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
+| `batch.console.captcha.provider` | `none` / `cloudflare` / `tencent` / `aliyun` | **none** | 登录验证码实现；selfhosted 会阻止启动；第三方 provider 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
 
 ### 1.D 弹性 / 性能 / 观测
 
