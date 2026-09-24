@@ -21,6 +21,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -115,6 +117,39 @@ class KafkaConsumerCloseJoinTest {
       verify(consumer, atLeastOnce()).wakeup();
       assertThat(warnMessages())
           .anySatisfy(m -> assertThat(m).contains("did not exit within").contains("500"));
+    }
+  }
+
+  @Test
+  void zeroBudgetWakesConsumerWithoutWaitingForPollThread() throws Exception {
+    dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
+    Consumer<String, byte[]> consumer = mockConsumer();
+    doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
+    when(consumer.assignment()).thenReturn(Set.of());
+    CountDownLatch pollEntered = new CountDownLatch(1);
+    doAnswer(invocation -> {
+          pollEntered.countDown();
+          Thread.sleep(5_000L);
+          return ConsumerRecords.<String, byte[]>empty();
+        })
+        .when(consumer)
+        .poll(any());
+
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      runner = new Thread(kafka, "test-kafka-zero-budget");
+      runner.setDaemon(true);
+      runner.start();
+      assertThat(pollEntered.await(1, TimeUnit.SECONDS)).isTrue();
+
+      long startedAt = System.nanoTime();
+      kafka.close(Duration.ZERO);
+      long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+
+      assertThat(elapsedMillis).isLessThan(100L);
+      verify(consumer).wakeup();
+      runner.interrupt();
+      runner.join(1_000L);
     }
   }
 

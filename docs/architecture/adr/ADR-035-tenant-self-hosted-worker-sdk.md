@@ -41,7 +41,7 @@
 - Kafka consumer wrapper(SASL 凭据 + topic 配置)
 - 基本 logging / 重试退避
 
-**严格不含**:MyBatis / Flyway / Redis / OTel / Spring Boot 服务端组件。目标:`batch-worker-sdk` jar < 2 MB,只引 jackson + http client + kafka-client。
+**严格不含**:MyBatis / Flyway / Redis / OTel / Spring Boot 服务端组件。目标:`batch-worker-sdk` jar < 2 MB,只引 jackson + OkHttp + kafka-client。OkHttp 仅替换 SDK 内部控制面 HTTP 实现,不暴露到公共 API。
 
 ### 1.1 可选模块 `batch-worker-sdk-spring-boot-starter`
 
@@ -49,7 +49,7 @@
 
 | 模块 | 定位 | 依赖边界 |
 |---|---|---|
-| `batch-worker-sdk` | 核心 SDK,非 Spring 租户直接依赖 | 不含 Spring / Boot / MyBatis / Flyway / Redis;继续守 `jar < 2 MB` |
+| `batch-worker-sdk` | 核心 SDK,非 Spring 租户直接依赖 | 不含 Spring / Boot / MyBatis / Flyway / Redis;允许 OkHttp 5 提供可验证的双栈建连;继续守 `jar < 2 MB` |
 | `batch-worker-sdk-spring-boot-starter` | 可选适配层,给 Spring Boot 租户省掉手写 `main()` wiring | 依赖 core + `spring-boot-autoconfigure`;不把 Spring 类引入 core jar |
 
 这是对 docs/agent-baseline.md "固定 10 模块"的显式例外,性质同 `batch-worker-sdk-testkit`:属于 SDK 发布/适配模块,不是新增平台运行时服务模块,不改变 trigger / orchestrator / worker / console-api 主链。比照 ADR-029 的模块数例外,本节作为评审依据;真正创建模块时同步更新 docs/agent-baseline.md 模块说明。

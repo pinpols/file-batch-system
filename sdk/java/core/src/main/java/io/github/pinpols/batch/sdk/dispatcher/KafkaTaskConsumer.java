@@ -447,13 +447,16 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
     Thread t = this.kafkaThread.get();
     if (t != null && t != Thread.currentThread()) {
-      long timeoutMs = Math.max(100L, joinTimeout == null ? 5_000L : joinTimeout.toMillis());
-      try {
-        t.join(timeoutMs);
-      } catch (InterruptedException ie) {
-        Thread.currentThread().interrupt();
-        log.warn("Kafka close interrupted while waiting for poll thread", ie);
-        return;
+      long timeoutMs =
+          Math.max(0L, EmptyChecks.isNull(joinTimeout) ? 5_000L : joinTimeout.toMillis());
+      if (timeoutMs > 0L) {
+        try {
+          t.join(timeoutMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          log.warn("Kafka close interrupted while waiting for poll thread", ie);
+          return;
+        }
       }
       if (t.isAlive()) {
         log.warn(

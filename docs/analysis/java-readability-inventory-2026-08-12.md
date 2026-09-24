@@ -9,7 +9,7 @@
 |---|---:|
 | 生产 Java 源文件 | 2270 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2071 |
+| `Map<String, Object>` 出现次数 | 2073 |
 | 含 Map 的源文件 | 445 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |

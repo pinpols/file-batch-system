@@ -66,7 +66,7 @@ These are the main runtime-facing third-party components currently used by the p
 | Micrometer Tracing Bridge OTel | managed by Spring Boot 4.1.0 | Apache-2.0 | common | Observation → OpenTelemetry 桥接 |
 | OpenTelemetry Exporter OTLP | managed by Spring Boot 4.1.0 | Apache-2.0 | common | Trace/Span 推送到 OTel Collector |
 | OpenTelemetry Exporter JDK Sender | managed by Spring Boot 4.1.0 | Apache-2.0 | common | 使用 JDK HttpClient 替代 OkHttp 5.x |
-| OkHttp (okhttp-jvm) | 5.0.0-alpha.16 | Apache-2.0 | export, dispatch | HTTP client(JVM 类在 `okhttp-jvm`) |
+| OkHttp (okhttp-jvm) | 5.0.0-alpha.16 | Apache-2.0 | export, dispatch, Java worker SDK | HTTP client(JVM 类在 `okhttp-jvm`) |
 | Apache POI | 5.4.0 | Apache-2.0 | import, export, console-api | Spreadsheet handling |
 | Quartz Scheduler | managed by Spring Boot 4.1.0 | Apache-2.0 | trigger | Cron / FixedRate 调度 |
 | SLF4J API | managed by Spring Boot 4.1.0 | MIT | all (transitive) | Logging facade |
@@ -107,7 +107,7 @@ These packages are used in test or build tooling and are not shipped as producti
 
 | 模块 | 直接依赖 | 备注 |
 |---|---|---|
-| `batch-worker-sdk`(core) | jackson-databind / jackson-datatype-jsr310 / kafka-clients / slf4j-api / lombok(provided) | 不引 Spring;target jar < 2 MB |
+| `batch-worker-sdk`(core) | jackson-databind / jackson-datatype-jsr310 / kafka-clients / slf4j-api / okhttp-jvm / lombok(provided) | 不引 Spring;target jar < 2 MB;OkHttp 的 Okio/Kotlin 依赖进入租户运行时 classpath |
 | `batch-worker-sdk-spring-boot-starter` | core SDK + spring-boot-autoconfigure + spring-boot-starter | 仅 Spring Boot 4.x;`@ConfigurationProperties` 自动绑定 |
 | `batch-worker-sdk-testkit` | core SDK + aiohttp 等价 Java fake server | 测试 scope,不进生产 image |
 

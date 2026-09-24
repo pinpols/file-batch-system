@@ -2,14 +2,179 @@ package client
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestControlPlaneDialer_UsesBoundedHappyEyeballsFallback(t *testing.T) {
+	dialer := newControlPlaneDialer()
+	if dialer.FallbackDelay != 250*time.Millisecond {
+		t.Fatalf("expected 250ms fallback delay, got %s", dialer.FallbackDelay)
+	}
+	if dialer.Timeout != defaultHTTPTimeout {
+		t.Fatalf("expected connect timeout %s, got %s", defaultHTTPTimeout, dialer.Timeout)
+	}
+}
+
+func TestHTTPTransport_RealSocketHappyEyeballsMatrix(t *testing.T) {
+	matrixFile := os.Getenv("BATCH_SDK_HE_MATRIX_FILE")
+	if matrixFile == "" {
+		t.Skip("BATCH_SDK_HE_MATRIX_FILE not set")
+	}
+	data, err := os.ReadFile(matrixFile)
+	if err != nil {
+		t.Fatalf("read HE matrix: %v", err)
+	}
+	var matrix struct {
+		Scenarios map[string]struct {
+			Addresses []string `json:"addresses"`
+			BaseURL   string   `json:"base_url"`
+			Expected  string   `json:"expected"`
+			TimeoutMS int      `json:"timeout_ms"`
+		} `json:"scenarios"`
+	}
+	if err := json.Unmarshal(data, &matrix); err != nil {
+		t.Fatalf("parse HE matrix: %v", err)
+	}
+
+	for scenarioName, scenario := range matrix.Scenarios {
+		t.Run(scenarioName, func(t *testing.T) {
+			resolver := newOrderedLoopbackResolver(t, scenario.Addresses)
+			dialer := newControlPlaneDialer()
+			dialer.Timeout = time.Duration(scenario.TimeoutMS) * time.Millisecond
+			dialer.Resolver = resolver
+			httpTransport := &http.Transport{DialContext: dialer.DialContext}
+			httpClient := &http.Client{
+				Timeout:   time.Duration(scenario.TimeoutMS) * time.Millisecond,
+				Transport: httpTransport,
+			}
+			transport := NewHTTPTransport(
+				scenario.BaseURL,
+				WithTenantID("tx"),
+				WithHTTPClient(httpClient),
+			)
+
+			started := time.Now()
+			_, callErr := transport.Heartbeat(
+				context.Background(),
+				"w-1",
+				HeartbeatRequest{TenantID: "tx"},
+			)
+			elapsed := time.Since(started)
+			httpTransport.CloseIdleConnections()
+			if scenario.Expected == "success" && callErr != nil {
+				t.Fatalf("expected success, got %v", callErr)
+			}
+			if scenario.Expected == "timeout" && callErr == nil {
+				t.Fatal("expected timeout, got success")
+			}
+			if elapsed >= 2500*time.Millisecond {
+				t.Fatalf("exceeded bound: %s", elapsed)
+			}
+			if scenarioName == "ipv6_blackhole" && elapsed < 150*time.Millisecond {
+				t.Fatalf("did not exercise fallback delay: %s", elapsed)
+			}
+		})
+	}
+}
+
+func newOrderedLoopbackResolver(t *testing.T, addresses []string) *net.Resolver {
+	t.Helper()
+	server, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("start DNS fixture: %v", err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	preference := make(map[uint16]int, len(addresses))
+	for index, address := range addresses {
+		if strings.Contains(address, ":") {
+			preference[28] = index
+		} else {
+			preference[1] = index
+		}
+	}
+	go func() {
+		buffer := make([]byte, 512)
+		for {
+			n, peer, readErr := server.ReadFrom(buffer)
+			if readErr != nil {
+				return
+			}
+			query := append([]byte(nil), buffer[:n]...)
+			go func() {
+				response, queryType, responseErr := loopbackDNSResponse(query)
+				if responseErr != nil {
+					return
+				}
+				if preference[queryType] > 0 {
+					time.Sleep(20 * time.Millisecond)
+				}
+				_, _ = server.WriteTo(response, peer)
+			}()
+		}
+	}()
+	serverAddress := server.LocalAddr().String()
+	return &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, "udp4", serverAddress)
+		},
+	}
+}
+
+func loopbackDNSResponse(query []byte) ([]byte, uint16, error) {
+	if len(query) < 17 {
+		return nil, 0, fmt.Errorf("short DNS query")
+	}
+	questionEnd := 12
+	for {
+		if questionEnd >= len(query) {
+			return nil, 0, fmt.Errorf("invalid DNS name")
+		}
+		labelLength := int(query[questionEnd])
+		questionEnd++
+		if labelLength == 0 {
+			break
+		}
+		questionEnd += labelLength
+	}
+	if questionEnd+4 > len(query) {
+		return nil, 0, fmt.Errorf("missing DNS question type")
+	}
+	queryType := binary.BigEndian.Uint16(query[questionEnd : questionEnd+2])
+	questionEnd += 4
+	var record []byte
+	switch queryType {
+	case 1:
+		record = net.ParseIP("127.0.0.1").To4()
+	case 28:
+		record = net.ParseIP("::1").To16()
+	default:
+		return nil, queryType, fmt.Errorf("unsupported DNS query type %d", queryType)
+	}
+	response := append([]byte(nil), query[:questionEnd]...)
+	response[2] = 0x81
+	response[3] = 0x80
+	binary.BigEndian.PutUint16(response[6:8], 1)
+	answer := make([]byte, 12+len(record))
+	answer[0], answer[1] = 0xc0, 0x0c
+	binary.BigEndian.PutUint16(answer[2:4], queryType)
+	binary.BigEndian.PutUint16(answer[4:6], 1)
+	binary.BigEndian.PutUint32(answer[6:10], 1)
+	binary.BigEndian.PutUint16(answer[10:12], uint16(len(record)))
+	copy(answer[12:], record)
+	return append(response, answer...), queryType, nil
+}
 
 // 503 then 200 -> retry with backoff, eventual success.
 func TestHTTPTransport_RetryThenSuccess(t *testing.T) {

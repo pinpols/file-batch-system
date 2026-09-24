@@ -204,21 +204,12 @@ impl Op {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct FakeState {
     /// One scripted-response queue per [`Op`], indexed by `Op::index`.
     queues: [VecDeque<HttpResponse>; Op::COUNT],
     /// Ordered log of operation names, in call order.
     calls: Vec<String>,
-}
-
-impl Default for FakeState {
-    fn default() -> Self {
-        Self {
-            queues: Default::default(),
-            calls: Vec::new(),
-        }
-    }
 }
 
 impl FakeTransport {

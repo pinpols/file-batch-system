@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -15,6 +16,11 @@ import (
 	"time"
 
 	"github.com/pinpols/file-batch-system/sdk/go/protocol"
+)
+
+const (
+	defaultHTTPTimeout                = 10 * time.Second
+	defaultHappyEyeballsFallbackDelay = 250 * time.Millisecond
 )
 
 // Transport is the control-plane HTTP surface (byo-sdk-guide §1.1's 8 endpoints,
@@ -284,15 +290,17 @@ func WithRequestSigning(enabled bool) HTTPTransportOption {
 //   - BATCH_SDK_TENANT_ID            -> WithTenantID
 //   - BATCH_SDK_REQUEST_SIGNING_ENABLED -> WithRequestSigning (false / 0 / no / off => off)
 func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTransport {
+	dialer := newControlPlaneDialer()
 	t := &HTTPTransport{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			// §4 Go pit: NEVER leave the client with no timeout.
-			Timeout: 10 * time.Second,
+			Timeout: defaultHTTPTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        32,
 				MaxIdleConnsPerHost: 16,
 				IdleConnTimeout:     90 * time.Second,
+				DialContext:         dialer.DialContext,
 				// keep-alive enabled (DisableKeepAlives defaults false).
 			},
 		},
@@ -311,6 +319,19 @@ func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTranspor
 		o(t)
 	}
 	return t
+}
+
+// newControlPlaneDialer keeps dual-stack fallback independent from process-wide
+// resolver flags. The explicit delay makes the SDK contract deterministic and
+// matches the Node/AnyIO 250ms connection-attempt delay.
+func newControlPlaneDialer() *net.Dialer {
+	return &net.Dialer{
+		// Dial budget follows the pre-existing request timeout. Happy Eyeballs only
+		// changes address racing; it must not make 5-10s connects fail earlier.
+		Timeout:       defaultHTTPTimeout,
+		KeepAlive:     30 * time.Second,
+		FallbackDelay: defaultHappyEyeballsFallbackDelay,
+	}
 }
 
 // parseSdkBool mirrors the Java SDK's parseBoolean: any value other than the

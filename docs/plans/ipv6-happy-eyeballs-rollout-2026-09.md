@@ -1,6 +1,6 @@
 # IPv6 Happy Eyeballs 渐进落地方案
 
-> 状态：HE-1 ~ HE-5 已完成本地实现和验证，HE-7 待生产同构网络验证。本文是外部 HTTP 双栈治理的边界和验收依据，不授权全工程直接替换 HTTP 客户端。
+> 状态：HE-1 ~ HE-6 已完成本地实现和对应层级验证；HE-7 的全网络矩阵待生产同构环境验证。本文是外部 HTTP 双栈治理的边界和验收依据，不授权全工程直接替换 HTTP 客户端。
 
 ## 目标
 
@@ -39,7 +39,7 @@ OutboundHttpTransport            batch-common:纯 JDK 窄契约
 - Docker/Kubernetes 内部服务名、PG、Kafka、Valkey、MinIO 连接策略不改。
 - `worker-core` 平台内部 HTTP 客户端不在本轮迁移；它有独立重试和协议契约。
 - Atomic/Dispatch 已有 OkHttp 实现继续保留其响应上限、幂等重试、回执和领域错误映射，不套通用适配器。
-- Java SDK core 保持 Spring-free、轻依赖；是否提供可选 OkHttp transport 由后续 SDK 方案单独评审。
+- Java SDK core 保持 Spring-free 和单一制品；内部使用 OkHttp 5，不自研网络栈、不新增平行 SDK artifact、不暴露 OkHttp 公共类型。
 - Go/Python/Rust/TypeScript SDK 使用各语言原生连接栈，不为了形式统一引入 OkHttp 等价层。
 
 ## 分阶段实施
@@ -51,7 +51,7 @@ OutboundHttpTransport            batch-common:纯 JDK 窄契约
 | HE-3 | `DnsResolveGuard` 增加全部地址校验 | 已完成 | 顺序、去重、混合公网/私网拒绝、IPv4/IPv6 受限地址有测试 |
 | HE-4 | 现有 OkHttp SSRF DNS 返回完整安全地址列表 | 已完成 | Webhook、Dispatch、Atomic 的领域实现不重写；原定向测试通过 |
 | HE-5 | 双栈故障注入验证 | 已完成（本地） | IPv6 不可达/IPv4 可达、IPv4 不可达/IPv6 可达、双栈均可达三组证据 |
-| HE-6 | Java SDK 可选 transport 评审 | 暂缓 | 真实租户需要并且不污染 core 时再立项 |
+| HE-6 | SDK 控制面 HTTP 双栈治理 | 已完成（本地） | 五语言通过真实 loopback socket 的单栈、双栈、双向黑洞和全黑洞矩阵；Java 在现有 core 内使用 OkHttp 5，并验证单次 POST 和停机取消；不把仓库锁文件表述成下游依赖锁定 |
 | HE-7 | 生产同构网络验证 | 外部阻塞 | staging DNS、路由、NetworkPolicy 和出口代理环境验收 |
 
 ## 安全不变量
@@ -89,3 +89,7 @@ OutboundHttpTransport            batch-common:纯 JDK 窄契约
 - HE-5 使用自定义 DNS、双栈 loopback 和可取消黑洞 socket 验证：IPv6 黑洞回退 IPv4 约 270ms，IPv4 不可达但 IPv6 可用约 73ms，双栈均可用约 9ms。
 - GUARDED 适配器测试验证了 IP 字面量在建连前被拒绝、DNS 地址快照只解析一次，并且系统 `ProxySelector` 不会介入连接。
 - HE-5 是客户端进程内的确定性故障注入；HE-7 仍必须在 staging 记录真实 DNS、操作系统路由、NetworkPolicy 和出口代理下的切换时延。
+- HE-6 的五语言现状、Java 适配边界和验收矩阵见 [`SDK IPv6 / Happy Eyeballs`](../sdk/ipv6-happy-eyeballs.md)。
+- SDK 单元测试只承担各语言可控的算法/配置回归；纯 IPv6、反向黑洞、全部地址不可达、真实代理与
+  NetworkPolicy 组合原归 HE-7；其中前三项现已由五语言真实 loopback socket 门禁覆盖，真实 DNS、跨主机路由、
+  TLS 出口代理和 NetworkPolicy 仍归 HE-7，不以本地结果冒充生产同构证据。

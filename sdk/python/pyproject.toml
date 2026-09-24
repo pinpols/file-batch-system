@@ -28,6 +28,8 @@ classifiers = [
 # value models). P1 adds httpx for the HTTP client + config validation.
 # P2 adds aiokafka. P3+ may add opentelemetry-api.
 dependencies = [
+    # Keep compatible ranges for library consumers. CI installs from this file
+    # without uv.lock and test_happy_eyeballs.py guards the relied-on AnyIO behavior.
     "anyio>=4.14.2",
     "httpx>=0.27",
     "pydantic>=2.7",

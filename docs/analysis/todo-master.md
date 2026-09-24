@@ -232,7 +232,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 |---|---|---|
 | **HE-1 ~ HE-4** | 平台 transport、JDK 外部调用迁移、全地址 SSRF、既有 OkHttp DNS 对齐 | ✅ 已完成 |
 | **HE-5** | IPv4/IPv6 黑洞与单栈/双栈故障注入 | ✅ 本地已完成，staging 证据归 HE-7 |
-| **HE-6** | Java SDK 可选 OkHttp transport | 🟡 暂缓，真实租户需求触发 |
+| **HE-6** | 五语言 SDK 控制面 HTTP 双栈治理 | ✅ 本地已完成；生产同构网络全矩阵归 HE-7 |
 | **HE-7** | staging DNS/路由/NetworkPolicy/出口代理验证 | 🔒 外部阻塞 |
 
 ---

@@ -28,7 +28,7 @@
 | **超时类型** | 4 种(schedule/start/run/heartbeat) | 2 种(job timeout / process timeout) | 2 种 | 2 种 | **1 种 lease TTL** |
 | **背压 / 限流** | task queue 分区 + server rate limit | maxJobsActive + server | poll batch size | poll 间隔 | ✅ pause/resume |
 | **多租隔离** | Namespace(v1,数据未严格隔离) | Tenant ID(8.3+) | Domain | AWS account | ✅ **租户 Kafka topic + SASL** |
-| **依赖体积** | Java SDK ~20 MB | Java client ~15 MB | Java client ~8 MB | AWS SDK ~5 MB | ✅ **~2 MB** |
+| **依赖体积** | Java SDK ~20 MB | Java client ~15 MB | Java client ~8 MB | AWS SDK ~5 MB | core thin jar **< 2 MB**；OkHttp/Okio/Kotlin 额外约 2.9 MiB |
 | **观测性** | Web UI + 完整 history replay + OTel | Operate UI + Zeebe Exporter | UI + 历史 | CloudWatch | ❌ **无 worker 端指标** |
 | **测试基建** | TestServer / TimeSkipping / Replay test | EmbeddedBroker / ZeebeProcessTest | 内嵌 server | LocalStack | ⚠️ 仅 JDK HttpServer stub |
 | **加密 / Codec** | DataConverter(自定义加密) | Payload encryption(企业版) | (无内置) | KMS 集成 | ❌ **无** |
@@ -43,11 +43,11 @@
 - Temporal Namespace v1 只是逻辑隔离,**数据库共享**;Zeebe 8.3 刚加 tenant-id 是补丁
 - 我们一开始就是 `tenant_id` 全表 + Kafka topic 物理分租户 + SASL/SCRAM per-tenant ACL —— **更严格**
 
-### 依赖最小化(SDK 2 MB)
+### 依赖最小化(core thin jar < 2 MB)
 
 - Temporal Java SDK: ~20 MB,带 gRPC + protobuf + opentelemetry
 - Zeebe Java client: ~15 MB
-- 我们 4 个依赖,无 Spring —— **租户接入门槛低 90%**
+- core 无 Spring；控制面 HTTP 为获得可验证的 Happy Eyeballs 引入 OkHttp，连同 Okio/Kotlin 的额外运行时体积约 2.9 MiB，仍显著小于 gRPC/protobuf 客户端栈
 
 ### Atomic worker dual-use RCE 隔离(ADR-029)
 
@@ -273,7 +273,7 @@ Temporal namespace 有 per-task-queue rate limit:防租户 abuse。
 |---|---|
 | Temporal 把 workflow 写在 worker 端 | 破坏"orchestrator 是唯一状态主机"红线 |
 | Conductor 让 worker 长 poll HTTP | Kafka 派单对 batch 场景更优(可重放 / 审计) |
-| Zeebe gRPC streaming | 引入 protobuf 依赖,SDK 2 MB → 15 MB,违反最小依赖原则 |
+| Zeebe gRPC streaming | 引入 protobuf 依赖,会把当前轻量 thin jar + HTTP 依赖模型扩大到约 15 MB,违反最小依赖原则 |
 | Temporal 引入 OTel 强依赖 | 强依赖会拖死租户进程,我们保持 optional |
 | AWS SFn 把 worker 锁在 AWS account | 我们多云 / 私有云租户都要支持 |
 

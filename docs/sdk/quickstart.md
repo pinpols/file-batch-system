@@ -37,7 +37,7 @@
 </dependency>
 ```
 
-Core SDK 不绑 Spring,jar < 2 MB(只 jackson + http-client + kafka-clients + slf4j)。约束见 ADR-035 §1。
+Core SDK 不绑 Spring,jar < 2 MB(只 jackson + OkHttp + kafka-clients + slf4j)。OkHttp 只作为内部控制面 transport,不进入 SDK 公共 API。约束见 ADR-035 §1。
 
 ### 2. 实现一个 handler
 
