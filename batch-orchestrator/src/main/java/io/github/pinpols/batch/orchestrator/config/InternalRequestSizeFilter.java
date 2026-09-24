@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
@@ -75,7 +76,8 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
   }
 
   private static boolean isInternalPath(String path) {
-    return "/internal".equals(path) || (path != null && path.startsWith("/internal/"));
+    return "/internal".equals(path)
+        || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
   }
 
   private static boolean isMultipart(HttpServletRequest request) {

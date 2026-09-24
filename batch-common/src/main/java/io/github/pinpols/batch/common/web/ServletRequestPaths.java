@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.web;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Objects;
 
@@ -10,13 +11,13 @@ public final class ServletRequestPaths {
 
   public static String applicationPath(HttpServletRequest request) {
     String servletPath = request.getServletPath();
-    if (servletPath != null && !servletPath.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(servletPath)) {
       return servletPath;
     }
 
     String requestUri = Objects.toString(request.getRequestURI(), "");
     String contextPath = Objects.toString(request.getContextPath(), "");
-    if (!contextPath.isEmpty()
+    if (EmptyChecks.isNotEmpty(contextPath)
         && (requestUri.equals(contextPath) || requestUri.startsWith(contextPath + "/"))) {
       return requestUri.substring(contextPath.length());
     }
