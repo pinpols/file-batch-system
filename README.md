@@ -20,6 +20,12 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 
 > 想先看代码结构？跳到[模块结构](#模块结构)；想尽快跑起来？跳到[快速开始](#快速开始)。
 
+## 文档导航
+
+- [docs/README.md](docs/README.md) 是项目文档总入口，按架构、设计、API、运维、测试、SDK、审计等视角导航。
+- [docs/standards/document-governance.md](docs/standards/document-governance.md) 定义文档索引、状态、待办、归档和漂移检查规则。
+- [docs/runbook/README.md](docs/runbook/README.md) 是运维 SOP 入口，覆盖部署、容量、灰度、观测、应急和配置治理。
+
 ## 它解决什么问题？
 
 | 常见做法 | 痛点 | BFS 的做法 |

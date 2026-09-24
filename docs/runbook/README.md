@@ -78,6 +78,8 @@
 | 观测与韧性 | [分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |
 | 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[种子校验](./seed-validation.md)、[CI 加速](./ci-speedup-2026-06-02.md)、[取证回放](./forensic-replay-howto.md) |
 | SDK 发布 | [双轨灰度](./sdk-dual-rollout.md)、[SDK 发布](./sdk-release.md)、[Python 发布](./sdk-python-release.md) |
+| 故障剧本 | [Playbooks 索引](./playbooks/README.md) |
+| CI 专项 | [CI Runbook 索引](./ci/README.md) |
 
 ## 补充与历史专题
 

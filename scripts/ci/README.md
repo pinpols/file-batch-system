@@ -304,9 +304,9 @@ bash scripts/python.sh scripts/ci/report-java-readability-inventory.py \
 
 ## `check-docs-structure.py`
 
-校验 `docs/` 一级目录入口、`docs/README.md` 覆盖、当前文档的仓库内相对链接，以及禁止提交的
-Finder 元数据和带日期本机验收报告。归档正文和外部 URL 不联网检查，避免历史快照或第三方站点
-波动造成误报。该检查已接入 PR gate 和 full gate。
+校验 `docs/` 一级目录入口、子目录 README 覆盖、当前文档的仓库内相对链接、根 README 文档导航入口、
+`docs/README.md` 文档治理入口，以及禁止提交的 Finder 元数据和带日期本机验收报告。归档正文和外部
+URL 不联网检查，避免历史快照或第三方站点波动造成误报。该检查已接入 PR gate 和 full gate。
 
 ```bash
 bash scripts/python.sh scripts/ci/check-docs-structure.py

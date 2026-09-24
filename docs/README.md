@@ -17,7 +17,7 @@
 | # | 目录 | 视角 | 关键入口 |
 |---|---|---|---|
 | 01 | [architecture/](./architecture/README.md) | 工程向 / 运行态架构 | `system-flow-overview.md` 一图看完整链路 |
-| 02 | [design/](./design/README.md) | 业务向 / 静态设计 | `data-model-ddl.md` 全表 schema |
+| 02 | [design/](./design/README.md) | 业务向 / 静态设计 | `database-schema-guide.md` 表目录与关系图 |
 | 03 | [api/](./api/README.md) | 前后端契约 | `console-api-protocol.md` + OpenAPI |
 | 04 | [runbook/](./runbook/README.md) | 运维 SOP（应急 / 部署 / 容量 / 灰度 / 观测）| `incident-response.md` + `feature-switches.md` |
 | 05 | [testing/](./testing/README.md) | 测试计划 / 覆盖矩阵 / release-gate | `full-project-test-plan.md` |
@@ -49,6 +49,7 @@
 | 上线评审 | 05 testing (`release-gate.md`) → 04 runbook (`docker-deployment.md` 或 `feature-switches.md`)|
 | 架构改动 | 01 architecture (`project-structure.md` / adr) → 顶层 03 changelog 追规范 |
 | 规范复扫 / PR 审核 | 09 audit (`convention-drift-guard-index.md`) → 根目录 `CLAUDE.md` → 顶层 02 coding-conventions → `scripts/ci/README.md` |
+| 文档维护 / 目录调整 | 17 standards (`document-governance.md`) → 本 README → 受影响子目录 README → `scripts/ci/check-docs-structure.py` |
 | AI 协作 | 顶层 01 agent-baseline → 02 coding-conventions |
 
 ## 维护约束（来自 CLAUDE.md）
@@ -59,3 +60,4 @@
 - **archive/ 只读**：归档文件不再维护，新内容写到主干目录
 - **待办唯一入口**：当前待办以 [`analysis/todo-master.md`](./analysis/todo-master.md) 为准；`archive/` 中的待办只代表历史时点
 - **文档状态治理**：详见 [`standards/document-governance.md`](./standards/document-governance.md)
+- **索引同步**：新增、移动、归档文档时，必须同步本 README、对应子目录 README 和必要的根 README 入口；`check-docs-structure.py` 会检查主目录 README 覆盖和仓库内链接。
