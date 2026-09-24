@@ -1,4 +1,4 @@
--- V92 P0-1: calendar_holiday 补 tenant_id, 与 CLAUDE.md "多租隔离" 硬约束对齐
+-- V92 P0-1: calendar_holiday 补 tenant_id, 与 docs/agent-baseline.md "多租隔离" 硬约束对齐
 --
 -- 之前 UNIQUE (calendar_id, biz_date) 靠 business_calendar.tenant_id 间接保证;
 -- 跨表 JOIN 才能租户过滤, PG planner 走不到 (tenant_id, ...) 复合索引;

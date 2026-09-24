@@ -1,6 +1,6 @@
 -- V97: archive.job_instance_archive 一次性对齐 batch.job_instance（V93 calendar_code + V94 data_interval_*）
 --
--- CLAUDE.md archive 冷表对齐：热表新增列必须同 PR 补 archive 镜像，否则 ArchiveSchemaDriftCheck 启动 fail-fast。
+-- docs/agent-baseline.md archive 冷表对齐：热表新增列必须同 PR 补 archive 镜像，否则 ArchiveSchemaDriftCheck 启动 fail-fast。
 -- 冷库仅列对齐 + COMMENT；CHECK 留在热表。
 --
 -- 全新库：本脚本与 batch.job_instance（V93/V94）对齐。
