@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -45,7 +46,7 @@ public class DingTalkNotificationSender implements NotificationSender {
   private final OutboundHttpTransport httpTransport;
 
   public DingTalkNotificationSender(
-      ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
+      ObjectMapper objectMapper, @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;
   }

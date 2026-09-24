@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.AlertLabels;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -62,7 +63,7 @@ public class AlertmanagerSilenceBridge {
   public AlertmanagerSilenceBridge(
       AlertmanagerNotifyProperties properties,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      OutboundHttpTransport httpTransport) {
+      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.props = properties.getSilence();
     this.meterRegistryProvider = meterRegistryProvider;
     this.httpTransport = httpTransport;

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -74,7 +75,9 @@ public class AliyunSmsProvider implements SmsProvider {
 
   @Autowired
   public AliyunSmsProvider(
-      SmsProperties properties, ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
+      SmsProperties properties,
+      ObjectMapper objectMapper,
+      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;

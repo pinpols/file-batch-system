@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.AlertLabels;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -60,7 +61,7 @@ public class AlertmanagerEmitPublisher {
   public AlertmanagerEmitPublisher(
       AlertmanagerEmitProperties props,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      OutboundHttpTransport httpTransport) {
+      @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
     this.props = props;
     this.meterRegistryProvider = meterRegistryProvider;
     this.httpTransport = httpTransport;

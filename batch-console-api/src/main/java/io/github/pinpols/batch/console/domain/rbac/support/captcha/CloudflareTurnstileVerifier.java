@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
+import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -42,7 +43,7 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
   public CloudflareTurnstileVerifier(
       CaptchaProperties properties,
       ObjectMapper objectMapper,
-      OutboundHttpTransport httpTransport) {
+      @ConsoleOutboundTransport OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.httpTransport = httpTransport;

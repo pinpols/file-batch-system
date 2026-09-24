@@ -25,6 +25,7 @@
 
 ### Changed
 
+- **组合部署出站 HTTP 隔离**：Console 与 Orchestrator 的 `OutboundHttpTransport` 使用模块级 qualifier 显式绑定，避免 E2E 组合应用或未来同进程部署因存在多个实现而启动失败，并确保通知、验证码、治理、血缘和 Sensor 不会跨模块误用传输策略。
 - **1.0.0 迁移基线重发**：在确认无共享或生产数据库使用旧 checksum 后，将 11 个历史迁移注释统一指向权威 `docs/agent-baseline.md`；基线重发后，CI 已恢复严格禁止修改历史迁移。部署必须重建空库后重新执行 Flyway，禁止对已有库执行 `flyway repair` 迁移该基线。
 - **测试模块依赖边界**：多模块共享的多租户 SQL 种子迁入 `batch-test-support` 资源包，消费模块统一通过测试 classpath 加载；移除 Orchestrator 对 E2E 源码目录的反向引用，并将 `batch-e2e-tests` 的应用模块依赖明确限制为 test scope。
 - **Trace 诊断与异步传播边界**：Trigger 和 Task Dispatch 的既有 Outbox 信封保存最小 W3C `traceparent` / `tracestate`，Relay 在 Kafka send 时恢复父上下文；业务 `traceId` 仍是最长 128 字符的持久化精确检索键，不参与幂等、租户或状态机语义。Console 401/403 同步返回关联 ID，Trace 快照补充截断领域和工作流节点运行数据；OTLP 仅承载 traces/logs，metrics 继续由 Prometheus 拉取。
