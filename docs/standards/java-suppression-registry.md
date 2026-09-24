@@ -19,6 +19,7 @@
 | `java:S2077` | 动态 SQL/存储过程名称仅在 allowlist、schema 和固定片段校验后执行 | orchestrator、worker | 全部调用改为参数化且不再需要动态标识符 |
 | `java:S2259`, `java:S2583`, `java:S2589` | Spring/Lombok/配置驱动的可达性或空值分析误报 | common、console、orchestrator、worker、trigger | 静态分析能识别实际控制流，或代码改为显式判定 |
 | `java:S3330`, `java:S4502` | Cookie/CSRF 与内部无状态链路的安全配置由代码显式承担 | console、trigger | 安全配置迁移到等价且可审计的框架配置 |
+| `java:S5164` | 导出格式在单次 generate 作用域内复用严格字符编码器，并由 `AutoCloseable` 作用域在长寿命 worker 线程返回前强制 `ThreadLocal.remove()` | worker export | 编码器缓存改为显式 generate 上下文且不增加每字段分配 |
 | `java:S6218` | Java record/数组/协议载荷的不可避免参数形态 | console、orchestrator、worker、SDK | 改为命名对象且不降低传输契约可读性 |
 | `ConfigurationProperties` | 多个 properties 类型共享同一前缀但子键不重叠 | common、worker | 前缀拆分或 Spring 元数据能准确表达同一配置边界 |
 | `SpringJavaInjectionPointsAutowiringInspection` | Spring 自动配置的条件 bean / `ObjectProvider` 注入点 IDE 误报 | common | IDE 与 Spring Boot 配置元数据无误报 |
