@@ -14,6 +14,7 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -354,8 +355,8 @@ public class WebhookDispatcher {
       bytes = stream.readNBytes(MAX_ERROR_RESPONSE_BYTES + 1);
     }
     int length = Math.min(bytes.length, MAX_ERROR_RESPONSE_BYTES);
-    var contentType = body.contentType();
-    var charset = EmptyChecks.isNull(contentType)
+    MediaType contentType = body.contentType();
+    Charset charset = EmptyChecks.isNull(contentType)
         ? StandardCharsets.UTF_8
         : contentType.charset(StandardCharsets.UTF_8);
     return new String(bytes, 0, length, charset);
