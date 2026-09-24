@@ -8,6 +8,14 @@ public final class EmptyChecks {
 
   private EmptyChecks() {}
 
+  public static boolean isNull(Object value) {
+    return value == null;
+  }
+
+  public static boolean isNotNull(Object value) {
+    return value != null;
+  }
+
   public static boolean isEmpty(Map<?, ?> value) {
     return value == null || value.isEmpty();
   }

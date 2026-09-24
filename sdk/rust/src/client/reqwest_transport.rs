@@ -36,7 +36,7 @@
 
 use std::time::Duration;
 
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, ClientBuilder};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE};
 
 use super::transport::{HttpResponse, Transport};
@@ -208,6 +208,13 @@ impl ReqwestTransport {
     /// [`TransportBuildError`] only if the client (TLS / timeout) cannot be
     /// constructed or the tenant/api-key contain non-ASCII header bytes.
     pub fn new(config: ReqwestConfig) -> Result<Self, TransportBuildError> {
+        Self::build(config, Client::builder())
+    }
+
+    fn build(
+        config: ReqwestConfig,
+        client_builder: ClientBuilder,
+    ) -> Result<Self, TransportBuildError> {
         if !(1..=64).contains(&config.max_concurrent_tasks) {
             return Err(TransportBuildError(format!(
                 "max_concurrent_tasks must be 1..64, got {}",
@@ -231,7 +238,7 @@ impl ReqwestTransport {
             );
         }
 
-        let client = Client::builder()
+        let client = client_builder
             .connect_timeout(Duration::from_millis(config.connect_timeout_ms))
             .timeout(Duration::from_millis(config.read_timeout_ms))
             .default_headers(default_headers)
@@ -439,10 +446,14 @@ impl Transport for ReqwestTransport {
 mod tests {
     use super::*;
     use crate::client::transport::{classify_response, TransportOutcome};
+    use serde_json::Value;
+    use std::env;
+    use std::fs;
     use std::io::{BufRead, BufReader, Read, Write};
-    use std::net::{TcpListener, TcpStream};
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
     use std::thread;
+    use std::time::Instant;
 
     /// A captured request the one-shot mock server hands back to the test.
     #[derive(Debug, Default, Clone)]
@@ -619,6 +630,97 @@ mod tests {
         );
         // original fields preserved.
         assert!(req.body.contains("\"workerCode\":\"w1\""));
+    }
+
+    #[test]
+    fn dual_stack_resolution_falls_back_without_duplicate_post() {
+        let (base, rx) = one_shot_server(200, "");
+        let port = base.rsplit(':').next().unwrap().parse::<u16>().unwrap();
+        let addresses = [
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), port),
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
+        ];
+        let builder = Client::builder().resolve_to_addrs("dual-stack.test", &addresses);
+        let transport = ReqwestTransport::build(
+            ReqwestConfig::new(format!("http://dual-stack.test:{port}"), "tenant-42")
+                .with_timeouts(2_000, 2_000),
+            builder,
+        )
+        .expect("build dual-stack transport");
+
+        let response = transport.register("w1", r#"{"workerCode":"w1"}"#);
+
+        assert_eq!(response.status, 200);
+        assert_eq!(
+            rx.recv().expect("captured request").path,
+            "/internal/workers/register"
+        );
+        assert!(
+            rx.try_recv().is_err(),
+            "fallback must not duplicate the POST"
+        );
+    }
+
+    #[test]
+    fn real_socket_happy_eyeballs_matrix() {
+        let Ok(matrix_file) = env::var("BATCH_SDK_HE_MATRIX_FILE") else {
+            return;
+        };
+        let matrix: Value =
+            serde_json::from_str(&fs::read_to_string(matrix_file).expect("read HE matrix"))
+                .expect("parse HE matrix");
+        let scenarios = matrix["scenarios"].as_object().expect("scenario object");
+
+        for (scenario_name, scenario) in scenarios {
+            let base_url = scenario["base_url"].as_str().expect("base_url");
+            let port = base_url
+                .rsplit(':')
+                .next()
+                .expect("port")
+                .parse::<u16>()
+                .expect("numeric port");
+            let addresses = scenario["addresses"]
+                .as_array()
+                .expect("addresses")
+                .iter()
+                .map(|address| {
+                    SocketAddr::new(
+                        address
+                            .as_str()
+                            .expect("address string")
+                            .parse::<IpAddr>()
+                            .expect("IP address"),
+                        port,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let timeout_ms = scenario["timeout_ms"].as_u64().expect("timeout_ms");
+            let builder = Client::builder().resolve_to_addrs("localhost", &addresses);
+            let transport = ReqwestTransport::build(
+                ReqwestConfig::new(base_url, "tx").with_timeouts(timeout_ms, timeout_ms),
+                builder,
+            )
+            .expect("build HE transport");
+
+            let started = Instant::now();
+            let response = transport.heartbeat("w-1", r#"{"tenantId":"tx"}"#);
+            let elapsed = started.elapsed();
+            if scenario["expected"] == "success" {
+                assert_eq!(response.status, 200, "{scenario_name}: {response:?}");
+            } else {
+                assert_eq!(response.status, 0, "{scenario_name}: {response:?}");
+            }
+            assert!(
+                elapsed < Duration::from_millis(2_500),
+                "{scenario_name} exceeded bound: {elapsed:?}"
+            );
+            if scenario_name == "ipv6_blackhole" {
+                assert!(
+                    elapsed >= Duration::from_millis(150),
+                    "{scenario_name} did not exercise fallback delay: {elapsed:?}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -21,6 +21,7 @@ ADR-035 租户自托管 Worker SDK 的文档集。代码总入口见 [`sdk/READM
 | [byo-conformance-contract.md](byo-conformance-contract.md) | 防漂移契约:`then.expect` 封闭词表 + 跨语言一致性要求 |
 | [sdk-parity-matrix.md](sdk-parity-matrix.md) | 5 语言能力对齐矩阵(谁实现了什么) |
 | [config-reference.md](config-reference.md) | SDK 配置项、默认值和语言差异 |
+| [ipv6-happy-eyeballs.md](ipv6-happy-eyeballs.md) | 五语言控制面 HTTP 的 IPv4/IPv6 与 Happy Eyeballs 能力、边界和验证矩阵 |
 
 > 契约 fixture 实体在 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/),跨语言共享常量在 [`docs/api/sdk-shared-constants.yaml`](../api/sdk-shared-constants.yaml)。
 

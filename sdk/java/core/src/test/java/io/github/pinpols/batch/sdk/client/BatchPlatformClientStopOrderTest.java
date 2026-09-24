@@ -20,7 +20,7 @@ import org.mockito.Mockito;
 
 /**
  * Phase 1 §3.1 #1.1:验证 {@link BatchPlatformClient#stop()} 的关闭顺序 Kafka consumer → dispatcher drain →
- * heartbeat → lease → deactivate。
+ * cancel in-flight HTTP → heartbeat → lease → deactivate → evict idle connections。
  *
  * <p>正确顺序保护:drain 期间 heartbeat / lease 仍在跑维持租约,避免 orchestrator 在 worker 完成 in-flight 任务过程中误判 worker
  * 死了把同 task 派给别人。
@@ -70,23 +70,28 @@ class BatchPlatformClientStopOrderTest {
     InOrder order = Mockito.inOrder(kafka, dispatcher, hb, lease, http);
     order.verify(kafka).close(any(Duration.class));
     order.verify(dispatcher).stop(any(Duration.class));
-    order.verify(hb).close();
-    order.verify(lease).close();
-    order.verify(http).deactivate(anyString(), any());
+    order.verify(http).cancelInFlightCalls();
+    order.verify(hb).close(any(Duration.class));
+    order.verify(lease).close(any(Duration.class));
+    order.verify(http).deactivate(anyString(), any(), any(Duration.class));
+    order.verify(http).evictIdleConnections();
   }
 
   @Test
   void deactivateFailureSwallowedSoStopAlwaysFinishes() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    doThrow(new IOException("network down")).when(http).deactivate(anyString(), any());
+    doThrow(new IOException("network down"))
+        .when(http)
+        .deactivate(anyString(), any(), any(Duration.class));
 
     inject(client, "httpClient", http);
     inject(client, "started", true);
 
     client.stop();
 
-    verify(http).deactivate(anyString(), any());
+    verify(http).deactivate(anyString(), any(), any(Duration.class));
+    verify(http).evictIdleConnections();
   }
 
   @Test

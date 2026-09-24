@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-09-24
+- **ADR-035 Java SDK HTTP 实现边界**：核心 SDK 继续保持 Spring-free，允许以 OkHttp 5 作为内部控制面 HTTP 实现以获得可验证的 IPv4/IPv6 Happy Eyeballs；OkHttp 类型不得暴露到公共 API，SDK 发布物继续遵守 `< 2 MB` 约束，平台内部服务发现与网络策略不随之改变。
 - **业务数据源 RLS 账号边界**：Worker 业务数据源默认使用 `batch_business_writer`；应用启动和健康检查必须拒绝 SUPERUSER / BYPASSRLS 账号。目标环境仍须由 DBA 核验运行账号不是业务表 owner，仓库默认值和本地测试不能替代该证据。
 - **当前待办证据口径**：`todo-master` 不再维护易失真的本地/外部事项汇总数字；完成状态必须指向代码、测试或门禁，staging/生产验收继续单列为外部阻塞，历史覆盖快照不得用作当前测试数量。
 

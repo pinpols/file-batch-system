@@ -133,4 +133,8 @@ echo "[sdk-live] Rust live Kafka adapter"
   BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" cargo test --features kafka end_to_end_consume_against_real_broker -- --nocapture
 )
 
+echo "[sdk-live] Five-language Happy Eyeballs real socket matrix"
+SDK_HE_PYTHON="${PYTHON_VENV_DIR:-${TMPDIR:-/tmp}/batch-sdk-python-live-venv}/bin/python" \
+  bash "$ROOT/scripts/ci/run-sdk-happy-eyeballs-gate.sh"
+
 echo "[sdk-live] all SDK live transport checks passed"

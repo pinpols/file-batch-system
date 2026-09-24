@@ -30,6 +30,9 @@ import { signatureHeaders } from "./signing.ts";
 /** HTTP methods that carry a request body and are signed when signing is opt-in. */
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+/** RFC 8305 connection-attempt delay used by the Node 22 control-plane client. */
+const HAPPY_EYEBALLS_ATTEMPT_TIMEOUT_MS = 250;
+
 /** Effective task config returned by claim. */
 export interface ClaimResponse {
   effectiveConfig?: Record<string, unknown>;
@@ -200,9 +203,15 @@ export class HttpTransport implements Transport {
       }
     }
     // keep-alive agent — §1.1: avoid per-call TCP+TLS handshake.
-    this.#agent = this.#secure
-      ? new https.Agent({ keepAlive: true, maxSockets: 16 })
-      : new http.Agent({ keepAlive: true, maxSockets: 16 });
+    // Pin family autoselection instead of inheriting a process-wide
+    // --no-network-family-autoselection flag.
+    const agentOptions: http.AgentOptions = {
+      keepAlive: true,
+      maxSockets: 16,
+      autoSelectFamily: true,
+      autoSelectFamilyAttemptTimeout: HAPPY_EYEBALLS_ATTEMPT_TIMEOUT_MS,
+    };
+    this.#agent = this.#secure ? new https.Agent(agentOptions) : new http.Agent(agentOptions);
   }
 
   /** True when the base_url is https:// (TLS on the wire). */

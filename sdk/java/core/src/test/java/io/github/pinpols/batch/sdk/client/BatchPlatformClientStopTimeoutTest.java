@@ -139,9 +139,11 @@ class BatchPlatformClientStopTimeoutTest {
     assertThat(elapsedMs).isLessThan(1_000L);
     verify(kafka).close(any(Duration.class));
     verify(dispatcher).stop(any(Duration.class));
-    verify(hb).close();
-    verify(lease).close();
-    verify(http).deactivate(anyString(), any());
+    verify(http).cancelInFlightCalls();
+    verify(hb).close(any(Duration.class));
+    verify(lease).close(any(Duration.class));
+    verify(http).deactivate(anyString(), any(), any(Duration.class));
+    verify(http).evictIdleConnections();
   }
 
   /**

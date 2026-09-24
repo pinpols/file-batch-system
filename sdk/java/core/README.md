@@ -8,9 +8,10 @@
 
 ## 形态
 
-- 单一 jar(目标 < 2 MB),依赖只 4 个:`jackson-databind` / `kafka-clients` / `slf4j-api` / `lombok(provided)`
+- 单一 jar(目标 < 2 MB),核心依赖为 `jackson-databind` / `kafka-clients` / `slf4j-api` / `okhttp-jvm` / `lombok(provided)`
 - **不依赖** Spring / batch-common / 任何 framework
 - **JDK 21+**(编译目标 `maven.compiler.release=21`,本模块固定 LTS 基线;租户在 LTS 上即可跑)
+- 控制面 HTTP 使用 OkHttp 5 Happy Eyeballs;保持 SDK 公共 API 和单一制品不变,禁止 transport 隐式重放 POST
 - 通信协议权威源:[`docs/sdk/wire-protocol.md`](../../../docs/sdk/wire-protocol.md) + [`docs/api/sdk-contract-fixtures/`](../../../docs/api/sdk-contract-fixtures/) 12 个 JSON 用例
 
 ## 快速接入(5 分钟)
@@ -136,7 +137,7 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 | `buildId` | String | null | 运行指纹(建议 CI 注入 git SHA / 镜像 tag);**禁放敏感信息** |
 | `maxConcurrentTasks` | int | **4** | 进程内并发 handler 上限(1..64,超出 capacity-aware pause) |
 | `heartbeatInterval` | Duration | **30s** | 心跳基础间隔(服务器 `nextHeartbeatHintMs` 钳制覆盖) |
-| `httpTimeout` | Duration | **10s** | HTTP 调用超时(connect + read 合一,非分离字段) |
+| `httpTimeout` | Duration | **10s** | HTTP connect/read/write/call 统一上限,非分离字段 |
 | `kafkaPollInterval` | Duration | 200ms | Kafka poll 间隔 |
 | `leaseRenewInterval` | Duration | 60s | in-flight 任务 lease 续约间隔(应 < orchestrator lease TTL 的 1/2) |
 | `claimMax5xxRetries` | int | 3 | CLAIM 收 5xx / 传输错误的最大额外重试(401/403 永远 fail-fast) |

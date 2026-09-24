@@ -11,7 +11,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│            HTTP /internal/*  ── 控制面,同步,JDK HttpClient             │
+│            HTTP /internal/*  ── 控制面,同步,SDK HTTP transport       │
 │   register / heartbeat / deactivate / claim / report / renew(lease)      │
 └──────────────────────────────────────────────────────────────────────────┘
                               ▲                            │

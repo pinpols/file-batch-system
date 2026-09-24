@@ -4,7 +4,7 @@ ADR-035 租户自托管 Worker SDK 的 Java 实现,拆成 3 个独立模块。�
 
 | 模块 | 坐标 | 是什么 | 何时引 |
 |---|---|---|---|
-| [`core/`](core/) | `io.github.pinpols.batch:batch-worker-sdk` | 核心:`SdkTaskHandler` / `BatchPlatformClient` / `TaskDispatcher` / Kafka 消费 + 心跳/租约调度 + 5 类 worker batteries handler。**零 Spring 依赖**,jar < 2 MB(只 jackson + kafka-clients + slf4j) | 所有 Java worker(必引) |
+| [`core/`](core/) | `io.github.pinpols.batch:batch-worker-sdk` | 核心:`SdkTaskHandler` / `BatchPlatformClient` / `TaskDispatcher` / Kafka 消费 + 心跳/租约调度 + 5 类 worker batteries handler。**零 Spring 依赖**,jar < 2 MB；控制面 HTTP 由 OkHttp 5 提供 Happy Eyeballs | 所有 Java worker(必引) |
 | [`spring/`](spring/) | `io.github.pinpols.batch:batch-worker-sdk-spring-boot-starter` | 可选 Spring Boot 4.x 自动装配:`@Component` handler 即自动注册,`SmartLifecycle` 接管 start/stop | 用 Spring Boot 时引 |
 | [`testkit/`](testkit/) | `io.github.pinpols.batch:batch-worker-sdk-testkit` | 测试套件:`FakeBatchPlatform` in-process 平台 fake + `@BatchWorkerTest` JUnit 扩展 | 仅 test scope,**生产不引** |
 

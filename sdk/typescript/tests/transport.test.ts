@@ -6,6 +6,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import dns from "node:dns";
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import { HttpTransport, FatalTransportError } from "../src/client/transport.ts";
 
@@ -102,6 +104,118 @@ test("transport: 409 → idempotent success (register idempotent=true)", async (
   (transport as unknown as { close(): void }).close();
   await srv.close();
 });
+
+test("transport: forwards the explicit Happy Eyeballs policy to Node connections", async () => {
+  type CreateConnection = (
+    options: Record<string, unknown>,
+    callback: (...args: unknown[]) => void,
+  ) => unknown;
+  const agentPrototype = http.Agent.prototype as unknown as {
+    createConnection: CreateConnection;
+  };
+  const originalCreateConnection = agentPrototype.createConnection;
+  let observedOptions: Record<string, unknown> | undefined;
+  agentPrototype.createConnection = function (options, callback) {
+    observedOptions = options;
+    return originalCreateConnection.call(this, options, callback);
+  };
+
+  const srv = await startServer((_req, res) => {
+    res.statusCode = 200;
+    res.end("{}");
+  });
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+    sleep: async () => {},
+  });
+
+  try {
+    await transport.register({ workerCode: "w1" });
+    assert.equal(observedOptions?.autoSelectFamily, true);
+    assert.equal(observedOptions?.autoSelectFamilyAttemptTimeout, 250);
+  } finally {
+    transport.close();
+    await srv.close();
+    agentPrototype.createConnection = originalCreateConnection;
+  }
+});
+
+test(
+  "transport: real socket Happy Eyeballs matrix",
+  { skip: !process.env.BATCH_SDK_HE_MATRIX_FILE },
+  async () => {
+    const matrix = JSON.parse(
+      readFileSync(process.env.BATCH_SDK_HE_MATRIX_FILE as string, "utf8"),
+    ) as {
+      scenarios: Record<
+        string,
+        {
+          addresses: string[];
+          base_url: string;
+          expected: "success" | "timeout";
+          timeout_ms: number;
+        }
+      >;
+    };
+    const mutableDns = dns as unknown as { lookup: typeof dns.lookup };
+    const originalLookup = mutableDns.lookup;
+
+    try {
+      for (const [scenarioName, scenario] of Object.entries(matrix.scenarios)) {
+        mutableDns.lookup = ((
+          hostname: string,
+          options: { all?: boolean } | number | undefined,
+          callback: (...args: unknown[]) => void,
+        ) => {
+          if (hostname !== "localhost") {
+            return (originalLookup as (...args: unknown[]) => unknown)(hostname, options, callback);
+          }
+          const addresses = scenario.addresses.map((address) => ({
+            address,
+            family: address.includes(":") ? 6 : 4,
+          }));
+          queueMicrotask(() => {
+            if (typeof options === "object" && options?.all) {
+              callback(null, addresses);
+            } else {
+              callback(null, addresses[0].address, addresses[0].family);
+            }
+          });
+        }) as typeof dns.lookup;
+
+        const transport = new HttpTransport({
+          baseUrl: scenario.base_url,
+          tenantId: "tx",
+          workerCode: "w-1",
+          timeoutMs: scenario.timeout_ms,
+          sleep: async () => {},
+        });
+        const startedAt = performance.now();
+        try {
+          if (scenario.expected === "success") {
+            await transport.heartbeat("w-1", { tenantId: "tx" });
+          } else {
+            await assert.rejects(() => transport.heartbeat("w-1", { tenantId: "tx" }));
+          }
+        } finally {
+          transport.close();
+        }
+        const elapsedMs = performance.now() - startedAt;
+        assert.ok(elapsedMs < 2_500, `${scenarioName} exceeded bound: ${elapsedMs}ms`);
+        if (scenarioName === "ipv6_blackhole") {
+          assert.ok(
+            elapsedMs >= 150,
+            `${scenarioName} did not exercise fallback delay: ${elapsedMs}ms`,
+          );
+        }
+      }
+    } finally {
+      mutableDns.lookup = originalLookup;
+    }
+  },
+);
 
 test("transport: sets Idempotency-Key + required tenantId/workerId on claim", async () => {
   let claimKey: string | undefined;

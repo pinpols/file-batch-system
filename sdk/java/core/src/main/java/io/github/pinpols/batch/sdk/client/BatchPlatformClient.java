@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.client;
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
@@ -197,7 +198,7 @@ public class BatchPlatformClient {
    * <ul>
    *   <li>Kafka close+join: 15%(显式让 poll thread join 完成 offset commit)
    *   <li>Dispatcher drain: 70%(in-flight handler 主消耗)
-   *   <li>Scheduler stop: 10%(lease + heartbeat 两个,各自 5s cap)
+   *   <li>Scheduler stop: 10%(lease + heartbeat 按剩余预算动态分配)
    *   <li>Deactivate + 收尾: 剩余 ~5%
    * </ul>
    *
@@ -214,17 +215,20 @@ public class BatchPlatformClient {
     long startNanos = System.nanoTime();
     log.info("BatchPlatformClient stopping (timeoutMs={})", totalMs);
     // Lane E #5:Kafka close+join 预算 15%(原 20%);KafkaTaskConsumer.close(Duration) 内部已 join thread。
-    long kafkaJoinMs = Math.max(50L, totalMs * 15 / 100);
+    long kafkaJoinMs = Math.min(remainingMs(startNanos, totalMs), totalMs * 15 / 100);
     if (kafkaConsumer != null) {
       kafkaConsumer.close(Duration.ofMillis(kafkaJoinMs));
     }
     // 回退再 join 一次(KafkaTaskConsumer.close 已经 join,这里只覆盖极端竞态)
     if (kafkaConsumerThread != null && kafkaConsumerThread.isAlive()) {
       long remainingMs = remainingMs(startNanos, totalMs);
-      try {
-        kafkaConsumerThread.join(Math.max(50L, Math.min(remainingMs, kafkaJoinMs)));
-      } catch (InterruptedException ie) {
-        Thread.currentThread().interrupt();
+      long fallbackJoinMs = Math.min(remainingMs, kafkaJoinMs);
+      if (fallbackJoinMs > 0L) {
+        try {
+          kafkaConsumerThread.join(fallbackJoinMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+        }
       }
     }
     if (dispatcher != null) {
@@ -233,35 +237,61 @@ public class BatchPlatformClient {
       long dispatcherMs = Math.max(0L, remainingMs - totalMs * 15 / 100);
       dispatcher.stop(Duration.ofMillis(dispatcherMs));
     }
-    if (heartbeatScheduler != null) {
-      heartbeatScheduler.close();
-    }
-    if (leaseRenewalScheduler != null) {
-      leaseRenewalScheduler.close();
-    }
+    // OkHttp 同步 execute() 的稳定取消入口是 Call.cancel(),不能只依赖 shutdownNow 的线程中断。
+    // dispatcher drain 完成或超时后统一取消残余 REPORT、heartbeat 和 renew，再关闭 scheduler。
+    httpClient.cancelInFlightCalls();
+    closeSchedulersWithinBudget(startNanos, totalMs);
     // Lane E #4-Java:凭据 fatal 时,deactivate 也会 401 — 跳过,只 log。
     boolean skipDeactivate = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
     if (skipDeactivate) {
       log.warn("skipping deactivate: Kafka SASL auth failed earlier, "
           + "platform HTTP will also fail with 401");
     } else {
-      try {
-        Map<String, Object> body = new HashMap<>();
-        body.put("tenantId", config.getTenantId());
-        body.put("workerCode", config.getWorkerCode());
-        body.put("status", "OFFLINE");
-        body.put("heartbeatAt", Instant.now().toString());
-        httpClient.deactivate(config.getWorkerCode(), body);
-      } catch (Exception ex) {
-        log.warn("deactivate call failed (ignored): {}", ex.getMessage());
+      long deactivateTimeoutMs = remainingMs(startNanos, totalMs);
+      if (deactivateTimeoutMs <= 0L) {
+        log.warn("skipping deactivate: stop timeout budget exhausted");
+      } else {
+        try {
+          Map<String, Object> body = new HashMap<>();
+          body.put("tenantId", config.getTenantId());
+          body.put("workerCode", config.getWorkerCode());
+          body.put("status", "OFFLINE");
+          body.put("heartbeatAt", Instant.now().toString());
+          httpClient.deactivate(
+              config.getWorkerCode(), body, Duration.ofMillis(deactivateTimeoutMs));
+        } catch (Exception ex) {
+          log.warn("deactivate call failed (ignored): {}", ex.getMessage());
+        }
       }
     }
+    httpClient.evictIdleConnections();
     started = false;
   }
 
   private static long remainingMs(long startNanos, long totalMs) {
     long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
     return Math.max(0L, totalMs - elapsedMs);
+  }
+
+  private void closeSchedulersWithinBudget(long stopStartNanos, long totalMs) {
+    int schedulerCount = (EmptyChecks.isNull(heartbeatScheduler) ? 0 : 1)
+        + (EmptyChecks.isNull(leaseRenewalScheduler) ? 0 : 1);
+    if (schedulerCount == 0) {
+      return;
+    }
+    long schedulerBudgetMs = Math.min(remainingMs(stopStartNanos, totalMs), totalMs * 10 / 100);
+    long schedulerStartNanos = System.nanoTime();
+    if (EmptyChecks.isNotNull(heartbeatScheduler)) {
+      long heartbeatBudgetMs = schedulerBudgetMs / schedulerCount;
+      heartbeatScheduler.close(Duration.ofMillis(heartbeatBudgetMs));
+    }
+    if (EmptyChecks.isNotNull(leaseRenewalScheduler)) {
+      long schedulerElapsedMs = (System.nanoTime() - schedulerStartNanos) / 1_000_000L;
+      long leaseBudgetMs = Math.min(
+          remainingMs(stopStartNanos, totalMs),
+          Math.max(0L, schedulerBudgetMs - schedulerElapsedMs));
+      leaseRenewalScheduler.close(Duration.ofMillis(leaseBudgetMs));
+    }
   }
 
   private static void putIfPresent(Map<String, Object> body, String key, String value) {

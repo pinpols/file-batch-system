@@ -63,10 +63,13 @@ class BatchPlatformClientStopBudgetTest {
 
     verify(kafka).close(any(Duration.class));
     verify(dispatcher).stop(any(Duration.class));
-    verify(hb).close();
-    verify(lease).close();
+    verify(http).cancelInFlightCalls();
+    verify(hb).close(any(Duration.class));
+    verify(lease).close(any(Duration.class));
     // 关键:fatal auth 时不调 deactivate
     verify(http, never()).deactivate(anyString(), any());
+    verify(http, never()).deactivate(anyString(), any(), any(Duration.class));
+    verify(http).evictIdleConnections();
   }
 
   /** Lane E #4-Java:正常路径(无 fatal auth)仍会调 deactivate。 */
@@ -89,7 +92,8 @@ class BatchPlatformClientStopBudgetTest {
 
     client.stop(Duration.ofMillis(500));
 
-    verify(http).deactivate(anyString(), any());
+    verify(http).deactivate(anyString(), any(), any(Duration.class));
+    verify(http).evictIdleConnections();
   }
 
   /** Lane E #5:Kafka close 收到的 Duration 应基于总预算的 ~15% 算出(±jitter)。 */

@@ -2,8 +2,10 @@ package io.github.pinpols.batch.sdk.scheduler;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -116,10 +118,16 @@ public class LeaseRenewalScheduler implements AutoCloseable {
 
   @Override
   public void close() {
+    close(Duration.ofSeconds(5));
+  }
+
+  /** 在调用方分配的停机预算内关闭 scheduler。 */
+  public void close(Duration timeout) {
     log.info("LeaseRenewalScheduler stopping");
     scheduler.shutdown();
     try {
-      if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+      long timeoutMillis = Math.max(0L, EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis());
+      if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
         scheduler.shutdownNow();
       }
     } catch (InterruptedException ie) {

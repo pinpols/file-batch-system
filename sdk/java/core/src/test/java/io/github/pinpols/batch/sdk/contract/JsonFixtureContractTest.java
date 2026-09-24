@@ -59,7 +59,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * <p>**仍不做的事**(留后续 follow-up):
  *
  * <ul>
- *   <li>真起 SDK 全链路(mock server / mock kafka consumer 跑 offset 副作用)— 需要 testkit + JDK HttpClient 抽象
+ *   <li>真起 SDK 全链路(mock server / mock kafka consumer 跑 offset 副作用)— 需要 testkit + HTTP transport 抽象
  *   <li>responseBody 与 OpenAPI schema 的深度字段比对(swagger-parser 引入成本高,先靠 fixture 自校验 + 人工评审回退)
  * </ul>
  *

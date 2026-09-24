@@ -4,7 +4,9 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.WorkerIdentity;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -179,6 +181,11 @@ public class HeartbeatScheduler implements AutoCloseable {
 
   @Override
   public void close() {
+    close(Duration.ofSeconds(5));
+  }
+
+  /** 在调用方分配的停机预算内关闭 scheduler。 */
+  public void close(Duration timeout) {
     log.info("HeartbeatScheduler stopping");
     ScheduledFuture<?> f = currentFuture.getAndSet(null);
     if (f != null) {
@@ -186,7 +193,8 @@ public class HeartbeatScheduler implements AutoCloseable {
     }
     scheduler.shutdown();
     try {
-      if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+      long timeoutMillis = Math.max(0L, EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis());
+      if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
         scheduler.shutdownNow();
       }
     } catch (InterruptedException ie) {
