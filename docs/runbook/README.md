@@ -64,6 +64,7 @@
 | 24 | [jvm-tuning-and-profiling.md](./jvm-tuning-and-profiling.md) | JVM 参数(按模块分档)+ profiling 工具链 + 生产 5 类症状 SOP |
 | 25 | [credential-matrix.md](./credential-matrix.md) | **凭据矩阵**:各类凭据(片级账密/渠道/密码/内部密钥/JWT/KMS/对象存储/DB)存哪、怎么注入、prod 强校验、上线必配否、谁负责 |
 | 26 | [sonar.md](./sonar.md) | SonarQube 扫描与门禁 SOP（本地一键扫描、报告解读、CI 门禁配置、质量基线） |
+| 27 | [script-execution-permissions.md](./script-execution-permissions.md) | macOS/Linux 本地脚本执行权限检查与一键恢复 |
 
 ## 专题入口
 
