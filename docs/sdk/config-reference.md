@@ -27,19 +27,21 @@
 | strictTimingValidation | bool | 否 | true | `STRICT_TIMING`(`false/0/no/off` 降级) | true=时序 4 规则违反即 fail-fast;false=WARN-only |
 | claim/retry 退避 | int/时长 | 否 | 见下 | 见「语言差异」 | 5xx / 传输错误指数退避;连续 4xx(非鉴权非 409)达阈值 → fatal |
 
-## 语言差异(收口待办)
+## 语言适配边界
 
-现状 `BATCH_SDK_` 前缀已是五语言共同权威;但**部分具体 env 名 / 覆盖点在各语言尚未逐项统一**,接入时以对应语言 SDK 实际读取名为准:
+`BATCH_SDK_` 是五语言共同权威前缀。Java `fromEnv()` 与 Python `from_env()` 提供完整环境工厂；Go、TypeScript、Rust
+保留各自惯用的 option/builder API，不复制一套聚合环境工厂。部署层可以读取同名环境变量后传入这些 API。
 
 | 概念 | Java env | Python env | 备注 |
 |---|---|---|---|
 | SASL 凭据 | `KAFKA_SASL_JAAS_CONFIG`(整段 JAAS) | `KAFKA_SASL_USERNAME` + `KAFKA_SASL_PASSWORD`(拆分) | 语义等价,形态不同 |
-| 重试次数 | (fromEnv 未开放;用 builder `claimMax5xxRetries`) | `RETRY_MAX_ATTEMPTS` | Java 走 builder,Python 走 env |
-| 重试退避 | (builder `claimRetryBaseDelay`) | `RETRY_BASE_DELAY_MS` | 同上 |
-| 时序严格度 | `STRICT_TIMING` | (未开放 env,用构造参数) | Java 有 env 降级口 |
+| 重试总尝试次数 | `RETRY_MAX_ATTEMPTS` | `RETRY_MAX_ATTEMPTS` | 最小 1；Java 内部换算为额外 retry 次数 |
+| 重试退避 | `RETRY_BASE_DELAY_MS` | `RETRY_BASE_DELAY_MS` | 毫秒 |
+| 时序严格度 | `STRICT_TIMING` | `STRICT_TIMING` | `false/0/no/off` 临时降级为告警 |
 
-- **Go / Rust 集成读裸 `KAFKA_BOOTSTRAP`**(无 `BATCH_SDK_` 前缀,见 `sdk/rust/src/kafka.rs`):属跨语言 env 漂移,收口由 Go / Rust SDK owner 处理(本页 Java/Python 侧已对齐 `BATCH_SDK_`)。
-- 逐项 env 名的五语言完全统一(含 SASL 拆分 vs JAAS、retry env 开放面)列为 follow-up;本页先确立**唯一前缀权威 + 概念级语义对齐**,避免误接入。
+- Java 的 JAAS 单串与 Python/Node/Go/Rust 的 username/password 字段属于 Kafka 客户端 API 形态差异，不是配置语义漂移。
+- 五语言真实 Kafka transport 测试统一使用 `BATCH_SDK_KAFKA_BOOTSTRAP`；
+  `scripts/ci/check-sdk-config-env-parity.py` 阻止裸 `KAFKA_BOOTSTRAP` 回归。
 
 ## 关联
 

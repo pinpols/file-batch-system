@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>orchestrator 侧的 {@code AlertEscalationScheduler} 只抬升 {@code escalation_tier} + 打日志/指标(放大可见度,
  * 不直接发通知)。本属性驱动 console-api 侧的 {@code AlertEscalationNotifier}:把「刚升级、还没通知过」的告警经现有 webhook
- * 投递链路推到订阅方,闭合升级→通知的回路。EMAIL/钉钉/企微 sender 仍未接通,故 v1 只覆盖 WEBHOOK 渠道。
+ * 投递链路推到订阅方,闭合升级→通知的回路。具体渠道由订阅规则和 {@code NotificationSenderRegistry} 路由；
+ * Alertmanager 迁移后本组件默认关闭，仅作为回滚路径保留。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.alert.escalation.notify")

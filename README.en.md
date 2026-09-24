@@ -14,7 +14,7 @@
 File Batch System (BFS) is a **self-hosted distributed batch platform** for reliability-critical batch workloads in finance, settlement, data transfer, and similar domains:
 
 - You hand files or events to the platform; it handles **scheduled triggering, dependency orchestration, sharding/routing, execution, and result reporting**;
-- Built-in pipelines for file import / export / dispatch / process, plus atomic tasks: shell / SQL / stored procedures / HTTP;
+- Built-in import / export / process / dispatch pipelines, plus an isolated atomic worker for shell / SQL / stored procedure / HTTP tasks;
 - Core guarantees: **task state and message publication share one transaction (Outbox), CLAIM-before-execute prevents duplicate work, resumable checkpoints on failure, and full observability and auditability**;
 - Multi-tenant shared cluster: data, SLA, quotas, and permissions are isolated by `tenant_id`.
 
@@ -40,6 +40,8 @@ File Batch System (BFS) is a **self-hosted distributed batch platform** for reli
 - **Graceful worker draining**: ONLINE → DRAINING → DECOMMISSIONED lifecycle
 - **Compensation & retry**: built-in retry policies (FIXED / EXPONENTIAL / NONE) and approval-based compensation
 - **File error tracking**: per-row parsing/validation/load failures, with skip and audit support
+- **Dry-run drills**: batch-day, config-package, and five-worker no-side-effect validation before capacity tests or production changes
+- **Config governance**: properties are classified as `STATIC` / `DYNAMIC_DB` / `SECRET` / `RESTART_REQUIRED`, with Console visibility, Helm checksum rollout, and CI drift guards
 - **Tenant-hosted SDK**: SDKs in five languages — Java / Python / Go / TypeScript / Rust — let tenants register workers in their own environments (ADR-035, [see below](#tenant-hosted-sdk-adr-035))
 
 ## Overall architecture
@@ -57,14 +59,15 @@ flowchart LR
     O <--> C[batch-console-api<br/>console · audit · AI assistant]
 ```
 
-The four file pipelines:
+The five worker types:
 
-| Pipeline | Stage chain |
+| Worker | Purpose | Stage / execution model |
 |---|---|
-| Import | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
-| Export | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
-| Dispatch | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
-| Process | READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK |
+| import | File receive, parse, validate, load | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
+| export | Query, render, sharded export, object-store sink | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
+| process | Staging, compute/aggregate, validate, commit, idempotent rerun | READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK |
+| dispatch | SFTP / NAS / HTTP / S3 delivery | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
+| atomic | Controlled shell / SQL / stored-proc / HTTP atomic tasks | No file pipeline; isolated executor with allowlist / timeout / RCE boundaries |
 
 For the detailed state chain and key constraints see [Architecture constraints](#architecture-constraints); for end-to-end flow diagrams see [docs/architecture/system-flow-overview.md](docs/architecture/system-flow-overview.md).
 
@@ -74,7 +77,7 @@ Tenants can run their business handlers in **their own process / data center / K
 
 | Language | Coordinates / package | Notes |
 |---|---|---|
-| Java | `io.github.pinpols.batch:batch-worker-sdk` | Zero-Spring core; optional `-spring-boot-starter` adapter (Boot 4.x) |
+| Java | `io.github.pinpols.batch:batch-worker-sdk` | Zero-Spring core; optional `-spring-boot-starter` adapter (Boot 3.x / 4.x) |
 | Python | `batch-worker-sdk` (import `batch_worker_sdk`) | 3.12+, async-only, pydantic v2 / httpx / aiokafka |
 | Go / TypeScript / Rust | see [sdk/README.md](sdk/README.md) | Cross-language verified against the same contract fixtures as Java/Python |
 
@@ -101,15 +104,15 @@ Getting started and operations:
 | `batch-worker-process` | 18086 | Process pipeline: READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK (WAP mode + SQL transform plugins) |
 | `batch-worker-atomic` | 18087 | Dedicated atomic-task worker (ADR-029): shell / SQL / stored-proc / HTTP executors, no file pipeline; dual-use (RCE-grade) capabilities isolated into least-privilege processes |
 | `batch-console-api` | 18080 | Console REST API, audit, AI assistance |
-| `batch-worker-sdk` | — | Tenant-hosted Worker SDK (core of ADR-035). Published as a jar with zero Spring dependencies; HTTP + Kafka protocol, handler runtime, 4-state governance. See [`sdk/java/core/README.md`](sdk/java/core/README.md) |
-| `batch-worker-sdk-spring-boot-starter` | — | Optional Spring Boot adapter (Boot 4.x); `@Component` auto-registers and `SmartLifecycle` manages start/stop. See [`sdk/java/spring/README.md`](sdk/java/spring/README.md) |
-| `batch-worker-sdk-testkit` | — | SDK test suite: `FakeBatchPlatform` in-process fake + `@BatchWorkerTest` JUnit extension for tenant handler tests. Not for production. See [`sdk/java/testkit/README.md`](sdk/java/testkit/README.md) |
+| `sdk/java/core` | — | Tenant-hosted Worker SDK (core of ADR-035). Published as a jar with zero Spring dependencies; HTTP + Kafka protocol, handler runtime, 4-state governance. See [`sdk/java/core/README.md`](sdk/java/core/README.md) |
+| `sdk/java/spring` | — | Optional Spring Boot adapter (Boot 3.x / 4.x); `@Component` auto-registers and `SmartLifecycle` manages start/stop. See [`sdk/java/spring/README.md`](sdk/java/spring/README.md) |
+| `sdk/java/testkit` | — | SDK test suite: `FakeBatchPlatform` in-process fake + `@BatchWorkerTest` JUnit extension for tenant handler tests. Not for production. See [`sdk/java/testkit/README.md`](sdk/java/testkit/README.md) |
 | `batch-e2e-tests` | — | End-to-end integration tests (embedded Orchestrator + Worker) |
 | `security-scan` | — | Local/CI security-scan orchestration tooling (standalone, not in the root reactor) |
-| `batch-worker-sdk` (Python) | — | Python SDK (ADR-035 cross-language peer implementation). Python 3.12+, async-only, pydantic v2 / httpx / aiokafka. Standalone toolchain (pip), not in the Maven reactor; cross-SDK contract drift is guarded by the parity lane. See [`sdk/python/README.md`](sdk/python/README.md) |
-| `batch-worker-sdk` (Go / TypeScript / Rust) | — | Cross-language SDKs as standalone toolchains (ADR-035 peers), sharing contract fixtures with Java/Python; language list, install and usage in [sdk/README.md](sdk/README.md) |
+| `sdk/python` | — | Python SDK (ADR-035 cross-language peer implementation). Python 3.12+, async-only, pydantic v2 / httpx / aiokafka. Standalone toolchain (pip), not in the Maven reactor; cross-SDK contract drift is guarded by the parity lane. See [`sdk/python/README.md`](sdk/python/README.md) |
+| `sdk/go` / `sdk/typescript` / `sdk/rust` | — | Cross-language SDKs as standalone toolchains (ADR-035 peers), sharing contract fixtures with Java/Python; language list, install and usage in [sdk/README.md](sdk/README.md) |
 
-> The platform runtime is a fixed set of 10 logical modules, from `batch-common` to `batch-console-api` (including `batch-worker-atomic`). `batch-worker` is an aggregator module with 6 sub-modules: `core` / `import` / `export` / `process` / `dispatch` / `atomic` (the `batch-worker-*` rows above). The root Maven reactor currently has 10 module paths; `batch-test-support` is test-only. The Go / Python / Rust / TypeScript SDKs, `load-tests`, and `security-scan` are standalone toolchains or separate reactors. See `CLAUDE.md §模块` and [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md) before changing the layout.
+> The platform runtime is a fixed set of 10 logical modules, from `batch-common` to `batch-console-api` (including `batch-worker-atomic`). `batch-worker` is an aggregator module with 6 sub-modules: `core` / `import` / `export` / `process` / `dispatch` / `atomic` (the `batch-worker-*` rows above). The root Maven reactor currently has 10 module paths: 7 platform/test modules plus 3 Java SDK modules. The Go / Python / Rust / TypeScript SDKs, `load-tests`, and `security-scan` are standalone toolchains or separate reactors. See `CLAUDE.md §模块` and [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md) before changing the layout.
 
 ## Tech stack
 
@@ -160,10 +163,27 @@ Local service ports:
 
 Prefer `mc` for object-storage troubleshooting; common commands are listed in [S3 object-storage backends](docs/runbook/object-storage-s3-backends.md#本地-minio-mc-常用命令).
 
-### Build
+### Build and lightweight gates
 
 ```bash
 mvn -q compile
+```
+
+Local lightweight gate:
+
+```bash
+bash scripts/local/strict-verify.sh
+```
+
+CI-sync checks can be run independently:
+
+```bash
+bash scripts/python.sh scripts/ci/check-config-governance.py
+bash scripts/python.sh scripts/ci/check-feature-switch-registry.py
+bash scripts/python.sh scripts/ci/check-config-defaults-sync.py
+bash scripts/python.sh scripts/ci/check-helm-env-sync.py
+bash scripts/ci/check-sql-config-boundaries.sh
+helm lint helm/batch-platform
 ```
 
 ### Run tests
@@ -201,6 +221,14 @@ COMPOSE_ENV_FILE=.env.test ./scripts/docker/up-apps.sh
 COMPOSE_ENV_FILE=.env.prod ./scripts/docker/up-apps.sh
 ```
 
+The control-plane capacity test uses a dedicated Trigger `benchmark` profile, so daily `local` settings are not mutated:
+
+```bash
+COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger
+```
+
+`load-tests/scripts/run-p2-capacity-profile.sh` validates the profile, admission concurrency, and Hikari budget before running. Dry-run and capacity validation should proceed as “functional baseline → capacity ladder → failure recovery → mixed dry-run/formal load”; see [batch-day dry-run enhancement plan](docs/plans/batch-day-dry-run-enhancement-plan-2026-09-08.md), [testing index](docs/testing/README.md), and [go-live readiness](docs/runbook/go-live-readiness.md).
+
 ### Local development startup
 
 The first time (or after code changes), build the local application modules:
@@ -235,6 +263,13 @@ Notes:
 - Login API: `POST /api/console/auth/login`
 - The repo stores only password hashes, never plaintext
 - After a successful login you receive a JWT; use `Authorization: Bearer <token>` for subsequent requests
+
+### Config governance and feature switches
+
+- Config classification and effective mode: [config governance](docs/runbook/config-governance.md) (`STATIC`, `DYNAMIC_DB`, `SECRET`, `RESTART_REQUIRED`)
+- Machine-readable global switch registry: [feature-switch-registry.yml](docs/runbook/feature-switch-registry.yml); human-readable guide: [feature switches](docs/runbook/feature-switches.md)
+- Helm deployments use ConfigMap / Secret checksums to roll pods when restart-required config changes
+- Dynamic config publishing requires versioning, stale-version rejection, post-publish confirmation, and multi-instance consistency metrics; do not add `@RefreshScope` to ordinary properties casually
 
 ### Frontend console
 
@@ -336,6 +371,7 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 | [Testing docs index](docs/testing/README.md) | Test plans, coverage matrix, gate rules, and report entry point |
 | [API docs index](docs/api/README.md) | Console API protocol, OpenAPI, and integration guide |
 | [Plans index](docs/plans/README.md) | Engineering borrowings, Spring Boot engineering patterns, and capability benchmarks |
+| [Config governance](docs/runbook/config-governance.md) | Config classification, dynamic config versions, publish confirmation, checksum rollouts, and consistency metrics |
 | [Local development](docs/runbook/local-development.md) | Environment setup, debugging, and common issues |
 | [CI system](docs/runbook/ci.md) | PR / full-ci / staging gate pipelines |
 | [Security scanning](docs/runbook/security-scan.md) | Local vulnerability checks: secrets, dependencies, SAST, images, ZAP |

@@ -38,4 +38,4 @@
 
 - 新增业务状态或准入条件时，按 [代码规范](../coding-conventions.md) §1.5 使用能读出业务事实的局部变量，禁止 `isOk`、`flag` 等泛名。
 - 新增高参数 `Command` / `Context` / `Param` 作为调用实参时，遵循 §1.1 与 §1.4；既有 `PositionalArgsConventionTest` 继续守护已治理类型。
-- 每次修改生产 Java 后运行 `python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md`，保持机器快照与源码一致。
+- 每次修改生产 Java 后运行 `bash scripts/python.sh scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md`，保持机器快照与源码一致。

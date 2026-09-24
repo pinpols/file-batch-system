@@ -11,28 +11,33 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
+import io.github.pinpols.batch.e2e.apps.E2eTriggerApplication;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
+import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * ADR-010 Stage 5 Layer 2: trigger → orchestrator 异步链路 Kafka→consumer→job_instance leg E2E。
+ * ADR-010 Stage 5: trigger → outbox → Kafka → orchestrator → job_instance 全链路 E2E。
  *
- * <p>真起 PG + Kafka(Testcontainers via {@link AbstractIntegrationTest})+ orchestrator 全栈 Spring
- * context(via {@link E2eOrchestratorApplication})，{@code TriggerLaunchConsumer} 无条件启动。 测试模拟"trigger
- * 端 已 publish 到 Kafka topic":手动用 KafkaTemplate 投一条 LaunchEnvelope,断言:
+ * <p>真起 PG + Kafka(Testcontainers via {@link AbstractIntegrationTest})，并行启动 trigger 与 orchestrator 两个独立
+ * Spring context。首个用例从 {@link TriggerService#launch} 进入，断言:
  *
  * <ol>
  *   <li>orchestrator 端 {@code TriggerLaunchConsumer} 真消费消息(@KafkaListener)
@@ -41,9 +46,7 @@ import org.springframework.test.context.ActiveProfiles;
  *   <li>job_instance 行真被 INSERT(uk_job_instance_tenant_dedup 回退)
  * </ol>
  *
- * <p>本测试与 batch-trigger 模块的 {@code TriggerAsyncLaunchE2eIT}(Layer 1)互补:Layer 1 覆盖 trigger
- * fire→Kafka 段,Layer 2 覆盖 Kafka→job_instance 段,两段拼接出 ADR-010 全链路验证。真做 trigger+orchestrator 双
- * ApplicationContext 同 JVM 全链路 E2E 留作 follow-up。
+ * <p>重复消息用例仍直接投 Kafka，用来独立验证 orchestrator 的 at-least-once 消费幂等。
  */
 @SpringBootTest(
     classes = E2eOrchestratorApplication.class,
@@ -58,6 +61,34 @@ import org.springframework.test.context.ActiveProfiles;
 class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static ConfigurableApplicationContext triggerContext;
+
+  private static TriggerService triggerService() {
+    if (triggerContext == null) {
+      triggerContext = new SpringApplicationBuilder(E2eTriggerApplication.class)
+          .profiles("test", "e2e")
+          .run(
+              "--spring.main.web-application-type=none",
+              "--spring.datasource.url=" + platformJdbcUrl(),
+              "--spring.datasource.username=" + platformJdbcUsername(),
+              "--spring.datasource.password=" + platformJdbcPassword(),
+              "--spring.kafka.bootstrap-servers=" + kafkaBootstrapServers(),
+              "--spring.flyway.enabled=false",
+              "--spring.quartz.auto-startup=false",
+              "--batch.security.bypass-mode=true",
+              "--batch.orchestrator.base-url=http://127.0.0.1:1",
+              "--batch.trigger.outbox.poll-interval-millis=200",
+              "--batch.trigger.kafka.send-timeout-seconds=5");
+    }
+    return triggerContext.getBean(TriggerService.class);
+  }
+
+  @AfterAll
+  static void stopTriggerContext() {
+    if (triggerContext != null) {
+      triggerContext.close();
+    }
+  }
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -66,33 +97,26 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
   private KafkaTemplate<String, String> kafkaTemplate;
 
   @Test
-  void kafkaPublish_consumerInvokesLaunchAndCreatesJobInstance() throws Exception {
-    // 1) 准备:在 orchestrator 端 seed job_definition,模拟 trigger fire 时它已经存在
+  void triggerLaunch_publishesAndCreatesJobInstance() {
+    // 1) 准备 job_definition；fixture 预置的 trigger_request 先删掉，让真实 trigger service 创建。
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
-
-    // 2) 构造 LaunchEnvelope = trigger 端会写到 trigger_outbox_event 的同款 payload
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put("fileFormatType", "JSON");
-    LaunchRequest launchRequest = new LaunchRequest(
+    jdbcTemplate.update(
+        "delete from batch.trigger_request where tenant_id = ? and request_id = ?",
         TENANT,
-        seed.jobCode(),
-        LocalDate.of(2026, 4, 30),
-        TriggerType.API,
-        seed.requestId(),
-        "tr-fullchain",
-        params);
-    LaunchEnvelope envelope =
-        LaunchEnvelope.of(launchRequest, seed.dedupKey(), BatchDateTimeSupport.utcNow());
-    String payload = JsonUtils.toJson(envelope);
-    String key = TENANT + ":" + seed.requestId();
+        seed.requestId());
 
-    // 3) 模拟 trigger 端 KafkaTriggerEventPublisher 已发到 topic — 直接走 orchestrator 端
-    //    KafkaTemplate(同 JVM 内同 broker),consumer 会真订阅并消费
-    kafkaTemplate.send(BatchTopics.TRIGGER_LAUNCH_V1, key, payload).get();
+    TriggerLaunchRequest request = new TriggerLaunchRequest();
+    request.setTenantId(TENANT);
+    request.setJobCode(seed.jobCode());
+    request.setBizDate(LocalDate.of(2026, 4, 30));
+    request.setTriggerType(TriggerType.API);
+    request.setParams(Map.of("fileFormatType", "JSON"));
+    triggerService()
+        .launch(
+            new TriggerLaunchCommand(request, seed.dedupKey(), seed.requestId(), "tr-fullchain"));
 
-    // 4) 断言:orchestrator TriggerLaunchConsumer 消费 → 调 LaunchApplicationService.launch →
-    //    job_instance 行被 INSERT(uk_job_instance_tenant_dedup 回退,含 dedup_key)
+    // 2) trigger outbox relay 真发 Kafka，orchestrator consumer 真消费并创建实例。
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(200))
@@ -103,6 +127,13 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
               TENANT,
               seed.dedupKey());
           assertThat(count).isEqualTo(1);
+          String publishStatus = jdbcTemplate.queryForObject(
+              "select publish_status from batch.trigger_outbox_event "
+                  + "where tenant_id = ? and request_id = ?",
+              String.class,
+              TENANT,
+              seed.requestId());
+          assertThat(publishStatus).isEqualTo("PUBLISHED");
         });
   }
 

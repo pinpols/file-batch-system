@@ -148,6 +148,9 @@ fi
 if ! "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py; then
   errors=$((errors+1))
 fi
+if ! "$PYTHON_BIN" scripts/ci/check-sdk-config-env-parity.py; then
+  errors=$((errors+1))
+fi
 
 READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"
 if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; then

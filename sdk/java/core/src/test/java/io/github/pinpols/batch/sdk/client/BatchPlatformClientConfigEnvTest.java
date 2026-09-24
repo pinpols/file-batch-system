@@ -43,6 +43,9 @@ class BatchPlatformClientConfigEnvTest {
     env.put("BATCH_SDK_HTTP_TIMEOUT_SECONDS", "5");
     env.put("BATCH_SDK_API_KEY", "secret");
     env.put("BATCH_SDK_BUILD_ID", "abc123");
+    env.put("BATCH_SDK_RETRY_MAX_ATTEMPTS", "4");
+    env.put("BATCH_SDK_RETRY_BASE_DELAY_MS", "350");
+    env.put("BATCH_SDK_CLIENT_ERROR_FAIL_FAST_THRESHOLD", "7");
 
     BatchPlatformClientConfig config = BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get);
 
@@ -51,6 +54,9 @@ class BatchPlatformClientConfigEnvTest {
     assertThat(config.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(30));
     assertThat(config.getApiKey()).isEqualTo("secret");
     assertThat(config.getBuildId()).isEqualTo("abc123");
+    assertThat(config.getClaimMax5xxRetries()).isEqualTo(3);
+    assertThat(config.getClaimRetryBaseDelay()).isEqualTo(Duration.ofMillis(350));
+    assertThat(config.getClientErrorFailFastThreshold()).isEqualTo(7);
   }
 
   @Test

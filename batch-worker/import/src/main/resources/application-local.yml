@@ -100,7 +100,7 @@ batch:
       # P1-17 reWriteBatchedInserts=true 与 batch-defaults.yml:275 对齐(Import LOAD batchUpdate 收益最大);
       # 本地 profile 覆盖 URL 加 stringtype 时勿再丢该参数。
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified&reWriteBatchedInserts=true}
-      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      username: ${BATCH_BUSINESS_DB_USERNAME:batch_business_writer}
       password: ${BATCH_BUSINESS_DB_PASSWORD:}
       schema: biz
   # 对象存储配置统一走 batch-defaults.yml 的 batch.storage.s3.*（endpoint/access-key/bucket

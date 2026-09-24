@@ -1,13 +1,13 @@
 # Java 可读性治理扫描快照
 
-> 由 `python3 scripts/ci/report-java-readability-inventory.py` 生成。
+> 由 `bash scripts/python.sh scripts/ci/report-java-readability-inventory.py` 生成。
 > 本报告只列候选，不把行数、Map 或 suppression 数量直接判定为缺陷。
 
 ## 汇总
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2258 |
+| 生产 Java 源文件 | 2261 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2071 |
 | 含 Map 的源文件 | 445 |
@@ -23,7 +23,7 @@
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 304 |
+| `batch-common` | 307 |
 | `batch-console-api` | 887 |
 | `batch-orchestrator` | 530 |
 | `batch-trigger` | 69 |

@@ -100,6 +100,6 @@
 
 ## 6. 阶段 0 完成证据
 
-- 运行 `python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md`，证明机器快照与源码一致。
+- 运行 `bash scripts/python.sh scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md`，证明机器快照与源码一致。
 - 运行 `python3 scripts/ci/check-java-readability.py`、PMD 和 Spotless，证明既有硬规则不退化。
 - 阶段 1～3 每次合并后重新生成机器快照；只有自注入归零、固定 Map 清单完成且保留项理由仍成立，才能关闭对应阶段。

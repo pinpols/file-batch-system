@@ -15,18 +15,18 @@ import (
 )
 
 // Integration test for the real Kafka adapter. ENV-GATED: a plain `go test ./...`
-// without KAFKA_BOOTSTRAP skips it, so the default test run is broker-free and
+// without BATCH_SDK_KAFKA_BOOTSTRAP skips it, so the default test run is broker-free and
 // stays green. Run against the local PLAINTEXT broker with:
 //
-//	KAFKA_BOOTSTRAP=localhost:19092 go test ./...
+//	BATCH_SDK_KAFKA_BOOTSTRAP=localhost:19092 go test ./...
 //
 // SASL/SCRAM-SHA-512 + TLS are config-supported (see Config / buildDialer) but
 // the local broker is PLAINTEXT, so this test exercises the PLAINTEXT path; the
 // SCRAM path is validated by construction (buildDialer) and code review.
 func TestKafkaConsumer_Integration(t *testing.T) {
-	bootstrap := os.Getenv("KAFKA_BOOTSTRAP")
+	bootstrap := os.Getenv("BATCH_SDK_KAFKA_BOOTSTRAP")
 	if bootstrap == "" {
-		t.Skip("KAFKA_BOOTSTRAP not set; skipping Kafka integration test (broker-free run)")
+		t.Skip("BATCH_SDK_KAFKA_BOOTSTRAP not set; skipping Kafka integration test (broker-free run)")
 	}
 
 	const tenant = "acme"

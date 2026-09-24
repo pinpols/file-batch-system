@@ -14,7 +14,7 @@
 File Batch System（BFS）是一套**自托管的分布式批处理平台**，面向金融、结算、数据传输等对可靠性要求高的批处理场景：
 
 - 上游把文件或事件交给平台，平台负责**按计划触发、编排依赖、分片路由、执行并回报结果**；
-- 内置文件导入 / 导出 / 分发 / 加工四条流水线，以及 shell / SQL / 存储过程 / HTTP 原子任务；
+- 内置 import / export / process / dispatch 四类文件/数据流水线，以及独立 atomic Worker 承载 shell / SQL / 存储过程 / HTTP 原子任务；
 - 核心保证：**任务状态与消息发送同事务（Outbox）、执行前先 CLAIM 防重复、失败可断点续跑、全程可观测可审计**；
 - 多租户共享集群：按 `tenant_id` 隔离数据、SLA、配额与权限。
 
@@ -40,6 +40,8 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 - **Worker 优雅排空**：ONLINE → DRAINING → DECOMMISSIONED 生命周期管理
 - **补偿与重试**：内置重试策略（FIXED / EXPONENTIAL / NONE）和审批补偿链路
 - **文件错误追踪**：逐行记录解析/校验/加载失败，支持跳过与审计
+- **dry-run 演练**：批量日 / 配置包 / 五类 Worker 支持无副作用预检，用于上线前容量、幂等和配置正确性验证
+- **配置治理**：配置项按 `STATIC` / `DYNAMIC_DB` / `SECRET` / `RESTART_REQUIRED` 标记，Console、Helm checksum、CI 守护共同防止配置漂移
 - **租户自托管 SDK**：Java / Python / Go / TypeScript / Rust 五种语言 SDK，租户可在自有环境注册 Worker（ADR-035，[详见下方](#租户自托管-sdkadr-035)）
 
 ## 整体架构
@@ -57,14 +59,15 @@ flowchart LR
     O <--> C[batch-console-api<br/>控制台 · 审计 · AI 辅助]
 ```
 
-四条文件流水线（Pipeline）：
+五类 Worker：
 
-| 流水线 | 阶段链 |
+| Worker | 定位 | 阶段 / 执行模型 |
 |---|---|
-| 导入 import | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
-| 导出 export | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
-| 分发 dispatch | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
-| 加工 process | READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK |
+| import | 文件接收、解析、校验、装载 | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
+| export | 查询、渲染、分片导出、对象存储落地 | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
+| process | staging、计算/聚合、校验、commit、幂等重跑 | READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK |
+| dispatch | SFTP / NAS / HTTP / S3 等下游交付 | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
+| atomic | 受控 shell / SQL / stored-proc / HTTP 原子任务 | 无文件 pipeline，独立隔离执行器，遵守 allowlist / timeout / RCE 边界 |
 
 更详细的状态主链与关键约束见[架构约束](#架构约束)；端到端流程图见 [docs/architecture/system-flow-overview.md](docs/architecture/system-flow-overview.md)。
 
@@ -101,15 +104,15 @@ flowchart LR
 | `batch-worker-process` | 18086 | 加工链路：READ → TRANSFORM → STAGE → PUBLISH → FEEDBACK（含 WAP 模式 + SQL transform 插件） |
 | `batch-worker-atomic` | 18087 | 专用原子任务 worker(ADR-029):shell / sql / stored-proc / http 执行器,不带文件 pipeline;dual-use(RCE 级)能力隔离到最小权限进程 |
 | `batch-console-api` | 18080 | 控制台 REST API、审计、AI 辅助 |
-| `batch-worker-sdk` | — | 租户自托管 Worker SDK(ADR-035 核心)。**对外发布 jar**,零 Spring 依赖,HTTP+Kafka 协议 + handler 运行时 + 4-state 治理。详见 [`sdk/java/core/README.md`](sdk/java/core/README.md) |
-| `batch-worker-sdk-spring-boot-starter` | — | SDK 可选 Spring Boot 适配层(Boot 4.x);`@Component` 即自动注册 + `SmartLifecycle` 接管 start/stop。详见 [`sdk/java/spring/README.md`](sdk/java/spring/README.md) |
-| `batch-worker-sdk-testkit` | — | SDK 测试套件:`FakeBatchPlatform` in-process 平台 fake + `@BatchWorkerTest` JUnit 扩展,租户写 handler 测试用。生产不引入。详见 [`sdk/java/testkit/README.md`](sdk/java/testkit/README.md) |
+| `sdk/java/core` | — | 租户自托管 Worker SDK(ADR-035 核心)。**对外发布 jar**,零 Spring 依赖,HTTP+Kafka 协议 + handler 运行时 + 4-state 治理。详见 [`sdk/java/core/README.md`](sdk/java/core/README.md) |
+| `sdk/java/spring` | — | SDK 可选 Spring Boot 适配层(Boot 3.x / 4.x);`@Component` 即自动注册 + `SmartLifecycle` 接管 start/stop。详见 [`sdk/java/spring/README.md`](sdk/java/spring/README.md) |
+| `sdk/java/testkit` | — | SDK 测试套件:`FakeBatchPlatform` in-process 平台 fake + `@BatchWorkerTest` JUnit 扩展,租户写 handler 测试用。生产不引入。详见 [`sdk/java/testkit/README.md`](sdk/java/testkit/README.md) |
 | `batch-e2e-tests` | — | 端到端集成测试(内嵌 Orchestrator + Worker) |
 | `security-scan` | — | 本地/CI 安全扫描编排工具(独立模块,不进 root reactor) |
-| `batch-worker-sdk`(Python) | — | Python SDK(ADR-035 跨语言对等实现)。Python 3.12+ async-only,pydantic v2 / httpx / aiokafka。**独立工具链**(pip),不进 Maven reactor;跨 SDK contract drift 由 Lane P guard。详见 [`sdk/python/README.md`](sdk/python/README.md) |
-| `batch-worker-sdk`（Go / TypeScript / Rust） | — | 独立工具链的跨语言 SDK（ADR-035 对等实现），与 Java/Python 共享契约 fixture；语言清单、安装与使用见 [sdk/README.md](sdk/README.md) |
+| `sdk/python` | — | Python SDK(ADR-035 跨语言对等实现)。Python 3.12+ async-only,pydantic v2 / httpx / aiokafka。**独立工具链**(pip),不进 Maven reactor;跨 SDK contract drift 由 Lane P guard。详见 [`sdk/python/README.md`](sdk/python/README.md) |
+| `sdk/go` / `sdk/typescript` / `sdk/rust` | — | 独立工具链的跨语言 SDK（ADR-035 对等实现），与 Java/Python 共享契约 fixture；语言清单、安装与使用见 [sdk/README.md](sdk/README.md) |
 
-> 平台运行时固定 10 个逻辑模块：从 `batch-common` 到 `batch-console-api`（含 `batch-worker-atomic`）。其中 `batch-worker` 是聚合（aggregator）模块，下挂 6 个子模块：`core` / `import` / `export` / `process` / `dispatch` / `atomic`（对应上表 `batch-worker-*`）。根 Maven reactor 当前有 10 个 module path，其中 `batch-test-support` 仅用于测试；Go / Python / Rust / TypeScript SDK、`load-tests`、`security-scan` 是独立工具链或独立 reactor。调整范围参考 `CLAUDE.md §模块` 与 [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md)。
+> 平台运行时固定 10 个逻辑模块：从 `batch-common` 到 `batch-console-api`（含 `batch-worker-atomic`）。其中 `batch-worker` 是聚合（aggregator）模块，下挂 6 个子模块：`core` / `import` / `export` / `process` / `dispatch` / `atomic`（对应上表 `batch-worker-*`）。根 Maven reactor 当前有 10 个 module path：7 个平台 / 测试模块 + 3 个 Java SDK 模块；Go / Python / Rust / TypeScript SDK、`load-tests`、`security-scan` 是独立工具链或独立 reactor。调整范围参考 `CLAUDE.md §模块` 与 [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md)。
 
 ## 技术栈
 
@@ -160,10 +163,27 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 
 MinIO 对象排查优先用 `mc`。常用命令见 [对象存储后端（S3 协议）配置与多云接入](docs/runbook/object-storage-s3-backends.md#本地-minio-mc-常用命令)。
 
-### 编译
+### 编译与基础门禁
 
 ```bash
 mvn -q compile
+```
+
+本地轻量门禁：
+
+```bash
+bash scripts/local/strict-verify.sh
+```
+
+CI 同步类检查可单独运行：
+
+```bash
+bash scripts/python.sh scripts/ci/check-config-governance.py
+bash scripts/python.sh scripts/ci/check-feature-switch-registry.py
+bash scripts/python.sh scripts/ci/check-config-defaults-sync.py
+bash scripts/python.sh scripts/ci/check-helm-env-sync.py
+bash scripts/ci/check-sql-config-boundaries.sh
+helm lint helm/batch-platform
 ```
 
 ### 运行测试
@@ -212,6 +232,8 @@ COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger
 `load-tests/scripts/run-p2-capacity-profile.sh` 会校验 profile、入口并发和 Hikari 池预算；未启用该 profile 时直接拒绝执行。
 完整环境边界见 [环境配置边界](docs/runbook/environment-profile-boundaries.md)。
 
+dry-run 与容量验证建议按“功能基线 → 阶梯容量 → 故障恢复 → 正式任务混压”推进，验收口径见 [批量日 dry-run 增强计划](docs/plans/batch-day-dry-run-enhancement-plan-2026-09-08.md)、[测试文档索引](docs/testing/README.md) 与 [上线就绪检查](docs/runbook/go-live-readiness.md)。
+
 ### 本地联调启动
 
 首次启动或代码有变更时，先构建本地应用模块：
@@ -246,6 +268,13 @@ bash scripts/local/stop-all.sh
 - 登录接口：`POST /api/console/auth/login`
 - 仓库只保存密码哈希，不保存明文密码
 - 登录成功后返回 JWT，后续请求使用 `Authorization: Bearer <token>`
+
+### 配置治理与特性开关
+
+- 配置分类与生效方式见 [配置治理](docs/runbook/config-governance.md)：`STATIC`、`DYNAMIC_DB`、`SECRET`、`RESTART_REQUIRED`
+- 全局开关登记源见 [feature-switch-registry.yml](docs/runbook/feature-switch-registry.yml)，人读版见 [特性开关](docs/runbook/feature-switches.md)
+- Helm 部署通过 ConfigMap / Secret checksum 触发需要重启的配置滚动更新
+- 动态配置发布需要版本号、旧版本拒绝、发布后确认和多实例一致性指标，不建议给普通属性随意加 `@RefreshScope`
 
 ### 前端控制台
 
@@ -346,6 +375,7 @@ DB (job_task: READY)
 | [测试文档索引](docs/testing/README.md) | 测试计划、覆盖矩阵、门禁规则和测试报告总入口 |
 | [API 文档索引](docs/api/README.md) | 控制台接口协议、OpenAPI 和对接说明 |
 | [阶段计划索引](docs/plans/README.md) | 工程化借鉴、Spring Boot 工程化样板计划与优秀系统能力对照表 |
+| [配置治理](docs/runbook/config-governance.md) | 配置项分类、动态配置版本、发布确认、checksum 滚动重启与一致性指标 |
 | [本地开发](docs/runbook/local-development.md) | 环境搭建、调试、常见问题 |
 | [CI 体系](docs/runbook/ci.md) | PR / full-ci / staging 门禁流水线说明 |
 | [安全扫描](docs/runbook/security-scan.md) | 本地漏洞自测组合：secret、依赖、SAST、镜像、ZAP |

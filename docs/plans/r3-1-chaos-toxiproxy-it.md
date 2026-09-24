@@ -1,6 +1,8 @@
 # Plan #1 — Chaos / Toxiproxy IT 框架
 
 > r3 validation-infra · 优先级 P0 · 估时 1 天
+>
+> **状态（2026-09-24）：实现完成。** 基类、三类故障注入 IT、CI full-gate 接线和维护说明均已落地；目标环境的长时故障演练仍按 runbook 单独执行。
 
 ## 目标
 在现有 Testcontainers IT 基础上加 Toxiproxy 代理层,让 PG / Kafka / Redis 的连接经代理而不直连容器,
@@ -27,12 +29,12 @@
 ## 步骤拆解
 
 ### Step 1 — 基础设施(2h)
-- [ ] `AbstractChaosIntegrationTest.java`:
+- [x] `AbstractChaosIntegrationTest.java`:
   - 共享 Toxiproxy 容器(static field + reuse)
   - `@BeforeAll` 创建 3 个 proxy:`pg_proxy: 5432 → pg:5432`,`kafka_proxy: 9092 → kafka:9092`,`redis_proxy: 6379 → redis:6379`
   - override Spring DataSource / KafkaTemplate / RedisConnectionFactory 的 URL 指向 toxiproxy 端口
   - `@AfterEach` 自动 reset 所有 toxic
-- [ ] helper API:
+- [x] helper API:
   ```java
   void withLatency(Proxy target, Duration latency, Runnable block);
   void withSlice(Proxy target, int bytesPerSlice, Runnable block);
@@ -63,10 +65,10 @@
   - `job_instance.lease_owner` 不残留死连接锁
 
 ## 验收标准
-- [ ] `mvn verify -pl batch-common,batch-orchestrator -Dit.test='*ToxicIT'` 三个 IT 全部通过
-- [ ] CI `full-ci-gate` 跑通(不进 pr-gate,Toxiproxy 起容器较慢)
-- [ ] 每个 IT 写 `@DisplayName` 中文 + 故障注入意图说明
-- [ ] `chaos/README.md` 补"如何写新 Toxic IT"指引
+- [x] 三个 `*ToxicIT` 均位于 `batch-test-support` 并可独立执行
+- [x] CI `full-ci-gate` 已包含 `batch-test-support` 的 verify
+- [x] 每个 IT 均有中文 `@DisplayName` 和故障注入意图说明
+- [x] `chaos/README.md` 已补充扩展方式和网络拓扑
 
 ## 风险 / 依赖
 - **依赖**:Testcontainers Toxiproxy 1.21.4(已加 pom test scope)

@@ -6,6 +6,10 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-24
+- **业务数据源 RLS 账号边界**：Worker 业务数据源默认使用 `batch_business_writer`；应用启动和健康检查必须拒绝 SUPERUSER / BYPASSRLS 账号。目标环境仍须由 DBA 核验运行账号不是业务表 owner，仓库默认值和本地测试不能替代该证据。
+- **当前待办证据口径**：`todo-master` 不再维护易失真的本地/外部事项汇总数字；完成状态必须指向代码、测试或门禁，staging/生产验收继续单列为外部阻塞，历史覆盖快照不得用作当前测试数量。
+
 ### 2026-09-23
 - **ADR-013 观测信号与业务关联边界**：业务 `trace_id` 继续承担持久化精确检索，W3C `traceparent` / `tracestate` 只作为现有 Outbox 消息的可选传输元数据，不参与业务状态、幂等和租户语义；OTLP 只承载 traces/logs，metrics 保持 Prometheus 拉取单一主通道。
 

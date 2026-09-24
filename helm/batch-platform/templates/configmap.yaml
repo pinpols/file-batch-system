@@ -21,6 +21,7 @@ data:
   # ── Redis（用于 ShedLock / 配置缓存 / 实时 SSE Pub-Sub）─────────────────
   BATCH_REDIS_HOST: {{ .Values.redis.host | quote }}
   BATCH_REDIS_PORT: {{ .Values.redis.port | quote }}
+  BATCH_SHEDLOCK_PROVIDER: {{ (.Values.shedlock).provider | default "redis" | quote }}
 
   # ── 各模块 server.port 显式注入（Spring Boot 4 对 ${VAR:default} fallback
   #    处理变严，直接显式注入避免占位符解析失败）
@@ -111,6 +112,8 @@ data:
   BATCH_WORKER_REPORT_OUTBOX_STORAGE: {{ (.Values.orchestrator.workerReportOutbox).storage | default "PLATFORM_PG" | quote }}
   BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID: {{ (.Values.orchestrator.workerReportOutbox).cutoverId | default "" | quote }}
   BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS: {{ (.Values.orchestrator.workerLease).renewBatchMaxItems | default 256 | quote }}
+  BATCH_WORKER_KAFKA_SUBSCRIBE_MODE: {{ (.Values.orchestrator.workerKafka).subscribeMode | default "PATTERN" | quote }}
+  BATCH_WORKER_KAFKA_TENANT_ALLOWLIST: {{ (.Values.orchestrator.workerKafka).tenantAllowlist | default "" | quote }}
   BATCH_WORKER_CHECKPOINT_ENABLED: {{ (.Values.orchestrator.workerCheckpoint).enabled | default true | quote }}
   BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED: {{ (.Values.orchestrator.workerCheckpoint).stageSkipEnabled | default false | quote }}
   BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED: {{ (.Values.orchestrator.businessRouting).enabled | default false | quote }}
@@ -149,6 +152,7 @@ data:
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT: {{ (.Values.orchestrator.importScanner).doneFileFormat | default "MARKER" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX: {{ (.Values.orchestrator.importScanner).doneFileSuffix | default ".done" | quote }}
   BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED: {{ (.Values.orchestrator.importScanner).batchManifestEnabled | default false | quote }}
+  BATCH_WORKER_IMPORT_SCANNER_EVENT_ARRIVAL_ENABLED: {{ (.Values.orchestrator.importScanner).eventArrivalEnabled | default false | quote }}
   BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED: {{ (((.Values.orchestrator).fileGovernance).arrival).requireVerified | default false | quote }}
   BATCH_SENSOR_ENABLED: {{ (.Values.orchestrator.sensor).enabled | default true | quote }}
   BATCH_RATE_LIMIT_ENABLED: {{ .Values.orchestrator.rateLimit.enabled | default false | quote }}

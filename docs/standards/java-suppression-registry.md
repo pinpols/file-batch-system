@@ -35,7 +35,7 @@
 ## 复查命令
 
 ```bash
-python3 scripts/ci/check-java-suppression-registry.py
-python3 scripts/ci/report-java-readability-inventory.py
+bash scripts/python.sh scripts/ci/check-java-suppression-registry.py
+bash scripts/python.sh scripts/ci/report-java-readability-inventory.py
 ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
 ```

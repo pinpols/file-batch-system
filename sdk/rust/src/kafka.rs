@@ -719,7 +719,7 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
 
 // ───────────────────────────────────────────────────────────────────────────
 // Integration test — mirrors the TS/Go/Python behavior, gated on a live broker.
-// Runs only in CI where KAFKA_BOOTSTRAP points at a real cluster; a no-broker
+// Runs only in CI where BATCH_SDK_KAFKA_BOOTSTRAP points at a real cluster; a no-broker
 // environment returns early so `cargo test --features kafka` stays green locally.
 // ───────────────────────────────────────────────────────────────────────────
 #[cfg(test)]
@@ -968,7 +968,7 @@ mod tests {
     fn end_to_end_consume_against_real_broker() {
         // Env gate: only runs in CI with a broker (mirrors the TS/Go/Python
         // integration gate). No broker → return green.
-        let bootstrap = match std::env::var("KAFKA_BOOTSTRAP") {
+        let bootstrap = match std::env::var("BATCH_SDK_KAFKA_BOOTSTRAP") {
             Ok(b) if !b.trim().is_empty() => b,
             _ => return,
         };

@@ -120,12 +120,12 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - ✅ worker 写之前 `tenant_id` 经 `RlsTenantContextHolder` 包装到 connection-scoped session var(#158;**需复核是否覆盖 import/export/dispatch 全部直写路径**,目前确认到 pipeline step adapter + sql plugin)
 - ⚠️ 所有包含 `tenant_id` 的 biz 租户表 + `batch.process_staging`加 policy —— **不是 Flyway migration**,而是手工 psql 脚本 `scripts/db/business/rls-phase-a.sql`(`psql -d batch_business -f`);脚本按真实 schema 动态发现表，因 biz 表本身也非 Flyway 管(`create_biz_tables.sql` 由 ops/seed 脚本建)
 - ✅ 测试:新建 `RlsTenantIsolationIntegrationTest`(命中/绕过反例)+ `RlsPhaseAMigrationCoverageTest`(三份脚本动态发现守护)—— **不是**「扩 `MultiTenantIsolationIntegrationTest`」
-- ⚠️ 平台运维聚合用 `BYPASSRLS` role —— 脚本创建的是 `batch_business_admin`(BYPASSRLS)+ `batch_business_writer`(应用,RLS 生效);**现役 `batch_user` 未收敛(R1)**
+- 平台运维聚合用 `BYPASSRLS` role —— 脚本创建 `batch_business_admin`(BYPASSRLS)+ `batch_business_writer`(应用,RLS 生效)。2026-09-24 起仓库默认值已切到 writer，并增加运行账号启动检查；历史目标环境的账号迁移和 owner 核验仍需 DBA 执行。
 
 **Phase 拆解(实际落地状态)**:
 | 步骤 | 内容 | 状态 |
 |---|---|---|
-| A1 | DB role:脚本建 `batch_business_writer`(应用,RLS 生效)/ `batch_business_admin`(BYPASSRLS,平台聚合)| ⚠️ 部分 —— role 已建,但现役 `batch_user` 未迁移/未收敛(R1) |
+| A1 | DB role:脚本建 `batch_business_writer`(应用,RLS 生效)/ `batch_business_admin`(BYPASSRLS,平台聚合)| ✅ 仓库默认与启动守护已完成；目标环境账号迁移/owner 核验为 DBA 验收项 |
 | A2 | `BatchPgSessionAutoConfiguration` / `RlsTenantContextHolder` 加 `app.tenant_id` SET LOCAL | ✅ 已落地(#158;待复核全写路径覆盖) |
 | A3 | 给所有含 `tenant_id` 的租户表加 ENABLE+FORCE+policy —— **动态手工 psql 脚本** `rls-phase-a.sql`(非 Flyway)| ✅ 已落地(strict 模式) |
 | A4 | 单测:`RlsTenantIsolationIntegrationTest` 命中/绕过反例 | ✅ 已落地 |
@@ -140,18 +140,18 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - [x] 所有带 `tenant_id` 的非分区 biz 表 + `batch.process_staging` 动态启用 RLS + strict policy
 - [x] `RlsTenantIsolationIntegrationTest` RLS 反例,全过
 - [x] `pg_policies` healthcheck 集成 actuator(`RlsPolicyHealthIndicator`)
-- [ ] runbook `docs/runbook/multi-tenant-rls.md` 写清 BYPASSRLS 何时用、policy 怎么 review
+- [x] runbook `docs/runbook/multi-tenant-rls.md` 已说明 BYPASSRLS 使用边界、policy 检查与 strict 排障流程
 
 **出口红线(阻断项 —— 不满足则 RLS 形同虚设,必须在 Phase A 真正收尾前全部通过)**:
 
-> 上面的「出口」是功能完成度(已基本达成),这三条是**安全有效性**。任一未达成 → RLS 只是装了脚手架,不提供实际防护。当前三条**都未达成**。
+> 上面的「出口」是仓库功能完成度,这三条是**安全有效性**。R2/R3 已由代码、脚本和守护落实；R1 的仓库默认与启动守护已完成，但生产/预发账号迁移仍须在目标环境验收。
 
 - [ ] **R1 · 现役业务账号必须被收敛为非 owner / 非 superuser / NOBYPASSRLS。**
-  - 现状漏洞:`rls-phase-a.sql` 只对新建的 `batch_business_writer` 收敛干净;真正在用的 `batch_user` 仅在 `NOT rolsuper` 时才 `ALTER ... NOBYPASSRLS`。**`ALTER ROLE NOBYPASSRLS` 治不了 superuser —— superuser 无视 RLS 是另一条独立通道,连 `FORCE` 都拦不住。** 若现役账号是 superuser 或 biz 表 owner,则 `pg_policies` 查得到 policy 但一行都不生效(静默失效)。
-  - 达成标准:核实生产/预发的 business DataSource 账号**不是 superuser、不是 biz 表 owner、无 BYPASSRLS**;worker 迁到 `batch_business_writer`;`batch_user` 权限收敛或停用。需 DBA 配合(改 `BusinessDataSourceProperties.username` + 回收 `batch_user`),脚本做不到。
-- [ ] **R2 · transition 模式必须翻成 strict —— 否则现在 fail-OPEN。**
-  - 现状漏洞:policy `TO PUBLIC` 且 `current_setting('app.tenant_id', true) IS NULL OR = '' → 允许全部`。即**任何忘记 `SET LOCAL app.tenant_id` 的连接都放行全表**,而「应用 SQL bug / 漏带 tenant_id」正是 RLS 要回退的场景 → 当前模式下毫无回退,RLS 等于装了没开。
-  - 进度:#158 已把 SET LOCAL 铺到 pipeline step 写入路径;达成标准 = 铺到**每一个** worker 写连接路径并验证后,删 `IS NULL/''` 逃逸分支转 strict(变量未设 → 0 行 / 拒写,fail-closed)。
+  - 仓库状态(2026-09-24):业务数据源默认已切到 `batch_business_writer`;启动检查与 health indicator 会拒绝 owner / superuser / BYPASSRLS。目标环境仍须由 DBA 核验历史账号迁移结果。
+  - 达成标准:核实生产/预发的 business DataSource 账号**不是 superuser、不是 biz 表 owner、无 BYPASSRLS**;历史 worker 迁到 `batch_business_writer`;`batch_user` 权限收敛或停用。账号和 owner 变更仍需 DBA 配合。
+- [x] **R2 · 默认 policy 已切换为 strict，未设置租户上下文时 fail-closed。**
+  - `rls-phase-a.sql` 与 `rls-phase-a-strict.sql` 均安装 `tenant_isolation_strict`，不存在 `IS NULL/''` 放行分支；漏 `SET LOCAL app.tenant_id` 时查询返回 0 行、写入被拒绝。
+  - transition policy 仅保留在事故应急回滚脚本中；回滚期间健康检查保持 DOWN，修复后必须恢复 strict。
 - [x] **R3 · 守护从「白名单」翻成「闭世界」,且 fail-fast。**
   - 守护已改为按活动 catalog 动态发现带 `tenant_id` 的非分区 `biz` 租户表；新增租户业务表不需要维护 Java/SQL 数组，漏配 RLS 会进入 health/fail-fast 检查，而非静默放行。非租户元数据不属于扫描边界，只有明确含 `tenant_id` 但确认非租户时才使用显式豁免。
   - 达成标准:守护从**活动 catalog** 出发 —— 查 `pg_tables WHERE schemaname='biz'`,断言**每一张实际存在的表**都 `ENABLE+FORCE+有 policy`;硬编码清单退化为「已知豁免名单」(同 CLAUDE.md 4 张系统表豁免写法)。漏配 → 启动 fail-fast / CI 红,而非静默放行。

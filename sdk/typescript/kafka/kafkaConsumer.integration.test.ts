@@ -1,10 +1,10 @@
 /**
  * Integration test for the real kafkajs adapter against a LIVE broker.
  *
- * GATED: only runs when KAFKA_BOOTSTRAP is set. Without it the whole suite is
+ * GATED: only runs when BATCH_SDK_KAFKA_BOOTSTRAP is set. Without it the whole suite is
  * skipped so the normal `node --test` unit run stays broker-free / green.
  *
- *   KAFKA_BOOTSTRAP=localhost:19092 \
+ *   BATCH_SDK_KAFKA_BOOTSTRAP=localhost:19092 \
  *     node --test --experimental-strip-types 'kafka/*.integration.test.ts'
  *
  * Coverage (byo-sdk-guide §1.2 / §1.9, wire-protocol §A):
@@ -32,7 +32,7 @@ import {
   dispatchTopicRegex,
 } from "../src/kafka/kafkaConsumer.ts";
 
-const BOOTSTRAP = process.env.KAFKA_BOOTSTRAP;
+const BOOTSTRAP = process.env.BATCH_SDK_KAFKA_BOOTSTRAP;
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
@@ -48,7 +48,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 20_000, stepMs = 10
 
 test(
   "kafka integration: accept v1, drop foreign tenant, reject v3 over live broker",
-  { skip: BOOTSTRAP ? false : "KAFKA_BOOTSTRAP not set" },
+  { skip: BOOTSTRAP ? false : "BATCH_SDK_KAFKA_BOOTSTRAP not set" },
   async () => {
     // lazy import so the unit run (no kafkajs needed at module load) is unaffected
     const { Kafka, logLevel } = await import("kafkajs");

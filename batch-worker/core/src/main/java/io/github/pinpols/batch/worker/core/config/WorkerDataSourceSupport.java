@@ -8,6 +8,8 @@ import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
 import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
+import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleHealthIndicator;
+import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleStartupCheck;
 import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
 import io.github.pinpols.batch.common.rls.RlsProperties;
 import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
@@ -114,6 +116,18 @@ public final class WorkerDataSourceSupport {
   public static RlsStartupFailFastCheck buildRlsStartupFailFastCheck(
       DataSource businessDataSource, RlsProperties rlsProperties) {
     return new RlsStartupFailFastCheck(businessDataSource, rlsProperties.getExemptTables());
+  }
+
+  /** 业务库账号权限健康探针：SUPERUSER/BYPASSRLS 会使行级隔离失效。 */
+  public static BusinessDataSourceRoleHealthIndicator buildBusinessDataSourceRoleHealthIndicator(
+      DataSource businessDataSource) {
+    return new BusinessDataSourceRoleHealthIndicator(businessDataSource);
+  }
+
+  /** 启动期拒绝能绕过 RLS 的业务库账号。 */
+  public static BusinessDataSourceRoleStartupCheck buildBusinessDataSourceRoleStartupCheck(
+      DataSource businessDataSource) {
+    return new BusinessDataSourceRoleStartupCheck(businessDataSource);
   }
 
   /** {@link DataSourceTransactionManager} 构造——process 模块平台/业务两侧各有一个同构 TransactionManager bean。 */

@@ -57,7 +57,7 @@ rg -n -i --glob '*.md' \
 
 ```bash
 bash scripts/ci/check-hardcoded-runtime-config.sh
-python3 scripts/ci/check-docs-structure.py
+bash scripts/python.sh scripts/ci/check-docs-structure.py
 ```
 
 该门禁检查当前文档的个人绝对路径、运维旧端口、local profile 固定 Redis 地址、Kafka

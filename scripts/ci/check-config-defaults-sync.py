@@ -16,9 +16,9 @@ deploy/docker/compose/app.yml 默认 :-false 的 bug，导致行为静默不一�
 - VAR 用 :?required 形式 → 跳过（明确要求必传，无 default）
 - 嵌套占位符 ${VAR:-${OTHER}} → 跳过（间接默认，复杂场景人工 review）
 
-CI 用法：
-  python3 scripts/ci/check-config-defaults-sync.py        生成报告
-  python3 scripts/ci/check-config-defaults-sync.py --check 不一致 → exit 1
+本地用法：
+  bash scripts/python.sh scripts/ci/check-config-defaults-sync.py         生成报告
+  bash scripts/python.sh scripts/ci/check-config-defaults-sync.py --check 不一致 → exit 1
 """
 
 from __future__ import annotations

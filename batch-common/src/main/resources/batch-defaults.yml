@@ -385,7 +385,7 @@ batch:
       # P1-17 reWriteBatchedInserts=true: Import LOAD batchUpdate 链路收益最大
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business?reWriteBatchedInserts=true}
       # 业务库用户名
-      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      username: ${BATCH_BUSINESS_DB_USERNAME:batch_business_writer}
       # 业务库密码（生产请通过环境变量/密钥管理注入）
       password: ${BATCH_BUSINESS_DB_PASSWORD:}
       # 业务 schema（用于 SQL 拼接/校验等）

@@ -46,6 +46,8 @@
 |---|---|---|
 | 15 | [feature-switches.md](./feature-switches.md) | 跨模块能力开关索引、默认值、风险和回滚 |
 | 16 | [config-governance.md](./config-governance.md) | 配置分类、生效方式、滚动重启、版本 CAS 与实例确认边界 |
+| 16a | [config-ops-tiering.md](./config-ops-tiering.md) | 配置运维入口 L0-L3 分层：哪些必须一等化，哪些保持容量参数 / 应急阀 / 内部实现 |
+| 16b | [environment-variable-governance.md](./environment-variable-governance.md) | 开发、场景测试、压测、生产的环境变量入口、对齐检查和变量治理体系 |
 | 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED / DIRECT_ONLY）切换 |
 | 17a | [stateful-backend-cutover.md](./stateful-backend-cutover.md) | Quota / Report Outbox / Object Storage 有状态后端切换守卫与 SOP |
 
@@ -67,7 +69,7 @@
 
 | 领域 | 文档 |
 |---|---|
-| 上线与环境 | [上线就绪](./go-live-readiness.md)、[staging 执行](./go-live-staging-execution.md)、[环境边界](./environment-profile-boundaries.md)、[发布](./releasing.md)、[数据库迁移](./db-migration-checklist.md) |
+| 上线与环境 | [上线就绪](./go-live-readiness.md)、[staging 执行](./go-live-staging-execution.md)、[环境边界](./environment-profile-boundaries.md)、[环境变量治理](./environment-variable-governance.md)、[发布](./releasing.md)、[数据库迁移](./db-migration-checklist.md) |
 | Trigger 与批量日 | [Trigger 运维](./trigger-operations.md)、[异步 launch 灰度](./trigger-async-launch-rollout.md)、[依赖感知 fire](./dependency-aware-fire.md)、[批量日门禁](./batch-day-gate-howto.md)、[事件到达](./event-driven-arrival.md) |
 | 多租户与数据 | [RLS](./multi-tenant-rls.md)、[RLS 严格灰度](./multi-tenant-rls-strict-rollout.md)、[biz 路由](./biz-tenant-routing.md)、[PG session](./pg-session-tuning.md)、[分区切换](./partition-cutover-2026-05.md) |
 | Worker 与恢复 | [重任务容量与资源池](./heavy-workload-operations.md)、[Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |

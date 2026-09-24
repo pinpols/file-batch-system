@@ -1,6 +1,8 @@
 # Plan #2 — 运维演练剧本
 
 > r3 validation-infra · 优先级 P0 · 估时 0.5 天
+>
+> **状态（2026-09-24）：完成。** 原计划 5 篇及补充的 Worker 背压剧本均已落地，并从 incident response 建立统一入口。
 
 ## 目标
 为 on-call 凌晨 3 点的真实故障写"抄写级"剧本,每篇回答 3 个问题:**怎么发现 → 怎么定位 → 怎么恢复**。
@@ -68,10 +70,10 @@ P2 一篇 + 把模板中 "Prometheus alert 名 / Grafana URL" 占位符替换成
 - 每篇剧本末尾加"事后"链接回 incident-response
 
 ## 验收标准
-- [ ] 5 篇剧本全 PR,每篇按模板结构
-- [ ] `playbooks/README.md` 指向具体剧本(从清单变为目录)
-- [ ] `incident-response.md` 引用 playbooks/
-- [ ] 至少 1 篇剧本能跟 Plan #1 的 chaos IT 配对(剧本说"怎么救",IT 验"救得回")
+- [x] 原计划 5 篇剧本及 1 篇 Worker 背压剧本均按统一结构落地
+- [x] `playbooks/README.md` 已提供具体剧本目录
+- [x] `incident-response.md` 已引用 `playbooks/`
+- [x] PG、Kafka、Redis 场景均有对应 Chaos/Toxiproxy IT 作为本地恢复能力证据
 
 ## 风险 / 依赖
 - **依赖**:需要查 `application.yml` / `BatchShedLockAutoConfiguration` / `OutboxPublishCircuitBreaker` 等代码,了解真实降级路径

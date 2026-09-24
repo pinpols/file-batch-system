@@ -140,6 +140,9 @@ batch:
         source-type: ${BATCH_WORKER_IMPORT_SCANNER_SOURCE_TYPE:SYSTEM}
         # 默认业务类型（用于任务分类/路由）
         default-biz-type: ${BATCH_WORKER_IMPORT_SCANNER_DEFAULT_BIZ_TYPE:IMPORT_SCAN}
+        event-arrival:
+          # 事件驱动到达入口：对象存储通知到达时即时触发一次扫描；默认关闭，轮询仍保留兜底。
+          enabled: ${BATCH_WORKER_IMPORT_SCANNER_EVENT_ARRIVAL_ENABLED:false}
         arrival:
           # 与“文件到达治理”联动：按文件组等待/超时策略（可选）
           enabled: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_ENABLED:false}

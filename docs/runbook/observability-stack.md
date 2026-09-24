@@ -104,7 +104,7 @@ prometheusRule:
 
 ```bash
 python3 scripts/ci/check-observability-contract.py
-python3 scripts/ci/check-production-overlay-safety.py
+bash scripts/python.sh scripts/ci/check-production-overlay-safety.py
 bash scripts/ci/check-helm-prometheusrule-sync.sh
 helm lint helm/batch-platform -f helm/values-prod.yaml
 ```

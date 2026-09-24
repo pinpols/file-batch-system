@@ -17,8 +17,34 @@ REQUIRED_CONTROLS = {
     "fault-injection",
     "alert-runbook-contract",
     "supply-chain",
+    "business-datasource-role",
 }
 VALID_STATUSES = {"implemented", "planned", "deferred"}
+
+
+def validate_business_role_defaults(errors: list[str]) -> None:
+    yaml_paths = (
+        ROOT / "helm/batch-platform/values.yaml",
+        ROOT / "helm/values-prod.yaml",
+        ROOT / "helm/batch-platform/examples/values-local-k8s.yaml",
+    )
+    for path in yaml_paths:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        username = document.get("postgresql", {}).get("business", {}).get("username")
+        if username != "batch_business_writer":
+            errors.append(
+                f"{path.relative_to(ROOT)}: business database username must be "
+                "batch_business_writer"
+            )
+
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    if "BATCH_BUSINESS_DB_USERNAME=batch_business_writer" not in env_example:
+        errors.append(".env.example: business database username must use batch_business_writer")
+
+    compose = (ROOT / "deploy/docker/compose/app.yml").read_text(encoding="utf-8")
+    unsafe = "BATCH_DATASOURCE_BUSINESS_USERNAME: ${BATCH_DATASOURCE_BUSINESS_USERNAME:-batch_user}"
+    if unsafe in compose:
+        errors.append("deploy/docker/compose/app.yml: business datasource defaults to batch_user")
 
 
 def main() -> int:
@@ -57,6 +83,7 @@ def main() -> int:
 
     missing = REQUIRED_CONTROLS - seen
     errors.extend(f"missing required control: {control_id}" for control_id in sorted(missing))
+    validate_business_role_defaults(errors)
     if errors:
         print("❌ application governance contract validation failed:")
         for error in errors:

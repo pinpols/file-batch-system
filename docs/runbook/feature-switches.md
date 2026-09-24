@@ -54,10 +54,11 @@
 | 配置 key | 枚举值 | 默认 | 作用 | 重要度 | env | 测试 |
 |---|---|---|---|---|---|---|
 | `batch.mq.routing.mode` | `SINGLE` / `TENANT` / `PRIORITY` | **TENANT** | 派发 Kafka topic 分流粒度；切换必须先升 consumer 再切 producer | **P0** | `BATCH_MQ_ROUTING_MODE` | ✅ |
+| `batch.worker.kafka.subscribe-mode` | `PATTERN` / `FIXED` / `TENANT_SCOPED` / `DIRECT_ONLY` | **PATTERN** | Worker Kafka 订阅范围；租户隔离池使用 `TENANT_SCOPED` + `BATCH_WORKER_KAFKA_TENANT_ALLOWLIST`，专用资源池模板会显式覆盖为 `DIRECT_ONLY` | **P0** | `BATCH_WORKER_KAFKA_SUBSCRIBE_MODE` / `BATCH_WORKER_KAFKA_TENANT_ALLOWLIST` | ✅ |
 | `batch.worker.checkpoint.enabled` | `true` / `false` | **true** | 断点续跑总开关（P0 默认开，显式 false 回滚到全量重跑） | **P0** | `BATCH_WORKER_CHECKPOINT_ENABLED` | ✅ |
 | `batch.worker.checkpoint.stage-skip.enabled` | `true` / `false` | **false** | PROCESS 阶段级续跑（仅 COMPUTE+VALIDATE，多分片自动降级） | P1 | `BATCH_WORKER_CHECKPOINT_STAGE_SKIP_ENABLED` | ✅ |
 | `batch.resource-scheduler.default-exceeded-strategy` | `QUEUE_DEFER` / `REJECT` | **QUEUE_DEFER** | 超配额租户的默认策略（REJECT 为旧行为，可回退） | P1 | `BATCH_RESOURCE_SCHEDULER_DEFAULT_EXCEEDED_STRATEGY` | ❌ |
-| `batch.resource-scheduler.waiting-dispatch-kick-enabled` | `true` / `false` | **true** | task 终态提交后合并唤醒 WAITING 分区；关闭后只保留周期扫描 | P1 | `BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED` | ✅ |
+| `batch.resource-scheduler.waiting-dispatch-kick-enabled` | `true` / `false` | **true** | task 终态提交后合并唤醒 WAITING 分区；关闭后只保留周期扫描，延迟由 `BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_DELAY_MILLIS` 控制 | P1 | `BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_KICK_ENABLED` | ✅ |
 | `batch.trigger.runtime.api-launch-adaptive-enabled` | `true` / `false` | **false** | Trigger 手工 launch 的 AIMD 本地准入；慢请求减半、正常请求逐步恢复，需先完成灰度压测 | P1 | `BATCH_TRIGGER_API_LAUNCH_ADAPTIVE_ENABLED` | ✅ |
 | `batch.trigger.outbox.adaptive-release-enabled` | `true` / `false` | **false** | 根据 orchestrator trigger consumer group lag 对 Relay 发布速率做 AIMD 调节；采样失败降到最小速率 | P1 | `BATCH_TRIGGER_OUTBOX_ADAPTIVE_RELEASE_ENABLED` | ✅ |
 | `batch.worker.lease.renew-batch-max-items` | 正整数 | **256** | 单次 renew-batch HTTP 最多携带任务数，超出自动拆单 | P2 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS` | ❌ |
@@ -97,6 +98,7 @@
 | `batch.worker.import.scanner.done-file-format` | `MARKER` / `MANIFEST` / `JSON` | **MARKER** | done 文件格式；MANIFEST/JSON 走 sidecar 清单强校验 | P2 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_FORMAT` | ❌ |
 | `batch.worker.import.scanner.done-file-suffix` | 字符串 | **`.done`** | done 文件后缀 | P2 | `BATCH_WORKER_IMPORT_SCANNER_DONE_FILE_SUFFIX` | ❌ |
 | `batch.worker.import.scanner.batch-manifest-enabled` | `true` / `false` | **false** | 扫描期强校验批次清单（文件完整性） | P1 | `BATCH_WORKER_IMPORT_SCANNER_BATCH_MANIFEST_ENABLED` | ✅ |
+| `batch.worker.import.scanner.event-arrival.enabled` | `true` / `false` | **false** | 对象存储事件通知触发即时扫描，轮询仍兜底 | P2 | `BATCH_WORKER_IMPORT_SCANNER_EVENT_ARRIVAL_ENABLED` | ✅ |
 | `batch.file-governance.arrival.require-verified` | `true` / `false` | **false**（jar）/ **true**（helm） | 到达组要求文件已校验通过才放行 | P1 | `BATCH_FILE_GOVERNANCE_ARRIVAL_REQUIRE_VERIFIED` | ❌ |
 | `batch.worker.atomic.enabled-task-types` | 白名单：`shell`/`sql`/`stored_proc`/`http` | **空（全部启用）** | atomic 执行器白名单 | P1 | `BATCH_WORKER_ATOMIC_ENABLED_TYPES` | ❌ |
 | `batch.worker.executors.http.max-request-body-bytes` | 正整数 | **1048576** | atomic HTTP 任务请求体上限 | P2 | `BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES` | ❌ |

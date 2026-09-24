@@ -149,7 +149,8 @@ public class BatchPlatformClientConfig {
    *
    * <p>必填:{@code <prefix>BASE_URL / TENANT_ID / WORKER_CODE / KAFKA_BOOTSTRAP / KAFKA_TOPIC_PATTERN
    * / KAFKA_GROUP_ID}。可选:{@code API_KEY / BUILD_ID / MAX_CONCURRENT_TASKS /
-   * HEARTBEAT_INTERVAL_SECONDS / HTTP_TIMEOUT_SECONDS / KAFKA_SECURITY_PROTOCOL /
+   * HEARTBEAT_INTERVAL_SECONDS / HTTP_TIMEOUT_SECONDS / RETRY_MAX_ATTEMPTS /
+   * RETRY_BASE_DELAY_MS / CLIENT_ERROR_FAIL_FAST_THRESHOLD / KAFKA_SECURITY_PROTOCOL /
    * KAFKA_SASL_MECHANISM / KAFKA_SASL_JAAS_CONFIG}。缺必填项一次性报全。
    */
   public static BatchPlatformClientConfig fromEnv() {
@@ -209,6 +210,22 @@ public class BatchPlatformClientConfig {
     String leaseRenew = env.apply(prefix + "LEASE_RENEW_INTERVAL_SECONDS");
     if (leaseRenew != null && !leaseRenew.isBlank()) {
       builder.leaseRenewInterval(Duration.ofSeconds(Long.parseLong(leaseRenew.trim())));
+    }
+    String retryMaxAttempts = env.apply(prefix + "RETRY_MAX_ATTEMPTS");
+    if (!EmptyChecks.isBlank(retryMaxAttempts)) {
+      int totalAttempts = Integer.parseInt(retryMaxAttempts.trim());
+      if (totalAttempts < 1) {
+        throw new IllegalArgumentException(prefix + "RETRY_MAX_ATTEMPTS must be >= 1");
+      }
+      builder.claimMax5xxRetries(totalAttempts - 1);
+    }
+    String retryBaseDelay = env.apply(prefix + "RETRY_BASE_DELAY_MS");
+    if (!EmptyChecks.isBlank(retryBaseDelay)) {
+      builder.claimRetryBaseDelay(Duration.ofMillis(Long.parseLong(retryBaseDelay.trim())));
+    }
+    String clientErrorThreshold = env.apply(prefix + "CLIENT_ERROR_FAIL_FAST_THRESHOLD");
+    if (!EmptyChecks.isBlank(clientErrorThreshold)) {
+      builder.clientErrorFailFastThreshold(Integer.parseInt(clientErrorThreshold.trim()));
     }
     // R3-4(Round-2 P0 #4):时序校验严格度开关,env 默认 true(保持 fail-fast)。
     // 仅当显式设为 false / 0 / no / off 时降级为 WARN-only。

@@ -1,16 +1,15 @@
 # 待办事项汇总(2026-06-23)
 
-本文件汇总 `docs/backlog/` 与 `docs/plans/` 中**尚未完成**的事项,作为单一索引。明细以各来源文档为准;启动任一项前**务必以 `origin/main` 实际代码复核状态**(历史规划文档的"待办"标注可能已被后续实现取代)。
+本文件是 2026-06-23 的历史快照，不再作为当前待办索引。当前状态以
+[`../analysis/todo-master.md`](../analysis/todo-master.md) 为准；下方内容仅保留来源和演进背景。
 
 > 维护约定:某项完成后,在此处划线并在来源文档同步标注,避免索引与实现漂移。
 
 ## P0 —— 安全/正确性优先
 
 - **多租户 RLS Phase A 三红线**(来源:`plans/multi-tenant-isolation-plan-2026-05-31.md` §Phase A)
-  - R1:现役 `batch_user` 收敛为非 superuser / 非 owner / `NOBYPASSRLS`。
-  - R2:RLS 由 transition 切到 strict(移除 fail-open 逃逸分支)。
-  - R3:租户隔离守护从白名单改为闭世界 fail-fast。
-  - 影响:三条未达成前 RLS 处于 fail-open,隔离形同未启用。
+  - 2026-09-24 本地代码状态：业务数据源默认使用 `batch_business_writer`；启动检查与 health indicator 会拒绝 superuser / `BYPASSRLS` 账号，并有真实 PostgreSQL 集成测试。
+  - 目标环境仍须由 DBA 确认角色不是表 owner、具备 `NOSUPERUSER NOBYPASSRLS`，并执行跨租户实测；本地默认值不能替代部署环境证据。
 - **结算级缺口路线图**(来源:`plans/settlement-gap-remediation-roadmap-2026-06-20.md`)
   - Phase 0(ADR-041)+ Phase 1(对账完整性闭环 1.1–1.5):**已全部落 main 并各带单测,default-off**(2026-06-23 核实,ADR-041 已置 Accepted)。**不再是待办**。
   - 剩余:**Phase 2**(长任务 task 级心跳 / ADR-038 checkpoint 接入 Load/GenerateStep / 准入软节流⚠️需小 ADR)、**Phase 3**(maker-checker 双控 / dual-use 命令审计表 / 告警升级阶梯 / 人工数据修正受控 API⚠️需 ADR-021 对齐)、**Phase 4**(事件驱动到达 / 依赖感知 fire⚠️需 ADR / 实例 pause-resume / TriggerType.EVENT 消费者)。多数需 ADR 决策,待定。
@@ -24,10 +23,10 @@
   - P2-8:10 万 task 洪峰容量(当前本地不达标,需调 trigger/orchestrator 消费并发 + 接入层 backpressure 后重跑)。
   - P2-9:多租户公平性(需 tenant-aware outbox 选择 / launch 消费分区并发 / quota fair-share)。
 - **验证基础设施 r3 系列**(来源:`plans/r3-1`…`r3-4`)
-  - r3-1:Chaos/Toxiproxy 集成测试框架(Kafka 延迟 / Redis down / PG 连接重置)。
-  - r3-2:运维剧本(部分已落地于 `docs/runbook/playbooks/`,**核对剩余篇目**)。
+  - r3-1:Chaos/Toxiproxy 集成测试框架已落地，覆盖 Kafka 延迟、Redis down、PG 连接重置。
+  - r3-2:6 篇运维剧本与统一目录已落地。
   - r3-3:24h Soak Test。时钟偏移已在 `BatchClockConfig` 实现并有单测；当前本地复验因磁盘使用率 97% 被保护阈值停止，需释放至少 30GB 后完成 30 分钟/24 小时窗口。
-  - r3-4:Forensic Bundle 本地回放工具(解包 + schema 还原 + replay + diff)。
+  - r3-4:Forensic Bundle 本地回放、schema 还原、replay、五维 diff 和操作文档已落地；真实生产证据包验证仍属于目标环境工作。
 - **ADR-046 Phase 2 worker 攒批生产启用门**(来源:`docs/archive/backlog/adr046-phase2-2.3-worker-batch-construction.md`)
   - 代码 2.0–2.4 + 2.3a–d 已全部落 main,flag `batch.worker.batch-claim.enabled` 默认关。
   - 待办:生产开 flag 前,在**独占全栈窗口**跑 `scripts/local/adr046-batch-consume-load.sh`(上万 fan-out 对照基线)达标。

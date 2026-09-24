@@ -1,8 +1,8 @@
 # 测试覆盖率缺口分析与补测计划
 
-> 分析基准日期：2026-04-08
-> 全量测试状态：21 E2E + 190 单元/集成，全部通过
-> 工具说明（已更新）：平台已随 #698 回到 JDK 21（bytecode class file version 65），JaCoCo 0.8.12 支持,可正常生成覆盖率报告——原“JaCoCo 不支持 Java 25 bytecode（v69），采用静态分析替代”的前提已失效。下文历史结论基于当时的静态分析,予以保留。
+> 历史分析基准日期：2026-04-08。本文保留当时的静态覆盖快照，不再作为当前待办或当前测试数量的权威来源。
+> 2026-09-24 复核：`batch-e2e-tests` 当前有 28 个 `*E2eIT`；实时测试状态以 CI、`docs/testing/README.md` 和 [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。
+> 工具说明：平台已随 #698 回到 JDK 21（bytecode class file version 65），JaCoCo 可正常生成覆盖率报告。下文的文件数量、覆盖比例和“无测试”结论仅表示 2026-04-08 快照，不能直接用于判断当前代码。
 
 ---
 

@@ -9,9 +9,10 @@
 | 方向 | 守护 |
 |---|---|
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-no-enable-preview.sh` |
+| SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀） |
 | 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
-| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
+| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
@@ -155,13 +156,24 @@ python3 scripts/ci/check-dependency-boundaries.py
 
 校验 Helm templates 注入的 `BATCH_*` 环境变量是否能被应用消费，避免生产 Chart 变量名写错后静默失效；同时确认生产一等开关入口（限流、请求签名等）已显式渲染。
 
-生产一等开关入口从 `docs/runbook/feature-switch-registry.yml` 读取；新增公共开关时先登记 registry，再补 Compose / Helm / 运维说明。
+生产一等开关入口从 `docs/runbook/feature-switch-registry.yml` 读取；新增公共开关时先按
+`docs/runbook/config-ops-tiering.md` 判断是否属于 L0，再登记 registry、补 Compose / Helm / 运维说明。
 
 ```bash
-python3 scripts/ci/check-helm-env-sync.py
+bash scripts/python.sh scripts/ci/check-helm-env-sync.py
 ```
 
 成功时打印 `Helm BATCH_* env 与应用消费入口一致` 并以退出码 `0` 结束；违反约束时列出未知变量或缺失入口并以 `1` 结束。
+
+## `check-env-variable-governance.py`
+
+校验环境变量治理文档、关键配置入口和常用检查脚本仍然存在，并确认 `.env.example` 保留开发、场景测试、压测和生产排障最常用的关键变量模板。它不要求 `.env.example` 收录全部 `BATCH_*`，全量公共开关仍以 `feature-switch-registry.yml` 和 `feature-switches.md` 为准。
+
+```bash
+bash scripts/python.sh scripts/ci/check-env-variable-governance.py
+```
+
+成功时打印 `environment variable governance doc and critical entry points are aligned` 并以退出码 `0` 结束；缺文档锚点、缺关键文件或缺关键变量模板时以 `1` 结束。
 
 ## `check-five-worker-parity.py`
 
@@ -280,10 +292,10 @@ python3 scripts/ci/check-java-suppression-registry.py
 也不把数量本身判定为缺陷。
 
 ```bash
-python3 scripts/ci/report-java-readability-inventory.py
-python3 scripts/ci/report-java-readability-inventory.py \
+bash scripts/python.sh scripts/ci/report-java-readability-inventory.py
+bash scripts/python.sh scripts/ci/report-java-readability-inventory.py \
   --output docs/analysis/java-readability-inventory-2026-08-12.md
-python3 scripts/ci/report-java-readability-inventory.py \
+bash scripts/python.sh scripts/ci/report-java-readability-inventory.py \
   --check docs/analysis/java-readability-inventory-2026-08-12.md
 ```
 
@@ -297,5 +309,5 @@ Finder 元数据和带日期本机验收报告。归档正文和外部 URL 不�
 波动造成误报。该检查已接入 PR gate 和 full gate。
 
 ```bash
-python3 scripts/ci/check-docs-structure.py
+bash scripts/python.sh scripts/ci/check-docs-structure.py
 ```
