@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
@@ -68,9 +69,11 @@ public class InternalAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
-    // This filter is registered only for /internal/*; do not re-check the raw request URI,
-    // which may differ from the servlet-mapped path after decoding or context-path removal.
-    String path = request.getServletPath();
+    String path = ServletRequestPaths.applicationPath(request);
+    if (!isInternalPath(path)) {
+      chain.doFilter(request, response);
+      return;
+    }
 
     if (securityProperties.isBypassMode()) {
       chain.doFilter(request, response);
@@ -131,6 +134,10 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     return EmptyChecks.isNotNull(path)
         && (path.startsWith(API_KEY_INTERNAL_PREFIX_WORKERS)
             || path.startsWith(API_KEY_INTERNAL_PREFIX_TASKS));
+  }
+
+  private static boolean isInternalPath(String path) {
+    return "/internal".equals(path) || (path != null && path.startsWith("/internal/"));
   }
 
   private static void writeUnauthorized(HttpServletResponse response) throws IOException {

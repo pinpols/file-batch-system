@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.support.ratelimit;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
@@ -66,7 +67,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       return;
     }
 
-    String path = request.getServletPath();
+    String path = ServletRequestPaths.applicationPath(request);
     String method = request.getMethod();
 
     // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────

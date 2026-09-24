@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,7 +45,8 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
 
     long max = properties.getMaxBodyBytes();
-    if (max <= 0 || !isWriteMethod(request)) {
+    String path = ServletRequestPaths.applicationPath(request);
+    if (max <= 0 || !isInternalPath(path) || !isWriteMethod(request)) {
       chain.doFilter(request, response);
       return;
     }
@@ -70,6 +72,10 @@ public class InternalRequestSizeFilter extends OncePerRequestFilter {
         || HttpMethod.PUT.matches(method)
         || HttpMethod.PATCH.matches(method)
         || HttpMethod.DELETE.matches(method);
+  }
+
+  private static boolean isInternalPath(String path) {
+    return "/internal".equals(path) || (path != null && path.startsWith("/internal/"));
   }
 
   private static boolean isMultipart(HttpServletRequest request) {
