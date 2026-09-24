@@ -4,7 +4,7 @@
 -- 依据: docs/analysis/dba-schema-review-2026-05-20.md §3.4
 --
 -- 规范:
---   docs/agent-baseline.md 红线 — NOT VALID 必须与 VALIDATE 同 PR / 同 sprint,
+--   CLAUDE.md 红线 — NOT VALID 必须与 VALIDATE 同 PR / 同 sprint,
 --   防止"逻辑生效但旧数据未校验"窗口期。
 --
 -- 失败时:

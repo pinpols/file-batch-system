@@ -10,7 +10,7 @@
 -- 生效边界:本表是「登记/可见/校验」层。worker 实际连接池仍由各 worker 的 routing.shards 配置 + secrets
 -- 在启动时构建;改本表不会让运行中的 worker 动态增减池(那需重启重建池)。两者应保持一致,本表为人审/校验的真相源。
 --
--- 落 platform 库 batch schema。属系统配置表(docs/agent-baseline.md §多租隔离 豁免类①),PK=placement_key,无 tenant_id;
+-- 落 platform 库 batch schema。属系统配置表(CLAUDE.md §多租隔离 豁免类①),PK=placement_key,无 tenant_id;
 -- 配置/字典性质,无需 archive 镜像。
 
 CREATE TABLE IF NOT EXISTS batch.business_shard_catalog (

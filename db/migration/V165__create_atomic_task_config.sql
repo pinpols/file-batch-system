@@ -16,10 +16,10 @@
 --   SensitiveDataValidator(#242)静态拒入,不允许 password / secret /
 --   apiKey 等关键字落库。
 --
---   archive 镜像 — docs/agent-baseline.md 红线(热表 batch.* 与 archive.*_archive 1:1),
+--   archive 镜像 — CLAUDE.md 红线(热表 batch.* 与 archive.*_archive 1:1),
 --   LIKE INCLUDING ALL 与 V159 风格一致,登记到 ArchiveSchemaDriftCheck.ARCHIVED_TABLES。
 --
---   多租隔离(docs/agent-baseline.md 硬约束):tenant_id NOT NULL,UNIQUE 含 tenant_id。
+--   多租隔离(CLAUDE.md 硬约束):tenant_id NOT NULL,UNIQUE 含 tenant_id。
 --
 -- 关联 PR:feat(console-api): R3-5 atomic_task_config 写库 scaffold
 -- =========================================================
@@ -48,7 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_atomic_task_config_tenant_type
     ON batch.atomic_task_config (tenant_id, task_type);
 
 -- ---------------------------------------------------------
--- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V159 一致)
+-- archive 镜像(CLAUDE.md 红线;LIKE INCLUDING ALL 与 V159 一致)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS archive.atomic_task_config_archive
     (LIKE batch.atomic_task_config INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);

@@ -13,11 +13,11 @@
 --   nodes / edges 全文存 JSONB(快照不需关系约束 / 不查询字段,只整体反序列化);
 --   workflow_definition_id 是反向引用(主表 id),便于按定义维度拉历史。
 --
---   archive 镜像 — docs/agent-baseline.md 红线(热表 batch.* 与 archive.*_archive 1:1),
+--   archive 镜像 — CLAUDE.md 红线(热表 batch.* 与 archive.*_archive 1:1),
 --   LIKE INCLUDING ALL 与 V159 / V165 风格一致,登记到
 --   ArchiveSchemaDriftCheck.ARCHIVED_TABLES。
 --
---   多租隔离(docs/agent-baseline.md 硬约束):tenant_id NOT NULL,UNIQUE 含 tenant_id。
+--   多租隔离(CLAUDE.md 硬约束):tenant_id NOT NULL,UNIQUE 含 tenant_id。
 --
 -- 关联 PR: feat(console-api): workflow-definition version history 闭环
 -- =========================================================
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_workflow_definition_version_def_ver_desc
     ON batch.workflow_definition_version (workflow_definition_id, version DESC);
 
 -- ---------------------------------------------------------
--- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V159 / V165 一致)
+-- archive 镜像(CLAUDE.md 红线;LIKE INCLUDING ALL 与 V159 / V165 一致)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS archive.workflow_definition_version_archive
     (LIKE batch.workflow_definition_version INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);

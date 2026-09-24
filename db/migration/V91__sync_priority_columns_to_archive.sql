@@ -1,4 +1,4 @@
--- V91: 补 V88 漏掉的 archive 镜像 (docs/agent-baseline.md "archive 冷表对齐")
+-- V91: 补 V88 漏掉的 archive 镜像 (CLAUDE.md "archive 冷表对齐")
 --
 -- V88 给 batch.job_task / batch.outbox_event 加了 priority 列，但 archive 镜像表未同步。
 -- ArchiveSchemaDriftCheck.checkOnStartup() 启动期 diff 14 张归档对照表，差异即 fail-fast。

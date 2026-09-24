@@ -11,5 +11,5 @@ ALTER TABLE batch.worker_registry
 COMMENT ON COLUMN batch.worker_registry.is_self_hosted IS
     'ADR-035 自托管标识:true=SDK 注册的租户自托管 worker(batch-worker-sdk);false=平台代部署内建 worker(默认)';
 
--- 注:worker_registry 不在 archive 范围内(无 worker_registry_archive 表;docs/agent-baseline.md §archive 冷表对齐
+-- 注:worker_registry 不在 archive 范围内(无 worker_registry_archive 表;CLAUDE.md §archive 冷表对齐
 -- 针对的是 instance/run/task 这类历史表)。本列无需镜像。
