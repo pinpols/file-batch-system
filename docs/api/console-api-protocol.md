@@ -7,7 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| 2026-09-24 | **登录验证码安全收敛**：移除公开的自建滑块挑战接口和前端组件，因为原接口会泄露正确答案；`provider=selfhosted` 改为启动失败，配置改用已接入的第三方 provider。登录请求的 `captchaToken` 仅使用已配置 provider 返回的凭据。 |
+| 2026-09-24 | **登录验证码安全收敛**：自建滑块挑战接口标记弃用并始终返回 404，不再签发会泄露答案的挑战；`provider=selfhosted` 改为启动失败，配置改用已接入的第三方 provider。登录请求的 `captchaToken` 仅使用已配置 provider 返回的凭据。 |
 | 2026-09-23 | **Trace 诊断契约校正**：`GET /api/console/queries/trace-snapshot` 明确只接受完整 traceId 精确匹配（最多 128 字符），响应新增 `truncatedDomains`，标出因单领域 200 条快照上限而被截断的结果；安全过滤器生成的 401/403 响应同步返回 `X-Request-Id`、`X-Trace-Id` 与 `meta`。 |
 | 2026-09-21 | **运营概览与 Outbox 重投契约对齐**：`GET /api/console/ops/summary` 允许菜单已开放的 `ROLE_TENANT_USER` 读取租户摘要；`ConsoleOutboxRetryLogResponse` 新增 `outboxEventId`，前端重投必须传关联的 `outbox_event.id`，不再误用重试日志自身 `id`。 |
 | 2026-09-21 | **改密标志收敛为非阻断提醒**：`mustChangePassword=true` 仅提示用户尽快更新密码，不再限制页面访问或业务写操作；自助改密仍清除标志并使旧会话失效，生产环境仍拒绝使用内置默认密码启动。wire 字段与端点不变。 |

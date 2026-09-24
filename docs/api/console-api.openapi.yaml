@@ -198,6 +198,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleCaptchaConfig'
+  /api/console/captcha/challenge:
+    get:
+      tags: [Auth]
+      summary: Deprecated self-hosted slider CAPTCHA challenge
+      operationId: issueConsoleCaptchaChallenge
+      deprecated: true
+      security: []
+      description: |
+        Deprecated compatibility route. Challenge issuance is disabled; supported providers return 404.
+        The insecure self-hosted provider is rejected during application startup.
+      responses:
+        '200':
+          description: Legacy response shape; no longer issued by supported providers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+        '404':
+          description: Challenge issuance is disabled
   /api/console/auth/token:
     post:
       tags: [Auth]

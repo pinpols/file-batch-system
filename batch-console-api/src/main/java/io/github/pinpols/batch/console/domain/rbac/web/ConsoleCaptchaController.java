@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleCaptchaConfigResponse;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code GET /api/console/captcha/config} —— 下发 {provider, siteKey, loginProtectionEnabled},
  *       FE 据此决定是否预载验证码 widget 及加载哪个 provider 的 widget。<b>不含 secret</b>。
+ *   <li>{@code GET /api/console/captcha/challenge} —— 已弃用，保留兼容路由并始终返回 404，不签发挑战。
  * </ul>
  */
 @RestController
@@ -34,5 +37,12 @@ public class ConsoleCaptchaController {
         captchaProperties.getProvider(),
         captchaProperties.getSiteKey(),
         loginProtectionProperties.isEnabled()));
+  }
+
+  /** 兼容旧路由；当前验证码实现不使用此挑战接口，也不会生成或存储挑战。 */
+  @Deprecated
+  @GetMapping("/challenge")
+  public CommonResponse<Void> deprecatedChallenge() {
+    throw BizException.of(ResultCode.NOT_FOUND, "error.auth.captcha_unavailable");
   }
 }
