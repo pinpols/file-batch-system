@@ -83,7 +83,7 @@
 ### 1.4 读写分离
 
 console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REPLICA_*` 完整 env。设计正确。
-约束面:trigger / orchestrator / worker 禁用读写分离(状态机依赖 read-after-write),CLAUDE.md 已挂硬约束,无需复核。
+约束面:trigger / orchestrator / worker 禁用读写分离(状态机依赖 read-after-write),docs/agent-baseline.md 已挂硬约束,无需复核。
 
 ---
 
@@ -324,7 +324,7 @@ console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REP
 
 ## 7. outbox / retry 三表路由
 
-### 7.1 表分工(CLAUDE.md 已硬约束)
+### 7.1 表分工(docs/agent-baseline.md 已硬约束)
 
 | 表 | 写入路径 | 推进者 | 状态 |
 |---|---|---|---|

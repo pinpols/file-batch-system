@@ -190,7 +190,7 @@ check-version-alignment:
 bump-version:
 	bash scripts/ci/bump-version.sh $(V)
 
-# PMD 代码规约（CLAUDE.md 规则）
+# PMD 代码规约（docs/agent-baseline.md 规则）
 pmd:
 	mvn pmd:check -fae
 

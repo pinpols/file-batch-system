@@ -8,7 +8,7 @@
 
 - 时间:2026-06-19。
 - 基线:`main` @ `05748d7`(fix(console): MustChangePasswordGuard 尊重 bypass-mode #567)。
-- 分支:`claude/backend-deep-scan-audit-qwucou`。
+- 分支:专项后端深度审查分支。
 - 方法:静态代码审查(并行 5 个只读探查 agent)+ 人工逐条复核。**未运行 IT**;受控修复 2 条经
   人工复核与标准 API 判定,**本机无法编译**(项目 `maven.compiler.release=25`,本环境仅 JDK 21),
   依赖 CI(temurin 25)编译与全量测试回退。
@@ -25,7 +25,7 @@
   `..` 拒绝 + workdir 隔离 + `env.clear()`;SQL/StoredProc 三层闸(dataSource 白名单 + OS-capable 角色门 +
   schema 白名单);HTTP 出口 resolve-then-connect + IP 黑名单 + 禁重定向(对齐 #444/2026-06-10 SSRF 加固);
   无 `enableDefaultTyping`/`ObjectInputStream`/不安全 YAML;加密 AES/GCM + Argon2id。
-- **CLAUDE.md 红线静态扫描干净**:无 `ZoneId.systemDefault()` / `Charset.forName("UTF-8")` 业务用法;
+- **docs/agent-baseline.md 红线静态扫描干净**:无 `ZoneId.systemDefault()` / `Charset.forName("UTF-8")` 业务用法;
   无生产 `@Autowired` field/setter 注入(命中项均为构造器参数或 `*Aware` 框架回调豁免);无 `maven.test.skip`。
 
 实际净化后的**真实缺陷集合很小**,均为低风险、局部、纵深防御类。

@@ -26,7 +26,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 // LENIENT:setUp 共享 stub(tenantGuard / cursorFactory / realtimeEventHub.subscribe)
-// 被部分用例不触发,符合 CLAUDE.md §测试约定豁免场景。
+// 被部分用例不触发,符合 docs/agent-baseline.md §测试约定豁免场景。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleOpsSummaryRealtimeStreamTest {

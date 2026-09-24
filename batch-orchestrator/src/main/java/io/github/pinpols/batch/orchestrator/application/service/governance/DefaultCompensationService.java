@@ -227,7 +227,7 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   /**
-   * R7-A5-P2 / CLAUDE.md §分支消除：把 JOB/STEP/PARTITION 三种 target 类型抽成 Map 路由表， 每种类型只描述"如何拿到归属
+   * R7-A5-P2 / docs/agent-baseline.md §分支消除：把 JOB/STEP/PARTITION 三种 target 类型抽成 Map 路由表， 每种类型只描述"如何拿到归属
    * jobInstanceId"，公共的"按 jobInstanceId → JobInstanceEntity → traceId"模板共用。 通过方法返回（而非 field
    * initializer），避免与 {@code @RequiredArgsConstructor} 注入字段 {@code jobMappers} 的初始化顺序冲突。
    */

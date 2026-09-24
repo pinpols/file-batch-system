@@ -148,4 +148,4 @@ archive.event_delivery_log_archive    ← 关联 delivery_log 行（按 outbox_e
 - [ADR-002 transactional-outbox](adr/ADR-002-transactional-outbox.md) — 决策追溯 + 当前状态（状态机、调度、退避、归档全细节）
 - [ADR-010 trigger 异步解耦](adr/ADR-010-trigger-async-decoupling.md) — `trigger_outbox_event` 独立表的决策
 - [docs/runbook/feature-switches.md](../runbook/feature-switches.md) — outbox 相关开关
-- [CLAUDE.md §架构硬约束](../../CLAUDE.md) — outbox_event 同事务约束、console-api 不能直接 UPDATE/DELETE 等
+- [docs/agent-baseline.md §架构硬约束](../../docs/agent-baseline.md) — outbox_event 同事务约束、console-api 不能直接 UPDATE/DELETE 等

@@ -8,7 +8,7 @@
 
 - **[P1]** `batch-orchestrator/src/main/resources/application.yml:38` — HikariCP `maximum-pool-size` 默认 30,但 orchestrator 并发运行多个高频调度路径(outbox-poll、waiting-dispatch、partition-reclaim、SLA、file-governance × 4 路、quota-snapshot、archive × 3 路),每路 Scheduler tick 都可能在事务提交前占住连接。积压场景下连接池极易耗尽触发 `SQLTransientConnectionException`。建议生产环境调高至 50,并在配置注释中给出连接需求估算基线(调度线程数 × 平均事务持续时长 / 池最小空闲保留)。
 
-- **[P1]** `batch-orchestrator/.../mq/OutboxPollScheduler.java:109-119` — `onApplicationReady()` 内直接 `new ScheduledThreadPoolExecutor(1, ...)` 实例化私有 executor,游离于 Spring 容器管理之外。CLAUDE.md §架构硬约束禁止覆盖 `batch-common` 基础设施 bean,而自建 executor 无 Micrometer 指标、无统一线程命名治理策略,且通过设置 `setDaemon(true)` 让调度线程成为守护线程,JVM `shutdown` 时该线程会被直接终止,`@PreDestroy` 中的 `awaitTermination(30s)` 实际上可能等不到正常结束。建议改用 Spring `ThreadPoolTaskScheduler` Bean(或 `taskScheduler`)注入,交由容器统一管理生命周期。
+- **[P1]** `batch-orchestrator/.../mq/OutboxPollScheduler.java:109-119` — `onApplicationReady()` 内直接 `new ScheduledThreadPoolExecutor(1, ...)` 实例化私有 executor,游离于 Spring 容器管理之外。docs/agent-baseline.md §架构硬约束禁止覆盖 `batch-common` 基础设施 bean,而自建 executor 无 Micrometer 指标、无统一线程命名治理策略,且通过设置 `setDaemon(true)` 让调度线程成为守护线程,JVM `shutdown` 时该线程会被直接终止,`@PreDestroy` 中的 `awaitTermination(30s)` 实际上可能等不到正常结束。建议改用 Spring `ThreadPoolTaskScheduler` Bean(或 `taskScheduler`)注入,交由容器统一管理生命周期。
 
 - **[P1]** `batch-orchestrator/.../scheduler/DefaultResourceScheduler.java:239-288` — `enrichFairnessScore()` 在每次 `schedule()` 和 `blockedDecision()` 调用中触发 4 次无缓存 DB count 查询(`countActiveByTenant`、`countActiveByTenant`(分区)、`countActiveByTenantAndQueueCode`、`countActiveByTenantAndWorkerGroup`)。`WaitingPartitionDispatchScheduler` 每 10s 批量处理若干 partition,每个 partition 各自调用 `schedule()`,一个 tick 内高并发场景会打出 N×4 次 COUNT 查询。建议在 tick 级别把 per-tenant 活跃计数结果缓存到局部 Map,同一批次内复用,消除重复 DB round-trip。
 
@@ -24,7 +24,7 @@
 
 ## 设计模式(7 项)
 
-- **[P0]** `batch-orchestrator/.../scheduler/BatchDayCutoffScheduler.java:42` / `BatchDayOpenScheduler.java:59` / `StaleCompensationCommandReconciler.java:42` / `ResultVersionRetentionScheduler.java:56` — `@Transactional` 直接标注在 `@Scheduled` 方法(或非 Service 公共方法)上,违反 CLAUDE.md 规则 #4("`@Transactional` 只放 Service 公共方法,不放 Controller / Mapper")。具体风险:`BatchDayCutoffScheduler.scheduledAdvance()` 同时有 `@Transactional`、`@Scheduled`、`@SchedulerLock` 三个注解叠加,ShedLock AOP 与事务 AOP 的代理嵌套顺序依赖 Bean 加载时序,不同 Spring Boot 版本行为差异可能导致锁在事务提交前释放(反之亦然)。业务事务逻辑应下沉至被调用的 Service/Component 方法,Scheduler 只负责触发和异常隔离。(4 处同类违反,建议统一整改。)
+- **[P0]** `batch-orchestrator/.../scheduler/BatchDayCutoffScheduler.java:42` / `BatchDayOpenScheduler.java:59` / `StaleCompensationCommandReconciler.java:42` / `ResultVersionRetentionScheduler.java:56` — `@Transactional` 直接标注在 `@Scheduled` 方法(或非 Service 公共方法)上,违反 docs/agent-baseline.md 规则 #4("`@Transactional` 只放 Service 公共方法,不放 Controller / Mapper")。具体风险:`BatchDayCutoffScheduler.scheduledAdvance()` 同时有 `@Transactional`、`@Scheduled`、`@SchedulerLock` 三个注解叠加,ShedLock AOP 与事务 AOP 的代理嵌套顺序依赖 Bean 加载时序,不同 Spring Boot 版本行为差异可能导致锁在事务提交前释放(反之亦然)。业务事务逻辑应下沉至被调用的 Service/Component 方法,Scheduler 只负责触发和异常隔离。(4 处同类违反,建议统一整改。)
 
 - **[P1]** `batch-orchestrator/.../statemachine/DefaultStateMachine.java:52-65` — 状态解析使用反射回退:对未实现 `Stateful` 的类型依次尝试 `getMethod(name)` + `invoke()` 6 次(`getInstanceStatus`/`getPartitionStatus`/`getTaskStatus`/`getRunStatus`/`getNodeStatus`/`getStatus`),每次调用均无 Method 对象缓存,在高频调度热路径上有可见性能损耗,且对方法名拼写错误无编译期保护。建议要求所有参与状态机的实体强制实现 `Stateful` 接口(可借助 ArchUnit 在测试期守护),彻底移除反射路径,或为已知类型做一次 `ConcurrentHashMap<Class<?>, Method>` 启动期缓存。
 
@@ -32,9 +32,9 @@
 
 - **[P1]** `batch-orchestrator/.../mq/OutboxPublishCircuitBreaker.java:99-114` — 半开探测逻辑边缘情况:`allowNow()` 的慢路径在 `redis.evalLong(ALLOW_SCRIPT, ...)` 返回 null 时,`resolvedOpen = 0`,熔断器被强制置为"关闭"态(`state = new CircuitState(0L, ...)`)。若此时 Redis 本身不可用(返回 null 是因网络故障),熔断器将在 Redis 故障期间持续放行所有轮次,失去保护作用。建议区分"Redis 返回 0(正常关闭)"与"Redis 返回 null(不可达)",后者应使用上次缓存的 `state` 而非强制关闭。
 
-- **[P1]** `batch-orchestrator/.../infrastructure/file/FileGovernanceRepository.java` — `@Repository` 注解的 `FileGovernanceRepository` 持有 `FileGovernanceMapper` 并在其上做薄封装,实质上为同一表(文件治理相关表)构造了 Mapper + Repository 双层入口,违反 CLAUDE.md §持久化"同一表同一写路径禁双主入口"约定。建议将 `FileGovernanceRepository` 的职责拆分:纯 DAO 操作(`params()` 封装 + Mapper 调用)保留为内部组件,业务校验(`FileStateMachine.assertTransition`、`BizException` 抛出)上移至 `DefaultFileGovernanceService`,并删除 `@Repository` 注解以明确其定位。
+- **[P1]** `batch-orchestrator/.../infrastructure/file/FileGovernanceRepository.java` — `@Repository` 注解的 `FileGovernanceRepository` 持有 `FileGovernanceMapper` 并在其上做薄封装,实质上为同一表(文件治理相关表)构造了 Mapper + Repository 双层入口,违反 docs/agent-baseline.md §持久化"同一表同一写路径禁双主入口"约定。建议将 `FileGovernanceRepository` 的职责拆分:纯 DAO 操作(`params()` 封装 + Mapper 调用)保留为内部组件,业务校验(`FileStateMachine.assertTransition`、`BizException` 抛出)上移至 `DefaultFileGovernanceService`,并删除 `@Repository` 注解以明确其定位。
 
-- **[P2]** `batch-orchestrator/.../service/LaunchValidationService.java` + `DefaultLaunchValidationService.java` — 接口仅有一个实现且无扩展点规划,属 CLAUDE.md §抽象层次"只用一处的接口"形式主义。同类情形:`WorkerRoutingPolicy` + `DefaultWorkerRoutingPolicy`(`infrastructure/router`),`WorkerRouter` + `DefaultWorkerRouter`(`infrastructure/router`)。若无多态需求,可直接暴露实现类为 `@Component`,减少无谓的间接层。(建议合并 3 对,以降低认知负担。)
+- **[P2]** `batch-orchestrator/.../service/LaunchValidationService.java` + `DefaultLaunchValidationService.java` — 接口仅有一个实现且无扩展点规划,属 docs/agent-baseline.md §抽象层次"只用一处的接口"形式主义。同类情形:`WorkerRoutingPolicy` + `DefaultWorkerRoutingPolicy`(`infrastructure/router`),`WorkerRouter` + `DefaultWorkerRouter`(`infrastructure/router`)。若无多态需求,可直接暴露实现类为 `@Component`,减少无谓的间接层。(建议合并 3 对,以降低认知负担。)
 
 - **[P2]** `batch-orchestrator/.../scheduler/TenantSchedulerSnapshotRecorder.java:45-68` — `persist()` 在 for 循环内对每个 tenant 逐条执行 `snapshotMapper.insert(row)` 及 `workerRegistryMapper.countByTenantAndStatus(tenantId, ...)` 查询。当启用租户数量较大(> 50)时产生 2N 次 DB 往返。建议将 `countByTenantAndStatus` 改为一次 `GROUP BY tenant_id` 聚合查询,insert 改为批量 INSERT,可显著降低调度器对 DB 的冲击。
 
@@ -44,7 +44,7 @@
 
 - **[P1]** `batch-orchestrator/.../infrastructure/pipeline/DefaultPipelineExecutor.java:58-62` — `executeStep()` 在 `stepRegistry.find()` 返回 `Optional.empty()` 时静默返回空 `StepResult()`,无日志、无异常。stepCode 拼写错误或 Bean 未注册会被静默捕获并抑制,调用方看到"步骤执行成功但结果全空",极难排查。建议至少在此处打 WARN 日志(`stepCode={} not found in registry`),与配置错误的可观测性要求对齐;严格模式下可直接抛 `BizException`(`STEP_NOT_FOUND`)。
 
-- **[P1]** `batch-orchestrator/.../application/service/sensor/` — `SensorPolicyRegistry` 与 `SensorPolicy` 接口定义在 `application.service.sensor`(应用层),但 `KafkaOffsetSensorPolicy` 明显依赖 Kafka client(infrastructure concern),与 DDD 分层约定(`application` 不依赖具体 infrastructure)冲突。`FileArrivalSensorPolicy` 同理依赖 MinIO。建议将接口和枚举保留在 `application.service.sensor`,具体策略实现移至 `infrastructure.sensor`,符合 CLAUDE.md §DDD 分层。
+- **[P1]** `batch-orchestrator/.../application/service/sensor/` — `SensorPolicyRegistry` 与 `SensorPolicy` 接口定义在 `application.service.sensor`(应用层),但 `KafkaOffsetSensorPolicy` 明显依赖 Kafka client(infrastructure concern),与 DDD 分层约定(`application` 不依赖具体 infrastructure)冲突。`FileArrivalSensorPolicy` 同理依赖 MinIO。建议将接口和枚举保留在 `application.service.sensor`,具体策略实现移至 `infrastructure.sensor`,符合 docs/agent-baseline.md §DDD 分层。
 
 - **[P1]** `batch-orchestrator/.../infrastructure/file/FileGovernanceRepository.java:402-407` — `params(Object... pairs)` 方法以可变参数交替存放 key/value,无奇偶校验(缺少 `if (pairs.length % 2 != 0) throw`)。调用方传奇数个参数会在运行时抛出 `ArrayIndexOutOfBoundsException`,无编译期防护。该方法全文件调用约 30 次,任意一处配对缺失即触发。建议增加 `Preconditions.checkArgument(pairs.length % 2 == 0)` 或改用强类型 builder(如 `MapBuilder.of("key1", v1).and("key2", v2).build()`)。
 

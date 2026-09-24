@@ -8,7 +8,7 @@
 
 **[P0]** `AuditAspect.java:166` — **SpEL 使用 `StandardEvaluationContext`(全能上下文),存在代码注入风险**。`AuditAspect.resolveAggregateId()` 使用 `StandardEvaluationContext`,允许任意 Java 方法调用、静态类型引用(`T(System).exit(0)`)。对比:`ConsoleCacheInvalidationAspect`(同模块)在 2026-05-16 安全扫描后已改用 `SimpleEvaluationContext + DataBindingPropertyAccessor`,但 `AuditAspect` **未同步修复**,形成不一致的安全基线。**建议**:与 `ConsoleCacheInvalidationAspect.evaluateSpel()` 保持一致,改用 `SimpleEvaluationContext.forPropertyAccessors(DataBindingPropertyAccessor.forReadOnlyAccess()).withInstanceMethods().build()`。
 
-**[P0]** `ConsoleApiExceptionHandler.java:73` — **`@Autowired` setter 注入违反 CLAUDE.md §Java 编码细则 #3**。`BizMessageResolver` 使用 setter `@Autowired` 注入,CLAUDE.md 明确「依赖注入只用构造器,禁 @Autowired field/setter 注入」(唯一例外是 `@Lazy @Autowired private SelfType self` AOP 自调用 workaround)。**建议**:改为构造器注入。
+**[P0]** `ConsoleApiExceptionHandler.java:73` — **`@Autowired` setter 注入违反 docs/agent-baseline.md §Java 编码细则 #3**。`BizMessageResolver` 使用 setter `@Autowired` 注入,docs/agent-baseline.md 明确「依赖注入只用构造器,禁 @Autowired field/setter 注入」(唯一例外是 `@Lazy @Autowired private SelfType self` AOP 自调用 workaround)。**建议**:改为构造器注入。
 
 **[P0]** `InMemoryTenantConfigPackageExcelImportStore.java:11` — **Excel 会话 `ConcurrentHashMap` 无 TTL / 无上限**。`sessions` 是进程内 `ConcurrentHashMap<String, PackageExcelSession>`,无容量上限,也无 TTL 清理机制。上传后如果用户放弃 preview/apply,session 永远驻留内存。大 Excel 文件(11 个 sheet 完整解析后驻内存)在高并发场景下可积累到 OOM。**建议**:(1) 引入 Caffeine `expireAfterWrite` + `maximumSize` 替代,TTL 建议 30 分钟;(2) 或者改为 Redis 存储;(3) 至少在 `get()` 找不到时返回明确的 `SESSION_EXPIRED` 错误码。
 
@@ -22,7 +22,7 @@
 
 ## P1 — 架构走偏 / 中期技术债(10 条)
 
-**[P1]** `ConsoleTenantConfigCopyService.java` — **`@Service` Bean 放在 `web` 包下,违反分层约定**。注入了 15 个 Mapper(`JobDefinitionMapper`、`WorkflowDefinitionMapper` 等),但其包路径是 `io.github.pinpols.batch.console.web`,属于 Web 层。CLAUDE.md §架构硬约束 要求 Web 层只是薄壳。**建议**:迁移到 `infrastructure/config/DefaultConsoleTenantConfigCopyService.java`,并抽接口到 `application/config/`。
+**[P1]** `ConsoleTenantConfigCopyService.java` — **`@Service` Bean 放在 `web` 包下,违反分层约定**。注入了 15 个 Mapper(`JobDefinitionMapper`、`WorkflowDefinitionMapper` 等),但其包路径是 `io.github.pinpols.batch.console.web`,属于 Web 层。docs/agent-baseline.md §架构硬约束 要求 Web 层只是薄壳。**建议**:迁移到 `infrastructure/config/DefaultConsoleTenantConfigCopyService.java`,并抽接口到 `application/config/`。
 
 **[P1]** `DefaultConsoleOpsApplicationService.java:44-70` — **Ops Summary 在单次请求中串行发出 9 条独立 DB 查询,无批处理**。`summary()` 按顺序发出 9 条独立 Mapper 调用(`countByStatus` × 2、`countByStatuses` × 2、各 worker/outbox 计数),且**不在同一事务**,每次都拿新连接,HikariCP 连接压力 9x。该方法还被 SSE 摘要流在每次写提交后触发,属于高频调用路径。**建议**:(1) 加 `@Transactional(readOnly = true)` 复用单连接;(2) 合并部分 count 到单 SQL(PostgreSQL `FILTER (WHERE ...)`)。
 
@@ -36,7 +36,7 @@
 
 **[P1]** `ConsoleRealtimeReplayStore.java:67` — **Replay 全量 `LRANGE 0 -1` 可能返回超大列表,无分页保护**。`replayMaxEntries` 配置控制写端(`lTrim`),但读端 `replay()` 仍是无条件拉全部。若配置值较大(如 10000),每次断线重连触发 replay 会在请求线程内反序列化并遍历全量数据,可能造成 GC 压力。**建议**:在 `replay()` 中对 `rawEntries` 加 `head(replayMaxEntries)` 截断保护,并在 cursor 匹配后仅取 cursor 之后的数据。
 
-**[P1]** `ConsoleJwtService.java:85-87` — **`redisTemplate` 字段使用 `@Autowired(required = false)` 可选注入**,违反 CLAUDE.md §编码细则 #3。`StringRedisTemplate` 是基础设施依赖,不是 AOP 自调用场景。**建议**:改为构造器注入 + `ObjectProvider<StringRedisTemplate>` 模式(与 `ConsoleSessionRegistry` 中 `ObjectProvider<MeterRegistry>` 一致),在 `authenticate/revoke` 中调 `getIfAvailable()` 判空。
+**[P1]** `ConsoleJwtService.java:85-87` — **`redisTemplate` 字段使用 `@Autowired(required = false)` 可选注入**,违反 docs/agent-baseline.md §编码细则 #3。`StringRedisTemplate` 是基础设施依赖,不是 AOP 自调用场景。**建议**:改为构造器注入 + `ObjectProvider<StringRedisTemplate>` 模式(与 `ConsoleSessionRegistry` 中 `ObjectProvider<MeterRegistry>` 一致),在 `authenticate/revoke` 中调 `getIfAvailable()` 判空。
 
 **[P1]** `ConsolePushSender.java:138` — **`pushService.sendAsync()` 返回的 `Future` 在同线程 `.get(8, SECONDS)` 阻塞**。`@Async("pushTaskExecutor")` 方法内部对 web-push 库的 `Future.get(8, SECONDS)` 做同步等待。push 线程池有 16 个线程、队列 200,若所有线程都在等待 HTTP 响应,实际并发 push 上限是 16 个,超出则用 CallerRunsPolicy 让调用方(业务线程)承担,与 `@Async` 的异步化意图矛盾。**建议**:在升级 web-push 6.x 前在 `sendOne()` 中对每个 `Future.get` 使用更短的超时,并在超时后标记该 endpoint 为暂时不可用。
 

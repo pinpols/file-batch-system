@@ -61,7 +61,7 @@
 ### 3.2 代码工程质量 — **L4**
 
 **强项**：
-- `CLAUDE.md` 强制规范（参数 ≤6 / FQN 禁用 / DictEnum / SpecHandler / 分支消除规则）
+- `docs/agent-baseline.md` 强制规范（参数 ≤6 / FQN 禁用 / DictEnum / SpecHandler / 分支消除规则）
 - pre-commit hook 自动 spotless apply
 - PMD 基线 + AvoidDuplicateLiterals 守护
 - CI-friendly 版本策略（`${revision}` 单点）
@@ -69,7 +69,7 @@
 
 **缺口**：
 - PMD 基线快照（`docs/pmd-violations.md`）仍有 ExcessiveParameterList × 11 / NcssCount × 5 / AvoidDuplicateLiterals × 283 未清
-- ExcessiveParameterList × 11 实质违反 CLAUDE.md "参数 ≤6" 硬约束，应优先清
+- ExcessiveParameterList × 11 实质违反 docs/agent-baseline.md "参数 ≤6" 硬约束，应优先清
 
 ### 3.3 测试 — **L3+**
 
@@ -150,7 +150,7 @@
 **强项**：
 - 113 markdown / 23 runbook / 13 架构文档 / API openapi yaml + protocol changelog 强制双更约束
 - changelog 严格只记规范条款变化（避免文件膨胀）
-- CLAUDE.md 自演进机制 — 任何规范变化必须 changelog 追加
+- docs/agent-baseline.md 自演进机制 — 任何规范变化必须 changelog 追加
 - 每条变更 commit message 写得详细（"why" 而非 "what"）
 - 文档之间互相引用 + 单点权威（如 sbom.json 是依赖权威源，THIRD-PARTY-LICENSES.md 是 curated 摘要，license-risk-assessment.md 是评估视角）
 
@@ -213,7 +213,7 @@
 ### P1：PMD 基线 299 条 violation 设清零截止时间 （2026-04-26 完成）
 
 **起点（2026-04-12）**：
-- ExcessiveParameterList × 11（违反 CLAUDE.md "参数 ≤6" 硬约束）
+- ExcessiveParameterList × 11（违反 docs/agent-baseline.md "参数 ≤6" 硬约束）
 - NcssCount × 5（方法过长）
 - AvoidDuplicateLiterals × 283（硬编码字符串散布）
 
@@ -226,7 +226,7 @@
 - ✅ ConsoleDashboardQueryService 提 UNKNOWN 常量（替换 13 处）
 - ✅ ConfigPackageExcelValidator.validateStepRows 抽 validateImplCode 子方法（NcssCount 触发解除）
 - ✅ AbstractSingleSheetExcelService.logImportAudit 8 参数 → ImportAuditContext record
-- ✅ ExcelPreviewResponse secondary constructor 加 @SuppressWarnings 豁免（按 CLAUDE.md record 豁免规则）
+- ✅ ExcelPreviewResponse secondary constructor 加 @SuppressWarnings 豁免（按 docs/agent-baseline.md record 豁免规则）
 - ✅ ConfigPackageExcelValidator + DefaultConsoleTenantConfigPackageExcelApplicationService 9 处 FQN 改短名
 - ✅ ruleset：`AvoidDuplicateLiterals` `maxDuplicateLiterals` 4 → 7（4-6 次局部重复属可接受）+ exceptionList 加 `true,false,null,UTF-8,utf-8`（语义弱字面量提常量丑）
 - ✅ run-full-regression.sh 删 `\|\| true`，PMD 真正阻断 CI；提供 `BATCH_CI_SKIP_PMD_GATE=1` escape hatch
@@ -262,8 +262,8 @@
 
 ## 8. 相关文档
 
-- 架构硬约束：[`/CLAUDE.md`](../../CLAUDE.md)
-- 模块边界规则：[`/CLAUDE.md` § 模块边界](../../CLAUDE.md)
+- 架构硬约束：[`/docs/agent-baseline.md`](../../docs/agent-baseline.md)
+- 模块边界规则：[`/docs/agent-baseline.md` § 模块边界](../../docs/agent-baseline.md)
 - License 评估：[`docs/compliance/license-risk-assessment.md`](../compliance/license-risk-assessment.md)
 - 一张图看链路：[`docs/architecture/system-flow-overview.md`](./system-flow-overview.md)
 - 海量承载评估：[`docs/architecture/scalability-assessment.md`](./scalability-assessment.md)

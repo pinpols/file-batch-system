@@ -202,7 +202,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   /**
-   * R7-A5: 用 ScheduleType.code() 替代字面量 + Map 路由替代 if-chain（CLAUDE.md §分支消除 + §领域字典）。 EVENT / MANUAL
+   * R7-A5: 用 ScheduleType.code() 替代字面量 + Map 路由替代 if-chain（docs/agent-baseline.md §分支消除 + §领域字典）。 EVENT / MANUAL
    * 不在 map 内即静默跳过（无 Quartz 注册）。
    */
   private final Map<String, Consumer<TriggerDescriptor>> scheduleHandlers = Map.of(

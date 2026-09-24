@@ -84,7 +84,7 @@
         <!-- OTel Logback appender 与 Spring Boot 4.1 的 OTel 1.62 API 兼容；
              instrumentation 项目尚以 alpha 后缀发布该独立工件。 -->
         <opentelemetry-instrumentation.version>2.25.0-alpha</opentelemetry-instrumentation.version>
-        <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
+        <!-- ArchUnit:守护 docs/agent-baseline.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.4.2</archunit.version>
         <poi.version>5.4.0</poi.version>
@@ -291,7 +291,7 @@
     <build>
         <plugins>
             <!-- R8 守护(2026-06-14):依赖层硬门禁。把「禁 JPA/Hibernate ORM / Spring Data JDBC」
-                 (CLAUDE.md 红线,原仅 ArchTest)上升到依赖图层面拦截;并禁误带 log4j1.x / 第三方 SNAPSHOT。
+                 (docs/agent-baseline.md 红线,原仅 ArchTest)上升到依赖图层面拦截;并禁误带 log4j1.x / 第三方 SNAPSHOT。
                  bannedDependencies 精确到 ORM 坐标 —— hibernate-validator(Bean Validation)/ commons-logging /
                  log4j-to-slf4j 都是合法传递依赖,不在禁列。 -->
             <plugin>
@@ -323,7 +323,7 @@
                                         <exclude>org.springframework.boot:spring-boot-starter-data-jpa</exclude>
                                         <exclude>log4j:log4j</exclude>
                                     </excludes>
-                                    <message>禁 JPA/Hibernate ORM / Spring Data JDBC / log4j1.x(ADR-001 + CLAUDE.md 红线)。持久化统一 MyBatis + JdbcTemplate。</message>
+                                    <message>禁 JPA/Hibernate ORM / Spring Data JDBC / log4j1.x(ADR-001 + docs/agent-baseline.md 红线)。持久化统一 MyBatis + JdbcTemplate。</message>
                                 </bannedDependencies>
                                 <requireReleaseDeps>
                                     <message>禁第三方 SNAPSHOT 依赖进入构建(本仓自有模块 io.github.pinpols.batch:* 豁免)。</message>

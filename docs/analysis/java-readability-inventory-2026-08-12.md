@@ -13,8 +13,8 @@
 | 含 Map 的源文件 | 445 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
-| `@SuppressWarnings` | 219 |
-| 含 suppression 的源文件 | 165 |
+| `@SuppressWarnings` | 221 |
+| 含 suppression 的源文件 | 166 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 10 |
 | `PMD.ExcessiveParameterList` 显式例外 | 35 |
@@ -48,7 +48,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 715 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 711 |
-| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 709 |
+| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 710 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 707 |
 
 ## Public Map 契约候选

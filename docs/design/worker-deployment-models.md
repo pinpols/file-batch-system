@@ -39,7 +39,7 @@
 
 - **Pipeline 5 阶段任务**(IMPORT / EXPORT / PROCESS / DISPATCH 内置流水线)
   - 原因:这些阶段直接写 `pipeline_instance` / `file_record` / `pipeline_stage_*`,worker 跟 orchestrator 同库强一致;SDK 协议层没暴露这些状态机
-  - 红线:CLAUDE.md「Worker 不能直接写 `job_instance` / `workflow_run`」,平台内置 worker 通过 `batch-common` 用专属接口写 pipeline 表,SDK 没这个口子
+  - 红线:docs/agent-baseline.md「Worker 不能直接写 `job_instance` / `workflow_run`」,平台内置 worker 通过 `batch-common` 用专属接口写 pipeline 表,SDK 没这个口子
 - **跨租户共享的标准化任务**(平台统一格式转换 / 统一对账 / 跨租户聚合)
 
 ### 类型 B:**只能自托管 SDK**(平台 worker 干不了)
@@ -209,7 +209,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 | 能力 | 原因 |
 |---|---|
 | 内置 Pipeline taskType(IMPORT/EXPORT/PROCESS/DISPATCH/FILE_STEP) | 平台 worker 独占,SDK 注册被 `TaskTypeRegistry` reject |
-| 直写 `file_record` / `pipeline_instance` / `pipeline_stage_*` | CLAUDE.md 红线:Worker 不能直接写状态机表 |
+| 直写 `file_record` / `pipeline_instance` / `pipeline_stage_*` | docs/agent-baseline.md 红线:Worker 不能直接写状态机表 |
 | Pipeline stage 级生命周期事件 | 平台只看 task 终态 + counts(ADR-035 §6 路径 3) |
 | `batch_day` 业务日历联动 | 平台 worker 用 `BatchDateService`,SDK 不暴露 |
 

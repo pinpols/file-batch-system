@@ -33,7 +33,7 @@ IMPORT_RE = re.compile(r"^\s*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;", re.M
 
 TEST_GLOB = "src/test/java"
 MAIN_GLOB = "src/main/java"
-EXCLUDE_PATHS = (".claude/", "target/", "build/")
+EXCLUDE_PATHS = (".agents/", "target/", "build/")
 MAX_HOPS = 5
 
 

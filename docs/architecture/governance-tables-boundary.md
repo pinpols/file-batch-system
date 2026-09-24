@@ -105,7 +105,7 @@
 
 ## 4. 相关文档
 
-- [CLAUDE.md §架构硬约束](../../CLAUDE.md) — 模块边界
-- [CLAUDE.md §领域数据字典](../../CLAUDE.md) — 各 status 枚举
+- [docs/agent-baseline.md §架构硬约束](../../docs/agent-baseline.md) — 模块边界
+- [docs/agent-baseline.md §领域数据字典](../../docs/agent-baseline.md) — 各 status 枚举
 - [docs/api/console-api-protocol.md](../api/console-api-protocol.md) — console API 中 config_approval / approval_command 的对外协议
 - [docs/design/i18n.md](../design/i18n.md) — `LocalizedErrorCarrier` 在 11 张表上的应用，含 approval 表

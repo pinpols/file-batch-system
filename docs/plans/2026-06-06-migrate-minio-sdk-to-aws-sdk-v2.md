@@ -121,7 +121,7 @@ Run: `find batch-common/src/test -name 'S3ObjectStore*'`
   private final software.amazon.awssdk.services.s3.presigner.S3Presigner presigner;
   private final S3StorageProperties properties;
 ```
-> 实现时正式 import,勿用 FQN(CLAUDE.md 规则#1);此处只示意。
+> 实现时正式 import,勿用 FQN(docs/agent-baseline.md 规则#1);此处只示意。
 
 - [ ] **Step 3: 9 方法逐个换(按上方映射表)**
 

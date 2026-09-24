@@ -45,7 +45,7 @@
 
 #### 3.1 `calendar_holiday` 表无 `tenant_id`，违反多租隔离硬约束
 - **位置**：`db/migration/V3__create_config_tables.sql:88-99`
-- **现状**：`UNIQUE (calendar_id, biz_date)`，靠 `business_calendar.tenant_id` 间接保证；CLAUDE.md "多租隔离" 章明确禁止此模式
+- **现状**：`UNIQUE (calendar_id, biz_date)`，靠 `business_calendar.tenant_id` 间接保证；docs/agent-baseline.md "多租隔离" 章明确禁止此模式
 - **业界**：DolphinScheduler `t_ds_command` / Airflow 多租改造方案均带 `tenant_id` 直列
 - **影响**：跨表 JOIN 才能租户过滤，PG planner 走不到 (tenant_id, calendar_code) 复合索引；未来分库 / partition 时要先补列；calendar 误删会让 holiday 行变孤儿
 - **修法**：补 `tenant_id` 列 + 唯一键改 `(tenant_id, calendar_id, biz_date)`，参考 V84/V85 workflow_node/edge 的 tenant_id 补列 PR
@@ -132,7 +132,7 @@
 
 | 优先级 | 项 | 一句话理由 | 估时 |
 |---|---|---|---|
-| **P0-1** | §3.1 `calendar_holiday.tenant_id` | 已违反 CLAUDE.md 硬约束，schema migration 5 行 | 0.5d |
+| **P0-1** | §3.1 `calendar_holiday.tenant_id` | 已违反 docs/agent-baseline.md 硬约束，schema migration 5 行 | 0.5d |
 | **P0-2** | §3.4 late_arrival 覆盖所有 triggerType | EVENT-only 假设错误，cutoff 后 SCHEDULED misfire 是真实场景 | 1d |
 | **P0-3** | §3.5 SETTLED 不可 reopen | 财务对账正确性硬要求；改 `shouldReopenBatchDay` + 补 reopen audit | 1d |
 | **P0-4** | §3.3 `job_instance.calendar_code` 快照列 | 配置变更不污染历史 + settle 性能改善（少一次 JOIN） | 1d + 数据回填 |

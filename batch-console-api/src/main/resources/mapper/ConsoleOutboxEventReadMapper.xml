@@ -20,7 +20,7 @@
         order by publish_status
     </select>
 
-    <!-- 故意只保留 SELECT — CLAUDE.md「Orchestrator 是唯一状态主机」硬约束下，console 不直接写
+    <!-- 故意只保留 SELECT — docs/agent-baseline.md「Orchestrator 是唯一状态主机」硬约束下，console 不直接写
          outbox_event；cleanup / republish 由 orchestrator /internal/outbox/* 接口承接。 -->
 
 </mapper>

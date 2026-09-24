@@ -52,7 +52,7 @@
 | `batch-worker-sdk` | 核心 SDK,非 Spring 租户直接依赖 | 不含 Spring / Boot / MyBatis / Flyway / Redis;继续守 `jar < 2 MB` |
 | `batch-worker-sdk-spring-boot-starter` | 可选适配层,给 Spring Boot 租户省掉手写 `main()` wiring | 依赖 core + `spring-boot-autoconfigure`;不把 Spring 类引入 core jar |
 
-这是对 CLAUDE.md "固定 10 模块"的显式例外,性质同 `batch-worker-sdk-testkit`:属于 SDK 发布/适配模块,不是新增平台运行时服务模块,不改变 trigger / orchestrator / worker / console-api 主链。比照 ADR-029 的模块数例外,本节作为评审依据;真正创建模块时同步更新 CLAUDE.md 模块说明。
+这是对 docs/agent-baseline.md "固定 10 模块"的显式例外,性质同 `batch-worker-sdk-testkit`:属于 SDK 发布/适配模块,不是新增平台运行时服务模块,不改变 trigger / orchestrator / worker / console-api 主链。比照 ADR-029 的模块数例外,本节作为评审依据;真正创建模块时同步更新 docs/agent-baseline.md 模块说明。
 
 **版本策略**:
 - v1 只声明支持仓库当前基线 Spring Boot 4.x;不承诺 Boot 3.x 兼容矩阵。
@@ -144,7 +144,7 @@
 
 **为什么不直接把 Pipeline SPI 也 SDK 化(Option C 否决)**
 - `AbstractPipelineStepExecutionAdapter` 强绑 `file_record` / `pipeline_instance` / `pipeline_step_run` 三表写入,这些是平台状态主机的内部表
-- 把这套 SDK 化等于把 orchestrator 的写权限下放给租户,直接破 CLAUDE.md §架构硬约束「orchestrator 唯一状态主机」
+- 把这套 SDK 化等于把 orchestrator 的写权限下放给租户,直接破 docs/agent-baseline.md §架构硬约束「orchestrator 唯一状态主机」
 - 业界对照:GitHub Actions self-hosted runner 也只暴露 `run-step` API,不暴露 workflow 内部状态机
 
 | 诉求 | 走哪条路径 |
@@ -425,4 +425,4 @@ try {
 - ADR-029 dedicated SPI worker:不变,内建 SPI worker 仍是「平台代部署」选项
 - `docs/design/task-spi-design.md` §Phase 4:本 ADR **替换**该节"jar 入 classpath"形态,改为「SDK 自托管 worker」
 - ADR-034 CAP 定位:平台状态机仍 CP,租户 worker 是「stateless executor」不影响 CAP 边界
-- CLAUDE.md §架构硬约束:本 ADR 不破任何硬约束(主链不变 / orchestrator 唯一状态主机 / worker 必须 CLAIM / outbox 同事务 — 全保留)
+- docs/agent-baseline.md §架构硬约束:本 ADR 不破任何硬约束(主链不变 / orchestrator 唯一状态主机 / worker 必须 CLAIM / outbox 同事务 — 全保留)

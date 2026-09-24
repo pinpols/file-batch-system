@@ -112,7 +112,7 @@ public class SqlTransformComputeSqlValidator {
   /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
   private static void checkTopLevelLimit(Select select, long maxLimitRows) {
     Long limit = topLimitOf(select);
-    if (EmptyChecks.isNull(limit)) {
+    if (limit == null) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ERR_KEY,

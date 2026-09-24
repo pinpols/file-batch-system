@@ -240,7 +240,7 @@ bash scripts/ci/check-required-java-docs.sh
 
 ## `check-version-alignment.sh`
 
-校验版本一致性:根 `pom.xml <revision>` ↔ helm `Chart.yaml appVersion`(预发态下 appVersion 合法地停在上一 GA,仅 GA 态强制相等)↔ `load-tests/pom.xml`(独立 reactor,版本手工同步,CLAUDE.md 点名高危点);校验 `.env.*` 的 `*_IMAGE_TAG` 不漂移，并强制 PostgreSQL、Kafka、MinIO、Valkey 的 Testcontainers 镜像与 `.env.example` 对齐。接入 `pr-gate.yml` 的 `static-checks` job。
+校验版本一致性:根 `pom.xml <revision>` ↔ helm `Chart.yaml appVersion`(预发态下 appVersion 合法地停在上一 GA,仅 GA 态强制相等)↔ `load-tests/pom.xml`(独立 reactor,版本手工同步,docs/agent-baseline.md 点名高危点);校验 `.env.*` 的 `*_IMAGE_TAG` 不漂移，并强制 PostgreSQL、Kafka、MinIO、Valkey 的 Testcontainers 镜像与 `.env.example` 对齐。接入 `pr-gate.yml` 的 `static-checks` job。
 
 ```bash
 bash scripts/ci/check-version-alignment.sh

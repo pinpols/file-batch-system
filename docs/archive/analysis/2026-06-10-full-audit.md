@@ -33,7 +33,7 @@
 - **P1-8 GitHub ruleset 未生效** → 组织账号层面(需升 Team org),仓库内无法闭环。
 - **P2-6 未 CLAIM 分区重派 sweeper / P2-12 COPY streaming** → feature 级改动,分期项。
 - **P2-7 磁盘/表体积告警** → observability 规则文件(prometheus-batch-rules.yml),运维侧。
-- **P2-10 field injection(4 处)/ P2-11 config-defaults-sync 脚本** → 建议修;P2-10 四处均有代码注释记录的 test-compat 理由(其中 2 处是 @ConfigurationProperties+Environment 标准 Spring 模式,转构造器注入会破坏本轮新增的 @PostConstruct 校验),按"不过度工程"暂留,如需统一可在 CLAUDE.md 增补豁免③。
+- **P2-10 field injection(4 处)/ P2-11 config-defaults-sync 脚本** → 建议修;P2-10 四处均有代码注释记录的 test-compat 理由(其中 2 处是 @ConfigurationProperties+Environment 标准 Spring 模式,转构造器注入会破坏本轮新增的 @PostConstruct 校验),按"不过度工程"暂留,如需统一可在 docs/agent-baseline.md 增补豁免③。
 - **R1 参数对象封装(26)** → 侵入 Mapper/MyBatis 签名,风险高收益低,单独评估。
 - **R3 FQN(42)/ R6(2)** → 纯机械规范churn、零行为变更,可走 `/convention-audit` 自动修复,不混入本批正确性修复。
 
@@ -86,7 +86,7 @@
 
 - **位置**:`batch-orchestrator/.../auth/ApiKeyVerifier.java:63,65`(`touchAsync` / `upgradeLegacyHashAsync` 为 `this.` 调用,AOP 代理失效;测试注释已自证)。
 - **后果**:每次认证同步执行 DB 写 + PBKDF2(50–200ms CPU),峰值流量可耗尽 Tomcat 线程池。
-- **修法**:CLAUDE.md 豁免①模式 `@Lazy @Autowired private ApiKeyVerifier self;`(同时把 CLAUDE.md self-injection 计数 9→10,见 P3-4 实为 10→11)。
+- **修法**:docs/agent-baseline.md 豁免①模式 `@Lazy @Autowired private ApiKeyVerifier self;`(同时把 docs/agent-baseline.md self-injection 计数 9→10,见 P3-4 实为 10→11)。
 
 ### P1-5 `FileGovernanceScheduler.sweepStaleRunningPipelines` 两步 UPDATE 非同事务(置信 85)
 
@@ -121,7 +121,7 @@
 | P2-7 | 磁盘/表体积告警零条:归档治理失效本身无第二道防线(exporter 已 scrape,规则缺失) | `prometheus-batch-rules.yml` | — | 补磁盘水位/库体积增速/归档 scheduler 最近成功时间 3–5 条 |
 | P2-8 | `dropPartition` 的 `${partitionName}` 当前安全但调用链无强制正则守护 | `ProcessStagingMapper.xml:57-59` | 75 | 调用前强制 `^process_staging_p[0-9]{8}$` |
 | P2-9 | `MapperXmlTenantGuardArchTest` 仅 console-api/orchestrator 有;trigger/worker-* 有含 tenant_id 的 XML 但无守护(当前 0 活跃违规,缺防回退) | 各模块 src/test | 80 | 各加空子类 extends 基类 |
-| P2-10 | `OrchestratorGracefulShutdown` field injection(`@Autowired(required=false) ApplicationEventPublisher`),不在两类豁免内;同型 `BatchSecurityProperties:38` / `ConsoleSecurityProperties:122` / `AbstractTaskConsumer:102` | 4 处 | 80–85 | 构造器 `ObjectProvider` 注入,或在 CLAUDE.md 增补豁免③并注明理由 |
+| P2-10 | `OrchestratorGracefulShutdown` field injection(`@Autowired(required=false) ApplicationEventPublisher`),不在两类豁免内;同型 `BatchSecurityProperties:38` / `ConsoleSecurityProperties:122` / `AbstractTaskConsumer:102` | 4 处 | 80–85 | 构造器 `ObjectProvider` 注入,或在 docs/agent-baseline.md 增补豁免③并注明理由 |
 | P2-11 | config-defaults-sync 脚本不查 `batch_runtime_default_parameter` seed(06-08 P1-5 遗留的防回漂项) | `scripts/ci/check-config-defaults-sync.py` | — | 扩展脚本对账 YAML ↔ V-seed |
 | P2-12 | Import COPY 路径仍 JVM 内整块构造单 chunk CSV(已有 10000 行上限,残余分期项) | `GenericJdbcMappedImportLoadPlugin.java:392-400` | — | 按计划改 streaming,非紧急 |
 
@@ -130,7 +130,7 @@
 1. **lease 混合时钟域**:写入用应用时钟、过期判定用 DB `current_timestamp`(`DefaultTaskAssignmentService.java:161/375` vs `JobPartitionMapper.xml:209/218`);NTP 漂移缩短 lease 寿命 → 提前 reclaim(幂等回退存在)。修法:lease 写入改 DB 时钟,一处 SQL;ShedLock/Redis 已正确用服务端时钟。
 2. **rate-limit 默认全关**:`rate-limit.enabled=false`、per-tenant launch 维度 0、`global-max-running-jobs=0`——launch 风暴入口默认无闸(quota 子系统/MQ per-tenant routing 默认开,能力在)。prod profile 给保守默认值。
 3. **回滚策略未成文**:migration 纪律强(checklist/NOT VALID guard/expand-contract 事实执行),但"前滚 only + 例外清单"没写下来。db-migration-checklist 加一节即可。
-4. **文档漂移三处**:`event-routing-policy.md:80` 称 OutboxRetryScheduler 扫 `event_outbox_retry` 重投,代码现状仅 console 展示;CLAUDE.md self-injection 计数 9 → 实际 10(`DefaultRetryGovernanceService.replayTransactionalSelf`);docker init 004 注释提及不存在的 loan_* 表。
+4. **文档漂移三处**:`event-routing-policy.md:80` 称 OutboxRetryScheduler 扫 `event_outbox_retry` 重投,代码现状仅 console 展示;docs/agent-baseline.md self-injection 计数 9 → 实际 10(`DefaultRetryGovernanceService.replayTransactionalSelf`);docker init 004 注释提及不存在的 loan_* 表。
 5. **strict RLS rollout 注意项**:`ProcessStagingMapper` 维护类 SQL(orphan 清理)翻 strict 后未 `SET LOCAL app.tenant_id` 会静默 0 行——列入 strict rollout checklist(确认 cleaner 走 BYPASSRLS 或仅靠分区 DROP 回收)。
 
 ## 编码规范扫描(R1–R12 全量)
@@ -140,7 +140,7 @@
 - **R1 参数超限**:12 项 ≥7 硬违规(`ConsoleWebhookSubscriptionMapper.insert/update`、`DeadLetterTaskMapper.markReplayFailure`、`ForensicExportLogMapper.markCompleted`、`ConsoleAlertRoutingApplicationService.list` 接口+实现+Controller、`ConsoleExcelStyles.addDropdownValidation`、`DispatchManifestSupport.manifestPayload`、`ConfigPackageExcelValidator` ×2、`DataQualityCheckExecutor.writeCheck`)+ 14 项 =6 的 Mapper/Service 接口(convention-audit skill 规则要求封装)。已有 8 处 `@SuppressWarnings(PMD)` 注释豁免合规。
 - **R3 FQN**:42 处必须修,分布 25 文件(高发:`DefaultWorkflowDagService` 8 处、`TriggerOutboxRelay` 5 处、`SqlTemplateExportDataPlugin` 5 处),纯机械改 import 零行为风险。合法豁免(同名冲突被迫 FQN)已排除。
 - **R4**:4 处 `@Autowired(required=false)` field 注入(见 P2-10)。
-- **R5**:Controller/Mapper 上 @Transactional 0;35 处非默认传播(8 MANDATORY outbox 防护 + 27 REQUIRES_NEW 调度隔离)是**规则文本与既成架构的系统性冲突**,建议 CLAUDE.md 修订 carve-out / ADR 收敛,不改代码。
+- **R5**:Controller/Mapper 上 @Transactional 0;35 处非默认传播(8 MANDATORY outbox 防护 + 27 REQUIRES_NEW 调度隔离)是**规则文本与既成架构的系统性冲突**,建议 docs/agent-baseline.md 修订 carve-out / ADR 收敛,不改代码。
 - **R6**:`ShellTaskExecutor:300` 裸 RuntimeException、`TenantConfigCopyRequest:75` IAE 硬编码英文,均建议修。
 - 修复执行可走 `/convention-audit`(自动修复流程)。
 

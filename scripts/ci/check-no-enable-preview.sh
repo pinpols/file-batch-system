@@ -5,13 +5,13 @@
 # 会被生产构建或运行加载的配置(pom.xml / Dockerfile / helm values / docker-compose /
 # .github workflows / 启动脚本)。
 #
-# 背景(对齐 CLAUDE.md「ADR 与范围纪律」+ docs/analysis/jdk-feature-usage-analysis 的 P1):
+# 背景(对齐 docs/agent-baseline.md「ADR 与范围纪律」+ docs/analysis/jdk-feature-usage-analysis 的 P1):
 #   项目主工程以 JDK 21 为编译/运行基线,但 preview/incubator 特性(Structured Concurrency、
 #   Stable Values、Primitive Patterns 等)语法/行为在跨小版本间不稳定,且 `--enable-preview`
 #   会让 class 文件带 preview 标记 → 同一 minor JDK 才能运行,破坏生产可移植性。
 #   preview/incubator 只允许在 spike / benchmark 模块(load-tests)里实验,绝不进生产 profile。
 #
-# 仅扫「构建/运行配置」,不扫文档(*.md):docs 与 CLAUDE.md 会以文字形式提及
+# 仅扫「构建/运行配置」,不扫文档(*.md):docs 与 docs/agent-baseline.md 会以文字形式提及
 # "enable-preview" 来说明本规则,那是合法的,不应误报。
 #
 # 用法:

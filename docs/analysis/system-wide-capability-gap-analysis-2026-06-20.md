@@ -2,7 +2,7 @@
 
 > **方法论自省**:本分析起于一次对话——用户逐个发现「压缩 / `.chk` / 文件组 / 动态地区」等到达侧需求,而非平台主动给出完整领域地图。两个教训:① 我先前是被动答题,未主动框定「批量文件/任务交付」这一完整领域;② 更严重的是,讨论一直锁在**单个 import worker 的到达侧**,而一个**交付闭环**系统最致命的缺口往往在**单 worker 看不到的闭环级 / 其余 worker**。本文用统一深度,跨**全 10 模块 + 端到端闭环**做一次能力勘察。
 >
-> 系统定位(CLAUDE.md):**批量任务编排控制面 + 文件/任务交付闭环**,`import → process → export → dispatch`。本分析对标**结算级(settlement-grade)**批量平台的行业要求。
+> 系统定位(docs/agent-baseline.md):**批量任务编排控制面 + 文件/任务交付闭环**,`import → process → export → dispatch`。本分析对标**结算级(settlement-grade)**批量平台的行业要求。
 >
 > 每条结论均**实勘代码**(file:line),区分 IMPLEMENTED / PARTIAL / MISSING。不在本文档内提修复方案——只画现状与缺口。
 

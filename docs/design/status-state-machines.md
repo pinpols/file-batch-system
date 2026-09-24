@@ -98,7 +98,7 @@ PENDING → ACCEPTED → LAUNCHED
 
 ## 4. 状态推进的硬约束
 
-来自 CLAUDE.md §架构硬约束：
+来自 docs/agent-baseline.md §架构硬约束：
 
 - **Orchestrator 是唯一状态主机**；Worker 不能直接改写 `job_instance` / `workflow_run` / `workflow_node_run`
 - Worker 通过 HTTP `report` 上报（含 i18n 三元组 + ADR-009 节点 outputs），orchestrator 推进状态机
@@ -123,7 +123,7 @@ batch-common/src/main/java/io/github/pinpols/batch/common/enums/
   # trigger_request.request_status 无 Java enum class，仅靠 V60 DB CHECK 约束回退
 ```
 
-所有 enum 实现 `DictEnum` 接口（CLAUDE.md §领域数据字典），提供 `code()` / `label()`，统一通过 `DictEnum.fromCode()` 反查。
+所有 enum 实现 `DictEnum` 接口（docs/agent-baseline.md §领域数据字典），提供 `code()` / `label()`，统一通过 `DictEnum.fromCode()` 反查。
 
 ## 6. 守护测试
 

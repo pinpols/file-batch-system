@@ -62,7 +62,7 @@ batch-common/
 - `batch-defaults.yml` 物理移动到 `batch-common/src/main/resources/`
 - `ConfigDriftGuardTest` 增 `baselineYamlExistsAtCanonicalLocation` +
   `baselineYamlIsReachableFromClasspath` 两个测试方法,改 repoRoot 定位逻辑
-- CLAUDE.md §模块边界 同步更新
+- docs/agent-baseline.md §模块边界 同步更新
 
 ### 兼容性影响
 

@@ -20,7 +20,7 @@
 --   兼容性:无记录时退化为今天的行为(从 0 跑),老任务无感知。
 --   灰度开关 batch.worker.checkpoint.enabled (默认 false) 在 P2/P3 加。
 --
---   archive 镜像 — CLAUDE.md 红线(热表 batch.* 与 archive.*_archive 1:1),
+--   archive 镜像 — docs/agent-baseline.md 红线(热表 batch.* 与 archive.*_archive 1:1),
 --   LIKE INCLUDING ALL 与 V159 风格一致,并登记到 ArchiveSchemaDriftCheck.ARCHIVED_TABLES。
 -- =========================================================
 
@@ -66,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_progress_completed_at
     WHERE completed = TRUE;
 
 -- ---------------------------------------------------------
--- archive 镜像(CLAUDE.md 红线;LIKE INCLUDING ALL 与 V159 一致)
+-- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V159 一致)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS archive.pipeline_progress_archive
     (LIKE batch.pipeline_progress INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);

@@ -271,7 +271,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
           ? null
           : renewedByKey.get(item.tenantId() + "\u0000" + item.taskId());
       results.add(
-          EmptyChecks.isNull(row)
+          row == null
               ? new TaskHeartbeatResult(false, false)
               : new TaskHeartbeatResult(true, Boolean.TRUE.equals(row.getCancelRequested())));
     }
@@ -404,14 +404,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         ? null
         : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
     JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
-    String businessKey =
-        EmptyChecks.isNotNull(partition) && EmptyChecks.isNotNull(partition.getBusinessKey())
-            ? partition.getBusinessKey()
-            : null;
-    String idempotencyKey =
-        EmptyChecks.isNotNull(partition) && EmptyChecks.isNotNull(partition.getIdempotencyKey())
-            ? partition.getIdempotencyKey()
-            : null;
+    String businessKey = partition == null ? null : partition.getBusinessKey();
+    String idempotencyKey = partition == null ? null : partition.getIdempotencyKey();
     Map<String, Object> partitionSnapshot = parsePartitionSnapshot(partition);
     return new EffectiveTaskConfig(
         tenantId,
@@ -434,9 +428,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         EmptyChecks.isNull(definition) ? null : definition.retryPolicy(),
         EmptyChecks.isNull(definition) ? null : definition.retryMaxCount(),
         EmptyChecks.isNull(definition) ? null : definition.timeoutSeconds(),
-        EmptyChecks.isNull(partition) ? null : partition.getPartitionNo(),
+        partition == null ? null : partition.getPartitionNo(),
         instance.getExpectedPartitionCount(),
-        EmptyChecks.isNull(partition) ? null : partition.getPartitionKey(),
+        partition == null ? null : partition.getPartitionKey(),
         intValue(partitionSnapshot.get("partitionPlanVersion")),
         intValue(partitionSnapshot.get("shardIndex")),
         intValue(partitionSnapshot.get("shardTotal")),
@@ -446,7 +440,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         // V94: data_interval 透传 — 创建 instance 时已落到 job_instance, claim 时实时读
         instance.getDataIntervalStart(),
         instance.getDataIntervalEnd(),
-        EmptyChecks.isNull(partition) ? null : partition.getCurrentInvocationId());
+        partition == null ? null : partition.getCurrentInvocationId());
   }
 
   @SuppressWarnings("unchecked")
@@ -569,14 +563,18 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     // 调度记录可以绑定具体实例，也可以绑定稳定资源池。资源池中的任一在线实例均可竞争
     // claim，但 CAS 成功后 task/partition 必须改记实际实例 ID，确保续租、取消和结果上报
     // 仍由 invocation fence 精确约束到单个执行实例。
-    String assignedWorkerCode = EmptyChecks.isNull(task) ? null : task.getAssignedWorkerCode();
-    boolean assignedToClaimingWorker = EmptyChecks.isBlank(assignedWorkerCode)
+    if (task == null) {
+      return new ClaimEval(true, null);
+    }
+    String assignedWorkerCode = task.getAssignedWorkerCode();
+    boolean assignedToClaimingWorker = assignedWorkerCode == null
+        || assignedWorkerCode.isBlank()
         || assignedWorkerCode.equals(workerCode)
         || assignedWorkerCode.equals(workerRegistry.routingCode());
     if (!assignedToClaimingWorker) {
       return new ClaimEval(false, null);
     }
-    if (EmptyChecks.isNull(task) || EmptyChecks.isNull(task.getJobPartitionId())) {
+    if (task.getJobPartitionId() == null) {
       return new ClaimEval(true, null);
     }
     JobPartitionEntity partition =

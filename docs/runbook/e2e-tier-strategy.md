@@ -124,4 +124,4 @@ mvn -pl batch-e2e-tests test -DexcludedGroups='smoke,critical'
 
 - Round-1 TOP-7 反馈:`docs/analysis/...`(TOP-7 表)
 - e2e shard 分组依据:`docs/runbook/e2e-it-optimization-2026-05-22.md`
-- 测试约定:`CLAUDE.md` §测试约定
+- 测试约定:`docs/agent-baseline.md` §测试约定

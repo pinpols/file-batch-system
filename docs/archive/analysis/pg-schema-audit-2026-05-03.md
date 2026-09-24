@@ -2,7 +2,7 @@
 
 > 范围：`batch` (68 表) + `archive` (14 表) 三轮 Flyway 迁移 (V1–V81)  
 > 触发：系统化审查表设计、多租隔离、索引覆盖、cascade 风险、archive 漂移  
-> 基线：CLAUDE.md 硬约束 + 2026-05-02 持久层审计
+> 基线：docs/agent-baseline.md 硬约束 + 2026-05-02 持久层审计
 
 ---
 
@@ -95,7 +95,7 @@ ALTER TABLE batch.job_step_instance
 **位置**：`batch.workflow_edge`，V4 第 100 行  
 **事实**：约束 `UNIQUE (workflow_definition_id, from_node_code, to_node_code, edge_type)` 未包含 `tenant_id`；且 workflow_edge 无 tenant_id 列，跨租户边界查询时需绕 workflow_definition 关联才能做租户校验（query plan 多一个 JOIN）。
 
-**现状**：不违规（FK 链路: `workflow_definition_id → tenant_id`），但违反"所有业务表默认携带 tenant_id"的落地原则（CLAUDE.md §14.1）。
+**现状**：不违规（FK 链路: `workflow_definition_id → tenant_id`），但违反"所有业务表默认携带 tenant_id"的落地原则（docs/agent-baseline.md §14.1）。
 
 **修复建议**：V82 迁移，补 tenant_id 列：
 ```sql
@@ -142,7 +142,7 @@ ALTER TABLE batch.workflow_edge
 - `batch.pipeline_*` 4 表（V6）：pipeline_definition, pipeline_step_definition, pipeline_instance, pipeline_step_run
 - `batch.workflow_*` 5 表（V4/V5）：workflow_definition, workflow_node, workflow_edge, workflow_run, workflow_node_run
 
-**事实**：两套体系都支持 DAG 编排，都有定义态 + 运行态，都支持重试 / 补偿。CLAUDE.md §领域字典 只提及 workflow_type ∈ `{DAG, PIPELINE, MIXED}`，没解释何时用 pipeline_definition vs job_definition + workflow。
+**事实**：两套体系都支持 DAG 编排，都有定义态 + 运行态，都支持重试 / 补偿。docs/agent-baseline.md §领域字典 只提及 workflow_type ∈ `{DAG, PIPELINE, MIXED}`，没解释何时用 pipeline_definition vs job_definition + workflow。
 
 **evidence**：
 - V6 pipeline_instance 有 pipeline_type ∈ `{IMPORT, EXPORT, DISPATCH}`
@@ -184,7 +184,7 @@ ALTER TABLE batch.workflow_edge
   }
   ```
   （重复 14 张表）
-- 在 CLAUDE.md 加硬规则：**加列到任何业务运行态表（*.instance / *.run）后，必须同期 PR 补充对应 archive 表的 ALTER**
+- 在 docs/agent-baseline.md 加硬规则：**加列到任何业务运行态表（*.instance / *.run）后，必须同期 PR 补充对应 archive 表的 ALTER**
 
 ---
 
@@ -263,7 +263,7 @@ DROP INDEX IF EXISTS uk_trigger_outbox_event_tenant_request;
 - V4 job_definition:44 `CONSTRAINT ck_job_definition_priority`
 - 但多数迁移没有 CHECK 约束命名（无前缀，匿名）
 
-**建议**：统一用 `ck_<table>_<field>` 格式，CLAUDE.md 补充约定。
+**建议**：统一用 `ck_<table>_<field>` 格式，docs/agent-baseline.md 补充约定。
 
 ---
 
@@ -331,7 +331,7 @@ DROP INDEX IF EXISTS uk_trigger_outbox_event_tenant_request;
 
 ---
 
-## 附录：对 CLAUDE.md 提议的硬约束补充
+## 附录：对 docs/agent-baseline.md 提议的硬约束补充
 
 ### 补充 A：多租隔离详细规则（补充到 §多租隔离）
 

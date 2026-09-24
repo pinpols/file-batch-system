@@ -83,4 +83,4 @@ flowchart TB
 - [workflow-dependency-guide.md](workflow-dependency-guide.md) — workflow DAG 主文档
 - [docs/design/file-pipeline-design.md §9](../design/file-pipeline-design.md) — 文件链路设计（pipeline 主文档）
 - [ADR-009 workflow-param-dsl](adr/ADR-009-workflow-param-dsl.md) — workflow 节点参数 DSL
-- [CLAUDE.md §领域数据字典](../../CLAUDE.md) — `WorkflowNodeType` / `WorkflowEdgeType` / `WorkflowType` / `JobType` 枚举
+- [docs/agent-baseline.md §领域数据字典](../../docs/agent-baseline.md) — `WorkflowNodeType` / `WorkflowEdgeType` / `WorkflowType` / `JobType` 枚举

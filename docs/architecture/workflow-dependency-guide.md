@@ -482,7 +482,7 @@ flowchart LR
 
 两个分支并行，任一成功 MERGE 就 fire。
 
-### 7.3 GATEWAY ALL + 备路径 — `tc/TC_WF_GATEWAY_ALL`（CLAUDE.md 2026-04-22 提及）
+### 7.3 GATEWAY ALL + 备路径 — `tc/TC_WF_GATEWAY_ALL`（docs/agent-baseline.md 2026-04-22 提及）
 
 3 个 branch 都成功才汇聚；带 `FAILURE` / `CONDITION` 边到 fallback 子路径。覆盖了 `WorkflowJoinMode` 全部三个值 + `WorkflowEdgeType` 全部四个值的语义。
 

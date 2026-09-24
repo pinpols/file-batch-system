@@ -79,7 +79,7 @@ Verifier 失败默认**不**中止任务。调用方决定升级路径：
 
 ## 范围红线（防越界）
 
-参考 CLAUDE.md "ADR 实施范围纪律"：
+参考 docs/agent-baseline.md "ADR 实施范围纪律"：
 
 - ✅ 任务终态后的"快照式"产物校验
 - ✅ 跨 worker 一致的判定（导出非空 / 回执存在）
@@ -91,7 +91,7 @@ Verifier 失败默认**不**中止任务。调用方决定升级路径：
 
 - **直接复用 `E2eVerifier`（测试 helper）**：测试侧接口耦合 testcontainer + builder
   pattern，不适合生产 SPI。
-- **把校验逻辑写进 `AbstractTaskConsumer`**：堆积越来越多 if-jobtype，违反 CLAUDE.md "分支消除" 规则。
+- **把校验逻辑写进 `AbstractTaskConsumer`**：堆积越来越多 if-jobtype，违反 docs/agent-baseline.md "分支消除" 规则。
 - **走 Spring Validation `@Valid`**：那是字段约束，不是产物级断言。
 
 ## 后果

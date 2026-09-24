@@ -7,6 +7,7 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapGetter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -20,12 +21,15 @@ public final class OtelTracePropagation {
   private static final TextMapGetter<Map<String, String>> GETTER = new TextMapGetter<>() {
     @Override
     public Iterable<String> keys(Map<String, String> carrier) {
+      if (carrier == null) {
+        return List.of();
+      }
       return carrier.keySet();
     }
 
     @Override
     public String get(@Nullable Map<String, String> carrier, String key) {
-      return EmptyChecks.isNull(carrier) ? null : carrier.get(key);
+      return carrier == null ? null : carrier.get(key);
     }
   };
 
@@ -52,7 +56,7 @@ public final class OtelTracePropagation {
    * <p>载荷缺失或无效时保持当前上下文不变，避免覆盖已有的有效链路。
    */
   public static Scope restore(@Nullable W3cTraceContext traceContext) {
-    if (EmptyChecks.isNull(traceContext) || EmptyChecks.isBlank(traceContext.traceparent())) {
+    if (traceContext == null || EmptyChecks.isBlank(traceContext.traceparent())) {
       return () -> {};
     }
     Map<String, String> carrier = new LinkedHashMap<>(2);

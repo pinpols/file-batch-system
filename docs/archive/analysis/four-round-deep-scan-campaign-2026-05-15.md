@@ -44,7 +44,7 @@
 | | 授权粒度（RBAC） | **/internal/* 单星号疑似只匹配一段路径 (P0 双层防御)** + approval tenant 不校验 (P0) |
 | | Flyway 迁移可回滚 | V117 DRY_RUN rolling rollback NPE 风险 |
 | | Cron + calendar + 时间 | **CronExpression 共享可变实例 race condition (P0)** |
-| | 文档与代码漂移 | ADR-010 状态字段过时；CLAUDE.md 模块清单漏 batch-config-defaults |
+| | 文档与代码漂移 | ADR-010 状态字段过时；docs/agent-baseline.md 模块清单漏 batch-config-defaults |
 
 ## 按轮次累计统计
 
@@ -80,10 +80,10 @@
 
 | # | 引入 | 发现 | 修复 |
 |---|---|---|---|
-| R4-P1-7 | R2 修复 `BatchSecurityProperties.isProductionProfile` 时用了 `java.util.Set<String>` FQN | R4 文档漂移 agent 抓到（CLAUDE.md 禁 FQN） | R4 改 `Set<String>` + import |
+| R4-P1-7 | R2 修复 `BatchSecurityProperties.isProductionProfile` 时用了 `java.util.Set<String>` FQN | R4 文档漂移 agent 抓到（docs/agent-baseline.md 禁 FQN） | R4 改 `Set<String>` + import |
 | R4-P2-6 | R3 修复 `ConsoleJwtService` encoder lazy init 时遗漏 clock skew validator | R4 配置漂移 agent 抓到 | R4 提取 `buildDecoder` 私有方法两处共用 |
 
-**教训**：缺乏自动化的 CLAUDE.md 硬约束 lint（FQN / `ZoneId.systemDefault()` / `Charset.forName` 等）。后续应加 ArchUnit 测试或 Spotless 自定义规则。
+**教训**：缺乏自动化的 docs/agent-baseline.md 硬约束 lint（FQN / `ZoneId.systemDefault()` / `Charset.forName` 等）。后续应加 ArchUnit 测试或 Spotless 自定义规则。
 
 ## 还剩 4 项排期
 
@@ -113,7 +113,7 @@
 
 2. **配置层 bug 占 P0 的 30%** —— Helm / .env / docker-compose / batch-defaults 跨 5 层的默认值漂移，单元测试完全测不到，必须靠 prod-mode dry-run 或 staging 一致性验证。
 
-3. **PG NULL 是隐藏雷区** —— 一轮就抓到 4 张表的 UNIQUE+NULL bypass。CLAUDE.md 强调 "UNIQUE 必须含 tenant_id"，但**没强调 NULL bypass**。已在 V124 + 后续 audit 报告中固化"业务 UNIQUE 列必须 NOT NULL 否则用 partial unique index"规则。
+3. **PG NULL 是隐藏雷区** —— 一轮就抓到 4 张表的 UNIQUE+NULL bypass。docs/agent-baseline.md 强调 "UNIQUE 必须含 tenant_id"，但**没强调 NULL bypass**。已在 V124 + 后续 audit 报告中固化"业务 UNIQUE 列必须 NOT NULL 否则用 partial unique index"规则。
 
 4. **CAS 链不完整比无 CAS 更危险** —— `updateOutputSummary` / `markPublished` 两处都是核心字段有 CAS，但 旁路字段或终态标记缺 CAS → 给开发者"已经做了乐观锁"的假象。
 

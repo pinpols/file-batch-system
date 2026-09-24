@@ -15,6 +15,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
 SDK_KAFKA_BOOTSTRAP="${BATCH_SDK_KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "${KAFKA_HOST_PORT:-19092}")}"
+# live broker 地址只应注入 Kafka 集成测试。先清除步骤级环境变量，避免普通
+# lifecycle/HTTP 单测意外启用 Kafka 路径并留下无法退出的后台连接。
+unset BATCH_SDK_KAFKA_BOOTSTRAP
 PYTHON_BIN="${PYTHON:-}"
 if [[ -z "$PYTHON_BIN" ]]; then
   for candidate in python3.12 python3 python; do
@@ -89,8 +92,10 @@ echo "[sdk-live] TypeScript live Kafka adapter"
 (
   cd "$ROOT/sdk/typescript"
   npm install --include=optional --package-lock=false --no-audit --no-fund
-  node --test --experimental-strip-types 'tests/lifecycle.test.ts' 'tests/transport.test.ts'
-  BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" node --test --experimental-strip-types 'kafka/*.integration.test.ts'
+  node --test --test-concurrency=1 --test-timeout=30000 --experimental-strip-types \
+    'tests/lifecycle.test.ts' 'tests/transport.test.ts'
+  BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" \
+    node --test --test-timeout=60000 --experimental-strip-types 'kafka/*.integration.test.ts'
 )
 
 echo "[sdk-live] Go client lifecycle + HTTP transport"

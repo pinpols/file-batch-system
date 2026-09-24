@@ -118,7 +118,7 @@ flowchart LR
 | `sdk/python` | — | Python SDK(ADR-035 跨语言对等实现)。Python 3.12+ async-only,pydantic v2 / httpx / aiokafka。**独立工具链**(pip),不进 Maven reactor;跨 SDK contract drift 由 Lane P guard。详见 [`sdk/python/README.md`](sdk/python/README.md) |
 | `sdk/go` / `sdk/typescript` / `sdk/rust` | — | 独立工具链的跨语言 SDK（ADR-035 对等实现），与 Java/Python 共享契约 fixture；语言清单、安装与使用见 [sdk/README.md](sdk/README.md) |
 
-> 平台运行时固定 10 个逻辑模块：从 `batch-common` 到 `batch-console-api`（含 `batch-worker-atomic`）。其中 `batch-worker` 是聚合（aggregator）模块，下挂 6 个子模块：`core` / `import` / `export` / `process` / `dispatch` / `atomic`（对应上表 `batch-worker-*`）。根 Maven reactor 当前有 10 个 module path：7 个平台 / 测试模块 + 3 个 Java SDK 模块；Go / Python / Rust / TypeScript SDK、`load-tests`、`security-scan` 是独立工具链或独立 reactor。调整范围参考 `CLAUDE.md §模块` 与 [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md)。
+> 平台运行时固定 10 个逻辑模块：从 `batch-common` 到 `batch-console-api`（含 `batch-worker-atomic`）。其中 `batch-worker` 是聚合（aggregator）模块，下挂 6 个子模块：`core` / `import` / `export` / `process` / `dispatch` / `atomic`（对应上表 `batch-worker-*`）。根 Maven reactor 当前有 10 个 module path：7 个平台 / 测试模块 + 3 个 Java SDK 模块；Go / Python / Rust / TypeScript SDK、`load-tests`、`security-scan` 是独立工具链或独立 reactor。调整范围参考 [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md)。
 
 ## 技术栈
 

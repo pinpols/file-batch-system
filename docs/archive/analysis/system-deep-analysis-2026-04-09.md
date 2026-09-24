@@ -151,7 +151,7 @@
 Task Outcome、Node Dispatch、Trigger Request 三个关键路径都依赖"先查后写"模式，没有统一的幂等键 + 数据库唯一约束机制。应在数据库层面强制 `UNIQUE(tenant_id, idempotency_key)`。
 
 ### D-2. 事务边界设计不一致
-`CLAUDE.md` 要求 outbox_event 与状态写入同事务，但实际代码中存在多处跨事务操作：
+`docs/agent-baseline.md` 要求 outbox_event 与状态写入同事务，但实际代码中存在多处跨事务操作：
 - `createTask()` vs `releaseForDispatch()`（H-3）
 - `INSERT request` vs `sendTrigger()`（H-4）
 - `markTaskFinish()` vs `markPartitionStatus()`（C-8）

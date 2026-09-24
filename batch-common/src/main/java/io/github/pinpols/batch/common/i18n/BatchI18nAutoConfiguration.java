@@ -40,7 +40,7 @@ public class BatchI18nAutoConfiguration {
   public MessageSource messageSource() {
     ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
     source.setBasename("classpath:messages");
-    // R7-A5-P2: 走 StandardCharsets 常量来源，避免字面量 "UTF-8"（CLAUDE.md §字符编码）。
+    // R7-A5-P2: 走 StandardCharsets 常量来源，避免字面量 "UTF-8"（docs/agent-baseline.md §字符编码）。
     source.setDefaultEncoding(StandardCharsets.UTF_8.name());
     source.setFallbackToSystemLocale(false);
     // useCodeAsDefaultMessage=false:key 不存在时返回 null,让 ExceptionHandler 走 fallback 字面量,

@@ -31,7 +31,7 @@
 - [ ] **包目录 + 声明**:`git mv` 包目录 `worker/spi` → `worker/atomic`(main + test);全仓 `sed` `io.github.pinpols.batch.worker.spi` → `io.github.pinpols.batch.worker.atomic`(package 声明 + 所有 import)。
 - [ ] **类名**:按总表重命名(`BatchWorkerSpiApplication` 等);注意 `BatchWorkerSpiProperties` 在 **batch-common**,改它影响引用方,一并 sed。
 - [ ] **配置 key**:`application.yml` / `application-local.yml`(worker 模块)+ `application-e2e.yml`(e2e)里 `batch.worker.spi.*` → `batch.worker.atomic.*`;**`batch.worker.executors.*` 不动**。
-- [ ] **CLAUDE.md**:固定 10 模块清单 `batch-worker-spi` → `batch-worker-atomic`;ADR-029 注脚同步。
+- [ ] **docs/agent-baseline.md**:固定 10 模块清单 `batch-worker-spi` → `batch-worker-atomic`;ADR-029 注脚同步。
 - [ ] **CI**:`full-ci-gate.yml`(IT shard 3 含 batch-worker-spi)、E2eIT shard 列表、`pr-gate.yml` 里模块名引用。
 - [ ] **docker**:`docker/compose/app.yml`(image / `MODULE` arg / `container_name` / `LOGGING_FILE_NAME`);`docker/observability/prometheus-batch-rules.yml` 注释里的模块名。
 - [ ] **scripts**:`start-all.sh` / `restart.sh` / `build-apps.sh`(模块名 + jar 名 + 端口 18087)、`07-spi-load.sh`(→ `07-atomic-load.sh`)、`strict-verify.sh` §7 注释。

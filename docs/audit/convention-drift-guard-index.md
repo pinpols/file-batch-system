@@ -3,13 +3,13 @@
 > 维护日期: 2026-09-13
 > 定位: 统一记录项目约定、约束、审计、审核、复扫与 CI 守卫入口,用于后续扫描时防止规范漂移。
 
-本文不是新的规范来源,也不替代 `CLAUDE.md`、编码规约、ADR 或 runbook。它只做一件事:把分散在代码、文档、脚本、CI、审计报告里的约束集中成一张可复扫的总账。
+本文不是新的规范来源,也不替代 `docs/agent-baseline.md`、编码规约、ADR 或 runbook。它只做一件事:把分散在代码、文档、脚本、CI、审计报告里的约束集中成一张可复扫的总账。
 
 ## 权威层级
 
 | 层级 | 权威入口 | 作用 | 漂移风险 |
 |---|---|---|---|
-| 1 | 根目录 `CLAUDE.md` | 项目硬约束、红线、模块边界、数据库与测试基本纪律 | 新增硬规则后只改代码或口头约定,没有进入根规范 |
+| 1 | 根目录 `docs/agent-baseline.md` | 项目硬约束、红线、模块边界、数据库与测试基本纪律 | 新增硬规则后只改代码或口头约定,没有进入根规范 |
 | 2 | [docs/coding-conventions.md](../coding-conventions.md) | 编码细则、命名、异常、事务、API、删除规范、安全旁路 | 代码风格、事务边界、参数/命名习惯逐步发散 |
 | 3 | [docs/architecture/adr/](../architecture/adr/) | 已决策的架构边界和取舍 | 代码实现和 ADR 方向不一致,或新增例外没有补 ADR |
 | 4 | [docs/api/](../api/) | Console / Orchestrator / SDK 契约 | 前后端、SDK、worker transport 契约漂移 |
@@ -32,14 +32,14 @@
 
 | 方向 | 必看规范 | 可执行守卫 | 典型漂移 |
 |---|---|---|---|
-| 多租户与数据库 | `CLAUDE.md`; [bounded-context-rules.md](../architecture/bounded-context-rules.md); ADR-017/020/024 | `check-biz-table-tenant-rls.py`; `check-migration-safety.sh`; `validate-flyway-schema.sh`; `check-no-positional-insert-select-star.py`; 相关租户/归档 ArchTest | 漏 `tenant_id`; `ON CONFLICT` 幂等守卫退化; archive schema 和热表漂移; 位置列插入导致错列 |
+| 多租户与数据库 | `docs/agent-baseline.md`; [bounded-context-rules.md](../architecture/bounded-context-rules.md); ADR-017/020/024 | `check-biz-table-tenant-rls.py`; `check-migration-safety.sh`; `validate-flyway-schema.sh`; `check-no-positional-insert-select-star.py`; 相关租户/归档 ArchTest | 漏 `tenant_id`; `ON CONFLICT` 幂等守卫退化; archive schema 和热表漂移; 位置列插入导致错列 |
 | API 契约 | [console-api-protocol.md](../api/console-api-protocol.md); [console-api.openapi.yaml](../api/console-api.openapi.yaml); [orchestrator-internal.openapi.yaml](../api/orchestrator-internal.openapi.yaml) | `check-console-openapi-paths.py`; `check-openapi-breaking.sh`; 前端 `gen:api:check` | Controller 改了但 OpenAPI/前端类型没同步; 返回体字段和页面假设不一致 |
 | Worker / SDK | ADR-035/036/037/038; [sdk-contract-fixtures](../api/sdk-contract-fixtures/) | `run-sdk-live-transport-gate.sh`; `run-sdk-orchestrator-e2e.sh`; workflow `sdk-contract-parity.yml`; `sdk-orchestrator-e2e.yml`; `sdk-release-validation.yml` | conformance 绿但生产 transport 不通; 五语言 SDK 行为不一致 |
-| 编码与架构 | [coding-conventions.md](../coding-conventions.md); `CLAUDE.md`; [project-structure.md](../architecture/project-structure.md) | PMD; Spotless; `check-dependency-boundaries.py`; `check-no-enable-preview.sh` | 构造注入退回字段注入; 事务放错层; common 引入重依赖; 预览特性混入主线 |
+| 编码与架构 | [coding-conventions.md](../coding-conventions.md); `docs/agent-baseline.md`; [project-structure.md](../architecture/project-structure.md) | PMD; Spotless; `check-dependency-boundaries.py`; `check-no-enable-preview.sh` | 构造注入退回字段注入; 事务放错层; common 引入重依赖; 预览特性混入主线 |
 | 配置与环境 | [runbook/](../runbook/); [dict/config-keys.md](../dict/config-keys.md); ADR-039 | `check-config-defaults-sync.py`; `check-feature-switch-registry.py`; `check-helm-env-sync.py`; `check-production-overlay-safety.py`; `check-version-alignment.sh`; `check-helm-prometheusrule-sync.sh`; `validate-kafka-topics.sh`; `check-sql-config-boundaries.sh` | yml、docker、helm、env、topic、PrometheusRule 不一致; SQL 和配置混在 shell |
 | 文档、脚本与仓库卫生 | [document-governance.md](../standards/document-governance.md); [scripts/README.md](../../scripts/README.md) | `check-docs-structure.py`; `check-changelog-sync.py`; `check-script-governance.py`; `check-shell-scripts.sh`; `check-repository-hygiene.py` | 链接或图片失效;索引漏项;守护未登记;Shell 告警增长;本机路径或产物入库 |
 | 测试与验收 | [testing/](../testing/); [verifications/](../verifications/) | `check-e2e-shard-coverage.sh`; `check-e2e-run-completeness.sh`; `check-module-test-coverage.sh`; `check-no-silent-disabled-tests.sh`; `select-affected-tests.py`; workflow `full-ci-gate.yml`; `staging-gate.yml`; `strict-verify.yml` | 只保留 happy path; disabled test 静默增加; sim/IT 覆盖和业务场景脱节 |
-| 安全与合规 | [compliance/](../compliance/); `CLAUDE.md` 安全红线 | `security-scan.sh`; `check-license-compliance.sh`; `check-dependency-licenses.sh`; workflow `codeql.yml`; `workflow-lint.yml` | 依赖许可不清; bypass 开关 fail-open; workflow 权限过大; secret 泄露到日志 |
+| 安全与合规 | [compliance/](../compliance/); `docs/agent-baseline.md` 安全红线 | `security-scan.sh`; `check-license-compliance.sh`; `check-dependency-licenses.sh`; workflow `codeql.yml`; `workflow-lint.yml` | 依赖许可不清; bypass 开关 fail-open; workflow 权限过大; secret 泄露到日志 |
 | 运维与恢复 | [runbook/incident-response.md](../runbook/incident-response.md); [runbook/troubleshooting-decision-tree.md](../runbook/troubleshooting-decision-tree.md); ADR-042/044 | `scripts/ops/inspect-all.sh`; `scripts/ops/heal-stuck-workflows.sh`; 相关 sim / drill / staging gate | Console 只能看不能救; DLQ/outbox/卡实例缺少幂等恢复动作 |
 
 ## 复扫频率
@@ -52,7 +52,7 @@
 | 改 worker / SDK transport | 跑 SDK fixture、live transport、orchestrator e2e | Java/Python/Go/JS/Rust 行为不漂移; conformance 和生产链路一致 |
 | 改配置、镜像、依赖版本 | 跑版本对齐、env/prod 同步、许可、SBOM、安全扫描 | 本地、CI、部署、测试容器版本统一; 许可风险明确 |
 | Release 前 | 跑 full CI、staging gate、关键 sim、runbook 演练证据 | 不只有单测绿,还要有运维和真实链路证据 |
-| 新增硬规则 / ADR 例外 | 更新 `CLAUDE.md` 或 ADR,追加 `docs/changelog.md`,同步本文 | 人读入口和机器守卫都能找到该规则 |
+| 新增硬规则 / ADR 例外 | 更新 `docs/agent-baseline.md` 或 ADR,追加 `docs/changelog.md`,同步本文 | 人读入口和机器守卫都能找到该规则 |
 
 ## 同步清单
 
@@ -87,4 +87,4 @@
 1. 新增或删除 CI 守卫脚本,必须更新本文的快照和守卫矩阵。
 2. 新增 ADR、硬约束或架构例外,必须能从本文追到权威入口。
 3. 审计报告发现的系统性问题,必须至少闭环到以下一项:代码修复、测试守卫、CI gate、ADR、runbook 或本文。
-4. 如果本文和 `CLAUDE.md`、ADR、OpenAPI、runbook 冲突,以后者对应权威文档为准,并立即修正本文。
+4. 如果本文和 `docs/agent-baseline.md`、ADR、OpenAPI、runbook 冲突,以后者对应权威文档为准,并立即修正本文。

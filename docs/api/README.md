@@ -2,7 +2,7 @@
 
 前后端契约：Console API 的人读协议 + 机读 OpenAPI。
 
-> **CLAUDE.md 硬约束**：改 `batch-console-api` 控制层必须同步更新这两份文件，否则 PR 拒收。
+> **docs/agent-baseline.md 硬约束**：改 `batch-console-api` 控制层必须同步更新这两份文件，否则 PR 拒收。
 
 ## 文件清单（编号即推荐阅读顺序）
 
@@ -31,7 +31,7 @@
        ↓
 前端用 02 OpenAPI  →  代码生成 / mock
        ↓
-后端改 controller  →  必须同步更新 01 + 02（CLAUDE.md 硬约束）
+后端改 controller  →  必须同步更新 01 + 02（docs/agent-baseline.md 硬约束）
 ```
 
 ## 本地门禁

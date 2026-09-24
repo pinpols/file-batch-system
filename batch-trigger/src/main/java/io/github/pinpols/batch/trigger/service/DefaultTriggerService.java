@@ -421,7 +421,7 @@ public class DefaultTriggerService implements TriggerService {
     }
     // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
     // workdayOverrides。CalendarBizDateDefinition 是 record，字段引用不可变但 Set 本身可写，
-    // toUnmodifiableSet 明确回退，符合 CLAUDE.md §集合 "返回不可变集合" 约定。
+    // toUnmodifiableSet 明确回退，符合 docs/agent-baseline.md §集合 "返回不可变集合" 约定。
     Set<LocalDate> holidays = rules.stream()
         .filter(rule -> isDayType(rule, "HOLIDAY"))
         .map(CalendarHolidayRule::getBizDate)

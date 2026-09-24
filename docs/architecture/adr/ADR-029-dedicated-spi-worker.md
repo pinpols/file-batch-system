@@ -29,8 +29,8 @@ worker(import/export/process/dispatch)技术上都能经 `@ConditionalOnProperty
 
 ## 破"固定模块"规则的理由
 
-CLAUDE.md 原"固定 9 模块不可擅自增删"。本次显式增到 10,理由是**安全基线**(RCE 特权隔离),
-不是 scope 扩张 —— 这正是该破规则的少数正当场景。已同步更新 CLAUDE.md 模块清单。
+docs/agent-baseline.md 原"固定 9 模块不可擅自增删"。本次显式增到 10,理由是**安全基线**(RCE 特权隔离),
+不是 scope 扩张 —— 这正是该破规则的少数正当场景。已同步更新 docs/agent-baseline.md 模块清单。
 
 ## 范围边界(不做)
 
@@ -42,7 +42,7 @@ CLAUDE.md 原"固定 9 模块不可擅自增删"。本次显式增到 10,理由�
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| PR-1 结构隔离 | 新模块 + 迁 executor + 4 worker 物理无 SPI + 本 ADR + CLAUDE.md | ✅ 本 PR |
+| PR-1 结构隔离 | 新模块 + 迁 executor + 4 worker 物理无 SPI + 本 ADR + docs/agent-baseline.md | ✅ 本 PR |
 | PR-2 运行时接线 | WorkerRouteAdapter + worker_type + application.yml + 注册/路由 + IT | ⏳ 待环境 |
 | PR-3 部署 | Helm / compose + 最小权限下放 | ⏳ ops |
 

@@ -29,7 +29,7 @@
 ### BE 架构 P0
 
 1. **`MapperXmlTenantGuardArchTest` 守护断层**:仅覆盖 `batch-orchestrator` + `batch-console-api`,**`batch-trigger` / `batch-worker-dispatch` / `batch-worker-process` 的 mapper XML 无同等守护**,多租 `tenant_id` 强制 WHERE 可能被新代码绕过。
-2. **`*Record` 后缀禁令在主代码 3 处违反**:orchestrator / worker-import / sdk;无 ArchTest 拦截。CLAUDE.md 红线明文禁止。
+2. **`*Record` 后缀禁令在主代码 3 处违反**:orchestrator / worker-import / sdk;无 ArchTest 拦截。docs/agent-baseline.md 红线明文禁止。
 3. **`executeLegacy` 死代码假象**:`batch-worker-import/LoadStep.java:91,96` 标 `@Deprecated` 但被同类主路径调用,语义被破坏。
 4. **CHANGELOG 双源不明**:根 `CHANGELOG.md`(11 天未动)+ `docs/changelog.md`(今天还在更)节奏脱钩,权威源不明。
 5. **`MultiTenantIsolationIntegrationTest` 单点**:V160-V165 新表无回归覆盖,新加表的隔离性靠 ArchTest 兜不住。

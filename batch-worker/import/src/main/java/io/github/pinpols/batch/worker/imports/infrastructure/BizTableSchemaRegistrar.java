@@ -48,7 +48,9 @@ public class BizTableSchemaRegistrar {
   /** biz 元数据快照单元:一张表 + 其列定义 JSON。 */
   private record TableColumns(String schema, String table, String columnsJson) {}
 
-  // P1-6: @EventListener 上原挂 @Transactional(REQUIRES_NEW) 违反 CLAUDE.md #4(@Transactional 只放
+  // P1-6: @EventListener 上原挂 @Transactional(REQUIRES_NEW) 违反 docs/agent-baseline.md
+  // #4(@Transactional
+  // 只放
   // Service 公共方法),且 EventListener 无外层事务时 REQUIRES_NEW≈REQUIRED 纯属误用。改为先在事务外只读
   // 收集 biz 元数据快照,再用 TransactionTemplate 显式包裹 deleteAll + N 条 upsertEntry 原子覆盖写
   // (对齐 AbstractStepBeanRegistrar 的合规范式)。

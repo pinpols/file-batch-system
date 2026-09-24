@@ -76,7 +76,7 @@ CREATE TABLE custom_task_type_registry (
 CREATE INDEX idx_ctt_tenant_status ON custom_task_type_registry (tenant_id, status);
 ```
 
-遵循 CLAUDE.md 多租隔离:`tenant_id` 在 PK 中。
+遵循 docs/agent-baseline.md 多租隔离:`tenant_id` 在 PK 中。
 
 ### 3.2 注册方式两条路
 
@@ -332,7 +332,7 @@ Conductor 的 `TaskDef` 模型是最对标的,我们参考它。
 
 ## 10. 维护
 
-- 表结构变更 → Flyway migration + archive 镜像(CLAUDE.md 红线)
+- 表结构变更 → Flyway migration + archive 镜像(docs/agent-baseline.md 红线)
 - 模板变量库扩展 → 同步本文档 §4.1 表
 - 新增"特殊参数语义"(类似敏感凭据约束)→ 同步 §5
 - console UX 期望变化 → 同步 §7

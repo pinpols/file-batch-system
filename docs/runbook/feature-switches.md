@@ -449,7 +449,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
 | `docs/architecture/rework-classification.md` | Phase 2 表格的"开关"列 |
-| `docs/changelog.md` | **仅当**改的是 CLAUDE.md 已有规范条款时记一条 |
+| `docs/changelog.md` | **仅当**改的是 docs/agent-baseline.md 已有规范条款时记一条 |
 
 ---
 

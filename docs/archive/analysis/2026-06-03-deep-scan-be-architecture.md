@@ -1,14 +1,14 @@
 # BE 架构 + 维护性 深度扫描报告(2026-06-03)
 
 > **范围**:`batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-worker-core/-import/-export/-process/-dispatch/-atomic` · `batch-console-api` 10 模块 + `docs/architecture/adr/` 39 份 ADR + `db/migration/V1..V165` + 测试基础设施。
-> **方法**:对照 `CLAUDE.md` 强约束 / 4 个高风险 ADR 范围边界 / 反向依赖 / mapper 静态扫描 / 测试约定 / 文档同步。
+> **方法**:对照 `docs/agent-baseline.md` 强约束 / 4 个高风险 ADR 范围边界 / 反向依赖 / mapper 静态扫描 / 测试约定 / 文档同步。
 > **基线**:`origin/main` @ `1115d723`。最近 6 个月 1235 commits / 1 GA(v1.0.0)。
 
 ---
 
 ## §1 执行摘要
 
-- 总体评价:**架构红线守得住**,核心约束(MyBatis-only / 唯一状态主机 / 多租 UNIQUE / archive 镜像 / 模块单向依赖)经多轮硬性扫描沉淀,V164/V165 等近期新表均符合规则。`ConsoleOrchestratorProxyService` + `OutboxOpsController` 这条 console→orchestrator 运维通道已落实,直接写 outbox 的红线没被破。9 处 `@Lazy self` 与 CLAUDE.md 自述完全对齐。
+- 总体评价:**架构红线守得住**,核心约束(MyBatis-only / 唯一状态主机 / 多租 UNIQUE / archive 镜像 / 模块单向依赖)经多轮硬性扫描沉淀,V164/V165 等近期新表均符合规则。`ConsoleOrchestratorProxyService` + `OutboxOpsController` 这条 console→orchestrator 运维通道已落实,直接写 outbox 的红线没被破。9 处 `@Lazy self` 与 docs/agent-baseline.md 自述完全对齐。
 - **核心风险**:在"守护边界"上有 **2 个静默的覆盖缺口**(P0)——`MapperXmlTenantGuardArchTest` 仅覆盖 `batch-orchestrator` + `batch-console-api`,**`batch-trigger` / `batch-worker-dispatch` / `batch-worker-process` 的 mapper XML 没有同等守护**;另外 `MultiTenantIsolationIntegrationTest` 只在 orchestrator 一处,对 V165 等跨模块新表无回归网。
 - **维护性短板**(P1):3 处 `*Record` 后缀违反持久化命名规则但未被构造期阻断;`@Deprecated executeLegacy` 仍被主路径自身调用(死代码假象);orchestrator/application/service 单实现接口 4 处历史 TODO 未结案;console-api `@Autowired field` 6+ 处生产代码(豁免仅给 IT 测试)。
 - 文档纪律:`docs/changelog.md`(14 个日期)与 root `CHANGELOG.md`(11 天未动)节奏脱钩,`CHANGELOG.md` 已成"低优先级老链路",建议明确"谁是权威源"或合并(P2)。
@@ -72,7 +72,7 @@
 
 ### P0-1 mapper XML 多租守护断层 ⚠️
 
-- **现象**:CLAUDE.md §多租隔离明文要求"**各模块** `MapperXmlTenantGuardArchTest`(静态扫描 mapper XML,禁可空 `<if tenantId>` 守护)"。实际只有 2 处:
+- **现象**:docs/agent-baseline.md §多租隔离明文要求"**各模块** `MapperXmlTenantGuardArchTest`(静态扫描 mapper XML,禁可空 `<if tenantId>` 守护)"。实际只有 2 处:
   - `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/arch/MapperXmlTenantGuardArchTest.java`
   - `batch-console-api/src/test/java/io/github/pinpols/batch/console/arch/MapperXmlTenantGuardArchTest.java`
 - 而以下模块都带 mapper XML 且**没有**对应守护:
@@ -88,7 +88,7 @@
   - `batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/domain/ImportBadRecord.java`
   - `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyRecord.java`(同时是 `public record`)
   - `batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/idempotent/SdkIdempotencyRecord.java`(SDK 属外发,影响面更大)
-- CLAUDE.md §持久化(ADR-001):**"表行类型放 `domain/entity/`,统一 `*Entity` 后缀(record 或 `@Data` class),**禁** `*Record` 后缀"**。
+- docs/agent-baseline.md §持久化(ADR-001):**"表行类型放 `domain/entity/`,统一 `*Entity` 后缀(record 或 `@Data` class),**禁** `*Record` 后缀"**。
 - **根因**:
   1. `ApiKeyRecord` 早期沉淀,逃过 2026-05-02 全平台清理(`refactor(orch/console): 清理遗留 *Record 类`),原因是其落在 `auth/` 而非 `domain/entity/`,语义边缘
   2. `ImportBadRecord` 是 worker 内部 bean,未注册到 `domain/entity/` → 守护规则的扫描路径限制 → 漏拦
@@ -105,14 +105,14 @@
 ### P0-4 双 CHANGELOG 脱钩
 
 - **现象**:
-  - `docs/changelog.md`:最近条目 2026-06-01,半年内 14 个独立日期,严格围绕 CLAUDE.md 规范变化
+  - `docs/changelog.md`:最近条目 2026-06-01,半年内 14 个独立日期,严格围绕 docs/agent-baseline.md 规范变化
   - `CHANGELOG.md`:最近条目 2026-05-23(`okhttp 5 / jsqlparser 5` 依赖升级),半年内只 6 个独立日期
 - **根因**:`CHANGELOG.md` 早期单 changelog 模型残留,新模式让 `docs/changelog.md` 装规范变化 / 各 `docs/runbook/*-2026-05-22.md` 装运维变化,但 `CHANGELOG.md`"GA / SemVer release notes"职责无人 own。
 - **建议**:① 在 `CHANGELOG.md` 顶部加 README 风格的"职责说明"——这里只装 v1.X.Y release notes,日常变更去 `docs/changelog.md` / `docs/runbook/<topic>-YYYY-MM-DD.md`;② 或正式废弃,只留 git tag `v1.0.0` annotated 文本;③ release flow runbook `docs/runbook/releasing.md` 里要明确 PR 完工触发 `CHANGELOG.md` append 的时点。
 
 ### P0-5 多租隔离 IT 单点
 
-- **现象**:CLAUDE.md 列出 `MultiTenantIsolationIntegrationTest`(batch-orchestrator)为多租 UNIQUE 守护测试,但近期 V160-V165 多张新表(`job_task_effective_parameters` / `pipeline_progress` / `atomic_task_config`)落地后,IT 是否含 explicit cross-tenant 写测无据可考;只有 mapper XML 静态扫(P0-1 受限)。
+- **现象**:docs/agent-baseline.md 列出 `MultiTenantIsolationIntegrationTest`(batch-orchestrator)为多租 UNIQUE 守护测试,但近期 V160-V165 多张新表(`job_task_effective_parameters` / `pipeline_progress` / `atomic_task_config`)落地后,IT 是否含 explicit cross-tenant 写测无据可考;只有 mapper XML 静态扫(P0-1 受限)。
 - **根因**:多租规则有 3 层(schema UNIQUE / mapper 条件不可空 / IT cross-tenant 写),只有 schema 层每条 V***.sql 都过 review,后两层都靠"开发者记得加测"。
 - **建议**:把 `MultiTenantIsolationIntegrationTest` 改成参数化驱动 — 每张业务表自动派生 `@ParameterizedTest` 跨租户写 + 校验唯一约束;表清单从 `db/migration` 解析 + 排除 4 张系统表;新增表自动入网。
 
@@ -126,7 +126,7 @@
   - `batch-orchestrator/.../OrchestratorGracefulShutdown.java:36`
   - `batch-worker-process/.../ProcessMetrics.java:52`
 - **根因**:`@Autowired(required=false)` 可选依赖在构造器注入下需要 `ObjectProvider` 模板,部分开发者图方便保留 field;`ConsoleJwtService` 因 self-AOP 解决方案选了 field;`OrchestratorGracefulShutdown` 是 ServletWebServerApplicationContext 钩子拿不到稳定构造时序。
-- **建议**:① `required=false` 全部改 `ObjectProvider<X>` 构造器注入,这是 CLAUDE.md 默认推荐;② `ConsoleJwtService` 用 `@Lazy self` 豁免改造,纳入 9 处清单(变 10 处)+ 在 changelog 显式记录;③ `OrchestratorGracefulShutdown` 单独写 PR 评注证明无法构造注入。
+- **建议**:① `required=false` 全部改 `ObjectProvider<X>` 构造器注入,这是 docs/agent-baseline.md 默认推荐;② `ConsoleJwtService` 用 `@Lazy self` 豁免改造,纳入 9 处清单(变 10 处)+ 在 changelog 显式记录;③ `OrchestratorGracefulShutdown` 单独写 PR 评注证明无法构造注入。
 
 ### P1-2 4 个单实现接口 TODO 已 11 天
 
@@ -144,12 +144,12 @@
 ### P1-4 `Propagation.REQUIRES_NEW` 文档化不足
 
 - **位置**:`DefaultRetryGovernanceService`(7 处)+ `DefaultCompensationService`(4 处)+ `DbRowExistsSensorPolicy`(1 处 readOnly)。
-- **根因**:CLAUDE.md §Java #4 "禁 Propagation.NEVER 之外的非默认传播",但因 REQUIRES_NEW 是审计行/补偿日志必需,实际是合理豁免;但豁免没在 CLAUDE.md / coding-conventions.md 写明,后人不知道是否还能加。
+- **根因**:docs/agent-baseline.md §Java #4 "禁 Propagation.NEVER 之外的非默认传播",但因 REQUIRES_NEW 是审计行/补偿日志必需,实际是合理豁免;但豁免没在 docs/agent-baseline.md / coding-conventions.md 写明,后人不知道是否还能加。
 - **建议**:在 `docs/coding-conventions.md` 列"REQUIRES_NEW 唯一豁免清单 = 审计/补偿日志独立提交",并贴一个 ArchTest 钉死扫描白名单 — 新增 REQUIRES_NEW 必须在白名单否则 fail。
 
 ### P1-5 Mutation IT 自建链路
 
-- **现象**:`batch-console-api/src/test/java/.../integration/Console*MutationIntegrationTest.java` 10 个文件,都 `extends AbstractMutationIntegrationTest`(本地基类),**而非 CLAUDE.md 要求的 `AbstractIntegrationTest`**。检查 `AbstractMutationIntegrationTest` 顶部确实 `import io.github.pinpols.batch.testing.AbstractIntegrationTest;` —— 但**它自己的 class 声明是 abstract,未 extends**。
+- **现象**:`batch-console-api/src/test/java/.../integration/Console*MutationIntegrationTest.java` 10 个文件,都 `extends AbstractMutationIntegrationTest`(本地基类),**而非 docs/agent-baseline.md 要求的 `AbstractIntegrationTest`**。检查 `AbstractMutationIntegrationTest` 顶部确实 `import io.github.pinpols.batch.testing.AbstractIntegrationTest;` —— 但**它自己的 class 声明是 abstract,未 extends**。
 - **根因**:该基类的 javadoc 写"不强加 `@SpringBootTest`,子类各自声明启用 properties"—— 实际是放弃了 Testcontainers PG/Kafka/Redis/MinIO 复用,跑 Mutation IT 时各自启 Spring context。
 - **建议**:① 把 `AbstractMutationIntegrationTest extends AbstractIntegrationTest`,让 10 个 Mutation IT 自动复用 Testcontainers 容器复用机制(目前可能每个测试类一个独立 PG 容器,启动慢);② 验证是否真的共享容器(`docker ps` 抓快照对照)。
 
@@ -203,7 +203,7 @@
 | `ZoneId.systemDefault()` 业务代码命中 | 5 处命中全在 `BatchTimezoneProvider` / `BatchDateTimeSupport` / 守护测试 / javadoc,无业务违反 |
 | `Charset.forName` 业务代码命中 | 5 处命中全在 `EncodingUtils` 实现内部 + 守护测试 + javadoc,无业务违反 |
 | Console 直接写 outbox | `OutboxEventMapper.xml` 只 SELECT,XML 注释明文 "故意只保留 SELECT";`ConsoleOrchestratorProxyService` → `OutboxOpsController` → `OutboxOpsApplicationService` 链路落实 |
-| `@Lazy self` 数量 | 9 处,与 CLAUDE.md 自述一致 |
+| `@Lazy self` 数量 | 9 处,与 docs/agent-baseline.md 自述一致 |
 | archive 镜像 V164 / V165 | 两个新表都同 PR 落了 `archive.*_archive` 表 |
 | trigger / worker 引入读写分离 | `grep` 0 命中,replica 真只在 console-api |
 
@@ -226,7 +226,7 @@
 
 | 报告条 | 相关 ADR / 文档 |
 |---|---|
-| P0-1(守护断层) | CLAUDE.md §多租 + ADR-001 |
+| P0-1(守护断层) | docs/agent-baseline.md §多租 + ADR-001 |
 | P0-2(`*Record`) | ADR-001 §entity 命名 + 2026-05-02 changelog 是清理点 |
 | P0-3(`executeLegacy`) | ADR-038 平台 worker 续跑(P3 #266 PR 是最近变更点) |
 | P0-4(双 CHANGELOG) | `docs/runbook/releasing.md` 应负责定义 |
@@ -241,7 +241,7 @@
 ### 本次扫描未涉及但建议下次纳入
 
 - **K8s / helm chart vs 模块/topic plan 漂移**(`helm/` 目录变更频率 + `docker/compose/*.yml` 同步度)。
-- **`load-tests` 与根 reactor 版本同步**(CLAUDE.md 明确"手工同步")。
+- **`load-tests` 与根 reactor 版本同步**(docs/agent-baseline.md 明确"手工同步")。
 - **SDK Python 与 Java 契约 drift**(本次扫描在 BE 范围,但 lane drift guard 在 R/P/Q lane PR #255-#257 已落地,值得专题深扫)。
 
 ---

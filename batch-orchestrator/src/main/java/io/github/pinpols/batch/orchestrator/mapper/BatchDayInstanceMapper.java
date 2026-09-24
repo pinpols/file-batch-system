@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.batch_day_instance} MyBatis 映射（替代原 Spring Data JDBC {@code
- * BatchDayInstanceRepository}，对齐 CLAUDE.md §架构硬约束 — 运行态走 MyBatis）。
+ * BatchDayInstanceRepository}，对齐 docs/agent-baseline.md §架构硬约束 — 运行态走 MyBatis）。
  *
  * <p>关键约束：
  *

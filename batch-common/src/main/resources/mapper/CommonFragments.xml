@@ -32,7 +32,7 @@
     </sql>
 
     <!--
-        租户隔离谓词。CLAUDE.md §多租隔离:所有业务 SELECT 必须含 tenant_id。
+        租户隔离谓词。docs/agent-baseline.md §多租隔离:所有业务 SELECT 必须含 tenant_id。
         用法:WHERE 1=1 <include refid="...tenantPredicate"/> AND other_cond
         参数:`tenantId`(顶层方法参数或 query record 字段)
     -->

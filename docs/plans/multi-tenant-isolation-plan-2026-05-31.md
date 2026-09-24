@@ -154,7 +154,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
   - transition policy 仅保留在事故应急回滚脚本中；回滚期间健康检查保持 DOWN，修复后必须恢复 strict。
 - [x] **R3 · 守护从「白名单」翻成「闭世界」,且 fail-fast。**
   - 守护已改为按活动 catalog 动态发现带 `tenant_id` 的非分区 `biz` 租户表；新增租户业务表不需要维护 Java/SQL 数组，漏配 RLS 会进入 health/fail-fast 检查，而非静默放行。非租户元数据不属于扫描边界，只有明确含 `tenant_id` 但确认非租户时才使用显式豁免。
-  - 达成标准:守护从**活动 catalog** 出发 —— 查 `pg_tables WHERE schemaname='biz'`,断言**每一张实际存在的表**都 `ENABLE+FORCE+有 policy`;硬编码清单退化为「已知豁免名单」(同 CLAUDE.md 4 张系统表豁免写法)。漏配 → 启动 fail-fast / CI 红,而非静默放行。
+  - 达成标准:守护从**活动 catalog** 出发 —— 查 `pg_tables WHERE schemaname='biz'`,断言**每一张实际存在的表**都 `ENABLE+FORCE+有 policy`;硬编码清单退化为「已知豁免名单」(同 docs/agent-baseline.md 4 张系统表豁免写法)。漏配 → 启动 fail-fast / CI 红,而非静默放行。
 
 **执行环节(R2/R3 判定逻辑在哪跑 —— 分层,主力是启动 fail-fast)**:
 
@@ -422,7 +422,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - ADR-035 tenant self-hosted worker SDK(Phase B 主文档)
 - ADR-029 dedicated SPI worker(本 plan 不变其定位)
 - ADR-034 CAP 定位(本 plan 三件套不影响 CAP,主链不变)
-- CLAUDE.md §架构硬约束(本 plan 全部 phase 都保留「orchestrator 唯一状态主机」「worker 必须 CLAIM」)
+- docs/agent-baseline.md §架构硬约束(本 plan 全部 phase 都保留「orchestrator 唯一状态主机」「worker 必须 CLAIM」)
 - `docs/architecture/scalability-assessment.md`(扩容能 / 不能解决的边界)
 - `BizTableSchemaRegistrar.java` javadoc(已留 Phase C 扩展点注释)
 

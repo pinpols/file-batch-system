@@ -65,7 +65,7 @@
 - BE / FE 各自一仓 + worktree + agent session 多线作业 → 本 session 出现 `ci/admin-automerge-rewrite` 分支累积工作 / worktree 死了 2 天没人理
 - 这是**工程问题不是技术问题**
 - **修法**:
-  - 短期:已加 [branch-hygiene skill](../../.claude/skills/branch-hygiene.md) 防短命分支累积
+  - 短期:已加 [Git/PR workflow skill](../../.agents/skills/git-pr-workflow/SKILL.md) 统一分支和 PR 操作检查
   - 中期:BE OpenAPI 改动直接 PR 触发 FE 仓 `gen:api` workflow(GitHub repository_dispatch)
   - 长期:考虑 monorepo(短期不推,长期看团队规模)
 

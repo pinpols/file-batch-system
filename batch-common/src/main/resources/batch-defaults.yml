@@ -304,7 +304,7 @@ batch:
   # 安全 / KMS（orchestrator + worker + console 共用）
   security:
     # 全链路安全旁路开关（放宽认证 / 脱敏 / 加解密 / 审批 / 渠道校验）；仅限本地 / 联调 / E2E。
-    # 默认值策略见 CLAUDE.md §配置开关规范：IDE 跑读此处默认 false；docker-compose 跑通过
+    # 默认值策略见 docs/agent-baseline.md §配置开关规范：IDE 跑读此处默认 false；docker-compose 跑通过
     # BATCH_SECURITY_BYPASS_MODE=true 覆盖；生产 profile 通过 @PostConstruct 守护拒绝 true。
     bypass-mode: ${BATCH_SECURITY_BYPASS_MODE:false}
     # 内部接口（/internal/**）共享密钥；生产环境必须通过 BATCH_INTERNAL_SECRET 注入强密钥

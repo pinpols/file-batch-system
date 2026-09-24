@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 /**
  * Console outbox 运维应用层：stats 仍在本地直接 SELECT，cleanup / republish 转发到 orchestrator。
  *
- * <p>转发原因：CLAUDE.md「Orchestrator 是唯一状态主机」硬约束 — outbox_event 是分发主链的核心环节， console 不能直接
+ * <p>转发原因：docs/agent-baseline.md「Orchestrator 是唯一状态主机」硬约束 — outbox_event 是分发主链的核心环节， console 不能直接
  * UPDATE/DELETE。改由 orchestrator 在自己 @Transactional 边界里执行。
  */
 @Service

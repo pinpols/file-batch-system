@@ -129,8 +129,10 @@ final class IntegrationTestInfrastructure {
     return FS_PRESIGN_SECRET;
   }
 
+  @SuppressWarnings("java:S5443")
   private static Path createTempRoot() {
     try {
+      // 测试文件系统根只在当前构建进程内使用，且由 JDK 创建为随机私有目录。
       return Files.createTempDirectory("batch-test-fs-root-");
     } catch (IOException ex) {
       throw new UncheckedIOException(ex);

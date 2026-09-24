@@ -7,7 +7,7 @@
 
 ## 一、定位
 
-file-batch-system = **批量运行控制面 + 文件/任务交付闭环**(见 CLAUDE.md / ADR)。
+file-batch-system = **批量运行控制面 + 文件/任务交付闭环**(见 docs/agent-baseline.md / ADR)。
 不是通用 workflow 引擎,不扩张为数据治理 / K8s 编排 / 合规审计平台。
 评估差距时,凡落在「明确范围边界外」的缺失**不算缺陷**(见 §四)。
 

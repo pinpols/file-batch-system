@@ -124,7 +124,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   }
 
   /**
-   * P1: 改为构造器注入(原 @Value field injection 违反 CLAUDE.md #3)。
+   * P1: 改为构造器注入(原 @Value field injection 违反 docs/agent-baseline.md #3)。
    *
    * <p>子类继续走 super(...) 链;通过 @PostConstruct {@link #initSemaphore()} 在 Spring 完成依赖注入后立即初始化
    * semaphore,避免 ensureSemaphore() 懒初始化路径在 maxConcurrentTasks=0 默认值下静默降级为 1。

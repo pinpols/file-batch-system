@@ -256,8 +256,11 @@ final class ImportPreprocessObjectSource {
     if (!isNewlineSafeCharset(charset)) {
       return false;
     }
-    return isRangeSliceableFormat(
-        resolveFileFormatType(importPayload, templateConfig), templateConfig);
+    String formatType = resolveFileFormatType(importPayload, templateConfig);
+    if (formatType == null || formatType.isBlank()) {
+      return false;
+    }
+    return isRangeSliceableFormat(formatType, templateConfig);
   }
 
   static boolean isBinaryImportFormat(String formatType) {

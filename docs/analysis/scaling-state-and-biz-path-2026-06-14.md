@@ -1,6 +1,6 @@
 # 扩容现状盘点 + biz 数据层路径决策(2026-06-14)
 
-> 状态:决策已定。与 `CLAUDE.md`「citus 冻结」一致,本文是其判据的合并记录。
+> 状态:决策已定。与 `docs/agent-baseline.md`「citus 冻结」一致,本文是其判据的合并记录。
 > 关联:tag `citus-poc-2026-06-14`(冻结快照)、PR #470(分区抽 main)、
 > `docs/design/partition-idempotency-decision.md`。
 
@@ -23,7 +23,7 @@
 
 ## 2. Citus 价值评估(为什么冻结)
 
-1. **没有当前规模问题**:CLAUDE.md 早写「需求驱动,非当前缺口」。无表撞 PG 上限;真实数据量痛点(process_staging 118GB)是**分区**解的,不是 Citus。控制面 PG 写有 10-15× 余量,瓶颈在控制面逻辑非 PG。
+1. **没有当前规模问题**:docs/agent-baseline.md 早写「需求驱动,非当前缺口」。无表撞 PG 上限;真实数据量痛点(process_staging 118GB)是**分区**解的,不是 Citus。控制面 PG 写有 10-15× 余量,瓶颈在控制面逻辑非 PG。
 2. **压错层**:citus 分支 49 表复合 PK + distribute 全在 **platform 控制面**(编排元数据,量级有限),不是会涨的 biz。
 3. **真会受益的 biz 上不了**:biz 租户隔离 100% 靠 RLS;PoC(多节点 coord+worker)实测 **RLS 在 Citus 分布表上坏掉**(返 0 行/写报错,GUC 跨节点未正确传播)。详见 [[project_biz_citus_rls_poc_broken]] 记录。
 4. **从未进生产**:citus 永不合 main。
@@ -42,7 +42,7 @@ biz 是**多租户 OLTP**,扩容天然轴是按租户。比 Citus 干净、且�
 
 ## 4. 解冻 Citus 的条件
 
-仅当**同时**满足:① 真撞 PG 写墙(控制面 10-15× 余量耗尽 / 单租户 biz 数据超单机);② 确认走**自托管** Citus 而非托管(Azure 托管 Citus = 路径 B,绕开自运维)。流程见 CLAUDE.md「解冻流程」(从 tag 起分支 → 重审计 main delta → 重跑 distribute + sim)。
+仅当**同时**满足:① 真撞 PG 写墙(控制面 10-15× 余量耗尽 / 单租户 biz 数据超单机);② 确认走**自托管** Citus 而非托管(Azure 托管 Citus = 路径 B,绕开自运维)。流程见 docs/agent-baseline.md「解冻流程」(从 tag 起分支 → 重审计 main delta → 重跑 distribute + sim)。
 
 ## 5. 一句话
 

@@ -13,7 +13,8 @@ class WorkerProcessMapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuard
   @Override
   protected Set<String> knownTenantlessBatchWriteStatements() {
     return Set.of(
-        // batch.process_staging 是 RLS 覆盖表(CLAUDE.md:RLS 覆盖 biz.* + batch.process_staging),
+        // batch.process_staging 是 RLS 覆盖表(docs/agent-baseline.md:RLS 覆盖 biz.* +
+        // batch.process_staging),
         // 租户隔离由 SET LOCAL app.tenant_id 行级策略强制;此为按 staged_at 的孤儿 GC(内部维护)
         "ProcessStagingMapper#deleteOrphansOlderThan");
   }

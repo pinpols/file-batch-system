@@ -1177,4 +1177,4 @@ DST 切换日的 cutoff_at / Quartz nextFireTime 漂移（gap / overlap 处理�
 - 本文是批量日 / 时区 / DST 的**主设计入口**，[`batch-day-design.md`](./batch-day-design.md) / [`batch-day-capability-design.md`](./batch-day-capability-design.md) / [`timezone-and-dst-design.md`](./timezone-and-dst-design.md) 是其下游材料
 - 后续相关 schema 变化（含归档表对齐）必须同步更新本文 §5 / §13 / §14.2 / §14.3
 - 新增 `batch_day.*` 状态、policy 取值、API 必须同步 `docs/dict/glossary.md`、`docs/api/console-api.openapi.yaml`、`docs/api/console-api-protocol.md`
-- CLAUDE.md 时区策略章节、`docs/coding-conventions.md §20`、`docs/runbook/feature-switches.md` 需保持与本文 §2 / §8 一致
+- docs/agent-baseline.md 时区策略章节、`docs/coding-conventions.md §20`、`docs/runbook/feature-switches.md` 需保持与本文 §2 / §8 一致

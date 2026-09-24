@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  * 注册各自模块允许的 ROLE_ADMIN 跨租入口白名单。
  *
  * <p>新模块加守护时只需 {@code class XxxMapperXmlTenantGuardArchTest extends
- * BaseMapperXmlTenantGuardArchTest}, 必要时 override 白名单方法即可。详见 CLAUDE.md §多租隔离。
+ * BaseMapperXmlTenantGuardArchTest}, 必要时 override 白名单方法即可。详见 docs/agent-baseline.md §多租隔离。
  *
  * <p><b>⚠️ 守护边界(2026-06-16 审计澄清):本测只做"防回退的文件名白名单",不验证运行时隔离。</b>白名单里的 mapper(含用户可达的
  * WorkflowNode/FileArrivalGroup/OperationAudit 等)其可空 {@code <if tenantId>} 方法, 安全**完全依赖调用方先经 {@code
@@ -59,7 +59,7 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
   }
 
   /**
-   * <b>表级豁免</b>:这些 {@code batch.*} 表**物理上没有 {@code tenant_id} 列**,按 CLAUDE.md §多租隔离合法豁免两类——① 系统表;②
+   * <b>表级豁免</b>:这些 {@code batch.*} 表**物理上没有 {@code tenant_id} 列**,按 docs/agent-baseline.md §多租隔离合法豁免两类——① 系统表;②
    * run/config 明细子表(仅经父表 FK + 父 id 访问,父行已按 tenant 校验)。对这些表的 UPDATE/DELETE 无法也不应带 tenant_id 谓词。
    *
    * <p>基类给出全仓通用集合(跨模块一致的系统表 + 已知无 tenant_id 列的子表);子类可 override 并 {@code union} 追加本模块特有的无 tenant_id
@@ -67,7 +67,7 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
    */
   protected Set<String> tenantExemptTables() {
     return Set.of(
-        // ① 系统表(CLAUDE.md §多租隔离 4 张豁免 + 全局目录),无 tenant_id 列
+        // ① 系统表(docs/agent-baseline.md §多租隔离 4 张豁免 + 全局目录),无 tenant_id 列
         "shedlock", // 分布式锁,全局系统表
         "step_registry", // 步骤注册表,全局系统表
         "biz_table_schema", // 业务库 schema 元数据,全局系统表
@@ -96,6 +96,7 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
   }
 
   @Test
+  @SuppressWarnings("java:S5960")
   void everyTenantAwareMapperMustNotGuardTenantIdWithConditional() throws IOException {
     Path mapperDir = Paths.get("src/main/resources/mapper");
     if (!Files.exists(mapperDir)) {

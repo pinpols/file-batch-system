@@ -1,7 +1,7 @@
 # Checkpoint / 断点续跑 设计与分期施工规划（2026-07）
 
 > 后端 P2 最大单项(粗估见 [`backend-borrowings-and-improvements-2026-07.md`](./backend-borrowings-and-improvements-2026-07.md) §2.2,15–25 人天)。文档先行、过评审再动工。
-> 原则:守 CLAUDE.md 架构硬约束(orchestrator 唯一状态主机 / worker 必 CLAIM / outbox 同事务 / UNIQUE 幂等契约 / 复合 PK 前瞻);借 Spring Batch 的 checkpoint 理念,不引依赖;把已有深度打磨到生产可用,优先于铺新面。
+> 原则:守 docs/agent-baseline.md 架构硬约束(orchestrator 唯一状态主机 / worker 必 CLAIM / outbox 同事务 / UNIQUE 幂等契约 / 复合 PK 前瞻);借 Spring Batch 的 checkpoint 理念,不引依赖;把已有深度打磨到生产可用,优先于铺新面。
 
 ---
 
@@ -42,9 +42,9 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 - `processed_count BIGINT`:已成功处理记录数,chunk/page 提交时累加。
 - `completed BOOLEAN` + `completed_at`:该 stage 整体完成标记,用于幂等跳过。
 - **CHECK 约束 `stage IN ('LOAD','GENERATE')`**(`V164:38-39`)——**这是关键设计边界**:表结构在 DDL 层就把续跑范围钉死在两个 stage。新增 PROCESS/DISPATCH 续跑必须 `ALTER` 这个 CHECK(是迁移、是语义变更,不是运维操作)。
-- archive 镜像 `archive.pipeline_progress_archive`(`V164:69-87`),登记入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES`(守 CLAUDE.md §archive 冷表对齐红线)。
+- archive 镜像 `archive.pipeline_progress_archive`(`V164:69-87`),登记入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES`(守 docs/agent-baseline.md §archive 冷表对齐红线)。
 
-**PK 前瞻注意**:本表用单列 `id` PK,不符合 CLAUDE.md「新表复合 PK 前瞻」的字面。但它是**只经父表 id(pipeline_instance_id)访问的 run 明细子表**,自身带 `tenant_id` + 独立 UNIQUE,属于 CLAUDE.md §多租隔离「② run 明细子表」豁免类别的近似。若本表未来要月分区,需评估复合化——**已列为风险 R-6**。
+**PK 前瞻注意**:本表用单列 `id` PK,不符合 docs/agent-baseline.md「新表复合 PK 前瞻」的字面。但它是**只经父表 id(pipeline_instance_id)访问的 run 明细子表**,自身带 `tenant_id` + 独立 UNIQUE,属于 docs/agent-baseline.md §多租隔离「② run 明细子表」豁免类别的近似。若本表未来要月分区,需评估复合化——**已列为风险 R-6**。
 
 ### 1.2 写入链路——谁写、粒度、同事务边界的真相
 
@@ -118,7 +118,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 - **orchestrator 唯一状态主机**:位点落 worker 可写的平台内部表 `pipeline_progress`,worker **不写** `job_instance`/`pipeline_instance` 状态(ADR-038 §范围边界 `:36-42`)。终态 CAS 只在 orchestrator `DefaultTaskOutcomeService.finishTask`(`:306-317`,guard `task_status=RUNNING`)。✅ 现状合规,本设计延续。
 - **worker 必 CLAIM**:claim 是乐观 version-CAS `UPDATE`(`JobTaskMapper.xml:265-277`),非 `FOR UPDATE SKIP LOCKED`;partition claim 带 lease CAS(`JobPartitionMapper.xml:213-227`)。✅
 - **outbox 同事务**:`OutboxDomainEventPublisher.publish` 是 `@Transactional(MANDATORY)`(`:30-46`),永远不能脱离调用方事务;dispatch 的 createPartitions+createTasks+writeDispatchEvent 同事务(`DefaultPartitionDispatchService.java:89-95`)。**checkpoint 位点写不进 outbox 事务**——位点是 worker 内部记录,不触发 orchestrator 状态转移,**本就不该走 outbox**(见 §4 YAGNI「位点写 outbox」)。✅
-- **UNIQUE 幂等契约**:`pipeline_progress` 的 `UNIQUE(tenant_id, pipeline_instance_id, stage)` 是位点 UPSERT 幂等键;任何扩 stage 值或改此列集都要 `grep -r 'on conflict'` 核对(CLAUDE.md §架构硬约束)。✅
+- **UNIQUE 幂等契约**:`pipeline_progress` 的 `UNIQUE(tenant_id, pipeline_instance_id, stage)` 是位点 UPSERT 幂等键;任何扩 stage 值或改此列集都要 `grep -r 'on conflict'` 核对(docs/agent-baseline.md §架构硬约束)。✅
 
 ---
 
@@ -141,9 +141,9 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 
 ## 3. 范围边界(YAGNI 红线)——❌ 不做清单
 
-对齐 CLAUDE.md §ADR 与范围纪律 + ADR-038 §范围边界。**发现越界(即使代码正确)必须 reject。**
+对齐 docs/agent-baseline.md §ADR 与范围纪律 + ADR-038 §范围边界。**发现越界(即使代码正确)必须 reject。**
 
-- ❌ **不新建第 2 张位点表**。`pipeline_progress` 是唯一位点载体;扩 stage 值走 `ALTER CHECK`,不建 `dispatch_progress`/`process_progress` 同义表(违反 CLAUDE.md「禁新增同义表」精神)。
+- ❌ **不新建第 2 张位点表**。`pipeline_progress` 是唯一位点载体;扩 stage 值走 `ALTER CHECK`,不建 `dispatch_progress`/`process_progress` 同义表(违反 docs/agent-baseline.md「禁新增同义表」精神)。
 - ❌ **不把位点写进 outbox / 不触发 orchestrator 状态转移**。位点是 worker 内部记录,不是业务事件;写 outbox 会放大控制面消息、且违反"位点是 worker 内部记录"(ADR-038 反例 `:99-106`,`docs/design/pipeline-stage-progress-display.md:137`)。
 - ❌ **不追求跨库 1PC / 不引 XA/JTA**。ADR-035 §决策 P3 已否决;位点跨库最终一致 + 插件幂等是既定取舍,不"修"成强事务。
 - ❌ **不做单条记录级回滚 / 不做 worker 内线程池并行**(ADR-038 §范围边界 `:42`)。续跑是"跳过已完成",不是"撤销部分写"。
@@ -168,9 +168,9 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 
 ### 4.2 存储:扩展 `pipeline_progress`,不建新表
 
-- 扩 CHECK 约束 `stage IN ('LOAD','GENERATE','COMPUTE_STAGE','PIPELINE_STAGE')`(具体值 P1 定),archive 镜像同迁移对齐(CLAUDE.md 红线),squawk `NOT VALID` + `VALIDATE` 同迁移双守护(见我方 memory「加 CHECK/FK 迁移的两道守护」)。
+- 扩 CHECK 约束 `stage IN ('LOAD','GENERATE','COMPUTE_STAGE','PIPELINE_STAGE')`(具体值 P1 定),archive 镜像同迁移对齐(docs/agent-baseline.md 红线),squawk `NOT VALID` + `VALIDATE` 同迁移双守护(见我方 memory「加 CHECK/FK 迁移的两道守护」)。
 - **不改 UNIQUE 列集**(仍 `tenant_id, pipeline_instance_id, stage`),所以幂等契约不变、无需重扫全仓 on-conflict。扩 CHECK 值集是**加值不改键**,风险可控——但仍需 `grep -r 'on conflict' pipeline_progress` 确认无隐藏依赖。
-- **复合 PK 前瞻**:若 P1/P2 预判 `pipeline_progress` 行数随租户×时间显著增长要月分区,应在扩 stage 的同批评估把 PK 改 `(tenant_id, id)` 或含分区键(CLAUDE.md「新表 PK 前瞻」)。当前作为 run 明细子表,暂不强制。
+- **复合 PK 前瞻**:若 P1/P2 预判 `pipeline_progress` 行数随租户×时间显著增长要月分区,应在扩 stage 的同批评估把 PK 改 `(tenant_id, id)` 或含分区键(docs/agent-baseline.md「新表 PK 前瞻」)。当前作为 run 明细子表,暂不强制。
 
 ### 4.3 写入时机与事务边界(与"outbox 同事务"硬约束的关系)
 
@@ -273,7 +273,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 
 ## 6. 与硬约束的合规性自检(评审用)
 
-| CLAUDE.md 硬约束 | 本设计如何守 |
+| docs/agent-baseline.md 硬约束 | 本设计如何守 |
 |---|---|
 | orchestrator 唯一状态主机 | 位点落 `pipeline_progress`(worker 可写平台内部表),worker 不写 job_instance/pipeline_instance 状态;终态仍 orchestrator CAS |
 | worker 必 CLAIM | 续跑不改 CLAIM;只改 EXECUTE 内部起点 |
@@ -308,7 +308,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 2. **跨库无 1PC 是天花板,不是缺陷**。LOAD 续跑的正确性 100% 押在 plugin 幂等上;任何"把它做成强一致"的提案都会撞 ADR-035 P3(否决 XA)——评审应确认接受这个边界,而非要求"修"。
 3. **DISPATCH/COMPUTE 行级续跑我建议明确 YAGNI 后置**。没有百万级 DISPATCH 崩溃的真实证据前投 8–12 人天做回执位点,违反 ADR-038 自己的改判逻辑(先有数据证据再动)。评审若有该证据请提供,否则 P2 只做观测项。
 4. **生产收益验证是上线后观测项,非阻塞**:系统尚未上线,续跑命中率/真实百万行业务库压力等生产收益指标无从验证也无需验证——sim/e2e 证机制正确即够 P0 验收;真实收益复盘列入 §5 P0「上线前 checklist」,上线后首周看观测面板即可。
-5. **`pipeline_progress` 复合 PK 前瞻(R-6)**是本设计唯一与 CLAUDE.md 字面有张力处,需评审拍板:现在补复合化,还是作为 run 明细子表豁免、待分区时再改。
+5. **`pipeline_progress` 复合 PK 前瞻(R-6)**是本设计唯一与 docs/agent-baseline.md 字面有张力处,需评审拍板:现在补复合化,还是作为 run 明细子表豁免、待分区时再改。
 
 ---
 

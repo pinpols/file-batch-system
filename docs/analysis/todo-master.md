@@ -54,7 +54,7 @@
 
 ## 二、ADR 优先级三阶段进展（priority-scope 镜像）
 
-权威源：[`archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md) + 各 ADR 顶部"范围边界（Scope Discipline）"小节 + CLAUDE.md "ADR 实施范围纪律" 章。
+权威源：[`archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md) + 各 ADR 顶部"范围边界（Scope Discipline）"小节 + docs/agent-baseline.md "ADR 实施范围纪律" 章。
 
 ### 第 1 阶段 P0（已落 backend）✅
 
@@ -104,7 +104,7 @@
 
 ### A. POSITIONAL-ARGS 治理（V6-P2-POSITIONAL-ARGS）· P2 · ✅ 已闭环
 
-> 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。CLAUDE.md "调用方约束" 子节由本方案沉淀。
+> 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。docs/agent-baseline.md "调用方约束" 子节由本方案沉淀。
 
 历史详细计划项（POS-1 ~ POS-5）已全部完成，归 §五。
 
@@ -350,7 +350,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ## 九、🔒 本地不能做（需 ops / staging / DBA / 业务方 配合）
 
-> 用途：本仓库内的 Claude / 开发者**无法独立完成**的项，挂在这里直至外部条件就绪。
+> 用途：本仓库内的自动化 agent / 开发者**无法独立完成**的项，挂在这里直至外部条件就绪。
 > 图例：每条标注阻塞类型 — `[ops]` 部署/CD · `[staging]` 预发环境 · `[prod]` 生产环境 · `[DBA]` 数据库变更评审 · `[BIZ]` 业务方决策 · `[client]` 外部 API 客户端确认
 
 | ID | 主题 | 阻塞类型 | 卡在哪 |

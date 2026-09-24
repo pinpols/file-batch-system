@@ -50,7 +50,7 @@ public class ReadReplicaProperties {
 
   private Pool replica = new Pool();
 
-  /** 主从连接池共用的配置 schema —— DRY 替代原先 Primary/Replica 双份重复定义（CLAUDE.md §分支消除规则）。 */
+  /** 主从连接池共用的配置 schema —— DRY 替代原先 Primary/Replica 双份重复定义（docs/agent-baseline.md §分支消除规则）。 */
   @Data
   public static class Pool {
     private String url;

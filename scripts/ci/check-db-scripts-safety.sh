@@ -3,7 +3,7 @@
 #
 # 背景:check-migration-safety.sh 只 squawk 扫 Flyway 的 db/migration/*.sql。但 batch_business
 # 库不走 Flyway,partition-migration / business 下的可执行脚本(改 UNIQUE/PK 列集、DROP+重建表)
-# 同样能对 prod 跑危险 DDL,却完全不在任何 CI 守护内。CLAUDE.md 红线:**任何改 UNIQUE 列集的
+# 同样能对 prod 跑危险 DDL,却完全不在任何 CI 守护内。docs/agent-baseline.md 红线:**任何改 UNIQUE 列集的
 # 动作(分区/分片/重建表/迁移)都是语义变更而非运维操作**(56 处 ON CONFLICT 把幂等承重在全局
 # UNIQUE 上)。2026-06-10 分区脚本实跑致 orchestrator outbox 全写失败回滚就是这类盲区被命中。
 #
@@ -42,7 +42,7 @@ HEADER_LINES=40
 
 # 关键约束级危险 DDL:改 UNIQUE/PK 列集、DROP 表 / 约束。
 # (DROP COLUMN / ALTER TYPE 也危险,但那类主要走 Flyway,已由 squawk 覆盖;这里聚焦
-#  手工脚本最易绕过守护、且 CLAUDE.md 点名的 UNIQUE/PK + DROP TABLE。)
+#  手工脚本最易绕过守护、且 docs/agent-baseline.md 点名的 UNIQUE/PK + DROP TABLE。)
 DANGEROUS_DDL_RE='(DROP[[:space:]]+TABLE|DROP[[:space:]]+CONSTRAINT|ADD[[:space:]]+CONSTRAINT.*(UNIQUE|PRIMARY[[:space:]]+KEY)|CREATE[[:space:]]+UNIQUE[[:space:]]+INDEX|ALTER[[:space:]]+TABLE.*(ADD|DROP).*(UNIQUE|PRIMARY[[:space:]]+KEY))'
 
 warn=0
@@ -54,7 +54,7 @@ echo
 for f in "${files[@]}"; do
   # ① on conflict → 永远 WARN(幂等契约提醒)。
   if grep -qiE 'on[[:space:]]+conflict' "$f"; then
-    echo "⚠️  [WARN] $f 含 ON CONFLICT —— 若同 PR 改了相关表 UNIQUE/PK 列集,必须核对幂等语义(CLAUDE.md 红线)。"
+    echo "⚠️  [WARN] $f 含 ON CONFLICT —— 若同 PR 改了相关表 UNIQUE/PK 列集,必须核对幂等语义(docs/agent-baseline.md 红线)。"
     warn=$((warn+1))
   fi
 

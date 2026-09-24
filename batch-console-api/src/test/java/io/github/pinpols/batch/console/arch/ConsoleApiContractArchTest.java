@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 守护 CLAUDE.md §Java 编码细则的两条 controller/事务红线(此前仅人工评审):
+ * 守护 docs/agent-baseline.md §Java 编码细则的两条 controller/事务红线(此前仅人工评审):
  *
  * <ul>
  *   <li>#6 Controller 端点(@RequestMapping 系)返回值一律 {@link CommonResponse};二进制下载 / 流式响应 豁免 {@code
@@ -62,7 +62,7 @@ class ConsoleApiContractArchTest {
             events.add(SimpleConditionEvent.violated(
                 method,
                 String.format(
-                    "%s 返回 %s,违反 CLAUDE.md #6(应返 CommonResponse;下载/流式才用"
+                    "%s 返回 %s,违反 docs/agent-baseline.md #6(应返 CommonResponse;下载/流式才用"
                         + " ResponseEntity/SseEmitter)",
                     method.getFullName(), returnType)));
           }

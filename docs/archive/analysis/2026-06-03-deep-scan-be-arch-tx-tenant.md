@@ -8,7 +8,7 @@
 2. **业务正确性** — 权限 / 租户 / 审计语义
 3. **运行时违约** — 实际触发非默认事务传播,代码上看似合理但 commit 时序错
 
-扫描基线:`origin/main` @ `5c306063`(2026-06-03);在 worktree `.claude/worktrees/scan-arch-2026-06-03` 上扫,不污染主工作区。
+扫描基线:`origin/main` @ `5c306063`(2026-06-03);在 worktree `.agents/worktrees/scan-arch-2026-06-03` 上扫,不污染主工作区。
 
 数据:215 个 `@Transactional` / 99 个文件;Outbox 散落 40+ 文件;读写分离仅在 `batch-console-api`。5 个并行 Explore 子代理 + 关键发现人工 grep 反核。
 
@@ -221,7 +221,7 @@ private static final ThreadLocal<Boolean> FORCE_PRIMARY = new ThreadLocal<>();
 
 这是**明示的设计选择**,作者已论证。但要点:`@RouteToPrimary` 标注的 service 方法若内部 spawn `@Async` 子任务 + 子任务做 read-after-write 假设主库,会读到 replica 的滞后视图。
 
-**当前没踩**(代码里没有 `@RouteToPrimary` 内部直接 `@Async` 的混用),但属于**ADR 应明文记录的注意事项**,放到 CLAUDE.md / ADR-XX 防新增违约。
+**当前没踩**(代码里没有 `@RouteToPrimary` 内部直接 `@Async` 的混用),但属于**ADR 应明文记录的注意事项**,放到 docs/agent-baseline.md / ADR-XX 防新增违约。
 
 **核验**: ✅ 直接读 RoutingHints 确认
 
@@ -293,7 +293,7 @@ MANDATORY 契约满足,无运行时风险。
 **待评估 / 文档化**:
 - P2-1:批量给查询 service 加 readOnly(决策:是否值得整批改)
 - P2-2:DbRowExistsSensorPolicy 隔离语义文档化
-- P2-3:RoutingHints + @Async 互动写入 ADR + CLAUDE.md
+- P2-3:RoutingHints + @Async 互动写入 ADR + docs/agent-baseline.md
 
 ---
 

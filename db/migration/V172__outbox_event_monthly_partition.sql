@@ -3,7 +3,7 @@
 -- 幂等语义决策见 docs/design/partition-idempotency-decision.md。
 -- 列/约束/索引权威源:scripts/db/partition-migration/01-*.sql(2026-06-10 pg_dump 重生成)。
 -- ⚠️ UNIQUE 约束名沿用原表名 uk_outbox_event_key(不用 _p_key):约束名是隐性契约,
---    OutboxEventKeyGenerator/SqlConsistency 等按名引用,改名会破坏调用方(CLAUDE.md 禁)。
+--    OutboxEventKeyGenerator/SqlConsistency 等按名引用,改名会破坏调用方(docs/agent-baseline.md 禁)。
 -- 注意:本迁移含全表复制,生产规模执行前评估窗口;当前为上线前阶段,数据量 <20 万行,秒级。
 
 -- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10)

@@ -5,17 +5,17 @@
          xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
 
     <description>
-        batch-platform PMD 规约 — 对齐 CLAUDE.md 编码规范
+        batch-platform PMD 规约 — 对齐 docs/agent-baseline.md 编码规范
     </description>
 
     <!-- ============================================================
-         CLAUDE.md: 禁止在代码中使用全限定类名（FQN）
+         docs/agent-baseline.md: 禁止在代码中使用全限定类名（FQN）
          已 import 的类型不得再用完整包路径引用。
          ============================================================ -->
     <rule ref="category/java/codestyle.xml/UnnecessaryFullyQualifiedName"/>
 
     <!-- ============================================================
-         CLAUDE.md: 方法参数数量不能超过 6 个
+         docs/agent-baseline.md: 方法参数数量不能超过 6 个
          minimum=7 => 参数 ≥ 7 时触发违规。
          构造器（record / DTO / Spring DI）按规约豁免，
          如需单独豁免请在构造器上添加：
@@ -28,7 +28,7 @@
     </rule>
 
     <!-- ============================================================
-         CLAUDE.md: 分支消除 — inline else 体 > 10 行须提取为命名方法
+         docs/agent-baseline.md: 分支消除 — inline else 体 > 10 行须提取为命名方法
          ExcessiveMethodLength 作为代理信号：方法体过长通常意味着
          未消除的分支内联，阈值设置宽松，仅捕获明显超标情形。
          ============================================================ -->

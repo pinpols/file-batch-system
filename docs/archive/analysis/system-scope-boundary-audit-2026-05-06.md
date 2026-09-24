@@ -187,8 +187,8 @@ ResourceTag scope 边界:
 | 1 | 系统数据库**不持有业务实体**（`customer / order / settlement / ledger` 等表绝不出现） | code review + DDL 审计 |
 | 2 | `result_version.payload_json` 只存 outputs Map（fileId / counts / refs），**不复制业务表正文** | ADR-017 §不会做 |
 | 3 | `archive_storage_metadata` 仅本平台 archive 表元数据，**不接外部数据集** | ADR-024 §不会做 |
-| 4 | trigger 不解释 `bizDate`，worker 不写 `job_instance` 状态 | CLAUDE.md §架构硬约束 |
-| 5 | console-api 不直接 UPDATE/DELETE outbox / 状态表 | CLAUDE.md §架构硬约束 |
+| 4 | trigger 不解释 `bizDate`，worker 不写 `job_instance` 状态 | docs/agent-baseline.md §架构硬约束 |
+| 5 | console-api 不直接 UPDATE/DELETE outbox / 状态表 | docs/agent-baseline.md §架构硬约束 |
 | 6 | 全平台禁 JPA / Spring Data JDBC，统一 MyBatis | ADR-001 |
 | 7 | 单一状态主机（orchestrator）+ 单一 runtime DB（platform schema） | ADR-007 |
 | 8 | AI 系统提示固化"只回答 batch-platform" + 拒绝直接代执行 | DefaultConsoleAiApplicationService.buildSystemPrompt |

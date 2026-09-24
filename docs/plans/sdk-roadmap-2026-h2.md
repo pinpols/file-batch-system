@@ -228,7 +228,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 | 模块 |
 |---|---|---|---|
-| 3.1.1 | ~~`custom_task_type_registry` 表 + Flyway V159 + archive 镜像(CLAUDE.md 红线)~~ ✅ 2026-06-01 #207 | 4h | orchestrator |
+| 3.1.1 | ~~`custom_task_type_registry` 表 + Flyway V159 + archive 镜像(docs/agent-baseline.md 红线)~~ ✅ 2026-06-01 #207 | 4h | orchestrator |
 | 3.1.2 | ~~`SdkTaskTypeDescriptor` API + `SdkTaskHandler.descriptor()` 可选方法~~ ✅ 2026-06-01 #208 | 4h | SDK |
 | 3.1.3 | ~~SDK `register()` body 加 `taskTypes[].descriptor` 段~~ ✅ 2026-06-01 #208 | 2h | SDK |
 | 3.1.4 | ~~orchestrator register handler upsert 到 registry(`source=SDK_DECLARED`)~~ ✅ 2026-06-01 #209 | 6h | orchestrator |
@@ -714,7 +714,7 @@ mvn -pl batch-orchestrator test -Dtest=*ArchTest
 | Flyway `V*.sql` | **P3-1** (V159), **P3-3** (V161 effective_parameters), **P4-2** (V162 taskTimeout) | V159 → V161 → V162 | 版本号串行分配,**禁同号** |
 | `OpenAPI yaml` | 几乎所有 BE PR 都改 | 全串行 | YAML merge 难,只允许一个 PR 同时改 yaml |
 | `pom.xml` (子模块新增) | P5-2 (testkit 新模块加进父 pom) | 单独一个 PR,不混改 | — |
-| `CLAUDE.md` / `coding-conventions.md` | 任何架构红线变更 | 全串行 | 不允许并行改根 doc |
+| `docs/agent-baseline.md` / `coding-conventions.md` | 任何架构红线变更 | 全串行 | 不允许并行改根 doc |
 
 #### C. 可并行的"绿色区"(同 phase 内可同时开工)
 
@@ -809,7 +809,7 @@ git push origin feature/sdk-px-yy
 
 ##### I.1 Java 编码反例(`coding-conventions.md` 10 条)
 
-**自查清单**(从 CLAUDE.md「Java 编码细则」搬来):
+**自查清单**(从 docs/agent-baseline.md「Java 编码细则」搬来):
 
 | # | 规则 | 高频反例 | 自查命令 |
 |---|---|---|---|
@@ -850,7 +850,7 @@ mvn spotbugs:check -pl <自己模块>
 
 ##### I.2 API 文档对齐(`pr-gate` 重点拦截项)
 
-**触发条件**(CLAUDE.md「API 文档同步」段):
+**触发条件**(docs/agent-baseline.md「API 文档同步」段):
 改 `batch-console-api` 控制层(新增 / 删除 / 改 path / 改请求响应字段)**必须同 PR 更新**:
 
 - `docs/api/console-api.openapi.yaml`(补 path + schema,无悬空 `$ref`)

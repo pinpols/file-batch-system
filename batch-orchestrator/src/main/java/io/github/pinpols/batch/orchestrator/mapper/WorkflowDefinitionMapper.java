@@ -5,7 +5,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * batch.workflow_definition 只读 Mapper。CLAUDE.md §持久化"同一表禁双主入口":本表写入主入口在 {@code
+ * batch.workflow_definition 只读 Mapper。docs/agent-baseline.md §持久化"同一表禁双主入口":本表写入主入口在 {@code
  * batch-console-api}(用户 UI CRUD),orch 端仅 SELECT 用于缓存 / reconciler。
  *
  * <p>orchestrator 若需要 seeding / 修复定义数据,走 db migration 或调用 console-api 的 ProxyService, 不得在本接口加

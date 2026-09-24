@@ -268,8 +268,7 @@ public class DefaultConsoleReportExcelApplicationService
               .filter(item -> item.getName().equals(header))
               .findFirst()
               .orElse(null);
-          values.add(
-              EmptyChecks.isNull(component) ? null : component.getAccessor().invoke(row));
+          values.add(component == null ? null : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {
         throw BizException.of(

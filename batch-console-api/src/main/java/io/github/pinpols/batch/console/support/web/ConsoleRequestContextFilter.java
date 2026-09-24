@@ -132,7 +132,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
 
   private String resolveOperatorId() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
+    if (authentication == null || !authentication.isAuthenticated()) {
       return null;
     }
     if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {

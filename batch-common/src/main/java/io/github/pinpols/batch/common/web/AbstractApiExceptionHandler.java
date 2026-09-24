@@ -31,7 +31,7 @@ public abstract class AbstractApiExceptionHandler {
 
   private final BizMessageResolver bizMessageResolver;
 
-  // CLAUDE.md §Java #3:构造器注入(子类 super 调用一致传入)。
+  // docs/agent-baseline.md §Java #3:构造器注入(子类 super 调用一致传入)。
   protected AbstractApiExceptionHandler(BizMessageResolver bizMessageResolver) {
     this.bizMessageResolver = bizMessageResolver;
   }

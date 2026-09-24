@@ -114,7 +114,7 @@
       where publish_status='PUBLISHING'
         and updated_at < current_timestamp - interval '60 seconds';
      ```
-     **必须**走 orchestrator 的 `/internal/outbox/*` 治理接口(CLAUDE.md 红线:console-api 禁直接 UPDATE/DELETE `outbox_event`)。
+     **必须**走 orchestrator 的 `/internal/outbox/*` 治理接口(docs/agent-baseline.md 红线:console-api 禁直接 UPDATE/DELETE `outbox_event`)。
 
 ### 方案 B:有损降级 — 只读模式撑过去(10 min)
 

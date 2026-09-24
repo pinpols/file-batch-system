@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 守护:{@code messages.properties}(en)与 {@code messages_zh_CN.properties}(zh)的 key 必须 1:1 对齐。
  *
- * <p>CLAUDE.md §字典/i18n + docs/design/i18n.md:两个文件 key 集合必须完全一致。否则新增业务异常 key 时漏补某一侧, 对应 locale
+ * <p>docs/agent-baseline.md §字典/i18n + docs/design/i18n.md:两个文件 key 集合必须完全一致。否则新增业务异常 key 时漏补某一侧, 对应 locale
  * 用户会静默降级(zh 缺 → 回退英文 / ResultCode.label()),且无任何 CI 反馈。此前仅靠人工评审,本测试补上自动守护。
  *
  * <p>同时校验:① 无重复 key(Properties 会静默后者覆盖前者);② value 非空(空翻译等于没翻译)。

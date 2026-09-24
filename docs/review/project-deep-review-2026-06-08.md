@@ -263,7 +263,7 @@
 
 ### 已做对的部分
 
-- 主链路约束明确：`CLAUDE.md` 36-43 行规定 `DB -> Outbox -> Kafka -> CLAIM -> EXECUTE -> REPORT`，并限制 worker 直接写状态表。
+- 主链路约束明确：`docs/agent-baseline.md` 36-43 行规定 `DB -> Outbox -> Kafka -> CLAIM -> EXECUTE -> REPORT`，并限制 worker 直接写状态表。
 - 模块边界清楚：runtime 固定 10 模块，SDK/testkit/starter 作为 ADR-035 例外，core SDK 保持 Spring-free。
 - Atomic worker 单独隔离 shell/sql/stored-proc/http executor，符合 dual-use RCE 风险隔离思路。
 - Console security 有回退：`ConsoleSecurityConfiguration` 对 `/api/console/**` 至少要求有效角色，并对 loggers 限 ADMIN。

@@ -8,7 +8,7 @@
 
 **[P1]** `batch-worker-core/.../infrastructure/DefaultTaskExecutionWrapper.java:122-133` — **watchdog 直接 new `Executors.newSingleThreadScheduledExecutor`,游离于统一线程池管控之外**。该 bean 是单例,watchdog 线程命名为 `worker-task-cancel-watchdog-N`,`@PreDestroy` 会 `shutdownNow()`,生命周期尚可接受。但在测试或多实例场景中容易泄漏,且无法通过 `TaskExecutionPool` 或 `spring.task.scheduling.*` 统一调整线程数/优先级。**建议**:将 watchdog 提取为 `@Bean ScheduledExecutorService`。
 
-**[P1]** `batch-worker-core/.../support/AbstractTaskConsumer.java:69` — **`maxConcurrentTasks` 用 `@Value` 字段注入**,违反 CLAUDE.md §Java 编码细则第 3 条(依赖注入只用构造器)。`semaphore` 在 `ensureSemaphore()` 内懒初始化:若任何路径(如 Spring AOP 代理、测试替身)在字段注入完成前触发 `doConsume`,`maxConcurrentTasks=0` → `Math.max(1,0)=1`,**并发上限静默降为 1**,无日志告警,背压阈值被永久破坏。**建议**:移入构造器参数并在 `@PostConstruct` 初始化。
+**[P1]** `batch-worker-core/.../support/AbstractTaskConsumer.java:69` — **`maxConcurrentTasks` 用 `@Value` 字段注入**,违反 docs/agent-baseline.md §Java 编码细则第 3 条(依赖注入只用构造器)。`semaphore` 在 `ensureSemaphore()` 内懒初始化:若任何路径(如 Spring AOP 代理、测试替身)在字段注入完成前触发 `doConsume`,`maxConcurrentTasks=0` → `Math.max(1,0)=1`,**并发上限静默降为 1**,无日志告警,背压阈值被永久破坏。**建议**:移入构造器参数并在 `@PostConstruct` 初始化。
 
 **[P1]** `batch-worker-import/.../config/PlatformDataSourceConfiguration.java` 与 `batch-worker-export/.../config/PlatformDataSourceConfiguration.java` — **import 和 export 两个模块各自复制了一份完全相同的双数据源配置**。两个 worker 进程部署在同一 PG 实例时,连接池数量实际翻倍(import platform pool + export platform pool 各自独立),可能触及 PostgreSQL `max_connections`。**建议**:将双数据源自动配置提取到 `batch-worker-core` 的 `WorkerCoreConfiguration`。
 

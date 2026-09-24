@@ -34,13 +34,13 @@
 
 
 
-- **核心新增红线违反(P0)**:CLAUDE.md §持久化明文 **"同一表同一写路径禁双主入口"** —— v2 发现 **6 张业务表(`workflow_definition` / `job_definition` / `business_calendar` / `batch_window` / `resource_queue` / `tenant_quota_policy`)在 orchestrator + console-api 各有一套 INSERT/UPDATE/DELETE Mapper,双主入口实锤**。这不是 v1 P1-6 提的"同名 OutboxEventMapper(console 只读)" — 这 6 张表两端都真写。
+- **核心新增红线违反(P0)**:docs/agent-baseline.md §持久化明文 **"同一表同一写路径禁双主入口"** —— v2 发现 **6 张业务表(`workflow_definition` / `job_definition` / `business_calendar` / `batch_window` / `resource_queue` / `tenant_quota_policy`)在 orchestrator + console-api 各有一套 INSERT/UPDATE/DELETE Mapper,双主入口实锤**。这不是 v1 P1-6 提的"同名 OutboxEventMapper(console 只读)" — 这 6 张表两端都真写。
 - **同表 entity 字段漂移**:同 6 张表跨模块 entity 字段**实际不一致**(典型:`WorkflowDefinitionEntity` console 多 `description/createdAt/updatedAt` 3 字段;`JobInstanceEntity` orchestrator 多 15 字段)— 表 schema 一份,entity 镜像两份且漂移。
 - **DDD 边界**:console-api 真实结构是 **`domain/<bc>/web|service|support|mapper|infrastructure` 嵌套类 DDD 包**(11 个 bounded context),与顶层 `web/` / `application/` / `infrastructure/` / `mapper/` / `service/` / `support/` 6 个传统分层**双轨并存**;orchestrator 也有 `controller/` 20 个 + `application/` 0 个(controller 全没下沉到 application 层)。结构纪律完全靠人。
-- **Lombok 持久化路径**:14 处 `@Builder` 加到 `domain/entity/*Entity`(orchestrator),其中 `JobInstanceEntity` / `ApprovalCommandEntity` / `JobDefinitionEntity` 等 12 处是 `@Data + @Builder + @NoArgsConstructor + @AllArgsConstructor` class(MyBatis 反射回填路径)。CLAUDE.md §Java 红线"Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`",措辞针对 JPA,但精神是"侵入持久化路径",**当前实践处于规则文义边界**,需要明确判定:**继续允许 / 加 ArchTest 限定 / 全部移到 record**。
+- **Lombok 持久化路径**:14 处 `@Builder` 加到 `domain/entity/*Entity`(orchestrator),其中 `JobInstanceEntity` / `ApprovalCommandEntity` / `JobDefinitionEntity` 等 12 处是 `@Data + @Builder + @NoArgsConstructor + @AllArgsConstructor` class(MyBatis 反射回填路径)。docs/agent-baseline.md §Java 红线"Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`",措辞针对 JPA,但精神是"侵入持久化路径",**当前实践处于规则文义边界**,需要明确判定:**继续允许 / 加 ArchTest 限定 / 全部移到 record**。
 - **MyBatis SQL 复杂度**:`JobInstanceMapper.xml` 536 行 / `WorkerRegistryMapper.xml` 279 行 / `JobDefinitionMapper.xml`(console)14 个 `<if>` + 10 个 `<choose>` 嵌套 — 复杂查询散落而非抽 `QueryObject` 或 `<sql>` 共享片段。
 - **配置漂移**:`mapper-locations: classpath*:mapper/*.xml` 在 `batch-defaults.yml` 已定义,**5 个模块的 `application-local.yml` 重复声明**;`bypass-mode: true` 在 8 个本地 profile 重复声明 — defaults 已经留了 `${BATCH_SECURITY_BYPASS_MODE:false}` 占位,本应单点切换。
-- **测试可维护性**:9 处 `@MockitoSettings(strictness = Strictness.LENIENT)` + 9 处 `private foo = Mockito.mock(...)` 字段直 mock + 10 处 `MockitoAnnotations.openMocks(this)` 命令式初始化 — CLAUDE.md §测试约定明文禁前两者、强制 `@ExtendWith(MockitoExtension.class)` 声明式,**实际值与规范不齐**,但与 v1 P0/P1 无重叠。
+- **测试可维护性**:9 处 `@MockitoSettings(strictness = Strictness.LENIENT)` + 9 处 `private foo = Mockito.mock(...)` 字段直 mock + 10 处 `MockitoAnnotations.openMocks(this)` 命令式初始化 — docs/agent-baseline.md §测试约定明文禁前两者、强制 `@ExtendWith(MockitoExtension.class)` 声明式,**实际值与规范不齐**,但与 v1 P0/P1 无重叠。
 - **package-info 静态守护**:全仓 6 个 `package-info.java`,**全部在 SDK 与 batch-common**,9 个核心模块 0 个 — 没有任何 `@PackagePrivate` / 包级 javadoc 边界标注 / 模块化(JPMS `module-info.java`)守护。模块边界完全靠 ArchUnit 加人工 review。
 - **ADR 越界检查**:ADR-021/022/026/027 顶部"❌ 不做"清单 v2 全文核对,**4 条边界全部守得住**(dry-run 无 FULL_SIMULATION 实现、forensic 无 `_history` 表、resource-affinity 仅落 `resourceProfile` 字段未做调度、data-quality 无业务结果裁定逻辑)— v1 P1-7 提的"ADR-021 顶部'两档都不开工' vs `dataquality/` 子包"维持 P1;其余 3 个 N/A。
 
@@ -50,9 +50,9 @@
 
 ## §2 P0 — 红线静默违反(立即修)
 
-### v2-P0-A 6 张表"同一表双主入口"实锤违反 CLAUDE.md §持久化 ⚠️⚠️⚠️
+### v2-P0-A 6 张表"同一表双主入口"实锤违反 docs/agent-baseline.md §持久化 ⚠️⚠️⚠️
 
-- **规则**:CLAUDE.md §持久化(ADR-001)明文 **"同一表同一写路径**禁**双主入口(Mapper + Repository 二选一)"**。
+- **规则**:docs/agent-baseline.md §持久化(ADR-001)明文 **"同一表同一写路径**禁**双主入口(Mapper + Repository 二选一)"**。
 - **现象**(orchestrator 与 console-api 同名 Mapper XML 两端都有 INSERT/UPDATE/DELETE):
 
   | 表 | orch 写操作数 | console 写操作数 | 表用途 |
@@ -70,7 +70,7 @@
   1. 立 ArchTest:扫所有同名 Mapper XML,若两端都有 `<insert/<update/<delete` 同 `id` 标签 → fail。
   2. 决议每张表的"主入口模块":定义类(workflow/job_definition/batch_window/business_calendar/resource_queue/tenant_quota_policy)归 **console-api**(用户操作高频);orchestrator 端改成只读 + 走 `ConsoleDefinitionProxyService`(对称 outbox proxy 模式)。
   3. 同步:删除 orchestrator 侧对应 Mapper 的 INSERT/UPDATE/DELETE 标签,留 SELECT;或反向收敛看业务流到底谁该写。
-  4. CLAUDE.md §持久化补一行:"同一定义表两端写入必须走 ProxyService 收敛,不得 Mapper 双写"。
+  4. docs/agent-baseline.md §持久化补一行:"同一定义表两端写入必须走 ProxyService 收敛,不得 Mapper 双写"。
 
 ### v2-P0-B 同 6 张表 entity 字段两端漂移 ⚠️⚠️
 
@@ -133,10 +133,10 @@
   | `ForensicExportLogEntity` | record | `@Builder` |
   | `ResultVersionEntity` | record | `@Builder(toBuilder=true)` |
 
-- **规则**:CLAUDE.md §Java #8 + 红线"Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`(侵入持久化路径)"。本仓是 MyBatis(无 `@Table`),措辞上不命中,但精神(避免侵入反射回填链路)是直接相关的。
+- **规则**:docs/agent-baseline.md §Java #8 + 红线"Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`(侵入持久化路径)"。本仓是 MyBatis(无 `@Table`),措辞上不命中,但精神(避免侵入反射回填链路)是直接相关的。
 - **实际后果**:① `@Data` 提供 setter,MyBatis ResultMap 走 setter 注入,正常;② `@Builder` 生成 builder 体,业务代码可以 bypass 全字段构造,**增加"漏字段"风险**(尤其 P0-B 漂移场景);③ record 配 `@Builder(toBuilder=true)` 让 record 的"不可变"语义被绕过,反而能 toBuilder 后改字段,与 record 精神冲突。
 - **建议**:
-  - 出 ADR-040 或在 CLAUDE.md §Java 红线注明 MyBatis entity 是否允许 `@Builder` 的最终判定 + 反例。
+  - 出 ADR-040 或在 docs/agent-baseline.md §Java 红线注明 MyBatis entity 是否允许 `@Builder` 的最终判定 + 反例。
   - 若允许:加 ArchTest 强制"使用 `@Builder` 的 entity 必须同时 `@NoArgsConstructor + @AllArgsConstructor`(或 record + 全字段 canonical)",拦"裸 `@Builder`"。
   - 若禁止:14 个 entity 全部走 builder pattern 拆出 `JobInstanceEntityBuilder` 工具类,entity 自身不带注解(改造 1 个 sprint)。
 
@@ -213,7 +213,7 @@
 ### v2-P1-G 9 处 `@MockitoSettings(strictness = LENIENT)` + 模板拷贝行为
 
 - **位置**:全部 9 处都在 stage / mq / outbox / worker-loop 测试上,**8 处**自带注释"严格模式会误报 UnnecessaryStubbing",剩 1 处 `OutboxPublishCircuitBreakerTest` 无说明。
-- **规则**:CLAUDE.md §测试约定明文"默认 strict(MockitoExtension 自带),**禁** `@MockitoSettings(strictness = Strictness.LENIENT)` 当模板拷贝带入;只有跨方法共享 stub 且部分方法不触发的场景才允许,需注释说明"。
+- **规则**:docs/agent-baseline.md §测试约定明文"默认 strict(MockitoExtension 自带),**禁** `@MockitoSettings(strictness = Strictness.LENIENT)` 当模板拷贝带入;只有跨方法共享 stub 且部分方法不触发的场景才允许,需注释说明"。
 - **评估**:8/9 有注释,**合规边缘** — 但 8 处注释文案高度雷同("严格模式会误报 UnnecessaryStubbing")显示模板复制嫌疑;9 处 `OutboxPublishCircuitBreakerTest` 完全无说明,**真违反**。
 - **建议**:① `OutboxPublishCircuitBreakerTest` 拆方法或加注释证据;② 8 处 stage 测试统一改为"在具体 `@BeforeEach` 内按需 `lenient().when()`,而不是整类 `LENIENT`"(scope 更小);③ 加 ArchTest 扫 `@MockitoSettings` 必须配 javadoc 关键字"UnnecessaryStubbing 误报"或 PR 评审签名,挡模板拷贝。
 
@@ -235,7 +235,7 @@
   实施路径(单 sprint):
   1. orch 侧 6 个 Mapper.xml 删 `<insert>/<update>/<delete>` → 改 `RuntimeException` 占位 / 测试期 `@Disabled`
   2. orch 端原写入路径(seeding / 升级补丁)改走 `ConsoleDefinitionProxyService`(对称 outbox proxy 模式) 或 `db/migration/V*.sql` 一次性补
-  3. CLAUDE.md §持久化补"定义类表权威主写模块清单"
+  3. docs/agent-baseline.md §持久化补"定义类表权威主写模块清单"
   4. ArchTest 增"6 张表只在 console-api 端有写 Mapper",防回潮
 
 ### v2-P2-A `JobInstanceEntity` orchestrator 端 30+ 字段 + `@Data`(无 record 化)
@@ -245,7 +245,7 @@
 ### v2-P2-B 10 处 `MockitoAnnotations.openMocks(this)` 命令式 mock 初始化残留
 
 - **位置**:orchestrator 9 处 + trigger 1 处 — 集中在 application/service/task/ 与 service/ 目录的旧测。
-- **规则**:CLAUDE.md §测试约定明文"**禁** `MockitoAnnotations.openMocks(this)` 命令式与 `private Foo foo = Mockito.mock(Foo.class)` 字段直 mock(改动旧代码时顺带迁)"。
+- **规则**:docs/agent-baseline.md §测试约定明文"**禁** `MockitoAnnotations.openMocks(this)` 命令式与 `private Foo foo = Mockito.mock(Foo.class)` 字段直 mock(改动旧代码时顺带迁)"。
 - **建议**:加 ArchTest 扫 `MockitoAnnotations.openMocks` 全仓禁,渐进迁移截止日期写入 changelog。
 
 ### v2-P2-C 9 处 `private final Foo = Mockito.mock(Foo.class)` 字段直 mock(全在 sensor 测试)
@@ -344,10 +344,10 @@
 
 | v2 条 | 相关 ADR / 规则 |
 |---|---|
-| v2-P0-A(双主入口) | CLAUDE.md §持久化 + ADR-001 + ADR-019(域级配额 quota_policy 谁主写)|
+| v2-P0-A(双主入口) | docs/agent-baseline.md §持久化 + ADR-001 + ADR-019(域级配额 quota_policy 谁主写)|
 | v2-P0-B(entity 字段漂移) | ADR-001 + 未立 ADR(应出 ADR-040 "跨模块同表 entity 单一定义") |
 | v2-P0-C(mapper guard 范围) | 同 v1 P0-1,扩 |
-| v2-P1-A(@Builder 持久化) | CLAUDE.md §Java #8 + 红线,规则文义边缘 |
+| v2-P1-A(@Builder 持久化) | docs/agent-baseline.md §Java #8 + 红线,规则文义边缘 |
 | v2-P1-B(SQL 复杂度) | 未有规则,**建议补 `docs/coding-conventions.md` §MyBatis XML 复杂度阈值**|
 
 ### 本次未尝试但建议下次纳入
@@ -409,7 +409,7 @@
 | 总耗时 | 45 分钟(v1)| 40 分钟(v2)| 85 分钟 |
 
 **最高优先级三条新发现总结**:
-1. **v2-P0-A**:6 张定义类表 orchestrator + console-api 双主入口(workflow_definition / job_definition / business_calendar / batch_window / resource_queue / tenant_quota_policy)— CLAUDE.md §持久化红线静默违反
+1. **v2-P0-A**:6 张定义类表 orchestrator + console-api 双主入口(workflow_definition / job_definition / business_calendar / batch_window / resource_queue / tenant_quota_policy)— docs/agent-baseline.md §持久化红线静默违反
 2. **v2-P0-B**:13 个跨模块同名 entity,**10 对字段漂移**(`JobDefinitionEntity` Δ=49 字段最严重)— ArchTest 完全没拦
 3. **v2-P0-C**:`MapperXmlTenantGuardArchTest` 漏配 6 个模块(v1 P0-1 只点了 3 个),覆盖断层是 v1 报告的 2 倍
 

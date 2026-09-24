@@ -41,7 +41,7 @@
 - **R3-P0-5** (`updateOutputSummary`): `markStatus` 有 version CAS，但 `updateOutputSummary` 没有 → lost update
 - **R3-P0-6** (`markPublished`): 缺 `AND publish_status='PUBLISHING'` 守卫 → CAS 链不完整
 
-**根源**: CLAUDE.md 规范要求"所有 UPDATE 必须 version CAS"，但只约束了核心字段，旁路字段或多步 CAS 序列的中间步骤常被遗漏。
+**根源**: docs/agent-baseline.md 规范要求"所有 UPDATE 必须 version CAS"，但只约束了核心字段，旁路字段或多步 CAS 序列的中间步骤常被遗漏。
 
 **改进**: 加 ArchUnit 规则：`@FieldAccess(targetPackage="**/mapper/") + UPDATE` 语句必须包含 `version` 或显式豁免注释。
 
@@ -56,7 +56,7 @@
 - `BATCH_REDIS_PORT`: docker-compose `6379` vs app defaults `16379` → redis 连接失败
 - `security.internalSecret` / `consoleJwtSecret`: Helm 打不出 Secret key → 启动 crash
 
-**根源**: 无"配置一致性 dry-run"和"端口对照表"的上线清单。CLAUDE.md 没有强制 helm values + .env.prod 同步的 CI gate。
+**根源**: 无"配置一致性 dry-run"和"端口对照表"的上线清单。docs/agent-baseline.md 没有强制 helm values + .env.prod 同步的 CI gate。
 
 **改进**: 
 - 加 `pre-commit hook`: 校验 `helm values*.yaml` 的所有 `${VAR}` 都在 `.env.X` 里有定义
@@ -69,9 +69,9 @@
 **R2 引入的 FQN 违规**: 在 `BatchSecurityProperties` 里用 `java.util.Set` FQN，但 `Set` 已 import  
 **R3 引入的 clock skew 遗漏**: `ConsoleJwtService.decoder()` fallback path 没有 `JwtTimestampValidator`
 
-**原因**: 修复过程中新增代码没走完整的 code review（Copilot 手速 > 人眼），CLAUDE.md 硬约束（FQN / 时区 / JWT 校验）没有 lint 自动化。
+**原因**: 修复过程中新增代码没走完整的 code review（Copilot 手速 > 人眼），docs/agent-baseline.md 硬约束（FQN / 时区 / JWT 校验）没有 lint 自动化。
 
-**改进**: 上 ArchUnit + spotless 强制 CLAUDE.md 规范，减少人工 review 依赖。
+**改进**: 上 ArchUnit + spotless 强制 docs/agent-baseline.md 规范，减少人工 review 依赖。
 
 ---
 
@@ -102,10 +102,10 @@
 - `file_record` UNIQUE `(tenant, checksum, path)` + checksum NULL → IMPORT 重复文件
 - `job_task` UNIQUE `(partition_id, task_seq)` + partition_id NULL → GENERAL job task 重复
 
-**根源**: CLAUDE.md 强调"所有 UNIQUE 必须含 tenant_id"，但没强调"**所有业务 UNIQUE 列必须 NOT NULL，否则用 partial unique index**"。
+**根源**: docs/agent-baseline.md 强调"所有 UNIQUE 必须含 tenant_id"，但没强调"**所有业务 UNIQUE 列必须 NOT NULL，否则用 partial unique index**"。
 
 **改进**: 
-- CLAUDE.md §数据库约束规范 加一条: "NULL bypass 防护"
+- docs/agent-baseline.md §数据库约束规范 加一条: "NULL bypass 防护"
 - Flyway 迁移 V124 新增 partial unique index（R3 已加）
 - lint 规则: UNIQUE 约束缺少 NOT NULL 时警告
 
@@ -136,7 +136,7 @@
 
 1. **outbox pattern 三层回退完整** — `trigger_request` → `trigger_outbox_event` → Kafka → orchestrator `uk_job_instance_tenant_dedup`，幂等键端到端闭环，审计无缝。
 
-2. **多租户隔离严格** — CLAUDE.md 硬约束 + ADR 治理，90% 的数据边界都守住了。R1-R4 跨租户漏洞仅 2 个（console 列表查询 + approve 信任请求体），且都已修。
+2. **多租户隔离严格** — docs/agent-baseline.md 硬约束 + ADR 治理，90% 的数据边界都守住了。R1-R4 跨租户漏洞仅 2 个（console 列表查询 + approve 信任请求体），且都已修。
 
 3. **State machine 纪律强** — orchestrator 单写主原则明确，worker 无法改 job_instance 状态，rollback 风险低。
 
@@ -150,7 +150,7 @@
 
 3. **没有"审计日志双轨制"** — DB 表的审计和 SIEM 日志平台的审计脱钩。高危操作（approve / promote / approve_replay）只 DB 记录，没有专用 appender 流向 ELK/Splunk，故障恢复时无实时告警。
 
-4. **CLAUDE.md 规范落地靠人眼** — "禁止 FQN"、"禁止 ZoneId.systemDefault()"、"所有 UNIQUE 含 tenant_id" 等约束，没有自动化校验，R4 还是遇到问题（FQN）。
+4. **docs/agent-baseline.md 规范落地靠人眼** — "禁止 FQN"、"禁止 ZoneId.systemDefault()"、"所有 UNIQUE 含 tenant_id" 等约束，没有自动化校验，R4 还是遇到问题（FQN）。
 
 ---
 
@@ -194,7 +194,7 @@
 
 - [ ] ArchUnit 规则: 禁止 FQN / ZoneId.systemDefault() / 无 version CAS 的 UPDATE
 - [ ] Helm pre-commit hook: 配置参数一致性校验
-- [ ] Spotless 增强: CLAUDE.md 强制规范 lint
+- [ ] Spotless 增强: docs/agent-baseline.md 强制规范 lint
 - [ ] 每月一轮深扫日程（第一个周二）
 
 ---
@@ -208,7 +208,7 @@
 | **已知跳过** | `docs/analysis/backend-deep-scan-bug-design-review-2026-05-14.md` | 已知设计 trade-off |
 | **修复清单** | git commits: `32288aca`, `9528615b`, `d739ee00`, `a8862766`, `4fbdb3d6`, `ccdf1f77`, `d41673da`, `aa5fcb38` | 逐项修复 |
 | **Flyway** | `db/migration/V124__r3_constraint_hardening.sql` | 约束硬化 |
-| **CLAUDE.md** | 根目录 CLAUDE.md (已更新) | 模块清单 + 配置规范 |
+| **docs/agent-baseline.md** | 根目录 docs/agent-baseline.md (已更新) | 模块清单 + 配置规范 |
 
 ---
 

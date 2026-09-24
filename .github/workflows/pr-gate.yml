@@ -382,7 +382,7 @@ jobs:
         shell: bash
         # 补 squawk 盲区:batch_business 不走 Flyway,partition-migration / business 下的手工
         # DDL 脚本(改 UNIQUE/PK 列集 / DROP TABLE)不在迁移守护内。本步要求这类危险脚本头部
-        # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(CLAUDE.md 红线)。
+        # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(docs/agent-baseline.md 红线)。
         run: bash scripts/ci/check-db-scripts-safety.sh
 
       - name: Version and infrastructure image alignment

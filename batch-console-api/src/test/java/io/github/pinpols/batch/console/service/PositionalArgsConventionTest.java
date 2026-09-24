@@ -15,7 +15,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * 守护测试：CLAUDE.md §方法参数约束 "调用方约束" 子节落地。
+ * 守护测试：docs/agent-baseline.md §方法参数约束 "调用方约束" 子节落地。
  *
  * <p>对已治理的类型（{@link #GUARDED_TYPES}）拦回潮：
  *

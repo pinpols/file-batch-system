@@ -1,7 +1,7 @@
 # BE Acceptance Runbook
 
 > 后端「启动 → 单测 / IT / E2E → 真实数据严格验证 → 违约扫描 → 重启 FE」一条龙验收 SOP。
-> 权威 entry:`scripts/local/be-acceptance.sh`。本文档给项目成员看(不只 Claude),配套 skill `~/.claude/skills/be-acceptance/`。
+> 权威入口:`scripts/local/be-acceptance.sh`。本文档面向项目开发者和自动化 agent；脚本是验收流程的唯一可执行入口。
 
 ## 何时跑
 
@@ -55,6 +55,7 @@
 之前硬编码 cloudflared trycloudflare URL。现在每次 step 8 都从 `pgrep -fl cloudflared` 找进程,grep log 抓 `https://*.trycloudflare.com`,自动测可达性。
 - 探测不到 → 静默 SKIP step 8 + 9 tunnel 段(本地 BE/FE 可达不受影响)
 - 探测到但 HTTP ≠ 200 → 失败记 backlog
+- 可选设置 `AGENT_TASK_OUTPUT_ROOT` 指向 agent 输出目录根路径；脚本会读取其下各会话的 `tasks/*.output`。未设置时只检查 `/tmp/cloudflared-*.log` 与 `/tmp/vite-preview.log`。
 
 ### resume 续跑
 每个 step 完成后写 `.be-acceptance-state`:
@@ -118,11 +119,10 @@ pgrep -fl cloudflared && echo "tunnel: running" || echo "tunnel: not active(隧�
 - `scripts/local/be-acceptance.sh`(449 行)— 一键 entry
 - `scripts/local/strict-verify.sh`(177 行)— 真实数据 15 项严格验证
 - `scripts/local/run-tests.sh` — 单测 / IT / E2E 分阶段子入口
-- `~/.claude/skills/be-acceptance/SKILL.md` — Claude skill(`/be-acceptance` 唤起)
 - `docs/backlog/be-acceptance-*.md` — 历次验收的 backlog 沉淀
 
 ## 维护规则
 
-- 加新 step / flag → 同步改本 runbook + SKILL.md + 脚本内 usage 注释三处
+- 加新 step / flag → 同步改本 runbook + 脚本内 usage 注释
 - 加新 backlog 模板字段 → 同步改 step 10 模板生成段
 - 默认串行不动,`--parallel` 是 opt-in(本地资源够才用)
