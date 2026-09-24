@@ -2,8 +2,10 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.startup.SecretPayloadFlywayCallback;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.infrastructure.http.OkHttpOrchestratorExternalHttpTransport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegra
   @Test
   void contextLoads() {
     assertThat(applicationContext).isNotNull();
+    assertThat(applicationContext.getBean(OutboundHttpTransport.class))
+        .isInstanceOf(OkHttpOrchestratorExternalHttpTransport.class);
     assertThat(flyway.getConfiguration().getCallbacks())
         .anyMatch(SecretPayloadFlywayCallback.class::isInstance);
   }

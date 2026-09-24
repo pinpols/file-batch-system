@@ -3,7 +3,10 @@
 # sonar-scan.sh — 本地一键 SonarQube 扫描 + 导出报告
 #
 # 用法：
-#   ./scripts/dev/sonar-scan.sh               # 默认全量扫描
+#   ./scripts/dev/sonar-scan.sh --full        # 全量扫描（默认）
+#   ./scripts/dev/sonar-scan.sh --incremental # 只编译不跑测试，按 Git 变更行导出报告
+#   ./scripts/dev/sonar-scan.sh --incremental --with-tests # 增量扫描并刷新覆盖率
+#   ./scripts/dev/sonar-scan.sh --incremental --base-ref origin/main
 #   ./scripts/dev/sonar-scan.sh --skip-build  # 跳过 mvn install（已构建时）
 #   ./scripts/dev/sonar-scan.sh --stop        # 停止并删除 SonarQube 容器
 #
@@ -19,12 +22,31 @@ set -euo pipefail
 # ── 参数 ──────────────────────────────────────────────────────────────────────
 SKIP_BUILD=false
 STOP_ONLY=false
-for arg in "$@"; do
-  case $arg in
-    --skip-build) SKIP_BUILD=true ;;
-    --stop)       STOP_ONLY=true  ;;
+WITH_TESTS=false
+SCAN_MODE="full"
+FULL_REQUESTED=false
+INCREMENTAL_REQUESTED=false
+BASE_REF="${SONAR_BASE_REF:-origin/main}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --full)        SCAN_MODE="full"; FULL_REQUESTED=true ;;
+    --incremental) SCAN_MODE="incremental"; INCREMENTAL_REQUESTED=true ;;
+    --base-ref)
+      [[ $# -ge 2 ]] || { echo "--base-ref requires a Git ref" >&2; exit 2; }
+      BASE_REF="$2"
+      shift
+      ;;
+    --skip-build)  SKIP_BUILD=true ;;
+    --with-tests)  WITH_TESTS=true ;;
+    --stop)        STOP_ONLY=true  ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
+  shift
 done
+if $FULL_REQUESTED && $INCREMENTAL_REQUESTED; then
+  echo "--full and --incremental are mutually exclusive" >&2
+  exit 2
+fi
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 SONAR_CONTAINER="sonarqube-batch"
@@ -33,8 +55,15 @@ SONAR_URL="http://localhost:${SONAR_PORT}"
 SONAR_ADMIN_USER="${SONAR_ADMIN_USER:-admin}"
 SONAR_ADMIN_PASS="${SONAR_ADMIN_PASS:-admin}"
 SONAR_IMAGE="${SONAR_IMAGE:-sonarqube@sha256:d4899d380ad9d7b63ebaa751e047f5a4f064f8902cdf7c1a3c3c96f7d71600ed}"
-PROJECT_KEY="${SONAR_PROJECT_KEY:-file-batch-system}"
-PROJECT_NAME="${SONAR_PROJECT_NAME:-File Batch System}"
+BASE_PROJECT_KEY="${SONAR_PROJECT_KEY:-file-batch-system}"
+BASE_PROJECT_NAME="${SONAR_PROJECT_NAME:-File Batch System}"
+if [[ "$SCAN_MODE" == "incremental" ]]; then
+  PROJECT_KEY="${SONAR_INCREMENTAL_PROJECT_KEY:-${BASE_PROJECT_KEY}-incremental}"
+  PROJECT_NAME="${BASE_PROJECT_NAME} Incremental"
+else
+  PROJECT_KEY="$BASE_PROJECT_KEY"
+  PROJECT_NAME="$BASE_PROJECT_NAME"
+fi
 SONAR_MAVEN_PLUGIN_VERSION="${SONAR_MAVEN_PLUGIN_VERSION:-5.7.0.6970}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/process.sh
@@ -66,6 +95,11 @@ done
 
 # ── 1. 启动 SonarQube ─────────────────────────────────────────────────────────
 info "Step 1/5 — Starting SonarQube (port ${SONAR_PORT})..."
+if [[ "$SCAN_MODE" == "incremental" ]]; then
+  info "Scan mode: incremental (base: ${BASE_REF}, tests: ${WITH_TESTS})"
+else
+  info "Scan mode: full"
+fi
 
 if docker ps --filter "name=${SONAR_CONTAINER}" --format '{{.Names}}' | grep -q "$SONAR_CONTAINER"; then
   ok "Container already running, reusing."
@@ -187,7 +221,7 @@ fi
 # ── 4. 构建 + 扫描 ────────────────────────────────────────────────────────────
 cd "$PROJECT_ROOT"
 
-if ! $SKIP_BUILD; then
+if ! $SKIP_BUILD && { [[ "$SCAN_MODE" == "full" ]] || $WITH_TESTS; }; then
   info "Step 4/5 — Running tests and generating JaCoCo XML reports..."
   BUILD_LOG=$(mktemp)
   set +e
@@ -205,23 +239,38 @@ if ! $SKIP_BUILD; then
   fi
   rm -f "$BUILD_LOG"
   ok "Build complete."
+elif ! $SKIP_BUILD; then
+  info "Step 4/5 — Compiling production and test bytecode without running tests..."
+  mvn test-compile -q -DskipTests --projects '!batch-e2e-tests'
+  ok "Compile complete."
 else
-  info "Step 4/5 — Skipping test/report generation (--skip-build)."
+  info "Step 4/5 — Skipping build (--skip-build)."
 fi
 
-COVERAGE_REPORT_COUNT=$(find "$PROJECT_ROOT" \
-  -path '*/target/site/jacoco/jacoco.xml' \
-  -not -path '*/batch-e2e-tests/*' \
-  -type f \
-  | wc -l | tr -d ' ')
-if [ "$COVERAGE_REPORT_COUNT" -eq 0 ]; then
-  error "No JaCoCo XML report found. Run without --skip-build or generate target/site/jacoco/jacoco.xml before scanning."
-  exit 1
+COVERAGE_ENABLED=false
+if [[ "$SCAN_MODE" == "full" ]] || $WITH_TESTS; then
+  COVERAGE_REPORT_COUNT=$(find "$PROJECT_ROOT" \
+    -path '*/target/site/jacoco/jacoco.xml' \
+    -not -path '*/batch-e2e-tests/*' \
+    -type f \
+    | wc -l | tr -d ' ')
+  if [ "$COVERAGE_REPORT_COUNT" -eq 0 ]; then
+    error "No JaCoCo XML report found. Run without --skip-build or generate target/site/jacoco/jacoco.xml before scanning."
+    exit 1
+  fi
+  COVERAGE_ENABLED=true
+  ok "Found $COVERAGE_REPORT_COUNT JaCoCo XML report(s)."
 fi
-ok "Found $COVERAGE_REPORT_COUNT JaCoCo XML report(s)."
 
 info "         Running Sonar analysis..."
 SONAR_LOG=$(mktemp)
+SONAR_COVERAGE_ARGS=()
+if ! $COVERAGE_ENABLED; then
+  # 增量静态扫描使用独立项目键，并显式禁用旧 JaCoCo 自动发现，避免把陈旧覆盖率当成本轮证据。
+  SONAR_COVERAGE_ARGS+=(
+    "-Dsonar.coverage.jacoco.xmlReportPaths=${OUT_DIR}/coverage-not-collected.xml"
+  )
+fi
 set +e
 mvn "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
   --projects '!batch-e2e-tests' \
@@ -233,6 +282,7 @@ mvn "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSI
   -Dsonar.java.target=21 \
   -Dsonar.java.skipUnchanged=false \
   -Dsonar.analysisCache.enabled=false \
+  "${SONAR_COVERAGE_ARGS[@]}" \
   2>&1 | tee "$SONAR_LOG" | grep -E "INFO.*task|INFO.*More|ERROR.*Unable|BUILD (SUCCESS|FAILURE)"
 SONAR_STATUS=${PIPESTATUS[0]}
 set -e
@@ -289,6 +339,8 @@ SONAR_ADMIN_PASS="$SONAR_ADMIN_PASS" \
 SONAR_URL="$SONAR_URL" \
 PROJECT_KEY="$PROJECT_KEY" \
 OUT_DIR="$OUT_DIR" \
+SCAN_MODE="$SCAN_MODE" \
+COVERAGE_ENABLED="$COVERAGE_ENABLED" \
 "$PYTHON_BIN" - <<'PYEOF'
 import base64
 import csv
@@ -304,6 +356,8 @@ AUTH = base64.b64encode(
 PROJECT_KEY = os.environ["PROJECT_KEY"]
 OUT_DIR = os.environ["OUT_DIR"]
 SONAR_URL = os.environ["SONAR_URL"]
+SCAN_MODE = os.environ["SCAN_MODE"]
+COVERAGE_ENABLED = os.environ["COVERAGE_ENABLED"] == "true"
 
 def get(path):
     req = urllib.request.Request(BASE + path)
@@ -365,7 +419,8 @@ with open(md_path, "w", encoding="utf-8") as f:
     f.write(f"| Code Smell | {m.get('code_smells','?')} | {RATING.get(m.get('sqale_rating','?'), m.get('sqale_rating','?'))} |\n")
     f.write(f"| 技术债 | {int(m.get('sqale_index','0'))//60}h {int(m.get('sqale_index','0'))%60}m | — |\n")
     f.write(f"| 重复率 | {m.get('duplicated_lines_density','?')}% | — |\n")
-    f.write(f"| 覆盖率 | {m.get('coverage','?')}% | — |\n\n")
+    coverage = f"{m.get('coverage','?')}%" if COVERAGE_ENABLED else "未采集（静态增量模式）"
+    f.write(f"| 覆盖率 | {coverage} | — |\n\n")
 
     f.write("## 各模块 OPEN Issue 分布\n\n")
     f.write(f"| {'模块':<45} | " + " | ".join(f"{s}" for s in SEVS) + " | 合计 |\n")
@@ -399,6 +454,19 @@ print(f"CSV:{csv_path}  ({len(all_issues)} issues, {len(open_issues)} open)")
 print(f"MD: {md_path}")
 PYEOF
 
+if [[ "$SCAN_MODE" == "incremental" ]]; then
+  info "         Exporting Git changed-line report (base: ${BASE_REF})..."
+  "$PYTHON_BIN" "${PROJECT_ROOT}/scripts/dev/sonar-incremental-report.py" \
+    --root "$PROJECT_ROOT" \
+    --base-ref "$BASE_REF" \
+    --issues-csv "${OUT_DIR}/sonar-report.csv" \
+    --output-dir "$OUT_DIR" \
+    --sonar-url "$SONAR_URL" \
+    --project-key "$PROJECT_KEY" \
+    --username "$SONAR_ADMIN_USER" \
+    --password "$SONAR_ADMIN_PASS"
+fi
+
 # ── latest 软链 ───────────────────────────────────────────────────────────────
 LATEST_LINK="${PROJECT_ROOT}/reports/sonar/latest"
 ln -sfn "${SCAN_TS}" "$LATEST_LINK"
@@ -407,6 +475,12 @@ echo ""
 ok "Reports written:"
 echo "   reports/sonar/${SCAN_TS}/sonar-report.csv  — $(wc -l < "${OUT_DIR}/sonar-report.csv") lines"
 echo "   reports/sonar/${SCAN_TS}/sonar-report.md"
+if [[ "$SCAN_MODE" == "incremental" ]]; then
+  echo "   reports/sonar/${SCAN_TS}/sonar-incremental-report.csv"
+  echo "   reports/sonar/${SCAN_TS}/sonar-incremental-hotspots.csv"
+  echo "   reports/sonar/${SCAN_TS}/sonar-incremental-report.md"
+  echo "   reports/sonar/${SCAN_TS}/sonar-changed-lines.json"
+fi
 echo "   reports/sonar/latest  ->  ${SCAN_TS}  (symlink)"
 echo ""
 echo -e "${GREEN}Dashboard:${NC} ${SONAR_URL}/dashboard?id=${PROJECT_KEY}"

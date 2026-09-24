@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.governance;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
@@ -29,7 +30,8 @@ class AlertmanagerEmitPublisherTest {
     AlertmanagerEmitProperties props = new AlertmanagerEmitProperties();
     props.setEnabled(enabled);
     props.setEndpoint("http://localhost:9093");
-    return new AlertmanagerEmitPublisher(props, meterProvider(new SimpleMeterRegistry()));
+    return new AlertmanagerEmitPublisher(
+        props, meterProvider(new SimpleMeterRegistry()), failOnRequest());
   }
 
   private AlertEventEntity entity() {

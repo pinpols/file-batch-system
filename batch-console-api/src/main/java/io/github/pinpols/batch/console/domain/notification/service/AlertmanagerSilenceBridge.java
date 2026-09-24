@@ -1,5 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
@@ -10,11 +14,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PreDestroy;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -57,18 +56,17 @@ public class AlertmanagerSilenceBridge {
 
   private final AlertmanagerNotifyProperties.Silence props;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
   private final ExecutorService executor;
 
   public AlertmanagerSilenceBridge(
       AlertmanagerNotifyProperties properties,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      OutboundHttpTransport httpTransport) {
     this.props = properties.getSilence();
     this.meterRegistryProvider = meterRegistryProvider;
+    this.httpTransport = httpTransport;
     if (props.isEnabled() && Texts.hasText(props.getApiBaseUrl())) {
-      this.httpClient = HttpClient.newBuilder()
-          .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMillis()))
-          .build();
       ThreadPoolExecutor pool = new ThreadPoolExecutor(
           1,
           1,
@@ -84,7 +82,6 @@ public class AlertmanagerSilenceBridge {
       this.executor = pool;
       log.info("AlertmanagerSilenceBridge enabled: apiBaseUrl={}", props.getApiBaseUrl());
     } else {
-      this.httpClient = null;
       this.executor = null;
       log.info("AlertmanagerSilenceBridge disabled (silence.enabled=false or apiBaseUrl blank)");
     }
@@ -181,25 +178,20 @@ public class AlertmanagerSilenceBridge {
 
   private void post(String uri, Object body, String action) {
     try {
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(uri))
-          .timeout(Duration.ofMillis(props.getTimeoutMillis()))
-          .header("Content-Type", "application/json")
-          .POST(HttpRequest.BodyPublishers.ofString(JsonUtils.toJson(body), StandardCharsets.UTF_8))
-          .build();
-      HttpResponse<Void> resp = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-      int sc = resp.statusCode();
-      if (sc >= 200 && sc < 300) {
+      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+          uri,
+          Map.of(),
+          JsonUtils.toJson(body),
+          "application/json; charset=utf-8",
+          Duration.ofMillis(props.getConnectTimeoutMillis()),
+          Duration.ofMillis(props.getTimeoutMillis()),
+          OutboundAddressPolicy.TRUSTED));
+      if (response.isSuccessful()) {
         recordSilenceMetric("success", action);
       } else {
         recordSilenceMetric("http_error", action);
-        log.warn("am_silence bridge non-2xx: action={} status={}", action, sc);
+        log.warn("am_silence bridge non-2xx: action={} status={}", action, response.statusCode());
       }
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      recordSilenceMetric("interrupted", action);
-      SwallowedExceptionLogger.info(
-          AlertmanagerSilenceBridge.class, "catch:InterruptedException", ex);
     } catch (RuntimeException | java.io.IOException ex) {
       recordSilenceMetric("failed", action);
       SwallowedExceptionLogger.warn(AlertmanagerSilenceBridge.class, "catch:am_silence", ex);

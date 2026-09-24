@@ -3,18 +3,14 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
-import java.io.IOException;
-import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,8 +20,7 @@ import org.springframework.stereotype.Component;
  * 渲染 JSON 截断拼成简洁摘要。企业微信返回 {@code {"errcode":0,...}} 为成功， 其余 errcode / HTTP 非 2xx / 异常一律折叠成 {@link
  * WebhookDeliveryResult#failure}（不抛、不打 url，日志净化）。
  *
- * <p>无状态、线程安全（单例 bean，共享 {@link OkHttpClient}）。参考 captcha 远程校验器范式： HTTP POST 抽 {@code protected}
- * 方法便于单测打桩。
+ * <p>无状态、线程安全；外部地址统一通过受 SSRF 保护的 {@link OutboundHttpTransport} 发送。
  */
 @Component
 @Slf4j
@@ -38,29 +33,14 @@ public class WeComNotificationSender implements NotificationSender {
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-  /** 单次调用总时长上限,兜住慢回调长期占用线程(与 WebhookDispatcher 同款)。 */
-  private static final Duration CALL_TIMEOUT = Duration.ofSeconds(15);
-
-  private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+  private static final String JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 
   private final ObjectMapper objectMapper;
+  private final OutboundHttpTransport httpTransport;
 
-  /**
-   * OkHttp 客户端内置 {@link SsrfGuardedDns},在建连回调层做 per-request SSRF pin —— 连的就是 guard 校验过的那个 IP, 关闭
-   * DNS-rebinding 的 TOCTOU 窗口,TLS 仍按 hostname 校验(SNI/证书不动)。与 WebhookDispatcher / worker-dispatch
-   * 同款。
-   */
-  private final OkHttpClient httpClient;
-
-  public WeComNotificationSender(ObjectMapper objectMapper, SsrfGuardedDns ssrfGuardedDns) {
+  public WeComNotificationSender(ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
     this.objectMapper = objectMapper;
-    this.httpClient = new OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT)
-        .readTimeout(REQUEST_TIMEOUT)
-        .writeTimeout(REQUEST_TIMEOUT)
-        .callTimeout(CALL_TIMEOUT)
-        .dns(ssrfGuardedDns)
-        .build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -76,11 +56,14 @@ public class WeComNotificationSender implements NotificationSender {
     }
     String body = buildTextMessage(message);
     try {
-      // 字面量 IP 兜底:OkHttp 对字面量 IP 短路不走 SsrfGuardedDns,故这里补一次 guard 拦住 metadata/内网字面量 IP。
-      // IM 渠道 url 存前未过 CallbackUrlValidator(仅 WEBHOOK 渠道过),故此兜底不可省。主机名的实连 IP 由 SsrfGuardedDns
-      // 在建连回调层 pin(连的就是校验的那个 IP),关闭 rebinding 窗口。
-      DnsResolveGuard.resolveAndValidate(URI.create(url).getHost());
-      WeComHttpResponse response = postJson(url, body);
+      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+          url,
+          Map.of(),
+          body,
+          JSON_MEDIA_TYPE,
+          CONNECT_TIMEOUT,
+          REQUEST_TIMEOUT,
+          OutboundAddressPolicy.GUARDED));
       return interpret(response);
     } catch (Exception e) {
       if (e instanceof InterruptedException) {
@@ -138,7 +121,7 @@ public class WeComNotificationSender implements NotificationSender {
     return content;
   }
 
-  private WebhookDeliveryResult interpret(WeComHttpResponse response) {
+  private WebhookDeliveryResult interpret(OutboundHttpResponse response) {
     int status = response.statusCode();
     if (status < 200 || status >= 300) {
       return WebhookDeliveryResult.failure(status, "wecom http status=" + status);
@@ -164,18 +147,4 @@ public class WeComNotificationSender implements NotificationSender {
       return -1;
     }
   }
-
-  /** HTTP POST 抽出便于单测打桩（覆盖此方法返回预置 JSON，不走真实网络）。 */
-  protected WeComHttpResponse postJson(String url, String body)
-      throws IOException, InterruptedException {
-    Request request =
-        new Request.Builder().url(url).post(RequestBody.create(body, JSON)).build();
-    try (Response response = httpClient.newCall(request).execute()) {
-      String responseBody = response.body() == null ? "" : response.body().string();
-      return new WeComHttpResponse(response.code(), responseBody);
-    }
-  }
-
-  /** {@link #postJson} 返回的最小响应视图，解耦 OkHttp {@link Response}，便于单测构造。 */
-  protected record WeComHttpResponse(int statusCode, String body) {}
 }

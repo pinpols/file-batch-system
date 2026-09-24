@@ -3,16 +3,15 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -29,6 +28,7 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -45,7 +45,7 @@ import org.springframework.stereotype.Component;
  * WebhookDeliveryResult#failure} 且<b>不走网络</b>。模板参数 {@code TemplateParam} 取事件类型构造 {@code {"event":
  * <eventType>}}，超长截断（阿里短信模板参数有长度限制）。
  *
- * <p>凭证来自专属 {@link SmsProperties}（与验证码 AK/SK 隔离）。无状态、线程安全（单例 bean，共享 {@link HttpClient}）；所有失败折叠为
+ * <p>凭证来自专属 {@link SmsProperties}（与验证码 AK/SK 隔离）。无状态、线程安全；所有失败折叠为
  * failure 而非抛异常。日志净化：<b>绝不打印手机号明文 / AK / SK / 签名</b>，手机号只打数量。
  *
  * <p><b>验签状态</b>：阿里云 ACS3 端到端无官方 golden 向量，单测仅验结构 / 确定性 + 分支；真实签名正确性<b>需对接真 API 联调验签</b>。
@@ -70,13 +70,14 @@ public class AliyunSmsProvider implements SmsProvider {
 
   private final SmsProperties properties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public AliyunSmsProvider(SmsProperties properties, ObjectMapper objectMapper) {
+  @Autowired
+  public AliyunSmsProvider(
+      SmsProperties properties, ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient =
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -152,8 +153,6 @@ public class AliyunSmsProvider implements SmsProvider {
         "Authorization", authorization);
 
     try {
-      // SSRF/rebinding 防护:投递前二次解析校验 endpoint host IP 不落内网/回环/链路本地。
-      DnsResolveGuard.resolveAndValidate(endpoint);
       String response = postJson(url, headers);
       JsonNode node = objectMapper.readTree(response);
       String code = node.path("Code").asText("");
@@ -320,16 +319,10 @@ public class AliyunSmsProvider implements SmsProvider {
   /** 同步 GET（RPC 风格，body 空，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
   protected String postJson(String url, Map<String, String> headers)
       throws IOException, InterruptedException, HttpStatusException {
-    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(REQUEST_TIMEOUT);
-    for (Map.Entry<String, String> e : headers.entrySet()) {
-      builder.header(e.getKey(), e.getValue());
-    }
-    HttpRequest request = builder.GET().build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    int status = response.statusCode();
-    if (status / 100 != 2) {
-      throw new HttpStatusException(status);
+    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.get(
+        url, headers, Duration.ofSeconds(5), REQUEST_TIMEOUT, OutboundAddressPolicy.GUARDED));
+    if (!response.isSuccessful()) {
+      throw new HttpStatusException(response.statusCode());
     }
     return response.body();
   }

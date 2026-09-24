@@ -1,19 +1,22 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -26,10 +29,10 @@ import org.springframework.stereotype.Component;
  * eventType + payloadJson 截断后 URL 编码）。鉴权用 HTTP Basic（{@code base64(AccountSid:AuthToken)}）。
  *
  * <p>accountSid / authToken / fromNumber 任一为空 → {@link WebhookDeliveryResult#failure} 且<b>不走网络</b>。
- * 投递前 {@link DnsResolveGuard#resolveAndValidate} 校验 base host（防 SSRF / rebinding）。多个手机号逐个发，任一非 2xx
+ * transport 在建连前校验 base host 的全部地址（防 SSRF / rebinding）。多个手机号逐个发，任一非 2xx
  * 即整体 failure（带首个失败状态码）；全部 2xx（Twilio 成功返回 201 + 含 sid 的 JSON）→ {@link WebhookDeliveryResult#ok}。
  *
- * <p>无状态、线程安全（单例 bean，共享 {@link HttpClient}）；所有失败折叠为 failure 而非抛异常。日志净化：<b>绝不打印 AuthToken /
+ * <p>无状态、线程安全（单例 bean，共享出站 transport）；所有失败折叠为 failure 而非抛异常。日志净化：<b>绝不打印 AuthToken /
  * AccountSid / 手机号明文 / Authorization 头</b>，手机号只打数量。
  */
 @Slf4j
@@ -45,12 +48,14 @@ public class TwilioSmsProvider implements SmsProvider {
 
   private final SmsProperties properties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public TwilioSmsProvider(SmsProperties properties, ObjectMapper objectMapper) {
+  @Autowired
+  public TwilioSmsProvider(
+      SmsProperties properties, ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -82,9 +87,10 @@ public class TwilioSmsProvider implements SmsProvider {
     String authHeader = basicAuthHeader(accountSid, authToken);
     String body = buildBody(message);
 
-    String host;
     try {
-      host = URI.create(apiBase).getHost();
+      if (EmptyChecks.isNull(URI.create(apiBase).getHost())) {
+        return WebhookDeliveryResult.failure(null, "invalid twilio apiBase");
+      }
     } catch (RuntimeException e) {
       return WebhookDeliveryResult.failure(null, "invalid twilio apiBase");
     }
@@ -96,8 +102,6 @@ public class TwilioSmsProvider implements SmsProvider {
       String formBody =
           "To=" + urlEncode(phone) + "&From=" + urlEncode(fromNumber) + "&Body=" + urlEncode(body);
       try {
-        // SSRF/rebinding 防护:apiBase 可被代理覆盖,投递前二次解析校验 host IP 不落内网/回环/链路本地。
-        DnsResolveGuard.resolveAndValidate(host);
         TwilioResponse response = postForm(url, authHeader, formBody);
         int status = response.status();
         if (status / 100 != 2) {
@@ -168,15 +172,14 @@ public class TwilioSmsProvider implements SmsProvider {
   /** 抽出便于单测覆盖：以 {@code application/x-www-form-urlencoded} POST 表单到 url，带 Basic 鉴权头，返回状态码 + 响应体。 */
   protected TwilioResponse postForm(String url, String authHeader, String body)
       throws IOException, InterruptedException {
-    HttpRequest request = HttpRequest.newBuilder()
-        .uri(URI.create(url))
-        .timeout(REQUEST_TIMEOUT)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Authorization", authHeader)
-        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-        .build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+        url,
+        Map.of("Authorization", authHeader),
+        body,
+        "application/x-www-form-urlencoded; charset=utf-8",
+        CONNECT_TIMEOUT,
+        REQUEST_TIMEOUT,
+        OutboundAddressPolicy.GUARDED));
     return new TwilioResponse(response.statusCode(), response.body());
   }
 }

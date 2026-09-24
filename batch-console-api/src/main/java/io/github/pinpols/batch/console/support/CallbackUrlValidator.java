@@ -49,7 +49,7 @@ public class CallbackUrlValidator {
 
     // S-2.6: DNS 解析后校验真实 IP，消除 DNS rebinding 窗口
     try {
-      DnsResolveGuard.resolveAndValidate(host);
+      DnsResolveGuard.resolveAllAndValidate(host);
     } catch (BlockedAddressException e) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.restricted_address");
     } catch (UnknownHostException e) {

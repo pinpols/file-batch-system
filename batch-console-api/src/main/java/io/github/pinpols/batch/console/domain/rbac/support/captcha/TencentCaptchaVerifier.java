@@ -4,12 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -19,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -56,12 +58,16 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
 
   private final CaptchaProperties properties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public TencentCaptchaVerifier(CaptchaProperties properties, ObjectMapper objectMapper) {
+  @Autowired
+  public TencentCaptchaVerifier(
+      CaptchaProperties properties,
+      ObjectMapper objectMapper,
+      OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -206,12 +212,14 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
   /** 执行 application/json POST 带签名头,返回响应体字符串。抽 protected 以便单测覆盖返回预置 JSON、无网络验证各分支。 */
   protected String postJson(String url, Map<String, String> headers, String body)
       throws IOException, InterruptedException {
-    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-        .timeout(REQUEST_TIMEOUT)
-        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-    headers.forEach(builder::header);
-    HttpResponse<String> response = httpClient.send(
-        builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+        url,
+        headers,
+        body,
+        CONTENT_TYPE,
+        CONNECT_TIMEOUT,
+        REQUEST_TIMEOUT,
+        OutboundAddressPolicy.GUARDED));
     return response.body();
   }
 

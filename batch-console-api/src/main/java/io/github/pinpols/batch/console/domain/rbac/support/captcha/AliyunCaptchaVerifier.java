@@ -2,13 +2,12 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,6 +17,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -49,12 +49,16 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
 
   private final CaptchaProperties properties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public AliyunCaptchaVerifier(CaptchaProperties properties, ObjectMapper objectMapper) {
+  @Autowired
+  public AliyunCaptchaVerifier(
+      CaptchaProperties properties,
+      ObjectMapper objectMapper,
+      OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -125,19 +129,22 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   /** 执行 application/json POST,带上签名头,返回响应体字符串。抽成 protected 以便单测覆盖、无网络验证 verify 各分支。 */
   protected String postJson(String url, Map<String, String> headers, String body)
       throws IOException, InterruptedException {
-    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-        .header("Content-Type", "application/json; charset=utf-8")
-        .header("Accept", "application/json")
-        .timeout(REQUEST_TIMEOUT)
-        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-    // host 头由 HttpClient 自行管理,不可手动 set,故签名头里跳过 host。
+    Map<String, String> requestHeaders = new TreeMap<>();
+    requestHeaders.put("Accept", "application/json");
+    // Host 由传输层按 URI 管理，签名头中的 host 只参与 canonical request。
     headers.forEach((k, v) -> {
       if (!"host".equalsIgnoreCase(k)) {
-        builder.header(k, v);
+        requestHeaders.put(k, v);
       }
     });
-    HttpResponse<String> response = httpClient.send(
-        builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+        url,
+        requestHeaders,
+        body,
+        "application/json; charset=utf-8",
+        CONNECT_TIMEOUT,
+        REQUEST_TIMEOUT,
+        OutboundAddressPolicy.GUARDED));
     return response.body();
   }
 

@@ -4,22 +4,23 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClient;
 
 /**
  * HTTP_POLL sensor：周期 GET/POST 外部 URL，按 matchExpr 判断响应是否达成预期。
@@ -50,18 +51,26 @@ import org.springframework.web.client.RestClient;
 public class HttpPollSensorPolicy implements SensorPolicy {
 
   private static final List<String> ALLOWED_METHODS = List.of("GET", "POST", "HEAD");
+  private static final Set<String> FORBIDDEN_REQUEST_HEADERS = Set.of(
+      "connection",
+      "content-length",
+      "host",
+      "proxy-authorization",
+      "te",
+      "trailer",
+      "transfer-encoding",
+      "upgrade");
 
   private final SensorProperties props;
   private final ObjectMapper objectMapper;
-  private final RestClient restClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public HttpPollSensorPolicy(SensorProperties props, ObjectMapper objectMapper) {
+  @Autowired
+  public HttpPollSensorPolicy(
+      SensorProperties props, ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
     this.props = props;
     this.objectMapper = objectMapper;
-    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-    factory.setConnectTimeout((int) props.getHttpRequestTimeout().toMillis());
-    factory.setReadTimeout((int) props.getHttpRequestTimeout().toMillis());
-    this.restClient = RestClient.builder().requestFactory(factory).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -96,9 +105,9 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     }
 
     try {
-      ResponseEntity<String> resp = invoke(url, method, spec);
-      int status = resp.getStatusCode().value();
-      String body = resp.getBody() == null ? "" : resp.getBody();
+      OutboundHttpResponse response = invoke(url, method, spec);
+      int status = response.statusCode();
+      String body = response.body();
       if (evaluateMatch(matchExpr, status, body)) {
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("responseStatus", status);
@@ -106,7 +115,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
         return SensorProbeResult.matched(output);
       }
       return SensorProbeResult.notYet();
-    } catch (ResourceAccessException e) {
+    } catch (IOException e) {
       log.debug("HTTP_POLL timeout url={} err={}", url, e.getMessage());
       return SensorProbeResult.notYet();
     } catch (Exception e) {
@@ -119,33 +128,56 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     }
   }
 
-  private ResponseEntity<String> invoke(String url, String method, Map<String, Object> spec)
-      throws JsonProcessingException {
-    HttpHeaders headers = parseHeaders(SensorSpecs.string(spec, "headersJson"));
-    RestClient.RequestBodySpec req =
-        restClient.method(HttpMethod.valueOf(method)).uri(url).headers(h -> h.addAll(headers));
+  private OutboundHttpResponse invoke(String url, String method, Map<String, Object> spec)
+      throws IOException {
+    Map<String, String> headers = parseHeaders(SensorSpecs.string(spec, "headersJson"));
     String body = SensorSpecs.string(spec, "body");
-    if (Texts.hasText(body) && ("POST".equals(method))) {
-      if (headers.getContentType() == null) {
-        req.contentType(MediaType.APPLICATION_JSON);
-      }
-      return req.body(body).retrieve().toEntity(String.class);
-    }
-    return req.retrieve().toEntity(String.class);
+    Duration timeout = props.getHttpRequestTimeout();
+    return switch (method) {
+      case "GET" ->
+        httpTransport.execute(
+            OutboundHttpRequest.get(url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED));
+      case "HEAD" ->
+        httpTransport.execute(OutboundHttpRequest.head(
+            url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED));
+      case "POST" ->
+        httpTransport.execute(OutboundHttpRequest.post(
+            url,
+            headers,
+            Objects.requireNonNullElse(body, ""),
+            resolveContentType(headers),
+            timeout,
+            timeout,
+            OutboundAddressPolicy.GUARDED));
+      default -> throw new IllegalArgumentException("unsupported sensor HTTP method: " + method);
+    };
   }
 
-  private HttpHeaders parseHeaders(String headersJson) throws JsonProcessingException {
-    HttpHeaders headers = new HttpHeaders();
+  private Map<String, String> parseHeaders(String headersJson) throws JsonProcessingException {
+    Map<String, String> headers = new LinkedHashMap<>();
     if (!Texts.hasText(headersJson)) {
       return headers;
     }
     JsonNode node = objectMapper.readTree(headersJson);
     if (node != null && node.isObject()) {
       for (Map.Entry<String, JsonNode> entry : node.properties()) {
-        headers.add(entry.getKey(), entry.getValue().asText());
+        String name = entry.getKey();
+        if (FORBIDDEN_REQUEST_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
+          throw new IllegalArgumentException("HTTP_POLL header is not allowed: " + name);
+        }
+        headers.put(name, entry.getValue().asText());
       }
     }
     return headers;
+  }
+
+  private static String resolveContentType(Map<String, String> headers) {
+    return headers.entrySet().stream()
+        .filter(entry -> "Content-Type".equalsIgnoreCase(entry.getKey()))
+        .map(Map.Entry::getValue)
+        .filter(Texts::hasText)
+        .findFirst()
+        .orElse("application/json; charset=utf-8");
   }
 
   /** matchExpr 解析：仅支持 {@code status==2xx} 或 {@code $.<jsonPointer>==<literal>}。 */

@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.console.support.http.OkHttpConsoleExternalHttpTransport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -13,8 +15,6 @@ import org.junit.jupiter.api.Test;
 class DingTalkNotificationSenderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private final SsrfGuardedDns ssrfGuardedDns =
-      new SsrfGuardedDns(mock(BatchSecurityProperties.class));
 
   private NotificationMessage message(String configJson) {
     WebhookEventPayload payload =
@@ -26,7 +26,8 @@ class DingTalkNotificationSenderTest {
   @Test
   void supportsIsCaseInsensitive() {
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns);
+        new DingTalkNotificationSender(objectMapper, failOnRequest());
+
     assertThat(sender.supports("DINGTALK")).isTrue();
     assertThat(sender.supports("dingtalk")).isTrue();
     assertThat(sender.supports("DingTalk")).isTrue();
@@ -36,53 +37,38 @@ class DingTalkNotificationSenderTest {
 
   @Test
   void missingUrlFailsWithoutNetworkCall() {
-    AtomicReference<Boolean> called = new AtomicReference<>(false);
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected String postJson(String url, String body) {
-            called.set(true);
-            return "{\"errcode\":0}";
-          }
-        };
+        new DingTalkNotificationSender(objectMapper, failOnRequest());
 
     WebhookDeliveryResult result = sender.send(message("{}"));
 
     assertThat(result.success()).isFalse();
     assertThat(result.httpStatus()).isNull();
     assertThat(result.errorSummary()).isEqualTo("missing dingtalk url");
-    assertThat(called.get()).isFalse();
   }
 
   @Test
   void errcodeZeroIsOk() {
-    AtomicReference<String> sentBody = new AtomicReference<>();
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected String postJson(String url, String body) {
-            sentBody.set(body);
-            return "{\"errcode\":0,\"errmsg\":\"ok\"}";
-          }
-        };
+    AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
+    DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper, request -> {
+      captured.set(request);
+      return new OutboundHttpResponse(200, "{\"errcode\":0,\"errmsg\":\"ok\"}");
+    });
 
     WebhookDeliveryResult result =
         sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\"}"));
 
     assertThat(result.success()).isTrue();
-    assertThat(sentBody.get()).contains("\"msgtype\":\"text\"");
-    assertThat(sentBody.get()).contains("JOB_FAILED");
+    assertThat(captured.get().body()).contains("\"msgtype\":\"text\"").contains("JOB_FAILED");
+    assertThat(captured.get().addressPolicy()).isEqualTo(OutboundAddressPolicy.GUARDED);
   }
 
   @Test
   void nonZeroErrcodeFails() {
-    DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected String postJson(String url, String body) {
-            return "{\"errcode\":310000,\"errmsg\":\"keywords not in content\"}";
-          }
-        };
+    DingTalkNotificationSender sender = new DingTalkNotificationSender(
+        objectMapper,
+        request -> new OutboundHttpResponse(
+            200, "{\"errcode\":310000,\"errmsg\":\"keywords not in content\"}"));
 
     WebhookDeliveryResult result =
         sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\"}"));
@@ -94,42 +80,32 @@ class DingTalkNotificationSenderTest {
 
   @Test
   void secretAppendsTimestampAndSignToUrl() {
-    AtomicReference<String> sentUrl = new AtomicReference<>();
+    AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
+        new DingTalkNotificationSender(objectMapper, request -> {
+          captured.set(request);
+          return new OutboundHttpResponse(200, "{\"errcode\":0}");
+        }) {
           @Override
           protected long epochMillis() {
             return 1_700_000_000_000L;
           }
-
-          @Override
-          protected String postJson(String url, String body) {
-            sentUrl.set(url);
-            return "{\"errcode\":0}";
-          }
         };
 
-    WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\","
-            + "\"secret\":\"SEC123\"}"));
+    WebhookDeliveryResult result = sender.send(message(
+        "{\"url\":\"https://oapi.dingtalk.com/robot/send?access_token=t\",\"secret\":\"SEC123\"}"));
 
     assertThat(result.success()).isTrue();
-    assertThat(sentUrl.get()).contains("timestamp=1700000000000");
-    assertThat(sentUrl.get()).contains("&sign=");
-    // 加签后的 sign 是 base64+urlencode，非空且不等于明文 secret。
-    String sign = sentUrl.get().substring(sentUrl.get().indexOf("&sign=") + "&sign=".length());
+    String sentUrl = captured.get().uri().toString();
+    assertThat(sentUrl).contains("timestamp=1700000000000").contains("&sign=");
+    String sign = sentUrl.substring(sentUrl.indexOf("&sign=") + "&sign=".length());
     assertThat(sign).isNotBlank().doesNotContain("SEC123");
   }
 
   @Test
   void ssrfHostResolvingToInternalIsBlockedBeforeNetwork() {
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected String postJson(String url, String body) {
-            throw new AssertionError("must not connect to internal address");
-          }
-        };
+        new DingTalkNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
 
     WebhookDeliveryResult result =
         sender.send(message("{\"url\":\"https://localhost/robot/send?access_token=t\"}"));
@@ -141,12 +117,7 @@ class DingTalkNotificationSenderTest {
   @Test
   void ssrfLiteralInternalIpIsBlocked() {
     DingTalkNotificationSender sender =
-        new DingTalkNotificationSender(objectMapper, ssrfGuardedDns) {
-          @Override
-          protected String postJson(String url, String body) {
-            throw new AssertionError("must not connect to metadata IP");
-          }
-        };
+        new DingTalkNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
 
     WebhookDeliveryResult result =
         sender.send(message("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));

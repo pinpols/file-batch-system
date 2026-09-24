@@ -43,7 +43,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         }
         // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
         // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。
-        return List.of(DnsResolveGuard.resolveAndValidate(hostname));
+        return DnsResolveGuard.resolveAllAndValidate(hostname);
       }
     };
     this.okHttpClient = new OkHttpClient.Builder()

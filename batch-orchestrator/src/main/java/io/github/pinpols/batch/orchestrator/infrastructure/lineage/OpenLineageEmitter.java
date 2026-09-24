@@ -1,6 +1,10 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -12,10 +16,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,7 +37,7 @@ import org.springframework.stereotype.Component;
  * RunEvent；仅 HTTP 2xx 才允许消费者提交 offset。
  *
  * <p><b>不引 openlineage-java 客户端</b>:SB4 + JDK 21 兼容性未验,且事件格式是文档化的 JSON,用 Jackson 生成 spec-compliant
- * payload + JDK HttpClient 发送即可,零新依赖。后续要 facets / Marquez 深度集成再换官方 client。
+ * payload，再交给平台统一出站 transport。后续要 facets / Marquez 深度集成再换官方 client。
  *
  * <p>runId 由 workflow_run id 确定性派生(name-based UUID),将来补 START 事件时与 COMPLETE 同 runId 成对。
  */
@@ -51,25 +52,27 @@ public class OpenLineageEmitter {
   private final OpenLineageProperties props;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   private final ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
+  private final boolean enabled;
 
+  @Autowired
   public OpenLineageEmitter(
       OpenLineageProperties props,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider) {
+      ObjectProvider<OpenLineageDatasetMapper> datasetMapperProvider,
+      OutboundHttpTransport httpTransport) {
     this.props = props;
     this.meterRegistryProvider = meterRegistryProvider;
     this.datasetMapperProvider = datasetMapperProvider;
+    this.httpTransport = httpTransport;
     if (props.isEnabled() && !props.getEndpoint().isBlank()) {
-      this.httpClient = HttpClient.newBuilder()
-          .connectTimeout(Duration.ofMillis(props.getConnectTimeoutMs()))
-          .build();
+      this.enabled = true;
       log.info(
           "OpenLineageEmitter enabled: endpoint={}, namespace={}",
           props.getEndpoint(),
           props.getNamespace());
     } else {
-      this.httpClient = null;
+      this.enabled = false;
     }
   }
 
@@ -80,32 +83,26 @@ public class OpenLineageEmitter {
    */
   public void emitWorkflowTerminalReliably(
       WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {
-    if (EmptyChecks.isNull(httpClient)
-        || EmptyChecks.isNull(run)
-        || EmptyChecks.isNull(terminalStatus)) {
+    if (!enabled || EmptyChecks.isNull(run) || EmptyChecks.isNull(terminalStatus)) {
       throw new IllegalStateException("OpenLineage endpoint is not configured");
     }
     try {
       String body =
           JsonUtils.toJson(buildRunEvent(run, terminalStatus, finishedAt, datasetsFor(run)));
-      HttpRequest request = HttpRequest.newBuilder()
-          .uri(URI.create(props.getEndpoint()))
-          .timeout(Duration.ofMillis(props.getRequestTimeoutMs()))
-          .header("Content-Type", "application/json")
-          .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-          .build();
-      HttpResponse<Void> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+          props.getEndpoint(),
+          Map.of(),
+          body,
+          "application/json; charset=utf-8",
+          Duration.ofMillis(props.getConnectTimeoutMs()),
+          Duration.ofMillis(props.getRequestTimeoutMs()),
+          OutboundAddressPolicy.TRUSTED));
+      if (!response.isSuccessful()) {
         recordLineageMetric("http_error", terminalStatus);
         throw new IllegalStateException(
             "OpenLineage endpoint returned HTTP " + response.statusCode());
       }
       recordLineageMetric("success", terminalStatus);
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      recordLineageMetric("interrupted", terminalStatus);
-      throw new IllegalStateException("OpenLineage delivery interrupted", ex);
     } catch (IOException ex) {
       recordLineageMetric("error", terminalStatus);
       throw new IllegalStateException("OpenLineage delivery failed", ex);

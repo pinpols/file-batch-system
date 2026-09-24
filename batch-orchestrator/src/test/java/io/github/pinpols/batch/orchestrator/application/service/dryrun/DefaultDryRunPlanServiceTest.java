@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -57,7 +58,8 @@ class DefaultDryRunPlanServiceTest {
         tz,
         jdbcTemplateProvider,
         s3ClientProvider,
-        s3PropsProvider);
+        s3PropsProvider,
+        request -> new OutboundHttpResponse(200, ""));
   }
 
   @Test

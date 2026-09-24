@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +38,7 @@ class TencentCaptchaVerifierTest {
     private boolean called;
 
     StubVerifier(CaptchaProperties props, String cannedResponse, long fixedEpoch) {
-      super(props, MAPPER);
+      super(props, MAPPER, failOnRequest());
       this.cannedResponse = cannedResponse;
       this.fixedEpoch = fixedEpoch;
     }
@@ -125,17 +126,18 @@ class TencentCaptchaVerifierTest {
   @Test
   @DisplayName("postJson 抛异常 → 保守判失败,不外泄")
   void postThrows_failsSafely() {
-    TencentCaptchaVerifier verifier = new TencentCaptchaVerifier(properties, MAPPER) {
-      @Override
-      protected long epochSeconds() {
-        return 1234567890L;
-      }
+    TencentCaptchaVerifier verifier =
+        new TencentCaptchaVerifier(properties, MAPPER, failOnRequest()) {
+          @Override
+          protected long epochSeconds() {
+            return 1234567890L;
+          }
 
-      @Override
-      protected String postJson(String url, Map<String, String> headers, String body) {
-        throw new RuntimeException("connection refused");
-      }
-    };
+          @Override
+          protected String postJson(String url, Map<String, String> headers, String body) {
+            throw new RuntimeException("connection refused");
+          }
+        };
 
     assertThat(verifier.verify("t:r", "1.2.3.4").success()).isFalse();
   }

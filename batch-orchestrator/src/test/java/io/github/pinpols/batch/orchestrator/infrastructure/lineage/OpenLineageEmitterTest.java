@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -55,7 +56,10 @@ class OpenLineageEmitterTest {
   @Test
   void buildRunEvent_successMapsToComplete() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
-        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+        props(true, "http://localhost:5000/api/v1/lineage"),
+        noRegistry(),
+        noDatasetMapper(),
+        failOnRequest());
     Instant finished = Instant.parse("2026-05-30T02:00:00Z");
     Map<String, Object> ev = emitter.buildRunEvent(run("SUCCESS"), "SUCCESS", finished);
 
@@ -75,7 +79,10 @@ class OpenLineageEmitterTest {
   @Test
   void buildRunEvent_includesInputAndOutputDatasets() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
-        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+        props(true, "http://localhost:5000/api/v1/lineage"),
+        noRegistry(),
+        noDatasetMapper(),
+        failOnRequest());
     List<OpenLineageDatasetRow> datasets = List.of(
         dataset(11L, "INPUT", "S3", "raw", "in.csv", "/in.csv"),
         dataset(12L, "OUTPUT", "S3", "curated", "out.csv", "/out.csv"));
@@ -104,7 +111,10 @@ class OpenLineageEmitterTest {
   @Test
   void buildRunEvent_treatsNonInputDatasetsAsOutputs() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
-        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+        props(true, "http://localhost:5000/api/v1/lineage"),
+        noRegistry(),
+        noDatasetMapper(),
+        failOnRequest());
 
     Map<String, Object> ev = emitter.buildRunEvent(
         run("SUCCESS"),
@@ -125,7 +135,10 @@ class OpenLineageEmitterTest {
   @Test
   void buildRunEvent_failedMapsToFail() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
-        props(true, "http://localhost:5000/api/v1/lineage"), noRegistry(), noDatasetMapper());
+        props(true, "http://localhost:5000/api/v1/lineage"),
+        noRegistry(),
+        noDatasetMapper(),
+        failOnRequest());
     Map<String, Object> ev =
         emitter.buildRunEvent(run("FAILED"), "FAILED", Instant.parse("2026-05-30T02:00:00Z"));
     assertThat(ev).containsEntry("eventType", "FAIL");

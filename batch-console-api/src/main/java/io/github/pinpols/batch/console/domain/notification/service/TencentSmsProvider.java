@@ -4,14 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpRequest;
+import io.github.pinpols.batch.common.http.OutboundHttpResponse;
+import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -25,6 +24,7 @@ import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -42,8 +42,8 @@ import org.springframework.stereotype.Component;
  * TemplateParamSet} 取事件类型一项，超长截断。
  *
  * <p>凭证来自 {@link SmsProperties}（{@code tencentSecretId}/{@code tencentSecretKey}），仅后端持有。无状态、线程安全（单例
- * bean，共享 {@link HttpClient}）；所有失败折叠为 failure 而非抛异常。日志净化：<b>绝不打印手机号明文 / SecretId / SecretKey /
- * 签名</b>，手机号只打数量。投递前 {@link DnsResolveGuard#resolveAndValidate} 防 SSRF/rebinding。
+ * bean，共享出站 transport）；所有失败折叠为 failure 而非抛异常。日志净化：<b>绝不打印手机号明文 / SecretId / SecretKey /
+ * 签名</b>，手机号只打数量。transport 在建连前执行全地址 SSRF/rebinding 防护。
  *
  * <p><b>验签状态</b>：腾讯云 TC3 端到端无官方 golden 向量，单测仅验结构 / 确定性 + 分支；真实签名正确性<b>需对接真 API 联调验签</b>。
  */
@@ -69,13 +69,14 @@ public class TencentSmsProvider implements SmsProvider {
 
   private final SmsProperties properties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final OutboundHttpTransport httpTransport;
 
-  public TencentSmsProvider(SmsProperties properties, ObjectMapper objectMapper) {
+  @Autowired
+  public TencentSmsProvider(
+      SmsProperties properties, ObjectMapper objectMapper, OutboundHttpTransport httpTransport) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.httpClient =
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    this.httpTransport = httpTransport;
   }
 
   @Override
@@ -145,8 +146,6 @@ public class TencentSmsProvider implements SmsProvider {
         "Authorization", authorization);
 
     try {
-      // SSRF/rebinding 防护:投递前二次解析校验 endpoint host IP 不落内网/回环/链路本地。
-      DnsResolveGuard.resolveAndValidate(endpoint);
       String response = postJson(url, headers, payload);
       JsonNode root = objectMapper.readTree(response);
       JsonNode resp = root.path("Response");
@@ -315,18 +314,16 @@ public class TencentSmsProvider implements SmsProvider {
   /** 同步 POST（JSON body，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
   protected String postJson(String url, Map<String, String> headers, String body)
       throws IOException, InterruptedException, HttpStatusException {
-    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(REQUEST_TIMEOUT);
-    for (Map.Entry<String, String> e : headers.entrySet()) {
-      builder.header(e.getKey(), e.getValue());
-    }
-    HttpRequest request = builder
-        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-        .build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    int status = response.statusCode();
-    if (status / 100 != 2) {
-      throw new HttpStatusException(status);
+    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+        url,
+        headers,
+        body,
+        CONTENT_TYPE,
+        Duration.ofSeconds(5),
+        REQUEST_TIMEOUT,
+        OutboundAddressPolicy.GUARDED));
+    if (!response.isSuccessful()) {
+      throw new HttpStatusException(response.statusCode());
     }
     return response.body();
   }

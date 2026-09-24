@@ -52,8 +52,9 @@ class BusinessDataSourceRoleCheckIntegrationTest {
     assertThat(
             new BusinessDataSourceRoleHealthIndicator(adminDataSource).health().getStatus())
         .isEqualTo(Status.DOWN);
-    assertThatThrownBy(
-            () -> new BusinessDataSourceRoleStartupCheck(adminDataSource).checkOnStartup())
+    BusinessDataSourceRoleStartupCheck startupCheck =
+        new BusinessDataSourceRoleStartupCheck(adminDataSource);
+    assertThatThrownBy(startupCheck::checkOnStartup)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("bypasses PostgreSQL RLS");
   }

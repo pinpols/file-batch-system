@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +26,7 @@ class AliyunCaptchaVerifierTest {
     final AtomicReference<String> sentBody = new AtomicReference<>();
 
     StubVerifier(CaptchaProperties properties, String cannedJson) {
-      super(properties, new ObjectMapper());
+      super(properties, new ObjectMapper(), failOnRequest());
       this.cannedJson = cannedJson;
     }
 
@@ -98,12 +99,13 @@ class AliyunCaptchaVerifierTest {
   @Test
   @DisplayName("postJson 异常 → 保守判失败")
   void postJsonThrows_fails() {
-    AliyunCaptchaVerifier verifier = new AliyunCaptchaVerifier(properties, new ObjectMapper()) {
-      @Override
-      protected String postJson(String url, Map<String, String> headers, String body) {
-        throw new RuntimeException("network down");
-      }
-    };
+    AliyunCaptchaVerifier verifier =
+        new AliyunCaptchaVerifier(properties, new ObjectMapper(), failOnRequest()) {
+          @Override
+          protected String postJson(String url, Map<String, String> headers, String body) {
+            throw new RuntimeException("network down");
+          }
+        };
 
     CaptchaResult result = verifier.verify("any-token", "1.2.3.4");
 

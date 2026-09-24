@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Logger;
@@ -53,7 +54,8 @@ class TencentSmsProviderTest {
 
   @Test
   void supportsIsCaseInsensitive() {
-    TencentSmsProvider provider = new TencentSmsProvider(properties(), objectMapper);
+    TencentSmsProvider provider =
+        new TencentSmsProvider(properties(), objectMapper, failOnRequest());
     assertThat(provider.supports("tencent")).isTrue();
     assertThat(provider.supports("TENCENT")).isTrue();
     assertThat(provider.supports("Tencent")).isTrue();
@@ -117,21 +119,22 @@ class TencentSmsProviderTest {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     AtomicReference<Map<String, String>> sentHeaders = new AtomicReference<>();
     AtomicReference<String> sentBody = new AtomicReference<>();
-    TencentSmsProvider provider = new TencentSmsProvider(properties(), objectMapper) {
-      @Override
-      protected long epochSeconds() {
-        return 1750000000L;
-      }
+    TencentSmsProvider provider =
+        new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
+          @Override
+          protected long epochSeconds() {
+            return 1750000000L;
+          }
 
-      @Override
-      protected String postJson(String url, Map<String, String> headers, String body) {
-        sentUrl.set(url);
-        sentHeaders.set(headers);
-        sentBody.set(body);
-        return "{\"Response\":{\"SendStatusSet\":[{\"Code\":\"Ok\",\"PhoneNumber\":\"x\"}],"
-            + "\"RequestId\":\"r1\"}}";
-      }
-    };
+          @Override
+          protected String postJson(String url, Map<String, String> headers, String body) {
+            sentUrl.set(url);
+            sentHeaders.set(headers);
+            sentBody.set(body);
+            return "{\"Response\":{\"SendStatusSet\":[{\"Code\":\"Ok\",\"PhoneNumber\":\"x\"}],"
+                + "\"RequestId\":\"r1\"}}";
+          }
+        };
 
     WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
 
@@ -159,13 +162,14 @@ class TencentSmsProviderTest {
 
   @Test
   void nonOkCodeFails() {
-    TencentSmsProvider provider = new TencentSmsProvider(properties(), objectMapper) {
-      @Override
-      protected String postJson(String url, Map<String, String> headers, String body) {
-        return "{\"Response\":{\"SendStatusSet\":[{\"Code\":\"LimitExceeded.PhoneNumberDailyLimit\","
-            + "\"Message\":\"limit\"}],\"RequestId\":\"r1\"}}";
-      }
-    };
+    TencentSmsProvider provider =
+        new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
+          @Override
+          protected String postJson(String url, Map<String, String> headers, String body) {
+            return "{\"Response\":{\"SendStatusSet\":[{\"Code\":\"LimitExceeded.PhoneNumberDailyLimit\","
+                + "\"Message\":\"limit\"}],\"RequestId\":\"r1\"}}";
+          }
+        };
 
     WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
 
@@ -176,13 +180,14 @@ class TencentSmsProviderTest {
 
   @Test
   void responseErrorFails() {
-    TencentSmsProvider provider = new TencentSmsProvider(properties(), objectMapper) {
-      @Override
-      protected String postJson(String url, Map<String, String> headers, String body) {
-        return "{\"Response\":{\"Error\":{\"Code\":\"AuthFailure.SignatureFailure\","
-            + "\"Message\":\"sig\"},\"RequestId\":\"r1\"}}";
-      }
-    };
+    TencentSmsProvider provider =
+        new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
+          @Override
+          protected String postJson(String url, Map<String, String> headers, String body) {
+            return "{\"Response\":{\"Error\":{\"Code\":\"AuthFailure.SignatureFailure\","
+                + "\"Message\":\"sig\"},\"RequestId\":\"r1\"}}";
+          }
+        };
 
     WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
 
@@ -198,13 +203,14 @@ class TencentSmsProviderTest {
     appender.start();
     logger.addAppender(appender);
     try {
-      TencentSmsProvider provider = new TencentSmsProvider(properties(), objectMapper) {
-        @Override
-        protected String postJson(String url, Map<String, String> headers, String body) {
-          return "{\"Response\":{\"SendStatusSet\":[{\"Code\":\"FailedOperation.PhoneNumberInBlacklist\"}],"
-              + "\"RequestId\":\"r1\"}}";
-        }
-      };
+      TencentSmsProvider provider =
+          new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
+            @Override
+            protected String postJson(String url, Map<String, String> headers, String body) {
+              return "{\"Response\":{\"SendStatusSet\":[{\"Code\":\"FailedOperation.PhoneNumberInBlacklist\"}],"
+                  + "\"RequestId\":\"r1\"}}";
+            }
+          };
       WebhookDeliveryResult result = provider.send(PHONE_NUMBERS, message(fullConfig()));
       assertThat(result.success()).isFalse();
       assertThat(appender.messages).isNotEmpty();
@@ -217,7 +223,7 @@ class TencentSmsProviderTest {
   }
 
   private TencentSmsProvider providerRecording(AtomicBoolean called, String response) {
-    return new TencentSmsProvider(properties(), objectMapper) {
+    return new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
       @Override
       protected String postJson(String url, Map<String, String> headers, String body) {
         called.set(true);
