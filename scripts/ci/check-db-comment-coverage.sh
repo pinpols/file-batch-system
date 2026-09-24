@@ -4,6 +4,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=scripts/ci/lib/migration-rebaseline.sh
+source "$ROOT_DIR/scripts/ci/lib/migration-rebaseline.sh"
 
 BASE_REF="${1:-${DB_COMMENT_BASE_REF:-origin/main}}"
 
@@ -28,6 +30,12 @@ fail=0
 key_column_pattern='(status|policy|strategy|type|mode|payload|params|json|dedup|idempotency|secret|key_ref|hash|timeout|window|timezone|version|trace_id|retry|priority|weight|target_ref|source_ref|endpoint|checksum)'
 
 for migration in "${migrations[@]}"; do
+  if git cat-file -e "$BASE_REF:$migration" 2>/dev/null \
+    && is_authorized_migration_rebaseline "$migration" \
+    && migration_sql_semantics_unchanged "$BASE_REF" "$migration"; then
+    echo "⚠️  跳过已精确授权且 SQL 语义未变的基线重发文件:$migration"
+    continue
+  fi
   content="$(tr '[:upper:]' '[:lower:]' < "$migration")"
   while IFS= read -r table; do
     [[ -z "$table" ]] && continue
