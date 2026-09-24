@@ -108,6 +108,21 @@ def test_from_env_happy_path():
     assert cfg.retry_base_delay == timedelta(milliseconds=100)
 
 
+def test_from_env_strict_timing_can_be_temporarily_disabled():
+    env = {
+        "BATCH_SDK_BASE_URL": "http://orch:8081",
+        "BATCH_SDK_TENANT_ID": "acme",
+        "BATCH_SDK_WORKER_CODE": "w-1",
+        "BATCH_SDK_HEARTBEAT_INTERVAL_SECONDS": "1",
+        "BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS": "60",
+        "BATCH_SDK_HTTP_TIMEOUT_SECONDS": "10",
+        "BATCH_SDK_STRICT_TIMING": "false",
+    }
+    with pytest.warns(RuntimeWarning, match="lease_renew_interval"):
+        cfg = BatchPlatformClientConfig.from_env(getter=env.get)
+    assert cfg.strict_timing_validation is False
+
+
 def test_frozen_model_rejects_mutation():
     cfg = BatchPlatformClientConfig(**_MIN_KWARGS)
     with pytest.raises(ValidationError, match="frozen"):

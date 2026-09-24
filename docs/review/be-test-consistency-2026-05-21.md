@@ -46,7 +46,7 @@
 - `batch-orchestrator/.../DefaultResourceSchedulerTest.java`（7 处）
 - `batch-worker-core/.../DefaultWorkerRegistryServiceTest.java`（7 处）
 
-**建议**：写进 CLAUDE.md 测试规范——要么全推广（中文场景描述），要么统一靠方法名（`shouldXxxWhenYyy`），别让两种共存当默认。
+**建议**：写进 docs/agent-baseline.md 测试规范——要么全推广（中文场景描述），要么统一靠方法名（`shouldXxxWhenYyy`），别让两种共存当默认。
 
 ---
 
@@ -145,4 +145,4 @@
 
 1. **Mock 初始化统一（Item 1 + 6）**：~25 个文件，一次专项 PR 把 `openMocks` 和 `Mockito.mock()` 字段消灭，统一到 `@ExtendWith + @Mock + @InjectMocks`，顺带删 10 个 `@MockitoSettings(LENIENT)`（Item 2）。
 2. **集成测试基类下沉 + JSON 工厂（Item 7 + 8）**：12 个 Mutation IT 的 `WebTestClient setUp` + JSON 拼接双重复制提到基类 + Fixture 工厂后，维护成本减半。
-3. **测试命名 + DisplayName 约定写进 CLAUDE.md（Item 3 + 4）**：明确 `shouldXxxWhenYyy` 为命名，`@DisplayName` 可选用于中文场景描述，止血新代码出现。
+3. **测试命名 + DisplayName 约定写进 docs/agent-baseline.md（Item 3 + 4）**：明确 `shouldXxxWhenYyy` 为命名，`@DisplayName` 可选用于中文场景描述，止血新代码出现。

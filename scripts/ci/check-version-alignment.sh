@@ -169,7 +169,7 @@ for pair in "orchestrator OpenAPI:${ORCH_OPENAPI_VER}" "SDK quickstart:${SDK_QUI
 done
 
 # load-tests 是独立 reactor（未纳入根 reactor），无法继承根 ${revision}，版本字面量手工同步。
-# CLAUDE.md 点名为高危点 → 必须与根 <revision> 一致。
+# docs/agent-baseline.md 点名为高危点 → 必须与根 <revision> 一致。
 # 取 <artifactId>batch-load-tests</artifactId> 紧随其后的 project <version>（非 dependency 里的）。
 LOADTEST_VER="$("$PYTHON_BIN" -c "
 import re

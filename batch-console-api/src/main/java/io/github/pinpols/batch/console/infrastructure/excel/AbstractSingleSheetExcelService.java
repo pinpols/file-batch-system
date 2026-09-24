@@ -106,7 +106,7 @@ public abstract class AbstractSingleSheetExcelService<R, T> {
   /**
    * 默认为空（已有逐行 logChange）；子类可覆盖写入批次级审计。
    *
-   * <p>参数封装为 {@link ImportAuditContext} 满足 CLAUDE.md「方法参数 ≤6」硬约束。
+   * <p>参数封装为 {@link ImportAuditContext} 满足 docs/agent-baseline.md「方法参数 ≤6」硬约束。
    */
   protected void logImportAudit(ImportAuditContext ctx) {
     // 默认空实现 — 逐行变更日志已由 doApply 中的 logChange 记录

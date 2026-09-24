@@ -52,11 +52,11 @@ def main() -> int:
     changed = changed_files(args.base)
     errors: list[str] = []
 
-    architecture_changed = "CLAUDE.md" in changed or any(
+    architecture_changed = "docs/agent-baseline.md" in changed or any(
         path.startswith("docs/architecture/adr/") for path in changed
     )
     if architecture_changed and "docs/changelog.md" not in changed:
-        errors.append("CLAUDE.md or ADR changed without docs/changelog.md")
+        errors.append("docs/agent-baseline.md or ADR changed without docs/changelog.md")
 
     release_changed = any(
         path in RELEASE_FILES or path.startswith(RELEASE_PREFIXES) for path in changed

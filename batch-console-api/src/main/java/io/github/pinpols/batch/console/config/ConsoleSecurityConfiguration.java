@@ -69,7 +69,7 @@ public class ConsoleSecurityConfiguration {
 
   /**
    * 把过滤器链装配所需的协作 bean 聚合成单一持有类,避免 {@link #consoleSecurityFilterChain} 参数 ≥ 7 触发 PMD
-   * ExcessiveParameterList(CLAUDE.md 红线 #2)。Spring 按类型逐个注入各成员,装配语义不变。
+   * ExcessiveParameterList(docs/agent-baseline.md 红线 #2)。Spring 按类型逐个注入各成员,装配语义不变。
    */
   @Bean
   public ConsoleSecurityFilterChainComponents consoleSecurityFilterChainComponents(

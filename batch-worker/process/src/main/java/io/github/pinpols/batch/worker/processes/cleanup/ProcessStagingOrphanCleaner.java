@@ -72,7 +72,7 @@ public class ProcessStagingOrphanCleaner {
         : Counter.builder("batch.worker.process.staging.orphan.cleaned.total")
             .description("累计被 ProcessStagingOrphanCleaner 删除的孤儿 staging 行数")
             .register(registry);
-    if (EmptyChecks.isNotNull(registry)) {
+    if (registry != null) { // empty-check: allow - optional metrics
       registry.gauge(
           "batch.worker.process.staging.oldest.age.seconds",
           Collections.emptyList(),

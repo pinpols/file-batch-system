@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
 import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.mapper.BusinessTenantPlacementMapper;
+import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleHealthIndicator;
+import io.github.pinpols.batch.common.rls.BusinessDataSourceRoleStartupCheck;
 import io.github.pinpols.batch.common.rls.RlsPolicyHealthIndicator;
 import io.github.pinpols.batch.common.rls.RlsProperties;
 import io.github.pinpols.batch.common.rls.RlsStartupFailFastCheck;
@@ -98,5 +100,28 @@ public class BusinessDataSourceConfiguration {
       RlsProperties rlsProperties) {
     return WorkerDataSourceSupport.buildRlsStartupFailFastCheck(
         importBusinessDataSource, rlsProperties);
+  }
+
+  @Bean(name = "importBusinessDataSourceRoleHealthIndicator")
+  @ConditionalOnProperty(
+      name = "batch.business.rls.health-check.enabled",
+      havingValue = "true",
+      matchIfMissing = true)
+  public BusinessDataSourceRoleHealthIndicator importBusinessDataSourceRoleHealthIndicator(
+      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
+    return WorkerDataSourceSupport.buildBusinessDataSourceRoleHealthIndicator(
+        importBusinessDataSource);
+  }
+
+  @Bean(name = "importBusinessDataSourceRoleStartupCheck")
+  @ConditionalOnProperty(
+      name = "batch.rls.startup-fail-fast",
+      havingValue = "true",
+      matchIfMissing = true)
+  @ConditionalOnBean(name = "importBusinessDataSource")
+  public BusinessDataSourceRoleStartupCheck importBusinessDataSourceRoleStartupCheck(
+      @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) {
+    return WorkerDataSourceSupport.buildBusinessDataSourceRoleStartupCheck(
+        importBusinessDataSource);
   }
 }

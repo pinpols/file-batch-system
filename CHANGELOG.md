@@ -14,6 +14,8 @@
 
 ### Added
 
+- **本地开发收尾守护**：业务数据源默认账号统一为 `batch_business_writer`，新增 SUPERUSER / BYPASSRLS 启动检查、健康检查和真实 PostgreSQL 集成测试；Trigger E2E 从真实 `TriggerService` 入口覆盖 Outbox→Kafka→Orchestrator，Kafka Outbox 增加故障恢复后重投验证；五语言 SDK 统一 live Kafka 环境变量，Java/Python 补齐重试与严格时序环境配置。
+- **脚本与文档治理入口**：新增仓库 Python 统一入口和治理聚合命令，避免系统 Python 缺包导致门禁漂移；校准 Chaos、运维剧本、Forensic Replay、测试覆盖快照和当前待办状态。
 - **租户配置包 Excel 易用性**：新增 11-Sheet 字段填写说明 API，返回必填、只读、类型、枚举、默认/留空行为、示例和适用范围；新增 `ALL / IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC / WORKFLOW` 场景化示例模板下载，同时保留完整 11-Sheet 全量导入契约。
 - **重任务执行保障**：新增平台全局活跃作业事务级硬上限、租户/资源队列共享派发 QPS、Dispatch 下游健康准入，以及 CPU/内存/IO 专用 Worker 资源池；稳定池代码与 Pod 实例身份分离，资源画像、WAITING 重派和 claim CAS 保持同一契约。
 - **整批量日 Dry-run**：批量日重放 session 支持历史实例与调度计划两类演练候选，完整透传 dry-run、计划快照、独立幂等键和 Worker capability；Console、OpenAPI、五语言 SDK、Compose/Helm 开关同步完成，默认关闭。
@@ -208,7 +210,7 @@
 - `scripts/ci/security-scan.sh` 硬编码 jar 路径改为 glob 匹配 `security-scan-*.jar`
 
 ### Fixed
-- 设计文档（`docs/design/*.md`）、运行手册（`docs/runbook/security-scan.md`）、模块 README（`security-scan/README.md`）、CLAUDE.md 中 `1.0.0-SNAPSHOT` 残留引用一并更新
+- 设计文档（`docs/design/*.md`）、运行手册（`docs/runbook/security-scan.md`）、模块 README（`security-scan/README.md`）、docs/agent-baseline.md 中 `1.0.0-SNAPSHOT` 残留引用一并更新
 
 ### Notes
 - `load-tests` 是独立模块（未纳入根 reactor），`${revision}` 无法继承；版本使用字面量，需与根版本手工同步
@@ -229,7 +231,7 @@
 - 5 个有特殊语义的 `fromCode`（`CatchUpPolicyType` / `WorkflowJoinMode` / `ShardStrategy` / `RunMode` / `FileStatus`）改为 `DictEnum.fromCode` 的薄包装，保留各自的"抛异常 / 默认值 / Optional"行为
 - `ConsoleMetaQueryService.EnumReg` record 精简到 `(key, enumClass)` 两字段
 - OpenAPI `CommonResponseMetaEnums` schema 同步补齐 20 个新 key
-- `CLAUDE.md` §领域数据字典 重写，追加 Lombok 样板 + 工具说明；新增 §版本管理、§变更记录两节
+- `docs/agent-baseline.md` §领域数据字典 重写，追加 Lombok 样板 + 工具说明；新增 §版本管理、§变更记录两节
 
 ### Removed
 - 35 个枚举各自的 `public static Set<String> codes()` 副本
@@ -332,7 +334,7 @@
 ### Changed
 - 179 文件 / 11648 行变更（一次提交）：Query record 工厂方法规约落地（`ofTenant` / `ofDefinition` 等），禁止调用处写 `null` 参数
 - `BatchKmsProperties` / `BatchSchedulingProperties` / `BatchSecurityProperties` 等 config properties 拆分
-- `CLAUDE.md` 首版：方法参数约束（≤ 6）、FQN 禁令、分支消除规则、API 文档同步约束
+- `docs/agent-baseline.md` 首版：方法参数约束（≤ 6）、FQN 禁令、分支消除规则、API 文档同步约束
 
 ---
 
@@ -441,4 +443,4 @@
 
 - 版本通过 Maven CI-friendly `${revision}` 在根 pom 统一控制（默认 `1.0.0`）。构建期覆盖：`mvn -Drevision=X.Y.Z ...`
 - 更细颗粒度的 API 层变更详见 `docs/api/console-api-protocol.md` 的 Changelog 表
-- 更细颗粒度的编码规范 / 架构变化详见 `CLAUDE.md` 的 §变更记录
+- 更细颗粒度的编码规范 / 架构变化详见 `docs/agent-baseline.md` 的 §变更记录

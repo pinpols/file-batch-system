@@ -35,7 +35,7 @@
 -XX:+UseStringDeduplication        # G1 配 80%+ Spring app String 重复,省 5-15% heap
 -Djava.security.egd=file:/dev/./urandom
 
-# === 时区 / 编码硬约束(对齐 CLAUDE.md)===
+# === 时区 / 编码硬约束(对齐 docs/agent-baseline.md)===
 -Duser.timezone=UTC
 -Dfile.encoding=UTF-8
 -Dsun.jnu.encoding=UTF-8

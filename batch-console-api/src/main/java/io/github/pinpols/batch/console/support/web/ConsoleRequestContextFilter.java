@@ -132,7 +132,8 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
 
   private String resolveOperatorId() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
+    if (authentication == null // empty-check: allow - Sonar S2259
+        || !authentication.isAuthenticated()) {
       return null;
     }
     if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {

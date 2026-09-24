@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * QF-2 守护测试:全仓扫 {@code new *Query(...)} 调用,字段 ≥ 5 的 record 在调用处出现 ≥ 2 个 {@code null} 占位时
- * fail,提示走静态工厂方法(详见 CLAUDE.md §Query Record 工厂方法规约)。
+ * fail,提示走静态工厂方法(详见 docs/agent-baseline.md §Query Record 工厂方法规约)。
  *
  * <p>白名单:
  *
@@ -70,9 +70,10 @@ class QueryRecordConstructionConventionTest {
     }
 
     assertThat(violations)
-        .as("Query record inline new 不允许 ≥ 2 个 null 占位 — 必须走静态工厂(CLAUDE.md §Query Record 工厂方法规约)\n"
-            + "命中:\n  "
-            + String.join("\n  ", violations))
+        .as(
+            "Query record inline new 不允许 ≥ 2 个 null 占位 — 必须走静态工厂(docs/agent-baseline.md §Query Record 工厂方法规约)\n"
+                + "命中:\n  "
+                + String.join("\n  ", violations))
         .isEmpty();
   }
 

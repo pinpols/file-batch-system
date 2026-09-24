@@ -194,22 +194,22 @@ jobs:
       - name: Verify yml ↔ docker-compose default sync
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-config-defaults-sync.py --check
+        run: bash scripts/ci/run-gate.sh PR_CONFIG_DEFAULTS_SYNC "配置默认值同步" -- python3 scripts/ci/check-config-defaults-sync.py --check
 
       - name: Verify tracked env files are shell-safe
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # .env.example 会被 CI 复制成 .env.local 并由本地脚本 source;含空格的值必须加引号。
-        run: python3 scripts/ci/check-env-file-shell-safety.py
+        run: bash scripts/ci/run-gate.sh PR_ENV_FILE_SHELL_SAFETY "环境文件 Shell 安全" -- python3 scripts/ci/check-env-file-shell-safety.py
 
       - name: Verify hardcoded runtime configuration boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: bash scripts/ci/check-hardcoded-runtime-config.sh
+        run: bash scripts/ci/run-gate.sh PR_RUNTIME_CONFIG_BOUNDARIES "运行时配置集中管理" -- bash scripts/ci/check-hardcoded-runtime-config.sh
 
       - name: Verify repository hygiene
         shell: bash
-        run: python3 scripts/ci/check-repository-hygiene.py
+        run: bash scripts/ci/run-gate.sh PR_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py
 
       - name: Verify script governance and zero ShellCheck warnings
         if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
@@ -222,7 +222,7 @@ jobs:
       - name: Verify module dependency boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-dependency-boundaries.py
+        run: bash scripts/ci/run-gate.sh PR_DEPENDENCY_BOUNDARIES "模块依赖边界" -- python3 scripts/ci/check-dependency-boundaries.py
 
       - name: Verify changelog synchronization
         shell: bash
@@ -231,42 +231,42 @@ jobs:
       - name: Verify documentation structure and internal links
         if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-docs-structure.py
+        run: bash scripts/ci/run-gate.sh PR_DOCS_STRUCTURE "文档结构与内部链接" -- python3 scripts/ci/check-docs-structure.py
 
       - name: Validate feature switch registry
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-feature-switch-registry.py
+        run: bash scripts/ci/run-gate.sh PR_FEATURE_SWITCH_REGISTRY "功能开关注册表" -- python3 scripts/ci/check-feature-switch-registry.py
 
       - name: Verify configuration governance registry
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-config-governance.py
+        run: bash scripts/ci/run-gate.sh PR_CONFIG_GOVERNANCE "配置治理注册表" -- python3 scripts/ci/check-config-governance.py
 
       - name: Verify Helm env switch sync
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-helm-env-sync.py
+        run: bash scripts/ci/run-gate.sh PR_HELM_ENV_SYNC "Helm 环境变量同步" -- python3 scripts/ci/check-helm-env-sync.py
 
       - name: Verify production Helm overlay safety
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-production-overlay-safety.py
+        run: bash scripts/ci/run-gate.sh PR_PRODUCTION_HELM_OVERLAY "生产 Helm overlay 安全" -- python3 scripts/ci/check-production-overlay-safety.py
 
       - name: Verify application governance contract
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-application-governance.py
+        run: bash scripts/ci/run-gate.sh PR_APPLICATION_GOVERNANCE "应用治理契约" -- python3 scripts/ci/check-application-governance.py
 
       - name: Verify code documentation references
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-code-doc-references.py
+        run: bash scripts/ci/run-gate.sh PR_CODE_DOC_REFERENCES "代码文档引用" -- python3 scripts/ci/check-code-doc-references.py
 
       - name: Verify Java readability conventions
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-java-readability.py
+        run: bash scripts/ci/run-gate.sh PR_JAVA_READABILITY "Java 可读性约定" -- python3 scripts/ci/check-java-readability.py
 
       - name: Verify Java readability inventory
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
@@ -277,12 +277,12 @@ jobs:
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。
-        run: python3 scripts/ci/check-console-openapi-paths.py
+        run: bash scripts/ci/run-gate.sh PR_CONSOLE_OPENAPI_PATHS "Console controller 与 OpenAPI 路由同步" -- python3 scripts/ci/check-console-openapi-paths.py
 
       - name: Verify SQL/config placement boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: bash scripts/ci/check-sql-config-boundaries.sh
+        run: bash scripts/ci/run-gate.sh PR_SQL_CONFIG_BOUNDARIES "SQL 与配置边界" -- bash scripts/ci/check-sql-config-boundaries.sh
 
       - name: No positional INSERT...SELECT * in mappers
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
@@ -294,7 +294,7 @@ jobs:
       - name: Limit MyBatis generated keys to the id column
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-mybatis-generated-key-columns.py
+        run: bash scripts/ci/run-gate.sh PR_MYBATIS_GENERATED_KEYS "MyBatis generated key 列限制" -- python3 scripts/ci/check-mybatis-generated-key-columns.py
 
       - name: No JDK preview flags in prod build/run config
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
@@ -315,20 +315,20 @@ jobs:
         shell: bash
         # 只检查本 PR 新增的生产 Java 行，历史遗留由专项迁移逐步收口；从此禁止新增
         # == null / != null / isEmpty / isBlank 等零散判断，统一使用 EmptyChecks。
-        run: python3 scripts/ci/check-empty-checks.py --base "$GUARD_BASE"
+        run: bash scripts/ci/run-gate.sh PR_EMPTY_CHECKS "集中式空值检查" -- python3 scripts/ci/check-empty-checks.py --base "$GUARD_BASE"
 
       - name: Verify readiness contract documentation sync
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # readiness 涉及 trigger / asset_partition / result_version / API / 运维文档的跨模块契约。
         # 改实现但漏文档、API 或测试证据时直接 fail。
-        run: python3 scripts/ci/check-readiness-doc-sync.py --base "$GUARD_BASE"
+        run: bash scripts/ci/run-gate.sh PR_READINESS_DOC_SYNC "Readiness 契约文档同步" -- python3 scripts/ci/check-readiness-doc-sync.py --base "$GUARD_BASE"
 
       - name: Verify Trivy ignore expiry metadata
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # .trivyignore 的每组 CVE 必须有 owner / reason / expires,过期豁免不得继续放行。
-        run: python3 scripts/ci/check-trivy-ignore-expiry.py
+        run: bash scripts/ci/run-gate.sh PR_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
 
       - name: Trivy fs scan on supply-chain inputs
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
@@ -351,45 +351,45 @@ jobs:
         shell: bash
         # 守护 full-ci-gate / staging-gate 的硬编码 e2e shard 清单与实际 *E2eIT 一致,
         # 防新增 / 重命名后被静默漏跑(2026-06-14 实测漏 5 个)。
-        run: bash scripts/ci/check-e2e-shard-coverage.sh
+        run: bash scripts/ci/run-gate.sh PR_E2E_SHARD_COVERAGE "E2E shard 覆盖" -- bash scripts/ci/check-e2e-shard-coverage.sh
 
       - name: Verify CI -pl covers all tested reactor modules
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 守护根 reactor 里有测试的模块都被某 unit shard 的 -pl 覆盖,
         # 防新模块漏进 shard 被静默跳过(2026-06-14 实测 sdk×3 共 ~370 测试从未跑)。
-        run: bash scripts/ci/check-module-test-coverage.sh
+        run: bash scripts/ci/run-gate.sh PR_MODULE_TEST_COVERAGE "Maven 测试模块覆盖" -- bash scripts/ci/check-module-test-coverage.sh
 
       - name: Migration safety lint (squawk, diff-only)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 只扫本 PR 新增/改动的 db/migration,拦危险 DDL(DROP COLUMN / 改类型 / 加 UNIQUE 长锁等)。
-        run: bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
+        run: bash scripts/ci/run-gate.sh PR_MIGRATION_SAFETY "数据库迁移安全" -- bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
 
       - name: Database comment coverage (diff-only)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 新建业务表及状态/策略/载荷/幂等等关键字段必须在同一迁移声明注释；历史基线见审计文档。
-        run: bash scripts/ci/check-db-comment-coverage.sh "$GUARD_BASE"
+        run: bash scripts/ci/run-gate.sh PR_DB_COMMENT_COVERAGE "数据库注释覆盖" -- bash scripts/ci/check-db-comment-coverage.sh "$GUARD_BASE"
 
       - name: Required Java architecture documentation
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: bash scripts/ci/check-required-java-docs.sh
+        run: bash scripts/ci/run-gate.sh PR_REQUIRED_JAVA_DOCS "Java 架构文档完整性" -- bash scripts/ci/check-required-java-docs.sh
 
       - name: DB scripts safety lint (scripts/db/** 手工 DDL)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 补 squawk 盲区:batch_business 不走 Flyway,partition-migration / business 下的手工
         # DDL 脚本(改 UNIQUE/PK 列集 / DROP TABLE)不在迁移守护内。本步要求这类危险脚本头部
-        # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(CLAUDE.md 红线)。
-        run: bash scripts/ci/check-db-scripts-safety.sh
+        # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(docs/agent-baseline.md 红线)。
+        run: bash scripts/ci/run-gate.sh PR_DB_SCRIPTS_SAFETY "数据库脚本安全" -- bash scripts/ci/check-db-scripts-safety.sh
 
       - name: Version and infrastructure image alignment
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 校验应用版本落点、环境镜像标签和四项核心 Testcontainers 镜像一致。
-        run: bash scripts/ci/check-version-alignment.sh
+        run: bash scripts/ci/run-gate.sh PR_VERSION_ALIGNMENT "应用与基础设施版本对齐" -- bash scripts/ci/check-version-alignment.sh
 
       - name: Helm PrometheusRule sync (告警规则 chart 副本 ↔ canonical)
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
@@ -403,22 +403,22 @@ jobs:
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 防止 OTLP 管道、Collector 队列/脱敏、Docker 日志上限或 JVM 诊断卷回归。
-        run: python3 scripts/ci/check-observability-contract.py
+        run: bash scripts/ci/run-gate.sh PR_OBSERVABILITY_CONTRACT "日志与遥测交付契约" -- python3 scripts/ci/check-observability-contract.py
 
       - name: Five-worker configuration parity
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-five-worker-parity.py
+        run: bash scripts/ci/run-gate.sh PR_FIVE_WORKER_PARITY "五类 Worker 配置一致性" -- python3 scripts/ci/check-five-worker-parity.py
 
       - name: KEDA autoscaling contracts
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-keda-autoscaling.py
+        run: bash scripts/ci/run-gate.sh PR_KEDA_AUTOSCALING "KEDA 自动伸缩契约" -- python3 scripts/ci/check-keda-autoscaling.py
 
       - name: Local log lifecycle contract
         if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: bash scripts/ci/check-log-lifecycle.sh
+        run: bash scripts/ci/run-gate.sh PR_LOG_LIFECYCLE "本地日志生命周期" -- bash scripts/ci/check-log-lifecycle.sh
 
       - name: OpenAPI breaking-change (oasdiff)
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
@@ -430,18 +430,18 @@ jobs:
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # biz.* 基表必须含 tenant_id 且进 strict RLS tables[] 数组。
-        run: python3 scripts/ci/check-biz-table-tenant-rls.py
+        run: bash scripts/ci/run-gate.sh PR_BIZ_TENANT_RLS "业务表多租户与 RLS" -- python3 scripts/ci/check-biz-table-tenant-rls.py
 
       - name: No silently-disabled tests
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # @Disabled 必须带非空 reason(防覆盖率被静默掏空)。
-        run: bash scripts/ci/check-no-silent-disabled-tests.sh
+        run: bash scripts/ci/run-gate.sh PR_NO_SILENT_DISABLED_TESTS "测试禁用原因检查" -- bash scripts/ci/check-no-silent-disabled-tests.sh
 
       - name: Java suppression registry
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: python3 scripts/ci/check-java-suppression-registry.py
+        run: bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
 
       - name: PMD + Spotless + dependency boundary
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'

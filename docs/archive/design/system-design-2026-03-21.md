@@ -45,7 +45,7 @@
 
 ## 4. 核心模块与职责
 
-→ [`../../architecture/architecture-truth.md`](../../architecture/architecture-truth.md) §模块职责 + CLAUDE.md §模块边界
+→ [`../../architecture/architecture-truth.md`](../../architecture/architecture-truth.md) §模块职责 + docs/agent-baseline.md §模块边界
 
 ### 4.1 模块总览
 ### 4.2 Orchestrator 内部设计
@@ -75,7 +75,7 @@
 
 ### 5.6 漏跑补跑与 Catch-up 策略
 
-→ CLAUDE.md §领域字典 `catch_up_policy` + 实现：`batch-orchestrator/.../service/CatchUpService*.java`
+→ docs/agent-baseline.md §领域字典 `catch_up_policy` + 实现：`batch-orchestrator/.../service/CatchUpService*.java`
 
 ## 6. DAG 编排与可视化设计
 
@@ -288,7 +288,7 @@
 ### 17.2 各模块职责与依赖边界
 ### 17.3 推荐目录结构
 
-→ §17.1-§17.3 参见 project-structure-pom.md + CLAUDE.md §模块边界
+→ §17.1-§17.3 参见 project-structure-pom.md + docs/agent-baseline.md §模块边界
 
 ## 18. 生产可用性与部署设计
 

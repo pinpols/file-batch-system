@@ -93,7 +93,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
 
     // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
     // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
-    // 生产 profile 不应设置此配置，以保留 CLAUDE.md §多租户隔离 的原严格语义。
+    // 生产 profile 不应设置此配置，以保留 docs/agent-baseline.md §多租户隔离 的原严格语义。
     String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
     if (EmptyChecks.isNull(selected)
         && Texts.hasText(fallbackTenant)
@@ -153,7 +153,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         : workerRegistryMapper.selectByTenantAndStatus(
             tenantId, WorkerRegistryStatus.ONLINE.code());
     WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
-    if (EmptyChecks.isNull(cache)) {
+    if (cache == null) { // empty-check: allow - Sonar S2259
       return loader.get();
     }
     return cache.getOrLoad(tenantId, workerGroup, loader);

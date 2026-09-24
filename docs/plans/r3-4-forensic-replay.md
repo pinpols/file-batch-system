@@ -1,6 +1,8 @@
 # Plan #4 — Forensic Bundle 本地回放工具
 
 > r3 validation-infra · 优先级 P1 · 估时 1.5 天
+>
+> **状态（2026-09-24）：本地实现完成，目标环境验证待执行。** 解包校验、临时 schema、触发、终态轮询、五维 diff 和操作文档均已落地；真实生产证据包只能在取得合规脱敏样本后验证，不能用合成数据冒充。
 
 ## 目标
 ADR-022 `forensic_export` 已能导出生产证据包(job_instances + batch_day_audits + manifest + sha256),
@@ -88,35 +90,33 @@ forensic-bundle-{exportId}.zip
 ## 步骤拆解
 
 ### Step 1 — bundle 解包 + 校验(2h)
-- [ ] `unzip` + sha256 校验 manifest 内 attestation
-- [ ] 解析 manifest.json,出 `tenantId / bizDate range / jobCodes` 摘要
+- [x] `unzip` + sha256 校验 manifest 内 attestation
+- [x] 解析 manifest.json,出 `tenantId / bizDate range / jobCodes` 摘要
 
 ### Step 2 — schema 映射 + 数据还原(3h)
-- [ ] 临时 namespace 策略:`sim_replay_{exportId}` schema **在 batch_platform 库**(`job_instance` 所在),跑完后 drop
-- [ ] JSON → JSONB 存入 forensic.job_instance_snapshot 等表(避开 CSV 列映射,bundle 是 JSON 数组)
-- [ ] 关联 step / partition 历史也还原(保证 trigger params 完整)
+- [x] 临时 namespace 策略:`sim_replay_{exportId}` schema **在 batch_platform 库**(`job_instance` 所在),跑完后 drop
+- [x] JSON → JSONB 存入 forensic.job_instance_snapshot 等表(避开 CSV 列映射,bundle 是 JSON 数组)
+- [x] 关联 step / partition 历史也还原(保证 trigger params 完整)
 
 ### Step 3 — replay 触发(2h)
-- [ ] 从 manifest 反推 launch request(tenantId / jobCode / bizDate / params)
-- [ ] 通过 console-api `POST /api/console/jobs/trigger` 触发(走 sim console-api 18080),带 `Idempotency-Key` header(`CommonConstants`,不是 `X-Idempotency-Key`)
-- [ ] 轮询 `instance_status` 进终态(SUCCESS / FAILED / PARTIAL_FAILED / CANCELED / SKIPPED)
+- [x] 从 manifest 反推 launch request(tenantId / jobCode / bizDate / params)
+- [x] 通过 console-api `POST /api/console/jobs/trigger` 触发(走 sim console-api 18080),带 `Idempotency-Key` header(`CommonConstants`,不是 `X-Idempotency-Key`)
+- [x] 轮询 `instance_status` 进终态(SUCCESS / FAILED / PARTIAL_FAILED / CANCELED / SKIPPED)
 
 ### Step 4 — diff harness(3h)
-- [ ] 抽取 replay 结果 snapshot(同 forensic 的 JSON 格式)
-- [ ] diff 逻辑实现:5 个维度,容差可配
-- [ ] 生成 markdown 报告
+- [x] 抽取 replay 结果 snapshot(同 forensic 的 JSON 格式)
+- [x] diff 逻辑实现:5 个维度,容差可配
+- [x] 生成 markdown 报告
 
 ### Step 5 — 真实测试(2h)
-- [ ] 用 sim 跑一个 ta 租户案例,生成 forensic bundle
-- [ ] 改一个 bug 模拟"代码改判"
-- [ ] 跑 replay,验证报告能识别改判
+- [ ] 使用经批准的脱敏证据包跑一次完整 sim 回放（需外部样本）
+- [x] 使用合成快照验证状态、计数、耗时、错误和 payload 改判检测
 
 ## 验收标准
-- [ ] 用真 sim bundle 端到端跑通,报告输出正确
-- [ ] 故意改业务逻辑能被识别(测试用)
-- [ ] 报告里 5 个 diff 维度都有真实样本
-- [ ] `scripts/local/replay-forensic-bundle.sh --help` 输出清晰用法
-- [ ] 文档:`docs/runbook/forensic-replay-howto.md` 含每周操作流程
+- [ ] 用经批准的真实脱敏 bundle 端到端跑通（目标环境验收项）
+- [x] 合成改判样本可被五维 diff 识别
+- [x] `scripts/local/replay-forensic-bundle.sh --help` 输出清晰用法
+- [x] 文档:`docs/runbook/forensic-replay-howto.md` 含每周操作流程
 
 ## 风险 / 依赖
 - **依赖**:

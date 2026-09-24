@@ -288,9 +288,9 @@ ElMessage.success toast 时无 "撤销" action button。常见模式(Gmail 7 秒
 
 ## 11. 认知负担(入口 / 嵌套 drawer / 决策点)
 
-### 11.1 硬编码中文(P0,踩 CLAUDE.md 红线)
+### 11.1 硬编码中文(P0,踩 docs/agent-baseline.md 红线)
 
-`JobDefinitionList.vue:10` 直接 `向导新建`,`:13` `Bundle 导入`。CLAUDE.md 写了 "所有用户可见字符串**必须** `t('namespace.key')`,**禁硬编码** zh/en",`npm run check:i18n` 也会跑。这两处可能通过(因为它们不在 locale 文件里所以没"缺 key"),但**红线就是红线**。
+`JobDefinitionList.vue:10` 直接 `向导新建`,`:13` `Bundle 导入`。docs/agent-baseline.md 写了 "所有用户可见字符串**必须** `t('namespace.key')`,**禁硬编码** zh/en",`npm run check:i18n` 也会跑。这两处可能通过(因为它们不在 locale 文件里所以没"缺 key"),但**红线就是红线**。
 
 → 立即修:加 `jobDefinitionList.headerWizard` / `headerBundle` 两 key,zh + en 1:1 写。
 
@@ -333,7 +333,7 @@ OpsSummary 4 tab(kpis/trend/dist/extra)+ 子 panel 各种图;**对新用户**进
 
 ### P0(必须修,影响信任 / 红线)
 
-1. **JobDefinitionList 硬编码中文**(`src/views/job/JobDefinitionList.vue:10,13`)— 踩 CLAUDE.md 红线,5 分钟修。
+1. **JobDefinitionList 硬编码中文**(`src/views/job/JobDefinitionList.vue:10,13`)— 踩 docs/agent-baseline.md 红线,5 分钟修。
 2. **跨页 selection 丢失**(`src/views/approvals/components/GeneralApprovalsTab.vue:66`)— 加 row-key + reserve-selection。
 3. **批量审批 partial success 谎报**(`L375 batchApprovedToast`)— 从 response 取真成功数。
 4. **AlertList 全量拉回前端切片**(`L285 queryAlertsAll`)— 大租户长期停滞;补真 paging 或限 maxResults。
@@ -372,6 +372,6 @@ grep -n "fmtRelative" src/views/                 # 0 命中,只 mobile 用 → �
 ## 15. 范围边界 / 未覆盖
 
 - 未跑 dev server 截图实测,本文全部基于源码静态分析。`isFreshTenant` 跨判定、`useOnboardingTour` 实际触发条件、各按钮 ARIA 文案、表单错误展示模式、SSE 重连 UX、网络断开 UX 这些"运行时才暴露"的问题未覆盖。建议:本 P0/P1 列表落地后,补一轮 Playwright + axe 自动检 + 手动 VIEWER/OPERATOR/ADMIN 三角色 walkthrough。
-- 移动端不写自动化测试是项目规定(CLAUDE.md),本文 mobile 章节属人工 review。
+- 移动端不写自动化测试是项目规定(docs/agent-baseline.md),本文 mobile 章节属人工 review。
 - 「角色 UX 矩阵」只覆盖核心 8 任务,完整矩阵建议作 separate doc。
 - 国际化对齐:本扫描默认中文用户,英文(en-US)label 实际渲染未核对,有可能 zh 长 en 短导致按钮宽度问题。

@@ -40,6 +40,7 @@ public class TriggerSecurityConfiguration {
   private final BatchSecurityProperties securityProperties;
 
   @Bean
+  @SuppressWarnings("java:S4502")
   public SecurityFilterChain triggerSecurityFilterChain(HttpSecurity http) throws Exception {
     // Internal-secret requests cannot be forged by a browser because the secret is not a cookie.
     // Keep CSRF enabled for every other request so a future authentication path cannot silently

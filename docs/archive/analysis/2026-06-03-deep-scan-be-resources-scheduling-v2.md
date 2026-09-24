@@ -145,7 +145,7 @@ private byte[] decryptViaSpool(byte[] rawBytes) {
 
 - `grep` 显示 **113 个 `@Transactional` 标签**(含 78 个非默认 Propagation 用法 `REQUIRES_NEW` / `MANDATORY` / `NESTED`);
 - `MANDATORY` 主要在 outbox path(保证调用方必须在 tx 内);
-- **`Propagation.NEVER` 无命中**(✅ CLAUDE.md §4 红线);
+- **`Propagation.NEVER` 无命中**(✅ docs/agent-baseline.md §4 红线);
 - **`Propagation.NESTED` 0 命中**;
 - `REQUIRES_NEW` 主要在 DLQ replay shell / 单条任务标记失败,**与外层 ShedLock 协作正确**(避免外层失败回滚淹没标记)。
 

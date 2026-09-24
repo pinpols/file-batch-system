@@ -53,7 +53,7 @@ public class ConsoleAtomicTaskConfigService {
   }
 
   /**
-   * 创建一条 atomic 节点配置。CLAUDE.md §Java #4:@Transactional 在 Service。
+   * 创建一条 atomic 节点配置。docs/agent-baseline.md §Java #4:@Transactional 在 Service。
    *
    * @param tenantId 已经 ConsoleTenantGuard.resolveTenant 解析过的 tenantId
    * @param taskType 内置原子 taskType

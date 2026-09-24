@@ -30,7 +30,7 @@
   - publish_status 状态机：NEW → PUBLISHING → PUBLISHED；失败走 NEW → PUBLISHING → FAILED → ...（带退避）→ GIVE_UP
 
 - **outbox_event**:
-  - 必须与业务状态变更同事务（`outbox_event 必须与任务状态写入处于同一事务` —— CLAUDE.md §架构硬约束）
+  - 必须与业务状态变更同事务（`outbox_event 必须与任务状态写入处于同一事务` —— docs/agent-baseline.md §架构硬约束）
   - publish_status 同上
   - retry 路径走 event_outbox_retry，主表 outbox_event 不直接做退避
 

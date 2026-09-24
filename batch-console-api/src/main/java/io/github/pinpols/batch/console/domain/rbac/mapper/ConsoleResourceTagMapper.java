@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.resource_tag} MyBatis 映射（替代原 Spring Data JDBC {@code ConsoleResourceTagRepository}，
- * 对齐 CLAUDE.md §架构硬约束 — Console 配置表写入也走 MyBatis）。
+ * 对齐 docs/agent-baseline.md §架构硬约束 — Console 配置表写入也走 MyBatis）。
  */
 public interface ConsoleResourceTagMapper {
 

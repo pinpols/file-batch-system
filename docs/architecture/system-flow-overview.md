@@ -1146,7 +1146,7 @@ orchestrator 集群多实例时，不能让两个实例同时 poll 同一批 out
 ### 7.5 熔断与优雅下线
 
 - **熔断（OutboxPublishCircuitBreaker）**：连续失败超阈值时整轮跳过 advance，避免 Kafka 雪崩时把 outbox 打成大面积 FAILED。三态：关闭 / 打开 / 半开。
-- **优雅下线**：`gracefulShutdown.isDraining()=true` 时跳过本轮 + 跳过抢锁（防 Lettuce 已 STOPPED 还去 Redis 抢锁抛 `IllegalStateException`，详见 CLAUDE.md 2026-04-24）。
+- **优雅下线**：`gracefulShutdown.isDraining()=true` 时跳过本轮 + 跳过抢锁（防 Lettuce 已 STOPPED 还去 Redis 抢锁抛 `IllegalStateException`，详见 docs/agent-baseline.md 2026-04-24）。
 
 ### 7.6 关键参数（`OutboxProperties`）
 
@@ -1460,4 +1460,4 @@ public class MyProcessPlugin implements ProcessComputePlugin {
 | Worker 插件如何注册 | [`worker-plugins.md`](./worker-plugins.md) |
 | Kafka topic 命名 | [`kafka-topic-plan.md`](./kafka-topic-plan.md) |
 | 真实端到端验证（含 RETRY/COMPENSATE） | [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
-| 编码与字典约定 | [`/CLAUDE.md`](../../CLAUDE.md) |
+| 编码与字典约定 | [`/docs/agent-baseline.md`](../../docs/agent-baseline.md) |

@@ -1,5 +1,8 @@
 .git
 .idea
+.codex
+.cursor
+.vscode
 .DS_Store
 logs
 # Dockerfile.app 现为自包含 builder(mvn 在 container 内跑),host 端 target/ 不进 context
@@ -10,7 +13,7 @@ target
 docs
 README*.md
 CHANGELOG.md
-AGENT.md
+AGENTS.md
 start-all.sh
 stop-all.sh
 batch-e2e-tests
@@ -22,6 +25,7 @@ helm
 reports
 qodana.sarif.json
 examples
+.agents
 .claude
 .local
 deploy/docker/biz-shard-init

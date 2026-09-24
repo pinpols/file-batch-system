@@ -119,10 +119,14 @@ class PlatformHttpClientTest {
 
   @Test
   void reportEmptyResponseOk() throws IOException {
+    AtomicReference<String> seenPath = new AtomicReference<>();
     server.createContext("/internal/tasks/99/report", ex -> {
+      seenPath.set(ex.getRequestURI().getPath());
       ex.sendResponseHeaders(204, -1);
       ex.close();
     });
     newClient().report(99L, "idem", Map.of("success", true));
+
+    assertThat(seenPath.get()).isEqualTo("/internal/tasks/99/report");
   }
 }

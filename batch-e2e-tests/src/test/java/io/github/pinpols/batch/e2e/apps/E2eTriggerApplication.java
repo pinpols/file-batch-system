@@ -25,23 +25,26 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
- * ADR-010 Stage 5 Layer 2 scaffold: trigger-only e2e application context. 与 {@link
+ * ADR-010 Stage 5 trigger-only E2E application context. 与 {@link
  * E2eOrchestratorApplication} 同款风格,只 scan trigger 包,避免 worker / orchestrator 包冲突。
  *
- * <p><b>当前状态(2026-04-30)</b>:scaffold 已落地,但本目录下尚未有用例真起本 application —— Layer 1
- * (`TriggerAsyncLaunchE2eIT` 在 batch-trigger 内)已覆盖 trigger 端 fire→Kafka 完整链路,Layer 2 当前 E2E 用
- * orchestrator-only context + 手动 publish Kafka 模拟 trigger,验证 consumer→job_instance leg。 真做
- * trigger+orchestrator 同 JVM 双 ApplicationContext 全链路 E2E 留作 follow-up(双 context bean 命名冲突 +
- * DataSource 双装配等需要细致 scaffold 设计)。
- *
- * <p>未来用例可继承本 scaffold:启 trigger 完整 context(@SchedulerLock / Quartz / wheel / outbox relay 全栈),配合
- * Layer 2 的 orchestrator context 跑端到端。建议两个 context 独立 @SpringBootTest,在测试主类 @BeforeAll 内
- * SpringApplication.run() 拉起 trigger context 共享同一 PG/Kafka container。
+ * <p>{@code TriggerAsyncLaunchFullChainE2eIT} 会在 orchestrator 测试上下文旁启动本上下文，共享真实 PG/Kafka，验证
+ * trigger service → trigger outbox relay → Kafka → orchestrator consumer → job_instance 的完整链路。
  */
 @Configuration
 @EnableAutoConfiguration(
     exclude = {
+      io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration.class,
+      io.github.pinpols.batch.common.config.S3AutoConfiguration.class,
       io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
+      org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration.class,
+      org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class,
+      org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration.class,
+      org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+          .class,
+      org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration.class,
+      org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration.class,
+      org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration.class,
       org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration.class,
       org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration.class,
       org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration
@@ -60,11 +63,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
   E2eKafkaProducerConfiguration.class
 })
 @ComponentScan(
-    basePackages = {
-      "io.github.pinpols.batch.e2e.support",
-      "io.github.pinpols.batch.common.spi.task",
-      "io.github.pinpols.batch.trigger"
-    },
+    basePackages = {"io.github.pinpols.batch.common.spi.task", "io.github.pinpols.batch.trigger"},
     excludeFilters = {
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,

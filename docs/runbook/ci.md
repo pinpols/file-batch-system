@@ -89,7 +89,7 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 
 | 检查项 | 工具 | 触发流水线 | 说明 |
 |---|---|---|---|
-| PMD 代码规约 | `maven-pmd-plugin` | 全部（run-full-regression） | 对齐 CLAUDE.md 规约 |
+| PMD 代码规约 | `maven-pmd-plugin` | 全部（run-full-regression） | 对齐 docs/agent-baseline.md 规约 |
 | Spotless 代码格式 | `spotless-maven-plugin` | 全部（run-full-regression） | Palantir Java Format 2.92.0（Google 风格兼容、120 列） |
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
@@ -333,7 +333,7 @@ scripts/ci/
   security-scan.sh           # 安全扫描入口（secret / deps / dast）
 
 build/
-  pmd-ruleset.xml            # PMD 规则集（对齐 CLAUDE.md）
+  pmd-ruleset.xml            # PMD 规则集（对齐 docs/agent-baseline.md）
 
 pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配置
 ```

@@ -16,6 +16,8 @@ target/
 **/target/
 target/security-scan-report/
 .idea/
+.codex/
+.cursor/
 *.iml
 .vscode/
 .project
@@ -40,6 +42,13 @@ logs/
 build/
 tmp/
 *.bak
+.agents/
+!.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/**/
+!.agents/skills/**/SKILL.md
 .claude/
 deploy/docker/sftp/data
 

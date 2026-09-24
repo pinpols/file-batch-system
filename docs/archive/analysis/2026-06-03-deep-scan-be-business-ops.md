@@ -46,13 +46,13 @@
 - 文件:`batch-common/src/main/java/io/github/pinpols/batch/common/enums/ApprovalType.java`,`batch-console-api/.../DefaultConsoleJobRecoveryService.java:167`,`batch-console-api/.../ConsoleSelfServiceJobService.java:75`
 - 现象:`ApprovalType` 仅声明 4 个 code(`CATCH_UP / COMPENSATION / DLQ_REPLAY / DOWNLOAD`),但仓内实际写入 `approval_command.approval_type` 的还有:
   - `"SELF_SERVICE"`(`ConsoleSelfServiceJobService.java:75` body.put)
-  - `"WORKFLOW_NODE"` / `"OUTBOX_CLEANUP"` 在文档 `CLAUDE.md` 路由部分被任务点名,但实际代码中**完全找不到**(`grep -rn "WORKFLOW_NODE_ACTION\|OUTBOX_CLEANUP" batch-* --include="*.java"` 0 命中)。
+  - `"WORKFLOW_NODE"` / `"OUTBOX_CLEANUP"` 在文档 `docs/agent-baseline.md` 路由部分被任务点名,但实际代码中**完全找不到**(`grep -rn "WORKFLOW_NODE_ACTION\|OUTBOX_CLEANUP" batch-* --include="*.java"` 0 命中)。
 - 影响:
   - `ConsoleMetaQueryService` 把 `ApprovalType` 注册成给 FE 的字典 → 前端 `approvalType` 下拉缺 `SELF_SERVICE`,运维筛选不到该类审批;同时 enum-registration 守护测试只能扫到登记的 4 项,实际 5 种类型,数据库可能出现 enum 之外的字面量却无任何静态守护拦截。
   - 任务描述提到的 OUTBOX_CLEANUP / WORKFLOW_NODE 路由实际**未实现**,console 走 `outboxCleanup(tenantId, retainDays)` 直连 orchestrator 无审批挡板,文档与代码漂移。
 - 建议(优先级排序):
   1. 把 `SELF_SERVICE` 写入 `ApprovalType` enum,补 label;
-  2. 删 CLAUDE.md / 任务描述里 `WORKFLOW_NODE` / `OUTBOX_CLEANUP` 的 approval 路由要求,或补实现(后者更危险:OUTBOX 删事件无审批);
+  2. 删 docs/agent-baseline.md / 任务描述里 `WORKFLOW_NODE` / `OUTBOX_CLEANUP` 的 approval 路由要求,或补实现(后者更危险:OUTBOX 删事件无审批);
   3. 加 `ApprovalCommandEntity.approval_type` 写入路径的 DictEnum 校验(insert 前 `ApprovalType.fromCode` 回退)。
 
 ### P0-2 `BatchDayReplayTerminalReconciler.findEntry` 只按 (sessionId, tenantId, jobCode) 匹配,同一 session 内同 jobCode 多次重放会回填到第一条 entry
@@ -121,7 +121,7 @@
 ### P1-6 `BatchDayReplaySessionMapper.selectActiveByCalendarBizDate` 在 `submit` 后立刻重读拿 id,但若 read-after-write 走 replica 会拿空 → 不过 orchestrator 主链严禁读写分离,所以本地路径安全;留作架构边界警告
 
 - 文件:`BatchDayReplayService.java:120-127`
-- 现象:`record` 不可变,MyBatis useGeneratedKeys 写不回 id,作者用唯一索引 `(tenant, calendarCode, bizDate, active)` 重 SELECT。CLAUDE.md §读写分离明确说 orchestrator 严禁引入读写分离,所以这里安全。
+- 现象:`record` 不可变,MyBatis useGeneratedKeys 写不回 id,作者用唯一索引 `(tenant, calendarCode, bizDate, active)` 重 SELECT。docs/agent-baseline.md §读写分离明确说 orchestrator 严禁引入读写分离,所以这里安全。
 - 建议:在 mapper XML 里给 insert 加 `<selectKey order="AFTER" keyProperty="id">` 拿 RETURNING id(PG 支持),消除重 SELECT;或把 `BatchDayReplaySessionEntity` 改成可变 `@Data` class(打破 record 习惯),用 useGeneratedKeys 直接回写。当前实现可工作但每次 submit 多一次 round-trip。
 
 ---
@@ -210,7 +210,7 @@
 
 ### 6.1 三 outbox 表分工清晰
 
-`outbox_event`(通用业务) / `event_outbox_retry`(发布者级 I/O 重试) / `trigger_outbox_event`(trigger 模块独立)分工与 CLAUDE.md 一致。`OutboxDomainEventPublisher` 明确不处理 trigger_outbox_event。无误用。
+`outbox_event`(通用业务) / `event_outbox_retry`(发布者级 I/O 重试) / `trigger_outbox_event`(trigger 模块独立)分工与 docs/agent-baseline.md 一致。`OutboxDomainEventPublisher` 明确不处理 trigger_outbox_event。无误用。
 
 ### 6.2 Audit 双写策略统一
 

@@ -60,8 +60,8 @@
   `ScheduledExecutorService` + programmatic ShedLock,默认 60s):取 `escalation_tier > escalation_notified_tier`
   的行(V181 水位线,`V181__alert_event_escalation_notify.sql:20`)→ 发 `alerts / ALERT_ESCALATED` 领域事件
   → 走现有 webhook 分发 → CAS 推进 `escalation_notified_tier`,保证每次 tier 抬升只通知一次。
-  **边界(`AlertEscalationNotifier.java:48`、`AlertEscalationNotifyProperties.java:11`):v1 只覆盖 WEBHOOK(+ Web Push);
-  EMAIL / 钉钉 / 企微 sender 尚未接通。** 这正是自研链路的最大短板——AM 迁移顺带补齐多渠道。
+  领域事件由订阅规则路由到 WEBHOOK、EMAIL、DINGTALK、WECOM、SLACK 或 SMS sender；AM 迁移后该 notifier
+  默认关闭，仅保留一版作为回滚路径。
 - **console 治理动作(审计,留 fbs)**:`ConsoleAlertController`(`ConsoleAlertController.java:35/45/55`)
   的 ack / silence / close,`@Idempotent` + `@AuditAction`(`alert.ack` / `alert.silence` / `alert.close`),
   `@PreAuthorize ROLE_ADMIN|ROLE_TENANT_ADMIN`。

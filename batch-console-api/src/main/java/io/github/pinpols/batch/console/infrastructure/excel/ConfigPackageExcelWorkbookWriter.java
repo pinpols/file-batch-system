@@ -461,7 +461,8 @@ public class ConfigPackageExcelWorkbookWriter {
         styles.body());
     writeGuideCell(
         row, 4, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
-    writeGuideCell(row, 5, joinAllowedValues(guide), styles.body());
+    writeGuideCell(
+        row, 5, EmptyChecks.isNull(guide) ? EMPTY : joinAllowedValues(guide), styles.body());
     writeGuideCell(
         row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
     writeGuideCell(
@@ -471,7 +472,13 @@ public class ConfigPackageExcelWorkbookWriter {
         8,
         EmptyChecks.isNull(rowData.appliesTo()) ? EMPTY : rowData.appliesTo(),
         styles.body());
-    writeGuideCell(row, 9, defaultBehaviorFor(rowData.columnName(), guide), styles.body());
+    writeGuideCell(
+        row,
+        9,
+        guide == null // empty-check: allow - Sonar S2259
+            ? EMPTY
+            : defaultBehaviorFor(rowData.columnName(), guide),
+        styles.body());
     writeGuideCell(
         row,
         10,
@@ -583,7 +590,7 @@ public class ConfigPackageExcelWorkbookWriter {
               "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
 
   public static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
-    if (EmptyChecks.isNull(guide) || EmptyChecks.isEmpty(guide.allowedValues())) {
+    if (guide == null || EmptyChecks.isEmpty(guide.allowedValues())) {
       return EMPTY;
     }
     return String.join(" / ", guide.allowedValues());

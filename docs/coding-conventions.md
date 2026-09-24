@@ -509,7 +509,7 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 | **包即词汇表**              | `entity` / `query` / `command`一眼可读；不要把 API 的 `*Request` / `*Dto` 写入 `domain`（除非明确是跨层复用的查询契约）。          |
 | **禁止 `*Record` 表映射后缀** | 表行一律 `*Entity`；Java `record` 关键字仍可用于 **非表** 的不可变 DTO。                                                  |
 | **单向依赖**               | `command` / `query` → 可依赖 `common`；**避免** `entity` 依赖 `command`；子域模型（`pipeline`）尽量只吃 JDK + `common`。   |
-| **与 §1 参数规约衔接**        | 对外 `Command` 若构造字段很多，按 CLAUDE.md：`argc > 6` 须 `@Builder` 且调用方先赋变量再传入；`domain.param` 中 Mapper 单次写入参数同理。 |
+| **与 §1 参数规约衔接**        | 对外 `Command` 若构造字段很多，按 docs/agent-baseline.md：`argc > 6` 须 `@Builder` 且调用方先赋变量再传入；`domain.param` 中 Mapper 单次写入参数同理。 |
 
 
 #### 8.2.2 `domain/entity` — 表行映射（MyBatis 主类型）
@@ -519,7 +519,7 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 | ---------- | --------------------------------------------------------------------------------------------------------------- |
 | **命名**     | `XxxEntity`，与表含义对应，不缩写业务词。                                                                                      |
 | **形态**     | **默认** `class` + `@Data`，运行态大行、多 null 更新、`version` 乐观锁时更合适。                                                     |
-| **Lombok** | 需 MyBatis 无参构造时：`@NoArgsConstructor` + `@AllArgsConstructor`；若加 `@Builder`，三连回退（与 CLAUDE.md 「Builder 与反射路径」一致）。 |
+| **Lombok** | 需 MyBatis 无参构造时：`@NoArgsConstructor` + `@AllArgsConstructor`；若加 `@Builder`，三连回退（与 docs/agent-baseline.md 「Builder 与反射路径」一致）。 |
 | **可变边界**   | 仅在编排内核、状态推进路径上允许对 Entity 做「读完—改字段—写回」；不要在 Controller 层持有可变 Entity 横穿多层。                                         |
 | **可选：不可变** | 少数只读/窄表可用 `record` + XML `resultMap`/`<constructor>`；新代码无必要时优先与大多数字段对齐用 `@Data` class。                          |
 | **接口混入**   | 实现 `Stateful`、`LocalizedErrorCarrier` 等横切接口时保持类在 `entity` 内，不为此单独开包。                                            |
@@ -613,7 +613,7 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 ### 9.2 实体与命名
 
-- 表行映射类型放在 `domain/entity`，类名 `***Entity` 后缀**（与 CLAUDE.md / ADR-001 一致）。
+- 表行映射类型放在 `domain/entity`，类名 `***Entity` 后缀**（与 docs/agent-baseline.md / ADR-001 一致）。
 - 可为不可变 `**record`**（配合 `resultMap` + `<constructor>`）或 `**@Data` class**（可变运行态行）；**禁止**再用 `*Record` 后缀区分「配置态」。
 - **同一表、同一写路径**只能有一个主入口：禁止 **Mapper 写 + 自建 Repository 写** 或历史意义上的 **Repository + Mapper 双写**。
 

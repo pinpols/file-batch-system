@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # 多语言 SDK live transport gate。
-# 预期外部已经启动 Kafka(CI 用 apache/kafka KRaft 单节点),并通过 KAFKA_BOOTSTRAP
+# 预期外部已经启动 Kafka(CI 用 apache/kafka KRaft 单节点),并通过 BATCH_SDK_KAFKA_BOOTSTRAP
 # 暴露 PLAINTEXT broker。
 # 覆盖:
 #   Java       EmbeddedKafka + HTTP fake testkit
@@ -14,7 +14,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
-KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "${KAFKA_HOST_PORT:-19092}")}"
+SDK_KAFKA_BOOTSTRAP="${BATCH_SDK_KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "${KAFKA_HOST_PORT:-19092}")}"
+# live broker 地址只应注入 Kafka 集成测试。先清除步骤级环境变量，避免普通
+# lifecycle/HTTP 单测意外启用 Kafka 路径并留下无法退出的后台连接。
+unset BATCH_SDK_KAFKA_BOOTSTRAP
 PYTHON_BIN="${PYTHON:-}"
 if [[ -z "$PYTHON_BIN" ]]; then
   for candidate in python3.12 python3 python; do
@@ -25,12 +28,12 @@ if [[ -z "$PYTHON_BIN" ]]; then
   done
 fi
 
-echo "[sdk-live] KAFKA_BOOTSTRAP=${KAFKA_BOOTSTRAP}"
+echo "[sdk-live] BATCH_SDK_KAFKA_BOOTSTRAP=${SDK_KAFKA_BOOTSTRAP}"
 echo "[sdk-live] Python=$("$PYTHON_BIN" -c 'import sys; print(sys.executable)')"
 
 # Broker readiness gate — READINESS WAIT ONLY (never a test retry; a genuine
 # broker/SDK bug must still fail loudly). The per-language live suites below
-# assume KAFKA_BOOTSTRAP already serves the Kafka API. Under CI the workflow
+# assume BATCH_SDK_KAFKA_BOOTSTRAP already serves the Kafka API. Under CI the workflow
 # already polls kafka-broker-api-versions.sh in-container; this host-side TCP
 # readiness loop is
 # defense-in-depth so a still-warming broker never surfaces as a spurious
@@ -59,7 +62,7 @@ wait_for_kafka() {
   echo "[sdk-live] ERROR: Kafka not reachable at $(batch_format_host_port "$host" "$port") within timeout" >&2
   return 1
 }
-wait_for_kafka "$KAFKA_BOOTSTRAP"
+wait_for_kafka "$SDK_KAFKA_BOOTSTRAP"
 "$PYTHON_BIN" - <<'PY'
 import sys
 
@@ -82,15 +85,17 @@ echo "[sdk-live] Python live Kafka + HTTP fake"
   VENV_PYTHON="$PYTHON_VENV_DIR/bin/python"
   "$VENV_PYTHON" -m pip install --upgrade pip
   "$VENV_PYTHON" -m pip install -e .[dev]
-  KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" "$VENV_PYTHON" -m pytest tests/test_kafka_live_integration.py -v
+  BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" "$VENV_PYTHON" -m pytest tests/test_kafka_live_integration.py -v
 )
 
 echo "[sdk-live] TypeScript live Kafka adapter"
 (
   cd "$ROOT/sdk/typescript"
   npm install --include=optional --package-lock=false --no-audit --no-fund
-  node --test --experimental-strip-types 'tests/lifecycle.test.ts' 'tests/transport.test.ts'
-  KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" node --test --experimental-strip-types 'kafka/*.integration.test.ts'
+  node --test --test-concurrency=1 --test-timeout=30000 --experimental-strip-types \
+    'tests/lifecycle.test.ts' 'tests/transport.test.ts'
+  BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" \
+    node --test --test-timeout=60000 --experimental-strip-types 'kafka/*.integration.test.ts'
 )
 
 echo "[sdk-live] Go client lifecycle + HTTP transport"
@@ -102,7 +107,7 @@ echo "[sdk-live] Go client lifecycle + HTTP transport"
 echo "[sdk-live] Go live Kafka adapter"
 (
   cd "$ROOT/sdk/go/kafka"
-  KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" go test ./...
+  BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" go test ./...
 )
 
 echo "[sdk-live] Rust client lifecycle + HTTP transport"
@@ -125,7 +130,7 @@ echo "[sdk-live] Rust live Kafka adapter"
     export PATH="$CMAKE_VENV_DIR/bin:$PATH"
   fi
   cargo clean
-  KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" cargo test --features kafka end_to_end_consume_against_real_broker -- --nocapture
+  BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" cargo test --features kafka end_to_end_consume_against_real_broker -- --nocapture
 )
 
 echo "[sdk-live] all SDK live transport checks passed"

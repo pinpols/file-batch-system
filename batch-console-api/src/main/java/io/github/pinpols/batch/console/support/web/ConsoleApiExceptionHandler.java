@@ -66,10 +66,10 @@ public class ConsoleApiExceptionHandler {
 
   private final ConsoleResponseFactory responseFactory;
 
-  // CLAUDE.md §Java #3:构造器注入。
+  // docs/agent-baseline.md §Java #3:构造器注入。
   private final BizMessageResolver bizMessageResolver;
 
-  // 唯一构造器(Spring 4.3+ 单 ctor 自动注入,无需 @Autowired)— 构造器注入符合 CLAUDE.md §Java #3。
+  // 唯一构造器(Spring 4.3+ 单 ctor 自动注入,无需 @Autowired)— 构造器注入符合 docs/agent-baseline.md §Java #3。
   public ConsoleApiExceptionHandler(
       ConsoleResponseFactory responseFactory, BizMessageResolver bizMessageResolver) {
     this.responseFactory = responseFactory;
@@ -321,7 +321,7 @@ public class ConsoleApiExceptionHandler {
   }
 
   /**
-   * PG DataIntegrityViolation 子串路由表（CLAUDE.md §分支消除规则 row 1）。 每个分支按 substring 命中,携带目标 {@link
+   * PG DataIntegrityViolation 子串路由表（docs/agent-baseline.md §分支消除规则 row 1）。 每个分支按 substring 命中,携带目标 {@link
    * ResultCode}（决定 HTTP status）并产出客户端可读的中文 message。
    */
   private enum PgConstraintViolation {

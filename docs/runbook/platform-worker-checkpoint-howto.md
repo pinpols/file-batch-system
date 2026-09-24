@@ -224,4 +224,4 @@ ORDER BY completed_at DESC;
 
 - ADR-038(本特性的设计依据)
 - ADR-020(batch-day-replay,与 P4 阶段级续跑的语义对齐对象)
-- CLAUDE.md §archive 冷表对齐(V164 已配套 archive 镜像 + ArchiveSchemaDriftCheck 登记)
+- docs/agent-baseline.md §archive 冷表对齐(V164 已配套 archive 镜像 + ArchiveSchemaDriftCheck 登记)

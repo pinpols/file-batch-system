@@ -43,6 +43,7 @@ KNOWN_RULES = {
     "java:S2589",
     "java:S3330",
     "java:S4502",
+    "java:S5164",
     "java:S6218",
 }
 

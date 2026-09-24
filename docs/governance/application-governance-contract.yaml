@@ -1,5 +1,5 @@
 version: 1
-updated: 2026-09-02
+updated: 2026-09-24
 scope: application-runtime
 controls:
   - id: timeout-budget
@@ -43,3 +43,11 @@ controls:
       - .github/workflows/sdk-release-validation.yml
       - docs/runbook/security-scan.md
     live_validation: release-pipeline
+  - id: business-datasource-role
+    priority: P0
+    status: implemented
+    evidence:
+      - batch-common/src/main/java/io/github/pinpols/batch/common/rls/BusinessDataSourceRoleChecker.java
+      - batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/BusinessDataSourceRoleCheckIntegrationTest.java
+      - docs/runbook/multi-tenant-rls.md
+    live_validation: startup-and-health

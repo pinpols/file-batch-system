@@ -243,6 +243,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.sdk == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -275,13 +276,16 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
 
+      - name: Check SDK configuration environment parity
+        run: python3 scripts/ci/check-sdk-config-env-parity.py
+
       - name: Install native build deps
         run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev libssl-dev netcat-openbsd
 
       - name: Start Kafka broker (KRaft single node)
         # apache/kafka(Apache-2.0)取代 redpandadata/redpanda(BSL)。KRaft 单节点、
         # 无 ZooKeeper。端口映射保持 -p 19092:9092(host 19092 → container 9092),
-        # 与下游 KAFKA_BOOTSTRAP=localhost:19092 一致;broker 对外 advertise
+        # 与下游 BATCH_SDK_KAFKA_BOOTSTRAP=localhost:19092 一致;broker 对外 advertise
         # PLAINTEXT://localhost:19092,使 host 侧客户端收到可回连的地址。
         run: |
           docker run -d --name sdk-live-kafka \
@@ -330,7 +334,7 @@ jobs:
 
       - name: Run SDK live transport gate
         env:
-          KAFKA_BOOTSTRAP: localhost:19092
+          BATCH_SDK_KAFKA_BOOTSTRAP: localhost:19092
         run: bash scripts/ci/run-sdk-live-transport-gate.sh
 
       - name: Dump broker logs on failure

@@ -46,7 +46,8 @@ import org.springframework.stereotype.Component;
  *       programmatic ShedLock(同 {@link WebhookDeliveryRelay}),多实例间互斥。
  * </ul>
  *
- * <p>边界:v1 只覆盖平台已接通的 WEBHOOK(+ Web Push)渠道;EMAIL/钉钉/企微 sender 尚未实现,留作独立后续。
+ * <p>边界:本组件只发布 {@code ALERT_ESCALATED} 领域事件；后续由订阅规则按 WEBHOOK、EMAIL、DINGTALK、WECOM、
+ * SLACK 或 SMS 路由到已注册的 sender。Alertmanager 迁移后本组件默认关闭，仅保留为回滚路径。
  *
  * <p>条件启用:默认开({@code batch.alert.escalation.notify.enabled=true});关掉退化回 V176 纯日志/指标放大。
  */

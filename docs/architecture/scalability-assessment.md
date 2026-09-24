@@ -209,4 +209,4 @@
 - [`workflow-dependency-guide.md`](./workflow-dependency-guide.md) — 作业依赖与 DAG 编排
 - [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) — 三类 worker 全 stage 真实跑通验证
 - [`architecture-truth.md`](./architecture-truth.md) — 当前架构基线
-- [`/CLAUDE.md`](../../CLAUDE.md) — 编码规范与变更记录（这周修的 bug 都登记在 §变更记录）
+- [`/docs/agent-baseline.md`](../../docs/agent-baseline.md) — 编码规范与变更记录（这周修的 bug 都登记在 §变更记录）

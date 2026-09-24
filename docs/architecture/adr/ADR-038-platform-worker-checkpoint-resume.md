@@ -54,7 +54,7 @@
 
 - 「**平台 worker 在重派 / 崩溃后从已处理位点续跑**」√
 - 「**chunk 业务写与位点更新补偿式一致**」√ —— 跨库无 1PC:业务先 commit、位点后 advance,崩溃窗口靠插件幂等吸收(详见 §决策二实施修正)。**不是**单事务原子。
-- 「**worker 直接写 `job_instance` / `pipeline_instance` 状态**」✗ —— 维持 CLAUDE.md 架构硬约束:Orchestrator 是唯一状态主机,worker 仍只 HTTP REPORT;本 ADR 的"位点"持久化落在 **worker 自己可写的 pipeline 内部记录 / file_record**,不碰 orchestrator 状态机
+- 「**worker 直接写 `job_instance` / `pipeline_instance` 状态**」✗ —— 维持 docs/agent-baseline.md 架构硬约束:Orchestrator 是唯一状态主机,worker 仍只 HTTP REPORT;本 ADR 的"位点"持久化落在 **worker 自己可写的 pipeline 内部记录 / file_record**,不碰 orchestrator 状态机
 - 「**worker 内并行**」✗ —— 已有 orchestrator 层 `lineNo % partitionCount` 逻辑分区(ParseStep),不重复造 worker 内并行
 - 「**orchestrator 主动取消信号**」✗ —— 现有超时 → `Thread.interrupt()` → watchdog(`cancelGraceSeconds`)已足够,不在本 ADR 范围
 
@@ -195,6 +195,6 @@ Import 的幂等天然有多租唯一约束回退;Export 因为只在 STORE 阶�
 **收益**:大数据量 Import/Export 崩溃 / 重派后从断点续,不重头跑；Import 依靠“业务先提交 + 位点后推进 + 插件强幂等”保证不漏，
 Export 依靠临时文件截断补偿保证不重复、不丢行。阶段级续跑尚未交付，不计入当前收益。
 
-**成本**:新增位点持久化载体(表 / 列 + archive 镜像,受 CLAUDE.md "archive 冷表对齐" 约束);`flushChunk` 事务边界变化需回归;Export 文件续跑用补偿而非严格事务,有"重写未确认尾部"的少量重复写。
+**成本**:新增位点持久化载体(表 / 列 + archive 镜像,受 docs/agent-baseline.md "archive 冷表对齐" 约束);`flushChunk` 事务边界变化需回归;Export 文件续跑用补偿而非严格事务,有"重写未确认尾部"的少量重复写。
 
 **不破坏**:Orchestrator 状态主机地位不变(位点落 worker 内部记录,不碰状态机);流式 / 超时取消 / 跨 worker 分区 不动;worker→orchestrator REPORT 异步语义不变。

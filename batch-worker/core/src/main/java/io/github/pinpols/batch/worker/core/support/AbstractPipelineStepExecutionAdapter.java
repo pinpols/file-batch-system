@@ -65,7 +65,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
    * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时由构造器注入; 测试 / 无 hook
    * bean 场景为 null,runVerifierHook() 直接跳过。
    *
-   * <p>review 2026-05-21: 之前用 setter + @Autowired(required=false),违反 CLAUDE.md §Java #3 (DI
+   * <p>review 2026-05-21: 之前用 setter + @Autowired(required=false),违反 docs/agent-baseline.md §Java #3 (DI
    * 只用构造器);改为 ObjectProvider 显式构造器注入。
    */
   private final PipelineVerifierHook verifierHook;

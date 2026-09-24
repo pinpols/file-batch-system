@@ -73,4 +73,4 @@ public class BatchSecurityProperties {
 
 - 散文档怎么用配置：[`../runbook/feature-switches.md`](../runbook/feature-switches.md) Phase 2 全部能力开关
 - 安全旁路总开关：[`../coding-conventions.md`](../coding-conventions.md) §21
-- 时区开关：CLAUDE.md §时区策略 + `BatchTimezoneProperties`
+- 时区开关：docs/agent-baseline.md §时区策略 + `BatchTimezoneProperties`

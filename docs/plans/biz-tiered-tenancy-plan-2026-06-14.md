@@ -2,7 +2,7 @@
 
 > 状态:**设计存档,非当前缺口**。需求驱动——仅当 biz 撞单机墙时按本方案执行。
 > 定位:把"该做时照着做"的设计落到纸上,现在**不建**(YAGNI;customer_account ~22k 行,无需求)。
-> 关联:[`docs/analysis/scaling-state-and-biz-path-2026-06-14.md`](../analysis/scaling-state-and-biz-path-2026-06-14.md)(扩容现状+路径决策)、CLAUDE.md「citus 冻结」。
+> 关联:[`docs/analysis/scaling-state-and-biz-path-2026-06-14.md`](../analysis/scaling-state-and-biz-path-2026-06-14.md)(扩容现状+路径决策)、docs/agent-baseline.md「citus 冻结」。
 
 ## 0. 一句话
 

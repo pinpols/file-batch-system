@@ -95,7 +95,7 @@ Excel 导入阶段现在拒绝：
 
 | Commit | 说明 |
 |--------|------|
-| `ce38019e` | ArchUnit lint 守护 CLAUDE.md（FQN / ZoneId 规约）|
+| `ce38019e` | ArchUnit lint 守护 docs/agent-baseline.md（FQN / ZoneId 规约）|
 | `12b40540` | workflow Excel DAG 拓扑校验 + Mermaid renderer + 23 tests |
 
 ## 前端工作（已完成）✅

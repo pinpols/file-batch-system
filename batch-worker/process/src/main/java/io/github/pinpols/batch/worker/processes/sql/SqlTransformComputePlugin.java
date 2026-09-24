@@ -422,7 +422,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             + " AND table_name = :table)",
         params,
         Boolean.class);
-    if (EmptyChecks.isNull(exists) || !exists) {
+    if (!Boolean.TRUE.equals(exists)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.process.target_table_not_found",

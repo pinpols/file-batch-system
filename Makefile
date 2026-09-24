@@ -1,6 +1,6 @@
 PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one python-env
+.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one python-env governance-checks
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
@@ -18,6 +18,13 @@ PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 python-env:
 	python3 -m venv .venv
 	.venv/bin/python -m pip install --requirement scripts/requirements.txt
+
+# 使用仓库 Python 运行应用治理门禁，不依赖系统 Python 的 site-packages。
+governance-checks:
+	bash scripts/python.sh scripts/ci/check-application-governance.py
+	bash scripts/python.sh scripts/ci/check-production-overlay-safety.py
+	bash scripts/python.sh scripts/ci/check-config-defaults-sync.py --check
+	bash scripts/python.sh scripts/ci/check-helm-env-sync.py
 
 # 构建所有应用模块 jar（不启动进程）
 dev-build:
@@ -183,7 +190,7 @@ check-version-alignment:
 bump-version:
 	bash scripts/ci/bump-version.sh $(V)
 
-# PMD 代码规约（CLAUDE.md 规则）
+# PMD 代码规约（docs/agent-baseline.md 规则）
 pmd:
 	mvn pmd:check -fae
 

@@ -15,7 +15,7 @@ import lombok.Builder;
  * @param taskId job_task.id（可空，stage 级 verifier 可能在 task 创建前就跑）
  * @param stageCode stage 业务码（如 EXPORT_FETCH / DISPATCH_DISPATCH），与 worker 内部 step 对齐
  * @param payload 业务侧自由属性（fileId / objectName / rowCount / checksum 等），key 与 worker output schema
- *     对齐（详见 CLAUDE.md §Workflow 节点参数 DSL 规范）
+ *     对齐（详见 docs/agent-baseline.md §Workflow 节点参数 DSL 规范）
  */
 @Builder
 public record VerifyContext(

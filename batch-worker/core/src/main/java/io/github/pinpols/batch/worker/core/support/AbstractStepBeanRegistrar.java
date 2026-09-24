@@ -69,7 +69,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
   }
 
   /**
-   * 事务边界：@EventListener 上原本挂的 {@code @Transactional(REQUIRES_NEW)} 违反 CLAUDE.md 规则 #4
+   * 事务边界：@EventListener 上原本挂的 {@code @Transactional(REQUIRES_NEW)} 违反 docs/agent-baseline.md 规则 #4
    * （{@code @Transactional} 只放 Service 公共方法）且 REQUIRES_NEW 在 EventListener 调用方无外层事务时 等同
    * REQUIRED，纯属误用。改为在 listener 内显式构造 {@link TransactionTemplate} 包裹 deleteByModule + N 条
    * insertEntry 的原子写入。登记失败时 console-api 的 Excel 校验会退化为不校验 impl_code 白名单 （与修复前一致，保持兼容），运维收到 ERROR

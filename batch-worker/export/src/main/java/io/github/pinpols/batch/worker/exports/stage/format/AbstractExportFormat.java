@@ -146,6 +146,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   }
 
   /** 线程级缓存的严格编码器（REPORT 而非默认 REPLACE），复用避免每字段 newEncoder。 */
+  @SuppressWarnings("java:S5164")
   private static final ThreadLocal<Map<String, CharsetEncoder>> STRICT_ENCODERS =
       ThreadLocal.withInitial(HashMap::new);
 

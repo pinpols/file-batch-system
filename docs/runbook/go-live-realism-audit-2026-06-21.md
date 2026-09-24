@@ -243,7 +243,7 @@
 
 ## §19 文档与可维护 —— 知识不在某个人脑子里
 
-**审核点**:runbook 覆盖高频运维场景(已有 biz-tenant-routing / instance-pause-resume / dependency-aware-fire 等);ADR 决策可追溯(范围边界判定提问);新人按文档能起本地环境 + 跑 sim;API 文档与控制层同步(`pr-gate` 拦漂移);CLAUDE.md 装"不能从代码推断的约束"。
+**审核点**:runbook 覆盖高频运维场景(已有 biz-tenant-routing / instance-pause-resume / dependency-aware-fire 等);ADR 决策可追溯(范围边界判定提问);新人按文档能起本地环境 + 跑 sim;API 文档与控制层同步(`pr-gate` 拦漂移);docs/agent-baseline.md 装"不能从代码推断的约束"。
 
 **形式化落地红旗**:出事只有原作者能救;ADR 写了不更新与实现漂移(如 ADR-043 §6.4 与实现差异需注明);文档与代码两张皮。
 

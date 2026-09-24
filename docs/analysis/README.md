@@ -1,6 +1,6 @@
 # 演进分析索引
 
-随版本迭代的"问题发现 → 修复 → 硬化"主线，加上少量长期治理方案与项目评估快照。一次性的 audit / benchmark / 已 fold 进 CLAUDE.md 的决策档，全部归 [`../archive/analysis/`](../archive/analysis/)。
+随版本迭代的"问题发现 → 修复 → 硬化"主线，加上少量长期治理方案与项目评估快照。一次性的 audit / benchmark / 已 fold 进 docs/agent-baseline.md 的决策档，全部归 [`../archive/analysis/`](../archive/analysis/)。
 
 ## 文件清单（编号即推荐阅读顺序）
 
@@ -46,7 +46,7 @@
 下列三类一律落 `archive/analysis/`，不在主干维护：
 
 1. **一次性 audit / benchmark**：vs-industry 对比、pg-schema-audit、sonar-cleanup、persistence-and-test-architecture 等
-2. **已 fold 进 CLAUDE.md / 主干文档的决策档**：原文作为"历史证据"留档，CLAUDE.md 是权威
+2. **已 fold 进 docs/agent-baseline.md / 主干文档的决策档**：原文作为"历史证据"留档，docs/agent-baseline.md 是权威
 3. **被新版覆盖的快照**：project-assessment-2026-04-29 这类版本快照
 
 ## 与其他子目录的分工

@@ -23,7 +23,7 @@
 | **S-1.8** | EncodingUtils 不剥离 UTF-8 BOM（工具未暴露；PreprocessStep 自己处理） | `EncodingUtils.java:35-44` | XS | P3 | 加 `stripBom(InputStream)` 工具方法，`PreprocessStep.resolveCharset` 复用 |
 | **S-1.9** | Guard.require 错误码硬编码 `INVALID_ARGUMENT` / `NOT_FOUND` | `Guard.java:52-56` | XS | P3 | 加重载 `require(boolean, ResultCode, String)`；业务需要 CONFLICT 时无需绕过 |
 | **S-1.10** | SqlTemplateExportSqlValidator 参数校验不区分模板/业务（未提供参数替换为 null） | `SqlTemplateExportSqlValidator.java:156-168` | S | P2 | 声明必填 + 可选两列；必填缺失立即抛 INVALID_ARGUMENT；可选显式默认 |
-| **S-1.11** | BatchSecurityProperties 注释与实际配置不符（IDE local 默认值标错） | `BatchSecurityProperties.java:16-23` | XS | P3 | 直接改注释。记一下 CLAUDE.md §21 的正确默认值 |
+| **S-1.11** | BatchSecurityProperties 注释与实际配置不符（IDE local 默认值标错） | `BatchSecurityProperties.java:16-23` | XS | P3 | 直接改注释。记一下 docs/agent-baseline.md §21 的正确默认值 |
 
 ## 二、并发与一致性硬化（4 条）
 

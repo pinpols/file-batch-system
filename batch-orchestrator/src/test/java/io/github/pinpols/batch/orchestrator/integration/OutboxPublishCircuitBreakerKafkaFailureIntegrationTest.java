@@ -22,7 +22,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -53,6 +56,7 @@ import org.springframework.test.annotation.DirtiesContext;
 // 该 IT 通过 stop/start Kafka 容器注入故障，重启后端口变化，Spring 缓存的 KafkaTemplate 仍指向旧端口；
 // 标 DirtiesContext 避免污染后续 IT（如 OutboxPublishIntegrationTest）。
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "it-cb";
@@ -72,6 +76,7 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @Order(2)
   void kafkaBrokerFailureOpensOutboxCircuitBreakerAfterThreshold() {
     assertThat(circuitBreaker.allowNow()).isTrue();
 
@@ -95,6 +100,27 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
       startKafkaAfterFaultInjection();
       circuitBreaker.onAdvanceResult(0);
     }
+  }
+
+  @Test
+  @Order(1)
+  void failedEventIsPublishedAfterKafkaRecovers() {
+    OutboxEventEntity event = seedOutboxEvent("cb-recover-" + System.nanoTime());
+    jdbcTemplate.update(
+        "update batch.outbox_event set publish_status = 'FAILED', publish_attempt = 1, "
+            + "next_publish_at = now() where id = ?",
+        event.getId());
+
+    ScheduleForwarderResult result = scheduleForwarder.advance(plan());
+    circuitBreaker.onAdvanceResult(result.totalFailures());
+
+    assertThat(result.totalFailures()).isZero();
+    assertStatus(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+    Integer attempt = jdbcTemplate.queryForObject(
+        "select publish_attempt from batch.outbox_event where id = ?",
+        Integer.class,
+        event.getId());
+    assertThat(attempt).isGreaterThanOrEqualTo(2);
   }
 
   private OutboxEventEntity seedOutboxEvent(String key) {

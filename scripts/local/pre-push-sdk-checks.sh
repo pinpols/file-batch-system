@@ -3,7 +3,7 @@
 # pre-push-sdk-checks.sh
 #
 # SDK 路线图 PR 推送前自查 — 拦截高频被 CI 拦截的问题:
-#   1. Java 编码反例(CLAUDE.md 「Java 编码细则」10 条)
+#   1. Java 编码反例(docs/agent-baseline.md 「Java 编码细则」10 条)
 #   2. API 文档对齐(Controller API 契约改了但 OpenAPI / protocol.md 没改)
 #   3. 轻量契约门禁(EmptyChecks、readiness 文档同步、Trivy ignore 到期)
 #
@@ -148,6 +148,9 @@ fi
 if ! "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py; then
   errors=$((errors+1))
 fi
+if ! "$PYTHON_BIN" scripts/ci/check-sdk-config-env-parity.py; then
+  errors=$((errors+1))
+fi
 
 READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"
 if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; then
@@ -198,7 +201,7 @@ fi
 echo ""
 
 # ═════════════════════════════════════════════════════════
-# 检查 1:Java 编码反例(CLAUDE.md 「Java 编码细则」10 条节选)
+# 检查 1:Java 编码反例(docs/agent-baseline.md 「Java 编码细则」10 条节选)
 #   关键:只扫"本 PR 真新增的行"(+ 开头的 diff 行),不扫全文件历史代码
 # ═════════════════════════════════════════════════════════
 if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
@@ -339,7 +342,7 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
 fi
 
 # ═════════════════════════════════════════════════════════
-# 检查 2:API 文档对齐(CLAUDE.md 「API 文档同步」)
+# 检查 2:API 文档对齐(docs/agent-baseline.md 「API 文档同步」)
 # ═════════════════════════════════════════════════════════
 if [[ -n "$CHANGED_CTL" ]]; then
   info "──────────────────────────────────────"
@@ -444,7 +447,7 @@ if [[ -n "$CHANGED_FLYWAY" ]]; then
       arch_mig=$(find . -path "*archive*migration*${version}__*" -not -path "*/target/*" 2>/dev/null | head -1)
       if ! grep -qiE "(CREATE|ALTER)[[:space:]]+TABLE[[:space:]]+archive\." "$f" 2>/dev/null \
           && [[ -z "$arch_mig" ]]; then
-        warn "  $version 含批表 DDL,但未找到 archive 镜像 migration(CLAUDE.md「archive 冷表对齐」红线)"
+        warn "  $version 含批表 DDL,但未找到 archive 镜像 migration(docs/agent-baseline.md「archive 冷表对齐」红线)"
         warn "  请人工确认是否需要补 archive 镜像(ArchiveSchemaDriftCheck 启动期会拦截)"
       fi
     fi

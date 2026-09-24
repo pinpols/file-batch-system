@@ -2,7 +2,7 @@
 
 > 项目里有 4 种"分布式协调"机制，**用法不能混淆**。本文档锁死边界，给后续维护者一个 decision tree。
 >
-> 配套阅读：[ADR-002 transactional-outbox](../architecture/adr/ADR-002-transactional-outbox.md)、[CLAUDE.md §模块边界 / §架构硬约束](../../CLAUDE.md)。
+> 配套阅读：[ADR-002 transactional-outbox](../architecture/adr/ADR-002-transactional-outbox.md)、[docs/agent-baseline.md §模块边界 / §架构硬约束](../../docs/agent-baseline.md)。
 
 ---
 
@@ -274,4 +274,4 @@ public void recoverLaunches() { ... }
 - [ADR-006 compensation-requires-new](../architecture/adr/ADR-006-compensation-requires-new.md) — 重试 / 补偿走 `REQUIRES_NEW`，与乐观锁 retry 循环协作
 - [ADR-010 trigger-async-decoupling](../architecture/adr/ADR-010-trigger-async-decoupling.md) — trigger outbox + Kafka，相同 SKIP LOCKED 模式复用
 - [docs/runbook/feature-switches.md](feature-switches.md) — 配置开关运维
-- [CLAUDE.md §架构硬约束](../../CLAUDE.md) — 状态主机 / outbox 同事务约束
+- [docs/agent-baseline.md §架构硬约束](../../docs/agent-baseline.md) — 状态主机 / outbox 同事务约束

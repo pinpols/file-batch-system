@@ -21,7 +21,7 @@ info:
     `docs/runbook/sdk-dual-rollout.md` 双向滚动纪律。
 
     本文件**只描述 SDK 可见的内部协议**,不暴露给 FE / 外部消费者(不在 console-api Swagger UI)。
-    pr-gate CI 会对照 `WorkerController` / `TaskController` 漂移检测(见 `CLAUDE.md` 「API 文档同步」段)。
+    pr-gate CI 会对照 `WorkerController` / `TaskController` 漂移检测(见 `docs/agent-baseline.md` 「API 文档同步」段)。
 
 servers:
   - url: http://orchestrator-internal:8081

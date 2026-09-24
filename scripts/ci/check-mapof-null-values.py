@@ -3,7 +3,7 @@
 #
 # Map.of / List.of / Set.of 空值守护(钉死唯一反复复发的生产 NPE 模式)。
 #
-# 背景(对齐 CLAUDE.md「异常→契约」红线 + 528k LOC null 纪律专项审计结论):
+# 背景(对齐 docs/agent-baseline.md「异常→契约」红线 + 528k LOC null 纪律专项审计结论):
 #   Map.of(...) / List.of(...) / Set.of(...) 是不可变工厂,对 null 键/值零容忍——
 #   一旦某个值参在运行时为 null 立刻抛 NPE,把一条干净的业务流程 / 4xx 错误
 #   掩盖成 500(UI 侧稳定复现)。历史实锤:

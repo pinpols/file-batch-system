@@ -3,14 +3,14 @@
 > **产出日期**：2026-05-01
 > **状态**：已闭环
 > **版本**：v1（49 处 nulls≥3）→ v2（198 处含 argc=4-6）→ v3（61 处 main，按 Effective Java / Google Style 收窄）→ **v4（main + test 全清，守护测试扩到 test 路径）**
-> **关联规约**：CLAUDE.md §「方法参数约束」（本方案同步追加"调用方约束"子节）
-> **触发**：CLAUDE.md "方法参数 ≥7 必须封装为 Param 类" 第一阶段落地后，参数臃肿从方法签名搬到了构造调用，留下 main 61 处 + test 41 处 `f(new XxxParam(a,...,h))` 反例（argc>6）
+> **关联规约**：docs/agent-baseline.md §「方法参数约束」（本方案同步追加"调用方约束"子节）
+> **触发**：docs/agent-baseline.md "方法参数 ≥7 必须封装为 Param 类" 第一阶段落地后，参数臃肿从方法签名搬到了构造调用，留下 main 61 处 + test 41 处 `f(new XxxParam(a,...,h))` 反例（argc>6）
 
 ## 1. 目标
 
 消除 main + test 中两类反例（业界标准 + Effective Java Item 1-2 对齐）：
 
-1. **方法签名 argc>6** —— CLAUDE.md 现有规约硬性违反，必须封装为 Param/Command record
+1. **方法签名 argc>6** —— docs/agent-baseline.md 现有规约硬性违反，必须封装为 Param/Command record
 2. **inline `f(new Xxx(...))` Xxx 构造参数 >6** —— 加 `@Builder` + 提取引用变量 + builder 链（默认值不显式 set）
 
 **不治理**：
@@ -21,7 +21,7 @@
 
 | 桶 | 阈值 | 数量 | 备注 |
 |---|---|---:|---|
-| **① 方法签名 argc>6（=7）** | 必修 | **7** | CLAUDE.md 硬性违反 |
+| **① 方法签名 argc>6（=7）** | 必修 | **7** | docs/agent-baseline.md 硬性违反 |
 | **② inline new argc>6** | 加 `@Builder` + 引用 | **54** | ~25 个治理类型 |
 | **合计** | | **61 处** | + ① 封装后产生的 ~10 处新调用方 |
 
@@ -31,7 +31,7 @@
 
 | 文件 | 方法 | 类型 | 处理 |
 |---|---|---|---|
-| `ConsoleApiKeyRepository.java:59` | `insert` | Spring Data JDBC `@Modifying @Query` | **豁免**（CLAUDE.md 框架契约豁免条款） |
+| `ConsoleApiKeyRepository.java:59` | `insert` | Spring Data JDBC `@Modifying @Query` | **豁免**（docs/agent-baseline.md 框架契约豁免条款） |
 | `ConsoleWebhookSubscriptionRepository.java:68` | `insert` | Spring Data JDBC `@Modifying @Query` | **豁免** |
 | `ConsoleWebhookSubscriptionRepository.java:89` | `update` | Spring Data JDBC `@Modifying @Query` | **豁免** |
 | `RetryScheduleMapper.java:31` | `markFailed` | MyBatis mapper（原生 `#{p.field}`） | ✅ `MarkFailedParam` record |
@@ -159,14 +159,14 @@ public class XxxDto {
 
 ## 4. 提交策略：1 个大 PR
 
-按用户决策"大 PR"——本方案 61 处 + ① 封装产生的 ~10 处新调用方 + 守护测试 + CLAUDE.md 规约更新 + changelog 追加，**全部一个 PR 合入**。
+按用户决策"大 PR"——本方案 61 处 + ① 封装产生的 ~10 处新调用方 + 守护测试 + docs/agent-baseline.md 规约更新 + changelog 追加，**全部一个 PR 合入**。
 
 | 改动项 | 预估 diff |
 |---|---:|
 | ① 7 处方法封装 + 7 个新 Param record + 调用方 ~10 处 | ~300 行 |
 | ② 54 处 inline argc>6 + ~25 类型加 `@Builder`（含 class 注解回退） | ~600 行 |
 | 守护测试 `PositionalArgsConventionTest` | ~120 行 |
-| CLAUDE.md §方法参数约束 追加调用方子节 | ~30 行 |
+| docs/agent-baseline.md §方法参数约束 追加调用方子节 | ~30 行 |
 | docs/changelog.md 追加规约变更条目 | ~5 行 |
 | **合计** | **~1100 行 diff** |
 
@@ -175,7 +175,7 @@ public class XxxDto {
 1. `chore(convention): 封装方法签名 argc>6 = 7 处 + 新 Param records`（桶 ①）
 2. `chore(convention): inline new argc>6 全清 = 54 处 + 25 类型加 @Builder`（桶 ②）
 3. `test(convention): PositionalArgsConventionTest 守护拦回潮`
-4. `docs(convention): CLAUDE.md §方法参数约束 加调用方子节 + changelog`
+4. `docs(convention): docs/agent-baseline.md §方法参数约束 加调用方子节 + changelog`
 
 每个 commit 独立编译 + 测试通过，PR 合入前跑全模块 `mvn -DskipITs test`。
 
@@ -219,13 +219,13 @@ public class XxxDto {
 - [ ] 61 处全部清零（main grep `\b<methodName>\(.*\bnew\s+\w+\([^)]*,[^)]*,[^)]*,[^)]*,[^)]*,[^)]*,` → 0）
 - [ ] `mvn -pl <全模块> -DskipITs test` 全部通过
 - [ ] `PositionalArgsConventionTest` 在 main + test 双路径通过
-- [ ] CLAUDE.md §方法参数约束 子节落地
+- [ ] docs/agent-baseline.md §方法参数约束 子节落地
 - [ ] docs/changelog.md 追加 2026-05-01 条目
 - [ ] hardening-backlog.md `V6-P2-POSITIONAL-ARGS` 状态 `方案待批准` → `已闭环`
 
 ## 9. 与其他文档的关系
 
-- `CLAUDE.md` §方法参数约束 末尾追加"调用方约束"子节（同 PR 落地）
+- `docs/agent-baseline.md` §方法参数约束 末尾追加"调用方约束"子节（同 PR 落地）
 - `docs/changelog.md` 追加 2026-05-01 规约变更条目
 - `docs/analysis/hardening-backlog.md` `V6-P2-POSITIONAL-ARGS` 索引同步状态
 - 完成后归档到 `archive/analysis/`

@@ -21,7 +21,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 复用型 ArchUnit 规则,守护 CLAUDE.md 硬性规约。
+ * 复用型 ArchUnit 规则,守护 docs/agent-baseline.md 硬性规约。
  *
  * <p>使用方:在各模块 test sources 写一个 {@code XxxConventionsArchTest},以 test scope 引入
  * {@code batch-test-support},把本类的规则跑在该模块自己 importPackages 出来的 JavaClasses 上。本类没有 {@code @Test} 方法,不会在 test-support surefire
@@ -39,7 +39,7 @@ public final class CodingConventionsArchRules {
             "io.github.pinpols.batch.common.config..", "io.github.pinpols.batch.common.time..")
         .should(callMethod(ZoneId.class.getName(), "systemDefault"))
         .allowEmptyShould(true)
-        .because("CLAUDE.md §时区策略:禁止业务代码直接读取 JVM 默认时区;注入 BatchTimezoneProvider"
+        .because("docs/agent-baseline.md §时区策略:禁止业务代码直接读取 JVM 默认时区;注入 BatchTimezoneProvider"
             + " 或调用 provider.defaultZone()。白名单 = batch-common.config / batch-common.time。");
   }
 
@@ -52,12 +52,13 @@ public final class CodingConventionsArchRules {
         .doNotHaveFullyQualifiedName("io.github.pinpols.batch.common.utils.EncodingUtils")
         .should(callMethod(Charset.class.getName(), "forName"))
         .allowEmptyShould(true)
-        .because("CLAUDE.md §字符编码:禁止 Charset.forName(\"UTF-8\") / 字面量;改用 StandardCharsets.UTF_8"
-            + " 或 EncodingUtils.resolve(raw)。白名单 = EncodingUtils 自身。");
+        .because(
+            "docs/agent-baseline.md §字符编码:禁止 Charset.forName(\"UTF-8\") / 字面量;改用 StandardCharsets.UTF_8"
+                + " 或 EncodingUtils.resolve(raw)。白名单 = EncodingUtils 自身。");
   }
 
   /**
-   * 禁止 {@code *Record} 后缀的持久化/领域类:CLAUDE.md §持久化(ADR-001)明文统一 {@code *Entity} 后缀。
+   * 禁止 {@code *Record} 后缀的持久化/领域类:docs/agent-baseline.md §持久化(ADR-001)明文统一 {@code *Entity} 后缀。
    *
    * <p>豁免:Java 14+ JEP 359 的"record"类型本身(因为 record 关键字与命名后缀语义不同),仅当类名是 "Record"(裸名)或位于 SDK
    * testkit/example 时跳过。
@@ -76,12 +77,12 @@ public final class CodingConventionsArchRules {
         })
         .should(existAtAll())
         .allowEmptyShould(true)
-        .because("CLAUDE.md §持久化(ADR-001):表行/领域类一律 *Entity 后缀,禁 *Record。"
+        .because("docs/agent-baseline.md §持久化(ADR-001):表行/领域类一律 *Entity 后缀,禁 *Record。"
             + "新增以 Record 结尾的类必须改名 *Entity(例如 ApiKeyEntity / ImportBadRecordEntity)。");
   }
 
   /**
-   * 禁止同一方法同时标 {@code @EventListener} 与 {@code @Transactional}:CLAUDE.md #4 要求
+   * 禁止同一方法同时标 {@code @EventListener} 与 {@code @Transactional}:docs/agent-baseline.md #4 要求
    * {@code @Transactional} 只放 Service 公共方法。事件监听方法直接挂事务是误用(监听器由框架直接调用, 不走 Service
    * 代理边界,事务语义不清/易吞异常),应改用 {@code TransactionTemplate} 显式包裹。
    */
@@ -91,12 +92,12 @@ public final class CodingConventionsArchRules {
             "org.springframework.context.event.EventListener",
             "org.springframework.transaction.annotation.Transactional"))
         .allowEmptyShould(true)
-        .because("CLAUDE.md #4:@EventListener 方法禁直接叠 @Transactional(误用);"
+        .because("docs/agent-baseline.md #4:@EventListener 方法禁直接叠 @Transactional(误用);"
             + "事件监听不走 Service 代理边界,改用 TransactionTemplate 显式包裹事务。");
   }
 
   /**
-   * 禁止同一方法同时标 {@code @Scheduled} 与 {@code @Transactional}:CLAUDE.md #4 要求 {@code @Transactional} 只放
+   * 禁止同一方法同时标 {@code @Scheduled} 与 {@code @Transactional}:docs/agent-baseline.md #4 要求 {@code @Transactional} 只放
    * Service 公共方法。定时任务方法直接挂事务是误用(调度由框架直接调用, 不走 Service 代理边界),应抽出 Service 方法或改用 {@code
    * TransactionTemplate}。
    */
@@ -106,7 +107,7 @@ public final class CodingConventionsArchRules {
             "org.springframework.scheduling.annotation.Scheduled",
             "org.springframework.transaction.annotation.Transactional"))
         .allowEmptyShould(true)
-        .because("CLAUDE.md #4:@Scheduled 方法禁直接叠 @Transactional(误用);"
+        .because("docs/agent-baseline.md #4:@Scheduled 方法禁直接叠 @Transactional(误用);"
             + "调度不走 Service 代理边界,抽 Service 方法或改用 TransactionTemplate。");
   }
 
@@ -128,7 +129,7 @@ public final class CodingConventionsArchRules {
                   + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
                   + " 与 @"
                   + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)
-                  + " — 违反 CLAUDE.md #4,改用 TransactionTemplate 显式包裹事务"));
+                  + " — 违反 docs/agent-baseline.md #4,改用 TransactionTemplate 显式包裹事务"));
         }
       }
     };
@@ -139,7 +140,9 @@ public final class CodingConventionsArchRules {
       @Override
       public void check(JavaClass item, ConditionEvents events) {
         events.add(SimpleConditionEvent.violated(
-            item, item.getName() + " ends with \"Record\" — 违反 CLAUDE.md §持久化命名约束,请改为 *Entity 后缀"));
+            item,
+            item.getName()
+                + " ends with \"Record\" — 违反 docs/agent-baseline.md §持久化命名约束,请改为 *Entity 后缀"));
       }
     };
   }

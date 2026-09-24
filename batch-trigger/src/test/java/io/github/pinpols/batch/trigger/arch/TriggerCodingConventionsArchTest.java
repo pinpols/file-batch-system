@@ -6,7 +6,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
 import org.junit.jupiter.api.Test;
 
-/** batch-trigger CLAUDE.md 规约守护,规则源自 batch-common 测试 jar 的 CodingConventionsArchRules。 */
+/** batch-trigger docs/agent-baseline.md 规约守护,规则源自 batch-common 测试 jar 的 CodingConventionsArchRules。 */
 class TriggerCodingConventionsArchTest {
 
   private static final JavaClasses CLASSES = new ClassFileImporter()

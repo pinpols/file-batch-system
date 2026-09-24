@@ -2,7 +2,7 @@
 # =========================================================
 # be-acceptance.sh
 #
-# BE 全链路验收 entry — 与 ~/.claude/skills/be-acceptance 同步。
+# BE 全链路验收入口；流程说明见 docs/runbook/be-acceptance.md。
 # 支持选定步骤跑(--steps=1,3,5)或从某步续跑(--from-step=3)。
 #
 # 用法:
@@ -47,6 +47,7 @@ export BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-host}"
 # FE_DIR:默认走 sibling 仓相对路径(本仓和 batch-console 平级)。
 # 别人 clone 仓库到不同位置 / Linux 上跑,环境变量 export FE_DIR=/path 覆盖。
 FE_DIR="${FE_DIR:-$ROOT_DIR/../batch-console}"
+AGENT_TASK_OUTPUT_ROOT="${AGENT_TASK_OUTPUT_ROOT:-}"
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
 FE_PORT="${FE_PORT:-5173}"
 DOCKER_CONTAINER_NAME_PATTERN="${DOCKER_CONTAINER_NAME_PATTERN:-batch-(postgres|kafka|valkey|minio)}"
@@ -271,7 +272,7 @@ cleanup_stale_runs() {
   # shellcheck disable=SC2064
   trap "rm -f \"$src_set\"" RETURN
   find . -path "*/db/migration/V*.sql" \
-    -not -path "*/target/*" -not -path "*/.claude/*" \
+    -not -path "*/target/*" -not -path "*/.agents/*" \
     -exec basename {} \; 2>/dev/null | sort -u > "$src_set"
   local orphan_cnt=0
   while IFS= read -r f; do
@@ -281,7 +282,7 @@ cleanup_stale_runs() {
       orphan_cnt=$((orphan_cnt + 1))
     fi
   done < <(find . -path "*/target/*/db/migration/V*.sql" \
-    -not -path "*/.claude/*" 2>/dev/null)
+    -not -path "*/.agents/*" 2>/dev/null)
   if [[ "$orphan_cnt" -gt 0 ]]; then
     note "清掉 $orphan_cnt 个 target/ 孤儿 Flyway migration(防 Flyway 启动重复 version 报错)"
   fi
@@ -378,7 +379,7 @@ step_5_strict() {
 
 step_6_scan() {
   hdr 6 "$(step_name 6)"
-  # 简单扫(只看 .java,避免 docs/CLAUDE.md 引用规则文本误报)
+  # 简单扫(只看 .java,避免 docs/docs/agent-baseline.md 引用规则文本误报)
   local fqn
   fqn=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
     | grep '^+' | grep -v '^+++' | grep -v "import\|@link\|//\|^\\+ *\\*" \
@@ -410,8 +411,12 @@ step_7_fe() {
   local tunnel_url=""
   local cf_pid; cf_pid=$(pgrep -f "cloudflared.*tunnel" | head -1)
   if [[ -n "$cf_pid" ]]; then
-    # 找 cloudflared 进程的 stdout log(可能在 /tmp 或用户指定)
-    for log_path in /tmp/claude-501/*/tasks/*.output /tmp/cloudflared-*.log /tmp/vite-preview.log; do
+    # 可选读取 agent 会话输出；agent 自身目录由调用方提供。
+    local log_paths=(/tmp/cloudflared-*.log /tmp/vite-preview.log)
+    if [[ -n "$AGENT_TASK_OUTPUT_ROOT" ]]; then
+      log_paths+=("$AGENT_TASK_OUTPUT_ROOT"/*/tasks/*.output)
+    fi
+    for log_path in "${log_paths[@]}"; do
       [[ -f "$log_path" ]] || continue
       tunnel_url=$(grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" "$log_path" 2>/dev/null | tail -1)
       [[ -n "$tunnel_url" ]] && break

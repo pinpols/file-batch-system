@@ -72,7 +72,7 @@ services:
       # P2-4: 透传给 003-create-replication-user.sh 创建流复制用户
       POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
       POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
-      # 全栈 UTF-8（见 CLAUDE.md §字符编码）：数据库 initdb 强制 UTF8 编码，
+      # 全栈 UTF-8（见 docs/agent-baseline.md §字符编码）：数据库 initdb 强制 UTF8 编码，
       # 容器 locale 锁 C.UTF-8 防止 psql/日志输出乱码。
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
       <<: *common-runtime-env

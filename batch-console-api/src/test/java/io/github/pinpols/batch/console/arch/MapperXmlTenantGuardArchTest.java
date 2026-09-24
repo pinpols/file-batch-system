@@ -26,7 +26,7 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
   @Override
   protected List<String> knownConditionalTenantMappers() {
     return List.of(
-        // 全局系统表(CLAUDE.md §多租隔离 4 张豁免表)
+        // 全局系统表(docs/agent-baseline.md §多租隔离 4 张豁免表)
         "BizTableSchemaMapper",
         "StepRegistryMapper",
         "ShedLockMapper",

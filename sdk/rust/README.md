@@ -41,7 +41,7 @@ cargo check --features kafka   # compile the rdkafka adapter (needs cmake + libs
 
 The `kafka` feature pulls `rdkafka` (real SASL/SCRAM consumer); it is optional so the
 core stays dependency-free. The end-to-end Kafka integration test is env-gated
-(`KAFKA_BOOTSTRAP`) and runs only against a live broker / in CI.
+(`BATCH_SDK_KAFKA_BOOTSTRAP`) and runs only against a live broker / in CI.
 
 ## P1 retry / idempotency
 

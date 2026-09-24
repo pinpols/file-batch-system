@@ -56,7 +56,7 @@
 
 ### 1 处规范硬违规(必修)
 
-- **FQN 违规**:`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java:260` 出现 `io.github.pinpols.batch.common.utils.JsonUtils.fromJson(...)`,未走 import,违反 CLAUDE.md "禁止全限定类名"。修复:加 import 后用短名。
+- **FQN 违规**:`batch-worker-core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java:260` 出现 `io.github.pinpols.batch.common.utils.JsonUtils.fromJson(...)`,未走 import,违反 docs/agent-baseline.md "禁止全限定类名"。修复:加 import 后用短名。
 
 ### 4 处"重构未走完"的复制粘贴(同源)
 
@@ -101,7 +101,7 @@
 
 ### 守卫机制
 
-- `ConsoleMetaEnumRegistrationTest.java` 真实存在(已编译),CLAUDE.md 说的"枚举二选一守护"到位。
+- `ConsoleMetaEnumRegistrationTest.java` 真实存在(已编译),docs/agent-baseline.md 说的"枚举二选一守护"到位。
 - `ExportFileVerifier` / `DispatchReceiptVerifier` 为产物验收,配 Micrometer 指标。
 - 4 条 GitHub workflow 分级:`pr-gate / full-ci-gate / staging-gate / capacity-gate`,有 capacity 门禁说明跑过 load-tests。
 
@@ -174,7 +174,7 @@
 | **ADR-009 Stage 1.2/2/3 全栈实装**(下文 §5"评估时遗漏"小节经第四轮代码核查推翻) | `a9469407` | 30 文件 +678/-20:协议层加 outputs / 4 worker adapter 填 NODE_OUTPUTS / orchestrator 持久化到 workflow_node_run.output / WorkflowParamResolver 160 行 + 10 单测 / DefaultWorkflowNodeDispatchService.mergeNodeParams 接入;`wf_probe_mixed.REPORT` seed 演示 `$.nodes.PROCESS.output.processedCount` 引用 |
 | ADR-009 Stage 1.2 SqlPlugin 测试断言修复 | `4e634c7c` | `requireTargetTableExists` 改用专用 i18n key `error.process.target_table_not_found`;`prepare_failsFast_whenTargetTableDoesNotExist` 断言改为基于 BizException.getMessageKey/getMessageArgs |
 | Worker 插件层 73 处 failure 迁 i18n 三元组 | `c74a9644` | V78 八表 errorKey/errorArgs 列在 step 失败路径上真正生效;30 个 i18n key 中英双语 |
-| **ADR-010 Stage 1-3 trigger outbox 框架**(并行 Claude 会话完成) | `9587b8bf` / `087f6b7a` / `1ca3a957` | Stage 1: V80 trigger_outbox_event + LaunchEnvelope DTO + Mapper;Stage 2: TriggerOutboxRelay 224 行 + 7 单测(空批/成功/失败/反序列化/抢占/异常隔离/退避函数);Stage 3: DefaultTriggerService 加异步分支 + 灰度开关 batch.trigger.async-launch.enabled |
+| **ADR-010 Stage 1-3 trigger outbox 框架**(并行 agent 会话完成) | `9587b8bf` / `087f6b7a` / `1ca3a957` | Stage 1: V80 trigger_outbox_event + LaunchEnvelope DTO + Mapper;Stage 2: TriggerOutboxRelay 224 行 + 7 单测(空批/成功/失败/反序列化/抢占/异常隔离/退避函数);Stage 3: DefaultTriggerService 加异步分支 + 灰度开关 batch.trigger.async-launch.enabled |
 | **ADR-010 Stage 4-7 Kafka publisher/consumer + runbook + deprecation** | `22b330ea` | 11 文件 +949/-0:trigger 加 spring-kafka + KafkaTriggerEventPublisher + TriggerKafkaProducerConfiguration;orchestrator 加 OrchestratorKafkaConsumerConfiguration + TriggerLaunchConsumer(409 dedup→ack / 429 限流→ack / runtime→抛出);TriggerLaunchConsumerTest 6 单测 + KafkaTriggerEventPublisherTest 3 单测;docs/runbook/trigger-async-launch-rollout.md 225 行灰度切换 runbook;HttpOrchestratorTriggerAdapter @Deprecated(forRemoval=true)+ DefaultTriggerService 首次同步路径 WARN(AtomicBoolean 防刷屏) |
 
 #### 评估时遗漏 — 实际已落地(2026-04-30 复查发现)

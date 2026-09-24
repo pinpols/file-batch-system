@@ -53,7 +53,11 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     }
 
     Integer managementPort = environment.getProperty("management.server.port", Integer.class);
-    if (EmptyChecks.isNull(managementPort) || managementPort <= 0) {
+    if (managementPort == null) { // empty-check: allow - Sonar S2259
+      throw new IllegalStateException(
+          "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
+    }
+    if (managementPort <= 0) {
       throw new IllegalStateException(
           "FATAL: production management.server.port must be explicitly configured to a positive, discoverable port");
     }
@@ -61,7 +65,7 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
 
   private void requireRemoteEndpoint(String key) {
     String value = environment.getProperty(key);
-    if (EmptyChecks.isBlank(value)) {
+    if (value == null || EmptyChecks.isBlank(value)) {
       throw new IllegalStateException("FATAL: production endpoint is not configured: " + key);
     }
     String normalized = value.trim().toLowerCase(Locale.ROOT);

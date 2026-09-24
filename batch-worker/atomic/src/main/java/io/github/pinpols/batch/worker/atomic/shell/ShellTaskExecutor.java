@@ -307,7 +307,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       Files.createDirectory(dir);
       return dir;
     } catch (IOException e) {
-      // 用 JDK 标准 UncheckedIOException 而非裸 RuntimeException(CLAUDE.md #5):语义精确(IO 失败),
+      // 用 JDK 标准 UncheckedIOException 而非裸 RuntimeException(docs/agent-baseline.md #5):语义精确(IO 失败),
       // 仍是 RuntimeException 子类 → 被 execute() 的 catch(RuntimeException) 兜住映射 EXECUTION_FAILED
       // (不能用 BizException:会被上面 catch(BizException) 误判为 Lane C 安全拒入 SECURITY_REJECTED)。
       throw new UncheckedIOException("create workdir failed: " + e.getMessage(), e);

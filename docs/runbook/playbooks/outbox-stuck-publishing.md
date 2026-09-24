@@ -89,7 +89,7 @@
 
 适用:scheduler 没在跑(ShedLock 锁残留)或 stale 阈值过大。
 
-1. **stale 行(卡 PUBLISHING)无独立手动接口**:回收只由调度自动调 `OutboxEventMapper.resetStalePublishing` 完成。若怀疑 scheduler 没在跑(ShedLock 锁残留),走第 2、3 步释放锁 / 重启即可恢复自动回收。**对已转 `FAILED`/`GIVE_UP` 的行**,走 orchestrator 治理接口重投(CLAUDE.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`):
+1. **stale 行(卡 PUBLISHING)无独立手动接口**:回收只由调度自动调 `OutboxEventMapper.resetStalePublishing` 完成。若怀疑 scheduler 没在跑(ShedLock 锁残留),走第 2、3 步释放锁 / 重启即可恢复自动回收。**对已转 `FAILED`/`GIVE_UP` 的行**,走 orchestrator 治理接口重投(docs/agent-baseline.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`):
    ```bash
    curl -X POST http://localhost:18082/internal/outbox/republish \
      -H "X-Internal-Secret: ${INTERNAL_SECRET}" \
@@ -117,7 +117,7 @@
 
 ### 方案 C:最后手段(破坏性操作)— 直接改 DB(只在生产严重事故 + 上述均失败)
 
-**违反 CLAUDE.md 红线**,只在 P0 事故 + 走过 incident commander approval 时使用。事后必须补 post-mortem 说明为什么治理接口不行。
+**违反 docs/agent-baseline.md 红线**,只在 P0 事故 + 走过 incident commander approval 时使用。事后必须补 post-mortem 说明为什么治理接口不行。
 
 ```sql
 begin;
@@ -151,5 +151,5 @@ commit;
 
 - 代码:`batch-orchestrator/.../infrastructure/mq/OutboxPollScheduler.java`(`resetStalePublishingEvents`),`OutboxEventMapper.xml#resetStalePublishing`
 - schema:`db/migration/V7__create_ops_tables.sql`(`batch.outbox_event` 定义)
-- 架构原则:CLAUDE.md §异步事件路由 / §架构硬约束(console-api 禁直接改 outbox)
+- 架构原则:docs/agent-baseline.md §异步事件路由 / §架构硬约束(console-api 禁直接改 outbox)
 - 上一级:[`docs/runbook/incident-response.md`](../incident-response.md)

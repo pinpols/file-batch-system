@@ -65,7 +65,7 @@
 - 所有写接口记录 `requestId` / `operator` / `clientIp`
 - 文件下载接口**不暴露真实对象存储永久凭证**——走预签名 URL 或代理下载
 
-> 安全旁路总开关：`batch.security.bypass-mode`（CLAUDE.md §配置开关规范 + `coding-conventions.md` §21）。生产 profile 强制拒绝 `true`。
+> 安全旁路总开关：`batch.security.bypass-mode`（docs/agent-baseline.md §配置开关规范 + `coding-conventions.md` §21）。生产 profile 强制拒绝 `true`。
 
 ## 4. 对象存储访问策略
 

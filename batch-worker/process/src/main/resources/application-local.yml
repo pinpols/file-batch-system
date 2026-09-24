@@ -55,6 +55,6 @@ batch:
   datasource:
     business:
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified}
-      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      username: ${BATCH_BUSINESS_DB_USERNAME:batch_business_writer}
       password: ${BATCH_BUSINESS_DB_PASSWORD:}
       schema: biz

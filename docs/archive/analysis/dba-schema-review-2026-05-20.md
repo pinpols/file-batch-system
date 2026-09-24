@@ -160,7 +160,7 @@ Schema 整体已较为成熟：
 - **PK/FK**：核心表都是 `BIGSERIAL PK(id)`；近期迁移（V58、V119）将 job_partition 子表的 FK 改为 CASCADE/SET NULL，老表仍是默认 RESTRICT，需逐张审视。
 - **CHECK**：状态枚举与数值范围覆盖完整；V124/V127 关键 NULL 绕过已修复。
 - **租户隔离**：核心 OK；console 系列需收紧。
-- **Outbox 事务边界**：`trigger_outbox_event` / `outbox_event` 与父事务同提交（V80、CLAUDE.md）；`event_delivery_log` / `worker_report_outbox` 与父事务关系需在文档中显式标注，避免后续重构破坏。
+- **Outbox 事务边界**：`trigger_outbox_event` / `outbox_event` 与父事务同提交（V80、docs/agent-baseline.md）；`event_delivery_log` / `worker_report_outbox` 与父事务关系需在文档中显式标注，避免后续重构破坏。
 
 ---
 

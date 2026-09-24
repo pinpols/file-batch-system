@@ -73,13 +73,13 @@
 
 ### 5. V6-P2-POSITIONAL-ARGS（2026-05-01 方案定稿）
 
-- **背景**：CLAUDE.md "方法参数 ≥7 必须封装" 第一阶段落地后，参数臃肿从方法签名搬到 `new XxxParam(a,b,...,n)` inline 调用，留下 main 反例
+- **背景**：docs/agent-baseline.md "方法参数 ≥7 必须封装" 第一阶段落地后，参数臃肿从方法签名搬到 `new XxxParam(a,b,...,n)` inline 调用，留下 main 反例
 - **范围**（业界对齐后收窄）：① 方法签名 argc=7 共 7 处 + ② inline argc>6 共 54 处 = **61 处**
   - **删桶 ③**（argc=4-6 共 137 处）：Effective Java / Google Style / Oracle Conventions 均未禁止 `f(new Foo(a..f))`，业界无依据
   - **豁免声明式注册类**：`ConsoleMenuRegistry`（41 处 MenuItem + 8 处 MenuGroup）/ Excel `*SchemaRegistry`（8 处 SheetDef）等，inline new 在声明式数据结构里是业界鼓励写法
 - **统一动作**：② 加 `@Builder` + 提取引用 + 默认值不显式 set；class 加 `@Builder` 用 `@NoArgsConstructor` + `@AllArgsConstructor` 三连或 `@Tolerate` 回退空参，**不降级**
 - **提交策略**：1 个大 PR 内 4 commit 拆分（① / ② / 守护测试 / 文档），~1100 行 diff
-- **规约同步**：CLAUDE.md §方法参数约束 追加"调用方约束"子节 + `docs/changelog.md` 2026-05-01 条目 + 守护 `PositionalArgsConventionTest` 白名单方式拦回潮
+- **规约同步**：docs/agent-baseline.md §方法参数约束 追加"调用方约束"子节 + `docs/changelog.md` 2026-05-01 条目 + 守护 `PositionalArgsConventionTest` 白名单方式拦回潮
 - **不做**：Spring Data JDBC entity 强制 `@Builder` / 重排 record 字段 / argc≤6 治理 / 声明式注册类 / test 重灾区 fixture builder（独立立项）
 - **详细方案**：[`positional-args-cleanup-plan.md`](./positional-args-cleanup-plan.md)
 - **前置 PR-A**：Query record 17 类 / 39 处调用点 + `QueryRecordConstructionConventionTest` 已完成（主线 commit 待 push）

@@ -216,7 +216,7 @@ Python 选择是"scheduler-only 模式"(`client.py` L249-256 注释:无 kafka_fa
 
 ### 3.2 outbox 三表分工
 
-CLAUDE.md 规定三表分工:
+docs/agent-baseline.md 规定三表分工:
 
 - `outbox_event` → 通用业务事件(orchestrator 主用,`OutboxEventMapper.java`)
 - `event_outbox_retry` → 投递失败退避重试
@@ -238,7 +238,7 @@ CLAUDE.md 规定三表分工:
 ### 3.4 跨服务事务边界(trigger → orch → worker)
 
 - trigger:fire → `trigger_outbox_event` 同事务(`TriggerOutboxDomainEventPublisher`)。
-- orch:状态 update + `outbox_event` insert 同事务(`OutboxDomainEventPublisher.java` L45 `outboxEventMapper.insert(entity)`,被 `@Transactional` 服务调用)。CLAUDE.md "outbox_event 写入必须与任务状态同事务" 命中。
+- orch:状态 update + `outbox_event` insert 同事务(`OutboxDomainEventPublisher.java` L45 `outboxEventMapper.insert(entity)`,被 `@Transactional` 服务调用)。docs/agent-baseline.md "outbox_event 写入必须与任务状态同事务" 命中。
 - worker:不直接写 `job_instance` / `workflow_run`(SDK 通过 REPORT 上送,orch 端写入数据库)。`DefaultCompensationService` 用 `REQUIRES_NEW` 拆 INSERT 命令 / 标 FAILED 独立提交,目的是"handler 失败也留住命令行"— 与边界硬约束兼容。
 
 未发现 worker 端直接 UPDATE job_instance 的违规(grep `Mapper` 调用)。
@@ -446,10 +446,10 @@ batch-orchestrator/.../ArchiveSchemaDriftCheck.java        # 仅归档守护登�
 
 ### 7.5 跨服务事务边界标注
 
-CLAUDE.md "outbox_event 写入必须与任务状态同事务":
+docs/agent-baseline.md "outbox_event 写入必须与任务状态同事务":
 
 - `batch-orchestrator/.../OutboxDomainEventPublisher.java` L45 `outboxEventMapper.insert(entity)` 在 `@Transactional` Service 调用栈内,与 `job_instance` / `workflow_run` 状态 UPDATE 同事务 ✓
-- `DefaultCompensationService` 用 `REQUIRES_NEW` 拆 INSERT 命令 + 标 FAILED → 独立提交是为了"handler 失败也留住命令行"(L113-116 注释明确),CLAUDE.md §4 规则 4 豁免:"Propagation.NEVER 之外的非默认传播 禁" — `REQUIRES_NEW` 算违规但 javadoc 写了理由,需架构组登记 ADR 例外清单(本次不展开)。
+- `DefaultCompensationService` 用 `REQUIRES_NEW` 拆 INSERT 命令 + 标 FAILED → 独立提交是为了"handler 失败也留住命令行"(L113-116 注释明确),docs/agent-baseline.md §4 规则 4 豁免:"Propagation.NEVER 之外的非默认传播 禁" — `REQUIRES_NEW` 算违规但 javadoc 写了理由,需架构组登记 ADR 例外清单(本次不展开)。
 
 ### 7.6 时区 / 编码 grep 全量结果
 
@@ -489,7 +489,7 @@ Charset.forName / "UTF-8":
   - SDK 内 atomic handlers(`shell/sql/http/storedProc`)语义对照(ADR-029 范围,另写)
   - Kafka consumer rebalance / 背压(`_kafka.py` vs `KafkaTaskConsumer.java`)
   - 测试覆盖率与 CI gating 真实矩阵
-- 数据完整性边界:CLAUDE.md "Pipeline vs Workflow vs Job" 分界已自带守护测试,本次不复扫;仅核对了"worker 不直接写状态"约束。
+- 数据完整性边界:docs/agent-baseline.md "Pipeline vs Workflow vs Job" 分界已自带守护测试,本次不复扫;仅核对了"worker 不直接写状态"约束。
 - 不涉及前端/部署/observability。
 
 — end —

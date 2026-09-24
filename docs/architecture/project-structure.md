@@ -38,7 +38,7 @@ file-batch-system/
 ├── .github/workflows/                      CI(pr-gate / strict-verify / sdk-publish 等)
 ├── .githooks/                              本地 pre-commit / pre-push 守护
 ├── pom.xml                                 Root POM(flatten + revision 占位)
-├── CLAUDE.md                               项目高频违反红线 + 关键路径指针(权威)
+├── docs/agent-baseline.md                               项目高频违反红线 + 关键路径指针(权威)
 └── AGENTS.md                               Agent / SDK 协议总览
 ```
 
@@ -274,7 +274,7 @@ Entity，必须通过 Response DTO 投影。Webhook secret 等敏感字段必须
 | `sdk/rust` | Rust | 与 Java SDK 对齐的 Rust 实现 |
 | `sdk/typescript` | TypeScript | 与 Java SDK 对齐的 TypeScript 实现 |
 
-## 关键架构约束(详 [`../../CLAUDE.md`](../../CLAUDE.md))
+## 关键架构约束(详 [`../../docs/agent-baseline.md`](../../docs/agent-baseline.md))
 
 - **主链**:`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`
 - **orchestrator 是唯一状态主机**:worker 不能直写 `job_instance` / `workflow_run`
@@ -289,8 +289,8 @@ Entity，必须通过 Response DTO 投影。Webhook secret 等敏感字段必须
 ```
 docs/
 ├── README.md                文档总入口(新人从这里)
-├── changelog.md             架构约束 / CLAUDE.md 变更日志(日期倒序)
-├── coding-conventions.md    Java 编码细则 + 反例表(CLAUDE.md §Java 红线展开)
+├── changelog.md             架构约束 / docs/agent-baseline.md 变更日志(日期倒序)
+├── coding-conventions.md    Java 编码细则 + 反例表(docs/agent-baseline.md §Java 红线展开)
 ├── agent-baseline.md        Agent / 自动化协作基线
 │
 ├── analysis/                深扫报告(2026-06-03 全方位 11 lane / P2 评估等)

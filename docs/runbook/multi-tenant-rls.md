@@ -252,11 +252,11 @@ o.p.util.PSQLException: ERROR: new row violates row-level security policy
 - 关键索引必须 `tenant_id` 为首字段(现有索引已经是,例:`UNIQUE (tenant_id, customer_no)`)
 - 实测 SELECT 性能影响 < 3%(2026-05-31 benchmark,基于 `RlsTenantIsolationIntegrationTest` + JMH micro)
 
-## 8. 跟 batch_user(老 role)的兼容性
+## 8. 运行账号约束
 
-- 现有部署仍可用 `batch_user`,RLS 对它生效(只要它**不是** SUPERUSER 不是 BYPASSRLS)
-- prod 部署必须 `ALTER ROLE batch_user NOSUPERUSER NOBYPASSRLS`(若它是)
-- 新部署优先用 `batch_business_writer`(本脚本创建,无 superuser/bypass)
+- 新部署和本地默认均使用 `batch_business_writer`(本脚本创建,无 superuser/bypass)
+- Worker 启动检查和 health indicator 会拒绝 SUPERUSER / BYPASSRLS 账号，避免仅凭 policy 存在误判隔离已生效
+- 历史部署若仍使用 `batch_user`，必须迁移到 `batch_business_writer`；目标环境还需由 DBA 确认该账号不是 biz 表 owner
 - `batch_business_admin` 严禁给业务 worker — 审计会标红
 
 ## 9. FAQ
@@ -297,4 +297,4 @@ A: 不直接 — SDK 租户 worker 连自己 DB,跟平台 biz.* 无关。若 SDK
 | 2026-05-31 | #158 | 高层接线:`AbstractPipelineStepExecutionAdapter` ThreadLocal + `SqlTransformComputePlugin.commit` SET LOCAL |
 | 2026-05-31 | #160 | 底层接线:import LoadPlugin + 2 个 export DataPlugin(read 路径 readonly tx) |
 | 2026-05-31 | — | 本 runbook §3 重写:transition vs strict 模式 + 接线现状 + 翻 strict checklist + 时机判断 |
-| 待定 | TBD | Phase A strict 模式 — 翻 policy 去掉 IS NULL 回退(§3.4 描述) |
+| 2026-06-01 | — | Phase A strict 模式落地：默认 policy 去掉 `IS NULL` 回退，并增加闭世界启动守护与应急回滚脚本 |

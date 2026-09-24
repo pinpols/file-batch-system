@@ -10,7 +10,7 @@ import java.nio.charset.UnsupportedCharsetException;
 import javax.annotation.Nullable;
 
 /**
- * 字符集归一工具。配合 CLAUDE.md §字符编码 约束：全系统内部一律 UTF-8，导入边界允许外部以 别名声明（{@code utf8} / {@code UTF8} / {@code
+ * 字符集归一工具。配合 docs/agent-baseline.md §字符编码 约束：全系统内部一律 UTF-8，导入边界允许外部以 别名声明（{@code utf8} / {@code UTF8} / {@code
  * utf-8} / {@code UTF-8}），本工具统一把所有 别名归一为 {@link StandardCharsets#UTF_8} 的规范名，并对未识别字符集快速失败。
  *
  * <p>禁止业务代码直接写 {@code Charset.forName("UTF-8")} 或字符串字面量 {@code "UTF-8"}：
@@ -44,12 +44,13 @@ public final class EncodingUtils {
    *
    * <p>空/空白输入返回 {@link #UTF_8}；非法字符集名抛 {@link IllegalArgumentException}。
    */
-  public static String normalize(String raw) {
-    if (!Texts.hasText(raw)) {
+  public static String normalize(@Nullable String raw) {
+    if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
       return UTF_8;
     }
+    String normalized = raw.trim();
     try {
-      return Charset.forName(raw.trim()).name();
+      return Charset.forName(normalized).name();
     } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
       throw new IllegalArgumentException("unsupported charset: " + raw, e);
     }
@@ -57,11 +58,12 @@ public final class EncodingUtils {
 
   /** 归一并返回对应 {@link Charset}；空/空白返回 {@link StandardCharsets#UTF_8}。 */
   public static Charset resolve(@Nullable String raw) {
-    if (!Texts.hasText(raw)) {
+    if (raw == null || raw.isBlank()) { // empty-check: allow - Sonar S2259
       return StandardCharsets.UTF_8;
     }
+    String normalized = raw.trim();
     try {
-      return Charset.forName(raw.trim());
+      return Charset.forName(normalized);
     } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
       throw new IllegalArgumentException("unsupported charset: " + raw, e);
     }

@@ -24,7 +24,7 @@ postgresql:
     username: "batch_user"
   business:
     url: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_business"
-    username: "batch_user"
+    username: "batch_business_writer"
     schema: "biz"
 
 kafka:

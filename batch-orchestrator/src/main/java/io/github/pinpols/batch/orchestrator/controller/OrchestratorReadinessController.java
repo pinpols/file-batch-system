@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>trigger 携 X-Internal-Secret 经本只读 API 查就绪,不直查 job_instance。
  *
- * <p>守 CLAUDE.md「Orchestrator 唯一状态主机 + trigger 严禁直连状态表」。
+ * <p>守 docs/agent-baseline.md「Orchestrator 唯一状态主机 + trigger 严禁直连状态表」。
  */
 @RestController
 @RequestMapping("/internal/readiness")

@@ -21,7 +21,7 @@ public class BatchSecurityProperties implements EnvironmentAware {
    * <p>S-1.11：Java 字段默认 {@code false}（安全默认），实际默认值由部署渠道覆盖：
    *
    * <ul>
-   *   <li>IDE 本地 / {@code application-local.yml}：<b>显式 {@code true}</b>（调试方便，与 CLAUDE.md
+   *   <li>IDE 本地 / {@code application-local.yml}：<b>显式 {@code true}</b>（调试方便，与 docs/agent-baseline.md
    *       §配置开关规范一致；旧注释写 {@code false} 是错的）
    *   <li>docker-compose：{@code ${BATCH_SECURITY_BYPASS_MODE:-false}}（贴近生产；之前注释 误写 {@code -true}）
    *   <li>prod profile：在 {@link #validateSecuritySettings()} 的 @PostConstruct 强制拒绝 {@code true}

@@ -22,11 +22,11 @@
 ## 复扫命令
 
 ```bash
-python3 scripts/ci/check-application-governance.py
-python3 scripts/ci/check-production-overlay-safety.py
-python3 scripts/ci/check-config-defaults-sync.py --check
-python3 scripts/ci/check-helm-env-sync.py
+make governance-checks
 ```
+
+首次运行缺少依赖时执行 `make python-env`。该入口优先使用仓库 `.venv`，不依赖系统
+Python 是否安装 PyYAML。
 
 ## 明确不做
 

@@ -13,7 +13,7 @@ postgresql:
     password: "batch_pass_123"
   business:
     url: "jdbc:postgresql://host.docker.internal:15432/batch_business"
-    username: "batch_user"
+    username: "batch_business_writer"
     password: "batch_pass_123"
     schema: "biz"
 kafka:

@@ -57,30 +57,40 @@ public class ConsoleConfigCacheInvalidationService {
       StringRedisTemplate redisTemplate,
       ConsoleQueryCacheService queryCacheService,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this(redisTemplate, queryCacheService, meterRegistryProvider.getIfAvailable());
+    this.redisTemplate = redisTemplate;
+    this.queryCacheService = queryCacheService;
+    MeterRegistry meterRegistry = meterRegistryProvider == null // empty-check: allow - Sonar S2259
+        ? null
+        : meterRegistryProvider.getIfAvailable();
+    Metrics metrics = meterRegistry == null // empty-check: allow - Sonar S2259
+        ? Metrics.empty()
+        : createMetrics(meterRegistry, publishedRevision);
+    this.publishSuccessCounter = metrics.successCounter();
+    this.publishFailureCounter = metrics.failureCounter();
   }
 
   public ConsoleConfigCacheInvalidationService(
       StringRedisTemplate redisTemplate, ConsoleQueryCacheService queryCacheService) {
-    this(redisTemplate, queryCacheService, (MeterRegistry) null);
-  }
-
-  private ConsoleConfigCacheInvalidationService(
-      StringRedisTemplate redisTemplate,
-      ConsoleQueryCacheService queryCacheService,
-      MeterRegistry meterRegistry) {
     this.redisTemplate = redisTemplate;
     this.queryCacheService = queryCacheService;
-    if (EmptyChecks.isNull(meterRegistry)) {
-      this.publishSuccessCounter = null;
-      this.publishFailureCounter = null;
-      return;
-    }
+    Metrics metrics = Metrics.empty();
+    this.publishSuccessCounter = metrics.successCounter();
+    this.publishFailureCounter = metrics.failureCounter();
+  }
+
+  private static Metrics createMetrics(MeterRegistry meterRegistry, AtomicLong publishedRevision) {
     meterRegistry.gauge("batch.console.config.invalidation.published_revision", publishedRevision);
-    this.publishSuccessCounter = meterRegistry.counter(
-        "batch.console.config.invalidation.publish.total", "result", "success");
-    this.publishFailureCounter = meterRegistry.counter(
-        "batch.console.config.invalidation.publish.total", "result", "failure");
+    return new Metrics(
+        meterRegistry.counter(
+            "batch.console.config.invalidation.publish.total", "result", "success"),
+        meterRegistry.counter(
+            "batch.console.config.invalidation.publish.total", "result", "failure"));
+  }
+
+  private record Metrics(Counter successCounter, Counter failureCounter) {
+    private static Metrics empty() {
+      return new Metrics(null, null);
+    }
   }
 
   public void evictJobDefinition(String tenantId, String jobCode) {

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Outbox 运维内部接口(仅供 console 通过 ConsoleOrchestratorProxyService HTTP 转发调用)。
  *
  * <p>承接 console 的 cleanup(按 retainDays 删 PUBLISHED/GIVE_UP)和 republish(FAILED/GIVE_UP → NEW)操作。设立此
- * controller 的原因:CLAUDE.md「Orchestrator 是唯一状态主机」硬约束,console 不能直接 UPDATE/DELETE outbox_event;改由
+ * controller 的原因:docs/agent-baseline.md「Orchestrator 是唯一状态主机」硬约束,console 不能直接 UPDATE/DELETE outbox_event;改由
  * orchestrator 在自己事务里执行。
  *
  * <p>P1-3 (2026-06-03 deep-scan): 加 dryRun query 参数 + operatorId/reason body 字段, dryRun=true 只

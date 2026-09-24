@@ -52,7 +52,7 @@ public class ProcessMetrics {
   private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
 
   // 显式 @Autowired:类内有 2 个构造器(public + private),Spring 4.3+ "exactly
-  // one constructor" 自动推断不成立,必须显式标主装配 ctor;CLAUDE.md §Java #3 豁免
+  // one constructor" 自动推断不成立,必须显式标主装配 ctor;docs/agent-baseline.md §Java #3 豁免
   // 构造器上的 @Autowired(只禁 field/setter)。
   @Autowired
   public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {

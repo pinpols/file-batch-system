@@ -119,7 +119,7 @@ def markdown(facts: list[SourceFact]) -> str:
     lines = [
         "# Java 可读性治理扫描快照",
         "",
-        "> 由 `python3 scripts/ci/report-java-readability-inventory.py` 生成。",
+        "> 由 `bash scripts/python.sh scripts/ci/report-java-readability-inventory.py` 生成。",
         "> 本报告只列候选，不把行数、Map 或 suppression 数量直接判定为缺陷。",
         "",
         "## 汇总",

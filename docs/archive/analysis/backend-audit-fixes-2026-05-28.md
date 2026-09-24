@@ -18,7 +18,7 @@
 | MED | 中 | `batch-console-api/.../config/ConsoleSecurityProperties.java` | `defaultAuthorities` 回退从 `[ADMIN, AUDITOR, TENANT_ADMIN]` 收敛到最小权限只读 `[AUDITOR]`,堵"空角色 SSE ticket / bypass 无 role header → 静默拿 admin"提权。**破坏面**:bypass-mode/E2E 中做写操作的请求需显式带 role header,CI staging-gate Playwright 会兜住 |
 | LOW 红线 | 低 | `ConsoleAdminTestDataController.java` / `ConsoleJobQueryService.java` | `java.util.Arrays.stream(...)` FQN → `import java.util.Arrays` |
 | LOW 红线 | 低 | `batch-worker-dispatch/.../channel/RemoteFilesystemDispatchSupport.java` | Callable 内 `throw new RuntimeException(ioe)` → JDK 语义化 `UncheckedIOException`(仍是 RuntimeException 子类,下游 ExecutionException 解包分支照旧命中) |
-| HIGH-5(部分) | 高 | `CLAUDE.md` | 多租隔离守护引用 drift:`TenantIsolationIntegrationTest`(不存在)→ 实际 `MultiTenantIsolationIntegrationTest` + 各模块 `MapperXmlTenantGuardArchTest` |
+| HIGH-5(部分) | 高 | `docs/agent-baseline.md` | 多租隔离守护引用 drift:`TenantIsolationIntegrationTest`(不存在)→ 实际 `MultiTenantIsolationIntegrationTest` + 各模块 `MapperXmlTenantGuardArchTest` |
 
 ---
 
@@ -77,7 +77,7 @@ SPRING_PROFILES_ACTIVE=local
 
 ### C. 📋 tenant_id 加列迁移 — 你做 Flyway,以下是 spec + 配套 Java
 
-**先厘清:这不是"缺少鉴权保护无隔离"的正确性 bug。** 三张表是**经父表 FK 间接租户隔离**的子表,CLAUDE.md "所有业务表必带 tenant_id" 的绝对表述,这三张很可能正是隐含的"经父表 scope"例外:
+**先厘清:这不是"缺少鉴权保护无隔离"的正确性 bug。** 三张表是**经父表 FK 间接租户隔离**的子表,docs/agent-baseline.md "所有业务表必带 tenant_id" 的绝对表述,这三张很可能正是隐含的"经父表 scope"例外:
 
 | 子表(无 tenant_id) | 建表 | 父表(有 tenant_id) | 关联列 |
 |---|---|---|---|
@@ -99,8 +99,8 @@ SPRING_PROFILES_ACTIVE=local
    create index ix_workflow_node_run_tenant on batch.workflow_node_run(tenant_id);
    ```
    `pipeline_step_run`(从 `pipeline_instance` 回填)、`pipeline_step_definition`(从 `pipeline_definition` 回填)同构。
-2. **UNIQUE 约束含 tenant_id**:若三表上有不含 tenant_id 的 UNIQUE(如 `pipeline_step_definition` 的 `(pipeline_definition_id, step_code)`),按 CLAUDE.md 改为 `(tenant_id, …)`。
-3. **归档镜像同 PR 补**(CLAUDE.md「archive 冷表对齐」+ 启动期 `ArchiveSchemaDriftCheck` fail-fast):`archive.workflow_node_run_archive` / `archive.pipeline_step_run_archive` / `archive.pipeline_step_definition_archive`(在 V71 系列创建)各补同名 `tenant_id` 列 + 回填。**漏补归档列会导致全系统启动 fail-fast。**
+2. **UNIQUE 约束含 tenant_id**:若三表上有不含 tenant_id 的 UNIQUE(如 `pipeline_step_definition` 的 `(pipeline_definition_id, step_code)`),按 docs/agent-baseline.md 改为 `(tenant_id, …)`。
+3. **归档镜像同 PR 补**(docs/agent-baseline.md「archive 冷表对齐」+ 启动期 `ArchiveSchemaDriftCheck` fail-fast):`archive.workflow_node_run_archive` / `archive.pipeline_step_run_archive` / `archive.pipeline_step_definition_archive`(在 V71 系列创建)各补同名 `tenant_id` 列 + 回填。**漏补归档列会导致全系统启动 fail-fast。**
 4. **配套 Java(迁移写入数据库后再随后续 PR 改,本分支不动)**:
    - entity 加字段:`batch-orchestrator/.../domain/entity/WorkflowNodeRunEntity.java`、`batch-console-api/.../domain/entity/WorkflowNodeRunEntity.java`、`batch-worker-core/.../domain/PipelineStepDefinition.java`(+ `PipelineStepDefinitionParam`)、以及 pipeline_step_run 对应 entity。
    - mapper:`PlatformFileRuntimeMapper.xml`(worker-core)`insertStepRun`/`insertPipelineStepDefinition`/`selectPipelineStepDefinitions`、`PipelineStepDefinitionMapper`(console-api)等的 INSERT 补列、SELECT/UPDATE 谓词补 `tenant_id`。

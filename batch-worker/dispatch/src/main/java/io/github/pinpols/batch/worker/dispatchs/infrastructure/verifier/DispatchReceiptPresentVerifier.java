@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * <p>判定逻辑：DISPATCH task 在 worker 提交远端通道（API / NAS / OSS / SFTP）后，必须返回 {@code receiptCode}（或同义的
  * {@code externalRequestId}）；二者皆缺 → 记 {@code DISPATCH_RECEIPT_MISSING} 失败，避免"任务成功但下游无凭证可追踪"。
  *
- * <p>对应的输出 key 与 {@code CLAUDE.md §Workflow 节点参数 DSL 规范} 中 DISPATCH worker 输出 schema 一致（receiptCode
+ * <p>对应的输出 key 与 {@code docs/agent-baseline.md §Workflow 节点参数 DSL 规范} 中 DISPATCH worker 输出 schema 一致（receiptCode
  * / externalRequestId）。
  */
 @Component

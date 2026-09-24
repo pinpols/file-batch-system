@@ -170,7 +170,7 @@
 
 - **SDK**:`docs/architecture/adr/ADR-035-*.md`(428 行长文,验收 section 标"K8s 待验")+ `docs/runbook/per-tenant-worker-onboarding.md`(Phase D 详尽)+ 各 `examples/*/README.md`
 - **Atomic**:`docs/adr/029-*.md` + `*ExecutorProperties.java` 内嵌 Javadoc
-- **FE**:`docs/plans/fe-worklist-2026-h2-atomic-sdk.md`(本批清单)+ `../batch-console/CLAUDE.md`
+- **FE**:`docs/plans/fe-worklist-2026-h2-atomic-sdk.md`(本批清单)+ `../batch-console/docs/agent-baseline.md`
 - **缺一份"租户接入旅程"**:从拿到 SDK → 配 Kafka ACL → 注册首个 taskType → 在 console 看到 → 派第一个任务 → 看到进度 → 灰度切 buildId,**端到端 5 分钟 quickstart 没有**
 
 ---
@@ -277,4 +277,4 @@
 **调研所触文件主要范围**:
 - SDK:`batch-worker-sdk/`、`batch-worker-sdk-spring-boot-starter/`、`batch-worker-sdk-testkit/`、`examples/sample-tenant-worker*/`、`db/migration/V159-V163`、`docs/architecture/adr/ADR-035-*`
 - Atomic:`batch-worker-atomic/`、`batch-console-api/.../ConsoleAtomicTaskType*`、`docs/adr/029-*`
-- FE:`../batch-console/src/{api,views,views-mobile,components,router,locales}/`、`../batch-console/CLAUDE.md`、`docs/plans/fe-worklist-2026-h2-atomic-sdk.md`
+- FE:`../batch-console/src/{api,views,views-mobile,components,router,locales}/`、`../batch-console/docs/agent-baseline.md`、`docs/plans/fe-worklist-2026-h2-atomic-sdk.md`

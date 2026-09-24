@@ -9,7 +9,8 @@
 
 | # | 文件 | 作用 | 何时看 |
 |---|---|---|---|
-| 01 | [data-model-ddl.md](./data-model-ddl.md) | 全表 DDL（job_instance / outbox / workflow_* 等核心表）| 改 schema / 排查数据 |
+| 01 | [database-schema-guide.md](./database-schema-guide.md) | 数据库边界、表目录、核心关系图和当前实例 catalog 查询 | 查表职责 / 关系 / DBA 接手 |
+| 01a | [data-model-ddl.md](./data-model-ddl.md) | 早期数据模型 DDL 设计稿和演进背景；现行结构以 Flyway migration 和业务库建表脚本为准 | 查历史设计 / 核心字段草案 |
 | 02 | [batch-day-design.md](./batch-day-design.md) | 批次日（business_calendar / batch_day_instance）设计 | 配批次窗口 |
 | 02a | [batch-day-capability-design.md](./batch-day-capability-design.md) | 批量运行平台能力设计总结：批量日生命周期、补跑、并发控制、当前实现差距 | 评估批量日能力 / 规划日切驱动型扩展 |
 | 02b | [timezone-and-dst-design.md](./timezone-and-dst-design.md) | 时区与夏令时设计：默认时区、业务覆盖优先级、DST gap/overlap 裁决 | 改 cron 时区、cutoff、data_interval 处理 |

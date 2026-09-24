@@ -35,7 +35,7 @@
 
 - [ ] **Step 1: 从当前文档分支切出代码 feature 分支**
 
-当前在 `docs/export-partition-slice-backlog-2026-06-06`(仅文档)。代码改动按 CLAUDE.md 走 `feature/<topic>`:
+当前在 `docs/export-partition-slice-backlog-2026-06-06`(仅文档)。代码改动按 docs/agent-baseline.md 走 `feature/<topic>`:
 
 Run:
 ```bash

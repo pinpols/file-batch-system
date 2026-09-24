@@ -94,6 +94,14 @@ public abstract class AbstractIntegrationTest {
     return PLATFORM_POSTGRES.getJdbcUrl();
   }
 
+  protected static String platformJdbcUsername() {
+    return PLATFORM_POSTGRES.getUsername();
+  }
+
+  protected static String platformJdbcPassword() {
+    return PLATFORM_POSTGRES.getPassword();
+  }
+
   protected static String businessJdbcUrl() {
     return BUSINESS_POSTGRES.getJdbcUrl();
   }

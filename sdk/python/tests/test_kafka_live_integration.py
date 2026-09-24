@@ -1,6 +1,6 @@
 """Live Kafka + HTTP fake 接通测试。
 
-默认无 ``KAFKA_BOOTSTRAP`` 时跳过;CI 的 sdk live gate 会启动真实 broker 后
+默认无 ``BATCH_SDK_KAFKA_BOOTSTRAP`` 时跳过;CI 的 sdk live gate 会启动真实 broker 后
 显式运行。本用例对齐 Java ``FakeBatchPlatformSelfTest`` 的关键链路:
 真实 Kafka 派单 → Python SDK consumer → dispatcher CLAIM → handler 执行 →
 REPORT 回到 fake platform。
@@ -99,11 +99,11 @@ def _assert_live_results(
 
 
 @pytest.mark.skipif(
-    not os.getenv("KAFKA_BOOTSTRAP"),
-    reason="KAFKA_BOOTSTRAP not set; live broker integration skipped",
+    not os.getenv("BATCH_SDK_KAFKA_BOOTSTRAP"),
+    reason="BATCH_SDK_KAFKA_BOOTSTRAP not set; live broker integration skipped",
 )
 async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() -> None:
-    bootstrap = os.environ["KAFKA_BOOTSTRAP"]
+    bootstrap = os.environ["BATCH_SDK_KAFKA_BOOTSTRAP"]
     suffix = str(time.time_ns())
     tenant = "acme"
     worker_code = f"w-py-live-{suffix}"

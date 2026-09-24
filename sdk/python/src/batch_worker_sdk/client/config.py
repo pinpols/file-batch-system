@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
@@ -77,6 +78,7 @@ class BatchPlatformClientConfig(BaseModel):
     # (无密钥)。对齐 Java ``requestSigningEnabled`` /
     # env ``BATCH_SDK_REQUEST_SIGNING_ENABLED``。
     request_signing_enabled: bool = False
+    strict_timing_validation: bool = True
 
     http_timeout: timedelta = timedelta(seconds=10)
     heartbeat_interval: timedelta = timedelta(seconds=30)
@@ -117,7 +119,13 @@ class BatchPlatformClientConfig(BaseModel):
             raise ValueError(f"base_url must not end with '/': {self.base_url!r}")
         if not self.base_url.startswith(("http://", "https://")):
             raise ValueError(f"base_url must start with http:// or https://: {self.base_url!r}")
-        self._validate_timings()
+        if self.strict_timing_validation:
+            self._validate_timings()
+        else:
+            try:
+                self._validate_timings()
+            except ValueError as error:
+                warnings.warn(str(error), RuntimeWarning, stacklevel=2)
         return self
 
     def _validate_timings(self) -> None:
@@ -263,6 +271,15 @@ class BatchPlatformClientConfig(BaseModel):
                 "1",
                 "yes",
                 "on",
+            )
+
+        v_strict = getter(prefix + "STRICT_TIMING")
+        if v_strict is not None and v_strict.strip():
+            kwargs["strict_timing_validation"] = v_strict.strip().lower() not in (
+                "false",
+                "0",
+                "no",
+                "off",
             )
 
         return cls(**kwargs)

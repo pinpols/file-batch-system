@@ -319,6 +319,7 @@ while True:
     if len(all_issues) >= data["total"]:
         break
     page += 1
+open_issues = [i for i in all_issues if i.get("status") == "OPEN"]
 
 # ── CSV ──────────────────────────────────────────────────────────────────────
 csv_path = f"{OUT_DIR}/sonar-report.csv"
@@ -342,7 +343,7 @@ m = {x["metric"]: x.get("value","?") for x in metrics["component"]["measures"]}
 # ── 按模块 × severity 统计 ───────────────────────────────────────────────────
 from collections import defaultdict
 mod_sev = defaultdict(lambda: defaultdict(int))
-for i in all_issues:
+for i in open_issues:
     comp = i.get("component", "").split(":")[-1].split("/")[0]
     mod_sev[comp][i.get("severity","?")] += 1
 
@@ -366,7 +367,7 @@ with open(md_path, "w", encoding="utf-8") as f:
     f.write(f"| 重复率 | {m.get('duplicated_lines_density','?')}% | — |\n")
     f.write(f"| 覆盖率 | {m.get('coverage','?')}% | — |\n\n")
 
-    f.write("## 各模块 Issue 分布\n\n")
+    f.write("## 各模块 OPEN Issue 分布\n\n")
     f.write(f"| {'模块':<45} | " + " | ".join(f"{s}" for s in SEVS) + " | 合计 |\n")
     f.write("|" + "-"*47 + "|" + "|".join(["------"]*len(SEVS)) + "|-------|\n")
     mods = sorted(mod_sev.keys())
@@ -380,19 +381,21 @@ with open(md_path, "w", encoding="utf-8") as f:
         totals["TOTAL"] += total
     f.write(f"| {'**合计**':<45} | " + " | ".join(f"**{totals[s]}**" for s in SEVS) + f" | **{totals['TOTAL']}** |\n\n")
 
-    # BLOCKER 明细
-    blockers = [i for i in all_issues if i.get("severity") == "BLOCKER"]
+    # OPEN BLOCKER 明细
+    blockers = [i for i in open_issues if i.get("severity") == "BLOCKER"]
     if blockers:
-        f.write("## BLOCKER 明细\n\n")
+        f.write("## OPEN BLOCKER 明细\n\n")
         f.write("| 类型 | 文件 | 行 | 描述 |\n|---|---|---|---|\n")
         for i in blockers:
             comp = i.get("component","").split(":")[-1]
             f.write(f"| {i.get('type','')} | `{comp}` | {i.get('line','')} | {i.get('message','')} |\n")
         f.write("\n")
 
-    f.write(f"---\n*详细明细见 `sonar-report.csv`（{len(all_issues)} 条）*\n")
+    f.write(
+        f"---\n*Markdown 摘要仅统计 OPEN issue；详细明细见 `sonar-report.csv`"
+        f"（全量 {len(all_issues)} 条，OPEN {len(open_issues)} 条）*\n")
 
-print(f"CSV:{csv_path}  ({len(all_issues)} issues)")
+print(f"CSV:{csv_path}  ({len(all_issues)} issues, {len(open_issues)} open)")
 print(f"MD: {md_path}")
 PYEOF
 

@@ -269,7 +269,9 @@ public class DefaultConsoleReportExcelApplicationService
               .findFirst()
               .orElse(null);
           values.add(
-              EmptyChecks.isNull(component) ? null : component.getAccessor().invoke(row));
+              component == null // empty-check: allow - Sonar S2259
+                  ? null
+                  : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {
         throw BizException.of(

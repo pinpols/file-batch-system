@@ -1,6 +1,6 @@
 # 文档治理规范
 
-> 本文是仓库文档状态、待办和历史快照的维护规则。它不替代 `CLAUDE.md` 的工程约束。
+> 本文是仓库文档状态、待办和历史快照的维护规则。它不替代 `docs/agent-baseline.md` 的工程约束。
 >
 > 最后核查：2026-09-11
 
@@ -37,7 +37,29 @@
 5. 日期快照、一次性审计、被新版取代的方案移入 `docs/archive/`，归档文件不再修正正文。
 6. 文档只使用仓库相对链接，不写本机绝对路径；示例凭据、令牌和固定密码必须使用占位符。
 
-## 4. 扫描与验收
+## 4. 项目介绍与索引维护
+
+文档入口必须按“读者路径”维护，而不是只堆文件列表。
+
+| 入口 | 维护责任 |
+|---|---|
+| 根目录 `README.md` | 说明项目做什么、解决什么问题、核心架构、快速开始，并保留 `docs/README.md`、文档治理和 runbook 入口 |
+| `docs/README.md` | 文档总导航；只覆盖一级目录、顶层文档、重要专题入口和角色路径，不扁平展开全部二级文档 |
+| 子目录 `README.md` | 该目录的人读索引；新增当前有效的同级文档时必须列入，归档/历史目录除外 |
+| `docs/runbook/README.md` | 运维 SOP 导航；新增部署、容量、灰度、应急、配置治理文档时必须同步 |
+| `docs/audit/convention-drift-guard-index.md` | 守护总账；新增系统性约束或 CI 守卫时必须同步 |
+| `scripts/ci/README.md` | 可执行门禁说明；新增 `check-*` / `validate-*` 脚本必须登记 |
+
+索引文字要求：
+
+- 介绍页要回答“这是什么、解决什么问题、怎么运行、到哪里查设计/运维/测试证据”。
+- 索引页按层级维护：一级入口覆盖二级目录，子目录入口覆盖本目录文档；不要在 `docs/README.md` 扁平展开 300+ 个文档。
+- 索引页要按受众或场景分组，不用纯字母序堆积。
+- 子目录 README 只放当前有效入口；历史快照放 `docs/archive/` 并标明只读。
+- 重要文档移动时同步修代码注释里的 `docs/...` 引用，避免注释链接失效。
+- 一次性验收报告、压测报告、排查记录放 `docs/verifications/` 或 `docs/archive/`，不要塞进总入口正文。
+
+## 5. 扫描与验收
 
 文档复扫至少执行：
 
@@ -57,7 +79,8 @@ rg -n -i --glob '*.md' \
 
 ```bash
 bash scripts/ci/check-hardcoded-runtime-config.sh
-python3 scripts/ci/check-docs-structure.py
+bash scripts/python.sh scripts/ci/check-docs-structure.py
+bash scripts/python.sh scripts/ci/check-code-doc-references.py
 ```
 
 该门禁检查当前文档的个人绝对路径、运维旧端口、local profile 固定 Redis 地址、Kafka
@@ -66,6 +89,6 @@ python3 scripts/ci/check-docs-structure.py
 文档结构门禁检查主目录 README、总索引覆盖、仓库内相对链接、Finder 元数据和带日期的本机
 验收报告。外部 URL 不联网检查，避免第三方站点波动阻断 CI。
 
-## 5. 维护责任
+## 6. 维护责任
 
 代码变更作者负责同步直接受影响的文档；PR 审核者负责检查状态和证据是否更新。每次版本发布前复扫一次，重大架构或安全变更后立即复扫。

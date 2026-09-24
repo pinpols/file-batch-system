@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Outbox 运维应用服务:承接 console 通过 HTTP 转发过来的 outbox cleanup / republish 操作。
  *
- * <p>由于 CLAUDE.md「Orchestrator 是唯一状态主机」硬约束,console-api 不能直接 UPDATE/DELETE outbox_event;改由本服务在
+ * <p>由于 docs/agent-baseline.md「Orchestrator 是唯一状态主机」硬约束,console-api 不能直接 UPDATE/DELETE outbox_event;改由本服务在
  * orchestrator 内部 @Transactional 边界里执行。
  *
  * <p>P1-3 (2026-06-03 deep-scan-be-business-ops): 支持 dryRun(只查 count 不改) + audit(operatorId /

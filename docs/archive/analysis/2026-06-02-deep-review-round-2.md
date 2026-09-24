@@ -279,7 +279,7 @@ Round-2 §5 列了 10 项 Round-3 主线。Python SDK 5 PR 落地后,**新加 4 
 | Python SDK P2-P5(Kafka / scheduler / FSM / testkit) | 7.4 表 | P0(承接 Phase 1 势头)|
 | `AtomicErrorCode` 同步进 `sdk-shared-constants.yaml`(Lane P 遗留) | 7.6 风险 | P1(parity 失效) |
 | `BatchPlatformClient` 外壳类(Python 高层 API) | 7.6 风险 | P1(配合 P3 一起) |
-| 多 agent worktree 摩擦最佳实践写进 CLAUDE.md | 7.6 风险 | P2 |
+| 多 agent worktree 摩擦最佳实践写进 docs/agent-baseline.md | 7.6 风险 | P2 |
 
 | 调整 | 原描述 | 新描述 |
 |---|---|---|

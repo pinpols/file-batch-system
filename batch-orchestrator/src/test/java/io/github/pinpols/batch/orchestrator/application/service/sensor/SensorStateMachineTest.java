@@ -38,7 +38,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 
 // LENIENT:setUp 共享 stub(registry.resolve / filePolicy.type)被部分用例隐式使用,
-// 部分用例(如 invalidSpec/policyNotFound)不触发,符合 CLAUDE.md §测试约定豁免场景。
+// 部分用例(如 invalidSpec/policyNotFound)不触发,符合 docs/agent-baseline.md §测试约定豁免场景。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class SensorStateMachineTest {

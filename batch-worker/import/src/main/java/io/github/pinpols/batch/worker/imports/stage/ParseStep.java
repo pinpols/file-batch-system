@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
@@ -288,12 +287,17 @@ public class ParseStep implements ImportStageStep {
   }
 
   private boolean recordTypeMatches(Map<String, Object> template, String trailerLine) {
-    Object marker = template == null ? null : template.get("recordType");
-    if (marker == null) {
-      marker = template == null ? null : template.get("record_type");
+    if (template == null) { // empty-check: allow - Sonar S2259
+      return true;
     }
-    String expected = marker == null ? null : String.valueOf(marker).trim();
-    if (EmptyChecks.isNull(template) || EmptyChecks.isBlank(expected)) {
+    Object marker = template.get("recordType");
+    if (marker == null) {
+      marker = template.get("record_type");
+    }
+    String expected = marker == null // empty-check: allow - Sonar S2259
+        ? null
+        : String.valueOf(marker).trim();
+    if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
       return true;
     }
     String delimiter = strOr(template.get("delimiter"), ",");

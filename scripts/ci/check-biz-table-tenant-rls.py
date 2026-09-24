@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""守护:biz.* 业务表的多租 + RLS 强制约束(CLAUDE.md §多租隔离 + RLS 盲区防回归)。
+"""守护:biz.* 业务表的多租 + RLS 强制约束(docs/agent-baseline.md §多租隔离 + RLS 盲区防回归)。
 
 业务库 biz.* 不走 Flyway,表定义在 scripts/db/business/create_biz_tables.sql,
 RLS 严格策略在 rls-phase-a-strict.sql 的 tables[] 数组里逐表 CREATE POLICY。

@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
 import org.junit.jupiter.api.Test;
 
 /**
- * batch-console-api 自有 CLAUDE.md 规约守护。复用 batch-common 测试 jar 里的 {@link
+ * batch-console-api 自有 docs/agent-baseline.md 规约守护。复用 batch-common 测试 jar 里的 {@link
  * CodingConventionsArchRules},把规则应用到 console-api 已编译类上。
  *
  * <p>历史上 console-api 是 ZoneId.systemDefault() 回归的重灾区(ConsoleJwtService 等), 加上本测试后 surefire

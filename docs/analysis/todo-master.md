@@ -1,6 +1,6 @@
 # TODO Master · 当前待办唯一索引
 
-> 核查日期：2026-09-11。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-09-24。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
@@ -19,7 +19,7 @@
 | 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
 | ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
 
-### 当前核查边界（2026-09-11）
+### 当前核查边界（2026-09-24）
 
 以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
 
@@ -45,16 +45,16 @@
 
 **环境分布**（可执行性切片）：
 
-| 类别 | 计数 | 说明 |
-|---|---:|---|
-| ✅ **本地可独立完成** | ~24 | 剩余多数与外部环境 / 灰度门禁绑定 |
-| 🔒 **本地不能做（挂起）** | 23 | 需 ops / staging / prod / DBA / BIZ 配合 — 集中列在 §九 |
+| 类别 | 当前结论 | 说明 |
+|---|---|---|
+| ✅ **本地可独立完成** | 本轮已完成 | RLS 运行账号校验、Trigger 真入口 E2E、Kafka 恢复验证、SDK 配置对齐和 Python 统一入口均有代码或测试证据 |
+| 🔒 **本地不能做（挂起）** | 见 §九 | 需 ops / staging / prod / DBA / BIZ 配合；不使用易失真的汇总数字 |
 
 ---
 
 ## 二、ADR 优先级三阶段进展（priority-scope 镜像）
 
-权威源：[`archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md) + 各 ADR 顶部"范围边界（Scope Discipline）"小节 + CLAUDE.md "ADR 实施范围纪律" 章。
+权威源：[`archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md) + 各 ADR 顶部"范围边界（Scope Discipline）"小节 + docs/agent-baseline.md "ADR 实施范围纪律" 章。
 
 ### 第 1 阶段 P0（已落 backend）✅
 
@@ -104,7 +104,7 @@
 
 ### A. POSITIONAL-ARGS 治理（V6-P2-POSITIONAL-ARGS）· P2 · ✅ 已闭环
 
-> 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。CLAUDE.md "调用方约束" 子节由本方案沉淀。
+> 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。docs/agent-baseline.md "调用方约束" 子节由本方案沉淀。
 
 历史详细计划项（POS-1 ~ POS-5）已全部完成，归 §五。
 
@@ -350,7 +350,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ## 九、🔒 本地不能做（需 ops / staging / DBA / 业务方 配合）
 
-> 用途：本仓库内的 Claude / 开发者**无法独立完成**的项，挂在这里直至外部条件就绪。
+> 用途：本仓库内的自动化 agent / 开发者**无法独立完成**的项，挂在这里直至外部条件就绪。
 > 图例：每条标注阻塞类型 — `[ops]` 部署/CD · `[staging]` 预发环境 · `[prod]` 生产环境 · `[DBA]` 数据库变更评审 · `[BIZ]` 业务方决策 · `[client]` 外部 API 客户端确认
 
 | ID | 主题 | 阻塞类型 | 卡在哪 |
@@ -375,6 +375,4 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **WK-up-3** | force-offline 紧急场景验证（完整验证）| `[staging]` | 同上 |
 | **LIC-2** | SBOM 嵌入 artifact + 第三方清单 | `[ops]` 部分 | 本地能改 maven 配置，但 CI 注入 + artifact 校验需 ops |
 
-**小计**：~19 条挂"本地不能做"，其中 ADR-010 灰度 7 + Quartz 切换 7 + Worker 灰度 3 + LIC 1 + 其他 1。
-
-剩余（本地可独立完成）：FE-1/2/3 / CC-1/2 / EXT-1 等少量短期项。
+本节只维护逐项状态，不维护易随去重口径变化的汇总数字。FE-1/2/3、CC-1/2 已在 §二标记完成，不再列入待办。

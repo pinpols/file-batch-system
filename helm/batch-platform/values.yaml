@@ -26,7 +26,7 @@ postgresql:
     password: ""
   business:
     url: "jdbc:postgresql://postgresql:5432/batch_business?reWriteBatchedInserts=true"
-    username: "batch_user"
+    username: "batch_business_writer"
     password: ""
     schema: "biz"
 
@@ -43,6 +43,10 @@ kafka:
 redis:
   host: "redis"
   port: "6379"
+
+shedlock:
+  # 调度锁后端：redis(默认) / jdbc。切换必须全停后统一调整，禁止双 provider 并行。
+  provider: "redis"
 
 # 对象存储后端（S3 协议：MinIO / AWS S3 / 阿里 OSS / 腾讯 COS 等），靠 endpoint + 凭据切换后端。
 objectStorage:
@@ -398,6 +402,9 @@ orchestrator:
     cutoverId: ""
   workerLease:
     renewBatchMaxItems: 256
+  workerKafka:
+    subscribeMode: "PATTERN"
+    tenantAllowlist: ""
   workerCheckpoint:
     enabled: true
     stageSkipEnabled: false
@@ -415,6 +422,7 @@ orchestrator:
     doneFileFormat: "MARKER"
     doneFileSuffix: ".done"
     batchManifestEnabled: false
+    eventArrivalEnabled: false
   fileGovernance:
     arrival:
       requireVerified: true

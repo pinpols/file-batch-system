@@ -21,7 +21,7 @@ on:
       - 'NOTICE'
       - '.gitignore'
       - '.editorconfig'
-      - '.claude/**'
+      - '.agents/**'
       # BYO 多语言 SDK(sdk/{python,go,rust,typescript})不进 Java reactor,由
       # sdk-contract-parity.yml + sdk-python.yml 自验;纯 sdk 改动不触发 75min 全量 + e2e。
       # 注意:Java SDK 模块 batch-worker-sdk* 是 reactor 模块,不在此列(照常跑)。
@@ -54,27 +54,27 @@ jobs:
 
       - name: Verify SQL/config placement boundaries
         shell: bash
-        run: bash scripts/ci/check-sql-config-boundaries.sh
+        run: bash scripts/ci/run-gate.sh FULL_SQL_CONFIG_BOUNDARIES "SQL 与配置边界" -- bash scripts/ci/check-sql-config-boundaries.sh
 
       - name: Limit MyBatis generated keys to the id column
         shell: bash
-        run: python3 scripts/ci/check-mybatis-generated-key-columns.py
+        run: bash scripts/ci/run-gate.sh FULL_MYBATIS_GENERATED_KEYS "MyBatis generated key 列限制" -- python3 scripts/ci/check-mybatis-generated-key-columns.py
 
       - name: Verify yml ↔ docker-compose default sync
         shell: bash
-        run: python3 scripts/ci/check-config-defaults-sync.py --check
+        run: bash scripts/ci/run-gate.sh FULL_CONFIG_DEFAULTS_SYNC "配置默认值同步" -- python3 scripts/ci/check-config-defaults-sync.py --check
 
       - name: Verify tracked env files are shell-safe
         shell: bash
-        run: python3 scripts/ci/check-env-file-shell-safety.py
+        run: bash scripts/ci/run-gate.sh FULL_ENV_FILE_SHELL_SAFETY "环境文件 Shell 安全" -- python3 scripts/ci/check-env-file-shell-safety.py
 
       - name: Verify hardcoded runtime configuration boundaries
         shell: bash
-        run: bash scripts/ci/check-hardcoded-runtime-config.sh
+        run: bash scripts/ci/run-gate.sh FULL_RUNTIME_CONFIG_BOUNDARIES "运行时配置集中管理" -- bash scripts/ci/check-hardcoded-runtime-config.sh
 
       - name: Verify repository hygiene
         shell: bash
-        run: python3 scripts/ci/check-repository-hygiene.py
+        run: bash scripts/ci/run-gate.sh FULL_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py
 
       - name: Verify script governance and zero ShellCheck warnings
         shell: bash
@@ -85,7 +85,7 @@ jobs:
 
       - name: Verify module dependency boundaries
         shell: bash
-        run: python3 scripts/ci/check-dependency-boundaries.py
+        run: bash scripts/ci/run-gate.sh FULL_DEPENDENCY_BOUNDARIES "模块依赖边界" -- python3 scripts/ci/check-dependency-boundaries.py
 
       - name: Verify changelog synchronization
         shell: bash
@@ -100,43 +100,43 @@ jobs:
 
       - name: Verify documentation structure and internal links
         shell: bash
-        run: python3 scripts/ci/check-docs-structure.py
+        run: bash scripts/ci/run-gate.sh FULL_DOCS_STRUCTURE "文档结构与内部链接" -- python3 scripts/ci/check-docs-structure.py
 
       - name: Validate feature switch registry
         shell: bash
-        run: python3 scripts/ci/check-feature-switch-registry.py
+        run: bash scripts/ci/run-gate.sh FULL_FEATURE_SWITCH_REGISTRY "功能开关注册表" -- python3 scripts/ci/check-feature-switch-registry.py
 
       - name: Verify configuration governance registry
         shell: bash
-        run: python3 scripts/ci/check-config-governance.py
+        run: bash scripts/ci/run-gate.sh FULL_CONFIG_GOVERNANCE "配置治理注册表" -- python3 scripts/ci/check-config-governance.py
 
       - name: Verify Helm env switch sync
         shell: bash
-        run: python3 scripts/ci/check-helm-env-sync.py
+        run: bash scripts/ci/run-gate.sh FULL_HELM_ENV_SYNC "Helm 环境变量同步" -- python3 scripts/ci/check-helm-env-sync.py
 
       - name: Verify five-worker configuration parity
         shell: bash
-        run: python3 scripts/ci/check-five-worker-parity.py
+        run: bash scripts/ci/run-gate.sh FULL_FIVE_WORKER_PARITY "五类 Worker 配置一致性" -- python3 scripts/ci/check-five-worker-parity.py
 
       - name: Verify KEDA autoscaling contracts
         shell: bash
-        run: python3 scripts/ci/check-keda-autoscaling.py
+        run: bash scripts/ci/run-gate.sh FULL_KEDA_AUTOSCALING "KEDA 自动伸缩契约" -- python3 scripts/ci/check-keda-autoscaling.py
 
       - name: Verify production Helm overlay safety
         shell: bash
-        run: python3 scripts/ci/check-production-overlay-safety.py
+        run: bash scripts/ci/run-gate.sh FULL_PRODUCTION_HELM_OVERLAY "生产 Helm overlay 安全" -- python3 scripts/ci/check-production-overlay-safety.py
 
       - name: Verify application governance contract
         shell: bash
-        run: python3 scripts/ci/check-application-governance.py
+        run: bash scripts/ci/run-gate.sh FULL_APPLICATION_GOVERNANCE "应用治理契约" -- python3 scripts/ci/check-application-governance.py
 
       - name: Verify code documentation references
         shell: bash
-        run: python3 scripts/ci/check-code-doc-references.py
+        run: bash scripts/ci/run-gate.sh FULL_CODE_DOC_REFERENCES "代码文档引用" -- python3 scripts/ci/check-code-doc-references.py
 
       - name: Verify Java readability conventions
         shell: bash
-        run: python3 scripts/ci/check-java-readability.py
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY "Java 可读性约定" -- python3 scripts/ci/check-java-readability.py
 
       - name: Verify Java readability inventory
         shell: bash
@@ -164,7 +164,7 @@ jobs:
 
       - name: Verify Trivy ignore expiry metadata
         shell: bash
-        run: python3 scripts/ci/check-trivy-ignore-expiry.py
+        run: bash scripts/ci/run-gate.sh FULL_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
 
       - name: Database comment coverage (diff-only)
         shell: bash

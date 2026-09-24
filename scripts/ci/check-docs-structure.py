@@ -15,8 +15,18 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 LINK = re.compile(r"!?\[[^\]]*]\(([^)]+)\)")
 SKIP_SCHEMES = ("http://", "https://", "mailto:", "codex:", "#")
-INDEX_EXEMPT = {"archive", "test-data"}
+INDEX_EXEMPT_PARTS = {"archive", "test-data"}
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+ROOT_README_REQUIRED_REFERENCES = (
+    "docs/README.md",
+    "docs/standards/document-governance.md",
+    "docs/runbook/README.md",
+)
+DOCS_README_REQUIRED_REFERENCES = (
+    "standards/document-governance.md",
+    "runbook/README.md",
+    "scripts/ci/check-docs-structure.py",
+)
 
 
 def tracked_docs() -> list[Path]:
@@ -53,13 +63,25 @@ def markdown_anchors(document: Path) -> set[str]:
     return anchors
 
 
-def check_directory_indexes(errors: list[str], known_paths: set[Path]) -> None:
-    root_index = (DOCS / "README.md").read_text(encoding="utf-8")
-    for directory in sorted(path for path in DOCS.iterdir() if path.is_dir()):
-        if directory.name not in INDEX_EXEMPT and not (directory / "README.md").is_file():
+def check_layered_directory_indexes(errors: list[str], known_paths: set[Path]) -> None:
+    for directory in sorted(path for path in DOCS.rglob("*") if path.is_dir()):
+        relative_parts = directory.relative_to(DOCS).parts
+        if any(part in INDEX_EXEMPT_PARTS for part in relative_parts):
+            continue
+        index = directory / "README.md"
+        if not index.is_file():
             errors.append(f"missing directory index: {directory.relative_to(ROOT)}/README.md")
-        if directory.name not in root_index:
-            errors.append(f"docs/README.md does not mention directory: {directory.name}/")
+        parent_index = directory.parent / "README.md"
+        if parent_index.is_file():
+            parent_text = parent_index.read_text(encoding="utf-8")
+            directory_token = f"{directory.name}/"
+            readme_token = f"{directory.name}/README.md"
+            if directory_token not in parent_text and readme_token not in parent_text:
+                errors.append(
+                    f"parent README does not mention child directory: {directory.relative_to(ROOT)}/"
+                )
+        elif directory.parent == DOCS:
+            errors.append(f"docs/README.md missing while checking directory: {directory.relative_to(ROOT)}/")
         index = directory / "README.md"
         if not index.is_file():
             continue
@@ -71,8 +93,20 @@ def check_directory_indexes(errors: list[str], known_paths: set[Path]) -> None:
                 and document.name not in index_text
             ):
                 errors.append(
-                    f"directory index does not mention document: {document.relative_to(ROOT)}"
+                    f"directory README does not mention same-level document: {document.relative_to(ROOT)}"
                 )
+
+
+def check_governance_entrypoints(errors: list[str]) -> None:
+    root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for reference in ROOT_README_REQUIRED_REFERENCES:
+        if reference not in root_readme:
+            errors.append(f"README.md missing documentation governance entry: {reference}")
+
+    docs_readme = (DOCS / "README.md").read_text(encoding="utf-8")
+    for reference in DOCS_README_REQUIRED_REFERENCES:
+        if reference not in docs_readme:
+            errors.append(f"docs/README.md missing documentation governance entry: {reference}")
 
 
 def check_internal_links(errors: list[str]) -> None:
@@ -134,7 +168,8 @@ def check_residual_files(errors: list[str]) -> None:
 
 def main() -> int:
     errors: list[str] = []
-    check_directory_indexes(errors, versionable_paths())
+    check_layered_directory_indexes(errors, versionable_paths())
+    check_governance_entrypoints(errors)
     check_internal_links(errors)
     check_residual_files(errors)
     if errors:

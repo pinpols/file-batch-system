@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
 import org.junit.jupiter.api.Test;
 
 /**
- * batch-worker-import CLAUDE.md 规约守护,规则源自 batch-common 测试 jar 的 CodingConventionsArchRules。
+ * batch-worker-import docs/agent-baseline.md 规约守护,规则源自 batch-common 测试 jar 的 CodingConventionsArchRules。
  *
  * <p>覆盖 P1-6 跨模块事务守卫:@EventListener / @Scheduled 方法禁直接叠 @Transactional(BizTableSchemaRegistrar
  * 所在模块)。

@@ -16,7 +16,7 @@ import java.time.Instant;
  *   <li>DB migration 给列 default 回退
  * </ol>
  *
- * <p>没有静态工厂方法:构造器 canonical(record)受 CLAUDE.md 豁免,Aspect 用 canonical 构造器 直接传 16 个字段(用 null
+ * <p>没有静态工厂方法:构造器 canonical(record)受 docs/agent-baseline.md 豁免,Aspect 用 canonical 构造器 直接传 16 个字段(用 null
  * 占位选填项),避免 11-参数 of() 触发参数数量约束。
  */
 public record OperationAuditEvent(

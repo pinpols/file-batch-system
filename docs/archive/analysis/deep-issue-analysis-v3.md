@@ -289,7 +289,7 @@ Report 对 5xx/网络异常重试到 `reportMaxAttempts`（默认 3 次）后抛
 
 **文件**：`batch-orchestrator/.../LaunchBatchDayService.java:315-317`
 
-Late arrival 容差外直接 `updateTriggerType(...)` 从 EVENT 改为 CATCH_UP，此时未进入 T1 事务。两个并发 late arrival 可能都走 CATCH_UP 分支，同一 trigger_request 被标记两次。**违反 CLAUDE.md §架构硬约束**"outbox_event 必须与任务状态写入处于同一事务"的延伸意图。
+Late arrival 容差外直接 `updateTriggerType(...)` 从 EVENT 改为 CATCH_UP，此时未进入 T1 事务。两个并发 late arrival 可能都走 CATCH_UP 分支，同一 trigger_request 被标记两次。**违反 docs/agent-baseline.md §架构硬约束**"outbox_event 必须与任务状态写入处于同一事务"的延伸意图。
 
 #### C-2.7 LoadStep chunk flush 无 savepoint + 无幂等
 
@@ -390,13 +390,13 @@ REPORT 是 Worker 执行链最后一步，但未通过 `startStepRun/finishStepR
 
 **文件**：`batch-console-api/.../DefaultConsoleTenantConfigInitApplicationService.java:315-376`
 
-`insertJobDefinition()` 20+ 行 setter，字段新增无编译期保护。多个 Mapper 方法参数 > 6。违反 CLAUDE.md §方法参数约束。
+`insertJobDefinition()` 20+ 行 setter，字段新增无编译期保护。多个 Mapper 方法参数 > 6。违反 docs/agent-baseline.md §方法参数约束。
 
 #### A-3.8 JobTaskQuery 缺工厂方法
 
 **文件**：`batch-orchestrator/.../domain/query/JobTaskQuery.java:5-10`
 
-5 字段但测试中 6+ 处 `new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null)`，违反 CLAUDE.md Query Record 工厂方法规约。
+5 字段但测试中 6+ 处 `new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null)`，违反 docs/agent-baseline.md Query Record 工厂方法规约。
 
 ### Medium（8 项）
 
@@ -525,7 +525,7 @@ Redis Lua 抛 `DataAccessException` 未被捕获 → 直接 500。**Redis 抖动
 | C-2.7 `LoadStep:78-155` | chunk flush 无 savepoint |
 | E2E 报告 B3（已修） | MyBatis camel/snake 键 → 静默 null |
 
-⚠️ **直接违反 CLAUDE.md §架构硬约束**："outbox_event 必须与任务状态写入处于同一事务"。现状不是个别违反，而是**没有在代码层静态强制**。
+⚠️ **直接违反 docs/agent-baseline.md §架构硬约束**："outbox_event 必须与任务状态写入处于同一事务"。现状不是个别违反，而是**没有在代码层静态强制**。
 
 ### 模式 B · 外部依赖无降级
 

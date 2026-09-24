@@ -8,7 +8,7 @@
 
 ## 一、JdbcTemplate 在生产代码的使用 — 11 个文件，1 处违规
 
-CLAUDE.md §架构硬约束：
+docs/agent-baseline.md §架构硬约束：
 > 全业务模块持久层**统一 MyBatis**（运行态与配置态均 Mapper）+ `JdbcTemplate` 基础设施
 
 按这条线把 11 个文件分类：
@@ -85,7 +85,7 @@ ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 
 
 涉及 8 个 integration test、7 张表（`alert_event`/`approval_command`/`retry_schedule`/`dead_letter`/`job_instance`/`job_task`/`job_partition`）。
 
-**否决原因**：7 张表里 **6 张只有 1 个测试用**，仅 `alert_event` 是 2 个。所谓"共享夹具"实际只服务一个调用方——这是把代码搬位置加抽象层，不是去重。Builder + 默认值会隐藏 severity/status/title 等字段语义，测试不能独立读懂；几个月后改默认会静默改变所有测试的预期。违反 CLAUDE.md "三行重复好过过早抽象"。
+**否决原因**：7 张表里 **6 张只有 1 个测试用**，仅 `alert_event` 是 2 个。所谓"共享夹具"实际只服务一个调用方——这是把代码搬位置加抽象层，不是去重。Builder + 默认值会隐藏 severity/status/title 等字段语义，测试不能独立读懂；几个月后改默认会静默改变所有测试的预期。违反 docs/agent-baseline.md "三行重复好过过早抽象"。
 
 **未来重新评估的触发条件**：当某张表的测试调用方涨到 3+ 个，且确认每次都是相同字段组合，再单独抽该表的 fixture（不要一次抽 7 个）。
 
@@ -119,7 +119,7 @@ ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 
 
 ## 五、相关 ADR / 文档
 
-- [CLAUDE.md §架构硬约束](../../CLAUDE.md) — JdbcTemplate vs MyBatis 边界
+- [docs/agent-baseline.md §架构硬约束](../../docs/agent-baseline.md) — JdbcTemplate vs MyBatis 边界
 - [docs/runbook/distributed-locking-checklist.md](../runbook/distributed-locking-checklist.md) — ShedLock JDBC fallback 设计
 - [ADR-001 mybatis-vs-jpa](../architecture/adr/ADR-001-mybatis-vs-jpa.md) — 持久层选型
 - [ADR-009 workflow-param-resolver](../architecture/adr/ADR-009-workflow-param-resolver.md) — Workflow 节点参数 DSL
