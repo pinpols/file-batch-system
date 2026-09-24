@@ -61,7 +61,8 @@ public class ConsoleConfigCacheInvalidationService {
     this.queryCacheService = queryCacheService;
     MeterRegistry meterRegistry =
         meterRegistryProvider == null ? null : meterRegistryProvider.getIfAvailable();
-    Metrics metrics = createMetrics(meterRegistry, publishedRevision);
+    Metrics metrics =
+        meterRegistry == null ? Metrics.empty() : createMetrics(meterRegistry, publishedRevision);
     this.publishSuccessCounter = metrics.successCounter();
     this.publishFailureCounter = metrics.failureCounter();
   }
@@ -70,15 +71,12 @@ public class ConsoleConfigCacheInvalidationService {
       StringRedisTemplate redisTemplate, ConsoleQueryCacheService queryCacheService) {
     this.redisTemplate = redisTemplate;
     this.queryCacheService = queryCacheService;
-    Metrics metrics = createMetrics(null, publishedRevision);
+    Metrics metrics = Metrics.empty();
     this.publishSuccessCounter = metrics.successCounter();
     this.publishFailureCounter = metrics.failureCounter();
   }
 
   private static Metrics createMetrics(MeterRegistry meterRegistry, AtomicLong publishedRevision) {
-    if (EmptyChecks.isNull(meterRegistry)) {
-      return new Metrics(null, null);
-    }
     meterRegistry.gauge("batch.console.config.invalidation.published_revision", publishedRevision);
     return new Metrics(
         meterRegistry.counter(
@@ -87,7 +85,11 @@ public class ConsoleConfigCacheInvalidationService {
             "batch.console.config.invalidation.publish.total", "result", "failure"));
   }
 
-  private record Metrics(Counter successCounter, Counter failureCounter) {}
+  private record Metrics(Counter successCounter, Counter failureCounter) {
+    private static Metrics empty() {
+      return new Metrics(null, null);
+    }
+  }
 
   public void evictJobDefinition(String tenantId, String jobCode) {
     evictAfterCommit(tenantId, "job-definition", jobCode);

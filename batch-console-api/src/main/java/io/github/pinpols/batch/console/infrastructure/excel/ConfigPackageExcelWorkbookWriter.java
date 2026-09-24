@@ -461,7 +461,8 @@ public class ConfigPackageExcelWorkbookWriter {
         styles.body());
     writeGuideCell(
         row, 4, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
-    writeGuideCell(row, 5, guide == null ? EMPTY : joinAllowedValues(guide), styles.body());
+    writeGuideCell(
+        row, 5, EmptyChecks.isNull(guide) ? EMPTY : joinAllowedValues(guide), styles.body());
     writeGuideCell(
         row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
     writeGuideCell(
@@ -594,7 +595,7 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public static String defaultBehaviorFor(String colName, ConsoleExcelStyles.ColumnGuide guide) {
-    if (guide == null) {
+    if (EmptyChecks.isNull(guide)) {
       return EMPTY;
     }
     if (guide.required()) {
