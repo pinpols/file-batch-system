@@ -24,7 +24,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT_DIR/scripts/ci/lib/migration-rebaseline.sh"
 
 MIGRATION_DIR="${1:-db/migration}"
-BASE_REF="${BASE_REF:-${GITHUB_BASE_REF:-origin/main}}"
+if [[ -n "${BASE_REF:-}" ]]; then
+  BASE_REF="$BASE_REF"
+elif [[ -n "${GUARD_BASE:-}" ]]; then
+  BASE_REF="$GUARD_BASE"
+elif [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+  BASE_REF="origin/$GITHUB_BASE_REF"
+else
+  BASE_REF="origin/main"
+fi
 
 if [[ ! -d "$MIGRATION_DIR" ]]; then
   echo "❌ ERROR: migration dir not found: $MIGRATION_DIR"
