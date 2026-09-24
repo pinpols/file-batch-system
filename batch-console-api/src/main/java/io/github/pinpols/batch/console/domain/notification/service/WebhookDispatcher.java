@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
@@ -11,7 +12,9 @@ import io.github.pinpols.batch.console.domain.notification.param.WebhookDelivery
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,6 +38,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -53,6 +57,8 @@ import org.springframework.stereotype.Service;
 public class WebhookDispatcher {
 
   private static final int MAX_ATTEMPTS = 3;
+
+  private static final int MAX_ERROR_RESPONSE_BYTES = 8192;
 
   private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
@@ -87,6 +93,8 @@ public class WebhookDispatcher {
         .writeTimeout(10, TimeUnit.SECONDS)
         .callTimeout(15, TimeUnit.SECONDS)
         .dns(ssrfGuardedDns)
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build();
   }
 
@@ -279,7 +287,7 @@ public class WebhookDispatcher {
     }
     try (Response response = httpClient.newCall(builder.build()).execute()) {
       if (!response.isSuccessful()) {
-        String body = response.body() == null ? "" : response.body().string();
+        String body = readBoundedErrorBody(response.body());
         throw new WebhookHttpStatusException(response.code(), body);
       }
     }
@@ -336,6 +344,22 @@ public class WebhookDispatcher {
 
   private String sanitize(String text) {
     return ConsoleTextSanitizer.safeDisplay(text, 2048);
+  }
+
+  private static String readBoundedErrorBody(ResponseBody body) throws IOException {
+    if (EmptyChecks.isNull(body)) {
+      return "";
+    }
+    byte[] bytes;
+    try (InputStream stream = body.byteStream()) {
+      bytes = stream.readNBytes(MAX_ERROR_RESPONSE_BYTES + 1);
+    }
+    int length = Math.min(bytes.length, MAX_ERROR_RESPONSE_BYTES);
+    MediaType contentType = body.contentType();
+    Charset charset = EmptyChecks.isNull(contentType)
+        ? StandardCharsets.UTF_8
+        : contentType.charset(StandardCharsets.UTF_8);
+    return new String(bytes, 0, length, charset);
   }
 
   private void sleep(long millis) {

@@ -57,6 +57,7 @@
 
 ### Fixed
 
+- 修复内部接口认证与请求体限制可被 URL 规范化绕过、Dispatch/回执轮询及 Webhook 出站请求可触达受限地址、Webhook 重定向 SSRF 和超大错误响应占用内存的问题；限制 Kafka lag 元数据访问角色，修正登录失败计数清理键，并移除会泄露答案的自建验证码。
 - 修复租户用户已开放运营概览菜单但摘要接口拒绝访问的问题；Outbox 重试日志响应补充关联事件 ID，控制台重投不再误用重试日志自身 ID。
 - 修复操作审计参数可能持久化并返回密码、令牌或密钥的问题：写入和查询路径统一递归脱敏，V212 清理历史密码字段；同时将 V174 恢复为误改前内容，并收紧迁移门禁为仅允许精确恢复基线父版本，避免 Flyway checksum 漂移。
 - 修复无效 `batch.timezone.default-zone` 静默回退的问题，启动期改为 fail-fast；`SecretPayloadProtector` 改由 common auto-configuration 注册并补装配测试，避免公共模块 Bean 扫描边界漂移；稳定 launch lifecycle IT 的 worker claim 前置状态等待和 worker 选择假设。

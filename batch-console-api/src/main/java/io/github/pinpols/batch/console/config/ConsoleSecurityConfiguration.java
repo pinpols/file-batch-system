@@ -129,9 +129,8 @@ public class ConsoleSecurityConfiguration {
                 "/api/console/auth/login",
                 "/api/console/auth/logout",
                 "/api/console/auth/public-key",
-                // 验证码 config / challenge 登录前即需访问(无认证态),仅下发公开 provider/siteKey。
+                // 验证码配置登录前即需访问(无认证态),仅下发公开 provider/siteKey。
                 "/api/console/captcha/config",
-                "/api/console/captcha/challenge",
                 "/api/console/push/vapid-public-key",
                 "/api/console/system/maintenance",
                 "/api/console/system/cron-preview",

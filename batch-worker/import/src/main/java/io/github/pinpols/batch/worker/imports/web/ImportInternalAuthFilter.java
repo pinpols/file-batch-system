@@ -3,6 +3,8 @@ package io.github.pinpols.batch.worker.imports.web;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.security.SecretComparator;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,8 +43,8 @@ public class ImportInternalAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
-    String uri = request.getRequestURI();
-    if (uri == null || !uri.startsWith("/internal/")) {
+    String path = ServletRequestPaths.applicationPath(request);
+    if (!"/internal".equals(path) && (EmptyChecks.isNull(path) || !path.startsWith("/internal/"))) {
       chain.doFilter(request, response);
       return;
     }

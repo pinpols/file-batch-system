@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.security.SecretComparator;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
@@ -67,8 +69,8 @@ public class InternalAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
-    String uri = request.getRequestURI();
-    if (uri == null || !uri.startsWith("/internal/")) {
+    String path = ServletRequestPaths.applicationPath(request);
+    if (!isInternalPath(path)) {
       chain.doFilter(request, response);
       return;
     }
@@ -84,7 +86,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     if (apiKey != null && !apiKey.isBlank() && apiKeyVerifier != null) {
       // 租户 API-Key 只允许自托管 worker 的 task/worker 生命周期端点;其它内部治理接口仍必须走
       // X-Internal-Secret,避免 per-tenant key 横向触达平台级内部能力。
-      if (!isApiKeyAllowedUri(uri)) {
+      if (!isApiKeyAllowedUri(path)) {
         writeUnauthorized(response);
         return;
       }
@@ -128,9 +130,15 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     writeUnauthorized(response);
   }
 
-  private static boolean isApiKeyAllowedUri(String uri) {
-    return uri.startsWith(API_KEY_INTERNAL_PREFIX_WORKERS)
-        || uri.startsWith(API_KEY_INTERNAL_PREFIX_TASKS);
+  private static boolean isApiKeyAllowedUri(String path) {
+    return EmptyChecks.isNotNull(path)
+        && (path.startsWith(API_KEY_INTERNAL_PREFIX_WORKERS)
+            || path.startsWith(API_KEY_INTERNAL_PREFIX_TASKS));
+  }
+
+  private static boolean isInternalPath(String path) {
+    return "/internal".equals(path)
+        || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
   }
 
   private static void writeUnauthorized(HttpServletResponse response) throws IOException {

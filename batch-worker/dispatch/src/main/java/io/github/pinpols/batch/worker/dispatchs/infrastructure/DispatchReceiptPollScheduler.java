@@ -79,6 +79,8 @@ public class DispatchReceiptPollScheduler {
         .writeTimeout(Duration.ofMillis(properties.getWriteTimeoutMillis()))
         .callTimeout(Duration.ofMillis(properties.getCallTimeoutMillis()))
         .dns(guardedDns())
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build();
     meterRegistry.gauge("batch.dispatch.receipt.poll.failures", pollFailures);
     meterRegistry.gauge("batch.dispatch.receipt.poll.successes", pollSuccesses);
@@ -219,6 +221,9 @@ public class DispatchReceiptPollScheduler {
         + "externalRequestId="
         + URLEncoder.encode(externalRequestId, StandardCharsets.UTF_8);
     Request request = new Request.Builder().url(url).get().build();
+    if (!securityProperties.isBypassMode()) {
+      DnsResolveGuard.resolveAllAndValidate(request.url().host());
+    }
     try (Response response = httpClient.newCall(request).execute()) {
       if (!response.isSuccessful() || response.body() == null) {
         // P2:之前静默吞,排障时只能看到 metric 计数无原因。补 warn + 失败计数,

@@ -201,21 +201,22 @@ paths:
   /api/console/captcha/challenge:
     get:
       tags: [Auth]
-      summary: Issue a self-hosted slider captcha challenge (pre-login)
+      summary: Deprecated self-hosted slider CAPTCHA challenge
       operationId: issueConsoleCaptchaChallenge
+      deprecated: true
       security: []
       description: |
-        Self-hosted provider only: issues a single-use slider challenge {challengeId, gap}.
-        Returns 404 for any other provider (third-party providers handle challenges via their own SDK).
+        Deprecated compatibility route. Challenge issuance is disabled; supported providers return 404.
+        The insecure self-hosted provider is rejected during application startup.
       responses:
         '200':
-          description: Slider challenge
+          description: Legacy response shape; no longer issued by supported providers
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseMapStringObject'
         '404':
-          description: Captcha challenge is not available for the current provider
+          description: Challenge issuance is disabled
   /api/console/auth/token:
     post:
       tags: [Auth]
@@ -14339,7 +14340,7 @@ components:
             Optional risk-based captcha credential. Required only after the account/IP failure
             count crosses the threshold (login-protection enabled). Non-secret; always sent as a
             top-level plaintext field even on the encrypted login path. Format depends on the
-            provider (self-hosted: "challengeId:position"; third-party: its ticket/randstr).
+            provider-specific token returned by the configured third-party CAPTCHA service.
       required: [username, password]
     ConsoleFileOperationResponse:
       type: object
