@@ -121,8 +121,10 @@ class SqlTaskExecutorTest {
 
     @Test
     void ignoresSemicolonInLineComment() {
-      assertThat(SqlTaskExecutor.splitStatements("SELECT 1 -- comment ; not split\n; SELECT 2"))
-          .hasSize(2);
+      assertThat(SqlTaskExecutor.splitStatements("""
+          SELECT 1 -- comment ; not split
+          ; SELECT 2
+          """.stripTrailing())).hasSize(2);
     }
 
     @Test
@@ -207,7 +209,10 @@ class SqlTaskExecutorTest {
 
     @Test
     void skipsLeadingCommentAndWhitespace() {
-      assertThat(SqlTaskExecutor.detectStatementType("-- header\n  SELECT 1")).isEqualTo("SELECT");
+      assertThat(SqlTaskExecutor.detectStatementType("""
+          -- header
+            SELECT 1
+          """.stripTrailing())).isEqualTo("SELECT");
       assertThat(SqlTaskExecutor.detectStatementType("/* block */  UPDATE t SET x = 1"))
           .isEqualTo("UPDATE");
     }

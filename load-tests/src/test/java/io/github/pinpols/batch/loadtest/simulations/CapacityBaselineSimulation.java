@@ -84,7 +84,8 @@ public class CapacityBaselineSimulation extends Simulation {
               "triggerType": "API",
               "params": {}
             }
-            """.formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+            """
+                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
 
     // ── Write scenario (30 %) — job launch ─────────────────────────────────────
 

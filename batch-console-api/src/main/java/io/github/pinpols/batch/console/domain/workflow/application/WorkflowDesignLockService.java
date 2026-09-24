@@ -43,27 +43,29 @@ public class WorkflowDesignLockService {
    * 原子释放:GET → 校验 lockedBy == 调用者 → DEL,全程在 Redis 单线程内执行,消除「GET 后 TTL 过期、他人重新获锁、本调用误删他人锁」 的竞态。返回
    * 0=无锁(幂等) / 1=已删 / -1=非持锁人。lockedBy 用 Redis 内置 cjson 解析。
    */
-  private static final RedisScript<Long> RELEASE_SCRIPT = new DefaultRedisScript<>(
-      "local v = redis.call('GET', KEYS[1])\n"
-          + "if not v then return 0 end\n"
-          + "if cjson.decode(v)['lockedBy'] == ARGV[1] then\n"
-          + "  return redis.call('DEL', KEYS[1])\n"
-          + "else\n"
-          + "  return -1\n"
-          + "end",
-      Long.class);
+  private static final RedisScript<Long> RELEASE_SCRIPT =
+      new DefaultRedisScript<>("""
+      local v = redis.call('GET', KEYS[1])
+      if not v then return 0 end
+      if cjson.decode(v)['lockedBy'] == ARGV[1] then
+        return redis.call('DEL', KEYS[1])
+      else
+        return -1
+      end
+      """.stripTrailing(), Long.class);
 
   /** 原子续期:GET → 校验 lockedBy == 调用者 → SET 新 payload + TTL。返回 0=锁不存在(已过期) / 1=已续 / -1=非持锁人。 */
-  private static final RedisScript<Long> RENEW_SCRIPT = new DefaultRedisScript<>(
-      "local v = redis.call('GET', KEYS[1])\n"
-          + "if not v then return 0 end\n"
-          + "if cjson.decode(v)['lockedBy'] == ARGV[1] then\n"
-          + "  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])\n"
-          + "  return 1\n"
-          + "else\n"
-          + "  return -1\n"
-          + "end",
-      Long.class);
+  private static final RedisScript<Long> RENEW_SCRIPT =
+      new DefaultRedisScript<>("""
+      local v = redis.call('GET', KEYS[1])
+      if not v then return 0 end
+      if cjson.decode(v)['lockedBy'] == ARGV[1] then
+        redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+        return 1
+      else
+        return -1
+      end
+      """.stripTrailing(), Long.class);
 
   private static final long RESULT_NOT_OWNER = -1L;
   private static final long RESULT_ABSENT = 0L;

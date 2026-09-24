@@ -43,7 +43,10 @@ class ImportPreprocessPipelineTest {
 
   @Test
   void shouldUntarFirstFileEntryWhenCompressTypeTar() throws Exception {
-    byte[] raw = "id,name\n1,alice\n".getBytes(StandardCharsets.UTF_8);
+    byte[] raw = """
+        id,name
+        1,alice
+        """.getBytes(StandardCharsets.UTF_8);
     byte[] tar = buildTar(Map.of("orders.csv", raw));
     Map<String, Object> template = Map.of("compress_type", "TAR");
     byte[] out = ImportPreprocessPipeline.run(tar, null, template, true);
@@ -52,7 +55,10 @@ class ImportPreprocessPipelineTest {
 
   @Test
   void shouldUntarGzWhenCompressTypeTarGz() throws Exception {
-    byte[] raw = "a,b\n1,2\n".getBytes(StandardCharsets.UTF_8);
+    byte[] raw = """
+        a,b
+        1,2
+        """.getBytes(StandardCharsets.UTF_8);
     byte[] tar = buildTar(Map.of("data.csv", raw));
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     try (GZIPOutputStream gos = new GZIPOutputStream(bos)) {

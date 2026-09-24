@@ -16,7 +16,7 @@
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
-| Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
+| Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh` |
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
@@ -274,6 +274,16 @@ bash scripts/ci/install-upstream-modules.sh
 
 ```bash
 python3 scripts/ci/check-java-readability.py
+```
+
+## `check-java-text-block-style.py`
+
+检查全仓 Java text block 的基础排版：结束 `"""` 必须独立占一行，避免多行
+SQL / JSON / XML / Lua fixture 退回难读的行尾分隔符形式。脚本不判断所有
+`"\n" +` 拼接是否必须改成 text block，避免误报签名串、canonical request 和动态协议拼接。
+
+```bash
+python3 scripts/ci/check-java-text-block-style.py
 ```
 
 ## `check-java-suppression-registry.py`

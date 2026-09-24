@@ -103,10 +103,11 @@ public class OrchestratorRedisSupport {
 
   // R3-P0-9：HSET + EXPIRE 两次 round-trip 非原子；连接中断时 hash 无 TTL → stale 缓存永久。
   // 改用 HSET 全字段 + PEXPIRE 同 Lua 一次原子执行；额外加 try-catch 走 cacheWrite 的 fail-open 路径。
-  private static final String LUA_HSET_EXPIRE =
-      "for i = 1, #ARGV - 1, 2 do redis.call('HSET', KEYS[1], ARGV[i], ARGV[i+1]) end\n"
-          + "redis.call('PEXPIRE', KEYS[1], ARGV[#ARGV])\n"
-          + "return 1";
+  private static final String LUA_HSET_EXPIRE = """
+      for i = 1, #ARGV - 1, 2 do redis.call('HSET', KEYS[1], ARGV[i], ARGV[i+1]) end
+      redis.call('PEXPIRE', KEYS[1], ARGV[#ARGV])
+      return 1
+      """.stripTrailing();
 
   public void putHashAll(String key, Map<String, String> fields, Duration ttl) {
     cacheWrite(key, () -> {

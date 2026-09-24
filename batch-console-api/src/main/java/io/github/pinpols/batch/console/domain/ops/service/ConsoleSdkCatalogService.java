@@ -40,11 +40,13 @@ public class ConsoleSdkCatalogService {
           "java",
           "io.github.pinpols.batch:batch-worker-sdk",
           "1.1.0-SNAPSHOT",
-          "<dependency>\n"
-              + "  <groupId>io.github.pinpols.batch</groupId>\n"
-              + "  <artifactId>batch-worker-sdk</artifactId>\n"
-              + "  <version>1.1.0-SNAPSHOT</version>\n"
-              + "</dependency>",
+          """
+          <dependency>
+            <groupId>io.github.pinpols.batch</groupId>
+            <artifactId>batch-worker-sdk</artifactId>
+            <version>1.1.0-SNAPSHOT</version>
+          </dependency>
+          """.stripTrailing(),
           CONFORMANCE_PER_PR_PARITY),
       new SdkLanguage(
           "python",

@@ -172,7 +172,9 @@ class SqlTemplateExportSqlValidatorTest {
   @Test
   void validate_doesNotTreatCommentAsRequiredParameter() {
     SqlTemplateExportSqlValidator validator = validatorWithDefaults();
-    String sql = "SELECT id FROM biz.t WHERE batch_no = :batchNo -- :tenantId\n";
+    String sql = """
+        SELECT id FROM biz.t WHERE batch_no = :batchNo -- :tenantId
+        """;
     assertThatThrownBy(() -> validator.validate(sql))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining(":tenantId");
