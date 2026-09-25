@@ -29,7 +29,7 @@ import java.util.concurrent.locks.LockSupport;
 import javax.net.SocketFactory;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
-import mockwebserver3.SocketPolicy;
+import mockwebserver3.SocketEffect;
 import okhttp3.OkHttpClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -200,7 +200,7 @@ class PlatformHttpClientTest {
   void cancelInFlightCallsUnblocksHangingSynchronousRequest() throws Exception {
     try (MockWebServer hangingServer = new MockWebServer()) {
       hangingServer.enqueue(new MockResponse.Builder()
-          .socketPolicy(SocketPolicy.NoResponse.INSTANCE)
+          .onResponseStart(SocketEffect.Stall.INSTANCE)
           .build());
       hangingServer.start(InetAddress.getByName("127.0.0.1"), 0);
       PlatformHttpClient client =
@@ -230,7 +230,7 @@ class PlatformHttpClientTest {
   void deactivateHonorsRemainingShutdownBudget() throws Exception {
     try (MockWebServer hangingServer = new MockWebServer()) {
       hangingServer.enqueue(new MockResponse.Builder()
-          .socketPolicy(SocketPolicy.NoResponse.INSTANCE)
+          .onResponseStart(SocketEffect.Stall.INSTANCE)
           .build());
       hangingServer.start(InetAddress.getByName("127.0.0.1"), 0);
       PlatformHttpClient client =

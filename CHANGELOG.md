@@ -25,6 +25,10 @@
 
 ### Changed
 
+- **SDK 与前端运行时及依赖治理**：Go SDK 最低版本升至 1.26，CI 覆盖 Go 1.26/1.27；Python 覆盖 3.12/3.14；TypeScript SDK 覆盖 Node 22/24；Rust、Go、Python SDK 锁文件依兼容范围刷新。前端默认构建运行时改为 Node 24，保留 Node 22 消费兼容，并增加声明与 CI 矩阵对齐门禁。
+
+- **Maven 依赖与构建工具版本核查**：升级 Spring Boot、Spring AI、MyBatis starter、AWS SDK、OkHttp、PostgreSQL JDBC、POI、Commons Compress 及同主版本依赖补丁；Resilience4j 2.4 切换至 Boot 4 专用模块。同步 Maven 插件、Gatling 与 ArchUnit 版本，修复 SFTP SPI 示例基线，并更新技术栈与许可证基线。
+
 - **基础设施镜像版本与部署说明**：PostgreSQL 固定到 `17.11`、Valkey 固定到 `8.1.10`，同步 Testcontainers、CI 预拉取、Sim、HA 清单及 Compose 默认值；基础服务手册改正 Redis/Valkey 漂移，并明确 MinIO 授权审查和替代后端生产验证尚未完成。Kafka `4.1.2` 仍在官方支持列表，本次不做跨次版本升级。
 - **对象存储测试镜像来源**：本地 Compose、CI 预拉取和 Testcontainers 的 MinIO 测试镜像改为可匿名拉取的 `bitnamilegacy/minio:2025.7.23-debian-12-r1`，并将 repository 与 tag 一并纳入版本对齐守护；该镜像仅作为本地/集成测试过渡来源，不代表生产对象存储选型。
 - **组合部署出站 HTTP 隔离**：Console 与 Orchestrator 的 `OutboundHttpTransport` 使用模块级 qualifier 显式绑定，避免 E2E 组合应用或未来同进程部署因存在多个实现而启动失败，并确保通知、验证码、治理、血缘和 Sensor 不会跨模块误用传输策略。

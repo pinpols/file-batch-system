@@ -3,8 +3,8 @@ package io.github.pinpols.batch.common.resilience;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
-import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerMetricsAutoConfiguration;
+import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerAutoConfiguration;
+import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerMetricsAutoConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;

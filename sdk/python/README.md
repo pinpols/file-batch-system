@@ -195,18 +195,19 @@ Lane S (P2) 把 dispatcher + Kafka consumer 接上,对齐 Java SDK 下列 5 个�
 
 ```bash
 cd sdk/python
-pip install -e .[dev]
+# 仓库开发使用锁文件；发布给消费者的依赖仍遵循 pyproject.toml 声明的兼容范围。
+uv sync --locked --extra dev
 
 # Lint + types
-ruff check src tests
-ruff format --check src tests
-mypy src
+uv run --locked ruff check src tests
+uv run --locked ruff format --check src tests
+uv run --locked mypy src
 
 # 测试
-pytest -v
+uv run --locked pytest -v
 
 # 契约 runner
-pytest -v tests/contract
+uv run --locked pytest -v tests/contract
 ```
 
 ## `@batch_task` decorator (P5)

@@ -124,7 +124,7 @@ flowchart LR
 
 | 层次 | 选型 |
 |------|------|
-| 运行时 | JDK 21(LTS), Spring Boot 4.1.0 |
+| 运行时 | JDK 21(LTS), Spring Boot 4.1.1 |
 | 消息队列 | Apache Kafka(版本由 Spring Boot BOM 管理) |
 | 数据库 | PostgreSQL 17（JSONB、TIMESTAMPTZ） |
 | 对象存储 | MinIO（兼容 S3 协议） |
