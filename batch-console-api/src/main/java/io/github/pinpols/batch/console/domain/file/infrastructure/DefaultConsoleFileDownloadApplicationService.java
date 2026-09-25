@@ -33,7 +33,7 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
- * 文件下载端点：console 侧代理 MinIO 下载，承担审批门控 + 按需解密，对应 {@code DefaultConsoleFileGovernanceService}
+ * 文件下载端点：console 侧代理对象存储下载，承担审批门控 + 按需解密，对应 {@code DefaultConsoleFileGovernanceService}
  * 里加密文件"不直接 presign S3，走 console 代理 URL"的安全路径。
  *
  * <p>提供 2 个下载入口：

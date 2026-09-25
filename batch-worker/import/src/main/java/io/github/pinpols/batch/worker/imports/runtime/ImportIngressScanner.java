@@ -42,7 +42,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * MinIO 入库扫描器：定时轮询对象存储 bucket，将新到达的文件自动登记为 {@code file_record}（status=RECEIVED）， 为后续 Import
+ * 对象存储入库扫描器：定时轮询 bucket，将新到达的文件自动登记为 {@code file_record}（status=RECEIVED）， 为后续 Import
  * pipeline 提供触发点。扫描器只负责"发现并登记"，不直接调度任务。
  *
  * <p><b>去重与稳定性</b>：

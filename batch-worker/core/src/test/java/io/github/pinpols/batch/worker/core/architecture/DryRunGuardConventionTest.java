@@ -47,7 +47,7 @@ class DryRunGuardConventionTest {
       // batch-worker-import: 写 biz 表 / 完成审计
       "batch-worker/import/.*/stage/LoadStep.java",
       "batch-worker/import/.*/stage/FeedbackStep.java",
-      // batch-worker-export: 上传 MinIO / 注册 file_record / 完成 / 投递审计
+      // batch-worker-export: 上传对象存储 / 注册 file_record / 完成 / 投递审计
       "batch-worker/export/.*/stage/StoreStep.java",
       "batch-worker/export/.*/stage/RegisterStep.java",
       "batch-worker/export/.*/stage/CompleteStep.java",
@@ -96,7 +96,7 @@ class DryRunGuardConventionTest {
    * READ_ONLY_OR_LOCAL plugin 出现以下符号 = 强烈怀疑引入了副作用,需要重新分类到 {@link #SIDE_EFFECTING_GUARDED} 并补
    * DryRunGuard。
    *
-   * <p>覆盖五类副作用通道:JDBC 模板写、MyBatis insert/update/delete、HTTP client send、MinIO/S3 put、Kafka send。 用粗
+   * <p>覆盖五类副作用通道:JDBC 模板写、MyBatis insert/update/delete、HTTP client send、对象存储 put、Kafka send。 用粗
    * grep 而非 AST 故意宽松:误报 = 让开发者解释,漏报 = dry-run 边界静默失守。
    *
    * <p>需要在 READ_ONLY plugin 里用这些符号(如 staging 表的内部读写)→ 调用方在文件头加注释 {@code "// dry-run-allow-internal:

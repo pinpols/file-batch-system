@@ -44,7 +44,7 @@ CODE_OR_CONTRACT_PATHS = (
 
 
 CONTENT_TOUCHPOINTS = (
-    re.compile(r"\breadiness\b", re.IGNORECASE),
+    re.compile(r"\b(readiness[-_. ]?(defer|timeout|window|level)|readiness_level)\b", re.IGNORECASE),
     re.compile(r"\basset_partition\b", re.IGNORECASE),
     re.compile(r"\bresult_version\b", re.IGNORECASE),
 )

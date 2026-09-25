@@ -14,7 +14,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.TestConstructor;
 
 /**
- * 冒烟集成测试：使用真实 Postgres（平台 + 业务）、Kafka 和 MinIO 的 Spring 上下文。
+ * 冒烟集成测试：使用真实 Postgres（平台 + 业务）、Kafka 和对象存储的 Spring 上下文。
  *
  * <p>继承 {@link AbstractIntegrationTest} —— 不要在此重复 {@code @BatchIntegrationTest} 或容器配置。
  */

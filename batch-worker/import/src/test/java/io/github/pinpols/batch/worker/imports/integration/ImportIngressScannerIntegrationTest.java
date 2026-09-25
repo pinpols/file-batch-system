@@ -25,7 +25,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
- * 集成测试：ImportIngressScanner 发现放置在 MinIO 中的 CSV 文件并将其注册为数据库中的平台文件记录。
+ * 集成测试：ImportIngressScanner 发现放置在对象存储中的 CSV 文件并将其注册为数据库中的平台文件记录。
  *
  * <p>此处通过 {@code @TestPropertySource} 启用扫描器，覆盖 application-test.yml 中的 {@code
  * scanner.enabled=false}。稳定窗口设为 0，文件立即被视为稳定。
@@ -46,7 +46,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @EnabledIf("s3BackendActive")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
-  /** fixture 直接写 MinIO（S3Client），filesystem 后端下自动跳过。 */
+  /** fixture 直接写对象存储（S3Client），filesystem 后端下自动跳过。 */
   static boolean s3BackendActive() {
     return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
   }
@@ -67,7 +67,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     String objectName = "ingress/it-scan-test.csv";
     String bucket = s3Bucket();
 
-    // 上传一个最小化的 CSV 到 MinIO
+    // 上传一个最小化的 CSV 到对象存储
     byte[] content = """
         id,name
         1,Alice
@@ -247,9 +247,9 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     return S3Client.builder()
         .endpointOverride(URI.create(s3Endpoint()))
         .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
-        .forcePathStyle(true)
-        .region(Region.US_EAST_1)
+            AwsBasicCredentials.create(s3AccessKey(), s3SecretKey())))
+        .forcePathStyle(s3PathStyleEnabled())
+        .region(Region.of(s3Region()))
         .build();
   }
 }

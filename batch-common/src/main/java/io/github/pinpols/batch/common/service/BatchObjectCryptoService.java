@@ -189,7 +189,7 @@ public class BatchObjectCryptoService {
     if (inputStream == null) {
       return InputStream.nullInputStream();
     }
-    // S-1.1: setup 过程中任何异常都要关闭底层流，避免 MinIO 连接 / 文件句柄泄漏。
+    // S-1.1: setup 过程中任何异常都要关闭底层流，避免对象存储连接 / 文件句柄泄漏。
     // 返回成功后的 close 由调用方负责（CipherInputStream.close 会级联 close 底层流 + 校验 GCM tag）。
     InputStreamCloseGuard closeGuard = new InputStreamCloseGuard(inputStream);
     try (closeGuard) {

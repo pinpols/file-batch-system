@@ -165,7 +165,7 @@ management:
       # A-4.1: 健康检查详情默认需授权；生产管理端口仍必须由网络策略/Ingress 隔离
       show-details: ${BATCH_ACTUATOR_HEALTH_SHOW_DETAILS:when_authorized}
       # readiness 组：下游全就绪才对外服务；include="*" 会自动纳入所有已注册的
-      # HealthIndicator（db/redis/kafka/minio 等，按模块 starter 实际 bean 决定）。
+      # HealthIndicator（db/redis/kafka/object-storage 等，按模块 starter 实际 bean 决定）。
       # liveness 只看 livenessState（避免下游抖动反复重启 Pod），K8s readinessProbe 应配
       # /actuator/health/readiness
       group:
@@ -316,7 +316,7 @@ batch:
         # 具体密钥内容（Base64 等形式；生产请避免明文出现在仓库）
         DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
 
-  # S3 协议对象存储（orchestrator + 所有 worker + console）。底层 MinIO SDK 是通用 S3 客户端,
+  # S3 协议对象存储（orchestrator + 所有 worker + console）。底层是 AWS SDK v2 通用 S3 客户端,
   # 同一套配置可接 自建 MinIO/Ceph、AWS S3、阿里云 OSS（S3 兼容）、腾讯云 COS（S3 兼容）。
   storage:
     # 有状态后端选择：切换 backend、bucket、endpoint 或 filesystem root 前必须先迁移历史对象，
@@ -343,18 +343,25 @@ batch:
       secret-key: ${BATCH_S3_SECRET_KEY:}
       # 默认 bucket
       bucket: ${BATCH_S3_BUCKET:batch-dev}
-      # 区域。AWS/OSS/COS 走 SigV4 必填(如 us-east-1 / oss-cn-hangzhou / ap-guangzhou);自建 MinIO/Ceph 留空
+      # 区域。AWS/OSS/COS 走 SigV4 必填(如 us-east-1 / oss-cn-hangzhou / ap-guangzhou);自建 S3 兼容服务可留空
       region: ${BATCH_S3_REGION:}
-      # 是否自动建桶。自建 MinIO 默认 true;托管云 bucket 预建、凭据无 CreateBucket 权限 → 设 false
+      # 是否自动建桶。自建对象存储默认 true;托管云 bucket 预建、凭据无 CreateBucket 权限 → 设 false
       auto-create-bucket: ${BATCH_S3_AUTO_CREATE_BUCKET:true}
+      # 自建 S3 兼容服务通常用 path-style;AWS S3 标准域名、部分云厂商可设 false。
+      path-style-enabled: ${BATCH_S3_PATH_STYLE_ENABLED:true}
+      # AWS SDK v2 checksum 策略。默认 WHEN_REQUIRED,避免非 AWS 后端不兼容 aws-chunked trailer。
+      request-checksum-calculation: ${BATCH_S3_REQUEST_CHECKSUM_CALCULATION:WHEN_REQUIRED}
+      response-checksum-validation: ${BATCH_S3_RESPONSE_CHECKSUM_VALIDATION:WHEN_REQUIRED}
       # 大对象上传走 multipart，降低单连接 STORE 时间；小对象仍走普通 putObject。
       multipart-enabled: ${BATCH_S3_MULTIPART_ENABLED:true}
       multipart-threshold-bytes: ${BATCH_S3_MULTIPART_THRESHOLD_BYTES:67108864}
       multipart-part-size-bytes: ${BATCH_S3_MULTIPART_PART_SIZE_BYTES:16777216}
-      # 连接 / 读取超时(S3AutoConfiguration 应用到 SDK httpClient)。MinIO/S3 抖动时无需改外部 yml,
+      # 连接 / 读取超时(S3AutoConfiguration 应用到 SDK httpClient)。对象存储抖动时无需改外部 yml,
       # 直接用 env 调;默认与 S3StorageProperties 一致(connect 5s / read 30s)。
       connect-timeout-ms: ${BATCH_S3_CONNECT_TIMEOUT_MS:5000}
       read-timeout-ms: ${BATCH_S3_READ_TIMEOUT_MS:30000}
+      max-attempts: ${BATCH_S3_MAX_ATTEMPTS:0}
+      adaptive-retry: ${BATCH_S3_ADAPTIVE_RETRY:false}
     encryption:
       max-in-memory-encrypt-bytes: ${BATCH_STORAGE_ENCRYPTION_MAX_IN_MEMORY_ENCRYPT_BYTES:33554432}
 

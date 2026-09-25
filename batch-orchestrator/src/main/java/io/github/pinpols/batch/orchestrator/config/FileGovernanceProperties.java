@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <ul>
  *   <li><b>Latency</b>：到达 / 处理延迟监控
  *   <li><b>Archive</b>：文件记录归档
- *   <li><b>Reconcile</b>：MinIO 桶 vs DB file_record 对账
+ *   <li><b>Reconcile</b>：对象存储 bucket vs DB file_record 对账
  *   <li><b>Arrival</b>：文件到达 SLA + 超时动作
  *   <li><b>Access</b>：预签名 URL 下载控制
  * </ul>

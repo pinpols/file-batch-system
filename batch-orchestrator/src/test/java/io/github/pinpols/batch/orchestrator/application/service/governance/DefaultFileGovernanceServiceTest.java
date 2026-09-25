@@ -321,7 +321,7 @@ class DefaultFileGovernanceServiceTest {
     assertThat(url)
         .startsWith("/api/console/files/1/download?tenantId=t1")
         .contains("approvalId=appr-1");
-    // 加密文件路径不调 MinIO 直连
+    // 加密文件路径不调对象存储直连
     verify(s3GovernanceStorage, never()).createPresignedDownloadUrl(any(), any(), anyInt());
     verify(fileGovernanceRepository).appendAudit(any());
   }
@@ -378,7 +378,7 @@ class DefaultFileGovernanceServiceTest {
 
     String url = service.presignFileDownload(cmd);
 
-    // bypass 时即使设了 encryption / approval,也走直连 MinIO
+    // bypass 时即使设了 encryption / approval,也走对象存储直连
     assertThat(url).isEqualTo("https://direct-objectStore");
   }
 

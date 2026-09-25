@@ -15,8 +15,6 @@ import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
-import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
-import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -46,12 +44,11 @@ public class S3AutoConfiguration {
         .endpointOverride(URI.create(p.getEndpoint()))
         .credentialsProvider(StaticCredentialsProvider.create(
             AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
-        .forcePathStyle(true)
-        // 关掉 AWS SDK v2 ≥2.30 默认的 WHEN_SUPPORTED 请求校验和（CRC32 + aws-chunked trailer）：
-        // 阿里 OSS / 腾讯 COS / GCS 等非 AWS 后端多不识别该 trailer，会回 501/签名错误。
-        // WHEN_REQUIRED 恢复旧 MinIO SDK 行为（仅在 API 强制要求时才算 checksum）。
-        .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
-        .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
+        .forcePathStyle(p.isPathStyleEnabled())
+        // 默认关掉 AWS SDK v2 >=2.30 的 WHEN_SUPPORTED 请求校验和(CRC32 + aws-chunked trailer):
+        // 多数 S3 兼容后端不识别该 trailer,会回 501/签名错误；确需 AWS 原生行为时通过配置打开。
+        .requestChecksumCalculation(p.getRequestChecksumCalculation())
+        .responseChecksumValidation(p.getResponseChecksumValidation())
         .httpClientBuilder(http)
         .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1);
     RetryStrategy retryStrategy = buildRetryStrategy(p);
@@ -86,8 +83,9 @@ public class S3AutoConfiguration {
         .endpointOverride(URI.create(p.getEndpoint()))
         .credentialsProvider(StaticCredentialsProvider.create(
             AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
-        .serviceConfiguration(
-            S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .serviceConfiguration(S3Configuration.builder()
+            .pathStyleAccessEnabled(p.isPathStyleEnabled())
+            .build())
         .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
         .build();
   }

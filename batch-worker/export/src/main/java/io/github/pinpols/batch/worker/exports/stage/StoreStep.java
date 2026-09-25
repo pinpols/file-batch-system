@@ -46,7 +46,7 @@ public class StoreStep implements ExportStageStep {
 
   @Override
   public ExportStageResult execute(ExportJobContext context) {
-    // ADR-026: 演练模式下不上传 MinIO/SFTP，仅落 SHA + 占位 objectName 让下游 stage 链路完整跑完
+    // ADR-026: 演练模式下不上传对象存储/SFTP，仅落 SHA + 占位 objectName 让下游 stage 链路完整跑完
     if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
         .isDryRun()) {
       return executeDryRun(context);

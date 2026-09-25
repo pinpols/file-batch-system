@@ -12,7 +12,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/** 使用 Testcontainers Postgres（platform + biz）、Kafka、MinIO 和模拟的 orchestrator HTTP 端点加载导入 Worker。 */
+/** 使用 Testcontainers Postgres（platform + biz）、Kafka、对象存储和模拟的 orchestrator HTTP 端点加载导入 Worker。 */
 @SpringBootTest(
     classes = BatchWorkerImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)

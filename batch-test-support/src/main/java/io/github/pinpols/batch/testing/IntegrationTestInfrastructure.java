@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.testing;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -22,6 +23,7 @@ final class IntegrationTestInfrastructure {
 
   static final String BACKEND_S3 = "s3";
   static final String BACKEND_FILESYSTEM = "filesystem";
+  static final String DEFAULT_OBJECT_STORE_BUCKET = "batch-test";
 
   private static final String FS_PRESIGN_SECRET = "test-fs-presign-secret-0123456789abcdef";
   private static final String FS_DOWNLOAD_BASE_URL =
@@ -38,7 +40,7 @@ final class IntegrationTestInfrastructure {
       PostgreSQLContainer platformPostgres,
       PostgreSQLContainer businessPostgres,
       KafkaContainer kafka,
-      ObjectStoreContainer objectStore,
+      TestObjectStoreEndpoint objectStore,
       GenericContainer<?> redis) {
     registerPlatformDatabaseProperties(registry, platformPostgres);
     registerKafkaProperties(registry, kafka);
@@ -80,23 +82,28 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerObjectStoreProperties(
-      DynamicPropertyRegistry registry, ObjectStoreContainer minio) {
+      DynamicPropertyRegistry registry, TestObjectStoreEndpoint objectStore) {
     if (isFilesystemBackend()) {
       // bucket 名仍由 S3 配置提供：guard 与 S3ExportStorage 用它做对象命名空间
       registry.add("batch.storage.backend", () -> BACKEND_FILESYSTEM);
       registry.add("batch.storage.filesystem.root", () -> FS_ROOT.toString());
       registry.add("batch.storage.filesystem.download-base-url", () -> FS_DOWNLOAD_BASE_URL);
       registry.add("batch.storage.filesystem.presign-secret", () -> FS_PRESIGN_SECRET);
-      registry.add("batch.storage.s3.bucket", minio::getDefaultBucket);
+      registry.add("batch.storage.s3.bucket", IntegrationTestInfrastructure::objectStoreBucket);
       // 共享 JVM 内从既有 S3 基线切换需要一次性 cutover-id；全新 DB 首启仅记 baseline，忽略该值
       registry.add("batch.storage.backend-guard.cutover-id", () -> "test-fs-" + UUID.randomUUID());
       return;
     }
+    if (EmptyChecks.isNull(objectStore)) {
+      throw new IllegalStateException("S3-compatible test object store endpoint is not configured");
+    }
     registry.add("batch.storage.backend", () -> BACKEND_S3);
-    registry.add("batch.storage.s3.endpoint", minio::getEndpoint);
-    registry.add("batch.storage.s3.access-key", minio::getAccessKey);
-    registry.add("batch.storage.s3.secret-key", minio::getSecretKey);
-    registry.add("batch.storage.s3.bucket", minio::getDefaultBucket);
+    registry.add("batch.storage.s3.endpoint", objectStore::getEndpoint);
+    registry.add("batch.storage.s3.access-key", objectStore::getAccessKey);
+    registry.add("batch.storage.s3.secret-key", objectStore::getSecretKey);
+    registry.add("batch.storage.s3.bucket", objectStore::getDefaultBucket);
+    registry.add("batch.storage.s3.region", objectStore::getRegion);
+    registry.add("batch.storage.s3.path-style-enabled", objectStore::isPathStyleEnabled);
   }
 
   static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {
@@ -119,6 +126,11 @@ final class IntegrationTestInfrastructure {
 
   static boolean isFilesystemBackend() {
     return BACKEND_FILESYSTEM.equals(storageBackend());
+  }
+
+  static String objectStoreBucket() {
+    return System.getProperty("batch.test.storage.bucket", DEFAULT_OBJECT_STORE_BUCKET)
+        .trim();
   }
 
   static Path filesystemRoot() {

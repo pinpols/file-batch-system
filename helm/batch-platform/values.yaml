@@ -50,11 +50,20 @@ shedlock:
 
 # 对象存储后端（S3 协议：MinIO / AWS S3 / 阿里 OSS / 腾讯 COS 等），靠 endpoint + 凭据切换后端。
 objectStorage:
+  # S3 兼容对象存储端点。本地 chart 默认指向 compose 中的 MinIO;生产 overlay 必须显式改成实际服务。
   endpoint: "http://minio:9000"
   accessKey: ""
   secretKey: ""
   bucket: "batch-prod"
   region: ""
+  autoCreateBucket: true
+  pathStyleEnabled: true
+  requestChecksumCalculation: "WHEN_REQUIRED"
+  responseChecksumValidation: "WHEN_REQUIRED"
+  connectTimeoutMs: 5000
+  readTimeoutMs: 30000
+  maxAttempts: 0
+  adaptiveRetry: false
 
 # Alertmanager 是可选外部依赖。未配置 endpoint 时保持关闭，避免容器内 localhost 误连。
 alertmanager:

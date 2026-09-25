@@ -39,7 +39,7 @@ class DispatchFileContentResolverPathTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    // 未配 MinIO:provider.getIfAvailable() 默认返回 null → objectStore 为 null(测 LOCAL 路径)。
+    // 未配对象存储:provider.getIfAvailable() 默认返回 null → objectStore 为 null(测 LOCAL 路径)。
     resolver = new DispatchFileContentResolver(s3Properties, cryptoService, objectStoreProvider);
     var init = DispatchFileContentResolver.class.getDeclaredMethod("init");
     init.setAccessible(true);
