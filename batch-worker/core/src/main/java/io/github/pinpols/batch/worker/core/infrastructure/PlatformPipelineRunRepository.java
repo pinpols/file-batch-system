@@ -22,8 +22,10 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Pipeline 实例与步骤运行记录的数据访问协作者。 */
 @Repository
@@ -153,6 +155,7 @@ public class PlatformPipelineRunRepository {
     }
   }
 
+  @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
   public Long startStepRun(
       Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {
@@ -169,18 +172,10 @@ public class PlatformPipelineRunRepository {
         PipelineRunStatus.RUNNING.name(),
         "inputSummaryJson",
         toJson(inputSummary));
-    for (int index = 0; index < 5; index++) {
-      try {
-        mapper.insertStepRun(values);
-        return toLong(values.get(ID));
-      } catch (DuplicateKeyException ex) {
-        values.remove(ID);
-        if (index == 4) {
-          throw ex;
-        }
-      }
-    }
-    return null;
+    mapper.lockStepRunSequence(values);
+    values.put("runSeq", mapper.selectNextStepRunSeq(values));
+    mapper.insertStepRun(values);
+    return toLong(values.get(ID));
   }
 
   public void finishStepRunSuccess(Long stepRunId, Object outputSummary) {

@@ -188,6 +188,19 @@
           and step_code = #{stepCode}
     </select>
 
+    <!-- 独立语句获取事务锁；锁等待结束后，后续 MAX 查询才能取得新 READ COMMITTED 快照。 -->
+    <select id="lockStepRunSequence" resultType="int">
+        select 1
+        from (
+            select pg_advisory_xact_lock(
+                hashtextextended(
+                    concat('pipeline_step_run:', #{pipelineInstanceId}, ':', #{stepCode}),
+                    0
+                )
+            )
+        ) step_run_lock
+    </select>
+
     <!--
       P1 阶段级续跑读取侧:该 pipeline 实例下**每个 stepCode 最新一次 run 为 SUCCESS** 的 stepCode 集。
       契约(2026-07 语义修复):判定"可跳过"必须看**最新一次 attempt 的终态**,不能看"历史上曾成功过"——
@@ -229,28 +242,14 @@
     </select>
 
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
-        with step_run_lock as (
-            select pg_advisory_xact_lock(
-                hashtextextended(
-                    concat('pipeline_step_run:', #{pipelineInstanceId}, ':', #{stepCode}),
-                    0
-                )
-            )
-        ),
-        next_seq as (
-            select coalesce(max(run_seq), 0) + 1 as run_seq
-            from batch.pipeline_step_run, step_run_lock
-            where pipeline_instance_id = #{pipelineInstanceId}
-              and step_code = #{stepCode}
-        )
         insert into batch.pipeline_step_run (
             pipeline_instance_id, step_code, stage_code, run_seq,
             step_status, input_summary, started_at
         )
-        select
-            #{pipelineInstanceId}, #{stepCode}, #{stageCode}, next_seq.run_seq,
+        values (
+            #{pipelineInstanceId}, #{stepCode}, #{stageCode}, #{runSeq},
             #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
-        from next_seq
+        )
     </insert>
 
     <update id="finishStepRun">

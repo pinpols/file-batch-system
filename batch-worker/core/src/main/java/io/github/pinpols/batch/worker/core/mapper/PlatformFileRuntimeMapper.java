@@ -33,6 +33,8 @@ public interface PlatformFileRuntimeMapper {
 
   Integer selectNextStepRunSeq(Map<String, Object> params);
 
+  int lockStepRunSequence(Map<String, Object> params);
+
   List<String> selectSucceededStepCodes(Map<String, Object> params);
 
   String selectLatestSucceededStepOutputSummary(Map<String, Object> params);

@@ -9,6 +9,11 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
@@ -74,6 +79,7 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
           stage_code           varchar(64)  not null,
           run_seq              integer      not null default 1,
           step_status          varchar(32)  not null,
+          input_summary        jsonb,
           started_at           timestamptz,
           finished_at          timestamptz,
           constraint uk_pipeline_step_run unique (pipeline_instance_id, step_code, run_seq)
@@ -182,6 +188,85 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     // act + assert
     assertThat(succeededStepCodes(500L)).containsExactly("COMPUTE");
     assertThat(succeededStepCodes(501L)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("锁等待结束后读取新快照，分配下一个 step run 序号")
+  void concurrentStepRunAllocation_usesFreshSnapshotAfterLockWait() throws Exception {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    CountDownLatch contenderStarted = new CountDownLatch(1);
+    try (SqlSession firstSession = sqlSessionFactory.openSession(false)) {
+      PlatformFileRuntimeMapper firstMapper =
+          firstSession.getMapper(PlatformFileRuntimeMapper.class);
+      Map<String, Object> firstParams = stepRunParams(900L);
+      firstMapper.lockStepRunSequence(firstParams);
+      insertStepRun(firstMapper, firstParams, 1);
+
+      Future<Integer> contender = executor.submit(() -> {
+        try (SqlSession secondSession = sqlSessionFactory.openSession(false)) {
+          secondSession
+              .getConnection()
+              .createStatement()
+              .execute("select set_config('application_name', 'step-run-seq-contender', false)");
+          PlatformFileRuntimeMapper secondMapper =
+              secondSession.getMapper(PlatformFileRuntimeMapper.class);
+          Map<String, Object> secondParams = stepRunParams(900L);
+          contenderStarted.countDown();
+          secondMapper.lockStepRunSequence(secondParams);
+          int nextRunSeq = secondMapper.selectNextStepRunSeq(secondParams);
+          insertStepRun(secondMapper, secondParams, nextRunSeq);
+          secondSession.commit();
+          return nextRunSeq;
+        }
+      });
+
+      assertThat(contenderStarted.await(5, TimeUnit.SECONDS)).isTrue();
+      awaitAdvisoryLockWait();
+      firstSession.commit();
+
+      assertThat(contender.get(10, TimeUnit.SECONDS)).isEqualTo(2);
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+    }
+
+    assertThat(jdbcTemplate.queryForList(
+            "select run_seq from batch.pipeline_step_run "
+                + "where pipeline_instance_id = 900 and step_code = 'COMPUTE' order by run_seq",
+            Integer.class))
+        .containsExactly(1, 2);
+  }
+
+  private void awaitAdvisoryLockWait() throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+    while (System.nanoTime() < deadline) {
+      Integer waiting = jdbcTemplate.queryForObject(
+          "select count(*) from pg_stat_activity "
+              + "where application_name = 'step-run-seq-contender' "
+              + "and wait_event_type = 'Lock'",
+          Integer.class);
+      if (waiting != null && waiting > 0) {
+        return;
+      }
+      Thread.sleep(20);
+    }
+    throw new AssertionError("contender did not block on the advisory transaction lock");
+  }
+
+  private Map<String, Object> stepRunParams(long pipelineInstanceId) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("pipelineInstanceId", pipelineInstanceId);
+    params.put("stepCode", "COMPUTE");
+    params.put("stageCode", "COMPUTE");
+    params.put("stepStatus", "RUNNING");
+    params.put("inputSummaryJson", "{}");
+    return params;
+  }
+
+  private void insertStepRun(
+      PlatformFileRuntimeMapper mapper, Map<String, Object> params, int runSeq) {
+    params.put("runSeq", runSeq);
+    mapper.insertStepRun(params);
   }
 
   @Test
