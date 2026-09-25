@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.RuleFinding;
-import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
 import io.github.pinpols.batch.orchestrator.config.DataQualityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
@@ -21,10 +20,6 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -58,15 +53,9 @@ public class DataQualityCheckExecutor {
   private static final String SEVERITY_BLOCKER = "BLOCKER";
   private static final String SEVERITY_WARN = "WARN";
 
-  // R2-P0-1：DQ 规则 SQL 走 NamedParameterJdbcTemplate + JSqlParser AST 校验，消除字符串拼接注入面。
-  // SensorSqlValidator 做「SELECT/WITH 限制 + 禁 *(含子查询/CTE) + schema 白名单 + 禁用函数黑名单
-  // (pg_read_file/dblink/pg_sleep 等)」校验，DQ 复用同一套规则(SelectSqlAstValidator 共享核)。
-  // 允许的 schema 限定在 batch / archive 两个业务命名空间，禁止访问 pg_catalog / information_schema 等。
-  private static final List<String> ALLOWED_DQ_SCHEMAS = List.of("batch", "archive");
-
   private final DataQualityRuleMapper ruleMapper;
   private final DataQualityCheckMapper checkMapper;
-  private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
+  private final DataQualitySqlRuleProbe sqlRuleProbe;
   private final DataQualityProperties properties;
 
   /**
@@ -169,36 +158,7 @@ public class DataQualityCheckExecutor {
    * 写库，注入面也被驱动层兜住。
    */
   private String executeScalarSqlRule(JobInstanceEntity instance, DataQualityRuleEntity rule) {
-    NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-    if (jdbcTemplate == null) {
-      throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());
-    }
-    String sql = rule.getExpression();
-    if (!Texts.hasText(sql)) {
-      throw new IllegalArgumentException("rule expression empty: " + rule.getRuleCode());
-    }
-    String validated;
-    try {
-      validated = SensorSqlValidator.validate(sql.trim(), ALLOWED_DQ_SCHEMAS);
-    } catch (IllegalArgumentException ex) {
-      throw new IllegalArgumentException(
-          "rule expression rejected by SQL validator: "
-              + rule.getRuleCode()
-              + " — "
-              + ex.getMessage(),
-          ex);
-    }
-    MapSqlParameterSource params = new MapSqlParameterSource()
-        .addValue("tenantId", instance.getTenantId())
-        .addValue("bizDate", instance.getBizDate())
-        .addValue("jobInstanceId", instance.getId());
-    Number result;
-    try {
-      result = jdbcTemplate.queryForObject(validated, params, Number.class);
-    } catch (DataAccessException dae) {
-      throw new IllegalStateException("DQ SQL execution failed: " + dae.getMessage(), dae);
-    }
-    long actual = result == null ? 0L : result.longValue();
+    long actual = sqlRuleProbe.evaluateScalar(instance, rule);
     return matchThreshold(actual, rule.getThresholdJson(), rule.getRuleCode())
         ? STATUS_PASS
         : STATUS_FAIL;

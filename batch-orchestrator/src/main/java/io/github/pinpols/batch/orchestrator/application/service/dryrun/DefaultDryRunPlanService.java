@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -68,7 +67,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       WorkflowNodeMapper workflowNodeMapper,
       WorkflowEdgeMapper workflowEdgeMapper,
       BatchTimezoneProvider timezoneProvider,
-      ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
+      DryRunSqlProbe sqlProbe,
       ObjectProvider<S3Client> s3ClientProvider,
       ObjectProvider<S3StorageProperties> s3PropertiesProvider,
       @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
@@ -77,7 +76,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     this.workflowNodeMapper = workflowNodeMapper;
     this.workflowEdgeMapper = workflowEdgeMapper;
     this.timezoneProvider = timezoneProvider;
-    this.sqlProbe = new DryRunSqlProbe(jdbcTemplateProvider);
+    this.sqlProbe = sqlProbe;
     this.objectStorageProbe = new DryRunObjectStorageProbe(s3ClientProvider, s3PropertiesProvider);
     this.endpointProbe = new DryRunEndpointProbe(httpTransport);
   }

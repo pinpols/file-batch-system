@@ -76,16 +76,25 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py
 
+      - name: Verify LOC snapshot
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_LOC_SNAPSHOT "代码量快照同步" -- python3 scripts/ci/check-loc-snapshot.py
+
       - name: Verify script governance and zero ShellCheck warnings
         shell: bash
         run: |
           python3 scripts/ci/check-script-governance.py
           bash scripts/ci/check-shell-scripts.sh
+          python3 scripts/ci/check-shell-linux-portability.py
           bash scripts/ci/check-postgres-client-fallback.sh
 
       - name: Verify module dependency boundaries
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_DEPENDENCY_BOUNDARIES "模块依赖边界" -- python3 scripts/ci/check-dependency-boundaries.py
+
+      - name: Verify direct client boundaries
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_DIRECT_CLIENT_BOUNDARIES "业务层直连客户端边界" -- python3 scripts/ci/check-direct-client-boundaries.py
 
       - name: Verify changelog synchronization
         shell: bash
@@ -101,6 +110,10 @@ jobs:
       - name: Verify documentation structure and internal links
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_DOCS_STRUCTURE "文档结构与内部链接" -- python3 scripts/ci/check-docs-structure.py
+
+      - name: Verify documentation timestamp policy
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_DOC_TIMESTAMP_POLICY "文档日期命名策略" -- python3 scripts/ci/check-doc-timestamp-policy.py
 
       - name: Validate feature switch registry
         shell: bash

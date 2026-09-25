@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeReplayStore;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
@@ -60,7 +61,7 @@ class ConsoleRealtimeReplayStoreTest {
     when(listOperations.range("batch:console:realtime:buffer:t1:alerts", 0, 19_999L))
         .thenReturn(List.of(JsonUtils.toJson(first), JsonUtils.toJson(second)));
 
-    ConsoleRealtimeReplayStore.ReplayBatch replay = store.replay("t1", "alerts", "cursor-1", null);
+    RealtimeReplayStore.ReplayBatch replay = store.replay("t1", "alerts", "cursor-1", null);
 
     assertThat(replay.cursorFound()).isTrue();
     assertThat(replay.events()).hasSize(1);

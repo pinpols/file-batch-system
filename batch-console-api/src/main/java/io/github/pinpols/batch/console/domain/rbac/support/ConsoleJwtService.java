@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -32,7 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -82,23 +82,22 @@ public class ConsoleJwtService {
   private final Environment environment;
 
   /**
-   * P1(2026-05-23 audit / docs/agent-baseline.md §编码细则 #3):Redis 可选依赖改 {@link ObjectProvider} 构造器注入, 替代原
-   * {@code @Autowired(required = false)} field 注入。authenticate() / revoke() 内每次调用 {@link
-   * ObjectProvider#getIfAvailable()},非 Spring 单测场景或 redis 启动失败时返回 null, 与之前 {@code redisTemplate ==
-   * null} 降级路径完全一致。
+   * P1(2026-05-23 audit / docs/agent-baseline.md §编码细则 #3):撤销名单存储可选依赖改 {@link ObjectProvider}
+   * 构造器注入。authenticate() / revoke() 内每次调用 {@link ObjectProvider#getIfAvailable()},非 Spring 单测场景或存储启动失败时返回
+   * null, 与之前 Redis 不存在时跳过撤销名单的降级路径一致。
    */
-  private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
+  private final ObjectProvider<ConsoleTokenRevocationStore> tokenRevocationStoreProvider;
 
   @Autowired
   public ConsoleJwtService(
       ConsoleSecurityProperties properties,
       ConsoleSessionRegistry sessionRegistry,
       Environment environment,
-      ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+      ObjectProvider<ConsoleTokenRevocationStore> tokenRevocationStoreProvider) {
     this.properties = properties;
     this.sessionRegistry = sessionRegistry;
     this.environment = environment;
-    this.redisTemplateProvider = redisTemplateProvider;
+    this.tokenRevocationStoreProvider = tokenRevocationStoreProvider;
   }
 
   /** 非 Spring 单测构造器:无 Redis,等价 ObjectProvider 永远返回 null。 */
@@ -106,35 +105,34 @@ public class ConsoleJwtService {
       ConsoleSecurityProperties properties,
       ConsoleSessionRegistry sessionRegistry,
       Environment environment) {
-    this(properties, sessionRegistry, environment, EmptyRedisProvider.INSTANCE);
+    this(properties, sessionRegistry, environment, EmptyRevocationStoreProvider.INSTANCE);
   }
 
   /** 非 Spring 测试场景下提供空 {@link ObjectProvider},{@code getIfAvailable()} 始终返回 null。 */
-  private static final class EmptyRedisProvider implements ObjectProvider<StringRedisTemplate> {
-    static final EmptyRedisProvider INSTANCE = new EmptyRedisProvider();
+  private static final class EmptyRevocationStoreProvider
+      implements ObjectProvider<ConsoleTokenRevocationStore> {
+    static final EmptyRevocationStoreProvider INSTANCE = new EmptyRevocationStoreProvider();
 
     @Override
-    public StringRedisTemplate getObject() {
-      throw new IllegalStateException("no StringRedisTemplate bean (test stub)");
+    public ConsoleTokenRevocationStore getObject() {
+      throw new IllegalStateException("no ConsoleTokenRevocationStore bean (test stub)");
     }
 
     @Override
-    public StringRedisTemplate getObject(Object... args) {
-      throw new IllegalStateException("no StringRedisTemplate bean (test stub)");
+    public ConsoleTokenRevocationStore getObject(Object... args) {
+      throw new IllegalStateException("no ConsoleTokenRevocationStore bean (test stub)");
     }
 
     @Override
-    public StringRedisTemplate getIfAvailable() {
+    public ConsoleTokenRevocationStore getIfAvailable() {
       return null;
     }
 
     @Override
-    public StringRedisTemplate getIfUnique() {
+    public ConsoleTokenRevocationStore getIfUnique() {
       return null;
     }
   }
-
-  private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
 
   // JWT IP/UA binding drift 日志抑制器:同一 (用户+租户+storedHash→currentHash) 组合
   // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复刷屏(实测一轮 e2e 8000+ 行噪音)。
@@ -173,7 +171,7 @@ public class ConsoleJwtService {
       // 非 prod:不 fail-fast(本地/联调要能起),但默认/弱 jwt-secret 仍在用就显式 WARN——
       // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
       String jwtSecret = properties.getJwtSecret();
-      String lower = jwtSecret == null ? "" : jwtSecret.toLowerCase(Locale.ROOT);
+      String lower = EmptyChecks.isNull(jwtSecret) ? "" : jwtSecret.toLowerCase(Locale.ROOT);
       if (!Texts.hasText(jwtSecret)
           || lower.contains("change-me")
           || lower.contains("change_me")
@@ -236,16 +234,18 @@ public class ConsoleJwtService {
         .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
         .claim(CLAIM_SESSION_VERSION, sessionVersion)
         .claim(CLAIM_JTI, jti)
-        .claim(CLAIM_AUTHORITIES, authorities == null ? List.of() : List.copyOf(authorities));
-    if (currentRequest != null) {
+        .claim(
+            CLAIM_AUTHORITIES,
+            EmptyChecks.isNull(authorities) ? List.of() : List.copyOf(authorities));
+    if (EmptyChecks.isNotNull(currentRequest)) {
       String ipHash = hashClientIp(currentRequest);
       String uaHash = hashUserAgent(currentRequest);
       // 两个 hash 均来自 Hashes.sha256Short（声明 @Nullable）：User-Agent 头可缺失、RemoteAddr
       // 极端场景也可能缺失，null 时不写入 claim 是防御性必要检查，Sonar 的 servlet 模型误判恒非空。
-      if (ipHash != null) {
+      if (EmptyChecks.isNotNull(ipHash)) {
         claimsBuilder.claim(CLAIM_IP_HASH, ipHash);
       }
-      if (uaHash != null) {
+      if (EmptyChecks.isNotNull(uaHash)) {
         claimsBuilder.claim(CLAIM_UA_HASH, uaHash);
       }
     }
@@ -261,7 +261,7 @@ public class ConsoleJwtService {
         expiresAt,
         username,
         tenantId,
-        authorities == null ? Set.of() : new LinkedHashSet<>(authorities),
+        EmptyChecks.isNull(authorities) ? Set.of() : new LinkedHashSet<>(authorities),
         false);
   }
 
@@ -279,34 +279,35 @@ public class ConsoleJwtService {
     String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
     Long sessionVersion = jwt.getClaim(CLAIM_SESSION_VERSION);
     if (properties.isSingleSessionEnabled()) {
-      if (sessionVersion == null
+      if (EmptyChecks.isNull(sessionVersion)
           || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion)) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
       }
     }
     // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
     String jti = jwt.getClaimAsString(CLAIM_JTI);
-    StringRedisTemplate authRedis = redisTemplateProvider.getIfAvailable();
-    if (jti != null && authRedis != null) {
-      Boolean revoked = authRedis.hasKey(REVOKED_KEY_PREFIX + jti);
-      if (Boolean.TRUE.equals(revoked)) {
-        throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
-      }
+    ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
+    if (EmptyChecks.isNotNull(jti)
+        && EmptyChecks.isNotNull(revocationStore)
+        && revocationStore.isRevoked(jti)) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
     }
     // P2-2:IP/UA 软绑定。签发时绑定 hash,异地异机访问只打 WARN(不 deny)— 移动网 IP 抖动 / UA
     // 升级会误伤,真要 deny 需配合风控规则。空 claim = 旧 token 兼容,跳过比对。
     auditClientBindingDrift(jwt, username, tenantId);
     List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);
     return new ConsolePrincipal(
-        username, tenantId, authorities == null ? Set.of() : new LinkedHashSet<>(authorities));
+        username,
+        tenantId,
+        EmptyChecks.isNull(authorities) ? Set.of() : new LinkedHashSet<>(authorities));
   }
 
   /**
    * P0-3:把当前 token 加入 revocation 黑名单,TTL = token 剩余生命。 调用方:登出 endpoint 拿到当前 cookie 中的 token 后传入。
    */
   public void revoke(String token) {
-    StringRedisTemplate revokeRedis = redisTemplateProvider.getIfAvailable();
-    if (revokeRedis == null) {
+    ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
+    if (EmptyChecks.isNull(revocationStore)) {
       return;
     }
     Jwt jwt;
@@ -316,36 +317,38 @@ public class ConsoleJwtService {
       return; // 解析失败的 token 没必要再 revoke
     }
     String jti = jwt.getClaimAsString(CLAIM_JTI);
-    if (jti == null) {
+    if (EmptyChecks.isNull(jti)) {
       return; // 旧版 token 无 jti,跳过
     }
     Instant exp = jwt.getExpiresAt();
-    if (exp == null) {
+    if (EmptyChecks.isNull(exp)) {
       return;
     }
     long ttlSeconds = exp.getEpochSecond() - BatchDateTimeSupport.utcNow().getEpochSecond();
     if (ttlSeconds <= 0) {
       return; // 已过期,无需占用 Redis
     }
-    revokeRedis.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
+    revocationStore.revoke(jti, Duration.ofSeconds(ttlSeconds));
   }
 
   private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
     HttpServletRequest req = currentRequest();
-    if (req == null) {
+    if (EmptyChecks.isNull(req)) {
       return;
     }
     String storedIp = jwt.getClaimAsString(CLAIM_IP_HASH);
     String storedUa = jwt.getClaimAsString(CLAIM_UA_HASH);
-    if (storedIp == null && storedUa == null) {
+    if (EmptyChecks.isNull(storedIp) && EmptyChecks.isNull(storedUa)) {
       return;
     }
     String currentIp = hashClientIp(req);
     String currentUa = hashUserAgent(req);
-    if (storedIp != null && currentIp != null && !storedIp.equals(currentIp)) {
+    if (EmptyChecks.isNotNull(storedIp)
+        && EmptyChecks.isNotNull(currentIp)
+        && !storedIp.equals(currentIp)) {
       // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 刷屏
       String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
-      if (driftLogSuppressor.getIfPresent(key) == null) {
+      if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
         driftLogSuppressor.put(key, Boolean.TRUE);
         log.warn(
             "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
@@ -353,9 +356,11 @@ public class ConsoleJwtService {
             tenantId);
       }
     }
-    if (storedUa != null && currentUa != null && !storedUa.equals(currentUa)) {
+    if (EmptyChecks.isNotNull(storedUa)
+        && EmptyChecks.isNotNull(currentUa)
+        && !storedUa.equals(currentUa)) {
       String key = "ua|" + username + "|" + tenantId + "|" + storedUa + "→" + currentUa;
-      if (driftLogSuppressor.getIfPresent(key) == null) {
+      if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
         driftLogSuppressor.put(key, Boolean.TRUE);
         log.warn(
             "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",

@@ -34,7 +34,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * 控制台实时事件总线：把事件分发给本机的 SSE 订阅者。
  *
  * <p>分工边界：本类<b>只</b>做本机连接管理与 fanout，不轮询 DB；跨实例的事件共享由 Redis Streams （见 {@code
- * ConsoleRealtimeReplayStore} 与发布端）负责。
+ * RealtimeReplayStore} 与发布端）负责。
  *
  * <p>关键机制：
  *
@@ -57,14 +57,14 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
   private static final long DEFAULT_HEARTBEAT_MILLIS = 25_000L;
   private static final String DEFAULT_STREAM = "pipeline-definitions";
 
-  private final ConsoleRealtimeReplayStore replayStore;
+  private final RealtimeReplayStore replayStore;
   private final ConsoleRealtimeMetrics realtimeMetrics;
   private final ConsoleRealtimeProperties realtimeProperties;
   private final List<Subscription> subscriptions = new CopyOnWriteArrayList<>();
   private final TaskScheduler scheduler;
 
   public ConsoleRealtimeEventHub(
-      ConsoleRealtimeReplayStore replayStore,
+      RealtimeReplayStore replayStore,
       ConsoleRealtimeMetrics realtimeMetrics,
       ConsoleRealtimeProperties realtimeProperties,
       @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
@@ -220,7 +220,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     if (subscription.cursor == null || subscription.cursor.isBlank()) {
       return;
     }
-    ConsoleRealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
+    RealtimeReplayStore.ReplayBatch replayBatch = replayStore.replay(
         subscription.tenantId, subscription.stream, subscription.cursor, subscription.eventType);
     if (!replayBatch.cursorFound()) {
       realtimeMetrics.recordReplayCursorMiss(subscription.stream);

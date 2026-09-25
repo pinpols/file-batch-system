@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import io.github.pinpols.batch.console.infrastructure.rbac.RedisConsoleSessionStore;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +33,8 @@ class ConsoleSessionRegistryTest {
     // R-4.7：meterRegistry 在单测里用空 provider；无 registry 时指标逻辑会跳过
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
-    registry = new ConsoleSessionRegistry(redisTemplate, properties, meterRegistryProvider);
+    registry = new ConsoleSessionRegistry(
+        new RedisConsoleSessionStore(redisTemplate), properties, meterRegistryProvider);
   }
 
   @Test

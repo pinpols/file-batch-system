@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlProbe;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -56,7 +57,7 @@ class DefaultDryRunPlanServiceTest {
         nodeMapper,
         edgeMapper,
         tz,
-        jdbcTemplateProvider,
+        new JdbcDryRunSqlProbe(jdbcTemplateProvider),
         s3ClientProvider,
         s3PropsProvider,
         request -> new OutboundHttpResponse(200, ""));

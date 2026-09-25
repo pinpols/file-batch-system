@@ -11,8 +11,6 @@ import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 
 /**
@@ -49,17 +47,17 @@ public class ConsoleSessionRegistry {
 
   private static final String KEY_PREFIX = "batch:console:auth:session:";
 
-  private final StringRedisTemplate redisTemplate;
+  private final ConsoleSessionStore sessionStore;
   private final ConsoleSecurityProperties securityProperties;
 
   /** 进程内会话版本镜像，Redis 抖动时回退。TTL 与 Redis 一致，防止内存累积。 */
   private final Cache<String, Long> localMirror;
 
   public ConsoleSessionRegistry(
-      StringRedisTemplate redisTemplate,
+      ConsoleSessionStore sessionStore,
       ConsoleSecurityProperties securityProperties,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.redisTemplate = redisTemplate;
+    this.sessionStore = sessionStore;
     this.securityProperties = securityProperties;
     // R-4.7：显式开 recordStats 让 Caffeine 的命中率 / 驱逐计数可观测；
     // expireAfterWrite + maximumSize 原有语义保留，运维可通过 actuator /
@@ -95,14 +93,14 @@ public class ConsoleSessionRegistry {
     }
     String key = key(username, tenantId);
     try {
-      Long version = redisTemplate.opsForValue().increment(key);
+      Long version = sessionStore.increment(key);
       // C-2.9: INCR 返回权威新值后立即同步到 Caffeine，再做 expire。
       // 之前顺序是 INCR → expire → put mirror，若 expire 抛异常会走 catch 分支
       // 用本地旧值 +1（可能落后 Redis 真实值），导致单会话判断错乱。
       long v = version == null ? 1L : version;
       localMirror.put(key, v);
       try {
-        redisTemplate.expire(key, sessionStateTtl());
+        sessionStore.expire(key, sessionStateTtl());
       } catch (DataAccessException expireEx) {
         // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
         log.warn(
@@ -129,8 +127,7 @@ public class ConsoleSessionRegistry {
     }
     String key = key(username, tenantId);
     try {
-      ValueOperations<String, String> ops = redisTemplate.opsForValue();
-      String raw = ops.get(key);
+      String raw = sessionStore.get(key);
       if (!Texts.hasText(raw)) {
         return 0L;
       }
@@ -158,7 +155,7 @@ public class ConsoleSessionRegistry {
   public void invalidateSession(String username, String tenantId) {
     String key = key(username, tenantId);
     try {
-      redisTemplate.delete(key);
+      sessionStore.delete(key);
     } catch (DataAccessException ex) {
       log.warn(
           "Redis unavailable during invalidateSession; local-only eviction: {}", ex.getMessage());

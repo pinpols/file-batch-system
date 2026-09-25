@@ -48,4 +48,14 @@ public final class MinioObjectStoreContainer extends GenericContainer<MinioObjec
   public String getEndpoint() {
     return "http://" + getHost() + ":" + getMappedPort(MINIO_API_PORT);
   }
+
+  @Override
+  public final boolean equals(Object other) {
+    return super.equals(other);
+  }
+
+  @Override
+  public final int hashCode() {
+    return super.hashCode();
+  }
 }

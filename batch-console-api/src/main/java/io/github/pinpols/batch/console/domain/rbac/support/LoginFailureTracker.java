@@ -2,12 +2,9 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,27 +29,7 @@ public class LoginFailureTracker {
   private static final String IP_KEY_PREFIX = "login:fail:ip:";
   private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit:";
 
-  /** ZADD member + 清窗口外 + EXPIRE,返回窗口内计数。KEYS[1]=key ARGV: now, windowStart, member, ttlSeconds。 */
-  private static final DefaultRedisScript<Long> RECORD_SCRIPT;
-
-  /** 清窗口外 + ZCARD 读计数(只读语义,但需写删除过期成员)。KEYS[1]=key ARGV: windowStart。 */
-  private static final DefaultRedisScript<Long> COUNT_SCRIPT;
-
-  static {
-    RECORD_SCRIPT = new DefaultRedisScript<>();
-    RECORD_SCRIPT.setResultType(Long.class);
-    RECORD_SCRIPT.setScriptText("redis.call('ZADD', KEYS[1], ARGV[1], ARGV[3]) "
-        + "redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2]) "
-        + "redis.call('EXPIRE', KEYS[1], ARGV[4]) "
-        + "return redis.call('ZCARD', KEYS[1])");
-
-    COUNT_SCRIPT = new DefaultRedisScript<>();
-    COUNT_SCRIPT.setResultType(Long.class);
-    COUNT_SCRIPT.setScriptText("redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1]) "
-        + "return redis.call('ZCARD', KEYS[1])");
-  }
-
-  private final StringRedisTemplate redisTemplate;
+  private final LoginFailureStore failureStore;
   private final BatchDateTimeSupport dateTimeSupport;
   private final LoginProtectionProperties properties;
 
@@ -72,28 +49,20 @@ public class LoginFailureTracker {
 
   /** 登录成功:清零该账号失败计数(IP 计数保留——IP 是共享资源)。 */
   public void clearAccount(String username) {
-    redisTemplate.delete(RATE_LIMIT_KEY_PREFIX + ACCOUNT_KEY_PREFIX + normalize(username));
+    failureStore.delete(RATE_LIMIT_KEY_PREFIX + ACCOUNT_KEY_PREFIX + normalize(username));
   }
 
   private long recordFailureAttempt(String key) {
     long now = dateTimeSupport.currentEpochMillis();
     long windowStart = now - windowMillis();
     long ttlSeconds = (windowMillis() / 1000) + 1;
-    Long count = redisTemplate.execute(
-        RECORD_SCRIPT,
-        List.of(RATE_LIMIT_KEY_PREFIX + key),
-        String.valueOf(now),
-        String.valueOf(windowStart),
-        UUID.randomUUID().toString(),
-        String.valueOf(ttlSeconds));
-    return count == null ? 0L : count;
+    return failureStore.recordFailure(
+        RATE_LIMIT_KEY_PREFIX + key, now, windowStart, UUID.randomUUID().toString(), ttlSeconds);
   }
 
   private long count(String key) {
     long windowStart = dateTimeSupport.currentEpochMillis() - windowMillis();
-    Long count = redisTemplate.execute(
-        COUNT_SCRIPT, List.of(RATE_LIMIT_KEY_PREFIX + key), String.valueOf(windowStart));
-    return count == null ? 0L : count;
+    return failureStore.count(RATE_LIMIT_KEY_PREFIX + key, windowStart);
   }
 
   private long windowMillis() {

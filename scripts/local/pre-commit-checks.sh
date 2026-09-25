@@ -77,6 +77,8 @@ fi
 if ((docs_changed == 1)); then
   gate_run PRE_COMMIT_DOCS_STRUCTURE "文档结构" \
     "$PYTHON_BIN" scripts/ci/check-docs-structure.py
+  gate_run PRE_COMMIT_DOC_TIMESTAMP_POLICY "文档日期命名策略" \
+    "$PYTHON_BIN" scripts/ci/check-doc-timestamp-policy.py
 fi
 gate_run PRE_COMMIT_REPOSITORY_HYGIENE "仓库卫生" \
   "$PYTHON_BIN" scripts/ci/check-repository-hygiene.py

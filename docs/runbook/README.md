@@ -73,7 +73,7 @@
 |---|---|
 | 上线与环境 | [上线就绪](./go-live-readiness.md)、[staging 执行](./go-live-staging-execution.md)、[环境边界](./environment-profile-boundaries.md)、[环境变量治理](./environment-variable-governance.md)、[发布](./releasing.md)、[数据库迁移](./db-migration-checklist.md) |
 | Trigger 与批量日 | [Trigger 运维](./trigger-operations.md)、[异步 launch 灰度](./trigger-async-launch-rollout.md)、[依赖感知 fire](./dependency-aware-fire.md)、[批量日门禁](./batch-day-gate-howto.md)、[事件到达](./event-driven-arrival.md) |
-| 多租户与数据 | [RLS](./multi-tenant-rls.md)、[RLS 严格灰度](./multi-tenant-rls-strict-rollout.md)、[biz 路由](./biz-tenant-routing.md)、[PG session](./pg-session-tuning.md)、[分区切换](./partition-cutover-2026-05.md) |
+| 多租户与数据 | [RLS](./multi-tenant-rls.md)、[RLS 严格灰度](./multi-tenant-rls-strict-rollout.md)、[biz 路由](./biz-tenant-routing.md)、[PG session](./pg-session-tuning.md)、[分区运维](./pg-table-partitioning.md) |
 | Worker 与恢复 | [重任务容量与资源池](./heavy-workload-operations.md)、[Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |
 | 文件与对象存储 | [Filesystem](./object-storage-filesystem.md)、[S3 后端](./object-storage-s3-backends.md)、[控制总数对账](./control-total-reconciliation-howto.md) |
 | 安全与权限 | [密码安全](./password-security-backlog.md)、[角色治理](./role-redesign-config-admin-audit.md)、[租户 Worker 接入](./per-tenant-worker-onboarding.md) |
@@ -89,7 +89,7 @@
 |---|---|
 | 环境接入 | [首租户配置](./first-tenant-config-quickstart.md)、[移动端隧道](./mobile-frontend-tunnel.md)、[跨主机 SSH 隧道](./ssh-tunnel-cross-host.md)、[IPv6 兼容](./ipv6-runtime-compatibility.md) |
 | 运行控制 | [维护模式](./maintenance-mode.md)、[实例暂停恢复](./instance-pause-resume.md) |
-| 历史治理记录 | [索引治理](./index-consolidation-2026-05.md)、[SQL 审计](./sql-audit-2026-05-20.md)、[E2E/IT 优化](./e2e-it-optimization-2026-05-22.md)、[TIA POC](./tia-poc-2026-05-22.md)、[CI/CD 后续](./ci-cd-followup-2026-05-22.md)、[GitOps 接入](./gitops-onboarding-2026-05-22.md)、[上线真实性审计](./go-live-realism-audit-2026-06-21.md) |
+| 历史治理记录 | [索引治理](./archive/index-consolidation-2026-05.md)、[分区 cutover](./archive/partition-cutover-2026-05.md)、[SQL 审计](./sql-audit-2026-05-20.md)、[E2E/IT 优化](./e2e-it-optimization-2026-05-22.md)、[TIA POC](./tia-poc-2026-05-22.md)、[CI/CD 后续](./ci-cd-followup-2026-05-22.md)、[GitOps 接入](./gitops-onboarding-2026-05-22.md)、[上线真实性审计](./go-live-realism-audit-2026-06-21.md) |
 
 ## 角色路径
 

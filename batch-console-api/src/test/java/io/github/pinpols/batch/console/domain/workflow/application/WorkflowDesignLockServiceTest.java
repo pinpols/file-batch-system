@@ -16,6 +16,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
+import io.github.pinpols.batch.console.infrastructure.workflow.RedisDesignLockStore;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -64,7 +65,8 @@ class WorkflowDesignLockServiceTest {
   @BeforeEach
   void setUp() {
     when(redisTemplate.opsForValue()).thenReturn(valueOps);
-    service = WorkflowDesignLockService.withClock(redisTemplate, objectMapper, fixedClock);
+    service = WorkflowDesignLockService.withClock(
+        new RedisDesignLockStore(redisTemplate), objectMapper, fixedClock);
   }
 
   @Test

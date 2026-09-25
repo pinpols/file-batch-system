@@ -96,6 +96,17 @@ public interface TestObjectStoreEndpoint {
   @FunctionalInterface
   interface CheckedRunnable {
 
-    void run() throws Exception;
+    void run() throws ObjectStoreEndpointException;
+  }
+
+  final class ObjectStoreEndpointException extends Exception {
+
+    ObjectStoreEndpointException(String message, Throwable cause) {
+      super(message, cause);
+    }
+
+    ObjectStoreEndpointException(String message) {
+      super(message);
+    }
   }
 }

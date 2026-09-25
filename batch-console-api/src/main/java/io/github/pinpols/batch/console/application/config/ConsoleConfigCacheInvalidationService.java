@@ -1,12 +1,9 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
-import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
-import io.github.pinpols.batch.console.support.cache.RedisKeyUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -14,7 +11,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -46,7 +42,7 @@ public class ConsoleConfigCacheInvalidationService {
   /** SCAN 单次返回上限 + DEL 单批次上限：太小 → SCAN 轮次多；太大 → 单 DEL 阻塞。500 是经验折中。 */
   private static final int SCAN_BATCH_SIZE = 500;
 
-  private final StringRedisTemplate redisTemplate;
+  private final ConfigInvalidationStore invalidationStore;
   private final ConsoleQueryCacheService queryCacheService;
   private final AtomicLong publishedRevision = new AtomicLong(0);
   private final Counter publishSuccessCounter;
@@ -54,10 +50,10 @@ public class ConsoleConfigCacheInvalidationService {
 
   @Autowired
   public ConsoleConfigCacheInvalidationService(
-      StringRedisTemplate redisTemplate,
+      ConfigInvalidationStore invalidationStore,
       ConsoleQueryCacheService queryCacheService,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.redisTemplate = redisTemplate;
+    this.invalidationStore = invalidationStore;
     this.queryCacheService = queryCacheService;
     MeterRegistry meterRegistry = meterRegistryProvider == null // empty-check: allow - Sonar S2259
         ? null
@@ -70,8 +66,8 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   public ConsoleConfigCacheInvalidationService(
-      StringRedisTemplate redisTemplate, ConsoleQueryCacheService queryCacheService) {
-    this.redisTemplate = redisTemplate;
+      ConfigInvalidationStore invalidationStore, ConsoleQueryCacheService queryCacheService) {
+    this.invalidationStore = invalidationStore;
     this.queryCacheService = queryCacheService;
     Metrics metrics = Metrics.empty();
     this.publishSuccessCounter = metrics.successCounter();
@@ -166,7 +162,7 @@ public class ConsoleConfigCacheInvalidationService {
    */
   private boolean scanAndDelete(String pattern) {
     try {
-      long deleted = RedisKeyUtils.scanAndDeleteOrThrow(redisTemplate, pattern, SCAN_BATCH_SIZE);
+      long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
       if (deleted > 0) {
         log.debug("evicted {} redis keys matching pattern={}", deleted, pattern);
       }
@@ -201,7 +197,7 @@ public class ConsoleConfigCacheInvalidationService {
 
   private void deleteAndPublish(String key, String tenantId, String type, String code) {
     try {
-      redisTemplate.delete(key);
+      invalidationStore.delete(key);
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
       log.warn("config cache redis delete failed: key={}, reason={}", key, exception.getMessage());
@@ -213,11 +209,8 @@ public class ConsoleConfigCacheInvalidationService {
 
   private void publishInvalidation(String tenantId, String type, String code) {
     try {
-      Long revision =
-          redisTemplate.opsForValue().increment(BatchRedisKeys.configInvalidationGlobalRevision());
-      Long keyRevision = redisTemplate
-          .opsForValue()
-          .increment(BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code));
+      Long revision = invalidationStore.nextGlobalRevision();
+      Long keyRevision = invalidationStore.nextKeyRevision(tenantId, type, code);
       ConfigCacheInvalidationEvent event = new ConfigCacheInvalidationEvent(
           safe(tenantId),
           safe(type),
@@ -225,7 +218,7 @@ public class ConsoleConfigCacheInvalidationService {
           EmptyChecks.isNull(revision) ? 0L : revision,
           EmptyChecks.isNull(keyRevision) ? 0L : keyRevision,
           Instant.now());
-      redisTemplate.convertAndSend(INVALIDATION_CHANNEL, JsonUtils.toJson(event));
+      invalidationStore.publish(event);
       publishedRevision.set(event.revision());
       increment(publishSuccessCounter);
     } catch (RuntimeException exception) {

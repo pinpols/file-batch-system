@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +18,7 @@ public class ConsoleSystemParameterService {
 
   private final ConsoleSystemParameterMapper repository;
   private final TenantIdResolver tenantGuard;
-  private final StringRedisTemplate redisTemplate;
+  private final SystemParameterCacheStore cacheStore;
 
   private static final String CACHE_PREFIX = "sys-param:";
   private static final Duration CACHE_TTL = Duration.ofMinutes(30);
@@ -32,12 +31,12 @@ public class ConsoleSystemParameterService {
   public Optional<String> getValue(String tenantId, String paramKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     String cacheKey = cacheKey(resolved, paramKey);
-    String cached = redisTemplate.opsForValue().get(cacheKey);
+    String cached = cacheStore.get(cacheKey);
     if (cached != null) {
       return Optional.of(cached);
     }
     Optional<SystemParameterEntity> entity = repository.findByTenantAndKey(resolved, paramKey);
-    entity.ifPresent(e -> redisTemplate.opsForValue().set(cacheKey, e.getParamValue(), CACHE_TTL));
+    entity.ifPresent(e -> cacheStore.put(cacheKey, e.getParamValue(), CACHE_TTL));
     return entity.map(SystemParameterEntity::getParamValue);
   }
 
@@ -46,14 +45,14 @@ public class ConsoleSystemParameterService {
       String tenantId, String paramKey, String paramValue, String description, String operator) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     repository.upsert(resolved, paramKey, paramValue, description, operator);
-    redisTemplate.delete(cacheKey(resolved, paramKey));
+    cacheStore.evict(cacheKey(resolved, paramKey));
   }
 
   @Transactional
   public void delete(String tenantId, String paramKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     repository.deleteByTenantAndKey(resolved, paramKey);
-    redisTemplate.delete(cacheKey(resolved, paramKey));
+    cacheStore.evict(cacheKey(resolved, paramKey));
   }
 
   private String cacheKey(String tenantId, String paramKey) {

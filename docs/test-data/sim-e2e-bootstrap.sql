@@ -308,6 +308,7 @@ WHERE tenant_id IN ('ta','tb','tc')
 -- 7b. EXPORT file_template_config.default_query_sql + query_param_schema
 --      默认 SQL 必须带 :tenantId AND :batchNo IS NOT NULL,防止 export 拉全表;
 --      query_param_schema 注入 sqlTemplateExport.cursorColumn。
+--      禁止通用兜底生成 SELECT *；具体 EXPORT 模板必须在后续专用块显式列清单。
 -- ----------------------------------------------------------------------------
 UPDATE batch.file_template_config
 SET default_query_sql = COALESCE(NULLIF(default_query_sql, ''),
@@ -315,18 +316,8 @@ SET default_query_sql = COALESCE(NULLIF(default_query_sql, ''),
 WHERE FALSE; -- no-op,占位让 diff 更清晰
 
 UPDATE batch.file_template_config
-SET default_query_sql = 'SELECT * FROM ' || lower(biz_type) || '_export '
-                         || 'WHERE tenant_id = :tenantId '
-                         || 'AND batch_no = :batchNo '
-                         || 'AND :batchNo IS NOT NULL '
-                         || 'ORDER BY id',
-    updated_at        = CURRENT_TIMESTAMP
-WHERE tenant_id IN ('ta','tb','tc')
-  AND template_type = 'EXPORT'
-  AND (default_query_sql IS NULL
-       OR default_query_sql = ''
-       OR default_query_sql NOT ILIKE '%:tenantId%'
-       OR default_query_sql NOT ILIKE '%:batchNo IS NOT NULL%');
+SET updated_at = updated_at
+WHERE FALSE; -- historical SELECT * fallback removed; explicit template blocks below own runtime SQL.
 
 UPDATE batch.file_template_config
 SET query_param_schema = jsonb_build_object(
@@ -486,6 +477,14 @@ SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, custo
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id = 'ta'
   AND template_code = 'ta_export_report_tpl';
+
+UPDATE batch.file_template_config
+SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',
+    query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    export_data_ref = 'sql_template_export',
+    updated_at = CURRENT_TIMESTAMP
+WHERE tenant_id = 'ta'
+  AND template_code = 'TA_EXPORT_REPORT_TPL';
 
 UPDATE batch.file_template_config
 SET default_query_sql = 'SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark FROM biz.transaction WHERE tenant_id = :tenantId AND CAST(:batchNo AS text) IS NOT NULL',

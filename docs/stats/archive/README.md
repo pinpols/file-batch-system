@@ -5,16 +5,16 @@
 ## 文件范围
 
 - `loc-2026-05-29.md` 至 `loc-2026-07-19.md`：旧物理行数口径。
-- `loc-2026-07-22-lean.md` 至 `loc-2026-09-01-lean.md`：精简逻辑行数口径。
+- `loc-2026-07-22-lean.md` 至 `loc-2026-09-24-lean.md`：精简逻辑行数口径。
 
 ## 当前基线
 
-当前基线位于上级目录：[loc-2026-09-24-lean.md](../loc-2026-09-24-lean.md)。
+当前基线位于上级目录：[loc-current-lean.md](../loc-current-lean.md)。
 
 复跑命令：
 
 ```bash
-python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-$(date +%F)-lean.md
+python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
 ```
 
 历史报告的统计口径、提交状态和排除目录以各报告头部说明为准，不将不同口径的物理行数与精简逻辑行数直接相加或横向比较。

@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPubSubConsumer;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;

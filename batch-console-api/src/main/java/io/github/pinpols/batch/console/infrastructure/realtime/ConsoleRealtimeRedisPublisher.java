@@ -1,6 +1,11 @@
-package io.github.pinpols.batch.console.domain.observability.realtime;
+package io.github.pinpols.batch.console.infrastructure.realtime;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
+import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
+import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleSseEvent;
+import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeEventBus;
+import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeReplayStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -12,14 +17,15 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class ConsoleRealtimeRedisPublisher {
+public class ConsoleRealtimeRedisPublisher implements RealtimeEventBus {
 
-  static final String CHANNEL_KEY = "batch:console:realtime";
+  public static final String CHANNEL_KEY = "batch:console:realtime";
 
   private final StringRedisTemplate redisTemplate;
   private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
-  private final ConsoleRealtimeReplayStore replayStore;
+  private final RealtimeReplayStore replayStore;
 
+  @Override
   public void publish(ConsoleSseEvent event) {
     if (event == null) {
       return;

@@ -13,7 +13,6 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -62,7 +61,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   /** Request attribute：记录本次请求使用的 Redis key，afterCompletion 时读取。 */
   private static final String ATTR_REDIS_KEY = "console.idempotency.redisKey";
 
-  private final StringRedisTemplate redisTemplate;
+  private final ConsoleIdempotencyStore idempotencyStore;
   private final BatchSecurityProperties securityProperties;
 
   @Override
@@ -104,7 +103,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     String existing;
     try {
-      existing = redisTemplate.opsForValue().get(redisKey);
+      existing = idempotencyStore.get(redisKey);
     } catch (DataAccessException ex) {
       // R-4.1 fail-closed：幂等拦截器拿不到 Redis 直接 503
       log.warn(
@@ -127,7 +126,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     // PENDING 也占问题（防并发双提交），但短 TTL（30s），超时自动释放
     Boolean isNew;
     try {
-      isNew = redisTemplate.opsForValue().setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));
+      isNew = idempotencyStore.setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));
     } catch (DataAccessException ex) {
       log.warn(
           "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
@@ -146,7 +145,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       // 让客户端走 retry 路径,避免误判"已处理"。
       String current;
       try {
-        current = redisTemplate.opsForValue().get(redisKey);
+        current = idempotencyStore.get(redisKey);
       } catch (DataAccessException ex) {
         log.warn(
             "idempotency Redis follow-up GET unavailable — fail-closed (treat as pending):"
@@ -191,10 +190,10 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     int status = response.getStatus();
     if (status >= 200 && status < 300 && ex == null) {
       // 成功：升级为 DONE，长 TTL 阻止重复提交
-      redisTemplate.opsForValue().set(redisKey, DONE, IDEMPOTENCY_TTL);
+      idempotencyStore.set(redisKey, DONE, IDEMPOTENCY_TTL);
     } else {
       // 失败：删除占位，允许安全重试
-      redisTemplate.delete(redisKey);
+      idempotencyStore.delete(redisKey);
     }
   }
 

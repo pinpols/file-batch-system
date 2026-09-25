@@ -308,7 +308,7 @@ def top_files(metrics: list[FileMetric], limit: int) -> str:
     return "\n".join(lines)
 
 
-def render_report(metrics: list[FileMetric], date: str, commit: str) -> str:
+def render_report(metrics: list[FileMetric], date: str, commit: str, rerun_target: str) -> str:
     physical = sum(item.physical for item in metrics)
     lean = sum(item.lean for item in metrics)
     ratio = lean / physical if physical else 0
@@ -341,7 +341,7 @@ def render_report(metrics: list[FileMetric], date: str, commit: str) -> str:
 ## 复跑
 
 ```bash
-python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-{date}-lean.md
+python3 scripts/dev/lean-loc-report.py --write {rerun_target}
 ```
 
 ## 注意
@@ -366,7 +366,17 @@ def main() -> None:
 
     today = dt.date.today().isoformat()
     commit = run_git(["rev-parse", "--short=9", "HEAD"])
-    report = render_report(metrics, today, commit)
+    rerun_target = f"docs/stats/loc-{today}-lean.md"
+    if args.write:
+        output_for_command = args.write if args.write.is_absolute() else ROOT / args.write
+        try:
+            rerun_target = output_for_command.relative_to(ROOT).as_posix()
+        except ValueError:
+            if output_for_command.name == "loc-current-lean.md":
+                rerun_target = "docs/stats/loc-current-lean.md"
+            else:
+                rerun_target = output_for_command.as_posix()
+    report = render_report(metrics, today, commit, rerun_target)
     if args.write:
         output = args.write if args.write.is_absolute() else ROOT / args.write
         output.parent.mkdir(parents=True, exist_ok=True)

@@ -211,12 +211,18 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py
 
+      - name: Verify LOC snapshot
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_LOC_SNAPSHOT "代码量快照同步" -- python3 scripts/ci/check-loc-snapshot.py
+
       - name: Verify script governance and zero ShellCheck warnings
         if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
           python3 scripts/ci/check-script-governance.py
           bash scripts/ci/check-shell-scripts.sh
+          python3 scripts/ci/check-shell-linux-portability.py
           bash scripts/ci/check-postgres-client-fallback.sh
 
       - name: Verify module dependency boundaries
@@ -229,6 +235,11 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_INFRA_ABSTRACTION_BOUNDARIES "基础设施抽象边界" -- python3 scripts/ci/check-infrastructure-abstraction-boundaries.py --base "$GUARD_BASE"
 
+      - name: Verify direct client boundaries
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_DIRECT_CLIENT_BOUNDARIES "业务层直连客户端边界" -- python3 scripts/ci/check-direct-client-boundaries.py
+
       - name: Verify changelog synchronization
         shell: bash
         run: python3 scripts/ci/check-changelog-sync.py --base "$GUARD_BASE"
@@ -237,6 +248,11 @@ jobs:
         if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_DOCS_STRUCTURE "文档结构与内部链接" -- python3 scripts/ci/check-docs-structure.py
+
+      - name: Verify documentation timestamp policy
+        if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_DOC_TIMESTAMP_POLICY "文档日期命名策略" -- python3 scripts/ci/check-doc-timestamp-policy.py
 
       - name: Validate feature switch registry
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'

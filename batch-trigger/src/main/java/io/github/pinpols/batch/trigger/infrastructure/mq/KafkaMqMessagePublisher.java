@@ -25,15 +25,17 @@ public class KafkaMqMessagePublisher implements MqMessagePublisher {
 
   @Override
   public CompletableFuture<MqPublishResult> publish(MqMessage message) {
-    ProducerRecord<String, String> record =
+    ProducerRecord<String, String> producerRecord =
         new ProducerRecord<>(message.topic(), message.key(), message.payload());
     message.headers().forEach((name, value) -> {
       if (EmptyChecks.isNotNull(value)) {
-        record.headers().add(new RecordHeader(name, value.getBytes(StandardCharsets.UTF_8)));
+        producerRecord
+            .headers()
+            .add(new RecordHeader(name, value.getBytes(StandardCharsets.UTF_8)));
       }
     });
     return kafkaTemplate
-        .send(record)
+        .send(producerRecord)
         .toCompletableFuture()
         .thenApply(result -> new MqPublishResult(
             result.getRecordMetadata().partition(), result.getRecordMetadata().offset()));
