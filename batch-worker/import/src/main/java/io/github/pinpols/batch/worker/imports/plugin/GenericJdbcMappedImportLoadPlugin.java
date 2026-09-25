@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.PGConnection;
@@ -462,6 +463,39 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       try (DataSourceConnectionLease lease =
           DataSourceConnectionLease.acquire(businessDataSource)) {
         Connection conn = lease.connection();
+        if (isRowLevelSecurityEnabled(conn, destinationTable)) {
+          String tempTable = "batch_import_copy_" + UUID.randomUUID().toString().replace("-", "");
+          String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
+          try (var statement = conn.createStatement()) {
+            statement.execute("CREATE TEMP TABLE " + quotedTempTable + " (LIKE " + destinationTable
+                + ")" + " ON COMMIT DROP");
+          }
+          log.info(
+              "jdbc-mapped-import COPY staged before RLS-protected insert:"
+                  + " tenantId={}, table={}, rows={}",
+              context.tenantId(),
+              destinationTable,
+              n);
+          CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
+          long copied = copyManager.copyIn(
+              buildCopySql("pg_temp." + quotedTempTable, insertCols), new StringReader(csv));
+          if (copied != n) {
+            throw new IllegalStateException(
+                "PostgreSQL temporary COPY row count mismatch: expected=" + n + ", copied="
+                    + copied);
+          }
+          String insertSql = "INSERT INTO " + destinationTable + " ("
+              + quotedColumns(insertCols) + ") SELECT " + quotedColumns(insertCols)
+              + " FROM pg_temp." + quotedTempTable;
+          try (var statement = conn.createStatement()) {
+            int inserted = statement.executeUpdate(insertSql);
+            if (inserted != n) {
+              throw new IllegalStateException("RLS-protected insert row count mismatch: expected="
+                  + n + ", inserted=" + inserted);
+            }
+          }
+          return null;
+        }
         CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
         long copied = copyManager.copyIn(copySql, new StringReader(csv));
         if (copied != n) {
@@ -470,10 +504,28 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         }
         return null;
       } catch (Exception ex) {
-        throw new IllegalStateException("PostgreSQL COPY failed: " + ex.getMessage(), ex);
+        throw new IllegalStateException("Partition load failed: " + ex.getMessage(), ex);
       }
     });
     return n;
+  }
+
+  private boolean isRowLevelSecurityEnabled(Connection connection, String destinationTable)
+      throws SQLException {
+    String[] parts = destinationTable.split("\\.", 2);
+    if (parts.length != 2) {
+      throw new IllegalArgumentException("qualified destination table required");
+    }
+    try (PreparedStatement statement =
+        connection.prepareStatement("SELECT c.relrowsecurity FROM pg_class c"
+            + " JOIN pg_namespace n ON n.oid = c.relnamespace"
+            + " WHERE n.nspname = ? AND c.relname = ?")) {
+      statement.setString(1, parts[0].replace("\"", ""));
+      statement.setString(2, parts[1].replace("\"", ""));
+      try (var result = statement.executeQuery()) {
+        return result.next() && result.getBoolean(1);
+      }
+    }
   }
 
   private String buildDeleteSql(JdbcMappedImportSpec spec) {
@@ -493,16 +545,17 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   private String buildCopySql(String destinationTable, List<String> insertCols) {
+    return "COPY " + destinationTable + " (" + quotedColumns(insertCols)
+        + ") FROM STDIN WITH (FORMAT csv, NULL '\\N')";
+  }
+
+  private String quotedColumns(List<String> columns) {
     StringBuilder colPart = new StringBuilder();
-    for (String c : insertCols) {
+    for (String c : columns) {
       colPart.append(JdbcMappedSqlValidator.quotePg(c)).append(',');
     }
     colPart.setLength(colPart.length() - 1);
-    return "COPY "
-        + destinationTable
-        + " ("
-        + colPart
-        + ") FROM STDIN WITH (FORMAT csv, NULL '\\N')";
+    return colPart.toString();
   }
 
   private String tableName(JdbcMappedImportSpec spec) {

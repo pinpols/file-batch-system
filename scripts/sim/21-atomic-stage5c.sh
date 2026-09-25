@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # =========================================================
-# 21-atomic-stage5c.sh:Atomic HTTP / timeout / cancel 验证
+# 21-atomic-stage5c.sh:Atomic SSRF rejection / timeout / cancel 验证
 #
 # 覆盖:
-#   - HTTP executor 访问非 loopback 公网 endpoint 真成功
+#   - HTTP executor 稳定拒绝 loopback endpoint(SSRF 防护)
+#   - HTTP 成功传输由 HttpTaskExecutor 本地 HTTP server 集成测试覆盖
 #   - SQL executor statement_timeout 触发 TIMEOUT 失败分类
 #   - task cancel API 对 RUNNING shell 任务置 cancel_requested,验证最终语义
 #
@@ -125,8 +126,8 @@ def wait_running_task(rid, timeout=30):
         time.sleep(1)
     raise TimeoutError(f"running task not found for {rid}")
 
-print("==> launch atomic HTTP success", flush=True)
-rid_http = launch("atomic_http_demo", "http-success", ATOMIC_PARAMS["httpSuccess"])
+print("==> launch atomic HTTP SSRF rejection", flush=True)
+rid_http = launch("atomic_http_demo", "http-ssrf-rejected", ATOMIC_PARAMS["httpSsrfRejected"])
 http_instance, http_status = wait_terminal(rid_http)
 
 print("==> launch atomic SQL timeout", flush=True)
@@ -180,12 +181,12 @@ parts = summary.split("\x1f")
 if len(parts) != 3:
     print("❌ Atomic Stage5c malformed summary", flush=True)
     sys.exit(1)
-http_ok = parts[0] == "SUCCESS"
+http_ok = parts[0].startswith("FAILED:SECURITY_REJECTED:")
 timeout_ok = parts[1].startswith("FAILED:TIMEOUT:") or parts[1].startswith("FAILED:WORKER_EXECUTION_TIMEOUT:")
 cancel_marked = parts[2].startswith("FAILED:FAILED:") and parts[2].endswith(":true") and cancel_http == "200"
 if not http_ok or not timeout_ok or not cancel_marked:
     print("❌ Atomic Stage5c assertion failed", flush=True)
     sys.exit(1)
 
-print(f"\n==> Stage 5c atomic scenario PASS: http={http_instance}/{http_status} timeout={timeout_instance}/{timeout_status} cancel={cancel_instance}/{cancel_status}", flush=True)
+print(f"\n==> Stage 5c atomic scenario PASS: http-ssrf={http_instance}/{http_status} timeout={timeout_instance}/{timeout_status} cancel={cancel_instance}/{cancel_status}", flush=True)
 PY

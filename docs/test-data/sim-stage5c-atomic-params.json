@@ -1,7 +1,7 @@
 {
-  "httpSuccess": {
+  "httpSsrfRejected": {
     "taskType": "http",
-    "url": "https://example.com",
+    "url": "http://127.0.0.1:18082/actuator/health",
     "method": "GET",
     "expectStatus": 200,
     "timeoutSeconds": 10

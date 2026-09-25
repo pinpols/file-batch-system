@@ -65,6 +65,7 @@
 
 ### Fixed
 
+- 修复 Import 在启用 RLS 的业务表上无法使用 PostgreSQL `COPY` 的问题：先 COPY 到事务内临时表，再通过目标表 `INSERT ... SELECT` 保留真实 RLS 策略校验；Process SQL 的 compute、validate、feedback 在同一业务事务中设置租户 GUC，并补充非超级用户/不可绕过 RLS 角色的 PostgreSQL 集成验证。Atomic Stage 5c 改为验证 loopback SSRF 拒绝及错误分类，避免依赖公网 endpoint。
 - 修复内部接口认证与请求体限制可被 URL 规范化绕过、Dispatch/回执轮询及 Webhook 出站请求可触达受限地址、Webhook 重定向 SSRF 和超大错误响应占用内存的问题；限制 Kafka lag 元数据访问角色，修正登录失败计数清理键，并移除会泄露答案的自建验证码。
 - 修复租户用户已开放运营概览菜单但摘要接口拒绝访问的问题；Outbox 重试日志响应补充关联事件 ID，控制台重投不再误用重试日志自身 ID。
 - 修复操作审计参数可能持久化并返回密码、令牌或密钥的问题：写入和查询路径统一递归脱敏，V212 清理历史密码字段；同时将 V174 恢复为误改前内容，并收紧迁移门禁为仅允许精确恢复基线父版本，避免 Flyway checksum 漂移。
