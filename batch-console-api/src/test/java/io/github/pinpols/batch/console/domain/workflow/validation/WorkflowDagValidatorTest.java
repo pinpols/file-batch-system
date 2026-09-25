@@ -225,43 +225,71 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
-  @DisplayName("GATEWAY 出度 < 2 → gateway_out_degree_too_small")
-  void shouldFail_whenGatewayOutDegreeTooSmall() {
+  @DisplayName("汇聚 GATEWAY 单出边 + N_OF 配置 → 通过")
+  void shouldPass_whenJoinGatewayHasSingleOutgoingEdge() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem gw = node("gw", "GATEWAY");
-    gw.setNodeParams("{\"strategy\":\"XOR\"}");
-    req.setNodes(Arrays.asList(node("start", "START"), gw, node("end", "END")));
-    req.setEdges(Arrays.asList(edge("start", "gw"), edge("gw", "end")));
-
-    assertBizError(req, "error.workflow.dag.gateway_out_degree_too_small");
-  }
-
-  @Test
-  @DisplayName("GATEWAY nodeParams 空 → gateway_strategy_missing")
-  void shouldFail_whenGatewayStrategyMissing() {
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    NodeItem gw = node("gw", "GATEWAY");
-    // 出度 2,但缺 strategy
+    gw.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":2}");
     req.setNodes(Arrays.asList(
-        node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
+        node("start", "START"), node("a", "TASK"), node("b", "TASK"), gw, node("end", "END")));
     req.setEdges(Arrays.asList(
-        edge("start", "gw"), edge("gw", "a"), edge("gw", "b"), edge("a", "end"), edge("b", "end")));
+        edge("start", "a"),
+        edge("start", "b"),
+        edge("a", "gw"),
+        edge("b", "gw"),
+        edge("gw", "end")));
 
-    assertBizError(req, "error.workflow.dag.gateway_strategy_missing");
+    assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
   }
 
   @Test
-  @DisplayName("GATEWAY 出度 = 2 且 strategy 非空 → 通过")
-  void shouldPass_whenGatewayValid() {
+  @DisplayName("汇聚 GATEWAY 缺 joinMode → gateway_join_mode_missing")
+  void shouldFail_whenJoinModeMissing() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem gw = node("gw", "GATEWAY");
-    gw.setNodeParams("{\"strategy\":\"XOR\"}");
+    gw.setNodeParams("{}");
+    req.setNodes(Arrays.asList(
+        node("start", "START"), node("a", "TASK"), node("b", "TASK"), gw, node("end", "END")));
+    req.setEdges(Arrays.asList(
+        edge("start", "a"),
+        edge("start", "b"),
+        edge("a", "gw"),
+        edge("b", "gw"),
+        edge("gw", "end")));
+
+    assertBizError(req, "error.workflow.dag.gateway_join_mode_missing");
+  }
+
+  @Test
+  @DisplayName("分支 GATEWAY 无 joinMode 且出度 = 2 → 通过")
+  void shouldPass_whenBranchGatewayHasTwoOutgoingEdges() {
+    WorkflowDefinitionSaveRequest req = baseRequest();
+    NodeItem gw = node("gw", "GATEWAY");
+    gw.setNodeParams("{}");
     req.setNodes(Arrays.asList(
         node("start", "START"), gw, node("a", "TASK"), node("b", "TASK"), node("end", "END")));
     req.setEdges(Arrays.asList(
         edge("start", "gw"), edge("gw", "a"), edge("gw", "b"), edge("a", "end"), edge("b", "end")));
 
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
+  }
+
+  @Test
+  @DisplayName("汇聚 GATEWAY N_OF 阈值超过入度 → gateway_join_threshold_invalid")
+  void shouldFail_whenJoinThresholdExceedsIncomingCount() {
+    WorkflowDefinitionSaveRequest req = baseRequest();
+    NodeItem gw = node("gw", "GATEWAY");
+    gw.setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":3}");
+    req.setNodes(Arrays.asList(
+        node("start", "START"), node("a", "TASK"), node("b", "TASK"), gw, node("end", "END")));
+    req.setEdges(Arrays.asList(
+        edge("start", "a"),
+        edge("start", "b"),
+        edge("a", "gw"),
+        edge("b", "gw"),
+        edge("gw", "end")));
+
+    assertBizError(req, "error.workflow.dag.gateway_join_threshold_invalid");
   }
 
   @Test
