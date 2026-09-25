@@ -26,6 +26,7 @@
 ### Changed
 
 - **基础设施镜像版本与部署说明**：PostgreSQL 固定到 `17.11`、Valkey 固定到 `8.1.10`，同步 Testcontainers、CI 预拉取、Sim、HA 清单及 Compose 默认值；基础服务手册改正 Redis/Valkey 漂移，并明确 MinIO 授权审查和替代后端生产验证尚未完成。Kafka `4.1.2` 仍在官方支持列表，本次不做跨次版本升级。
+- **对象存储测试镜像来源**：本地 Compose、CI 预拉取和 Testcontainers 的 MinIO 测试镜像改为可匿名拉取的 `bitnamilegacy/minio:2025.7.23-debian-12-r1`，并将 repository 与 tag 一并纳入版本对齐守护；该镜像仅作为本地/集成测试过渡来源，不代表生产对象存储选型。
 - **组合部署出站 HTTP 隔离**：Console 与 Orchestrator 的 `OutboundHttpTransport` 使用模块级 qualifier 显式绑定，避免 E2E 组合应用或未来同进程部署因存在多个实现而启动失败，并确保通知、验证码、治理、血缘和 Sensor 不会跨模块误用传输策略。
 - **1.0.0 迁移基线重发**：在确认无共享或生产数据库使用旧 checksum 后，将 11 个历史迁移注释统一指向权威 `docs/agent-baseline.md`；基线重发后，CI 已恢复严格禁止修改历史迁移。部署必须重建空库后重新执行 Flyway，禁止对已有库执行 `flyway repair` 迁移该基线。
 - **测试模块依赖边界**：多模块共享的多租户 SQL 种子迁入 `batch-test-support` 资源包，消费模块统一通过测试 classpath 加载；移除 Orchestrator 对 E2E 源码目录的反向引用，并将 `batch-e2e-tests` 的应用模块依赖明确限制为 test scope。
