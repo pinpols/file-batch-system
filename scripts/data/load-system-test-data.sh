@@ -2,14 +2,14 @@
 # =========================================================
 # load-system-test-data.sh - 装载系统测试数据
 # 说明：
-# 1) 写入平台库、业务库和 MinIO 的系统测试种子。
+# 1) 写入平台库、业务库和对象存储的系统测试种子。
 # 2) 用于本地联调、巡检和 E2E 前准备。
 # =========================================================
 # 默认依赖：
 #   - PostgreSQL: localhost:15432
 #   - 平台库: batch_platform
 #   - 业务库: batch_business
-#   - MinIO: http://localhost:19000
+#   - Object Storage: http://localhost:19000
 #
 # 使用方法：
 #   BATCH_PLATFORM_DB_PASSWORD=... \
@@ -29,11 +29,11 @@ PG_USER="${BATCH_PLATFORM_DB_USERNAME:-$PGUSER}"
 PG_HOST="${BATCH_PLATFORM_DB_HOST:-$PGHOST}"
 PG_PORT="${BATCH_PLATFORM_DB_PORT:-$PGPORT}"
 PG_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-$PGPASSWORD}"
-MINIO_ALIAS="${BATCH_S3_ALIAS:-local}"
-MINIO_ENDPOINT="${BATCH_S3_ENDPOINT}"
-MINIO_ACCESS_KEY="${BATCH_S3_ACCESS_KEY}"
-MINIO_SECRET_KEY="${BATCH_S3_SECRET_KEY}"
-MINIO_BUCKET="${BATCH_S3_BUCKET}"
+OBJECT_STORE_ALIAS="${BATCH_S3_ALIAS:-local}"
+OBJECT_STORE_ENDPOINT="${BATCH_S3_ENDPOINT}"
+OBJECT_STORE_ACCESS_KEY="${BATCH_S3_ACCESS_KEY}"
+OBJECT_STORE_SECRET_KEY="${BATCH_S3_SECRET_KEY}"
+OBJECT_STORE_BUCKET="${BATCH_S3_BUCKET}"
 
 export PGPASSWORD="${PG_PASSWORD}"
 
@@ -83,7 +83,7 @@ echo "Closing seed-injected in-progress runtime rows to TERMINATED (避免 CLAIM
 psql_platform -f "${SQL_DIR}/close-seed-runtime-rows.sql"
 
 if command -v mc >/dev/null 2>&1; then
-  echo "Seeding MinIO objects..."
+  echo "Seeding object storage objects..."
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir}"' EXIT
 
@@ -118,15 +118,15 @@ settlementNo,customerNo,bizDate,accountingPeriod,grossAmount,feeAmount,netAmount
 STL-20260315-0001,CUST0001,2026-03-15,2026-03,2000.00,20.00,1980.00,CNY
 EOF
 
-  mc alias set "${MINIO_ALIAS}" "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" >/dev/null
-  mc mb --ignore-existing "${MINIO_ALIAS}/${MINIO_BUCKET}" >/dev/null
-  mc cp "${tmp_dir}/customer-account-20260322.csv" "${MINIO_ALIAS}/${MINIO_BUCKET}/ingress/import/customer-account-20260322.csv" >/dev/null
-  mc cp "${tmp_dir}/customer-account-20260322.json" "${MINIO_ALIAS}/${MINIO_BUCKET}/ingress/import/customer-account-20260322.json" >/dev/null
-  mc cp "${tmp_dir}/customer-account-20260322.xml" "${MINIO_ALIAS}/${MINIO_BUCKET}/ingress/import/customer-account-20260322.xml" >/dev/null
-  mc cp "${tmp_dir}/settlement-20260322.csv" "${MINIO_ALIAS}/${MINIO_BUCKET}/outbound/settlement/settlement-20260322.csv.part" >/dev/null
-  mc cp "${tmp_dir}/settlement-20260315.csv" "${MINIO_ALIAS}/${MINIO_BUCKET}/archive/settlement/settlement-20260315.csv" >/dev/null
+  mc alias set "${OBJECT_STORE_ALIAS}" "${OBJECT_STORE_ENDPOINT}" "${OBJECT_STORE_ACCESS_KEY}" "${OBJECT_STORE_SECRET_KEY}" >/dev/null
+  mc mb --ignore-existing "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}" >/dev/null
+  mc cp "${tmp_dir}/customer-account-20260322.csv" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/ingress/import/customer-account-20260322.csv" >/dev/null
+  mc cp "${tmp_dir}/customer-account-20260322.json" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/ingress/import/customer-account-20260322.json" >/dev/null
+  mc cp "${tmp_dir}/customer-account-20260322.xml" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/ingress/import/customer-account-20260322.xml" >/dev/null
+  mc cp "${tmp_dir}/settlement-20260322.csv" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/outbound/settlement/settlement-20260322.csv.part" >/dev/null
+  mc cp "${tmp_dir}/settlement-20260315.csv" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/archive/settlement/settlement-20260315.csv" >/dev/null
   printf 'done\n' > "${tmp_dir}/customer-account-20260322.done"
-  mc cp "${tmp_dir}/customer-account-20260322.done" "${MINIO_ALIAS}/${MINIO_BUCKET}/ingress/import/customer-account-20260322.done" >/dev/null
+  mc cp "${tmp_dir}/customer-account-20260322.done" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/ingress/import/customer-account-20260322.done" >/dev/null
 
   # ── ta/tb/tc 租户样本：与 test-full-coverage-import-suite 里 Excel channel 配置的
   #    bucket/prefix（ta/, tb/, tc/）对齐；同时与 deploy/docker/sftp/data/{tenant}/inbound/ 下
@@ -157,18 +157,18 @@ EOF
 EOF
 
   # 入站样本：上传到每个租户 prefix 下的 inbound/ 目录
-  mc cp "${tmp_dir}/ta-customer-profile-20260419.csv" "${MINIO_ALIAS}/${MINIO_BUCKET}/ta/inbound/customer-profile-20260419.csv" >/dev/null
-  mc cp "${tmp_dir}/tb-transaction-20260419.csv"      "${MINIO_ALIAS}/${MINIO_BUCKET}/tb/inbound/transaction-20260419.csv" >/dev/null
-  mc cp "${tmp_dir}/tc-risk-score-20260419.json"      "${MINIO_ALIAS}/${MINIO_BUCKET}/tc/inbound/risk-score-20260419.json" >/dev/null
+  mc cp "${tmp_dir}/ta-customer-profile-20260419.csv" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/ta/inbound/customer-profile-20260419.csv" >/dev/null
+  mc cp "${tmp_dir}/tb-transaction-20260419.csv"      "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/tb/inbound/transaction-20260419.csv" >/dev/null
+  mc cp "${tmp_dir}/tc-risk-score-20260419.json"      "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/tc/inbound/risk-score-20260419.json" >/dev/null
 
   # 出站占位：预建目录占位，避免前端首次打开导出页 bucket 404
   printf '' > "${tmp_dir}/.keep"
-  mc cp "${tmp_dir}/.keep" "${MINIO_ALIAS}/${MINIO_BUCKET}/ta/outbound/report/.keep" >/dev/null
-  mc cp "${tmp_dir}/.keep" "${MINIO_ALIAS}/${MINIO_BUCKET}/tb/outbound/statement/.keep" >/dev/null
+  mc cp "${tmp_dir}/.keep" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/ta/outbound/report/.keep" >/dev/null
+  mc cp "${tmp_dir}/.keep" "${OBJECT_STORE_ALIAS}/${OBJECT_STORE_BUCKET}/tb/outbound/statement/.keep" >/dev/null
 
-  echo "MinIO seed complete."
+  echo "Object storage seed complete."
 else
-  echo "mc not found, skip MinIO seed."
+  echo "mc not found, skip object storage seed."
 fi
 
 echo "System test seed loaded."

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.testing;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -15,7 +16,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
- * 集成测试基类：需要真实 PostgreSQL、Kafka、MinIO、Redis 的模块继承本类。
+ * 集成测试基类：需要真实 PostgreSQL、Kafka、S3 兼容对象存储、Redis 的模块继承本类。
  *
  * <p>平台库 Testcontainers 仅执行 {@code db/platform-init.sql}（与 Flyway V1 等价的 schema 边界）； 表结构由各模块测试中的
  * Flyway 从 {@code classpath:db/migration} 完整迁移。
@@ -25,7 +26,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
-  // 2026-05 IT 提速:MinIO + Redis 加 .withReuse(true) 跨 JVM 复用。
+  // 2026-05 IT 提速:对象存储 + Redis 加 .withReuse(true) 跨 JVM 复用。
   // **PG 不加 reuse**:reuse 会让 outbox_event 等表跨 run 残留,
   // 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure 等依赖 outbox 状态的 IT。
   // PG 单次启动 ~3-5s,影响有限,稳妥优先。
@@ -44,8 +45,7 @@ public abstract class AbstractIntegrationTest {
   private static final KafkaContainer KAFKA = TestKafkaContainers.create();
 
   @SuppressWarnings("resource")
-  private static final ObjectStoreContainer MINIO =
-      TestObjectStoreContainers.create().withReuse(true);
+  private static final TestObjectStoreEndpoint OBJECT_STORE = createObjectStoreEndpoint();
 
   @SuppressWarnings("resource")
   private static final GenericContainer<?> REDIS =
@@ -56,7 +56,7 @@ public abstract class AbstractIntegrationTest {
     PLATFORM_POSTGRES.start();
     BUSINESS_POSTGRES.start();
     KAFKA.start();
-    MINIO.start();
+    startObjectStoreIfNeeded();
     REDIS.start();
   }
 
@@ -87,7 +87,7 @@ public abstract class AbstractIntegrationTest {
   @DynamicPropertySource
   static void registerDynamicProperties(DynamicPropertyRegistry registry) {
     IntegrationTestInfrastructure.registerDynamicProperties(
-        registry, PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, MINIO, REDIS);
+        registry, PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, OBJECT_STORE, REDIS);
   }
 
   protected static String platformJdbcUrl() {
@@ -121,11 +121,30 @@ public abstract class AbstractIntegrationTest {
   }
 
   protected static String s3Endpoint() {
-    return MINIO.getEndpoint();
+    return requireObjectStore().getEndpoint();
   }
 
   protected static String s3Bucket() {
-    return MINIO.getDefaultBucket();
+    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+      return IntegrationTestInfrastructure.objectStoreBucket();
+    }
+    return requireObjectStore().getDefaultBucket();
+  }
+
+  protected static String s3AccessKey() {
+    return requireObjectStore().getAccessKey();
+  }
+
+  protected static String s3SecretKey() {
+    return requireObjectStore().getSecretKey();
+  }
+
+  protected static String s3Region() {
+    return requireObjectStore().getRegion();
+  }
+
+  protected static boolean s3PathStyleEnabled() {
+    return requireObjectStore().isPathStyleEnabled();
   }
 
   /** 当前测试对象存储后端（s3 | filesystem），由系统属性 {@code batch.test.storage.backend} 决定。 */
@@ -138,7 +157,7 @@ public abstract class AbstractIntegrationTest {
     return IntegrationTestInfrastructure.filesystemRoot();
   }
 
-  /** 按当前测试后端读取对象内容（S3 走 MinIO 容器，filesystem 走临时根目录）。 */
+  /** 按当前测试后端读取对象内容（S3 走兼容对象存储，filesystem 走临时根目录）。 */
   public static byte[] readObject(String bucket, String key) {
     if (IntegrationTestInfrastructure.isFilesystemBackend()) {
       Path path = filesystemRoot().resolve(bucket).resolve(key);
@@ -148,7 +167,7 @@ public abstract class AbstractIntegrationTest {
         throw new UncheckedIOException("filesystem test read failed: " + path, ex);
       }
     }
-    return MINIO
+    return requireObjectStore()
         .client()
         .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key).build())
         .asByteArray();
@@ -166,7 +185,7 @@ public abstract class AbstractIntegrationTest {
       }
       return;
     }
-    MINIO
+    requireObjectStore()
         .client()
         .putObject(
             software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
@@ -186,7 +205,7 @@ public abstract class AbstractIntegrationTest {
       }
       return;
     }
-    MINIO.ensureBucketExists(bucket);
+    requireObjectStore().ensureBucketExists(bucket);
   }
 
   protected static void ensureS3Bucket(String bucketName) {
@@ -199,5 +218,33 @@ public abstract class AbstractIntegrationTest {
 
   protected static int redisPort() {
     return REDIS.getMappedPort(TestValkeyContainers.REDIS_PORT);
+  }
+
+  private static TestObjectStoreEndpoint createObjectStoreEndpoint() {
+    if (IntegrationTestInfrastructure.isFilesystemBackend()) {
+      return null;
+    }
+    TestObjectStoreEndpoint endpoint = TestObjectStoreContainers.createEndpoint();
+    if (endpoint instanceof MinioObjectStoreContainer container) {
+      return container.withReuse(true);
+    }
+    return endpoint;
+  }
+
+  private static void startObjectStoreIfNeeded() {
+    if (OBJECT_STORE instanceof MinioObjectStoreContainer container) {
+      container.start();
+      return;
+    }
+    if (EmptyChecks.isNotNull(OBJECT_STORE)) {
+      OBJECT_STORE.ensureBucketExists(OBJECT_STORE.getDefaultBucket());
+    }
+  }
+
+  private static TestObjectStoreEndpoint requireObjectStore() {
+    if (EmptyChecks.isNull(OBJECT_STORE)) {
+      throw new IllegalStateException("S3-compatible test object store is not configured");
+    }
+    return OBJECT_STORE;
   }
 }

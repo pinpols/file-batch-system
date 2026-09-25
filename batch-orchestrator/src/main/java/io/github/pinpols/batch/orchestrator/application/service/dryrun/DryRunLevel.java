@@ -11,7 +11,7 @@ import lombok.experimental.Accessors;
  * <ul>
  *   <li>{@link #CONFIG_VALIDATE} — 解析 cron / 业务日 / 参数 / DAG / fileTemplate / SQL；只读 + 不调外
  *   <li>{@link #SCHEDULE_PLAN} — 给定 bizDate，输出"会触发哪些 job / 预计 instance / 分区数 / Worker 类型 / 输入输出文件"
- *   <li>{@link #EXECUTION_PLAN} — task 级：SQL explain / 文件路径解析 / 模板字段检查 / MinIO key 预生成 / 下游
+ *   <li>{@link #EXECUTION_PLAN} — task 级：SQL explain / 文件路径解析 / 模板字段检查 / 对象 key 预生成 / 下游
  *       endpoint reachability
  * </ul>
  */

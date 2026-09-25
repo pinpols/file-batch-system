@@ -18,7 +18,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Integration test: S3ExportStorage read/write/copy/remove against the active test storage backend
- * (MinIO/S3 by default, filesystem via {@code -Dbatch.test.storage.backend=filesystem}).
+ * (S3-compatible object storage by default, filesystem via {@code -Dbatch.test.storage.backend=filesystem}).
  */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,

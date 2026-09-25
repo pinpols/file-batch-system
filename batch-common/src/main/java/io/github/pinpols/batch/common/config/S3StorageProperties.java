@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
+import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 
 /**
  * 对象存储（S3 协议）连接配置。绑定前缀 {@code batch.storage.s3}。
@@ -28,15 +30,29 @@ public class S3StorageProperties {
 
   /**
    * S3 区域。AWS / 阿里 OSS / 腾讯 COS 走 SigV4 签名时必填（如 {@code us-east-1} / {@code oss-cn-hangzhou} /
-   * {@code ap-guangzhou}）；自建 MinIO / Ceph 可留空。空时不向 client 传 region（保持 MinIO 默认行为）。
+   * {@code ap-guangzhou}）；自建 S3 兼容服务可留空，运行时会回退 {@code us-east-1} 以满足 AWS SDK 构造要求。
    */
   private String region;
 
   /**
-   * 是否在 bucket 不存在时自动创建。自建 MinIO 默认 {@code true}（开发期便利）。 托管云（S3/OSS/COS）bucket 通常已预建、凭据无
+   * 是否在 bucket 不存在时自动创建。自建对象存储默认 {@code true}（开发期便利）。 托管云（S3/OSS/COS）bucket 通常已预建、凭据无
    * CreateBucket 权限，应设 {@code false}，否则启动期建桶会撞 AccessDenied。
    */
   private boolean autoCreateBucket = true;
+
+  /**
+   * 是否启用 path-style 访问。自建 S3 兼容服务通常需要 {@code true}；AWS S3 标准域名、部分云厂商可设 {@code false} 使用 virtual-hosted
+   * style。
+   */
+  private boolean pathStyleEnabled = true;
+
+  /** 请求 checksum 计算策略。默认 WHEN_REQUIRED，避免部分 S3 兼容后端不支持 aws-chunked trailer。 */
+  private RequestChecksumCalculation requestChecksumCalculation =
+      RequestChecksumCalculation.WHEN_REQUIRED;
+
+  /** 响应 checksum 校验策略。默认 WHEN_REQUIRED，和请求侧保持兼容优先。 */
+  private ResponseChecksumValidation responseChecksumValidation =
+      ResponseChecksumValidation.WHEN_REQUIRED;
 
   /** 建立 TCP 连接超时（ms）。后端挂/不可达时快速失败，不拖慢 worker 线程。 */
   @Min(value = 1, message = "batch.storage.s3.connect-timeout-ms must be at least 1")

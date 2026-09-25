@@ -65,7 +65,7 @@ public class DispatchChannelHealthService {
   private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
-  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
+  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配对象存储时保持 null(同历史行为)。
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
   private BatchObjectStore objectStore;
   private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -131,7 +131,7 @@ public class DispatchChannelHealthService {
       return thread;
     };
     this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
-    // 中心对象存储仅在 MinIO 配置有效时由 S3AutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
+    // 中心对象存储仅在 S3 配置有效时由 S3AutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
     this.objectStore = objectStoreProvider.getIfAvailable();
     meterRegistry.gauge("batch.dispatch.channel.probe.successes", probeSuccessCount);
     meterRegistry.gauge("batch.dispatch.channel.probe.failures", probeFailureCount);

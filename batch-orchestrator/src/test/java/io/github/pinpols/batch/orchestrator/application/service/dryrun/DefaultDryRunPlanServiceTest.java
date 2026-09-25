@@ -189,7 +189,7 @@ class DefaultDryRunPlanServiceTest {
         .build());
 
     assertThat(result.success()).isTrue();
-    // L3 真接后：无 SQL/MinIO/endpoint params 时返回 EXEC_PLAN_NO_PROBES_TRIGGERED
+    // L3 真接后：无 SQL/对象存储/endpoint params 时返回 EXEC_PLAN_NO_PROBES_TRIGGERED
     assertThat(result.findings())
         .extracting(DryRunFinding::code)
         .contains("EXEC_PLAN_NO_PROBES_TRIGGERED");

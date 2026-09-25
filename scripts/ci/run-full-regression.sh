@@ -284,10 +284,11 @@ deploy_smoke() {
   render_dir="$(mktemp -d "${TMPDIR:-/tmp}/batch-deploy-smoke.XXXXXX")"
 
   local -a secret_args=(
-    --set-string postgresql.platform.password="${BATCH_DEPLOY_SMOKE_PLATFORM_DB_PASSWORD:-smoke-platform-pass}"
-    --set-string postgresql.business.password="${BATCH_DEPLOY_SMOKE_BUSINESS_DB_PASSWORD:-smoke-business-pass}"
-    --set-string objectStorage.accessKey="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_ACCESS_KEY:-smoke-access-key}"
-    --set-string objectStorage.secretKey="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_SECRET_KEY:-smoke-secret-key}"
+	    --set-string postgresql.platform.password="${BATCH_DEPLOY_SMOKE_PLATFORM_DB_PASSWORD:-smoke-platform-pass}"
+	    --set-string postgresql.business.password="${BATCH_DEPLOY_SMOKE_BUSINESS_DB_PASSWORD:-smoke-business-pass}"
+	    --set-string objectStorage.endpoint="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_ENDPOINT:-http://object-storage.batch-smoke.svc:9000}"
+	    --set-string objectStorage.accessKey="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_ACCESS_KEY:-smoke-access-key}"
+	    --set-string objectStorage.secretKey="${BATCH_DEPLOY_SMOKE_OBJECT_STORAGE_SECRET_KEY:-smoke-secret-key}"
     --set-string security.internalSecret="${BATCH_DEPLOY_SMOKE_INTERNAL_SECRET:-smoke-internal-secret}"
     --set-string security.consoleJwtSecret="${BATCH_DEPLOY_SMOKE_CONSOLE_JWT_SECRET:-smoke-console-jwt-secret}"
     --set-string security.loginEncryption.privateKeyPem="${BATCH_DEPLOY_SMOKE_LOGIN_PRIVATE_KEY:-smoke-private-key}"
@@ -373,10 +374,11 @@ deployment_verification() {
   verification_id="rollback-verification-$(date +%Y%m%d%H%M%S)-$$-$RANDOM"
 
   local -a secret_args=(
-    --set-string postgresql.platform.password="${BATCH_DEPLOY_VERIFICATION_PLATFORM_DB_PASSWORD:-verify-platform-pass}"
-    --set-string postgresql.business.password="${BATCH_DEPLOY_VERIFICATION_BUSINESS_DB_PASSWORD:-verify-business-pass}"
-    --set-string minio.accessKey="${BATCH_DEPLOY_VERIFICATION_MINIO_ACCESS_KEY:-verify-access-key}"
-    --set-string minio.secretKey="${BATCH_DEPLOY_VERIFICATION_MINIO_SECRET_KEY:-verify-secret-key}"
+	    --set-string postgresql.platform.password="${BATCH_DEPLOY_VERIFICATION_PLATFORM_DB_PASSWORD:-verify-platform-pass}"
+	    --set-string postgresql.business.password="${BATCH_DEPLOY_VERIFICATION_BUSINESS_DB_PASSWORD:-verify-business-pass}"
+	    --set-string objectStorage.endpoint="${BATCH_DEPLOY_VERIFICATION_OBJECT_STORAGE_ENDPOINT:-http://object-storage.batch-verify.svc:9000}"
+	    --set-string objectStorage.accessKey="${BATCH_DEPLOY_VERIFICATION_OBJECT_STORAGE_ACCESS_KEY:-verify-access-key}"
+	    --set-string objectStorage.secretKey="${BATCH_DEPLOY_VERIFICATION_OBJECT_STORAGE_SECRET_KEY:-verify-secret-key}"
   )
 
   run_helm lint "$chart_dir"

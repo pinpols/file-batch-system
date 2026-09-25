@@ -46,6 +46,7 @@
 - **Java 镜像构建提速**：Dockerfile 增加全 reactor/单模块依赖闭包双路径；共享测试基础设施拆为 `batch-test-support`，镜像打包不再编译测试源码；补充 Buildx Bake 构建 DAG 与 GitHub Actions 远程缓存。
 - **容器环境标识统一**：普通本地 Compose 栈固定使用 `batch-platform`，Docker 观测标签和 Kafka UI 集群名按环境注入，生产 Helm overlay 显式使用 `production`。
 - **配置与运行参数治理**：运行时超时、SQL/配置边界和安全开关进一步外置；Compose、Helm、应用默认值、Feature Switch registry 和 CI 同步检查保持一致。
+- **S3 兼容对象存储治理**：对象存储运行配置从本地 MinIO 绑定收敛为通用 S3-compatible 后端契约，补齐 endpoint、path-style、checksum、重试、桶自动创建和生产 fail-close 的 Compose/Helm/env 对齐；集成测试默认仍使用 MinIO Testcontainers，同时支持外部 S3 兼容端点，并新增 RustFS、SeaweedFS 和迁移一致性 POC 脚本。
 - **安全门禁与依赖治理**：强化 Helm workload 安全检查、生产凭据 fail-close、SQL 解析边界、文件完整性校验和依赖许可证/安全扫描；示例项目与 SDK 依赖同步安全修复。
 - **Worker 与控制面稳定性**：收紧 Pipeline 定义只读访问，修复 orchestrator HA 协调和 retry schedule 状态转换，稳定 Docker Sim、E2E fixture 与多模块构建链路。
 - **Orchestrator 持久化与吞吐**：claim/report 主路径采用批量 CAS、`UPDATE ... RETURNING`、实例增量计数和按任务规模分级持久化，降低控制面数据库往返与重复聚合。

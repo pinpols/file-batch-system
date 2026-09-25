@@ -15,8 +15,15 @@
 | `access-key` | `BATCH_S3_ACCESS_KEY` | 访问密钥 ID（腾讯 COS 为 SecretId） |
 | `secret-key` | `BATCH_S3_SECRET_KEY` | 秘密访问密钥 |
 | `bucket` | `BATCH_S3_BUCKET` | 默认 bucket |
-| `region` | `BATCH_S3_REGION` | **AWS/OSS/COS 走 SigV4 必填**;自建 MinIO/Ceph 留空 |
+| `region` | `BATCH_S3_REGION` | **AWS/OSS/COS 走 SigV4 必填**;自建 S3 兼容服务可留空，运行时回退 `us-east-1` |
 | `auto-create-bucket` | `BATCH_S3_AUTO_CREATE_BUCKET` | bucket 不存在时自动创建。自建默认 `true`;**托管云设 `false`**(bucket 预建、凭据无 CreateBucket 权限) |
+| `path-style-enabled` | `BATCH_S3_PATH_STYLE_ENABLED` | 自建 S3 兼容服务通常设 `true`;AWS S3 标准域名、部分云厂商可设 `false` |
+| `request-checksum-calculation` | `BATCH_S3_REQUEST_CHECKSUM_CALCULATION` | 默认 `WHEN_REQUIRED`,避免非 AWS 后端不兼容 aws-chunked trailer |
+| `response-checksum-validation` | `BATCH_S3_RESPONSE_CHECKSUM_VALIDATION` | 默认 `WHEN_REQUIRED`,与请求侧保持兼容优先 |
+| `connect-timeout-ms` | `BATCH_S3_CONNECT_TIMEOUT_MS` | 连接超时 |
+| `read-timeout-ms` | `BATCH_S3_READ_TIMEOUT_MS` | socket 读写空闲超时 |
+| `max-attempts` | `BATCH_S3_MAX_ATTEMPTS` | `0` 表示使用 AWS SDK 默认重试策略 |
+| `adaptive-retry` | `BATCH_S3_ADAPTIVE_RETRY` | 是否启用 SDK 自适应重试 |
 
 ## 各后端示例
 
@@ -26,8 +33,8 @@ batch.storage.s3:
   endpoint: http://minio:9000
   access-key: minioadmin
   secret-key: ${BATCH_S3_SECRET_KEY}
-  bucket: batch-prod
-  # region 留空,auto-create-bucket 默认 true
+	  bucket: batch-prod
+	  # region 留空,auto-create-bucket/path-style-enabled 默认 true
 ```
 
 **AWS S3**
@@ -37,8 +44,9 @@ batch.storage.s3:
   region: us-east-1
   access-key: ${AWS_ACCESS_KEY_ID}
   secret-key: ${AWS_SECRET_ACCESS_KEY}
-  bucket: my-batch-bucket
-  auto-create-bucket: false
+	  bucket: my-batch-bucket
+	  auto-create-bucket: false
+	  path-style-enabled: false
 ```
 
 **阿里云 OSS（S3 兼容模式）**
@@ -67,8 +75,10 @@ batch.storage.s3:
 
 1. **region 必填**:AWS/OSS/COS 缺 region 会 SigV4 签名失败(`SignatureDoesNotMatch` / `AuthorizationHeaderMalformed`)。
 2. **建桶权限**:托管云务必 `auto-create-bucket: false` + bucket 预建,否则启动期撞 `AccessDenied`。
-3. **COS bucket 名**:强制 `name-APPID` 格式。
-4. **HTTPS**:托管云一律 `https://`。
+3. **path-style**:自建 S3 兼容服务通常用 `true`;AWS S3 标准域名推荐 `false`。
+4. **checksum**:多数 S3 兼容后端不支持 AWS SDK v2 的 aws-chunked trailer,默认 `WHEN_REQUIRED` 更稳。
+5. **COS bucket 名**:强制 `name-APPID` 格式。
+6. **HTTPS**:托管云一律 `https://`。
 
 ## 本地 MinIO `mc` 常用命令
 

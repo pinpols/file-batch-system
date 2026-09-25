@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * <p>触发时机：EXPORT job 的 task 终态 SUCCESS 后调用。判定逻辑只看 payload 里 worker 已经填的 {@code recordCount} 与
  * {@code fileSizeBytes}：均为 0 时记 EXPORT_FILE_EMPTY 失败，避免"任务 status=SUCCESS 但导出空文件"被误当成正常完成。
  *
- * <p>不做：开桶读 MinIO 二次确认大小（保持 SPI 实现轻量；二次确认走 ExportContentVerificationE2eIT 在端到端层面覆盖）。
+ * <p>不做：开桶读对象存储二次确认大小（保持 SPI 实现轻量；二次确认走 ExportContentVerificationE2eIT 在端到端层面覆盖）。
  */
 @Component
 public class ExportFileNonEmptyVerifier implements ContentVerifier {

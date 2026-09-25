@@ -38,6 +38,14 @@ data:
   BATCH_S3_ENDPOINT: {{ .Values.objectStorage.endpoint | quote }}
   BATCH_S3_BUCKET: {{ .Values.objectStorage.bucket | quote }}
   BATCH_S3_REGION: {{ .Values.objectStorage.region | default "" | quote }}
+  BATCH_S3_AUTO_CREATE_BUCKET: {{ .Values.objectStorage.autoCreateBucket | default true | quote }}
+  BATCH_S3_PATH_STYLE_ENABLED: {{ .Values.objectStorage.pathStyleEnabled | default true | quote }}
+  BATCH_S3_REQUEST_CHECKSUM_CALCULATION: {{ .Values.objectStorage.requestChecksumCalculation | default "WHEN_REQUIRED" | quote }}
+  BATCH_S3_RESPONSE_CHECKSUM_VALIDATION: {{ .Values.objectStorage.responseChecksumValidation | default "WHEN_REQUIRED" | quote }}
+  BATCH_S3_CONNECT_TIMEOUT_MS: {{ .Values.objectStorage.connectTimeoutMs | default 5000 | quote }}
+  BATCH_S3_READ_TIMEOUT_MS: {{ .Values.objectStorage.readTimeoutMs | default 30000 | quote }}
+  BATCH_S3_MAX_ATTEMPTS: {{ .Values.objectStorage.maxAttempts | default 0 | quote }}
+  BATCH_S3_ADAPTIVE_RETRY: {{ .Values.objectStorage.adaptiveRetry | default false | quote }}
   BATCH_ALERT_AM_EMIT_ENABLED: {{ (.Values.alertmanager).enabled | default false | quote }}
   BATCH_ALERT_AM_EMIT_ENDPOINT: {{ (.Values.alertmanager).endpoint | default "" | quote }}
   BATCH_CONSOLE_ALERTMANAGER_ENABLED: {{ ((.Values.alertmanager).console).enabled | default true | quote }}

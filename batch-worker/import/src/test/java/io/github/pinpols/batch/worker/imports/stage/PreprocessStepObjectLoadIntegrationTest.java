@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
-import io.github.pinpols.batch.testing.ObjectStoreContainer;
+import io.github.pinpols.batch.testing.MinioObjectStoreContainer;
 import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -35,7 +35,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
- * ADR-sim #382 回归:PREPROCESS 从对象存储拉取大文件(storagePath→MinIO)。
+ * ADR-sim #382 回归:PREPROCESS 从对象存储拉取大文件(storagePath→object store)。
  *
  * <p>覆盖 {@code PreprocessStep.resolveRawBytes} 的对象拉取分支 + 早期 "raw payload is blank" 校验放行 storagePath
  * 情形(回归 #382:之前缺该分支 + 校验会拦截无内联内容的对象路径 import)。用真 MinIO 容器, 投对象 → 触发 PREPROCESS → 断言下载内容流入
@@ -44,7 +44,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Tag("integration")
 class PreprocessStepObjectLoadIntegrationTest {
 
-  private static ObjectStoreContainer objectStore;
+  private static MinioObjectStoreContainer objectStore;
   private static String bucket;
   private static S3Client client;
   private static S3Presigner presigner;

@@ -51,7 +51,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @EnabledIf("s3BackendActive")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
-  /** fixture 直接写 MinIO（S3Client），filesystem 后端下自动跳过。 */
+  /** fixture 直接写对象存储（S3Client），filesystem 后端下自动跳过。 */
   static boolean s3BackendActive() {
     return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
   }
@@ -217,9 +217,9 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     return S3Client.builder()
         .endpointOverride(URI.create(s3Endpoint()))
         .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create("minioadmin", "minioadmin123")))
-        .forcePathStyle(true)
-        .region(Region.US_EAST_1)
+            AwsBasicCredentials.create(s3AccessKey(), s3SecretKey())))
+        .forcePathStyle(s3PathStyleEnabled())
+        .region(Region.of(s3Region()))
         .build();
   }
 

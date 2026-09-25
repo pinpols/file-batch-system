@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
  * <p><b>阈值</b>（{@link SkipThresholdMode}）：{@code ABSOLUTE}（最大跳过条数）或 {@code PERCENTAGE}（最大跳过率），超阈值通过
  * {@link #recordThresholdViolation} 写入坏记录 并在上下文中标记 {@code skipThresholdExceeded=true}。
  *
- * <p><b>坏记录写入数据库</b>：每条坏记录同步写入 {@code file_error_record}， 并按 {@link ErrorSinkType} 决定是否额外写入 MinIO
+ * <p><b>坏记录写入数据库</b>：每条坏记录同步写入 {@code file_error_record}， 并按 {@link ErrorSinkType} 决定是否额外写入对象存储
  * 错误文件（{@link ImportErrorOutputStorage}）。 含 {@code error_line_masking_enabled} 配置时对错误信息和原始记录脱敏。
  *
  * <p>{@link #finalizeErrorOutput} 在 pipeline 结束时汇总统计并更新 {@code file_record} 元数据 + 审计。

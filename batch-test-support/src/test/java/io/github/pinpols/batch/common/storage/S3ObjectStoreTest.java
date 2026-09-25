@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.testing.ObjectStoreContainer;
+import io.github.pinpols.batch.testing.MinioObjectStoreContainer;
 import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -30,7 +30,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  */
 class S3ObjectStoreTest {
 
-  private static ObjectStoreContainer objectStore;
+  private static MinioObjectStoreContainer objectStore;
   private static S3ObjectStore store;
   private static String bucket;
 

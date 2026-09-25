@@ -12,7 +12,7 @@ import java.util.function.Supplier;
  * 指标装饰层:给每个对象存储操作打点(延迟 + 成功/失败计数),挂在最外层(加密/raw 之外)。计量名 {@code batch.objectstore.op},按 {@code
  * operation}(put/get/list/...)与 {@code outcome}(success/error)分标签。
  *
- * <p>对象存储是热路径(ingress/export/dispatch/治理),per-op 指标便于发现后端抖动/慢调用——尤其在评估更换 MinIO 后端时,
+ * <p>对象存储是热路径(ingress/export/dispatch/治理),per-op 指标便于发现后端抖动/慢调用——尤其在评估更换 S3 兼容后端时,
  * 可直接对比新旧后端的延迟分布。纯观测,不改语义:任何方法抛出原异常照常向上传播,仅在 finally 记录耗时与结果标签。
  */
 public class MeteredObjectStore implements BatchObjectStore {

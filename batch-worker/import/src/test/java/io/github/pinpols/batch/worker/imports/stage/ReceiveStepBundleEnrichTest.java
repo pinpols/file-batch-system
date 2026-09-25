@@ -80,7 +80,7 @@ class ReceiveStepBundleEnrichTest {
     Map<String, Object> fr = new LinkedHashMap<>();
     fr.put("storage_path", "ingress/t1/g1/risk.csv");
     fr.put("storage_bucket", "batch-ingress");
-    fr.put("storage_type", "MINIO");
+    fr.put("storage_type", "S3");
     fr.put("file_format_type", "CSV");
     fr.put("charset", "UTF-8");
     fr.put("file_name", "risk.csv");
@@ -99,7 +99,7 @@ class ReceiveStepBundleEnrichTest {
 
     assertThat(enriched.storagePath()).isEqualTo("ingress/t1/g1/risk.csv");
     assertThat(enriched.storageBucket()).isEqualTo("batch-ingress");
-    assertThat(enriched.storageType()).isEqualTo("MINIO");
+    assertThat(enriched.storageType()).isEqualTo("S3");
     assertThat(enriched.fileFormatType()).isEqualTo("CSV");
     assertThat(enriched.charset()).isEqualTo("UTF-8");
     assertThat(enriched.fileName()).isEqualTo("risk.csv");

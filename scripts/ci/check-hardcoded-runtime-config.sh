@@ -74,7 +74,7 @@ assert_no_matches \
 
 assert_no_matches \
   'MinIO 测试容器必须通过 TestObjectStoreContainers 创建' \
-  'new[[:space:]]+ObjectStoreContainer' \
+  'new[[:space:]]+MinioObjectStoreContainer' \
   'batch-test-support/src/main/**/*.java' '*/src/test/**/*.java' \
   ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestObjectStoreContainers.java'
 
@@ -84,7 +84,7 @@ assert_no_matches \
   'batch-test-support/src/main/**/*.java' '*/src/test/**/*.java' \
   ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestKafkaContainers.java' \
   ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestValkeyContainers.java' \
-  ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/ObjectStoreContainer.java'
+  ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/MinioObjectStoreContainer.java'
 
 assert_no_matches \
   'worker 并发配置键与默认值只能由 WorkerRuntimeConfiguration 维护' \

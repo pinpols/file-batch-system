@@ -97,7 +97,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
    *   <li>{@code content_encryption_enabled=true}（且非 bypass-mode）：不能直接暴露 S3 presign URL，
    *       因为原始对象是加密字节；改返回 {@code /api/console/files/{id}/download} 走 console 代理， 由 console 侧解密 +
    *       审计后再吐给前端。
-   *   <li>普通文件：直连 MinIO 生成有 TTL 的 presign URL（下限 60s）。
+   *   <li>普通文件：直连对象存储生成有 TTL 的 presign URL（下限 60s）。
    * </ul>
    *
    * <p>若模板配置 {@code download_requires_approval}，则请求必须带 {@code approvalId}，否则 400。 所有成功路径都写 {@code

@@ -343,6 +343,14 @@ switches:
       - BATCH_STORAGE_FILESYSTEM_DEFAULT_PRESIGN_TTL
       - BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES
       - BATCH_S3_REGION
+      - BATCH_S3_AUTO_CREATE_BUCKET
+      - BATCH_S3_PATH_STYLE_ENABLED
+      - BATCH_S3_REQUEST_CHECKSUM_CALCULATION
+      - BATCH_S3_RESPONSE_CHECKSUM_VALIDATION
+      - BATCH_S3_CONNECT_TIMEOUT_MS
+      - BATCH_S3_READ_TIMEOUT_MS
+      - BATCH_S3_MAX_ATTEMPTS
+      - BATCH_S3_ADAPTIVE_RETRY
     composeRequired: true
     helmRequired: true
 
@@ -380,13 +388,6 @@ switches:
     module: all
     env:
       - BATCH_STORAGE_STARTUP_CHECK_ENABLED
-    composeRequired: false
-    helmRequired: false
-
-  - key: batch.storage.s3.auto-create-bucket
-    module: all
-    env:
-      - BATCH_S3_AUTO_CREATE_BUCKET
     composeRequired: false
     helmRequired: false
 
