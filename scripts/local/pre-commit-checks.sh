@@ -92,9 +92,31 @@ if ((docs_changed == 1)); then
 fi
 if ((loc_affecting_changed == 1)); then
   update_loc_snapshot() {
-    "$PYTHON_BIN" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
+    local staged_tree
+    local snapshot_commit
+    local tmp_dir
+    local tmp_worktree
+
+    staged_tree="$(git write-tree)"
+    snapshot_commit="$(git commit-tree "$staged_tree" -p HEAD -m pre-commit-loc-snapshot)"
+    tmp_dir="$(mktemp -d)"
+    tmp_worktree="$tmp_dir/worktree"
+    cleanup_loc_worktree() {
+      git worktree remove "$tmp_worktree" --force >/dev/null 2>&1 || true
+      rm -rf "$tmp_dir"
+    }
+    git worktree add --detach "$tmp_worktree" "$snapshot_commit" >/dev/null
+    if ! (
+      cd "$tmp_worktree"
+      "$PYTHON_BIN" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null
+      "$PYTHON_BIN" scripts/ci/check-loc-snapshot.py
+    ); then
+      cleanup_loc_worktree
+      return 1
+    fi
+    cp "$tmp_worktree/docs/stats/loc-current-lean.md" docs/stats/loc-current-lean.md
+    cleanup_loc_worktree
     git add docs/stats/loc-current-lean.md
-    "$PYTHON_BIN" scripts/ci/check-loc-snapshot.py
   }
   gate_run PRE_COMMIT_LOC_SNAPSHOT "代码量快照同步" update_loc_snapshot
 fi
