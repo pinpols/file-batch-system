@@ -106,7 +106,7 @@ jobs:
         if: matrix.lang == 'go'
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26.x'
           cache: false
       - name: Go conformance + parity + vet
         if: matrix.lang == 'go'
@@ -334,7 +334,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26.x'
           cache: false
       - name: vet + 模块可解析(Go 无打包产物,发布即 tag)
         working-directory: sdk/go

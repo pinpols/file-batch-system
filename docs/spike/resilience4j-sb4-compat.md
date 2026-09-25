@@ -1,8 +1,8 @@
-# Spike:Resilience4j 在 Spring Boot 4 / JDK 25 上的兼容性
+# Resilience4j 与 Spring Boot 4 兼容性
 
-**日期**:2026-05-30
+**初始验证**:2026-05-30；版本复核：2026-09-25
 **对应 epic**:P1-B Phase 2(从 `DownstreamFallback` 升级到 Resilience4j circuit-breaker)
-**结论**:✅ **可行**。R4J 2.3.0 在 SB 4.0.6 + JDK 25 上能加载 autoconfig、注册 bean、状态机正常工作、Micrometer 自动埋点正常。
+**当前结论**:使用 Resilience4j **2.4.0 的 `resilience4j-spring-boot4` 模块**。`resilience4j-spring-boot3` 不能用于 Spring Boot 4；2.4.0 的 Boot 3 verifier 会拒绝启动。
 
 ---
 
@@ -20,23 +20,23 @@
 
 | 维度 | 版本 |
 |---|---|
-| Spring Boot | 4.0.6 |
-| Spring Framework | 7.x(SB 4 默认) |
-| JDK | 25 |
-| Resilience4j | 2.3.0(maven central 最新,2025-01) |
-| 依赖 | `resilience4j-spring-boot3` + `resilience4j-micrometer` |
-| 传递依赖 | `resilience4j-spring6`(Spring 框架 6 接口实现层) |
+| Spring Boot | 4.1.1 |
+| Spring Framework | 7.x (Spring Boot 4 BOM) |
+| JDK | 21 (project compiler baseline) |
+| Resilience4j | 2.4.0 |
+| Boot integration | `resilience4j-spring-boot4` + `resilience4j-micrometer` |
+| Spring integration | `resilience4j-spring6` |
 
 ## 实施
 
 ### 加入 dependencyManagement(根 pom.xml)
 
 ```xml
-<resilience4j.version>2.3.0</resilience4j.version>
+<resilience4j.version>2.4.0</resilience4j.version>
 ...
 <dependency>
   <groupId>io.github.resilience4j</groupId>
-  <artifactId>resilience4j-spring-boot3</artifactId>
+  <artifactId>resilience4j-spring-boot4</artifactId>
   <version>${resilience4j.version}</version>
 </dependency>
 <dependency>
@@ -51,7 +51,7 @@
 ```xml
 <dependency>
   <groupId>io.github.resilience4j</groupId>
-  <artifactId>resilience4j-spring-boot3</artifactId>
+  <artifactId>resilience4j-spring-boot4</artifactId>
 </dependency>
 <dependency>
   <groupId>io.github.resilience4j</groupId>
@@ -62,7 +62,7 @@
 ### 验证测试
 
 `batch-console-api/src/test/java/.../spike/Resilience4jSb4CompatSpike.java`(89 行)
-用 `@ImportAutoConfiguration` 精确导 R4J 的 4 个核心 autoconfig,避开本项目 batch-common 的
+用 `@ImportAutoConfiguration` 精确导 Resilience4j 的核心自动配置，避开本项目 batch-common 的
 autoconfig(它们要 Clock / InformationSchemaMapper / DataSource 等无关 bean):
 
 ```java
@@ -85,7 +85,9 @@ autoconfig(它们要 Clock / InformationSchemaMapper / DataSource 等无关 bean
 | Micrometer 自动埋点出现(`resilience4j.circuitbreaker.*`) | ✅ |
 | `@CircuitBreaker` 注解 AOP 切面命中 RestClient | ⏳ **未验** — 需起 Web 上下文,留独立 PR |
 
-**测试输出**:`Tests run: 4, Failures: 0, Errors: 0`(8.1s)
+**历史测试输出**:`Tests run: 4, Failures: 0, Errors: 0`(8.1s, Resilience4j 2.3.0)。2026-09-25 将测试导入改为 2.4.0 Boot 4 包名；Boot 4 专用上下文冒烟测试通过。
+
+**不兼容路径**：2.4.0 的 `resilience4j-spring-boot3` 会因 Boot 4 verifier 抛出“only compatible with Spring Boot 3.x”。必须使用 `resilience4j-spring-boot4` 并采用 `io.github.resilience4j.springboot.*` 自动配置包名。
 
 ## 遇到问题记录
 

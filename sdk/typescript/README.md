@@ -2,7 +2,7 @@
 
 A tenant-facing Bring-Your-Own worker SDK for the file-batch-system platform, built as a **decision core**: a set of pure functions in `src/decide.ts` that map wire-protocol inputs (HTTP status codes, heartbeat directives, lease-renew responses, capacity and stop signals) to structured results whose fields match the closed `then.expect` vocabulary of the platform's anti-drift contract (`docs/sdk/byo-conformance-contract.md` §2, `docs/sdk/wire-protocol.md` §A/§B/§C). Constants are consumed from `docs/api/sdk-shared-constants.yaml` (never re-authored) and kept honest by a parity test; behavior is proven against the contract fixtures by a conformance runner. Real HTTP/Kafka IO wraps these pure functions in a later phase — phase 1 is the decision core plus its conformance proof. Zero runtime dependencies; tests use Node's built-in runner with native TypeScript type-stripping.
 
-**最低环境要求(消费方)**:**Node 22**(`engines.node`)—— 发布产物是编译后的 ES2023 `dist/*.js`(非原始 `.ts`),运行时零依赖;Kafka 适配器用可选 `kafkajs`(`optionalDependencies`)。开发/跑测试使用 Node 22 的原生 type-stripping 能力。
+**最低环境要求(消费方)**:**Node 22**(`engines.node`)。CI 覆盖 Node 22 和 24；发布产物是编译后的 ES2023 `dist/*.js`(非原始 `.ts`),运行时零依赖;Kafka 适配器用可选 `kafkajs`(`optionalDependencies`)。开发默认使用 Node 24，测试依赖 Node 原生 type-stripping。
 
 > **⚠️ 包名 `@batch/worker-sdk` 仍是占位 scope,尚未在 npm 注册,现在 `npm install @batch/worker-sdk` 装不了。** 发布前会改成真实 scope(计划形如 `@yourorg/batch-worker-sdk`,由仓库管理员建 npm org 后定,见 [`docs/sdk/RELEASING.md`](../../docs/sdk/RELEASING.md))。在此之前请用 workspace 引用(monorepo 内 `"@batch/worker-sdk": "workspace:*"`),**不要**深相对路径 import 源码。下文示例里的 `@batch/worker-sdk` 会随真实 scope 敲定同步更新。
 

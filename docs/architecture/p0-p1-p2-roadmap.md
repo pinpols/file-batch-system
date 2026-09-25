@@ -224,7 +224,7 @@ Stage 2/3 推迟,**不排进近期 roadmap**。理由:
 ```xml
 <dependency>
   <groupId>io.github.resilience4j</groupId>
-  <artifactId>resilience4j-spring-boot3</artifactId>
+  <artifactId>resilience4j-spring-boot4</artifactId>
 </dependency>
 ```
 

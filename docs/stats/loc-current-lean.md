@@ -1,12 +1,12 @@
 # 精简代码量统计 — 2026-09-25
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `d7b683336`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `9d45a6d25`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,531 | 466,150 | 235,028 | 50.4% |
+| 4,532 | 466,216 | 235,087 | 50.4% |
 
 ## 按用途
 
@@ -14,8 +14,8 @@
 |---|---:|---:|---:|---:|
 | prod | 2,641 | 240,851 | 109,909 | 45.6% |
 | test | 1,158 | 166,586 | 88,570 | 53.2% |
-| script | 589 | 43,421 | 27,068 | 62.3% |
-| config | 52 | 7,873 | 5,550 | 70.5% |
+| script | 590 | 43,499 | 27,127 | 62.4% |
+| config | 52 | 7,861 | 5,550 | 70.6% |
 | infra-config | 32 | 5,191 | 3,766 | 72.5% |
 | sql | 59 | 2,228 | 165 | 7.4% |
 
@@ -25,15 +25,15 @@
 |---|---:|---:|---:|---:|
 | Java | 3,353 | 342,960 | 173,874 | 50.7% |
 | Shell | 181 | 27,234 | 20,990 | 77.1% |
-| Python | 202 | 26,940 | 13,566 | 50.4% |
+| Python | 203 | 27,018 | 13,625 | 50.4% |
 | YAML | 95 | 12,044 | 9,004 | 74.8% |
-| XML | 169 | 20,606 | 6,372 | 30.9% |
+| XML | 169 | 20,593 | 6,371 | 30.9% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
 | Properties | 5 | 2,861 | 2,335 | 81.6% |
 | SQL | 426 | 11,191 | 1,439 | 12.9% |
 | Go | 34 | 6,955 | 1,281 | 18.4% |
-| TOML | 7 | 330 | 214 | 64.8% |
+| TOML | 7 | 331 | 215 | 65.0% |
 
 ## 最大文件（按 Lean logical LOC）
 
@@ -53,7 +53,7 @@
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
 | `scripts/local/start-all.sh` | script | Shell | 605 | 478 |
-| `pom.xml` | config | XML | 763 | 445 |
+| `pom.xml` | config | XML | 751 | 445 |
 | `scripts/local/sim-harness.sh` | script | Shell | 554 | 417 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 841 | 399 |
 | `scripts/dev/sonar-scan.sh` | script | Shell | 488 | 397 |

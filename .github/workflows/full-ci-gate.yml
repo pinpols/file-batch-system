@@ -187,6 +187,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
 
+      - name: SDK and frontend runtime alignment
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_SDK_RUNTIME_ALIGNMENT "SDK 与前端运行时版本对齐" -- python3 scripts/ci/check-sdk-runtime-alignment.py
+
       - name: Database comment coverage (diff-only)
         shell: bash
         run: |

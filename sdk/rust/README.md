@@ -14,7 +14,7 @@ runner drives all `docs/api/sdk-contract-fixtures` by routing off each fixture's
 
 **最低环境要求**:默认 feature 的零依赖核心为 **Rust 1.75+**(edition 2021，
 `Cargo.toml` 的 `rust-version` 为核心 MSRV 声明)。启用生产 `http` 或 `kafka`
-适配器时要求 **Rust 1.86+**，该下限来自当前锁定的可选依赖树；适配器 CI 使用 stable。
+适配器时要求 **Rust 1.88+**，该下限来自当前锁定的可选依赖树；适配器 CI 使用 stable。
 
 ## Layout
 

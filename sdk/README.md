@@ -27,9 +27,9 @@
 | 1 | **Java core**(`batch-worker-sdk`) | **JDK 21+** | `jackson-databind` / `kafka-clients` / `slf4j-api`(`lombok` 仅 provided 编译期) | jar 编译到 bytecode 21(`maven.compiler.release=21`,不随平台 25),租户在 LTS 上即可跑 |
 | 2 | **Java Spring starter**(`-spring-boot-starter`) | **JDK 21+** + 租户自带 **Spring Boot 3.x/4.x** | core + `spring-boot-autoconfigure`(版本随租户 SB,不锁定) | 仅 Spring 租户需要;非 Spring 直接用 core |
 | 3 | **Python**(`batch-worker-sdk`) | **3.12+** | `httpx>=0.27` / `pydantic` / `aiokafka` | async-only(现代 typing:`type` 语句 / PEP 695) |
-| 4 | **Go**(`batch-worker-sdk-go`) | **Go 1.25+** | 核心零依赖;Kafka 适配器 = 独立 nested module(`segmentio/kafka-go`) | 不用 Kafka 则不引该依赖 |
-| 5 | **TypeScript**(`@batch/worker-sdk`) | **Node 22**(active LTS) | 核心零依赖;Kafka = 可选 `kafkajs`(`optionalDependencies`) | 发布产物编译为 ES2023 JS(`dist/`),非原始 `.ts` |
-| 6 | **Rust**(`batch-worker-sdk` crate) | **Rust stable**(edition 2021) | 核心零依赖;`http`(reqwest+rustls)/ `kafka`(rdkafka)= 可选 feature | 默认 feature 全关 = std-only |
+| 4 | **Go**(`batch-worker-sdk-go`) | **Go 1.26+** | 核心零依赖;Kafka 适配器 = 独立 nested module(`segmentio/kafka-go`) | CI 覆盖 Go 1.26/1.27；不用 Kafka 则不引该依赖 |
+| 5 | **TypeScript**(`@batch/worker-sdk`) | **Node 22 或 24** | 核心零依赖;Kafka = 可选 `kafkajs`(`optionalDependencies`) | `engines` 仅允许两条 LTS major；CI 双版本验证 |
+| 6 | **Rust**(`batch-worker-sdk` crate) | **核心 Rust 1.75+** | 核心零依赖;`http`(reqwest+rustls)/ `kafka`(rdkafka)= 可选 feature | 锁定依赖下适配器需 Rust 1.88+；默认 feature 全关 = std-only |
 
 **通用前置(所有语言)**:
 - 网络可达平台：HTTP `/internal/*` + Kafka broker（`batch.task.dispatch.<tenant>.*`）
@@ -70,6 +70,8 @@ Java / Python SDK 提供 5 类 worker 的内建或抽象 handler：
 租户可以继承抽象基类，也可以直接使用 typed handler。Go / TS / Rust 不提供内置业务 handler，需由租户实现。
 
 ## 测试与验证
+
+Python 仓库开发与 CI 按 `sdk/python/uv.lock` 使用 `uv sync --locked`；CI 同时验证最低支持版本与当前稳定版本。其他语言使用各自的 manifest/lockfile，并由 [`docs/architecture/runtime-compatibility-contract-2026-09-01.md`](../docs/architecture/runtime-compatibility-contract-2026-09-01.md) 集中记录运行边界。
 
 | 范围 | 入口 | 说明 |
 |---|---|---|

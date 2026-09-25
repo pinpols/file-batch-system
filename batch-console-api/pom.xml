@@ -221,10 +221,10 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- SPIKE: Resilience4j SB4 兼容验证。结论见 docs/spike/resilience4j-sb4-compat.md -->
+        <!-- Spring Boot 4 integration; shared Resilience4j configuration remains managed in the parent. -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-spring-boot3</artifactId>
+            <artifactId>resilience4j-spring-boot4</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>

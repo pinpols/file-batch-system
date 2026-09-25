@@ -422,6 +422,10 @@ jobs:
         # 校验应用版本落点、环境镜像标签和四项核心 Testcontainers 镜像一致。
         run: bash scripts/ci/run-gate.sh PR_VERSION_ALIGNMENT "应用与基础设施版本对齐" -- bash scripts/ci/check-version-alignment.sh
 
+      - name: SDK and frontend runtime alignment
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_SDK_RUNTIME_ALIGNMENT "SDK 与前端运行时版本对齐" -- python3 scripts/ci/check-sdk-runtime-alignment.py
+
       - name: Helm PrometheusRule sync (告警规则 chart 副本 ↔ canonical)
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

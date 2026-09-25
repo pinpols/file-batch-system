@@ -6,8 +6,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <!-- R7 OSS 扫描：4.0.3 命中 8 个 CVE；4.1.0 包含 4.0.7 patch 修复并进入 4.1 release train。 -->
-        <version>4.1.0</version>
+        <!-- Stable patch release in the Spring Boot 4.1 line. -->
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -48,49 +48,40 @@
              embedded servlet container on the first patched 11.x release. -->
         <tomcat.version>11.0.25</tomcat.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <awssdk.version>2.31.78</awssdk.version>
+        <awssdk.version>2.55.5</awssdk.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
         <!-- Bucket4j:orchestrator 租户动作限流的真令牌桶(Redis 分布式后端,Lettuce 集成)。
              8.10+ groupId 迁 com.bucket4j、artifact 带 _jdk17 后缀;lettuce 模块对 lettuce-core 为 provided,
              复用本仓 spring-data-redis 传递的 lettuce 7.5.x。 -->
-        <bucket4j.version>8.14.0</bucket4j.version>
-        <!-- okhttp 升 5.0.0-alpha.16(2026-05-23 决策):虽然 Maven Central 上 5.x 仍只有 alpha
-             (latest 5.0.0-alpha.16,2025-05-29 发布,无 beta/rc/GA),但 Square 官方声明
-             "alpha 的 API 稳定性等同 RC,Square 自家 prod 已在使用"(见 okhttp 5 README)。
-             同时 mockwebserver 在 5.x 改名为 mockwebserver3(包名 mockwebserver3),
-             test 依赖同步切换。使用面:worker-dispatch HTTP/OSS 渠道(okhttp 客户端)+
-             worker-core report-outbox / http-task 测试(mockwebserver3)。
-             启动条件:5.x 释 GA tag 后去掉本注释。 -->
-        <okhttp.version>5.0.0-alpha.16</okhttp.version>
-        <okio.version>3.17.0</okio.version>
+        <bucket4j.version>8.20.0</bucket4j.version>
+        <!-- Keep the stable OkHttp 5 artifacts aligned; JVM classes are in okhttp-jvm. -->
+        <okhttp.version>5.5.0</okhttp.version>
+        <okio.version>3.18.2</okio.version>
         <!-- org.jetbrains:annotations(@Contract/@Nullable):batch-common Guard/Texts 编译期用。
              此前靠 minio→okhttp→kotlin-stdlib 传递带入,#401 删 minio 后改为显式直依赖。 -->
-        <jetbrains-annotations.version>17.0.0</jetbrains-annotations.version>
+        <jetbrains-annotations.version>26.1.0</jetbrains-annotations.version>
         <!-- JSR-305 @javax.annotation.Nullable:SonarJava S4449 只认声明级 @Nullable(JSpecify 的
              @Nullable 是 TYPE_USE,该规则不识别,见 utils/package-info.java 说明)。 -->
         <jsr305.version>3.0.2</jsr305.version>
-        <lombok.version>1.18.46</lombok.version>
+        <lombok.version>1.18.48</lombok.version>
         <mockito.version>5.20.0</mockito.version>
-        <mybatis-spring-boot.version>4.0.1</mybatis-spring-boot.version>
-        <!-- spring-ai 暂留 2.0.0-M3(milestone)(2026-05-23 状态):2.x 系列截至当日只发了 M3,
-             无 2.0.0 GA;1.x 已 GA(latest 1.1.7)但与 2.x API 不同。
-             启动条件:Spring AI 团队发布 2.0.0 GA 后整体升;或决定降到 1.x stable 也可。 -->
-        <spring-ai.version>2.0.0-M3</spring-ai.version>
-        <jsqlparser.version>5.3</jsqlparser.version>
+        <mybatis-spring-boot.version>4.1.0</mybatis-spring-boot.version>
+        <spring-ai.version>2.0.1</spring-ai.version>
+        <jsqlparser.version>5.4</jsqlparser.version>
         <shedlock.version>6.3.0</shedlock.version>
-        <spring-retry.version>2.0.12</spring-retry.version>
+        <spring-retry.version>2.0.13</spring-retry.version>
         <!-- OTel Logback appender 与 Spring Boot 4.1 的 OTel 1.62 API 兼容；
              instrumentation 项目尚以 alpha 后缀发布该独立工件。 -->
         <opentelemetry-instrumentation.version>2.25.0-alpha</opentelemetry-instrumentation.version>
         <!-- ArchUnit:守护 docs/agent-baseline.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
-        <archunit.version>1.4.2</archunit.version>
-        <poi.version>5.4.0</poi.version>
+        <archunit.version>1.5.0</archunit.version>
+        <poi.version>5.5.1</poi.version>
         <!-- commons-compress:import 预处理 UNTAR / UNTAR_GZ 用(tar 容器解包);JDK 自带 GZIP/ZIP,
-             tar 无标准库支持。版本对齐 POI 5.4.0 传递的 commons-compress,避免双版本漂移。 -->
-        <commons-compress.version>1.27.1</commons-compress.version>
+             tar 无标准库支持。版本对齐 POI 5.5.1 传递的 commons-compress,避免双版本漂移。 -->
+        <commons-compress.version>1.28.0</commons-compress.version>
         <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
              Spring Boot 默认传递依赖，强制升到已验证的安全 patch 版本。
              - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
@@ -98,22 +89,21 @@
                bypass (netty-handler) + CVE-2026-44894 QUIC token handler (netty-codec-classes-quic)
              - netty 4.2.15.Final → 4.2.16.Final: CVE-2026-55831/55833/56745/56816/59901
              - netty 4.2.16.Final → 4.2.17.Final: CVE-2026-75595 netty-handler
-             - bcprov-jdk18on 1.81 → 1.85: CVE-2026-5598、CVE-2026-8763、CVE-2026-13506
+             - bcprov-jdk18on 1.81 → 1.86: security fixes and current compatible release
              - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
-             - postgresql 42.7.11 → 42.7.12: CVE-2026-54291。 -->
+             - postgresql 42.7.11 → 42.7.12: CVE-2026-54291
+             - postgresql 42.7.13: SCRAM channel-binding downgrade fix and protocol improvements。 -->
         <netty.version>4.2.17.Final</netty.version>
-        <bouncycastle.version>1.85</bouncycastle.version>
+        <bouncycastle.version>1.86</bouncycastle.version>
         <async-http-client.version>2.16.1</async-http-client.version>
-        <postgresql.version>42.7.12</postgresql.version>
+        <postgresql.version>42.7.13</postgresql.version>
         <!-- CVE-2026-54399 / CVE-2026-54428: Anthropic client 2.16.1 经 Spring AI BOM
              传入 httpcore5 5.4.2；5.4.3 起包含修复。统一覆盖 core 与 HTTP/2 变体，避免
              仅覆盖一个工件后依赖树再次漂移。 -->
         <httpcomponents-core5.version>5.4.3</httpcomponents-core5.version>
 
-        <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
-             2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4 + JDK25 是否能跑。
-             结论见 docs/spike/resilience4j-sb4-compat.md。 -->
-        <resilience4j.version>2.3.0</resilience4j.version>
+        <!-- Resilience4j version validated against Spring Boot 4.1 and Java 21. -->
+        <resilience4j.version>2.4.0</resilience4j.version>
     </properties>
 
     <dependencyManagement>
@@ -213,8 +203,7 @@
                 <artifactId>jsqlparser</artifactId>
                 <version>${jsqlparser.version}</version>
             </dependency>
-            <!-- POI Excel:batch-common (test) + worker-import/export + console-api 共用,
-                 之前散在 4 个 module 写死 5.4.0,bump 时易遗漏 → 收敛 parent。 -->
+            <!-- POI Excel:batch-common (test) + worker-import/export + console-api 共用。 -->
             <dependency>
                 <groupId>org.apache.poi</groupId>
                 <artifactId>poi-ooxml</artifactId>
@@ -274,10 +263,9 @@
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
             </dependency>
-            <!-- SPIKE -->
             <dependency>
                 <groupId>io.github.resilience4j</groupId>
-                <artifactId>resilience4j-spring-boot3</artifactId>
+                <artifactId>resilience4j-spring-boot4</artifactId>
                 <version>${resilience4j.version}</version>
             </dependency>
             <dependency>
@@ -297,7 +285,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>3.6.2</version>
+                <version>3.6.3</version>
                 <executions>
                     <execution>
                         <id>enforce-rules</id>
@@ -419,7 +407,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
-                <version>1.7.3</version>
+                <version>1.8.0</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>resolveCiFriendliesOnly</flattenMode>
@@ -457,7 +445,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-pmd-plugin</artifactId>
-                    <version>3.27.0</version>
+                    <version>3.28.0</version>
                     <configuration>
                         <rulesets>
                             <ruleset>${maven.multiModuleProjectDirectory}/build/pmd-ruleset.xml</ruleset>
@@ -513,7 +501,7 @@ $1$2 $4 $5(</replacement>
                 <plugin>
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>
-                    <version>0.8.14</version>
+                    <version>0.8.15</version>
                     <executions>
                         <!-- 测试执行前挂载 agent，收集覆盖率数据 -->
                         <execution>
@@ -526,7 +514,7 @@ $1$2 $4 $5(</replacement>
                                     JaCoCo 0.8.14 ASM instrumentation 对 jsqlparser 生成的超大方法
                                     (CCJSqlParserTokenManager.jjMoveNfa_0) 会抛 MethodTooLargeException,
                                     导致 fork JVM 加载失败、orchestrator IT 大面积连环挂(2026-05-30 真因)。
-                                    第三方 lib coverage 本就无收集意义,exclude 它即可。升 0.8.15+ 时复核。
+                                    已升级至 0.8.15；仍排除生成的第三方解析器代码，不纳入产品覆盖率。
                                 -->
                                 <excludes>
                                     <exclude>net/sf/jsqlparser/**</exclude>
@@ -619,7 +607,7 @@ $1$2 $4 $5(</replacement>
                     <plugin>
                         <groupId>org.cyclonedx</groupId>
                         <artifactId>cyclonedx-maven-plugin</artifactId>
-                        <version>2.9.1</version>
+                        <version>2.9.3</version>
                         <inherited>false</inherited>
                         <executions>
                             <execution>
@@ -691,7 +679,7 @@ $1$2 $4 $5(</replacement>
                         <plugin>
                             <groupId>com.github.spotbugs</groupId>
                             <artifactId>spotbugs-maven-plugin</artifactId>
-                            <version>4.9.8.3</version>
+                            <version>4.10.4.1</version>
                             <!--
                               注意:SpotBugs core 4.9.x 支持到 Java 23 (bytecode v67)。
                               本项目 maven.compiler.release=21 (v65,2026-06 由 25 降级)在支持

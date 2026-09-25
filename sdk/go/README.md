@@ -10,7 +10,7 @@ contract fixtures, plus the cross-language shared constants kept honest against
 the conformance runner drives all `docs/api/sdk-contract-fixtures` by routing off
 each fixture's `when` shape (never `then.expect`).
 
-**最低环境要求**:**Go 1.25+**(`go.mod` go directive)。核心 stdlib-only 零依赖;Kafka 适配器是独立 nested module(`kafka/`,依赖 `segmentio/kafka-go`),不用 Kafka 则不引入。
+**最低环境要求**:**Go 1.26+**(`go.mod` go directive)。CI 覆盖最低支持的 Go 1.26 和当前稳定版 Go 1.27。核心 stdlib-only 零依赖;Kafka 适配器是独立 nested module(`kafka/`,依赖 `segmentio/kafka-go`),不用 Kafka 则不引入。
 
 ## Test
 

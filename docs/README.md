@@ -16,7 +16,7 @@
 
 | # | 目录 | 视角 | 关键入口 |
 |---|---|---|---|
-| 01 | [architecture/](./architecture/README.md) | 工程向 / 运行态架构 | `system-flow-overview.md` 一图看完整链路 |
+| 01 | [architecture/](./architecture/README.md) | 工程向 / 运行态架构 | [运行时兼容约束](./architecture/runtime-compatibility-contract-2026-09-01.md) / `system-flow-overview.md` |
 | 02 | [design/](./design/README.md) | 业务向 / 静态设计 | `database-schema-guide.md` 表目录与关系图 |
 | 03 | [api/](./api/README.md) | 前后端契约 | `console-api-protocol.md` + OpenAPI |
 | 04 | [runbook/](./runbook/README.md) | 运维 SOP（应急 / 部署 / 容量 / 灰度 / 观测）| `incident-response.md` + `feature-switches.md` |

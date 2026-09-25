@@ -1,4 +1,4 @@
 module github.com/pinpols/file-batch-system/sdk/go
 
 
-go 1.25
+go 1.26.0
