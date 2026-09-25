@@ -124,7 +124,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   // ─── COMPUTE ─────────────────────────────────────────────────────────────────
 
   @Override
+  @Transactional(transactionManager = "processBusinessTransactionManager")
   public ProcessStageResult compute(ProcessJobContext context) {
+    RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     Map<String, Object> attrs = context.getAttributes();
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
@@ -235,7 +237,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   // ─── VALIDATE ────────────────────────────────────────────────────────────────
 
   @Override
+  @Transactional(transactionManager = "processBusinessTransactionManager")
   public ProcessStageResult validate(ProcessJobContext context) {
+    RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
     if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
@@ -335,7 +339,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   // ─── FEEDBACK ────────────────────────────────────────────────────────────────
 
   @Override
+  @Transactional(transactionManager = "processBusinessTransactionManager")
   public ProcessStageResult feedback(ProcessJobContext context) {
+    RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     String batchKey = requireBatchKey(context);
     SqlTransformComputeSpec spec = parsedSpec(context);
     if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {

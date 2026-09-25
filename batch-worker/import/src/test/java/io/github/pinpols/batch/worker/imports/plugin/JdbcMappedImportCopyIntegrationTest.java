@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.imports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import java.math.BigDecimal;
@@ -12,11 +14,14 @@ import java.sql.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -58,6 +63,7 @@ class JdbcMappedImportCopyIntegrationTest {
           PRIMARY KEY (tenant_id, biz_date, customer_no)
         )
         """);
+    jdbcTemplate.execute("ALTER TABLE biz.copy_import_customer ENABLE ROW LEVEL SECURITY");
     jdbcTemplate.execute("""
         CREATE TABLE biz.copy_import_customer_part (
           tenant_id text NOT NULL,
@@ -260,6 +266,96 @@ class JdbcMappedImportCopyIntegrationTest {
     assertThat(row.get("remark")).isEqualTo("updated");
   }
 
+  @Test
+  void rlsProtectedCopyUsesRealTenantPolicyWithNonPrivilegedRole() throws Exception {
+    String role = "copy_import_rls_" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.execute(
+        "CREATE ROLE " + role + " LOGIN PASSWORD 'test-password'" + " NOSUPERUSER NOBYPASSRLS");
+    jdbcTemplate.execute("GRANT USAGE ON SCHEMA biz TO " + role);
+    jdbcTemplate.execute("GRANT SELECT, INSERT ON biz.copy_import_customer TO " + role);
+    jdbcTemplate.execute("ALTER TABLE biz.copy_import_customer FORCE ROW LEVEL SECURITY");
+    jdbcTemplate.execute("""
+        CREATE POLICY tenant_isolation_test ON biz.copy_import_customer
+          AS PERMISSIVE
+          FOR ALL
+          TO PUBLIC
+          USING (tenant_id = current_setting('app.tenant_id', true))
+          WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
+        """);
+
+    DriverManagerDataSource rlsDataSource = new DriverManagerDataSource();
+    rlsDataSource.setDriverClassName("org.postgresql.Driver");
+    rlsDataSource.setUrl(POSTGRES.getJdbcUrl());
+    rlsDataSource.setUsername(role);
+    rlsDataSource.setPassword("test-password");
+    JdbcTemplate rlsJdbcTemplate = new JdbcTemplate(rlsDataSource);
+    JdbcMappedImportSecurityProperties security = new JdbcMappedImportSecurityProperties();
+    security.setAllowedSchemas(List.of("biz"));
+    GenericJdbcMappedImportLoadPlugin rlsPlugin =
+        new GenericJdbcMappedImportLoadPlugin(rlsDataSource, new ObjectMapper(), security);
+
+    Map<String, Object> roleAttributes = rlsJdbcTemplate.queryForMap("""
+        SELECT r.rolsuper, r.rolbypassrls
+        FROM pg_roles r
+        WHERE r.rolname = current_user
+        """);
+    assertThat(roleAttributes.get("rolsuper")).isEqualTo(false);
+    assertThat(roleAttributes.get("rolbypassrls")).isEqualTo(false);
+
+    ImportLoadContext context = new ImportLoadContext(
+        "t1",
+        "IMPORT_CUSTOMER",
+        "trace-rls",
+        "worker-1",
+        "customers.csv",
+        "BATCH-RLS",
+        "2026-06-07",
+        "CUSTOMER",
+        null,
+        "TPL-COPY",
+        templateConfig());
+    Map<String, Object> row = Map.of(
+        "customerNo", "RLS-ALLOWED",
+        "customerName", "Tenant one",
+        "amount", "10.50",
+        "note", "policy checked");
+
+    assertThat(rlsPlugin.loadChunk(context, List.of(row))).isEqualTo(1);
+    assertThat(countVisibleRows(rlsDataSource, "t1", "RLS-ALLOWED")).isEqualTo(1);
+    assertThat(countVisibleRows(rlsDataSource, "t2", "RLS-ALLOWED")).isZero();
+
+    RlsTenantContextHolder.set("t2");
+    assertThatThrownBy(() -> rlsPlugin.loadChunk(context, List.of(rowWithCustomerNo("RLS-DENIED"))))
+        .hasStackTraceContaining("row-level security");
+    assertThat(jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM biz.copy_import_customer WHERE customer_no='RLS-DENIED'",
+            Integer.class))
+        .isZero();
+  }
+
+  private int countVisibleRows(DriverManagerDataSource source, String tenantId, String customerNo) {
+    RlsTenantContextHolder.set(tenantId);
+    TransactionTemplate transaction =
+        new TransactionTemplate(new DataSourceTransactionManager(source));
+    return transaction.execute(status -> {
+      RlsTenantSessionSupport.applyIfPresent(source);
+      return new JdbcTemplate(source)
+          .queryForObject(
+              "SELECT count(*) FROM biz.copy_import_customer WHERE customer_no=?",
+              Integer.class,
+              customerNo);
+    });
+  }
+
+  private static Map<String, Object> rowWithCustomerNo(String customerNo) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("customerNo", customerNo);
+    row.put("customerName", "Tenant one");
+    row.put("amount", "10.50");
+    row.put("note", "policy checked");
+    return row;
+  }
+
   private boolean rowExists(String tenantId, String bizDate, String customerNo) {
     Integer count = jdbcTemplate.queryForObject(
         """
@@ -302,6 +398,8 @@ class JdbcMappedImportCopyIntegrationTest {
             Map.of("biz_date", "${bizDate}"),
             "loadStrategy",
             "PARTITION_REPLACE_COPY",
+            "conflictColumns",
+            List.of("tenant_id", "customer_no"),
             "replacePartitionColumns",
             List.of("tenant_id", "biz_date")));
   }
