@@ -40,8 +40,8 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 ## 合并与清理
 
 1. 只有用户明确要求合并，且仓库保护规则允许、required checks 通过、所需 review 完成时才合并；检查或 review 未完成时停止在开放 PR 状态。
-2. 合并操作返回不等于已合并。通过 PR state/merge commit 确认 `MERGED`，再确认目标主分支已包含该提交。
-3. 只有确认合并后才清理分支。先检查 `git worktree list --porcelain`，确认目标分支未被其他 worktree 使用；再按用户授权删除远端/本地分支并 `git fetch --prune`。未合并、检查失败或仍被 worktree 使用的分支不得删除。
+2. 合并操作返回不等于已合并。记录 PR 的 `baseRefName`、`headRefName`、`headRefOid`、`state` 和 `mergeCommit`；确认 `state=MERGED`，fetch 目标分支，并验证 `mergeCommit` 是目标分支的祖先。仓库使用 squash merge 时，特性分支原始提交通常不是目标分支祖先；不得仅凭 `git branch -d` 的结果判断 PR 是否合并。
+3. 只有确认合并后才清理分支。先确认待清理的分支名及远端 ref 仍对应已核实的 PR head，避免删除该分支上的后续提交。检查 `git worktree list --porcelain`，包括当前 worktree；目标分支仍被任何 worktree 检出时，不得删除。当前 worktree 干净时先切换到已更新的目标分支；其他 worktree 仍检出目标分支时先保留该分支并处理 worktree。只有在 PR 已合并、其 `mergeCommit` 已包含于目标分支且分支指向已记录的 `headRefOid` 时，才可按用户授权删除对应远端分支及本地分支。Squash/rebase 后 `git branch -d` 可能因提交图不相连而拒绝；此时仅在上述证据全部成立后，对明确核实的分支使用 `git branch -D`，不得将强制删除作为常规清理方式。清理后运行 `git fetch --prune` 并复核状态。未合并、检查失败、远端 ref 已变化或仍被 worktree 使用的分支不得删除。
 4. 收尾核对主分支、工作区、远端分支和 PR 状态；报告 commit、PR、检查、merge commit、分支清理结果及任何剩余 worktree。
 
 ## Sonar 与快照参考
