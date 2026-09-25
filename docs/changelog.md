@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-09-25
+- **Spring Boot 基线补丁升级**：将工程固定框架基线同步至 Spring Boot 4.1.1；版本细节由根 POM BOM 统一管理。
 - **Java 日志与异常输出规范**：服务/测试统一使用 SLF4J/Logback 或 JUnit `TestReporter`，禁止直接标准输出和 `printStackTrace()`；未预期故障将 Throwable 交由日志框架记录，预期 fallback 使用 `SwallowedExceptionLogger`，周期重试避免重复整栈。唯一标准输出例外为 `security-scan` CLI，并由 Java 日志治理门禁限定。
 
 ### 2026-09-24
