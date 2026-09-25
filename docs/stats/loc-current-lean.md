@@ -1,20 +1,20 @@
-# 精简代码量统计 — 2026-09-25
+# 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `33155471c`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4a829983e`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,533 | 466,679 | 235,338 | 50.4% |
+| 4,533 | 466,864 | 235,457 | 50.4% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,641 | 240,953 | 109,968 | 45.6% |
+| prod | 2,641 | 240,955 | 109,970 | 45.6% |
 | test | 1,158 | 166,814 | 88,686 | 53.2% |
-| script | 591 | 43,631 | 27,203 | 62.3% |
+| script | 591 | 43,814 | 27,320 | 62.4% |
 | config | 52 | 7,862 | 5,550 | 70.6% |
 | infra-config | 32 | 5,191 | 3,766 | 72.5% |
 | sql | 59 | 2,228 | 165 | 7.4% |
@@ -23,9 +23,9 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,353 | 343,285 | 174,042 | 50.7% |
-| Shell | 181 | 27,257 | 21,012 | 77.1% |
-| Python | 204 | 27,125 | 13,679 | 50.4% |
+| Java | 3,353 | 343,287 | 174,044 | 50.7% |
+| Shell | 181 | 27,342 | 21,090 | 77.1% |
+| Python | 204 | 27,223 | 13,718 | 50.4% |
 | YAML | 95 | 12,045 | 9,004 | 74.8% |
 | XML | 169 | 20,592 | 6,372 | 30.9% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
@@ -54,11 +54,11 @@
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
 | `scripts/local/start-all.sh` | script | Shell | 605 | 478 |
 | `pom.xml` | config | XML | 751 | 445 |
+| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 | `scripts/local/sim-harness.sh` | script | Shell | 554 | 417 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 841 | 399 |
 | `scripts/dev/sonar-scan.sh` | script | Shell | 488 | 397 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 577 | 395 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 745 | 394 |
 
 ## 复跑
 

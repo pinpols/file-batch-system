@@ -23,13 +23,26 @@ GENERATED_KEY_INSERT = re.compile(
 ID_KEY_COLUMN = re.compile(r"\bkeyColumn=\"id\"", re.IGNORECASE)
 
 
-def main() -> int:
+def mapper_files(root: Path, candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return [
+            root / relative
+            for relative in candidates
+            if relative.endswith("Mapper.xml") and (root / relative).is_file()
+        ]
+    return [
+        mapper
+        for mapper in root.rglob("*Mapper.xml")
+        if "target" not in mapper.parts
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
     root = Path(__file__).resolve().parents[2]
     offenders: list[str] = []
+    candidates = argv if argv else None
 
-    for mapper in root.rglob("*Mapper.xml"):
-        if "target" in mapper.parts:
-            continue
+    for mapper in mapper_files(root, candidates):
         content = mapper.read_text(encoding="utf-8", errors="replace")
         for match in GENERATED_KEY_INSERT.finditer(content):
             if ID_KEY_COLUMN.search(match.group(0)):
@@ -53,4 +66,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

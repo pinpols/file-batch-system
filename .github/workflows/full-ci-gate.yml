@@ -528,3 +528,117 @@ jobs:
           path: |
             batch-e2e-tests/target/surefire-reports/**
           retention-days: 14
+
+  main-failure-triage:
+    name: main full-gate failure triage
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (
+        needs.static-checks.result == 'failure' ||
+        needs.unit-it-a.result == 'failure' ||
+        needs.unit-it-b1.result == 'failure' ||
+        needs.unit-it-b2.result == 'failure' ||
+        needs.security-scan.result == 'failure' ||
+        needs.e2e-shard.result == 'failure'
+      )
+    needs:
+      - static-checks
+      - unit-it-a
+      - unit-it-b1
+      - unit-it-b2
+      - security-scan
+      - e2e-shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Label and notify associated PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          create_label() {
+            local name="$1"
+            local color="$2"
+            local description="$3"
+            gh api "repos/${REPO}/labels/${name}" >/dev/null 2>&1 && return 0
+            gh api "repos/${REPO}/labels" \
+              -X POST \
+              -f "name=${name}" \
+              -f "color=${color}" \
+              -f "description=${description}" >/dev/null
+          }
+
+          create_label "main-broken" "B60205" "main full-ci-gate is red after this change"
+          create_label "needs-fix" "D93F0B" "requires a follow-up fix or revert"
+
+          short_sha="${HEAD_SHA:0:12}"
+          body_file="$(mktemp)"
+          cat >"${body_file}" <<EOF
+          <!-- main-full-gate-triage -->
+          main 上的 \`full-ci-gate\` 已失败，当前主干不可发布。
+
+          - full-gate run: ${RUN_URL}
+          - head sha: \`${HEAD_SHA}\`
+          - branch: \`main\`
+
+          处理要求：
+          1. 先暂停发布，不以单个 PR gate 绿作为上线依据。
+          2. PR 作者或维护者确认失败根因。
+          3. 小修走 follow-up PR；风险不清或影响上线窗口时优先 revert 原 PR。
+          4. 等 main 最新 \`full-ci-gate\` 重新变绿后再恢复发布判断。
+          EOF
+
+          mapfile -t associated_prs < <(
+            gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+              -H "Accept: application/vnd.github+json" \
+              --jq '.[] | select(.base.ref == "main") | .number'
+          )
+
+          if ((${#associated_prs[@]} > 0)); then
+            for pr in "${associated_prs[@]}"; do
+              gh api "repos/${REPO}/issues/${pr}/labels" \
+                -X POST \
+                -f "labels[]=main-broken" \
+                -f "labels[]=needs-fix" >/dev/null
+
+              existing_comment_id="$(
+                gh api "repos/${REPO}/issues/${pr}/comments" \
+                  --paginate \
+                  --jq ".[] | select(.body | contains(\"<!-- main-full-gate-triage -->\") and contains(\"${HEAD_SHA}\")) | .id" \
+                  | head -1
+              )"
+              if [[ -z "${existing_comment_id}" ]]; then
+                gh pr comment "${pr}" --repo "${REPO}" --body-file "${body_file}"
+              fi
+            done
+            exit 0
+          fi
+
+          issue_title="[main-broken] full-ci-gate failed at ${short_sha}"
+          existing_issue="$(
+            gh issue list \
+              --repo "${REPO}" \
+              --state open \
+              --label main-broken \
+              --search "${short_sha} in:title" \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+          if [[ -z "${existing_issue}" ]]; then
+            gh issue create \
+              --repo "${REPO}" \
+              --title "${issue_title}" \
+              --body-file "${body_file}" \
+              --label main-broken \
+              --label needs-fix
+          fi

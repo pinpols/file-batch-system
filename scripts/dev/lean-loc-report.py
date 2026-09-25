@@ -365,10 +365,13 @@ def main() -> None:
         return
 
     today = dt.date.today().isoformat()
+    report_date = today
     commit = run_git(["rev-parse", "--short=9", "HEAD"])
     rerun_target = f"docs/stats/loc-{today}-lean.md"
     if args.write:
         output_for_command = args.write if args.write.is_absolute() else ROOT / args.write
+        if output_for_command.name == "loc-current-lean.md":
+            report_date = "当前快照"
         try:
             rerun_target = output_for_command.relative_to(ROOT).as_posix()
         except ValueError:
@@ -376,7 +379,7 @@ def main() -> None:
                 rerun_target = "docs/stats/loc-current-lean.md"
             else:
                 rerun_target = output_for_command.as_posix()
-    report = render_report(metrics, today, commit, rerun_target)
+    report = render_report(metrics, report_date, commit, rerun_target)
     if args.write:
         output = args.write if args.write.is_absolute() else ROOT / args.write
         output.parent.mkdir(parents=True, exist_ok=True)

@@ -214,6 +214,9 @@ python3 scripts/ci/check-config-governance.py
 python3 scripts/ci/check-config-governance.py --write  # 新增配置类后重建登记表
 ```
 
+成功时打印 `configuration governance valid` 并以退出码 `0` 结束；登记表或 Console
+运行时副本漂移、发现运行时刷新违约或引入未经评审的配置中心依赖时，以 `1` 结束并打印修复建议。
+
 ## `check-db-scripts-safety.sh`
 
 补 `check-migration-safety.sh`(squawk 只扫 `db/migration`)的盲区:`scripts/db/**`(尤其 `business/` 不走 Flyway、`partition-migration/`)下的手工 DDL 脚本同样能跑危险变更。

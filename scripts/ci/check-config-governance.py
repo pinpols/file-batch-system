@@ -145,6 +145,7 @@ def main() -> int:
 
     violations = forbidden_usages()
     if violations:
+        print("❌ configuration governance validation failed:", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
 
@@ -152,20 +153,31 @@ def main() -> int:
     if args.write:
         REGISTRY.write_text(expected, encoding="utf-8")
         RUNTIME_REGISTRY.write_text(expected, encoding="utf-8")
-        print(f"已登记 {len(inventory())} 个生产配置绑定点: {REGISTRY.relative_to(ROOT)}")
+        print(
+            "✅ configuration governance registry written: "
+            f"{len(inventory())} configuration properties"
+        )
         return 0
 
     if not REGISTRY.exists() or REGISTRY.read_text(encoding="utf-8") != expected:
         print(
+            "❌ configuration governance validation failed:\n"
             "配置治理登记表与源码不一致；执行 "
             "python3 scripts/ci/check-config-governance.py --write 后提交结果。",
             file=sys.stderr,
         )
         return 1
     if not RUNTIME_REGISTRY.exists() or RUNTIME_REGISTRY.read_text(encoding="utf-8") != expected:
-        print("Console 运行时配置目录与治理登记表不一致；请执行 --write。", file=sys.stderr)
+        print(
+            "❌ configuration governance validation failed:\n"
+            "Console 运行时配置目录与治理登记表不一致；请执行 --write。",
+            file=sys.stderr,
+        )
         return 1
-    print(f"配置治理校验通过：{len(inventory())} 个绑定点，未发现运行时刷新违约。")
+    print(
+        "✅ configuration governance valid: "
+        f"{len(inventory())} configuration properties, no runtime refresh violations"
+    )
     return 0
 
 

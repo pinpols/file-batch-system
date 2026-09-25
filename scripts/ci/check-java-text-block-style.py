@@ -11,7 +11,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def tracked_java_sources() -> list[Path]:
+def tracked_java_sources(candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return [
+            ROOT / relative
+            for relative in candidates
+            if relative.endswith(".java") and (ROOT / relative).is_file()
+        ]
     result = subprocess.run(
         ["git", "ls-files", "--", "*.java"],
         cwd=ROOT,
@@ -54,9 +60,10 @@ def scan_file(path: Path) -> list[str]:
     return errors
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    candidates = argv if argv else None
     errors: list[str] = []
-    for path in tracked_java_sources():
+    for path in tracked_java_sources(candidates):
         errors.extend(scan_file(path))
 
     if errors:
@@ -70,4 +77,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

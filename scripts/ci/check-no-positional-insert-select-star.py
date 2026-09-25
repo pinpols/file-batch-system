@@ -19,12 +19,25 @@ from pathlib import Path
 POSITIONAL = re.compile(r"insert\s+into\s+[\w.]+\s+select\s+\*", re.IGNORECASE)
 
 
-def main() -> int:
+def mapper_files(root: Path, candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return [
+            root / relative
+            for relative in candidates
+            if relative.endswith("Mapper.xml") and (root / relative).is_file()
+        ]
+    return [
+        xml
+        for xml in root.rglob("*Mapper.xml")
+        if "/target/" not in str(xml)
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
     root = Path(__file__).resolve().parents[2]
     offenders: list[str] = []
-    for xml in root.rglob("*Mapper.xml"):
-        if "/target/" in str(xml):
-            continue
+    candidates = argv if argv else None
+    for xml in mapper_files(root, candidates):
         text = xml.read_text(encoding="utf-8", errors="replace")
         for m in POSITIONAL.finditer(text):
             line = text.count("\n", 0, m.start()) + 1
@@ -46,4 +59,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

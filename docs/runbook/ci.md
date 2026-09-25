@@ -10,6 +10,7 @@
 | `full-ci-gate` | push main(合并 PR 或直推) | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
 | `staging-gate` | nightly(每天 18:00 UTC / 北京 02:00 schedule)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,4 shard 并发)闸门;**不替代** full-ci-gate | — |
 | `daily-sim-strict-validation` | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 当天有代码/配置变更时（Markdown/RST、`LICENSE`、`NOTICE` 除外），串行执行 `sim-harness all` 与 BE-ACC step 5(strict real-data verification) | 240 min |
+| `full-ci-gate / main-failure-triage` | main 的 `full-ci-gate` 任一核心 job 失败 | 自动给关联 PR 标记 `main-broken` / `needs-fix` 并评论处理要求；无关联 PR 时创建 issue | — |
 
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
 >
@@ -31,6 +32,31 @@
 - **直推 main 跳过 pr-gate**(无审查),但 `full-ci-gate` 仍回退回归
 - **`concurrency.group + cancel-in-progress`** 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
+- **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。
+
+## 开源多人协作策略
+
+多人并行提交时，单个 PR 绿并不能证明“合并后主干仍绿”。本项目按以下规则处理：
+
+1. **main 受保护**：禁止直接 push；所有变更通过 PR、required checks 和 review。管理员 bypass 只用于仓库治理紧急场景，不能作为常规合并方式。
+2. **建议启用 GitHub merge queue**：仓库 Settings → Branches / Rulesets 中对 `main` 开启 merge queue，让候选 PR 在“临时合并结果”上跑 required checks，减少多个 PR 分别绿色但合到一起红的情况。merge queue 是仓库设置，不能完全由代码文件强制。
+3. **PR gate 是合入门禁，full-ci-gate 是发布门禁**：开源贡献者不要求本地安装完整 hook；关键规则必须在 PR / full CI 中兜底。本地 hook 只减少返工，不承担最终可信边界。
+4. **main full-gate 红即冻结发布**：不以任何单个 PR gate 通过作为上线依据。直到 main 最新 `full-ci-gate` 重新通过，release / deploy 均应暂停。
+5. **失败自动归责**：`full-ci-gate` 内置的 `main-failure-triage` job 会在 main 的核心 job 失败后，根据失败 run 的 `head_sha` 找关联 PR，贴 `main-broken` / `needs-fix` 并评论处理要求；找不到 PR 时创建 issue。该 job 不使用 `workflow_run`，避免高权限跨 workflow 触发风险。
+6. **修复优先级**：小且确定的问题走 follow-up PR；原因不清、影响上线窗口或需要长时间排查时，维护者优先 revert 导致 main 变红的 PR，再让作者重新提交修复版。
+7. **连续合并难定位时按顺序二分**：用 main 的 merge 顺序和 `full-ci-gate` 首次失败的 `head_sha` 定位第一个坏提交；不要在红 main 上连续堆多个修复尝试。
+
+维护者处理 checklist：
+
+```bash
+gh run view <failed-full-ci-run-id> --log-failed
+gh pr list --search "<head-sha>" --state all
+gh pr comment <pr-number> --body "main full-ci-gate failed: <run-url>"
+git fetch origin main
+git switch -c revert/main-broken-<short-sha> origin/main
+git revert <merge-or-squash-commit-sha>
+gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: restore green main" --body "Reverts <sha> because main full-ci-gate is red: <run-url>"
+```
 
 ## pr-gate 增量 vs full-ci-gate 全量(关键区别)
 
@@ -116,6 +142,62 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 无 Java 相关变更 | 跳过 Maven gate |
 
 所有路径下均跳过集成测试套件（`--skip-it-suite`），保证 PR 反馈在 45 分钟内完成。
+
+---
+
+## 本地 Git Hook 门禁
+
+本地 hook 只承担**快速失败**和**提交前防低级漂移**，不替代 PR / full-ci / staging / sim 验证。设计原则：
+
+- `pre-commit` 按暂存文件域路由，尽量只扫暂存命中的文件；CI 仍保留全量扫描。
+- `pre-push` 面向分支级轻量契约，允许使用 `origin/main...HEAD` 的增量基线。
+- Maven 编译、PMD、单元/集成/E2E、镜像、安全全量扫描不放进 `pre-commit`，继续由 CI 负责。
+
+### pre-commit
+
+| 触发范围 | 本地检查 | 扫描粒度 |
+|---|---|---|
+| 所有提交 | `git diff --cached --check` | 暂存区 |
+| Java 暂存文件 | `spotless:apply` | 受 Maven 插件能力限制，执行仓库 Spotless apply；随后重新暂存 Java 文件 |
+| Java 暂存文件 | Java 日志治理、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险 | **增量**：仅传入暂存 Java 文件；对应 CI 无参全量 |
+| MyBatis Mapper XML 暂存文件 | PostgreSQL generated key 列约束、禁止位置式 `INSERT ... SELECT *` | **增量**：仅传入暂存 Mapper 文件；对应 CI 无参全量 |
+| Shell 暂存文件 | `bash -n`、ShellCheck、Shell Linux 可移植性 | **增量**：仅暂存 Shell 文件；对应 CI 无参全量 |
+| Workflow / composite action | `actionlint` | 全仓 workflow 语义检查 |
+| `scripts/*` / `load-tests/scripts/*` / `.githooks/*` | 脚本治理注册表 | 全局脚本登记与命名约束 |
+| 文档变更 | 文档结构、文档日期策略、代码与文档路径引用 | 全局文档关系检查 |
+| `.env*` 变更 | 环境文件 Shell 安全 | 全局 env 文件检查 |
+| YAML / Compose / env 默认值变更 | 配置默认值同步、功能开关注册表 | 按域触发的全量一致性检查 |
+| `pom.xml` / `*/pom.xml` 变更 | Maven 模块依赖边界 | 全局依赖图检查 |
+| `helm/*` 变更 | Helm 环境变量同步、Helm 生产 overlay 安全 | 全局 Helm / 配置一致性检查 |
+| tracked 源码/脚本/配置变更 | Lean LOC 快照重生成与校验 | 基于暂存树生成 `docs/stats/loc-current-lean.md` |
+| 所有提交 | 仓库卫生 | 全局仓库约束 |
+
+### pre-push
+
+| 检查 | 扫描粒度 |
+|---|---|
+| 禁推 `main` / 受保护分支 | 当前 push ref |
+| `check-empty-checks.py --base <base>` | 增量 |
+| `check-infrastructure-abstraction-boundaries.py --base <base>` | 增量 |
+| `check-readiness-doc-sync.py --base <base>` | 增量 |
+| Java 新增行编码反例（FQN、`@Autowired`、`@Transactional` 位置、`RuntimeException`、日志拼接、`ZoneId.systemDefault`、`Charset.forName`） | 增量：PR 新增有效代码行 |
+| `check-direct-client-boundaries.py` | 全量：业务层直连客户端是跨模块边界 |
+| `check-trivy-ignore-expiry.py` | 全量：安全白名单有效期 |
+| `check-env-file-shell-safety.py` | 全量：所有 tracked env 文件 |
+| `check-sdk-config-env-parity.py` | 全量：SDK 配置环境变量对齐 |
+| `check-config-defaults-sync.py --check`、`check-helm-env-sync.py` | 按域触发的全量：配置 / Helm / Compose 变更时运行 |
+| `check-feature-switch-registry.py` | 按域触发的全量：功能开关、YAML、Helm 变更时运行 |
+| `check-config-governance.py`、`check-env-variable-governance.py` | 按域触发的全量：配置绑定、环境变量治理入口变更时运行 |
+| `check-hardcoded-runtime-config.sh` | 按域触发的全量：运行配置、脚本、容器、测试基础设施变更时运行 |
+| `check-changelog-sync.py --base <base>` | 按域触发的增量：发布敏感配置、契约、迁移或架构规范变更时运行 |
+| Java readability inventory 自动刷新 | Java 变更时刷新全局清单 |
+| Shell 脚本检查 / Docker bake 配置解析 | 仅变更命中的文件或配置 |
+
+### 增量与全量边界
+
+适合增量的检查：单文件语法、单文件可读性、单文件 Shell 可移植性、只依赖新增行的编码反例。
+
+必须全量的检查：跨文件索引、文档链接、配置矩阵、Helm/Compose/YAML 对齐、模块依赖、直连客户端边界、LOC 快照、安全白名单、SDK/runtime 对齐、Maven/PMD/测试/E2E。把这些改成单文件增量会漏掉跨文件漂移。
 
 ---
 

@@ -48,7 +48,16 @@ KNOWN_RULES = {
 }
 
 
-def production_sources() -> list[Path]:
+def production_sources(candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return sorted(
+            ROOT / relative
+            for relative in candidates
+            if relative.endswith(".java")
+            and "/src/main/java/" in relative
+            and (ROOT / relative).is_file()
+            and relative.startswith(SOURCE_PREFIXES)
+        )
     result = subprocess.run(
         ["git", "ls-files", "--", *SOURCE_PREFIXES],
         cwd=ROOT,
@@ -63,9 +72,9 @@ def production_sources() -> list[Path]:
     )
 
 
-def scan() -> list[tuple[str, int, str]]:
+def scan(candidates: list[str] | None = None) -> list[tuple[str, int, str]]:
     findings: list[tuple[str, int, str]] = []
-    for path in production_sources():
+    for path in production_sources(candidates):
         source = path.read_text(encoding="utf-8")
         relative = path.relative_to(ROOT).as_posix()
         for match in ANNOTATION.finditer(source):
@@ -75,8 +84,9 @@ def scan() -> list[tuple[str, int, str]]:
     return findings
 
 
-def main() -> int:
-    findings = scan()
+def main(argv: list[str] | None = None) -> int:
+    candidates = argv if argv else None
+    findings = scan(candidates)
     unknown = [finding for finding in findings if finding[2] not in KNOWN_RULES]
     counts = Counter(rule for _, _, rule in findings)
     print(f"Java production suppressions: {len(findings)}")
@@ -94,4 +104,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

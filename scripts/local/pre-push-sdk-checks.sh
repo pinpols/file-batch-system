@@ -110,6 +110,18 @@ CHANGED_PROTOCOL=$(echo "$CHANGED_FILES" | grep -E "console-api-protocol\.md$" |
 CHANGED_FLYWAY=$(echo "$CHANGED_FILES" | grep -E "db/migration/V[0-9]+__" || true)
 CHANGED_SHELL=$(echo "$CHANGED_FILES" | grep -E "\.sh$" || true)
 CHANGED_DOCKER_BUILD=$(echo "$CHANGED_FILES" | grep -E "(^|/)(Dockerfile[^/]*|docker-bake.*\.hcl|docker-compose.*\.ya?ml)$|^deploy/docker/|^helm/" || true)
+CHANGED_CONFIG_DEFAULTS=$(echo "$CHANGED_FILES" | grep -E "(^|/)(application[^/]*\.ya?ml|docker-compose.*\.ya?ml|\.env[^/]*|values[^/]*\.ya?ml)$|^deploy/docker/|^helm/" || true)
+CHANGED_FEATURE_SWITCH=$(echo "$CHANGED_FILES" | grep -E "^docs/runbook/feature-switch|(^|/)(application[^/]*\.ya?ml|docker-compose.*\.ya?ml|values[^/]*\.ya?ml)$|^helm/" || true)
+CHANGED_CONFIG_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "(docs/runbook/config-governance-registry\.yml|batch-console-api/src/main/resources/config-governance-registry\.json|pom\.xml$)" || true)
+while IFS= read -r java_file; do
+  [[ -z "$java_file" || ! -f "$java_file" ]] && continue
+  if grep -qE "@ConfigurationProperties|@RefreshScope|ConfigurationPropertiesRebinder" "$java_file"; then
+    CHANGED_CONFIG_GOVERNANCE+="$java_file"$'\n'
+  fi
+done <<< "$CHANGED_JAVA"
+CHANGED_ENV_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "^(\.env\.example|docs/runbook/(environment-variable-governance|feature-switch|config-ops-tiering)|scripts/ci/check-(feature-switch-registry|config-defaults-sync|helm-env-sync|config-governance)\.py|deploy/docker/compose/|helm/)" || true)
+CHANGED_RUNTIME_CONFIG=$(echo "$CHANGED_FILES" | grep -E "^((scripts|load-tests/scripts)/.*\.sh|deploy/docker/|helm/|docker-compose.*\.ya?ml|Makefile|batch-.*/src/(main|test)/.*\.(java|ya?ml)|\.env[^/]*)$" || true)
+CHANGED_RELEASE_SENSITIVE=$(echo "$CHANGED_FILES" | grep -E "^(db/migration/|deploy/docker/|deploy/ha/|helm/batch-platform/(templates|files)/|docs/api/sdk-contract-fixtures/|pom\.xml|\.env\.example|docker-compose(\.kafka-ha)?\.yml|helm/batch-platform/(Chart|values|values-canary)\.yaml|helm/values-prod\.yaml|docs/api/(console-api\.openapi|orchestrator-internal\.openapi|sdk-shared-constants)\.yaml|docs/agent-baseline\.md|docs/architecture/adr/)" || true)
 
 info "本次 push 涉及:"
 [[ -n "$CHANGED_JAVA" ]]     && info "  Java 文件 $(echo "$CHANGED_JAVA" | wc -l | tr -d ' ') 个"
@@ -117,6 +129,7 @@ info "本次 push 涉及:"
 [[ -n "$CHANGED_YAML" ]]     && info "  OpenAPI yaml $(echo "$CHANGED_YAML" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_FLYWAY" ]]   && info "  Flyway migration $(echo "$CHANGED_FLYWAY" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_SHELL" ]]    && info "  Shell 脚本 $(echo "$CHANGED_SHELL" | wc -l | tr -d ' ') 个"
+[[ -n "$CHANGED_CONFIG_DEFAULTS" ]] && info "  配置 / Helm / Compose 相关文件 $(echo "$CHANGED_CONFIG_DEFAULTS" | wc -l | tr -d ' ') 个"
 echo ""
 
 errors=0
@@ -157,6 +170,45 @@ if ! "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py; then
 fi
 if ! "$PYTHON_BIN" scripts/ci/check-sdk-config-env-parity.py; then
   errors=$((errors+1))
+fi
+
+if [[ -n "$CHANGED_CONFIG_DEFAULTS" ]]; then
+  if ! "$PYTHON_BIN" scripts/ci/check-config-defaults-sync.py --check; then
+    errors=$((errors+1))
+  fi
+  if ! "$PYTHON_BIN" scripts/ci/check-helm-env-sync.py; then
+    errors=$((errors+1))
+  fi
+fi
+
+if [[ -n "$CHANGED_FEATURE_SWITCH" ]]; then
+  if ! "$PYTHON_BIN" scripts/ci/check-feature-switch-registry.py; then
+    errors=$((errors+1))
+  fi
+fi
+
+if [[ -n "$CHANGED_CONFIG_GOVERNANCE" ]]; then
+  if ! "$PYTHON_BIN" scripts/ci/check-config-governance.py; then
+    errors=$((errors+1))
+  fi
+fi
+
+if [[ -n "$CHANGED_ENV_GOVERNANCE" ]]; then
+  if ! "$PYTHON_BIN" scripts/ci/check-env-variable-governance.py; then
+    errors=$((errors+1))
+  fi
+fi
+
+if [[ -n "$CHANGED_RUNTIME_CONFIG" ]]; then
+  if ! bash scripts/ci/check-hardcoded-runtime-config.sh; then
+    errors=$((errors+1))
+  fi
+fi
+
+if [[ -n "$CHANGED_RELEASE_SENSITIVE" && -n "$BASE_REF" ]]; then
+  if ! "$PYTHON_BIN" scripts/ci/check-changelog-sync.py --base "$BASE_REF"; then
+    errors=$((errors+1))
+  fi
 fi
 
 READABILITY_INVENTORY="docs/analysis/java-readability-inventory-2026-08-12.md"

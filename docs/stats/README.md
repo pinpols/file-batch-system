@@ -4,7 +4,7 @@
 
 新的精简口径使用 [scripts/dev/lean-loc-report.py](../../scripts/dev/lean-loc-report.py)。注意：主流工具（Sonar `NCLOC`、cloc、scc、tokei）的默认结果通常仍是“物理非空/非注释行”，不是逻辑语句行；本口径专门用于回答“格式化换行带来的体量水分”。
 
-当前快照：[loc-current-lean.md](./loc-current-lean.md)。
+当前快照：[loc-current-lean.md](./loc-current-lean.md)，标题固定为“当前快照”，不使用生成当天日期；日期只用于归档快照，避免本地时区与 CI 时区生成不同内容。
 
 归档说明：[archive/README.md](./archive/README.md)。历史快照已移入 `archive/`，不作为当前代码量基线。
 

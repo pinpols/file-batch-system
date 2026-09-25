@@ -7,6 +7,8 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-09-25
+- **开源多人协作下的 main 红线**：`full-ci-gate` 新增 `main-failure-triage` job，在 main 核心门禁失败后自动标记关联 PR 并评论处理要求；CI 文档明确 PR gate 只是合入门禁，main 最新 full-gate 才是发布门禁，并建议启用 merge queue 降低多人并发合并后主干变红的风险。
+- **本地门禁增量/全量边界**：`pre-commit` 中 Java 日志治理、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险、MyBatis Mapper XML 与 Shell Linux 可移植性改为只扫描暂存命中文件；CI 保持无参全量扫描。仓库级文档、配置、功能开关、Helm 环境变量、依赖、LOC、安全白名单、changelog 和运行时对齐检查继续按域触发全量执行，避免跨文件漂移漏检。
 - **每日仿真与严格数据验证**：新增基于北京时间当天代码变更判定的 GitHub Actions nightly，串行运行 `sim-harness all` 和 BE-ACC step 5(strict real-data verification)；MinIO 初始化 sidecar 改复用锁定的服务镜像内 `mc`，移除不可用的独立 mc 镜像依赖。
 - **CI 检测结果格式统一**：每日变更检测和 SDK release breaking-change gate 统一使用共享状态/错误码/skip 原因格式；release tag 拉取失败改为显式失败，不再误判为无历史版本。
 - **提交前门禁按变更域扩展**：Shell 变更增加 Linux 可移植性检查；文档变更检查代码文档路径引用；`.env`、Maven POM 和 Helm 变更分别执行 shell 安全、模块依赖边界和生产 overlay 安全检查。

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 
@@ -14,16 +15,25 @@ STACK_TRACE = re.compile(r"\bprintStackTrace\s*\(")
 CLI_STDOUT_PREFIX = Path("security-scan/src/main/java/")
 
 
-def main() -> int:
-    errors: list[str] = []
+def java_sources(candidates: list[str] | None = None) -> set[Path]:
+    if candidates is not None:
+        return {
+            ROOT / relative
+            for relative in candidates
+            if relative.endswith(".java") and (ROOT / relative).is_file()
+        }
     java_files: set[Path] = set()
     java_files.update(ROOT.glob("batch-*/**/src/**/*.java"))
     for root in (ROOT / "sdk", ROOT / "security-scan", ROOT / "examples"):
         if root.is_dir():
             java_files.update(root.glob("**/src/**/*.java"))
-    java_files = {
-        path for path in java_files if "target" not in path.relative_to(ROOT).parts
-    }
+    return {path for path in java_files if "target" not in path.relative_to(ROOT).parts}
+
+
+def main(argv: list[str] | None = None) -> int:
+    candidates = argv if argv else None
+    errors: list[str] = []
+    java_files = java_sources(candidates)
 
     for path in sorted(java_files):
         relative = path.relative_to(ROOT)
@@ -52,4 +62,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
