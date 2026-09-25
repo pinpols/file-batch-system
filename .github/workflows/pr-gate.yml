@@ -224,6 +224,11 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_DEPENDENCY_BOUNDARIES "模块依赖边界" -- python3 scripts/ci/check-dependency-boundaries.py
 
+      - name: Verify infrastructure abstraction boundaries
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_INFRA_ABSTRACTION_BOUNDARIES "基础设施抽象边界" -- python3 scripts/ci/check-infrastructure-abstraction-boundaries.py --base "$GUARD_BASE"
+
       - name: Verify changelog synchronization
         shell: bash
         run: python3 scripts/ci/check-changelog-sync.py --base "$GUARD_BASE"

@@ -8,7 +8,7 @@
 
 | 方向 | 守护 |
 |---|---|
-| 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-no-enable-preview.sh` |
+| 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
@@ -264,6 +264,19 @@ bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-r
 ```bash
 bash scripts/ci/install-upstream-modules.sh
 ```
+
+## `check-infrastructure-abstraction-boundaries.py`
+
+diff-only 守护。新增或修改的 application、domain、service、web 主代码禁止直接引用或 import
+Kafka、Redis、JDBC、Quartz、RestClient/WebClient、AWS SDK 等具体基础设施类型；应依赖
+Port、Adapter 或业务抽象。config、infrastructure、mapper、support、shared client、common 底层适配包
+继续拥有实现细节。
+
+```bash
+python3 scripts/ci/check-infrastructure-abstraction-boundaries.py --base origin/main
+```
+
+该守护已接入 PR gate。历史存量按治理文档分批收敛，不在本守护里一次性清零。
 
 ## `check-java-readability.py`
 

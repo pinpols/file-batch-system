@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -198,7 +199,7 @@ class S3CompatibleObjectStorePocTest {
   }
 
   @Test
-  void shouldRunComparableThirtySecondMixedLoad() throws Exception {
+  void shouldRunComparableThirtySecondMixedLoad(TestReporter testReporter) throws Exception {
     int workers = intEnv("S3_COMPAT_POC_LOAD_WORKERS", 4);
     int payloadSize = intEnv("S3_COMPAT_POC_LOAD_PAYLOAD_BYTES", 1024 * 1024);
     int durationSeconds = intEnv("S3_COMPAT_POC_LOAD_SECONDS", 30);
@@ -245,15 +246,17 @@ class S3CompatibleObjectStorePocTest {
         future.get();
       }
       long elapsedNanos = System.nanoTime() - startNanos[0];
-      System.out.printf(
-          "S3 mixed-load result: workers=%d payloadBytes=%d durationSeconds=%d puts=%d gets=%d elapsedSeconds=%.2f opsPerSecond=%.2f%n",
-          workers,
-          payloadSize,
-          durationSeconds,
-          puts.get(),
-          gets.get(),
-          elapsedNanos / 1_000_000_000.0,
-          (puts.get() + gets.get()) / (elapsedNanos / 1_000_000_000.0));
+      testReporter.publishEntry(
+          "s3.mixed-load",
+          "workers=" + workers
+              + ", payloadBytes=" + payloadSize
+              + ", durationSeconds=" + durationSeconds
+              + ", puts=" + puts.get()
+              + ", gets=" + gets.get()
+              + ", elapsedSeconds=" + String.format("%.2f", elapsedNanos / 1_000_000_000.0)
+              + ", operationsPerSecond="
+              + String.format(
+                  "%.2f", (puts.get() + gets.get()) / (elapsedNanos / 1_000_000_000.0)));
       assertThat(puts.get()).isPositive();
       assertThat(gets.get()).isEqualTo(puts.get());
     } finally {
