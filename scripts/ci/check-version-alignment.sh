@@ -265,6 +265,42 @@ for service in POSTGRES KAFKA MINIO VALKEY; do
   fi
 done
 
+# 这些运行入口使用字面镜像或 Compose fallback，不能由 Testcontainers 守卫覆盖。
+POSTGRES_TAG=$(grep -E '^POSTGRES_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+VALKEY_TAG=$(grep -E '^VALKEY_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+REDIS_COMPAT_TAG=$(grep -E '^REDIS_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+
+check_image_reference() {
+  local file="$1" reference="$2" label="$3"
+  if ! grep -Fq -- "$reference" "$ROOT/$file"; then
+    echo "  ✗ ${label} 缺少预期镜像引用 ${reference}" >&2
+    FAIL=1
+  else
+    echo "  ✓ ${label} 镜像引用已对齐"
+  fi
+}
+
+echo ""
+echo "── 运行入口镜像版本守护 ─────"
+if [[ "$REDIS_COMPAT_TAG" != "$VALKEY_TAG" ]]; then
+  echo "  ✗ REDIS_IMAGE_TAG=${REDIS_COMPAT_TAG} 与 VALKEY_IMAGE_TAG=${VALKEY_TAG} 不一致" >&2
+  FAIL=1
+else
+  echo "  ✓ Redis 兼容别名与 Valkey 镜像版本一致"
+fi
+check_image_reference ".github/actions/setup-build-env/action.yml" "postgres:${POSTGRES_TAG}" "CI 预拉取"
+check_image_reference ".github/actions/setup-build-env/action.yml" "valkey/valkey:${VALKEY_TAG}" "CI 预拉取"
+check_image_reference "scripts/local/sim-harness.sh" "postgres:${POSTGRES_TAG}" "Sim harness"
+check_image_reference "docker-compose.yml" 'valkey/valkey:${VALKEY_IMAGE_TAG:-'"${VALKEY_TAG}"'}' "Compose fallback"
+check_image_reference "deploy/ha/30-redis-failover.yaml" "valkey/valkey:${VALKEY_TAG}" "HA manifest"
+check_image_reference "docs/runbook/base-services-deployment.md" 'valkey/valkey:${VALKEY_IMAGE_TAG}' "部署手册"
+if grep -Fq -- 'redis:7.4' "$ROOT/docs/runbook/base-services-deployment.md"; then
+  echo "  ✗ 部署手册仍引用过期的 redis:7.4 镜像" >&2
+  FAIL=1
+else
+  echo "  ✓ 部署手册无过期 redis:7.4 镜像"
+fi
+
 echo ""
 if (( FAIL == 1 )); then
   echo "ERROR: 有版本不一致，见上方 ✗" >&2

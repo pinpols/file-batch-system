@@ -322,7 +322,7 @@ services:
 
   valkey:
     logging: *container-logging
-    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1}
+    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
     container_name: batch-valkey
     restart: unless-stopped
     # 数据上限保留 25% 给复制/AOF fork、连接缓冲和 allocator 碎片。

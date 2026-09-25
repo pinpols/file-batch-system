@@ -11,7 +11,7 @@ metadata:
 spec:
   redis:
     replicas: 3                        # 1 主 2 从(operator 自动选主)
-    image: valkey/valkey:8.1           # 与本仓一致(Valkey,RESP 兼容)
+    image: valkey/valkey:8.1.10        # 与本仓一致(Valkey,RESP 兼容)
     # 1Gi Pod 中只给数据 768Mi，保留 25% 给复制/AOF fork、连接缓冲和 allocator 碎片。
     # 本实例承载 ShedLock/quota 等正确性键，禁止用 LRU 静默淘汰；达到上限后由应用熔断/拒绝。
     customConfig:
@@ -40,7 +40,7 @@ spec:
             topologyKey: kubernetes.io/hostname
   sentinel:
     replicas: 3                        # 3 哨兵(quorum 2)
-    image: valkey/valkey:8.1
+    image: valkey/valkey:8.1.10
     resources:
       requests: { cpu: "100m", memory: 128Mi }
       limits: { cpu: "200m", memory: 256Mi }

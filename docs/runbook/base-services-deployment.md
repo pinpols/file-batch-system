@@ -1,4 +1,4 @@
-# 基础依赖部署方案（Postgres / Kafka / MinIO / Redis）
+# 基础依赖部署方案（PostgreSQL / Kafka / MinIO / Valkey）
 
 应用层（orchestrator / trigger / console-api / worker × 3）完全无状态，通过 `batch-defaults.yml` 的
 几个环境变量接入 4 个基础服务。Helm chart（`helm/batch-platform/templates/`）只部署应用模块，
@@ -13,7 +13,7 @@
 | Postgres | `postgres:${POSTGRES_IMAGE_TAG}` | 15432 | 5432 |
 | Kafka (KRaft) | `apache/kafka:${KAFKA_IMAGE_TAG}` | 19092 | 9092 |
 | MinIO | `quay.io/minio/minio:${MINIO_IMAGE_TAG}` | 19000 / 19001 | 9000 / 9001 |
-| Redis | `redis:7.4` | 16379 | 6379 |
+| Valkey | `valkey/valkey:${VALKEY_IMAGE_TAG}` | 16379 | 6379 |
 
 另有 2 个 init 容器：`batch-kafka-init` 建 topic、`batch-minio-init` 建 bucket。一键启停：
 
@@ -25,21 +25,21 @@ make dev-stop    # 仅停 app JVM；基础依赖保持 up
 **优点**：团队环境一致、版本锁定、一键启停清理、跨平台。
 **代价**：Docker Desktop 驻留 2-4GB 内存，宿主机 ↔ 容器 IO 有 10-30% 惩罚。
 
-### 可选：Postgres/Redis 裸机 + Kafka/MinIO Docker（混合模式）
+### 可选：PostgreSQL/Valkey 裸机 + Kafka/MinIO Docker（混合模式）
 
 适合场景：Docker Desktop 吃内存严重、集成测试 Postgres IO 密集、性能敏感开发。
 
 | 服务 | 建议 | 理由 |
 |---|---|---|
 | Postgres | 裸机（`brew install postgresql@17`） | 访问最频繁，fsync 裸跑快 20-30% |
-| Redis | 裸机（`brew install redis`） | 极轻，纯内存 |
+| Valkey | 裸机或兼容部署 | RESP 兼容缓存服务，纯内存 |
 | Kafka | 保留 Docker | KRaft 配置复杂，镜像封装好 |
 | MinIO | 保留 Docker | Bucket 初始化脚本已自动化 |
 
 预期收益：启动快 ~10-15s，Docker 内存占用降 30%，Postgres IO 提升 20-30%。
 代价：新人多一步 setup，升级 Postgres 版本要双路径同步。
 
-本仓库当前不自带混合模式脚本；如需启用，建议自行在 `.env.local.bare` 覆盖 DB/Redis 连接串
+本仓库当前不自带混合模式脚本；如需启用，建议自行在 `.env.local.bare` 覆盖 DB/Valkey 连接串
 并直接跳过 docker-compose 里对应的 service。
 
 ### 不推荐：全裸机
@@ -71,12 +71,16 @@ Kafka KRaft 裸装维护成本（quorum controller + log dir + JVM 参数），�
 
 ### 方案 2：K8s Operator（云原生自建）
 
+**MinIO 部署状态：授权与维护支持待确认。** 当前仓库保留的 MinIO 镜像用于本地开发/集成测试；部署前必须针对实际镜像来源、版本和使用方式完成许可证审查。MinIO 官方当前许可页对无有效企业协议的使用列出非生产、单实例内部评估条件，官方仓库也已归档。本文中的 MinIO Operator/HA 清单仅作历史架构示例，未经授权确认和目标版本验证，不应作为生产部署批准依据。替代存储 POC 尚未覆盖有效多节点故障恢复及完整业务 E2E。
+
+参考：[MinIO 软件许可](https://docs.min.io/license/) · [MinIO 仓库与维护状态](https://github.com/minio/minio) · [S3 兼容后端 POC 结论](../analysis/s3-compatible-backend-comparison-2026-09-25.md)
+
 | 服务 | Operator |
 |---|---|
 | Postgres | **Crunchy / CloudNativePG / Zalando** |
 | Kafka | **Strimzi**（事实标准） |
 | MinIO | **MinIO Operator** |
-| Redis | **Redis Operator**（Opstree / Spotahome） |
+| Valkey / Redis 协议兼容服务 | **Redis Operator**（Opstree / Spotahome；须验证目标版本兼容性） |
 
 跟应用同一套 K8s 集群，Helm 管理。
 
