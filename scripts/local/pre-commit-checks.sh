@@ -26,6 +26,7 @@ shell_files=()
 docs_changed=0
 scripts_changed=0
 workflow_changed=0
+loc_affecting_changed=0
 for file in "${staged_files[@]}"; do
   [[ "$file" == *.java ]] && java_files+=("$file")
   [[ "$file" == *.sh ]] && shell_files+=("$file")
@@ -33,6 +34,13 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] \
     && scripts_changed=1
   [[ "$file" == .github/workflows/* || "$file" == .github/actions/* ]] && workflow_changed=1
+  if [[ "$file" != docs/* && "$file" != db/migration/* ]]; then
+    case "$file" in
+      *.java|*.sh|*.py|*.yml|*.yaml|*.xml|*.ts|*.tsx|*.rs|*.go|*.toml|*.properties|*.sql)
+        loc_affecting_changed=1
+        ;;
+    esac
+  fi
 done
 
 if ((${#java_files[@]} > 0)); then
@@ -79,6 +87,14 @@ if ((docs_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-docs-structure.py
   gate_run PRE_COMMIT_DOC_TIMESTAMP_POLICY "文档日期命名策略" \
     "$PYTHON_BIN" scripts/ci/check-doc-timestamp-policy.py
+fi
+if ((loc_affecting_changed == 1)); then
+  update_loc_snapshot() {
+    "$PYTHON_BIN" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
+    git add docs/stats/loc-current-lean.md
+    "$PYTHON_BIN" scripts/ci/check-loc-snapshot.py
+  }
+  gate_run PRE_COMMIT_LOC_SNAPSHOT "代码量快照同步" update_loc_snapshot
 fi
 gate_run PRE_COMMIT_REPOSITORY_HYGIENE "仓库卫生" \
   "$PYTHON_BIN" scripts/ci/check-repository-hygiene.py
