@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.config.RoutingHints;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -202,8 +203,10 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
       // I/O error 路径：pause 截断 in-flight 连接，等价于 fail-open 触发但没机会切换 routing key。
       // ReadReplicaRoutingDataSource 在 catch 内已递增 failover 计数器；下次请求 quarantine 生效。
       // 这里不 fail，只记日志便于调试。
-      System.err.println(
-          "[" + label + "] tolerated I/O error (Docker pause in-flight): " + ex.getMessage());
+      SwallowedExceptionLogger.info(
+          ReadReplicaHappyPathIntegrationTest.class,
+          label + " tolerated I/O error during Docker pause fault injection",
+          ex);
     }
   }
 

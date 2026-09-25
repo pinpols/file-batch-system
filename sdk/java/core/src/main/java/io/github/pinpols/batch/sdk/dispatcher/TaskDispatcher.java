@@ -499,7 +499,7 @@ public class TaskDispatcher {
       body.put("resultSummary", resultSummaryJson(code, diagnosticMessage(message, error)));
       retryCoordinator.reportWithRetry(msg.taskId(), idem, body);
     } catch (Exception ex) {
-      log.error("reportFailure failed for taskId={}: {}", msg.taskId(), ex.getMessage());
+      log.error("reportFailure failed for taskId={}", msg.taskId(), ex);
     }
   }
 
