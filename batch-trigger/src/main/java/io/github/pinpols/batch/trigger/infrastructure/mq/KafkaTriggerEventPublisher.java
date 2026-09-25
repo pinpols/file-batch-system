@@ -15,8 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,7 +28,6 @@ import org.springframework.stereotype.Component;
  * <p>ADR-010 固化路径，无条件实例化（2026-05-02 同步 HTTP 路径已删除）。
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
@@ -38,6 +37,13 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
   private final MqMessagePublisher mqMessagePublisher;
   private final TriggerKafkaProperties kafkaProperties;
+
+  public KafkaTriggerEventPublisher(
+      @Qualifier("triggerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
+      TriggerKafkaProperties kafkaProperties) {
+    this.mqMessagePublisher = mqMessagePublisher;
+    this.kafkaProperties = kafkaProperties;
+  }
 
   @Override
   public CompletableFuture<PublishResult> publishAsync(

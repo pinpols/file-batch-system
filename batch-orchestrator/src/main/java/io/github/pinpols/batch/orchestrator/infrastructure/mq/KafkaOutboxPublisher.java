@@ -72,7 +72,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private final Executor deliveryLogExecutor;
 
   public KafkaOutboxPublisher(
-      MqMessagePublisher mqMessagePublisher,
+      @Qualifier("orchestratorMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
       BatchOrchestratorGovernanceProperties governance,
       EventDeliveryLogMapper eventDeliveryLogMapper,
       BatchTopicResolver topicResolver,

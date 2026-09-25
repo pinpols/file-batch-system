@@ -13,7 +13,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /** Trigger MQ 发布适配器；业务 relay 只依赖通用消息端口。 */
-@Component
+@Component("triggerMqMessagePublisher")
 public class KafkaMqMessagePublisher implements MqMessagePublisher {
 
   private final KafkaTemplate<String, String> kafkaTemplate;

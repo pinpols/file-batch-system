@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -50,7 +51,8 @@ public class DeadLetterPublisher {
   private final Timer publishTimer;
 
   public DeadLetterPublisher(
-      MqMessagePublisher mqMessagePublisher, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      @Qualifier("workerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.mqMessagePublisher = mqMessagePublisher;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {

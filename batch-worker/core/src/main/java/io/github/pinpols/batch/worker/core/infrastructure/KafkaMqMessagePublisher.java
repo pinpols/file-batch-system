@@ -12,7 +12,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /** Worker MQ 发布适配器；DLQ 等业务组件不直接依赖 KafkaTemplate。 */
-@Component
+@Component("workerMqMessagePublisher")
 public class KafkaMqMessagePublisher implements MqMessagePublisher {
 
   private final KafkaTemplate<String, String> kafkaTemplate;

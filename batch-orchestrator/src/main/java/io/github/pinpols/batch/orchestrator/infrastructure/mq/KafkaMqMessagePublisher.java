@@ -12,7 +12,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /** Orchestrator MQ 发布适配器；KafkaTemplate 依赖收敛在 infrastructure 层。 */
-@Component
+@Component("orchestratorMqMessagePublisher")
 public class KafkaMqMessagePublisher implements MqMessagePublisher {
 
   private final KafkaTemplate<String, String> kafkaTemplate;
