@@ -78,7 +78,7 @@ public class BizTableSchemaRegistrar {
       }
     } catch (Exception ex) {
       // 失败降级：console-api 查到空表就跳过 targetColumn 校验（兼容首次部署无 biz 库的场景）
-      log.error("biz_table_schema snapshot failed (read biz metadata): {}", ex.getMessage(), ex);
+      log.error("biz_table_schema snapshot failed while reading business metadata", ex);
       return;
     }
     try {
@@ -90,7 +90,7 @@ public class BizTableSchemaRegistrar {
       });
       log.info("biz_table_schema snapshot refreshed: schema=biz, tables={}", snapshot.size());
     } catch (Exception ex) {
-      log.error("biz_table_schema snapshot failed (write registry): {}", ex.getMessage(), ex);
+      log.error("biz_table_schema snapshot failed while writing registry", ex);
     }
   }
 }
