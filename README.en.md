@@ -6,8 +6,11 @@
 
 [![PR Gate](https://github.com/pinpols/file-batch-system/actions/workflows/pr-gate.yml/badge.svg)](https://github.com/pinpols/file-batch-system/actions/workflows/pr-gate.yml)
 [![Full CI](https://github.com/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/badge.svg)](https://github.com/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml)
+[![Daily Sim + Strict](https://github.com/pinpols/file-batch-system/actions/workflows/daily-sim-strict-validation.yml/badge.svg)](https://github.com/pinpols/file-batch-system/actions/workflows/daily-sim-strict-validation.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-21-blue.svg)](https://adoptium.net/)
+
+[Quick start](#quick-start) · [Architecture](#overall-architecture) · [Documentation](#documentation-index) · [Contributing](CONTRIBUTING.md)
 
 ## What is this?
 
@@ -136,13 +139,13 @@ Getting started and operations:
 
 ### Environment variable files
 
-The repo ships a single template, [`.env.example`](.env.example); copy it to create per-environment configs:
+The repo ships one environment template, [`.env.example`](.env.example). Copy it for local development:
 
-- `.env.local` — local development
-- `.env.test` — isolated test environment
-- `.env.prod` — production; real secrets should be injected by a secrets manager or CI
+```bash
+cp .env.example .env.local
+```
 
-For a quick local start, just copy `.env.example` to `.env.local`.
+Do not commit environment files containing real credentials. Inject production secrets through a secrets manager or deployment platform rather than deploying directly from the template.
 
 ### Start local infrastructure
 
@@ -166,7 +169,7 @@ Prefer `mc` for object-storage troubleshooting; common commands are listed in [S
 ### Build and lightweight gates
 
 ```bash
-mvn -q compile
+./mvnw -ntp -q compile
 ```
 
 Local lightweight gate:
@@ -190,14 +193,18 @@ helm lint helm/batch-platform
 
 ```bash
 # Unit tests
-mvn test -pl batch-common,batch-orchestrator -Dgroups=\!e2e
+./mvnw -ntp -pl batch-common,batch-orchestrator test -Dgroups=\!e2e
 
 # Integration tests (require Docker)
-mvn verify -pl batch-orchestrator
+./mvnw -ntp -pl batch-orchestrator -am verify
 
 # End-to-end tests
-mvn verify -pl batch-e2e-tests -Dgroups=e2e
+./mvnw -ntp -pl batch-e2e-tests -am verify -Dgroups=e2e
 ```
+
+### Scheduled GitHub Actions validation
+
+At 21:31 China Standard Time each day, the workflow checks for code/config changes on the default branch. If any are found, an ephemeral GitHub-hosted runner runs `sim-harness all` followed by the BE acceptance strict real-data verification. Changes limited to Markdown/RST documents, `LICENSE`, or `NOTICE` are skipped. This supplements, but does not replace, the PR Gate or post-merge Full CI; see the [CI runbook](docs/runbook/ci.md) for details and manual dispatch.
 
 ### Start the application container stack
 
@@ -358,6 +365,8 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 
 | Document | Description |
 |---|---|
+| [Documentation governance](docs/standards/document-governance.md) | Documentation index, lifecycle status, backlog, archival, and drift checks |
+| [Operations runbooks](docs/runbook/README.md) | Deployment, capacity, rollout, observability, incident response, and configuration governance |
 | [Design docs index](docs/design/README.md) | Entry point for system design docs: data model, flows, interfaces, and topic designs |
 | [Project structure](docs/architecture/project-structure.md) | Current Maven reactor, platform runtime modules, SDK and docs/scripts boundaries |
 | [SDK home](sdk/README.md) | Tenant-hosted Worker SDK usage guide (language choice / install / run / test / troubleshooting), with the [docs/sdk index](docs/sdk/README.md) |

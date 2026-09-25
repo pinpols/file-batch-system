@@ -301,7 +301,8 @@ services:
 
   minio-init:
     logging: *container-logging
-    image: minio/mc:${MINIO_MC_IMAGE_TAG:-RELEASE.2025-08-13T08-35-41Z}
+    # 固定复用 MinIO 服务镜像内的 mc，避免依赖不可用的独立客户端镜像。
+    image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
     container_name: batch-minio-init
     depends_on:
       minio:

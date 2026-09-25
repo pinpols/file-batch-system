@@ -9,6 +9,7 @@
 | `pr-gate` | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈,阻断不合格 PR | 45 min |
 | `full-ci-gate` | push main(合并 PR 或直推) | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
 | `staging-gate` | nightly(每天 18:00 UTC / 北京 02:00 schedule)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,4 shard 并发)闸门;**不替代** full-ci-gate | — |
+| `daily-sim-strict-validation` | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 当天有代码/配置变更时（Markdown/RST、`LICENSE`、`NOTICE` 除外），串行执行 `sim-harness all` 与 BE-ACC step 5(strict real-data verification) | 240 min |
 
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
 >

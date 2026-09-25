@@ -8,6 +8,7 @@
 2. 从最新 `main` 创建短生命周期分支；不要直接向受保护的 `main` 推送。
 3. 检查 `git status` 和现有差异，保留他人或并行任务留下的改动。
 4. 优先复用 Maven Wrapper、仓库脚本和现有测试入口，不在 CI 配置中复制业务判断。
+5. 首次启用仓库 Git hook 时运行 `git config core.hooksPath .githooks`；提交前门禁按暂存文件域选择检查。
 
 ## 变更归属
 
@@ -50,6 +51,8 @@
 
 所有 Maven 命令使用 `./mvnw`。先跑最小相关验证，再按影响扩大范围；多模块验证使用 `-am` 带上依赖模块。
 
+提交时 hook 会自动检查暂存区；Shell、Workflow、文档、`.env`、Maven POM 和 Helm 变更会分别触发对应的语法、治理或安全检查。需要的本地工具包括 `shellcheck`、`actionlint` 和仓库 Python 环境；缺少工具时 hook 会明确失败，不会静默跳过。
+
 ```bash
 # 编译受影响模块
 ./mvnw -ntp -pl <module> -am -DskipTests compile
@@ -74,6 +77,8 @@ make ci-pr
 | SDK 契约 | 各语言测试 + `bash scripts/ci/run-sdk-live-transport-gate.sh` |
 | 本地全链路 | `bash scripts/local/sim-harness.sh all`，以当前 runbook 为准 |
 | 性能 | `load-tests/` 对应入口；记录 SHA、镜像、环境、工作负载和业务结果 |
+
+默认分支另有每日定时验证：当天有代码/配置变更时，在隔离的 GitHub-hosted runner 上顺序执行 `sim-harness all` 和 BE-ACC step 5 严格真实数据验证；仅 Markdown/RST 文档及 `LICENSE`、`NOTICE` 变更时跳过。可在 Actions 手动触发并选择是否强制运行。它是额外的主干回归，不替代 PR required checks 或合并后的 Full CI。详见 [CI runbook](docs/runbook/ci.md)。
 
 不能执行的验证必须在 PR 中写明原因和残余风险。静态检查、编译、单测、容器 IT、本地真实服务和 staging 验收是不同证据，不得互相替代。
 

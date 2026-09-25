@@ -6,8 +6,11 @@
 
 [![PR Gate](https://github.com/pinpols/file-batch-system/actions/workflows/pr-gate.yml/badge.svg)](https://github.com/pinpols/file-batch-system/actions/workflows/pr-gate.yml)
 [![Full CI](https://github.com/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/badge.svg)](https://github.com/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml)
+[![Daily Sim + Strict](https://github.com/pinpols/file-batch-system/actions/workflows/daily-sim-strict-validation.yml/badge.svg)](https://github.com/pinpols/file-batch-system/actions/workflows/daily-sim-strict-validation.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-21-blue.svg)](https://adoptium.net/)
+
+[快速开始](#快速开始) · [整体架构](#整体架构) · [文档索引](#文档索引) · [贡献指南](CONTRIBUTING.md)
 
 ## 这是什么？
 
@@ -19,12 +22,6 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 - 多租户共享集群：按 `tenant_id` 隔离数据、SLA、配额与权限。
 
 > 想先看代码结构？跳到[模块结构](#模块结构)；想尽快跑起来？跳到[快速开始](#快速开始)。
-
-## 文档导航
-
-- [docs/README.md](docs/README.md) 是项目文档总入口，按架构、设计、API、运维、测试、SDK、审计等视角导航。
-- [docs/standards/document-governance.md](docs/standards/document-governance.md) 定义文档索引、状态、待办、归档和漂移检查规则。
-- [docs/runbook/README.md](docs/runbook/README.md) 是运维 SOP 入口，覆盖部署、容量、灰度、观测、应急和配置治理。
 
 ## 它解决什么问题？
 
@@ -142,13 +139,13 @@ flowchart LR
 
 ### 环境变量文件
 
-仓库只提供一份模板 [`.env.example`](.env.example)，复制它生成各环境配置：
+仓库提供统一模板 [`.env.example`](.env.example)。本地首次启动先复制模板：
 
-- `.env.local` - 本地开发配置
-- `.env.test` - 测试环境隔离配置
-- `.env.prod` - 生产环境配置，真实密钥应由密钥管理系统或 CI 注入
+```bash
+cp .env.example .env.local
+```
 
-如果只想快速启动本地环境，先复制 `.env.example` 为 `.env.local` 即可。
+不要提交包含真实凭据的环境文件。生产密钥应由密钥管理系统或部署平台注入，不应直接使用模板部署。
 
 ### 启动本地基础设施
 
@@ -172,7 +169,7 @@ MinIO 对象排查优先用 `mc`。常用命令见 [对象存储后端（S3 协�
 ### 编译与基础门禁
 
 ```bash
-mvn -q compile
+./mvnw -ntp -q compile
 ```
 
 本地轻量门禁：
@@ -196,14 +193,18 @@ helm lint helm/batch-platform
 
 ```bash
 # 单元测试
-mvn test -pl batch-common,batch-orchestrator -Dgroups=\!e2e
+./mvnw -ntp -pl batch-common,batch-orchestrator test -Dgroups=\!e2e
 
 # 集成测试（需要 Docker）
-mvn verify -pl batch-orchestrator
+./mvnw -ntp -pl batch-orchestrator -am verify
 
 # 端到端测试
-mvn verify -pl batch-e2e-tests -Dgroups=e2e
+./mvnw -ntp -pl batch-e2e-tests -am verify -Dgroups=e2e
 ```
+
+### GitHub Actions 定时验证
+
+默认分支每天北京时间 21:31 检查当天代码/配置变更；有变更时，在临时 GitHub-hosted runner 上依次运行 `sim-harness all` 和 BE-ACC 严格真实数据验证。仅 Markdown/RST 文档及 `LICENSE`、`NOTICE` 变更会跳过。该验证不替代 PR Gate 或合并后的 Full CI；流程和手动触发方式见 [CI 体系说明](docs/runbook/ci.md)。
 
 ### 启动应用容器栈
 
@@ -368,6 +369,8 @@ DB (job_task: READY)
 | 文档 | 说明 |
 |------|------|
 | [文档总入口](docs/README.md) | `docs/` 目录分层、角色阅读路径、归档与状态规则 |
+| [文档治理](docs/standards/document-governance.md) | 文档索引、状态、待办、归档和漂移检查规则 |
+| [运维手册总入口](docs/runbook/README.md) | 部署、容量、灰度、观测、应急和配置治理 SOP |
 | [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
 | [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK 与文档/脚本目录边界 |
 | [SDK 总入口](sdk/README.md) | 租户自托管 Worker SDK 使用说明书（选语言 / 安装 / 跑 / 测 / 排障），配套 [docs/sdk/README.md](docs/sdk/README.md) 文档索引 |

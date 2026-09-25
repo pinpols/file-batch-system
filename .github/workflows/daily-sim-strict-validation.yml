@@ -1,0 +1,131 @@
+name: daily-sim-strict-validation
+
+on:
+  schedule:
+    # 北京时间 21:31；避开整点以降低定时任务拥塞。
+    - cron: '31 13 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 当天没有代码或配置变更时仍强制运行（Asia/Shanghai）
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-sim-strict-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Evaluate today's code changes
+        id: gate
+        env:
+          FORCE_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: python3 scripts/ci/daily-validation-change-gate.py
+
+  sim-and-strict:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      BATCH_SCRIPT_RUNTIME: host
+      BATCH_CONSOLE_READ_REPLICA_ENABLED: 'false'
+      SKIP_CDS: '1'
+      JAVA_OPTS: -Xmx384m -XX:MaxMetaspaceSize=256m
+      SIM_JAVA_OPTS: -Xmx384m -XX:MaxMetaspaceSize=256m
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Prepare isolated local environment
+        shell: bash
+        run: |
+          cp .env.example .env.local
+          {
+            printf '%s\n' \
+              'BATCH_PLATFORM_DB_PASSWORD=batch_pass_123' \
+              'BATCH_BUSINESS_DB_PASSWORD=batch_pass_123' \
+              'BATCH_SECURITY_BYPASS_MODE=true' \
+              'BATCH_CONSOLE_READ_REPLICA_ENABLED=false' \
+              'SPRING_PROFILES_ACTIVE=local'
+            printf 'BATCH_INTERNAL_SECRET=%s\n' "$(openssl rand -hex 32)"
+          } >> .env.local
+
+      - name: Build application runtime jars
+        run: bash scripts/local/build-apps.sh
+
+      - name: Start isolated infrastructure and application processes
+        run: bash scripts/local/start-all.sh
+
+      - name: Run full simulation harness
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/local/sim-harness.sh all 2>&1 | tee /tmp/sim-harness-all.log
+
+      - name: Quiesce simulated schedules
+        run: bash scripts/sim/98-quiesce-schedules.sh
+
+      - name: Run BE acceptance strict step
+        shell: bash
+        run: |
+          set -o pipefail
+          CI=1 bash scripts/local/be-acceptance.sh --steps=5 2>&1 | tee /tmp/be-acceptance-strict.log
+
+      - name: Capture diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker ps -a || true
+          docker compose --env-file .env.local logs --no-color --tail=200 || true
+          for log in logs/current/app/*.log; do
+            [[ -f "$log" ]] && { echo "===== $log ====="; tail -200 "$log"; }
+          done
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: daily-sim-strict-${{ github.run_id }}
+          path: |
+            /tmp/sim-harness-all.log
+            /tmp/be-acceptance-strict.log
+            logs/runs/be-acceptance/**
+            logs/runs/**
+            logs/current/app/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop host applications and remove ephemeral containers
+        if: always()
+        shell: bash
+        run: |
+          bash scripts/local/stop-all.sh || true
+          docker compose --env-file .env.local \
+            -f docker-compose.yml \
+            -f deploy/docker/compose/app.yml \
+            -f scripts/sim/compose.yml \
+            --profile apps --profile replica --profile test --profile biz-shard \
+            down -v --remove-orphans || true
+          bash scripts/local/clean-stale-test-env.sh || true
+          docker network rm batch-platform_batch-network >/dev/null 2>&1 || true

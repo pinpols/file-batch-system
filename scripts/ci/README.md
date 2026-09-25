@@ -21,6 +21,15 @@
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
+## `daily-validation-change-gate.py`
+
+判断北京时间当天默认分支是否包含代码/配置变更，Markdown、RST、`LICENSE` 和 `NOTICE` 不触发验证。Actions 手工 dispatch 可勾选 `force` 绕过当天变更条件；本地运行可设 `FORCE_VALIDATION=true`，脚本不接受 `--force` 参数。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 仅写入 `$GITHUB_OUTPUT` 供 workflow 路由。
+
+```bash
+python3 scripts/ci/daily-validation-change-gate.py
+FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
+```
+
 `check-sql-config-boundaries.py` 是同名 `.sh` 稳定入口的实现，两者都登记，避免包装层与实现层单独漂移。
 
 ## PR 按需路由

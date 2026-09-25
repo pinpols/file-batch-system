@@ -14,6 +14,7 @@
 
 ### Added
 
+- **每日仿真与严格数据验证**：新增按北京时间当天代码变更触发的 GitHub Actions 定时验证，顺序运行完整 `sim-harness` 和 BE-ACC 严格真实数据步骤；新增按暂存文件域运行的提交前检查。
 - **本地开发收尾守护**：业务数据源默认账号统一为 `batch_business_writer`，新增 SUPERUSER / BYPASSRLS 启动检查、健康检查和真实 PostgreSQL 集成测试；Trigger E2E 从真实 `TriggerService` 入口覆盖 Outbox→Kafka→Orchestrator，Kafka Outbox 增加故障恢复后重投验证；五语言 SDK 统一 live Kafka 环境变量，Java/Python 补齐重试与严格时序环境配置。
 - **脚本与文档治理入口**：新增仓库 Python 统一入口和治理聚合命令，避免系统 Python 缺包导致门禁漂移；校准 Chaos、运维剧本、Forensic Replay、测试覆盖快照和当前待办状态。
 - **租户配置包 Excel 易用性**：新增 11-Sheet 字段填写说明 API，返回必填、只读、类型、枚举、默认/留空行为、示例和适用范围；新增 `ALL / IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC / WORKFLOW` 场景化示例模板下载，同时保留完整 11-Sheet 全量导入契约。
