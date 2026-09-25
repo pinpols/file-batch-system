@@ -61,11 +61,21 @@ jobs:
         shell: bash
         run: |
           cp .env.example .env.local
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".env.local")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          indexes = [index for index, line in enumerate(lines) if line.startswith("BATCH_SECURITY_BYPASS_MODE=")]
+          if len(indexes) != 1:
+              raise SystemExit("Expected exactly one BATCH_SECURITY_BYPASS_MODE entry in .env.local")
+          lines[indexes[0]] = "BATCH_SECURITY_BYPASS_MODE=true"
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
           {
             printf '%s\n' \
               'BATCH_PLATFORM_DB_PASSWORD=batch_pass_123' \
               'BATCH_BUSINESS_DB_PASSWORD=batch_pass_123' \
-              'BATCH_SECURITY_BYPASS_MODE=true' \
               'BATCH_CONSOLE_READ_REPLICA_ENABLED=false' \
               'SPRING_PROFILES_ACTIVE=local'
             printf 'BATCH_INTERNAL_SECRET=%s\n' "$(openssl rand -hex 32)"
