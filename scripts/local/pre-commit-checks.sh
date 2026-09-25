@@ -102,11 +102,17 @@ if ((loc_affecting_changed == 1)); then
     tmp_dir="$(mktemp -d)"
     tmp_worktree="$tmp_dir/worktree"
     cleanup_loc_worktree() {
-      git worktree remove "$tmp_worktree" --force >/dev/null 2>&1 || true
+      env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE \
+        git worktree remove "$tmp_worktree" --force >/dev/null 2>&1 || true
       rm -rf "$tmp_dir"
     }
-    git worktree add --detach "$tmp_worktree" "$snapshot_commit" >/dev/null
+    if ! env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE \
+      git worktree add --detach "$tmp_worktree" "$snapshot_commit" >/dev/null; then
+      cleanup_loc_worktree
+      return 1
+    fi
     if ! (
+      unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE
       cd "$tmp_worktree"
       "$PYTHON_BIN" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null
       "$PYTHON_BIN" scripts/ci/check-loc-snapshot.py
