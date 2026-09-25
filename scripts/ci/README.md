@@ -16,7 +16,7 @@
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
-| Java 质量 | `check-empty-checks.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
+| Java 质量 | `check-empty-checks.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh` |
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
@@ -288,6 +288,17 @@ python3 scripts/ci/check-direct-client-boundaries.py
 ```
 
 该守护已接入 PR gate 和 full gate，用于防止缓存、MQ、数据访问实现细节重新漂回业务层。
+
+## `check-java-logging-governance.py`
+
+禁止 Java 应用和测试直接写 `System.out` / `System.err`，并禁止直接调用
+`printStackTrace()`。安全扫描 CLI 的终端输出是用户界面，按显式路径白名单保留。
+
+```bash
+python3 scripts/ci/check-java-logging-governance.py
+```
+
+已接入 PR、full CI 和本地 pre-commit 的 Java 变更检查。
 
 ## `check-java-readability.py`
 

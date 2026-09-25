@@ -120,6 +120,16 @@ management:
   opentelemetry:
     tracing.export.otlp.endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces
     logging.export.otlp.endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs
+```
+
+### 2.8 异常与终端输出约定
+
+- Java 应用和测试通过 SLF4J/Logback 或 JUnit `TestReporter` 输出诊断信息；不直接写 `System.out` / `System.err`。
+- `printStackTrace()` 禁止用于应用、测试和 CLI；异常堆栈必须交给日志框架管理。
+- 未预期且需要排障的异常，使用 `log.error("operation failed: context={}", context, exception)`，将异常对象作为最后一个参数；不要同时插入 `exception.getMessage()`，避免重复输出和丢失堆栈语义。
+- 已处理的预期异常、fallback 或周期性重试，不应每次打印完整堆栈；优先使用 `SwallowedExceptionLogger` 记录类型与摘要。有持续故障风险时配套指标/告警，必要时仅在 DEBUG 记录堆栈。
+- `security-scan` 是面向开发者的命令行工具，其进度和摘要输出属于 CLI 用户界面，是唯一允许直接写标准输出的 Java 生产代码目录。该例外不允许扩展到服务或测试代码。
+- 门禁：`scripts/ci/check-java-logging-governance.py`。
 
 ---
 

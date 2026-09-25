@@ -86,7 +86,7 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
         pushRow(ctx, uri, row, counts);
       }
     } catch (Exception ex) {
-      log.error("dispatch from query failed: {}", ex.getMessage());
+      log.error("dispatch from query failed", ex);
       return SdkTaskResult.fail(ex);
     }
     return SdkTaskResult.ok(

@@ -46,6 +46,8 @@ done
 if ((${#java_files[@]} > 0)); then
   gate_run PRE_COMMIT_SPOTLESS "Java Spotless 格式化（${#java_files[@]} 个文件）" \
     ./mvnw -q spotless:apply
+  gate_run PRE_COMMIT_JAVA_LOGGING "Java 日志与异常输出治理" \
+    "$PYTHON_BIN" scripts/ci/check-java-logging-governance.py
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done

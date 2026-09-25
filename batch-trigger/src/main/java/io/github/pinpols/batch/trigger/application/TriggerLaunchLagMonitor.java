@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.application;
 
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -103,7 +104,8 @@ public class TriggerLaunchLagMonitor {
     } catch (ExecutionException | TimeoutException | RuntimeException exception) {
       if (!stopping.get()) {
         publishSnapshot(UNKNOWN_LAG);
-        log.warn("Failed to sample trigger launch consumer lag: {}", exception.getMessage());
+        SwallowedExceptionLogger.warn(
+            TriggerLaunchLagMonitor.class, "trigger launch consumer lag sample failed", exception);
       }
     }
   }

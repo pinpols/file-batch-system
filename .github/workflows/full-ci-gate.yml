@@ -151,6 +151,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY "Java 可读性约定" -- python3 scripts/ci/check-java-readability.py
 
+      - name: Verify Java logging governance
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_LOGGING "Java 日志与异常输出治理" -- python3 scripts/ci/check-java-logging-governance.py
+
       - name: Verify Java text block style
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" -- python3 scripts/ci/check-java-text-block-style.py

@@ -74,7 +74,8 @@ public class TriggerReconciler {
     try {
       doReconcile();
     } catch (RuntimeException exception) {
-      log.warn("trigger reconcile pass failed, will retry next cycle: {}", exception.getMessage());
+      SwallowedExceptionLogger.warn(
+          TriggerReconciler.class, "trigger reconcile pass failed; retry scheduled", exception);
     }
   }
 
