@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,31 +10,26 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
+import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
 import io.opentelemetry.api.trace.Span;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.RecordBatch;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 
 /**
  * ADR-010 Stage 5: KafkaTriggerEventPublisher 单测,覆盖:
@@ -50,7 +46,7 @@ import org.springframework.kafka.support.SendResult;
 class KafkaTriggerEventPublisherTest {
 
   @Mock
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private MqMessagePublisher mqMessagePublisher;
 
   private KafkaTriggerEventPublisher publisher;
 
@@ -58,28 +54,27 @@ class KafkaTriggerEventPublisherTest {
   void setUp() {
     TriggerKafkaProperties props = new TriggerKafkaProperties();
     props.setSendTimeoutSeconds(1);
-    publisher = new KafkaTriggerEventPublisher(kafkaTemplate, props);
+    publisher = new KafkaTriggerEventPublisher(mqMessagePublisher, props);
   }
 
   @Test
   void publish_validEnvelope_sendsWithHeadersAndReturnsOk() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
-    SendResult<String, String> sendResult = sendResult(0, 100L);
-    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any()))
-        .thenReturn(CompletableFuture.completedFuture(sendResult));
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.completedFuture(new MqPublishResult(0, 100L)));
 
     TriggerEventPublisher.PublishResult result =
         publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-1", envelope, "trace-1");
 
     assertThat(result.success()).isTrue();
-    ArgumentCaptor<ProducerRecord<String, String>> captor = ArgumentCaptor.captor();
-    verify(kafkaTemplate).send(captor.capture());
-    ProducerRecord<String, String> sent = captor.getValue();
+    ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(captor.capture());
+    MqMessage sent = captor.getValue();
     assertThat(sent.topic()).isEqualTo(BatchTopics.TRIGGER_LAUNCH_V1);
     assertThat(sent.key()).isEqualTo("tenant-a:req-1");
-    assertThat(headerValue(sent, "X-Trace-Id")).isEqualTo("trace-1");
-    assertThat(headerValue(sent, "X-Tenant-Id")).isEqualTo("tenant-a");
-    assertThat(headerValue(sent, "X-Envelope-Version")).isEqualTo("2");
+    assertThat(sent.headers()).containsEntry("X-Trace-Id", "trace-1");
+    assertThat(sent.headers()).containsEntry("X-Tenant-Id", "tenant-a");
+    assertThat(sent.headers()).containsEntry("X-Envelope-Version", "2");
   }
 
   @Test
@@ -88,11 +83,10 @@ class KafkaTriggerEventPublisherTest {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-trace")
         .withTraceContext(new W3cTraceContext("00-" + traceId + "-2222222222222222-01", null));
     String[] activeTraceId = new String[1];
-    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any()))
-        .thenAnswer(invocation -> {
-          activeTraceId[0] = Span.current().getSpanContext().getTraceId();
-          return CompletableFuture.completedFuture(sendResult(0, 101L));
-        });
+    when(mqMessagePublisher.publish(any(MqMessage.class))).thenAnswer(invocation -> {
+      activeTraceId[0] = Span.current().getSpanContext().getTraceId();
+      return CompletableFuture.completedFuture(new MqPublishResult(0, 101L));
+    });
 
     TriggerEventPublisher.PublishResult result = publisher.publish(
         BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-trace", envelope, "business-trace");
@@ -108,17 +102,16 @@ class KafkaTriggerEventPublisherTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorMessage()).contains("null");
-    verify(kafkaTemplate, never()).send(ArgumentMatchers.<ProducerRecord<String, String>>any());
+    verify(mqMessagePublisher, never()).publish(any(MqMessage.class));
   }
 
   @Test
   void publish_kafkaExecutionException_returnsFailure() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-2");
-    CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
+    CompletableFuture<MqPublishResult> failed = new CompletableFuture<>();
     failed.completeExceptionally(
         new ExecutionException(new RuntimeException("broker not reachable")));
-    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any()))
-        .thenReturn(failed);
+    when(mqMessagePublisher.publish(any(MqMessage.class))).thenReturn(failed);
 
     TriggerEventPublisher.PublishResult result =
         publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "tenant-a:req-2", envelope, "trace-2");
@@ -139,23 +132,5 @@ class KafkaTriggerEventPublisherTest {
         "trace-" + requestId,
         Map.of());
     return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
-  }
-
-  private static SendResult<String, String> sendResult(int partition, long offset) {
-    org.apache.kafka.clients.producer.RecordMetadata metadata =
-        new org.apache.kafka.clients.producer.RecordMetadata(
-            new TopicPartition(BatchTopics.TRIGGER_LAUNCH_V1, partition),
-            offset,
-            0,
-            RecordBatch.NO_TIMESTAMP,
-            0,
-            0);
-    return new SendResult<>(
-        new ProducerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, "key", "value"), metadata);
-  }
-
-  private static String headerValue(ProducerRecord<String, String> producerRecord, String name) {
-    Header header = producerRecord.headers().lastHeader(name);
-    return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
   }
 }

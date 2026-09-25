@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +9,8 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -27,12 +28,11 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.kafka.core.KafkaTemplate;
 
 @SuppressWarnings("unchecked")
 class KafkaOutboxPublisherTest {
 
-  private KafkaTemplate<String, String> kafkaTemplate;
+  private MqMessagePublisher mqMessagePublisher;
   private BatchMqTopicsProperties batchMqTopicsProperties;
   private OutboxProperties outboxProperties;
   private EventDeliveryLogMapper eventDeliveryLogMapper;
@@ -40,7 +40,7 @@ class KafkaOutboxPublisherTest {
 
   @BeforeEach
   void setUp() {
-    kafkaTemplate = mock(KafkaTemplate.class);
+    mqMessagePublisher = mock(MqMessagePublisher.class);
     batchMqTopicsProperties = new BatchMqTopicsProperties();
     outboxProperties = new OutboxProperties();
     eventDeliveryLogMapper = mock(EventDeliveryLogMapper.class);
@@ -51,7 +51,7 @@ class KafkaOutboxPublisherTest {
     BatchTopicResolver topicResolver =
         new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties());
     publisher = new KafkaOutboxPublisher(
-        kafkaTemplate,
+        mqMessagePublisher,
         governance,
         eventDeliveryLogMapper,
         topicResolver,
@@ -65,7 +65,7 @@ class KafkaOutboxPublisherTest {
   void shouldRecordFailedDeliveryWhenDispatchTopicSendFails() {
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     OutboxEventEntity event = dispatchEvent("IMPORT", "dispatch-key-001");
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka down")));
 
     CompletableFuture<Boolean> publishFuture = publisher.publish(event);
@@ -90,14 +90,16 @@ class KafkaOutboxPublisherTest {
   void dispatchTopicUsesPartitionKafkaKeyInsteadOfOutboxEventKey() {
     batchMqTopicsProperties.setExportDispatch("batch.task.dispatch.export");
     OutboxEventEntity event = dispatchEvent("EXPORT", "outbox-dedup-key");
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     CompletableFuture<Boolean> publishFuture = publisher.publish(event);
 
     assertThat(publishFuture).isCompletedWithValue(true);
-    verify(kafkaTemplate)
-        .send(eq("batch.task.dispatch.export"), eq("t1:IT_JOB:it-instance-001:1"), anyString());
+    ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("batch.task.dispatch.export");
+    assertThat(captor.getValue().key()).isEqualTo("t1:IT_JOB:it-instance-001:1");
   }
 
   @Test
@@ -126,7 +128,7 @@ class KafkaOutboxPublisherTest {
         message.partitionCount(),
         new W3cTraceContext("00-" + traceId + "-4444444444444444-01", null))));
     String[] activeTraceId = new String[1];
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenAnswer(invocation -> {
+    when(mqMessagePublisher.publish(any(MqMessage.class))).thenAnswer(invocation -> {
       activeTraceId[0] = Span.current().getSpanContext().getTraceId();
       return CompletableFuture.completedFuture(null);
     });
@@ -155,7 +157,7 @@ class KafkaOutboxPublisherTest {
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     outboxProperties.setDefaultTopic(BatchTopics.OUTBOX_EVENT);
     OutboxEventEntity event = fallbackEvent("CUSTOM_EVENT", "fallback-key-001");
-    when(kafkaTemplate.send(eq(BatchTopics.OUTBOX_EVENT), eq("fallback-key-001"), anyString()))
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker unavailable")));
 
     CompletableFuture<Boolean> publishFuture = publisher.publish(event);
@@ -179,16 +181,16 @@ class KafkaOutboxPublisherTest {
   @Test
   void workflowTerminalUsesDedicatedLineageTopic() {
     OutboxEventEntity event = fallbackEvent("WORKFLOW_TERMINAL", "ta:workflow:100:terminal");
-    when(kafkaTemplate.send(
-            eq(BatchTopics.WORKFLOW_TERMINAL_V1),
-            eq("ta:workflow:100:terminal"),
-            eq(event.getPayloadJson())))
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     assertThat(publisher.publish(event)).isCompletedWithValue(true);
 
-    verify(kafkaTemplate)
-        .send(BatchTopics.WORKFLOW_TERMINAL_V1, "ta:workflow:100:terminal", event.getPayloadJson());
+    ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo(BatchTopics.WORKFLOW_TERMINAL_V1);
+    assertThat(captor.getValue().key()).isEqualTo("ta:workflow:100:terminal");
+    assertThat(captor.getValue().payload()).isEqualTo(event.getPayloadJson());
   }
 
   private static OutboxEventEntity dispatchEvent(String eventType, String eventKey) {
