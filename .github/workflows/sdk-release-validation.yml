@@ -151,13 +151,21 @@ jobs:
         env:
           CURRENT_TAG: ${{ github.event.release.tag_name }}
         run: |
-          git fetch --tags --quiet || true
+          source scripts/lib/gate-result.sh
+          if git fetch --tags --quiet; then
+            :
+          else
+            fetch_rc=$?
+            gate_result FAIL SDK_RELEASE_TAG_FETCH "SDK release tag 历史" "$fetch_rc"
+            exit "$fetch_rc"
+          fi
           CURRENT="$CURRENT_TAG"
           PREV="$(git tag --sort=-v:refname | grep -v -x "${CURRENT:-__none__}" | head -n1 || true)"
           if [[ -z "$PREV" ]]; then
-            echo "ℹ️ 未找到上一个 release tag(可能是首发),跳过 breaking 比对"
+            gate_skip SDK_RELEASE_NO_PREVIOUS_TAG "SDK release 历史基线" "未找到上一个 release tag，按首发版本处理"
             echo "prev=" >> "$GITHUB_OUTPUT"
           else
+            gate_result PASS SDK_RELEASE_PREVIOUS_TAG "SDK release 历史基线"
             echo "上一个 release tag: $PREV"
             echo "prev=$PREV" >> "$GITHUB_OUTPUT"
           fi
@@ -168,20 +176,22 @@ jobs:
         env:
           PREV_TAG: ${{ steps.prevtag.outputs.prev }}
         run: |
+          source scripts/lib/gate-result.sh
           SPEC="docs/api/orchestrator-internal.openapi.yaml"
           if ! git cat-file -e "${PREV_TAG}:${SPEC}" 2>/dev/null; then
-            echo "ℹ️ $SPEC 在 $PREV_TAG 不存在,跳过比对"
+            gate_skip SDK_RELEASE_BREAKING_NO_BASE_SPEC "Orchestrator internal OpenAPI 兼容性" "$SPEC 在 $PREV_TAG 不存在，跳过版本对比"
             exit 0
           fi
           base_tmp="$(mktemp)"
           git show "${PREV_TAG}:${SPEC}" > "$base_tmp"
           echo "===== $SPEC(vs $PREV_TAG)====="
           if oasdiff breaking "$base_tmp" "$SPEC" --fail-on ERR; then
-            echo "✅ 相对上个 release 无 ERR 级破坏性变更"
+            gate_result PASS SDK_RELEASE_BREAKING_COMPATIBILITY "Orchestrator internal OpenAPI 兼容性"
           else
-            echo "❌ SDK 协议 spec 相对 $PREV_TAG 有 ERR 级破坏性变更——拒绝发布。"
-            echo "   如确为有意 breaking,须走版本化端点 + 弃用流程后再发。"
-            exit 1
+            check_rc=$?
+            echo "SDK 协议 spec 相对 $PREV_TAG 存在 ERR 级破坏性变更；如确需 breaking，必须先走版本化端点与弃用流程。" >&2
+            gate_result FAIL SDK_RELEASE_BREAKING_COMPATIBILITY "Orchestrator internal OpenAPI 兼容性" "$check_rc"
+            exit "$check_rc"
           fi
 
   # ===========================================================================

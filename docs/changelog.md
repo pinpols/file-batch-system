@@ -7,6 +7,9 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-09-25
+- **每日仿真与严格数据验证**：新增基于北京时间当天代码变更判定的 GitHub Actions nightly，串行运行 `sim-harness all` 和 BE-ACC step 5(strict real-data verification)；MinIO 初始化 sidecar 改复用锁定的服务镜像内 `mc`，移除不可用的独立 mc 镜像依赖。
+- **CI 检测结果格式统一**：每日变更检测和 SDK release breaking-change gate 统一使用共享状态/错误码/skip 原因格式；release tag 拉取失败改为显式失败，不再误判为无历史版本。
+- **提交前门禁按变更域扩展**：Shell 变更增加 Linux 可移植性检查；文档变更检查代码文档路径引用；`.env`、Maven POM 和 Helm 变更分别执行 shell 安全、模块依赖边界和生产 overlay 安全检查。
 - **SDK 运行时版本守护边界**：后端门禁只读取后端仓库内的声明；前端仓库独立运行 Node 版本矩阵，只有本地同时检出配对仓库时才由后端脚本交叉核对，避免 CI 隐含依赖相邻 checkout。
 - **Spring Boot 基线补丁升级**：将工程固定框架基线同步至 Spring Boot 4.1.1；版本细节由根 POM BOM 统一管理。
 - **Java 日志与异常输出规范**：服务/测试统一使用 SLF4J/Logback 或 JUnit `TestReporter`，禁止直接标准输出和 `printStackTrace()`；未预期故障将 Throwable 交由日志框架记录，预期 fallback 使用 `SwallowedExceptionLogger`，周期重试避免重复整栈。唯一标准输出例外为 `security-scan` CLI，并由 Java 日志治理门禁限定。

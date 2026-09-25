@@ -27,6 +27,9 @@ docs_changed=0
 scripts_changed=0
 workflow_changed=0
 loc_affecting_changed=0
+env_file_changed=0
+maven_descriptor_changed=0
+helm_changed=0
 for file in "${staged_files[@]}"; do
   [[ "$file" == *.java ]] && java_files+=("$file")
   [[ "$file" == *.sh ]] && shell_files+=("$file")
@@ -34,6 +37,9 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] \
     && scripts_changed=1
   [[ "$file" == .github/workflows/* || "$file" == .github/actions/* ]] && workflow_changed=1
+  [[ "$file" == .env* ]] && env_file_changed=1
+  [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
+  [[ "$file" == helm/* ]] && helm_changed=1
   if [[ "$file" != docs/* && "$file" != db/migration/* ]]; then
     case "$file" in
       *.java|*.sh|*.py|*.yml|*.yaml|*.xml|*.ts|*.tsx|*.rs|*.go|*.toml|*.properties|*.sql)
@@ -67,6 +73,8 @@ if ((${#shell_files[@]} > 0)); then
   }
   gate_run PRE_COMMIT_SHELLCHECK "Shell 语法与 ShellCheck（${#shell_files[@]} 个文件）" \
     check_shell_files
+  gate_run PRE_COMMIT_SHELL_LINUX_PORTABILITY "Shell Linux 可移植性" \
+    "$PYTHON_BIN" scripts/ci/check-shell-linux-portability.py
 fi
 
 if ((workflow_changed == 1)); then
@@ -89,6 +97,20 @@ if ((docs_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-docs-structure.py
   gate_run PRE_COMMIT_DOC_TIMESTAMP_POLICY "文档日期命名策略" \
     "$PYTHON_BIN" scripts/ci/check-doc-timestamp-policy.py
+  gate_run PRE_COMMIT_CODE_DOC_REFERENCES "代码与文档路径引用" \
+    "$PYTHON_BIN" scripts/ci/check-code-doc-references.py
+fi
+if ((env_file_changed == 1)); then
+  gate_run PRE_COMMIT_ENV_FILE_SHELL_SAFETY ".env 文件 Shell 安全" \
+    "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py
+fi
+if ((maven_descriptor_changed == 1)); then
+  gate_run PRE_COMMIT_DEPENDENCY_BOUNDARIES "Maven 模块依赖边界" \
+    "$PYTHON_BIN" scripts/ci/check-dependency-boundaries.py
+fi
+if ((helm_changed == 1)); then
+  gate_run PRE_COMMIT_PRODUCTION_OVERLAY "Helm 生产配置安全" \
+    "$PYTHON_BIN" scripts/ci/check-production-overlay-safety.py
 fi
 if ((loc_affecting_changed == 1)); then
   update_loc_snapshot() {
