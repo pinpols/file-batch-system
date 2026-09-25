@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.dryrun;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -29,10 +28,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
-import software.amazon.awssdk.services.s3.S3Client;
 
 /**
  * ADR-026 §三层粒度 演练计划服务实现。priority-scope §ADR-026 红线：
@@ -68,8 +65,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       WorkflowEdgeMapper workflowEdgeMapper,
       BatchTimezoneProvider timezoneProvider,
       DryRunSqlProbe sqlProbe,
-      ObjectProvider<S3Client> s3ClientProvider,
-      ObjectProvider<S3StorageProperties> s3PropertiesProvider,
+      DryRunObjectStorageProbe objectStorageProbe,
       @OrchestratorOutboundTransport OutboundHttpTransport httpTransport) {
     this.configCacheService = configCacheService;
     this.schedulePlanBuilder = schedulePlanBuilder;
@@ -77,7 +73,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     this.workflowEdgeMapper = workflowEdgeMapper;
     this.timezoneProvider = timezoneProvider;
     this.sqlProbe = sqlProbe;
-    this.objectStorageProbe = new DryRunObjectStorageProbe(s3ClientProvider, s3PropertiesProvider);
+    this.objectStorageProbe = objectStorageProbe;
     this.endpointProbe = new DryRunEndpointProbe(httpTransport);
   }
 

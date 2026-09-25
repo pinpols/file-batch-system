@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.application.trigger;
+package io.github.pinpols.batch.orchestrator.infrastructure.trigger;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;

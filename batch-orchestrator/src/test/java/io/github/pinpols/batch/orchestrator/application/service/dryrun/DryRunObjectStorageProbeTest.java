@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.storage.S3DryRunObjectStorageProbe;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +21,7 @@ class DryRunObjectStorageProbeTest {
     S3StorageProperties properties = new S3StorageProperties();
     properties.setBucket("invalid_bucket");
     DryRunObjectStorageProbe probe =
-        new DryRunObjectStorageProbe(clientProvider, provider(properties));
+        new S3DryRunObjectStorageProbe(clientProvider, provider(properties));
     List<DryRunFinding> findings = new ArrayList<>();
 
     int probed = probe.probe(Map.of(), findings);
@@ -31,7 +32,7 @@ class DryRunObjectStorageProbeTest {
 
   @Test
   void shouldKeepRegexOnlyFallbackWhenClientUnavailable() {
-    DryRunObjectStorageProbe probe = new DryRunObjectStorageProbe(provider(null), provider(null));
+    DryRunObjectStorageProbe probe = new S3DryRunObjectStorageProbe(provider(null), provider(null));
     List<DryRunFinding> findings = new ArrayList<>();
 
     int probed = probe.probe(Map.of("s3Bucket", "batch-results"), findings);
