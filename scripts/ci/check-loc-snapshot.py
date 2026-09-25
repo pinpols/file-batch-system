@@ -27,7 +27,7 @@ def normalize_report(text: str) -> str:
 
 def run_generator(output: pathlib.Path) -> None:
     subprocess.run(
-        ["python3", "scripts/dev/lean-loc-report.py", "--write", str(output)],
+        [sys.executable, "scripts/dev/lean-loc-report.py", "--write", str(output)],
         cwd=ROOT,
         check=True,
         stdout=subprocess.DEVNULL,

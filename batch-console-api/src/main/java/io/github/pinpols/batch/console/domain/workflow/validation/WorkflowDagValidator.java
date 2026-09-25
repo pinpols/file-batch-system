@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.workflow.validation;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.workflow.WorkflowJobReferencePort;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.EdgeItem;
@@ -21,6 +23,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -46,8 +49,8 @@ import org.springframework.stereotype.Component;
  *   <li>无孤立节点(每个非 START 节点必须能从 START DFS 到达)
  *   <li>JOB.related_job_code 非空
  *   <li>FILE_STEP.related_pipeline_code 非空 + 必须在 pipeline_definition 表存在(同租户)
- *   <li>GATEWAY 出度 ≥ 2
- *   <li>GATEWAY.gateway_strategy 非空(承载在 node_params,MVP 阶段 string 非空即可)
+ *   <li>GATEWAY 至少 1 条出边；出度 ≥ 2 表示分支，由 edge_type / condition_expr 决定
+ *   <li>GATEWAY 入度 ≥ 2 时必须配置 joinMode(ALL / ANY / N_OF)，N_OF 阈值必须合法
  * </ol>
  */
 @Component
@@ -150,7 +153,7 @@ public class WorkflowDagValidator {
     detectUnreachable(startNodes.get(0), nodeCodes, adj);
 
     // 8/9/10/11. 节点字段引用完整性
-    validateNodeReferences(tenantId, nodes, outDegree);
+    validateNodeReferences(tenantId, nodes, inDegree, outDegree);
   }
 
   /**
@@ -258,9 +261,12 @@ public class WorkflowDagValidator {
     return null;
   }
 
-  /** 8/9/10/11:JOB / FILE_STEP / GATEWAY 节点字段引用完整性 + gateway 出度下限。 */
+  /** 8/9/10/11:JOB / FILE_STEP / GATEWAY 节点字段引用完整性。 */
   private void validateNodeReferences(
-      String tenantId, List<NodeItem> nodes, Map<String, Integer> outDegree) {
+      String tenantId,
+      List<NodeItem> nodes,
+      Map<String, Integer> inDegree,
+      Map<String, Integer> outDegree) {
     for (NodeItem n : nodes) {
       String type = n.getNodeType();
       if (WorkflowNodeType.JOB.code().equalsIgnoreCase(type)) {
@@ -287,21 +293,56 @@ public class WorkflowDagValidator {
               pipelineCode);
         }
       } else if (WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(type)) {
-        // gateway_strategy 承载在 node_params (JSON);MVP 阶段非空即可,具体 strategy 取值不校验
-        if (isBlank(n.getNodeParams())) {
+        int outgoing = outDegree.getOrDefault(n.getNodeCode(), 0);
+        if (outgoing < 1) {
           throw BizException.of(
               ResultCode.VALIDATION_ERROR,
-              "error.workflow.dag.gateway_strategy_missing",
+              "error.workflow.dag.gateway_out_degree_zero",
               n.getNodeCode());
         }
-        if (outDegree.getOrDefault(n.getNodeCode(), 0) < 2) {
-          throw BizException.of(
-              ResultCode.VALIDATION_ERROR,
-              "error.workflow.dag.gateway_out_degree_too_small",
-              n.getNodeCode(),
-              outDegree.getOrDefault(n.getNodeCode(), 0));
+        int incoming = inDegree.getOrDefault(n.getNodeCode(), 0);
+        if (incoming >= 2) {
+          validateJoinConfig(n, incoming);
         }
       }
+    }
+  }
+
+  private void validateJoinConfig(NodeItem node, int incoming) {
+    Map<?, ?> params = parseNodeParams(node.getNodeParams());
+    String joinMode = EmptyChecks.isNull(params.get("joinMode"))
+        ? ""
+        : String.valueOf(params.get("joinMode")).trim().toUpperCase(Locale.ROOT);
+    if (!Set.of("ALL", "ANY", "N_OF").contains(joinMode)) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR,
+          "error.workflow.dag.gateway_join_mode_missing",
+          node.getNodeCode());
+    }
+    if (!"N_OF".equals(joinMode)) {
+      return;
+    }
+    Object rawThreshold = params.get("joinThreshold");
+    int threshold = rawThreshold instanceof Number number ? number.intValue() : -1;
+    if (threshold < 1 || threshold > incoming) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR,
+          "error.workflow.dag.gateway_join_threshold_invalid",
+          node.getNodeCode(),
+          threshold,
+          incoming);
+    }
+  }
+
+  private Map<?, ?> parseNodeParams(String nodeParams) {
+    if (isBlank(nodeParams)) {
+      return Map.of();
+    }
+    try {
+      Map<?, ?> params = JsonUtils.fromJson(nodeParams, Map.class);
+      return EmptyChecks.isNull(params) ? Map.of() : params;
+    } catch (IllegalArgumentException ignored) {
+      return Map.of();
     }
   }
 
