@@ -193,6 +193,13 @@ class WorkflowConditionEvaluatorTest {
   }
 
   @Test
+  void shouldMatchNotNullPayloadField() {
+    assertThat(evaluator.matches("bizDate != null", "{\"bizDate\":\"2026-09-25\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("bizDate != null", "{}")).isFalse();
+  }
+
+  @Test
   void shouldHandleNullOrInvalidPayloadJson() {
     assertThat(evaluator.matches("status = 'SUCCESS'", null)).isFalse();
     assertThat(evaluator.matches("status = 'SUCCESS'", "not-json")).isFalse();
