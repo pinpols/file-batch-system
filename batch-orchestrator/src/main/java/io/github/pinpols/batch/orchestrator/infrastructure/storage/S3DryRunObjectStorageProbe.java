@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.storage;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunObjectStorageProbe;
@@ -36,7 +37,7 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
     String bucket = stringValue(params, "s3Bucket");
     if (!Texts.hasText(bucket)) {
       S3StorageProperties properties = s3PropertiesProvider.getIfAvailable();
-      bucket = properties == null ? null : properties.getBucket();
+      bucket = EmptyChecks.isNull(properties) ? null : properties.getBucket();
     }
     if (!Texts.hasText(bucket)) {
       return 0;
@@ -50,7 +51,7 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
       return 1;
     }
     S3Client client = s3ClientProvider.getIfAvailable();
-    if (client == null) {
+    if (EmptyChecks.isNull(client)) {
       findings.add(DryRunFinding.warn(
           "EXEC_S3_CLIENT_UNAVAILABLE",
           SCOPE_EXECUTION,
@@ -85,7 +86,7 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
   }
 
   private static String stringValue(Map<String, Object> params, String key) {
-    Object raw = params == null ? null : params.get(key);
+    Object raw = EmptyChecks.isNull(params) ? null : params.get(key);
     return raw instanceof String string ? string : null;
   }
 }

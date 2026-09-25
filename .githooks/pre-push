@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# 启用：git config core.hooksPath .githooks（每人 clone 后跑一次）
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+exec bash "$ROOT/scripts/local/pre-push-sdk-checks.sh"

@@ -132,11 +132,18 @@ if [[ -n "$BASE_REF" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-empty-checks.py --base "$BASE_REF"; then
     errors=$((errors+1))
   fi
+  if ! "$PYTHON_BIN" scripts/ci/check-infrastructure-abstraction-boundaries.py --base "$BASE_REF"; then
+    errors=$((errors+1))
+  fi
   if ! "$PYTHON_BIN" scripts/ci/check-readiness-doc-sync.py --base "$BASE_REF"; then
     errors=$((errors+1))
   fi
 else
   warn "无可用 base,跳过 diff 类 Python 门禁"
+fi
+
+if ! "$PYTHON_BIN" scripts/ci/check-direct-client-boundaries.py; then
+  errors=$((errors+1))
 fi
 
 if [[ -f ".trivyignore" ]]; then
