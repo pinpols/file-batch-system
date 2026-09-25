@@ -195,7 +195,7 @@ echo ""
 echo "── 基础服务镜像（4 个 .env 对比） ─────"
 
 # 注:缓存服务运行 Valkey 镜像,但保留 REDIS_IMAGE_TAG 兼容旧 env / 脚本命名。
-TAGS=(POSTGRES_IMAGE_TAG KAFKA_IMAGE_TAG KAFKA_UI_IMAGE_TAG MINIO_IMAGE_TAG MINIO_MC_IMAGE_TAG REDIS_IMAGE_TAG VALKEY_IMAGE_TAG \
+TAGS=(POSTGRES_IMAGE_TAG KAFKA_IMAGE_TAG KAFKA_UI_IMAGE_TAG MINIO_IMAGE_REPOSITORY MINIO_IMAGE_TAG MINIO_MC_IMAGE_TAG REDIS_IMAGE_TAG VALKEY_IMAGE_TAG \
       SFTP_IMAGE_TAG MOCKSERVER_IMAGE_TAG PROMETHEUS_IMAGE_TAG ALERTMANAGER_IMAGE_TAG JAEGER_IMAGE_TAG TEMPO_IMAGE_TAG \
       LOKI_IMAGE_TAG OTEL_COLLECTOR_IMAGE_TAG GRAFANA_IMAGE_TAG REDIS_EXPORTER_IMAGE_TAG POSTGRES_EXPORTER_IMAGE_TAG \
       KAFKA_EXPORTER_IMAGE_TAG NODE_EXPORTER_IMAGE_TAG CADVISOR_IMAGE_TAG)
@@ -238,7 +238,6 @@ TEST_IMAGE_SOURCE="$ROOT/batch-test-support/src/main/java/io/github/pinpols/batc
 declare -A CORE_IMAGE_PREFIXES=(
   [POSTGRES]="postgres"
   [KAFKA]="apache/kafka"
-  [MINIO]="quay.io/minio/minio"
   [VALKEY]="valkey/valkey"
 )
 declare -A CORE_IMAGE_TAGS=(
@@ -251,7 +250,12 @@ declare -A CORE_IMAGE_TAGS=(
 for service in POSTGRES KAFKA MINIO VALKEY; do
   tag_name="${CORE_IMAGE_TAGS[$service]}"
   tag_value=$(grep -E "^${tag_name}=" "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-  expected="${CORE_IMAGE_PREFIXES[$service]}:${tag_value}"
+  if [[ "$service" == "MINIO" ]]; then
+    repo_value=$(grep -E "^MINIO_IMAGE_REPOSITORY=" "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+    expected="${repo_value}:${tag_value}"
+  else
+    expected="${CORE_IMAGE_PREFIXES[$service]}:${tag_value}"
+  fi
   actual=$(sed -nE "s/.*public static final String ${service} = \"([^\"]+)\";.*/\1/p" \
     "$TEST_IMAGE_SOURCE")
   if [[ -z "$actual" ]]; then
@@ -269,6 +273,8 @@ done
 POSTGRES_TAG=$(grep -E '^POSTGRES_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 VALKEY_TAG=$(grep -E '^VALKEY_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 REDIS_COMPAT_TAG=$(grep -E '^REDIS_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+MINIO_REPOSITORY=$(grep -E '^MINIO_IMAGE_REPOSITORY=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+MINIO_TAG=$(grep -E '^MINIO_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 
 check_image_reference() {
   local file="$1" reference="$2" label="$3"
@@ -290,8 +296,11 @@ else
 fi
 check_image_reference ".github/actions/setup-build-env/action.yml" "postgres:${POSTGRES_TAG}" "CI 预拉取"
 check_image_reference ".github/actions/setup-build-env/action.yml" "valkey/valkey:${VALKEY_TAG}" "CI 预拉取"
+check_image_reference ".github/actions/setup-build-env/action.yml" "${MINIO_REPOSITORY}:${MINIO_TAG}" "CI 预拉取"
 check_image_reference "scripts/local/sim-harness.sh" "postgres:${POSTGRES_TAG}" "Sim harness"
 check_image_reference "docker-compose.yml" 'valkey/valkey:${VALKEY_IMAGE_TAG:-'"${VALKEY_TAG}"'}' "Compose fallback"
+check_image_reference "docker-compose.yml" '${MINIO_IMAGE_REPOSITORY:-'"${MINIO_REPOSITORY}"'}:${MINIO_IMAGE_TAG:-'"${MINIO_TAG}"'}' "Compose fallback"
+check_image_reference "docs/runbook/base-services-deployment.md" '${MINIO_IMAGE_REPOSITORY}:${MINIO_IMAGE_TAG}' "部署手册"
 check_image_reference "deploy/ha/30-redis-failover.yaml" "valkey/valkey:${VALKEY_TAG}" "HA manifest"
 check_image_reference "docs/runbook/base-services-deployment.md" 'valkey/valkey:${VALKEY_IMAGE_TAG}' "部署手册"
 if grep -Fq -- 'redis:7.4' "$ROOT/docs/runbook/base-services-deployment.md"; then
