@@ -64,14 +64,14 @@ public class TaskDispatcher {
 
   /**
    * 平台 {@code result_summary} 是 JSONB 列(mapper {@code #{resultSummary}::jsonb}):必须是合法 JSON,
-   * 发裸人读串("boom")会触发 {@code invalid input syntax for type json} → report 500。统一序列化成 {@code
+   * 如果发送普通文本("boom")会触发 {@code invalid input syntax for type json} → report 500。统一序列化成 {@code
    * {code,message}} 对象(对齐内建 worker DefaultTaskExecutionWrapper 契约)。
    */
   /**
    * P0 backpressure 关键约束:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
-   * 的工作队列无界,单看 {@link #inFlight}(CLAIM 成功后才加)在平台 5xx / claim 慢 / HTTP 卡住时挡不住——worker 线程全卡在
-   * claim,inFlight 始终低,consumer 仍会持续把消息写入无界队列并提交 offset;一旦进程崩,这些 「已提交 offset 但从未 CLAIM」的任务没有
-   * lease,orchestrator 的 lease-timeout 重投兜不到(TaskTimeoutEnforcer 只扫 task_status='RUNNING')。故在
+   * 的工作队列无界,单看 {@link #inFlight}(CLAIM 成功后才加)在平台 5xx / claim 慢 / HTTP 阻塞时无法限流——worker 线程全部阻塞在
+   * claim,inFlight 始终低,consumer 仍会持续把消息写入无界队列并提交 offset;一旦进程崩溃,这些 「已提交 offset 但从未 CLAIM」的任务没有
+   * lease,orchestrator 的 lease-timeout 重投无法覆盖(TaskTimeoutEnforcer 只扫 task_status='RUNNING')。故在
    * {@link #onMessage} 提交前 {@code tryAcquire} 一个 permit,涵盖 queued+claiming+running; 无 permit 直接
    * {@code RETRY_LATER}(不提交 offset),permit 在 runnable 完整跑完后释放。
    */
@@ -81,7 +81,7 @@ public class TaskDispatcher {
 
   /**
    * Lane J:高频路径(claim 5xx 重试、平台态门控、4xx 持续等)log 节流;同 key 在 60s 内只放行第一条, 其余抑制并计数,下次放行附 suppressed
-   * 计数。窗口选 60s 是「人眼可读 + 不丢运维线索」折中。
+   * 计数。窗口选 60s 是「日志可读性 + 保留运维线索」之间的折中。
    */
   private final ThrottledLogger throttledLog = ThrottledLogger.create(log, Duration.ofSeconds(60));
 
@@ -224,9 +224,9 @@ public class TaskDispatcher {
     /**
      * 有效但当前 worker 不该处理、可重投的消息(纵深防御 ACL 漂移的 foreign-tenant / 未知 schema 大版本)。对齐 Go {@code
      * DispositionDroppedForeignTenant / DispositionRejectedSchema} 与 TS #826:**不提交 offset、不 pause
-     * 分区** —— Kafka consumer 记该分区 commit 天花板(取最低 withheld offset)后**继续消费**,天花板之上的 offset
+     * 分区** —— Kafka consumer 记该分区 commit 上限(取最低 withheld offset)后**继续消费**,上限之上的 offset
      * 永不提交(withheld 记录随 rebalance / 重启重投,at-least-once),同分区其它租户的正常消息不被 head-of-line 阻塞。§A
-     * 硬契约只要求「reject + 不 commit offset」,天花板已满足,无需冻结分区。
+     * 硬契约只要求「reject + 不 commit offset」,commit 上限已满足,无需冻结分区。
      */
     WITHHOLD
   }
@@ -244,7 +244,7 @@ public class TaskDispatcher {
     }
     if (!platformState.get().acceptsNewTasks()) {
       // Phase 2 §2.4:平台 PAUSED / DRAINING — 拒新任务。正常路径下 KafkaTaskConsumer 已 pause partition
-      // 不再投递,此处是防御性回退(pause 生效前可能有消息已在途)。高频路径走 throttledLog 防刷屏。
+      // 不再投递,此处是防御性回退(pause 生效前可能有消息已在途)。高频路径走 throttledLog 避免重复日志。
       throttledLog.info(
           "platform_state_" + platformState.get(),
           "dispatcher platformState={}, skipping new dispatch msg taskId={}",
@@ -262,7 +262,7 @@ public class TaskDispatcher {
     // + ACL 已隔离;若 consumer group 配置失误或 ACL 漂移导致拿到非本租户消息,这里 ERROR + WITHHOLD:
     // 不 ack offset 留给后续 redeliver / 人工介入,本进程不处理避免串任务。
     // 对齐 Go DispositionDroppedForeignTenant / TS #826:**不置 fatal、不冻结分区** —— consumer 记该分区
-    // commit 天花板后继续消费,同分区其它租户的正常消息不被 head-of-line 阻塞;该 foreign 消息永不提交(可重投)。
+    // commit 上限后继续消费,同分区其它租户的正常消息不被 head-of-line 阻塞;该 foreign 消息永不提交(可重投)。
     if (!config.getTenantId().equals(msg.tenantId())) {
       throttledLog.error(
           "tenant_mismatch",
@@ -494,7 +494,8 @@ public class TaskDispatcher {
       // 不再用异常类 SimpleName —— 否则平台按 errorCode 聚合告警时跨语言 SDK 碎片化(#P2 errorCode 词表统一)。
       String code = SdkErrorCode.EXECUTION_FAILED;
       body.put("errorCode", code);
-      // result_summary 是 JSONB:发 {code,message} 对象(裸串 → invalid input syntax for type json → 500)。
+      // result_summary 是 JSONB:发 {code,message} 对象(普通文本 → invalid input syntax for type json →
+      // 500)。
       // 原异常类名保留在 resultSummary.message 里维持可诊断性(平台读 resultSummary;errorMessage 字段是红线,禁发)。
       body.put("resultSummary", resultSummaryJson(code, diagnosticMessage(message, error)));
       retryCoordinator.reportWithRetry(msg.taskId(), idem, body);
@@ -505,7 +506,7 @@ public class TaskDispatcher {
 
   /**
    * 组装成功/业务失败的 report body(对齐 TaskExecutionReportDto)。result_summary 是 JSONB:发 {@code
-   * {code,message}} 对象,裸串会触发 invalid input syntax for type json → 500。
+   * {code,message}} 对象,普通文本会触发 invalid input syntax for type json → 500。
    */
   private Map<String, Object> successReportBody(TaskDispatchMessage msg, SdkTaskResult result) {
     Map<String, Object> body = new HashMap<>();
@@ -564,7 +565,7 @@ public class TaskDispatcher {
   }
 
   /**
-   * 把 {@code (code,message)} 序列化成 JSONB 列要求的合法 JSON 字符串。序列化失败兜底成一个最小合法 JSON 对象(永不发裸串,否则平台 JSONB 解析
+   * 把 {@code (code,message)} 序列化成 JSONB 列要求的合法 JSON 字符串。序列化失败时返回一个最小合法 JSON 对象(永不发普通文本,否则平台 JSONB 解析
    * 500)。
    */
   private static String resultSummaryJson(String code, String message) {

@@ -117,7 +117,7 @@ class BatchPlatformClient:
         """注册一个 :class:`SdkTaskHandler`(对齐 Java ``Builder.register``)。
 
         必须在 :meth:`start` 之前调用。``task_type`` 重复时直接抛错,让配置
-        失误的 worker 早爆错,而不是悄悄丢弃后注册的 handler。
+        失误的 worker 尽早报错,而不是悄悄丢弃后注册的 handler。
         """
         if self._started:
             raise RuntimeError("cannot register handlers after start()")

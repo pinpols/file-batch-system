@@ -25,7 +25,7 @@
 
 ### P1 级（15 条 — 用户痛）
 
-**画布交互**：键盘监听重复绑定(快捷键触发两次) · 跨 port 同向边可重复 · 拖放节点坐标写死(刷新位置丢失) · 粘贴含 START/END 后 Undo 复活
+**画布交互**：键盘监听重复绑定(快捷键触发两次) · 跨 port 同向边可重复 · 拖放节点坐标固化(刷新位置丢失) · 粘贴含 START/END 后 Undo 复活
 
 **Undo/草稿**：`node:moved` 双触发草稿多写 · isReadOnly 不动态更新 · 创建模式 currentDraftKey 空(草稿不存) · JSON.stringify 失败静默丢 · 多 tab 竞写无锁
 
@@ -154,7 +154,7 @@ export function fetchWorkflowMermaidDiagram(id: string) {
 
 ### 为什么不继续修 36 bug？
 
-典型的"烂尾工程"特征：
+典型的"未收敛工程"特征：
 - 不断修小 bug，但根本问题（架构选型）没解
 - 每轮修完又发现新 bug（KeepAlive / IME / cache race）
 - 维护成本随 Vue/X6 升级而指数增长

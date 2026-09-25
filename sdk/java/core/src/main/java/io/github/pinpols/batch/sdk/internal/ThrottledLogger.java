@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 
 /**
  * SDK 内部高频日志压制器 — Lane J:在 {@code throttleWindow} 内,同 {@code key} 只输出第一条,后续被抑制并计数, 下一次窗外放行时附 {@code
- * (suppressed N times since ...)} 提示,运维既不被刷屏也不会丢线索。
+ * (suppressed N times since ...)} 提示,运维既不会被重复日志干扰,也不会丢失线索。
  *
  * <p>非 public:仅供 SDK 内部 dispatcher / scheduler / consumer 等高频路径使用,不暴露给租户业务代码。
  *

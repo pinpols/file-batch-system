@@ -38,7 +38,7 @@ public class SparkSubmitExecutorProperties {
   /** 用户未配 timeoutSeconds 时的回退超时。 */
   private Duration defaultTimeout = Duration.ofMinutes(30);
 
-  /** stdout / stderr 截断上限(防日志爆内存)。 */
+  /** stdout / stderr 截断上限(防日志内存耗尽)。 */
   private int maxStdoutBytes = 1024 * 1024;
 
   private int maxStderrBytes = 256 * 1024;

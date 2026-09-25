@@ -256,7 +256,7 @@ class DispatchChannelCircuitBreakerTest {
   @Test
   void shouldRemoveMeterWhenBreakerEvictedOnRecovery() throws InterruptedException {
     // 完整生命周期 + 无 meter 泄漏(简报第 4 点验收):OPEN → HALF_OPEN 成功探测 → CLOSED 且 0 残留失败触发
-    // recordSuccess 驱逐 → 断言该 key 的 state meter 从 meterRegistry 消失。这是"基数不爆靠驱逐→onEntryRemoved
+    // recordSuccess 驱逐 → 断言该 key 的 state meter 从 meterRegistry 消失。这是"基数受控依赖驱逐→onEntryRemoved
     // →removeMetrics"核心机制的直接回归兜底:resilience4j 升级改事件语义时此测试会红,而非静默泄漏 meter。
     properties.setCooldownMillis(30L);
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();

@@ -21,7 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * （file_record，两支 union：related_file_id 直连 + pipeline_instance.file_id 间连）→ {@code
  * progress_by_instance}（pipeline_instance + pipeline_progress）→ {@code instance_enriched}， worker
  * 维度再叠 {@code task_base}（job_task）。<b>每一处 join 都带 {@code x.tenant_id = i.tenant_id} / {@code
- * x.tenant_id = #{tenantId}}</b>；任一条件漏写就会跨租户串数据——这正是本类要钉死的属性。
+ * x.tenant_id = #{tenantId}}</b>；任一条件漏写就会跨租户串数据——这正是本类要固化的属性。
  *
  * <p>核心断言：同一时间窗内种入租户 A + 租户 B 两份差异化数据，只查 A，聚合值必须 <b>只反映 A</b> （B 的极端可辨识值 888888888 字节 / 第 3 个实例 /
  * worker-b 必须缺席）。把 CTE 里任一 tenant 谓词 revert 掉，本类至少一个断言转红。

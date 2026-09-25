@@ -118,7 +118,7 @@ POST /api/console/telemetry/events
 **问题**：
 - ❌ 接前端任意埋点事件，变成了"前端日志接收平台"
 - ❌ INFO/ERROR 打到批量系统日志，污染告警视图
-- ❌ 前端流量 QPS 可能远超调度路径，压爆 console-api
+- ❌ 前端流量 QPS 可能远超调度路径，压垮 console-api
 - ❌ 各团队都想往这里塞事件，无限扩张
 
 **风险等级**：🟡 中

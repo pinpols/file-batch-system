@@ -38,7 +38,7 @@ import org.mockito.invocation.InvocationOnMock;
  *   <li>**HTTP claim/renew body**:SDK 写出的字段集必须包含 {@code TaskClaimRequest} 的关键字段 (tenantId/workerId)
  * </ul>
  *
- * <p>批 BE DTO 字段被改时,本测应该爆 — fail-fast 守门。
+ * <p>批 BE DTO 字段被改时,本测试应失败 — fail-fast 守门。
  */
 class SdkPlatformContractTest {
 
@@ -146,7 +146,7 @@ class SdkPlatformContractTest {
     assertThat(body).containsEntry("errorCode", "EXECUTION_FAILED");
     // errorMessage 仍是红线禁发字段(平台读 resultSummary,不读 errorMessage)。
     assertThat(body).doesNotContainKey("errorMessage");
-    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是裸串(否则平台解析 500)
+    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是普通文本(否则平台解析 500)
     assertThat(body.get("resultSummary").toString())
         .contains("\"code\":\"EXECUTION_FAILED\"")
         .contains("boom")

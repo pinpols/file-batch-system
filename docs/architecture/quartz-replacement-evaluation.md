@@ -342,7 +342,7 @@ Grafana panel 可加进 `deploy/docker/observability/grafana-dashboard-batch-cov
 | 不做 | 原因 |
 |---|---|
 | Quartz 独立 PG 实例(原 Phase 2 开关) | 解 5% 问题,终态时变孤儿,长期运维负担 |
-| Quartz cluster mode(多 trigger 节点) | QRTZ_LOCKS 行锁是天花板,加节点 ≠ 加吞吐 |
+| Quartz cluster mode(多 trigger 节点) | QRTZ_LOCKS 行锁是上限,加节点 ≠ 加吞吐 |
 | 引入 PowerJob / Temporal / DolphinScheduler | Workflow 引擎 overlap,推倒重做 |
 | 现在就开始写时间轮 | 业务量级远未到拐点,YAGNI;先做阶段 0 预警 |
 | 自研分层时间轮(秒/分/时/天 多层) | 单层 + 滑动窗口够用到亿级 fire/天;真要多层时再升级 |

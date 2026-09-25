@@ -339,7 +339,7 @@ Alertmanager → Slack 发出来值班点不进 runbook,得手动到 docs/runboo
 是手 export 的 raw JSON。CI 无任何校验它跟 prometheus rule 引用的 metric name 一致性。
 metric rename 后 dashboard 静默坏掉。
 
-### P2-7 helm probes initialDelay 写死 30/40s
+### P2-7 helm probes initialDelay 固化 30/40s
 
 `values.yaml:135-144` `livenessProbe.initialDelaySeconds: 40`,`readinessProbe: 30`。
 对 worker JVM 启动 60s+ 不安全。已经在用 `values-startup-probes.yaml` overlay,但 default
@@ -413,7 +413,7 @@ metric rename 后 dashboard 静默坏掉。
 | 两周 | P1-10 扩 check-config-defaults 校验 helm | 0.5 d |
 | 两周 | P1-11 Dockerfile builder/runtime JDK 对齐 | 15 min |
 | 月度 | P2-1..P2-9 batch 治理 | 见各条 |
-| nit | nit-1..nit-3 顺手改 | 30 min total |
+| nit | nit-1..nit-3 同步改 | 30 min total |
 
 ---
 
@@ -456,7 +456,7 @@ metric rename 后 dashboard 静默坏掉。
 | BatchAlertEventsGrowing | warning | ✗ 无 |
 | BatchJobDefinitionFailingRepeatedly | warning | ✗ 无 |
 
-13 条 alert 中 **9 条无任何 runbook 对应**。P1-6 修复时应顺手把每条 alert annotation 加
+13 条 alert 中 **9 条无任何 runbook 对应**。P1-6 修复时应同步把每条 alert annotation 加
 `runbook_url`,即便指向占位页都比无好。
 
 ---

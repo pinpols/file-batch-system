@@ -116,7 +116,7 @@ stop(timeout):
 - `409` → 当幂等成功
 - 其他 4xx → 累计 5 次 fail-fast
 - `5xx` / 传输错 → 指数退避(200ms 基,2^n,默认 3 次)
-- Kafka SASL 凭据错 → 推荐直接 fail-fast(Java SDK 还没做,BYO 起点就做更省事)
+- Kafka SASL 凭据错 → 推荐直接 fail-fast(Java SDK 还没做,BYO 起点就做更简化处理)
 
 ### 1.8 凭据走 env,严禁入 payload
 

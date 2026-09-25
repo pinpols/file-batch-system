@@ -19,7 +19,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 /**
  * P2: ConsoleTelemetryController 写路径整合 — 校验 FE 上报 → BE 校验入参 → 写结构化日志(而非业务表)。
  *
- * <p>BE 设计:telemetry 不入业务 DB(P2-2 整改后只记结构化日志,避免登录用户灌爆 Loki/日志存储), 所以集成验证点是:
+ * <p>BE 设计:telemetry 不入业务 DB(P2-2 整改后只记结构化日志,避免登录用户写满 Loki/日志存储), 所以集成验证点是:
  *
  * <ul>
  *   <li>合规 payload → 200 SUCCESS

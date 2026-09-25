@@ -181,7 +181,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 ## 4. Phase 2 — 调度上下文下沉 + 双向通道
 
-**目标**:SDK 不再"瞎子",平台暂停 / 异常 / 业务日变化都能即时感知。
+**目标**:SDK 不再缺少调度上下文,平台暂停 / 异常 / 业务日变化都能即时感知。
 **估时**:1.5 周 · **产出**:1 BE PR + 1 SDK PR · **依赖**:Phase 0
 
 ### 4.1 待办
@@ -219,7 +219,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 ## 5. Phase 3 — 自定义 taskType 注册 ⭐ 价值密度最高
 
-**目标**:租户运营在 console 拖节点 → 自动出表单(不再瞎填)。
+**目标**:租户运营在 console 拖节点 → 自动出表单(不再无依据填写)。
 **估时**:2-3 周 · **产出**:跨 4 方协作 · **依赖**:Phase 0
 
 > 这是租户接入第一周就会卡的点。**第一个真实租户来之前,M3.1 必须完成**。
@@ -337,7 +337,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 ## 7. Phase 5 — 开发体验 / 类型安全(纯 SDK)
 
-**目标**:租户写 handler 不再用 `Map<String, Object>` 瞎转型。
+**目标**:租户写 handler 不再用 `Map<String, Object>` 无类型约束转换。
 **估时**:2 周 · **依赖**:Phase 3(descriptor schema 已立)
 
 ### 7.1 待办
@@ -791,7 +791,7 @@ git push origin feature/sdk-px-yy
 情况 3:CI fail
   → 先看是不是"stale cache" 导致(memory: feedback_mvn_build_gotchas)
   → 本地 mvn clean install 复现
-  → 真错才 fix,不要瞎改
+  → 真错才 fix,不要无依据修改
 
 情况 4:跨 phase 依赖 PR 延误
   → 不允许"跳过依赖直接开后续 PR"
@@ -1148,7 +1148,7 @@ agent 立刻:
 | AC-Overall-1 | 全仓 `mvn clean install` 绿 | CI 跑 |
 | AC-Overall-2 | 全仓 `mvn verify` 绿(单测 + IT) | CI 跑 |
 | AC-Overall-3 | ArchUnit 守护测全部通过 | `mvn -Dtest=*ArchTest test` |
-| AC-Overall-4 | SDK jar < 2.1 MB(依赖不爆) | 构建产物大小 |
+| AC-Overall-4 | SDK jar < 2.1 MB(依赖体积受控) | 构建产物大小 |
 | AC-Overall-5 | OpenAPI / `docs/api/` 跟 controller 一致(CI `pr-gate` 拦截) | CI |
 | AC-Overall-6 | 4 份 SDK doc 的待办全划线 / 标"延后"/ 标"暂缓" | 文档 review |
 | AC-Overall-7 | `changelog.md` 含每 phase 5 行总结 | 文档 review |

@@ -231,7 +231,7 @@ public class WorkerTaskLeaseRenewer {
           // fast-retry 救回了之前失败的续期：记 metric 让运维感知抖动恢复速率
           MeterRegistry registry = meterRegistryProvider.getIfAvailable();
           if (registry != null) {
-            // tenantId 不作 metric tag(高基数 → Prometheus 内存爆),日志 MDC 已带租户便于追溯
+            // tenantId 不作 metric tag(高基数 → Prometheus 内存耗尽),日志 MDC 已带租户便于追溯
             Counter.builder(METRIC_FAST_RETRY).register(registry).increment();
           }
         }

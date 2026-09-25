@@ -135,7 +135,7 @@ public class ConsoleJwtService {
   }
 
   // JWT IP/UA binding drift 日志抑制器:同一 (用户+租户+storedHash→currentHash) 组合
-  // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复刷屏(实测一轮 e2e 8000+ 行噪音)。
+  // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复产生日志噪音(实测一轮 e2e 8000+ 行噪音)。
   // 10k 上限够覆盖任何合理量级会话规模。
   private final Cache<String, Boolean> driftLogSuppressor = Caffeine.newBuilder()
       .expireAfterWrite(Duration.ofMinutes(5))
@@ -346,7 +346,7 @@ public class ConsoleJwtService {
     if (EmptyChecks.isNotNull(storedIp)
         && EmptyChecks.isNotNull(currentIp)
         && !storedIp.equals(currentIp)) {
-      // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 刷屏
+      // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 产生日志噪音
       String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
       if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
         driftLogSuppressor.put(key, Boolean.TRUE);

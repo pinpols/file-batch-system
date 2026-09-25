@@ -52,7 +52,7 @@ public class BusinessRoutingProperties {
   /**
    * 多片模式下<b>每片</b>连接池上限。0(默认)= 用 {@code batch.datasource.business} 的池上限(单片默认 20)。
    *
-   * <p>多片下每个 worker 会给每片各开一个池,总连接 ≈ 片数 × 本值 × worker 数,易压爆 PG {@code max_connections}。片数多时应显式调小本值(如
+   * <p>多片下每个 worker 会给每片各开一个池,总连接 ≈ 片数 × 本值 × worker 数,易压垮 PG {@code max_connections}。片数多时应显式调小本值(如
    * 5~10),控制每 worker 对每片的连接占用。
    */
   private int shardMaximumPoolSize = 0;

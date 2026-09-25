@@ -80,7 +80,7 @@
   落一条 `notification_delivery_log`(`eventType=ALERTMANAGER`,`ruleId=0`,`:133-151`)。
   缺渠道 → `am.notify.skipped` 计数 + 返回 `SKIPPED`,不落库(`:58-65`)。
 - typed 契约:`AlertmanagerWebhookPayload`(AM webhook v4)/ `AlertmanagerAlert`,渲染器
-  `AlertmanagerAlertRenderer.render(...)` 把批量告警折叠成人类可读正文(`maxAlerts` 上限防撑爆)。
+  `AlertmanagerAlertRenderer.render(...)` 把批量告警折叠成人类可读正文(`maxAlerts` 上限防撑满)。
 - 路由「方案 B(消费 `alert_routing_config` 做 receiver→channel 映射)」在
   `AlertmanagerNotifyService.java:26` 注释里明写**首版不做**。
 
@@ -181,7 +181,7 @@ annotations:`summary`(title)、`description`(detail_json 摘要)、`trace_id`、
 - **B. 每租户一套 receiver(高隔离)**:route 为每租户生成子树。租户多时 route 树膨胀、reload 频繁,**YAGNI,后置**。
 
 **基数守则**:进 `group_by` 的 label 只能是**低基数枚举**(alertname / tenant / severity / alert_group / team);
-`resource_key / trace_id / instance` 一律进 annotation 或非分组 label,否则 AM 分组爆炸(见 §8)。
+`resource_key / trace_id / instance` 一律进 annotation 或非分组 label,否则 AM 分组数量失控(见 §8)。
 
 ---
 
@@ -324,13 +324,13 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 2. **退役后的回滚窗口**:PR-2 删净自研链路后,回滚只剩「修 AM」一条路。缓解:PR-1→PR-2 之间留至少一轮完整 sim/e2e +
    本地 smoke 全绿;PR-2 不急合。
 3. **tenant label 基数**:`tenant` 进 `group_by` 尚可(租户数有限),但 `resource_key/trace_id/instance` 若误入
-   label/group_by → AM 分组爆炸、内存膨胀。缓解:§4 基数守则,高基数一律进 annotation;snapshot 测试锁住 label 集合。
+   label/group_by → AM 分组数量失控、内存膨胀。缓解:§4 基数守则,高基数一律进 annotation;snapshot 测试锁住 label 集合。
 4. **静默语义差(console silence vs AM silence)**:单向桥接,AM UI silence 不回写 console。缓解:约定 silence 统一从
    console 操作,AM UI 只读;文档明示。
 5. **route 无匹配 / channel 未预建**:AM 路由到某 receiver 但 `notification_channel` 没建同名渠道 →
    `am.notify.skipped` 静默蒸发(`AlertmanagerNotifyService.java:60` 已警示)。缓解:生成器校验 receiver↔channel 对齐(§6.4);
    `am.notify.skipped` 元告警;smoke 步骤 6 兜底。
-6. **am-notify 端点安全 / 限流**:permitAll + bearer 自校验,未纳入 console 限流链 → 告警风暴可打爆该端点。
+6. **am-notify 端点安全 / 限流**:permitAll + bearer 自校验,未纳入 console 限流链 → 告警风暴可压垮该端点。
    缓解:把 `/internal/am-notify/**` 挂到 `ConsoleRateLimitFilter`(#779–781);bearer token 纳入密钥轮换(§7.3)。
 7. **firing/resolved 语义**:漏 re-emit → AM 误判 resolved 提前停通知;不发 resolved → CLOSED 告警多响 `resolve_timeout`(5m)。
    缓解:`resend-interval < resolve_timeout`;close 桥接发 endsAt(§6.1)。

@@ -27,7 +27,7 @@
 
 - 单 instance：`POST /api/console/jobs/{id}/rerun` 可触发；`RerunRequest.resultPolicy` 已暴露版本意图（ADR-017）；
 - 批量重放：**完全空白** — 运维要写 SQL 拉 instance 列表 + 循环 POST，无审批、无进度、无版本一致性、无下游联动；
-- 跨 job 一致性：手动循环时，部分 rerun 成功 / 部分失败，半截烂摊子要人工兜。
+- 跨 job 一致性：手动循环时，部分 rerun 成功 / 部分失败，中间不一致状态要人工兜。
 
 **强依赖** ADR-017：版本主模型不存在时，重放出来的多份 SUCCESS 仍然是隐式约定；只有 result_version 落地，"哪一份是 official"才有归属。
 

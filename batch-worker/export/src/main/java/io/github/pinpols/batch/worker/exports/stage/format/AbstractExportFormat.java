@@ -43,7 +43,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   private static final String KEY_QUERY_PARAM_SCHEMA = "query_param_schema";
 
   /**
-   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存爆失败。1024
+   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存耗尽。1024
    * 列足够覆盖业务极端场景；真要超此值需显式把模板的 {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
    */
   private static final int DEFAULT_MAX_COLUMNS = 1024;
@@ -284,7 +284,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return DEFAULT_MAX_COLUMNS;
   }
 
-  /** A-3.12：列数超上限立即 fail-fast，避免后续 StringBuilder / workbook 爆内存。 */
+  /** A-3.12：列数超上限立即 fail-fast，避免后续 StringBuilder / workbook 内存耗尽。 */
   protected <T> List<T> enforceMaxColumns(List<T> columns, int maxColumns, String source) {
     if (columns.size() > maxColumns) {
       throw new IllegalArgumentException("export column count "

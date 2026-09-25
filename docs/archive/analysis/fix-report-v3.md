@@ -239,7 +239,7 @@ reason：`no_online_workers_in_group` vs `no_worker_matches_resource_tag`。
 
 ### 三、V62 遗留闭环（附带 3 条）
 
-V62 migration 由本会话之前的另一过程创建（未 commit），部分 service 层调用未跟上。本轮顺手修复：
+V62 migration 由本会话之前的另一过程创建（未 commit），部分 service 层调用未跟上。本轮同步修复：
 
 ##### LaunchBatchDayService 补齐 15-arg BatchDayInstanceRecord
 

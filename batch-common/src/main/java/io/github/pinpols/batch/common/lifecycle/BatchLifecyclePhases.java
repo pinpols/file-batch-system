@@ -3,7 +3,7 @@ package io.github.pinpols.batch.common.lifecycle;
 /**
  * BFS 进程内 SmartLifecycle phase 台账。
  *
- * <p>Spring 关闭时按 phase 从高到低停止，启动时从低到高启动。这里把关键 phase 收敛成常量，避免各模块散落魔法数字后把
+ * <p>Spring 关闭时按 phase 从高到低停止，启动时从低到高启动。这里把关键 phase 收敛成常量，避免各模块散落未命名数字常量后把
  * scheduler / relay 停到 Redis、Kafka、DB 之后。
  */
 public final class BatchLifecyclePhases {

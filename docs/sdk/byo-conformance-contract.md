@@ -7,7 +7,7 @@
 ## 0. 为什么需要这份契约
 
 `wire-protocol.md` 是人读权威,`then.sdkExpectedAction` 是中文 prose——**多语言各自解读 prose = 行为天然漂移**。
-本契约用两个机器化锚点消除这个洞:
+本契约用两个自动化锚点消除这个洞:
 
 1. **常量**锚在 [`docs/api/sdk-shared-constants.yaml`](../api/sdk-shared-constants.yaml)(各语言 **consume,禁 re-author**)。
 2. **行为**锚在 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) 每个 fixture 的 `then.expect`**结构化字段**(各语言断言同一组离散字段,不解读 prose)。

@@ -1,7 +1,7 @@
 # 百万级宽表长字段 流式导入/导出 实证(2026-06-06)
 
 worker-import / worker-export **流式大文件**链路真实跑通验证:以 ~800MB、100 万行、含长字段的宽表 CSV,
-直接突破旧的 **512 MiB `byte[]` 内存天花板**(`MAX_OBJECT_BYTES`),证明 import spool-stream 与 export keyset-cursor 两侧均不把整文件读进堆。
+直接突破旧的 **512 MiB `byte[]` 内存上限**(`MAX_OBJECT_BYTES`),证明 import spool-stream 与 export keyset-cursor 两侧均不把整文件读进堆。
 
 ## 1. 结论速览
 

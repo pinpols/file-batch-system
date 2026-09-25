@@ -317,7 +317,7 @@ console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REP
 
 **P1-7 [Lease] outbox publishing-timeout=120s 与 partition lease-expire=120s 巧合相等**
 - 不是 bug,但量纲耦合在 docs 上没有解耦说明。
-- 后续若调 outbox publishing-timeout(出于 Kafka 端 retry 调整)很容易顺手把 lease 也改 → 间接影响 reclaim 行为。
+- 后续若调 outbox publishing-timeout(出于 Kafka 端 retry 调整)很容易同步把 lease 也改 → 间接影响 reclaim 行为。
 - **修复**:两个值的 Properties 加 cross-reference javadoc。
 
 ---
@@ -392,7 +392,7 @@ console-api 主从都 16,fail-open 三连击 quarantine 30s。`BATCH_CONSOLE_REP
 | `rate-limit.enabled` | `BATCH_RATE_LIMIT_ENABLED` | false |
 | `rate-limit.max-new-requests-per-tenant-per-minute` | env | 0 |
 
-**P1-8 [资源] 全局限流开关默认全 OFF,生产无防爆配置**
+**P1-8 [资源] 全局限流开关默认全 OFF,生产无容量保护配置**
 - `rate-limit.enabled=false`、`global-max-running-jobs=0`、tenant 桶都 0。
 - 单一恶意租户 launch 100w 任务时 orchestrator 调度 / DB 连接全部被打满。
 - **修复**: 在 prod profile(application-prod.yml,目前 batch-common 有一个但未深度配)显式抬起 `rate-limit.enabled=true` + max-new=1000/min。
@@ -463,7 +463,7 @@ OTLP 全栈接 `OTEL_EXPORTER_OTLP_ENDPOINT`(otel-collector:4318),trace + logs �
 | P1-5 | Thread | orchestrator 37 个 @Scheduled 共享 16 线程池;`taskScheduler.poolSize` 偏紧需提到 24 + 拆 archive 独立池 |
 | P1-6 | Mem | export 单 task 50w 行无分段,Hikari business pool 全部被占可能性 |
 | P1-7 | Lease | publishing-timeout=120s 与 lease-expire=120s 量纲耦合无 docs 解耦 |
-| P1-8 | 资源 | global-max-running-jobs / rate-limit 生产默认全关,缺防爆 |
+| P1-8 | 资源 | global-max-running-jobs / rate-limit 生产默认全关,缺容量保护 |
 
 > P1-1 ~ P1-4 + P1-6 + P1-8 偏运维 / 生产部署;P1-5 + P1-7 偏代码与文档。
 
@@ -508,7 +508,7 @@ OTLP 全栈接 `OTEL_EXPORTER_OTLP_ENDPOINT`(otel-collector:4318),trace + logs �
    - 修 max-poll-records / max-concurrent-tasks 数学
    - 抬 orchestrator taskScheduler.poolSize=24
 
-3. **生产前必须(P1 防爆)**:
+3. **生产前必须(P1 容量保护)**:
    - prod profile 抬起 rate-limit.enabled=true + global-max-running-jobs 设定
    - 实际压测验证 outbox publish latency P95 < 5s 在 5k/s 负载下成立
 

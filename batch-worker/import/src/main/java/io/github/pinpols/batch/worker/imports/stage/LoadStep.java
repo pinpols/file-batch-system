@@ -154,7 +154,7 @@ public class LoadStep implements ImportStageStep {
       // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
       // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
       // 加载失败多为模板/数据问题(坏 SQL、缺表、配置非法),message 已表达根因;ERROR 留一行,堆栈降 DEBUG,
-      // 避免大量数据级失败刷屏。失败已封装进 ImportStageResult + 死信,不丢信息。
+      // 避免大量数据级失败产生日志噪音。失败已封装进 ImportStageResult + 死信,不丢信息。
       Object fid = attrs.get(PipelineRuntimeKeys.FILE_ID);
       log.error(
           "load stage (streaming) failed: tenantId={}, fileId={}, message={}",

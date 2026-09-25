@@ -1,6 +1,6 @@
 {
   "scenario": "kafka-partition-pause-on-capacity",
-  "description": "in-flight 达 maxConcurrent → 必须 Kafka assignment.pause(partitions),防消息堆积内存爆;in-flight 释放后 resume(capacity-aware backpressure)",
+  "description": "in-flight 达 maxConcurrent → 必须 Kafka assignment.pause(partitions),防消息堆积内存耗尽;in-flight 释放后 resume(capacity-aware backpressure)",
   "given": {
     "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
     "state":  { "inFlight": 4, "assignedPartitions": ["batch.task.dispatch.acme.echo-0", "batch.task.dispatch.acme.echo-1"] }

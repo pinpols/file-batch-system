@@ -431,7 +431,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     pb.environment().keySet().removeIf(k -> !keep.contains(k));
   }
 
-  /** 后台线程把子进程的一路输出读进有界缓冲(防 buffer 写满导致子进程阻塞 + 防日志爆内存)。 */
+  /** 后台线程把子进程的一路输出读进有界缓冲(防 buffer 写满导致子进程阻塞 + 防日志内存耗尽)。 */
   private static final class StreamCollector {
     // #5:StringBuffer(线程安全)而非 StringBuilder —— 即便 await 的 join 超时、reader 线程仍在写,
     // 主线程 toString 也不会与之数据竞争(最多漏读尾部,不会损坏/抛异常)。

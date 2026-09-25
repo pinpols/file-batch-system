@@ -300,5 +300,5 @@ CREATE TABLE batch.workflow_tenant_pin (
 ## 7. 备忘
 
 - 本计划与 [`scalability-assessment.md`](../architecture/scalability-assessment.md) §6 路线图**互补不重叠**：scalability 侧重"量级 → 分库分表 / 多 AZ"，本计划侧重"能力 → Sensor / callback / 路由 / 弹性"
-- 本计划与 ADR-021/022/024/027 等"治理 / 合规"类 ADR 互补不重叠；治理类 ADR 的范围边界（什么不做）已经写死，本计划在那些红线之内活动
+- 本计划与 ADR-021/022/024/027 等"治理 / 合规"类 ADR 互补不重叠；治理类 ADR 的范围边界（什么不做）已经固化，本计划在那些红线之内活动
 - 完成后需补 `docs/architecture/maturity-assessment.md` 重评，预期从 L4 推到 L4+

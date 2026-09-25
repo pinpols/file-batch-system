@@ -12,7 +12,7 @@
 
 ### 问题
 
-- Pipeline 5-6 stage 写死(`IMPORT/EXPORT/PROCESS/DISPATCH`),新业务集成(SFTP / API / MQ)= 改 BE + 新 worker 模块,周期 ≥ 1 个月
+- Pipeline 5-6 stage 固化(`IMPORT/EXPORT/PROCESS/DISPATCH`),新业务集成(SFTP / API / MQ)= 改 BE + 新 worker 模块,周期 ≥ 1 个月
 - Worker 模块按类型物理拆分(`batch-worker-{import,export,process,dispatch}`),粒度过粗,扩展类型必然加 module
 - 对照:DolphinScheduler 40+ 任务类型走 SPI 注册,加一种 = 实现 1 个 Task 类 + 1 行注册
 
@@ -337,7 +337,7 @@ BE 降级时响应头加 `X-Degraded-Source: trigger`。FE interceptor 看到挂
 - 有 → 做 Week 1–3 MVP
 - 没有(workflow 都是工程师偶尔建)→ **不做**,守现有只读 mermaid viewer 即可
 
-选型:MVP 阶段 vue-flow(Vue3 原生 + 复用现有 EP 组件)已足够;**别为"功能更全"提前换 AntV X6**,除非真撞到 vue-flow 能力天花板。
+选型:MVP 阶段 vue-flow(Vue3 原生 + 复用现有 EP 组件)已足够;**别为"功能更全"提前换 AntV X6**,除非真撞到 vue-flow 能力上限。
 
 Week 4–6 推迟到需求触发的增量。现状已有只读 viewer:`WorkflowMermaidViewer.vue` / `WorkflowMiniDag.vue` / 移动端 `MWorkflowViewer.vue`(FE 仓 batch-console)。
 

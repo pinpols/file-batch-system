@@ -122,7 +122,7 @@ trigger:
 
 ### 切换后 fallback 路径仍有效
 
-显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator → 立刻走原 HTTP 同步桥(`HttpOrchestratorTriggerAdapter`),`DefaultTriggerService.forwardToOrchestrator` 首次调用打 1 条 deprecation WARN(AtomicBoolean 防刷屏)。已写入数据库的 `trigger_outbox_event` 由 relay 继续投递(回滚不丢),orchestrator consumer 仍在跑(由于 `@ConditionalOnProperty matchIfMissing=true`,缺 env 也起 listener,需要显式 `false` 才不起)。
+显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator → 立刻走原 HTTP 同步桥(`HttpOrchestratorTriggerAdapter`),`DefaultTriggerService.forwardToOrchestrator` 首次调用打 1 条 deprecation WARN(AtomicBoolean 避免重复日志)。已写入数据库的 `trigger_outbox_event` 由 relay 继续投递(回滚不丢),orchestrator consumer 仍在跑(由于 `@ConditionalOnProperty matchIfMissing=true`,缺 env 也起 listener,需要显式 `false` 才不起)。
 
 ---
 

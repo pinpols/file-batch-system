@@ -103,9 +103,9 @@
 
 **形式化落地红旗**:onboarding demo 顺,真实异构客户(自己的 Go/Python worker)接入卡在 lease/心跳/取消/背压的**生产行为漂移**(conformance≠production:fixture 测决策核,transport/lifecycle/scheduler 是另一套,全部通过藏 bug,已挖 12 项)。
 
-**验证方法**:补**打真 transport 的集成 conformance**(不止 fixture);真实自托管 worker 走 register→dispatch→CLAIM→EXECUTE→REPORT + lease 续约 + 取消 + 优雅停全程。
+**验证方法**:补**打真实 transport 的集成 conformance**(不止 fixture);真实自托管 worker 走 register→dispatch→CLAIM→EXECUTE→REPORT + lease 续约 + 取消 + 优雅停全程。
 
-**判据**:五语言 SDK 在真 transport 上行为等价;真实 worker 端到端接入跑通。
+**判据**:五语言 SDK 在真实 transport 上行为等价;真实 worker 端到端接入跑通。
 
 ---
 

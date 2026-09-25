@@ -545,7 +545,7 @@ async def _assert_directive_apply_fixture(
 def _build_request_body(spec: dict[str, Any], cfg: BatchPlatformClientConfig) -> dict[str, Any]:
     """按 given.state.request 复刻出向 body —— 字段名严格对齐 dispatcher /
     lease 的真实 wire 形状(taskId/tenantId/workerId/success/outputs/errorCode/
-    resultSummary/partitionInvocationId),把 13 的字段名红线机器化。"""
+    resultSummary/partitionInvocationId),把 13 的字段名红线自动化。"""
     kind = spec["kind"]
     if kind == "register":
         return {

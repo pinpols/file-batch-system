@@ -41,7 +41,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 - `position_marker VARCHAR(512)`:LOAD=已处理到的**物理行号**(staging 文件 append-only,行号稳定);GENERATE=`<byteOffset>@<typed-cursor>` 序列化(`V164:12-14`, `:50-51`)。
 - `processed_count BIGINT`:已成功处理记录数,chunk/page 提交时累加。
 - `completed BOOLEAN` + `completed_at`:该 stage 整体完成标记,用于幂等跳过。
-- **CHECK 约束 `stage IN ('LOAD','GENERATE')`**(`V164:38-39`)——**这是关键设计边界**:表结构在 DDL 层就把续跑范围钉死在两个 stage。新增 PROCESS/DISPATCH 续跑必须 `ALTER` 这个 CHECK(是迁移、是语义变更,不是运维操作)。
+- **CHECK 约束 `stage IN ('LOAD','GENERATE')`**(`V164:38-39`)——**这是关键设计边界**:表结构在 DDL 层就把续跑范围固化在两个 stage。新增 PROCESS/DISPATCH 续跑必须 `ALTER` 这个 CHECK(是迁移、是语义变更,不是运维操作)。
 - archive 镜像 `archive.pipeline_progress_archive`(`V164:69-87`),登记入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES`(守 docs/agent-baseline.md §archive 冷表对齐红线)。
 
 **PK 前瞻注意**:本表用单列 `id` PK,不符合 docs/agent-baseline.md「新表复合 PK 前瞻」的字面。但它是**只经父表 id(pipeline_instance_id)访问的 run 明细子表**,自身带 `tenant_id` + 独立 UNIQUE,属于 docs/agent-baseline.md §多租隔离「② run 明细子表」豁免类别的近似。若本表未来要月分区,需评估复合化——**已列为风险 R-6**。
@@ -305,7 +305,7 @@ DDL:`db/migration/V164__create_pipeline_progress.sql:25-42`。关键结构:
 ## 8. Concerns（给评审的坦白）
 
 1. **这不是"P2 最大单项从零启动",而是"已建成 60% 的能力做生产化 + 补边角"。** borrowings §2.2 的 15–25 人天估计与"链路未打通"表述基于 ADR-038 落地前,应在评审时同步校正,避免重复投入。真正的净新增(P1)只 10–15 人天。
-2. **跨库无 1PC 是天花板,不是缺陷**。LOAD 续跑的正确性 100% 押在 plugin 幂等上;任何"把它做成强一致"的提案都会撞 ADR-035 P3(否决 XA)——评审应确认接受这个边界,而非要求"修"。
+2. **跨库无 1PC 是上限,不是缺陷**。LOAD 续跑的正确性 100% 押在 plugin 幂等上;任何"把它做成强一致"的提案都会撞 ADR-035 P3(否决 XA)——评审应确认接受这个边界,而非要求"修"。
 3. **DISPATCH/COMPUTE 行级续跑我建议明确 YAGNI 后置**。没有百万级 DISPATCH 崩溃的真实证据前投 8–12 人天做回执位点,违反 ADR-038 自己的改判逻辑(先有数据证据再动)。评审若有该证据请提供,否则 P2 只做观测项。
 4. **生产收益验证是上线后观测项,非阻塞**:系统尚未上线,续跑命中率/真实百万行业务库压力等生产收益指标无从验证也无需验证——sim/e2e 证机制正确即够 P0 验收;真实收益复盘列入 §5 P0「上线前 checklist」,上线后首周看观测面板即可。
 5. **`pipeline_progress` 复合 PK 前瞻(R-6)**是本设计唯一与 docs/agent-baseline.md 字面有张力处,需评审拍板:现在补复合化,还是作为 run 明细子表豁免、待分区时再改。

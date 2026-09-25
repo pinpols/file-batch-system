@@ -82,6 +82,6 @@
 
 - `docs/verifications/import-partition-replace-copy-10m-system-2026-06-07.md` —— 1000 万行实测
 - `docs/verifications/streaming-large-file-import-export-2026-06-06.md` —— 流式 / RSS / 分区净亏 §5
-- `docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md` —— 控制面吞吐天花板
+- `docs/verifications/multitenant-peak-single-node-ceiling-2026-06-13.md` —— 控制面吞吐上限
 - `docs/verifications/control-plane-worker-throughput-2026-06-07.md` —— worker 非瓶颈实证
 - `docs/analysis/throughput-bottleneck-*`(控制面瓶颈根因)/ ADR-005(分区责任链)/ ADR-038(checkpoint)

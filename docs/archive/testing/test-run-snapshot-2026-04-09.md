@@ -24,7 +24,7 @@ mvn test -T 1C
 | 3 | batch-e2e-tests | `OutboxForwarderE2eIT` | `outboxSchedulerAutomaticallyPublishesAndWorkerReportsSuccess` | ConditionTimeout：等待 outbox status=PUBLISHED，超时时实际为 FAILED |
 | 4 | batch-e2e-tests | `OutboxForwarderRetryE2eIT` | `transientFailure_thenRecovery_eventIsPublishedEventually` | ConditionTimeout：等待 outbox status=PUBLISHED，超时时实际为 NEW |
 
-**共同特征**：全部是 ConditionTimeout，说明异步链路中某个环节卡住，需要看 E2E 的具体业务错误。
+**共同特征**：全部是 ConditionTimeout，说明异步链路中某个环节停滞，需要看 E2E 的具体业务错误。
 
 ---
 

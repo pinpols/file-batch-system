@@ -40,7 +40,7 @@
 - ❌ `custom_task_type_registry` 表 **不存在**
 - ❌ console "我的 taskType 注册" 页 **不存在**
 - ❌ 参数 schema 定义机制 **不存在**
-- ❌ workflow_node 编辑器**没有 schema 提示** —— 运营拖一个 `tenant_xyz_import` 节点,parameters 是空 JSON 框,只能瞎填
+- ❌ workflow_node 编辑器**没有 schema 提示** —— 运营拖一个 `tenant_xyz_import` 节点,parameters 是空 JSON 框,只能无依据填写
 - ❌ SDK register 时**没上报 schema**(协议没字段接收)
 - ❌ 默认参数 / 默认重试策略 **没法在 taskType 级声明**
 
@@ -252,7 +252,7 @@ class MyImportHandler implements SdkTaskHandler {
 }
 ```
 
-**这条要在 SDK README 写死成硬规约**,避免租户犯错。
+**这条要在 SDK README 固化成硬规约**,避免租户犯错。
 
 ---
 

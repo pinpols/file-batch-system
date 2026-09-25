@@ -288,7 +288,7 @@ console-api 一份配置 + 改 9 个 query service 加 `readOnly=true` 就值，
 | 主库 CPU 长期 > 80% 且**读 SQL 占大头** | 重新评估；但更可能的根因是缺索引 / 慢 SQL，**先优化主库** |
 | 全局读 TPS 主库无法承载 | 那时大概率已经在做分库分表了（Phase 3 范畴），见 `docs/architecture/scalability-assessment.md` §6 |
 
-> **结论**：console-api 走读写分离是 BFF 层的优化；主链路（trigger / orchestrator / worker）的强一致性需求决定了它们必须直连主库——这是**架构正交决策**，不是临时省事。**未来真要引入只在"新增的纯读模块 / 纯读端点"上做，绝不反向给现有主链路加。**
+> **结论**：console-api 走读写分离是 BFF 层的优化；主链路（trigger / orchestrator / worker）的强一致性需求决定了它们必须直连主库——这是**架构正交决策**，不是临时简化处理。**未来真要引入只在"新增的纯读模块 / 纯读端点"上做，绝不反向给现有主链路加。**
 
 ## 八、生产部署补充
 

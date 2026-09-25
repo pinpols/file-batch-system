@@ -152,7 +152,7 @@
 ### P2-4 `PartitionLeaseReclaimScheduler.LOCK_AT_MOST_MILLIS = 120s` 是字面常量,与 properties 不联动
 
 - 文件:`PartitionLeaseReclaimScheduler.java:59`
-- 现象:`@SchedulerLock(lockAtMostFor = "PT2M")` 与代码常量 `120_000L` 都写死,但 `governance.partitionLease().getReclaimBatchSize` 等其它策略走 properties。若运维调大 batchSize 同时不能改 lockAtMost,LOOP_BUDGET_MILLIS 95% 跑 batch 用不完。
+- 现象:`@SchedulerLock(lockAtMostFor = "PT2M")` 与代码常量 `120_000L` 都固化,但 `governance.partitionLease().getReclaimBatchSize` 等其它策略走 properties。若运维调大 batchSize 同时不能改 lockAtMost,LOOP_BUDGET_MILLIS 95% 跑 batch 用不完。
 - 建议:把 lockAtMost 抽到 `BatchPartitionLeaseProperties` 一并配置;现状只能改代码重发版。
 
 ### P2-5 `OutboxPollScheduler.scheduleNext` 在 `executor.getScheduledExecutor().isShutdown()` 时直接 return → 错过 graceful shutdown 后无人接力
@@ -170,7 +170,7 @@
 ### P2-7 `DefaultRetryGovernanceService.classifyErrorClass` 用 `NON_RETRYABLE_ERROR_CODES` 做 BUSINESS 分类,但该集合是 hardcoded final Set,新增硬错码必须改代码重发版
 
 - 文件:`DefaultRetryGovernanceService.java:77-88`
-- 现象:9 个硬错码写死,运维新加 stage / step 后扩硬错码需要发版。
+- 现象:9 个硬错码固化,运维新加 stage / step 后扩硬错码需要发版。
 - 建议:抽到 `BatchOrchestratorGovernanceProperties.retry.nonRetryableErrorCodes`,运维可热加载;保留代码 default 作 fallback。
 
 ---
@@ -236,7 +236,7 @@
 |---|---|---|---|---|
 | P0 | P0-1 | ApprovalType enum 与代码硬编码漂移 | S(加 enum + 守护) | 中(FE 字典 + 静态守护) |
 | P0 | P0-2 | Replay reconciler 同 jobCode 多 entry 错回填 | S(加 mapper + 改 find) | 高(session 长期停滞) |
-| P0 | P0-3 | Alert 子系统无 routing/notification | M(加 route 表 + 异步分发) | 高(生产告警瞎子) |
+| P0 | P0-3 | Alert 子系统无 routing/notification | M(加 route 表 + 异步分发) | 高(生产告警不可见) |
 | P1 | P1-1 | dead-letter replay 缺 audit + operatorId | S | 中 |
 | P1 | P1-2 | workflow skipNode 缺 audit + alert | S | 中 |
 | P1 | P1-3 | outbox cleanup/republish 缺 dry-run + audit | S | 高(误删) |

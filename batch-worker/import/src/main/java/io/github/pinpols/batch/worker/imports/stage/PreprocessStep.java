@@ -162,7 +162,7 @@ public class PreprocessStep implements ImportStageStep {
       }
 
       // 大文件流式直载:无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件,
-      // 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破 byte[]/MAX_OBJECT_BYTES 内存天花板,
+      // 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破 byte[]/MAX_OBJECT_BYTES 内存上限,
       // 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退 byte[] 路径。
       // 仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径
       // (设 normalizedPayload,无临时文件开销)。

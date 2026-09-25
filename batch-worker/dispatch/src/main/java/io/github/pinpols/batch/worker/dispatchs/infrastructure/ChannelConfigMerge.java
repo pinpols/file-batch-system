@@ -70,7 +70,7 @@ public final class ChannelConfigMerge {
   /**
    * 兼容历史 seed / 手工录入的短键名；merge 时统一折叠为运行时消费的规范键。
    *
-   * <p>保留别名兼容而不是继续打 WARN，避免老租户在未迁移存量 config_json 前持续刷屏。
+   * <p>保留别名兼容而不是继续打 WARN，避免老租户在未迁移存量 config_json 前持续产生日志噪音。
    */
   private static final Map<String, String> KEY_ALIASES = Map.of(
       "endpoint", "target_endpoint",
@@ -83,7 +83,7 @@ public final class ChannelConfigMerge {
    * 已是 {@code file_channel_config} 表独立列,JSON 里 redundant 出现时静默忽略,不告警。
    *
    * <p>设计意图:列是策略权威源,JSON overlay 不允许覆盖(S-1.5 安全)。但历史 seed / 老租户配置在 config_json 里 redundant
-   * 重复了同名字段(列 + JSON 同时存在,值通常相同),触发原 WARN 持续刷屏(每次 dispatch 都一条, 240 条 / 30min)。
+   * 重复了同名字段(列 + JSON 同时存在,值通常相同),触发原 WARN 持续产生日志噪音(每次 dispatch 都一条, 240 条 / 30min)。
    *
    * <p>本集合标记"已知 redundant 列字段"——既不允许 overlay 覆盖列(列优先,通过 line 119 normalized 不加入这些 key 实现),也不告警。运维
    * audit 时识别真正的策略攻击,不应被这种已知 redundant 噪声淹没。新增控制类列字段时同步加入。

@@ -11,7 +11,7 @@
 > 选型:**流派 A（应用内抽象）**。对标 Micronaut Object Storage / Rails ActiveStorage `Service` / Iceberg `FileIO` /
 > Hadoop `FileSystem`——业界主流都是"1 接口 + 少数后端(含 local)",不是一云一实现。
 
-## 0. 核心定调（先把规模和价值钉死,别被 dispatch 带跑）
+## 0. 核心定调（先把规模和价值固化,别被 dispatch 带跑）
 
 现状:全系统都走 `io.minio.MinioClient`,**没有别的后端**。收敛成 `BatchObjectStore` 接口后,**实现很少**:
 
@@ -55,7 +55,7 @@ class ObjectStoreAccessException  extends ObjectStoreException {}          // �
 ```
 
 > **接口契约定稿(对标 jclouds / Iceberg / Hadoop,修正前版 3 个缺陷)**:
-> - **`list` 分页惰性**(`afterMarker + maxKeys → nextMarker`,抄 jclouds `PageSet/marker`):前版返回 `List` 在大桶/NAS 大目录会爆内存。调用方循环翻页直到 `nextMarker==null`;S3 映射 continuation token,FS 排序后按 marker 切片。
+> - **`list` 分页惰性**(`afterMarker + maxKeys → nextMarker`,抄 jclouds `PageSet/marker`):前版返回 `List` 在大桶/NAS 大目录会内存耗尽。调用方循环翻页直到 `nextMarker==null`;S3 映射 continuation token,FS 排序后按 marker 切片。
 > - **`getFrom(offset)` 取代 `getRange(offset,length)`**(对标 Iceberg `SeekableInputStream`/Hadoop `seek` 的单 seek 退化形):前版"length 当下界"语义不清。range-slice 要"从 offset 正向读、自己在行边界停",`getFrom` 正合此意,与今天 `getObject(offset)` 行为一致;要"精确 N 字节"的调用方读 N 字节即可。
 > - **统一异常层级**:`ObjectStoreException` + `ObjectNotFoundException`(typed NoSuchKey)+ `ObjectStoreAccessException`,消除 S3/FS 抛异常不一致。
 >
@@ -116,7 +116,7 @@ Files.walk(root/bucket).filter(regularFile)
 ```
 **三个隐藏风险(比遍历本身更要命)**:
 - **etag = 变更令牌,不是内容哈希**:S3 返 MD5,`ImportIngressScanner` 靠它判文件**是否被改**。本地用 **`size + mtime`
-  合成伪 etag**(改了就变),不真算 MD5(大文件太贵)。**契约写死:etag 仅用于变更检测;内容完整性走单独的 `sha256`**
+  合成伪 etag**(改了就变),不真算 MD5(大文件太贵)。**契约固化:etag 仅用于变更检测;内容完整性走单独的 `sha256`**
   (export 的 `sha256Hex` 本就独立读对象算,与 etag 无关)。
 - **写入原子性**:S3 put 原子(对象完成才出现)。**FS 必须自己保证**:`put` 走 **`.tmp` + fsync + 原子 rename**
   (export spool 现成套路);否则 ingress 扫到正在写入的文件读坏数据。
@@ -131,7 +131,7 @@ EncryptingObjectStore(delegate)  // 装饰器:put 前加密 / get 后解密(bypa
 ```
 现有 import preprocess 的"大文件 spool 解密"、console 下载的"按需解密"都收敛到这层。**不算 impl 数。**
 
-> **⚠ 约束:加密 × `getFrom`(range 读)不兼容,必须写死。**
+> **⚠ 约束:加密 × `getFrom`(range 读)不兼容,必须固化。**
 > AES-GCM 是**整对象加密**,密文 offset ≠ 明文 offset,对加密对象做 range 读拿不到有意义的明文。所以
 > **`EncryptingObjectStore.getFrom` 必须拒绝(抛 `UnsupportedOperationException`)**;而 range-slice 分区优化**本就只对未加密文件**生效
 > (`canStreamObjectDirect` 已排除 `encrypt_type`),两者天然不相交。文档点破,防止有人天真叠加。

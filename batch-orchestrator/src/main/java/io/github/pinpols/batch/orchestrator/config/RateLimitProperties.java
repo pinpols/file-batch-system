@@ -13,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
 public class RateLimitProperties {
 
   /**
-   * 总开关：关闭则不做限流。默认开启——防接口盗刷的第一道闸门，api_key 泄漏后靠它把"被打爆"挡在租户级。 生产紧急情况可经 {@code
+   * 总开关：关闭则不做限流。默认开启——防接口盗刷的第一道闸门，api_key 泄漏后靠它把过载限制在租户级。 生产紧急情况可经 {@code
    * BATCH_RATE_LIMIT_ENABLED=false} 关闸。
    */
   private boolean enabled = true;

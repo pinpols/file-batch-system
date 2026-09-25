@@ -211,7 +211,7 @@ public class XxxDto {
 - ❌ 重排任何 record 字段
 - ❌ 重命名任何字段
 - ❌ Spring Data JDBC entity 强制 `@Builder`（侵入持久化路径）
-- ❌ 顺手"清理"邻近无关代码
+- ❌ 同步"清理"邻近无关代码
 - ❌ 守护测试全仓扩（用白名单方式）
 
 ## 8. 验收

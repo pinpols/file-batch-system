@@ -124,7 +124,7 @@ ops 不用做任何事,但**必须**事后看 Grafana / 日志查根因,fix 后�
 
 ### 5.3 紧急 hotfix 流程
 
-当 Argo UI 异常 / sync 卡住 / 必须分钟级止血时:
+当 Argo UI 异常 / sync 停滞 / 必须分钟级止血时:
 
 ```bash
 # 1. 直接 kubectl context 切到 prod

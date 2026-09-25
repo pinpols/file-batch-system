@@ -791,7 +791,7 @@ public class ConsoleJobController {
 
 **tag 命名**:全部 snake_case;优先用 `BatchMetricsNames.TAG_*` 标准 tag 常量(tenant_id / job_type / status / error_code / module / worker_type)。
 
-**禁止高基数 tag**:不要把 jobInstanceId / requestId / traceId 当 tag 打(会爆 cardinality)。这些走 MDC 日志关联,不走 metrics。
+**禁止高基数 tag**:不要把 jobInstanceId / requestId / traceId 当 tag 打(会导致 cardinality 失控)。这些走 MDC 日志关联,不走 metrics。
 
 **null/空值处理**:tag value 空 / null 必须 fallback 到字符串 `"unknown"`(`JobLifecycleMetrics#safe` 示范),保持 Grafana 维度可枚举。
 
@@ -895,8 +895,8 @@ public record ConsoleProperties(
 **反模式（PR 评审拒绝）**：
 
 - ❌ 把租户级差异化参数塞 yml（如 `tenant.acme.quota=1000`）→ 应进 `tenant_quota_policy` 表
-- ❌ 秘钥写死在 yml 且无环境变量占位符 → 必须 `${VAR:fallback-only-for-local}`
-- ❌ 基础设施 URL 写死在 yml 不留 env 占位符 → 跨环境部署受限
+- ❌ 秘钥固化在 yml 且无环境变量占位符 → 必须 `${VAR:fallback-only-for-local}`
+- ❌ 基础设施 URL 固化在 yml 不留 env 占位符 → 跨环境部署受限
 - ❌ 给 yml 字段加 `@RefreshScope` 期望热更新但下游不监听失效 → 多实例配置漂移；动态需求一律走 §13.3 标准链路
 - ❌ 业务方临时提"改这个参数立即生效"，直接把 yml 字段 promote 成"运行时可改"→ 必须先评估是否该建表；**yml 字段一旦发布就只能滚动重启改**
 

@@ -33,7 +33,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * <p>2026-07 语义修复的核心守卫:P1 阶段级续跑判定"可跳过"必须看**每个 stepCode 最新一次 run 的终态**, 而非"历史上曾成功过"。旧 SQL {@code
  * select distinct step_code where step_status='SUCCESS'} 会把 "SUCCESS 后重跑 FAILED"的 step 误判为可跳过 →
  * COMMIT 静默少发布。本类用真实 PG(Testcontainers)+ **真实 mapper XML**(经 MyBatis {@link XMLMapperBuilder}
- * 加载,非手抄 SQL)钉死修复后的语义。
+ * 加载,非手抄 SQL)固化修复后的语义。
  *
  * <p>不走 {@code AbstractIntegrationTest}/Spring:worker-core 是库模块无 Spring Boot 启动类,照姊妹 {@code
  * ProcessStageSkipCrashResumeIntegrationTest} 的裸 PG + JdbcTemplate 惯例,只是额外用 MyBatis

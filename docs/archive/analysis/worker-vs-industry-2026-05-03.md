@@ -59,7 +59,7 @@
 
 1. **task 不可中断 / 无 timeout 强终止** ⚠️
    - **位置**：全 worker-core `grep` 无 `Future.cancel`/`InterruptedException` 业务路径
-   - **现象**：worker 没有 task-level timeout/cancel 机制；`PrepareStep`/`ComputeStep` 等业务异常只能等其自然完成；plugin 无限循环或长 SQL 卡住 → orchestrator `JobInstanceTimeoutEnforcer` 标 TIMED_OUT，但 worker 线程仍被占着，`Semaphore` permit 永不释放 → **整个 worker 实例容量永久缩水**
+   - **现象**：worker 没有 task-level timeout/cancel 机制；`PrepareStep`/`ComputeStep` 等业务异常只能等其自然完成；plugin 无限循环或长 SQL 停滞 → orchestrator `JobInstanceTimeoutEnforcer` 标 TIMED_OUT，但 worker 线程仍被占着，`Semaphore` permit 永不释放 → **整个 worker 实例容量永久缩水**
    - **业界**：Temporal cancellation token + 心跳检；Spring Batch `JobOperator.stop()` 设 stop flag
 
 2. **PROCESS 5-stage `traceId` 每次不同 → batchKey 不重 → reclaim 后孤儿数据无人清** ⚠️

@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * <p>缺失这组指标 = SLA / 错误率 / 长任务排查没数据。各调用方在 job_instance 状态切到终态时调本类的 record* 方法即可,本类不持任何状态。
  *
  * <p>tag 受控:tenant_id + job_type + status / error_code(error_code 仅 failure 路径)。**不打**
- * job_instance_id(高基数会爆 cardinality)。
+ * job_instance_id(高基数会导致 cardinality 失控)。
  */
 @Component
 public class JobLifecycleMetrics {
@@ -61,7 +61,7 @@ public class JobLifecycleMetrics {
   /**
    * 失败专用:除了完成计数,额外打 batch.orchestrator.job.failure.total 带 error_code,便于按错误码分桶报警。
    *
-   * <p>同样带 dry_run tag,避免演练 instance 触发 FAILED 时拉爆生产错误率报警。
+   * <p>同样带 dry_run tag,避免演练 instance 触发 FAILED 时误触发生产错误率报警。
    */
   public void recordFailure(String tenantId, String jobType, String errorCode, boolean dryRun) {
     Tags tags = Tags.of(

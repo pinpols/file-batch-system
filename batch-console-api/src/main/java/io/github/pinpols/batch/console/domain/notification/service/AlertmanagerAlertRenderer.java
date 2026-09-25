@@ -24,7 +24,7 @@ public class AlertmanagerAlertRenderer {
   static final String ANNOTATION_DESCRIPTION = "description";
   private static final String PLACEHOLDER = "-";
 
-  /** 渲染 payload。{@code maxAlerts} 限制正文逐条展开的告警数(防超大批量告警撑爆正文);超出部分折叠成 "... and N more"。 */
+  /** 渲染 payload。{@code maxAlerts} 限制正文逐条展开的告警数(防超大批量告警导致正文过大);超出部分折叠成 "... and N more"。 */
   public RenderedAlertNotification render(AlertmanagerWebhookPayload payload, int maxAlerts) {
     List<AlertmanagerAlert> alerts = payload.safeAlerts();
     String status = upper(orPlaceholder(payload.status()));
@@ -46,7 +46,7 @@ public class AlertmanagerAlertRenderer {
 
     StringBuilder body = new StringBuilder(title).append('\n');
     int shown = Math.min(alerts.size(), Math.max(0, maxAlerts));
-    // 只遍历前 shown 条:超大批量告警(未认证 sink 可灌任意条数)全量循环会让 body / alertnames 无界膨胀撑爆内存。
+    // 只遍历前 shown 条:超大批量告警(未认证 sink 可灌任意条数)全量循环会让 body / alertnames 无界膨胀耗尽内存。
     // alertCount / title / "... and N more" 仍用原始 alerts.size(),保留总量可见性。
     List<String> alertnames = new ArrayList<>();
     for (int i = 0; i < shown; i++) {

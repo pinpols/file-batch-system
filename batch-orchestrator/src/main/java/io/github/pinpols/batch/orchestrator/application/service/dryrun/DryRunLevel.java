@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
- * ADR-026 dry-run 三层粒度。priority-scope §ADR-026 写死 L1/L2/L3，FULL_SIMULATION 红线不做。
+ * ADR-026 dry-run 三层粒度。priority-scope §ADR-026 固化 L1/L2/L3，FULL_SIMULATION 红线不做。
  *
  * <ul>
  *   <li>{@link #CONFIG_VALIDATE} — 解析 cron / 业务日 / 参数 / DAG / fileTemplate / SQL；只读 + 不调外

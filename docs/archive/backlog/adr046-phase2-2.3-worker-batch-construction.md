@@ -8,7 +8,7 @@
 >
 > **P2 测试/sim 收口(2026-06-23)**:除各切片单测外补了 ① 端点级真 PG IT
 > `TaskBatchClaimReportIntegrationTest`(@SpringBootTest + Testcontainers:claim-batch 认领 K 个独立 task +
-> report-batch 混合成功/失败逐项独立隔离,坐实此前只手动真栈验过的 2.1/2.2);② sim 回归 stage
+> report-batch 混合成功/失败逐项独立隔离,坐实此前只手动真实依赖栈验过的 2.1/2.2);② sim 回归 stage
 > `scripts/sim/27-batch-claim-consume.sh`(flag 开=端到端攒批回归,比对 `batch_task_batch_claim_size`
 > 指标增量;flag 关=自动 SKIP 不破默认套件)。
 >
@@ -18,7 +18,7 @@
 >   逐项结果完整映射。证明 CLAIM 往返 O(N)→⌈N/K⌉,进 CI、不依赖独占栈。
 > - **双 listener 互斥(本地实证)**:flag 开仅 `*-batch` 容器启动、flag 关仅单条容器启动
 >   (process worker 隔离 boot,throwaway consumer group,见会话记录)。fat-jar 正常起(~28s)。
-> - **真栈端到端负载验收脚本**:`scripts/local/adr046-batch-consume-load.sh`(需独占全栈 + flag 开):
+> - **真实依赖栈端到端负载验收脚本**:`scripts/local/adr046-batch-consume-load.sh`(需独占全栈 + flag 开):
 >   触发高 fan-out 作业 → 跑到终态 → 比对 orchestrator `batch_task_batch_claim_size`
 >   指标(count=claim-batch 调用数 / sum=认领 partition 数)算实削减,PASS 条件=全 SUCCESS 且 calls<partitions。
 >   留给独占窗口跑(共享栈被占时不可跑,会与他人 CLAIM 抢占)。
@@ -86,4 +86,4 @@ worker 侧补:`batch.worker.batch_consume.size` 直方图 + 攒批命中率;orch
 1. **2.3a** ✅:client `claimBatch`+`reportBatch`(+接口+DTO+单测)——纯加法,不接 listener(#689)。
 2. **2.3b** ✅:`executeBatch`(+单测)(#691)。
 3. **2.3c** ✅:batch factory + `doConsumeBatch` + 公共 consume listener 上提 `AbstractTaskConsumer` + worker flag(默认关)(#692)。
-4. **2.3d** ✅:确定性往返削减单测 + 双 listener 互斥本地实证 + 真栈负载脚本(见顶部「验收结论」)。生产开 flag 仍需先在独占栈跑 `adr046-batch-consume-load.sh` 达标。
+4. **2.3d** ✅:确定性往返削减单测 + 双 listener 互斥本地实证 + 真实依赖栈负载脚本(见顶部「验收结论」)。生产开 flag 仍需先在独占栈跑 `adr046-batch-consume-load.sh` 达标。

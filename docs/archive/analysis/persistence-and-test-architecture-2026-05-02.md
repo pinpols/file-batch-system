@@ -112,7 +112,7 @@ ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 
 | 项 | 状态 | 备注 |
 |---|---|---|
 | `WorkflowNodePayloadBuilder` 业务 SQL → MyBatis | ✅ 已做 | commit `322ba399`，迁 `FileRecordLookupMapper` |
-| §2.2 三个非 migration 测试迁 `AbstractIntegrationTest` | 🟡 顺手做 | `SlidingWindowRateLimiterIT` / `SqlConsistencyIntegrationTest` / `SqlTransformComputePluginIntegrationTest`，下次动这些测试时顺手 |
+| §2.2 三个非 migration 测试迁 `AbstractIntegrationTest` | 🟡 同步做 | `SlidingWindowRateLimiterIT` / `SqlConsistencyIntegrationTest` / `SqlTransformComputePluginIntegrationTest`，下次动这些测试时同步 |
 | 方向 A / B / C | ❌ 不做 | 详见 §三 |
 
 ---

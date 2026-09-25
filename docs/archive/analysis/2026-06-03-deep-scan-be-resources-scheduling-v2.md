@@ -12,7 +12,7 @@
 
 | 维度 | v1 状态 | v2 复扫纠偏 / 新发现 |
 |---|---|---|
-| JVM / GC | 未扫 | helm prod 已挂 G1(默认) + `MaxRAMPercentage=70` + JFR continuous + HeapDump + ExitOnOOM,**但 docker-compose 模式 `-Xmx512m -Xms128m` 写死 512MB,与容器 limit=1Gi 解耦 → 容器层加内存堆不长**(P1-9) |
+| JVM / GC | 未扫 | helm prod 已挂 G1(默认) + `MaxRAMPercentage=70` + JFR continuous + HeapDump + ExitOnOOM,**但 docker-compose 模式 `-Xmx512m -Xms128m` 固化 512MB,与容器 limit=1Gi 解耦 → 容器层加内存堆不长**(P1-9) |
 | Kafka 三角时序 | 部分 | **`session.timeout.ms` / `heartbeat.interval.ms` / `partition.assignment.strategy` 全为 Kafka 客户端默认**(45s / 3s / RangeAssignor),不是 cooperative-sticky → 新 worker 加入触发 stop-the-world rebalance(P1-10) |
 | max-poll-interval vs lease | 已校验 | `PartitionLeaseProperties` 已 fail-fast 断言 `lease.expire-seconds < max-poll-interval`,**与 v1 P1-4 互补但 v1 未提**;此守护让 P1-4 风险下降但仍存在 |
 | 大文件解密堆峰 | 未扫 | `PreprocessStep.decryptViaSpool` 先 spool 解密到 temp file,但 **最终仍 `Files.readAllBytes(decrypted)`**(行 294) → 100MB 文件仍占 100MB 堆,只去掉了"加密+解密双倍"那 100MB(P1-11) |
@@ -50,9 +50,9 @@
 | `helm/examples/values-local-k8s.yaml` | dev | — | 75% RAM | G1 | **75.0** | — | ✗ | ✗ | ✗ |
 | `scripts/local/start-all.sh`(IDE/本地裸跑) | `LOCAL_FAST_JVM_OPTS` + `JAVA_OPTS` | — | — | JDK 默认 | — | — | ✗ | ✗ | ✗ |
 
-### 1.2 P1-9 [JVM] docker-compose 写死 `-Xmx512m` 与容器 limit 解耦
+### 1.2 P1-9 [JVM] docker-compose 固化 `-Xmx512m` 与容器 limit 解耦
 
-- `docker-compose.app.yml` 7 处 JAVA_OPTS 写死 `-Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m`,orchestrator 写死 `-Xms256m -Xmx768m`。
+- `docker-compose.app.yml` 7 处 JAVA_OPTS 固化 `-Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m`,orchestrator 固化 `-Xms256m -Xmx768m`。
 - **当用户改容器 `mem_limit: 2g` 时,JVM 还只用 512MB** → 1.5G 闲置,真要起高负载只能手动 export `BATCH_APP_JAVA_OPTS`。
 - helm 路径用 `MaxRAMPercentage=70` 是正解,docker-compose 路径未对齐 → 本地压测调参体验差,且**生产若被回退到 docker-compose**(灰度环境)会触发 OOM。
 - **修复**: docker-compose 改 `${BATCH_APP_JAVA_OPTS:--XX:MaxRAMPercentage=70.0 -XX:MaxMetaspaceSize=192m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError}`,Xmx 由容器 mem_limit 驱动。
@@ -393,7 +393,7 @@ v1 P2-9 称 "BatchDayCutoffScheduler 缺 lockAtLeast",grep 显示实际为 `lock
 ### P1 新增(9)
 | ID | 主题 | 一句话 |
 |---|---|---|
-| P1-9 | JVM | docker-compose 写死 `-Xmx512m` 与容器 mem-limit 解耦,无法靠 K8s/compose 改内存边界 |
+| P1-9 | JVM | docker-compose 固化 `-Xmx512m` 与容器 mem-limit 解耦,无法靠 K8s/compose 改内存边界 |
 | P1-10 | Kafka | session.timeout / heartbeat.interval / partition.assignment.strategy 全默认,rolling update 触发 stop-the-world rebalance |
 | P1-11 | Mem | PreprocessStep.decryptViaSpool 最后 `Files.readAllBytes(decrypted)` 仍 100MB 入堆 |
 | P1-12 | Mem | TaskExecutionReportDto 无 `@Size` 守护,heartbeat_details 理论无界,可失败 Jackson + PG JSONB |

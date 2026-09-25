@@ -130,7 +130,7 @@
 | V4-P1-2 | ParseSupport 硬编码 CustomerImportPayload | 2026-04-22 | 删 `convertValue(CustomerImportPayload.class)` |
 | V4-P1-4 | EXPORT `:bizDate` 占位符 | 2026-04-22 | `SqlTemplateExportSecurityProperties.allowedExtraParams = ["bizDate"]` 默认 |
 | V4-P1-5 | DISPATCH non-retryable 标识 | 已完成 | `DefaultRetryGovernanceService:66` `NON_RETRYABLE_ERROR_CODES` 含 7 条 |
-| V4-P3-1 | calendar WARN 刷屏 | 2026-04-22 | trigger.log 0 calendar WARN（已核实） |
+| V4-P3-1 | calendar WARN 产生日志噪音 | 2026-04-22 | trigger.log 0 calendar WARN（已核实） |
 | V4-P3-2 | biz.transaction 索引 | 2026-04-22 | 现有 3 索引（pkey + account + tenant_date + unique txn_no） |
 | V4-P3-3 | 失败实例堆积 | 2026-04-26 | SQL 状态集扩展含 FAILED/CANCELLED/TERMINATED；一次性脚本清 1222 FAILED + 24 CANCELLED；30 天 retention 后自动归档 |
 | V4-P3-4 | dead_letter NEW 堆积 | 2026-04-26 | cleanup-historical-failures.sql 清 1242 → 8；FK 顺序修正（先删 event_delivery_log 再删 outbox_event） |

@@ -410,7 +410,7 @@ REPORT 是 Worker 执行链最后一步，但未通过 `startStepRun/finishStepR
 见 S-1.5。设计上应使用白名单模式。
 
 #### A-3.12 AbstractExportFormat 列数无上限
-**文件**：`batch-worker-export/.../stage/format/AbstractExportFormat.java:30-90`。10000+ 列表导出爆内存。
+**文件**：`batch-worker-export/.../stage/format/AbstractExportFormat.java:30-90`。10000+ 列表导出内存耗尽。
 
 #### A-3.13 CHARSET_TRANSCODE 输出无大小限制
 **文件**：`batch-worker-import/.../ImportPreprocessPipeline.java:62-114`。GBK→UTF-8 字节膨胀可能跳过 ReceiveStep 的 OOM 守卫。

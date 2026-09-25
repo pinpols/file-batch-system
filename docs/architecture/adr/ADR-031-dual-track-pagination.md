@@ -7,7 +7,7 @@
 ## 范围边界
 
 ✅ **做**:在现有 offset 分页之上**叠加** cursor 模式,**双轨并存**;按表特征选默认模式。
-❌ **不做**:全量替换 offset 为 cursor;改变现有 offset 端点的 API 契约;搞通用「ORM 级」分页框架。
+❌ **不做**:全量替换 offset 为 cursor;改变现有 offset 端点的 API 契约;引入通用「ORM 级」分页框架。
 
 ---
 

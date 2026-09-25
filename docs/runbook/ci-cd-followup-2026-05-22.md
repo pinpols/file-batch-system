@@ -76,7 +76,7 @@
 1. PR 列表出现 `chore(deps): bump spring-boot...` 类 PR
 2. 走完 pr-gate.yml 4 个 required check 后,patch PR 应该被 auto-merge workflow 自动 merge
 3. major bump 不应该出 PR(被 dependabot.yml ignore 规则过滤)
-4. 分组生效:同组多 dep 升级合一个 PR(不会 N 个 PR 刷屏)
+4. 分组生效:同组多 dep 升级合一个 PR(不会 N 个 PR 产生日志噪音)
 
 **潜在风险**:
 - patch auto-merge 在 CI 不稳时会 merge 进有 bug 的 patch — pr-gate 必须真稳才开

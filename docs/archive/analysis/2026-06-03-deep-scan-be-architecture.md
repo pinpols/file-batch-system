@@ -145,7 +145,7 @@
 
 - **位置**:`DefaultRetryGovernanceService`(7 处)+ `DefaultCompensationService`(4 处)+ `DbRowExistsSensorPolicy`(1 处 readOnly)。
 - **根因**:docs/agent-baseline.md §Java #4 "禁 Propagation.NEVER 之外的非默认传播",但因 REQUIRES_NEW 是审计行/补偿日志必需,实际是合理豁免;但豁免没在 docs/agent-baseline.md / coding-conventions.md 写明,后人不知道是否还能加。
-- **建议**:在 `docs/coding-conventions.md` 列"REQUIRES_NEW 唯一豁免清单 = 审计/补偿日志独立提交",并贴一个 ArchTest 钉死扫描白名单 — 新增 REQUIRES_NEW 必须在白名单否则 fail。
+- **建议**:在 `docs/coding-conventions.md` 列"REQUIRES_NEW 唯一豁免清单 = 审计/补偿日志独立提交",并贴一个 ArchTest 固化扫描白名单 — 新增 REQUIRES_NEW 必须在白名单否则 fail。
 
 ### P1-5 Mutation IT 自建链路
 

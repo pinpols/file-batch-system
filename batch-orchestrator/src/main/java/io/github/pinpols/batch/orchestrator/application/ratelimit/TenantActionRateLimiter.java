@@ -29,7 +29,7 @@ public class TenantActionRateLimiter {
 
   /**
    * 限流拒绝计数：本门面 {@link #tryConsume} 返回 false 时按 {@code action} 自增。tag 仅 {@code action}（基数 = {@link
-   * RateLimitAction} 枚举数，很小）。<b>刻意不带 tenant tag</b>：租户数可能很多，作为 tag 会打爆监控时序基数；per-action
+   * RateLimitAction} 枚举数，很小）。<b>刻意不带 tenant tag</b>：租户数可能很多，作为 tag 会压垮监控时序基数；per-action
    * 维度已足够做容量规划/滥用侦测，租户级归因走日志。
    *
    * <p><b>覆盖本门面全部 4 个调用点，但拒绝的对外语义并不一致——据此告警须按 action 区分</b>：

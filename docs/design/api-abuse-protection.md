@@ -73,7 +73,7 @@ signature = hex(hmacSha256(apiKey, canonical))        // 小写 hex
 头：X-Batch-Timestamp(epoch millis) / X-Batch-Nonce / X-Batch-Signature
 ```
 
-校验顺序：缺头 → 时钟偏移（默认 ±300s）→ 签名 → nonce 一次性（Redis SETNX，TTL=2×窗口）。**签名先于 nonce**，避免未签 / 错签请求白白消耗 nonce 空间。跨语言一致性由 SDK 侧 conformance 测试钉死（SDK 实现与 `RequestSignatures` 对同一输入产出相同 hex）。
+校验顺序：缺头 → 时钟偏移（默认 ±300s）→ 签名 → nonce 一次性（Redis SETNX，TTL=2×窗口）。**签名先于 nonce**，避免未签 / 错签请求白白消耗 nonce 空间。跨语言一致性由 SDK 侧 conformance 测试固化（SDK 实现与 `RequestSignatures` 对同一输入产出相同 hex）。
 
 ### 3.3 全部 opt-in、默认安全但不破坏存量
 

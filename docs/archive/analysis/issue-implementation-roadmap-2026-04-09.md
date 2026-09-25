@@ -50,7 +50,7 @@
 | M-4 | 配额峰值计数未保存 | MEDIUM | M | P2 | 第3阶段 ✅ | 会影响配额治理 |
 | M-5 | Import LoadStep 失败删除 staging 文件 | MEDIUM | M | P2 | 第2阶段 ✅ | 影响恢复能力 |
 | M-6 | 临时文件仅启动时清理 | MEDIUM | S/M | P2 | 第2阶段 ✅ | 运维隐患 |
-| M-7 | InputStream 链式关闭不完整 | MEDIUM | S | P2 | 第1阶段 ✅ | 小改，值得顺手修 |
+| M-7 | InputStream 链式关闭不完整 | MEDIUM | S | P2 | 第1阶段 ✅ | 小改，值得同步修 |
 | M-8 | SMTP/SFTP 密码存储为 String | MEDIUM | M | P2 | 第3阶段 ✅ | 安全改造但不必最先 |
 | M-10 | CatchUpPolicyType 静默回退 | MEDIUM | S | P1/P2 | 第1阶段 ✅ | 建议改为快速失败 |
 | M-11 | TimeZone.getTimeZone 静默回退 | MEDIUM | S | P1/P2 | 第1阶段 ✅ | 建议改为显式校验 |
@@ -175,7 +175,7 @@
 | H-2 Retry 终态校验 | S | P1 | 立刻修 |
 | M-10 CatchUpPolicy 回退 | S | P1/P2 | 很值得先修 |
 | M-11 TimeZone 回退 | S | P1/P2 | 很值得先修 |
-| M-7 流关闭问题 | S | P2 | 顺手修 |
+| M-7 流关闭问题 | S | P2 | 同步修 |
 
 ### 2. 高优先级且改动中等
 这类适合做成本迭代主任务：
@@ -418,7 +418,7 @@ tenant_quota_policy  (租户级配额：max_running_jobs、max_partitions、max_
 
 **现状：** `job_definition.worker_group` 和 `resource_queue.worker_group` 都是 VARCHAR 字符串，与 `worker_registry.worker_group` 之间无外键约束。
 
-**影响：** 拼写错误（如 `import_worker` vs `import_workers`）只能在运行时发现——任务派发后无人消费，表现为"任务卡住不动"。
+**影响：** 拼写错误（如 `import_worker` vs `import_workers`）只能在运行时发现——任务派发后无人消费，表现为"任务停滞不动"。
 
 **建议：** Console 创建/更新时增加 `worker_group` 存在性校验（查 `worker_registry` 确认该 group 有注册记录）。
 

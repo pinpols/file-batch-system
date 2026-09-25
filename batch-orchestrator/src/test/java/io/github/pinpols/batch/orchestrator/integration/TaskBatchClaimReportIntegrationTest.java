@@ -48,7 +48,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>区别于 {@code TaskControllerApplicationServiceTest}(mock service 的单测),本测试真起 orchestrator +
  * Testcontainers PG,走 {@link TaskControllerApplicationService#claimBatch}/{@link
  * TaskControllerApplicationService#reportBatch} 的完整路径(真 {@code assignWorker} CAS、{@code
- * loadEffectiveConfig}、{@code self.report} 逐项独立事务),验证此前只手动真栈验过的两件事:
+ * loadEffectiveConfig}、{@code self.report} 逐项独立事务),验证此前只手动真实依赖栈验过的两件事:
  *
  * <ol>
  *   <li><b>2.1 批量认领</b>:一次 claim-batch 认领 K 个独立 task,逐项结果;已被领走的项 {@code claimed=false} 而非抛异常。

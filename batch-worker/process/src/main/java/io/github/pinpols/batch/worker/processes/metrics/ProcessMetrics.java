@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  *   <li>{@code process_feedback_swallowed_total} - Counter,FEEDBACK 阶段捕获并抑制的异常累计
  * </ul>
  *
- * <p><b>tenantId 不作为 Micrometer tag</b>:运行时高基数(随租户数线性增长)会让 Prometheus time-series 内存爆失败。tenantId 走
+ * <p><b>tenantId 不作为 Micrometer tag</b>:运行时高基数(随租户数线性增长)会让 Prometheus time-series 内存耗尽。tenantId 走
  * MDC 进日志便于按租户追溯;按租维度聚合改用 Prometheus exemplar 或日志聚合方案, 不在 metrics label 维度直接展开。
  *
  * <p>方法签名保留 tenantId 入参纯为向后兼容,内部不再用于 tag 缓存键。

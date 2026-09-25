@@ -2,7 +2,7 @@
 
 > 评估日期：2026-04-27。
 >
-> 本文目的：把"批量"这件事拆成业务/执行/触发三个正交维度，把系统现状映射到这套模型上，识别**模型层缺口（已经在用但没有一等公民化）**、**能力层缺口（业务上需要但还没做）**、**暗债（多个并行枚举 / 写死阶段 / 配置注入分裂）**，并给出"做 / 不做 / 待评估"三档建议。
+> 本文目的：把"批量"这件事拆成业务/执行/触发三个正交维度，把系统现状映射到这套模型上，识别**模型层缺口（已经在用但没有一等公民化）**、**能力层缺口（业务上需要但还没做）**、**暗债（多个并行枚举 / 固化阶段 / 配置注入分裂）**，并给出"做 / 不做 / 待评估"三档建议。
 >
 > 与 [`capability-assessment.md`](./capability-assessment.md) 的分工：能力评估是"现在能做什么"；本文是"模型上还应该长什么"。
 >
@@ -137,9 +137,9 @@
 
 **建议**：合并成统一的 `BatchType`（IMPORT / EXPORT / PROCESS / DISPATCH / SYNC，外加 GENERAL / WORKFLOW 等内部 carryover），`PipelineType` 改为 `BatchType` 的别名或子集投影。
 
-### 3.3 Worker pipeline 阶段写死
+### 3.3 Worker pipeline 阶段固化
 
-`AbstractStageExecutor` 是模板方法，但每种 worker 的 stage **数量和名字都是 enum 写死**：
+`AbstractStageExecutor` 是模板方法，但每种 worker 的 stage **数量和名字都是 enum 固化**：
 - IMPORT：6 阶段固定
 - EXPORT：5 阶段固定
 - DISPATCH：5 阶段固定

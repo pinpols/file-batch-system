@@ -2,7 +2,7 @@
 # =============================================================================
 # sdk-e2e-local.sh — BYO SDK 样例 worker × 真 orchestrator 本地全链路验证
 #
-# 用**已在本地跑着的**真栈(orchestrator+trigger+postgres+kafka)驱动一个
+# 用**已在本地跑着的**真实依赖栈(orchestrator+trigger+postgres+kafka)驱动一个
 # examples/self-hosted-sdk/sample-tenant-worker-<lang>,走真链路逐阶段断言:
 # register → dispatch → claim → execute → report → terminal。
 #

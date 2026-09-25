@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 /**
  * Console AI 成本 / 调用可观测指标。
  *
- * <p>成本的<b>可聚合总量</b>走这里的低基数 Micrometer 指标；成本的<b>租户维度</b>不进 metric tag(高基数会打爆监控,见 #782/#788),而是落
+ * <p>成本的<b>可聚合总量</b>走这里的低基数 Micrometer 指标；成本的<b>租户维度</b>不进 metric tag(高基数会压垮监控,见 #782/#788),而是落
  * {@code console_ai_audit_log} 的 prompt_tokens/completion_tokens 列, 每租户成本靠审计表事后 SQL 聚合。
  *
  * <ul>

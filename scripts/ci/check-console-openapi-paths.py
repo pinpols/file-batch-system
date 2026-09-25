@@ -39,7 +39,7 @@ def base_package() -> str:
 
 
 # P1-A Stage 1 后,Controller 按 bounded context 散落到 domain/<ctx>/web/,
-# 从 console/ 根目录递归扫所有 *Controller.java(不钉死 web/);
+# 从 console/ 根目录递归扫所有 *Controller.java(不固化 web/);
 # 包路径由 pom groupId 派生(见 base_package),重命名免改本脚本。
 BASE_PACKAGE = base_package()
 CONSOLE_ROOT = (

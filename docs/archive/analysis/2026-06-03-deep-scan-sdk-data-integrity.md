@@ -299,7 +299,7 @@ docs/agent-baseline.md 规定三表分工:
 
 **证据**:Java `HeartbeatRequest` record 10 字段(含 `workerGroup`, `hostName`, `hostIp`, `processId`, `capabilityTags`, `currentLoad`),平台心跳路径共用 `WorkerHeartbeatDto`,会把 register 时建立的运维元数据列被空心跳覆盖。Python tick 只发 5 字段。
 
-**影响**:Python worker register 后,心跳一次 worker_registry 表里的 hostName/hostIp/processId/workerGroup/capabilityTags 全被刷成 NULL → 控制台"我的 Worker"看不到 IP/主机/能力标签,运维诊断瞎。
+**影响**:Python worker register 后,心跳一次 worker_registry 表里的 hostName/hostIp/processId/workerGroup/capabilityTags 全被刷成 NULL → 控制台"我的 Worker"看不到 IP/主机/能力标签,运维诊断不可见。
 
 **修法**:`tick()._build_heartbeat_body` 与 `_build_register_body` 共用一个字段构造函数,heartbeatAt + currentLoad 这两个是 tick 内每次刷新,其余从 config / handlers 复用。
 

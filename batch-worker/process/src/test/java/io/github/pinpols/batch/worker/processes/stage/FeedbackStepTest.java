@@ -124,7 +124,7 @@ class FeedbackStepTest {
     assertThat(result.success()).isTrue();
     assertThat(result.stage()).isEqualTo(ProcessStage.FEEDBACK);
     // metric: process_feedback_swallowed_total = 1
-    // tenantId 不再作为 tag(高基数 → Prometheus 内存爆),改单全局 counter
+    // tenantId 不再作为 tag(高基数 → Prometheus 内存耗尽),改单全局 counter
     assertThat(registry.find("process_feedback_swallowed_total").counter()).isNotNull();
     assertThat(registry.find("process_feedback_swallowed_total").counter().count())
         .isEqualTo(1.0);

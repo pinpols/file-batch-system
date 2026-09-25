@@ -20,7 +20,7 @@
 
 ### 2. 没有任务类型扩展机制(SPI / Plugin)
 
-- Pipeline 5-6 stage 写死(`IMPORT/EXPORT/PROCESS/DISPATCH`)
+- Pipeline 5-6 stage 固化(`IMPORT/EXPORT/PROCESS/DISPATCH`)
 - 加新业务集成(SFTP / API 拉取 / MQ 消费)= 改 BE + 写 worker 模块,周期 ≥ 1 个月
 - **对照**:DolphinScheduler 40+ 任务类型走 SPI,加新类型零核心改动
 - **现状成本**:每加一种业务集成 = 一次 mini 项目

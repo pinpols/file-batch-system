@@ -51,7 +51,7 @@
 | 缺陷 | 位置 | 影响 |
 |---|---|---|
 | **🔴 `KafkaTaskConsumer.close()` 不 join() poll 线程** | `batch-worker-sdk/src/main/java/io/github/pinpols/batch/sdk/dispatcher/KafkaTaskConsumer.java:259-265` | `wakeup()` 后立即返回,但 poll 线程可能还在跑;`BatchPlatformClient.stop()` 已进 deactivate,Kafka offset 未 commit;K8s SIGKILL 时**任务可能重放或丢** |
-| **🟠 `LeaseRenewalScheduler` 用 `scheduleAtFixedRate`** | `LeaseRenewalScheduler.java:46` vs `HeartbeatScheduler.java:76`(fixedDelay) | 续约 tick 卡(5xx retry)后,下轮立即又来,内存爆;Heartbeat 没这问题,两边不一致 |
+| **🟠 `LeaseRenewalScheduler` 用 `scheduleAtFixedRate`** | `LeaseRenewalScheduler.java:46` vs `HeartbeatScheduler.java:76`(fixedDelay) | 续约 tick 停滞(5xx retry)后,下轮立即又来,可能导致内存耗尽;Heartbeat 没这问题,两边不一致 |
 | **🟠 `claimWithRetry` 退避无 jitter** | `TaskDispatcher.java:414` `delayMs = baseDelayMs << attempt` | N 个 worker 同步雪崩 retry(wire-protocol §C 提到但未实装) |
 
 ---

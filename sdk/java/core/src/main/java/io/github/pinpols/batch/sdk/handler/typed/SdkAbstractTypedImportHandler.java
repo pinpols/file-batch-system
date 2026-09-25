@@ -15,7 +15,7 @@ import java.util.stream.Stream;
  * A.2 — typed Import 模板:把 A.1 的「强类型入参」与 ADR-036 的「行流/分批模板」合流。
  *
  * <p>租户既拿强类型入参 {@code I}(框架从 {@link SdkTaskContext#parameters()} 经 Jackson 反序列化), 又拿 Import
- * 阶段的行流模板(openSource → readRows(Stream) → 分批 loadBatch),无需再 {@code Map} 瞎转型。 模板负责
+ * 阶段的行流模板(openSource → readRows(Stream) → 分批 loadBatch),无需再 {@code Map} 无类型约束转换。 模板负责
  * try-with-resources 关流 + 分批 flush + 计数回退。
  *
  * <p>设计取舍:复用 {@link SdkTypedParameters} 完成入参解析(组合,不破坏 {@code SdkTypedTaskHandler} 现有 API)。 入参

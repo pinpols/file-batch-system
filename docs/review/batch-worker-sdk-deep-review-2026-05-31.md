@@ -55,7 +55,7 @@ SDK 框架**没做、值得补**的:
 
 ## 2.6 调度上下文缺失(2026-05-31 补)
 
-**当前 `TaskDispatchMessage` 只有 `parameters / runtimeAttributes`,没有任何"业务日 + 调度元信息"上下文**。SDK 是"瞎子",这导致两类真问题:
+**当前 `TaskDispatchMessage` 只有 `parameters / runtimeAttributes`,没有任何"业务日 + 调度元信息"上下文**。SDK 缺少调度上下文,这导致两类真问题:
 
 ### 2.6.1 日切(batch_day)感知缺失
 
@@ -132,7 +132,7 @@ SDK 端按 platformStatus 状态机响应:NORMAL / DEGRADED(降并发)/ PAUSED(`
 
 ### 2.7.2 当前后果
 
-- 运营拖一个 `tenant_xyz_import` 节点 → parameters 是空 JSON 框 → 只能瞎填
+- 运营拖一个 `tenant_xyz_import` 节点 → parameters 是空 JSON 框 → 只能无依据填写
 - 填错时 task 派到 SDK 抛 `ClassCastException` → 配置错位运行时才暴露
 - handler 升级了字段名,运营不知道 / 没改 workflow_node.parameters → 派单失败堆积
 
@@ -148,7 +148,7 @@ SDK 端按 platformStatus 状态机响应:NORMAL / DEGRADED(降并发)/ PAUSED(`
 
 ### 2.7.4 敏感凭据约束(硬规约)
 
-DB 密码 / OAuth secret / 加密密钥**禁止**走 console parameters(明文存 DB + 明文进 Kafka)。一律 K8s Secret + env var,SDK handler 构造时读。需在 SDK README 写死。
+DB 密码 / OAuth secret / 加密密钥**禁止**走 console parameters(明文存 DB + 明文进 Kafka)。一律 K8s Secret + env var,SDK handler 构造时读。需在 SDK README 固化。
 
 ---
 
@@ -219,7 +219,7 @@ DB 密码 / OAuth secret / 加密密钥**禁止**走 console parameters(明文�
 ## 7. 可演进性 ⚠️ 协议升级路径未铺
 
 - **TaskDispatchMessage 没 schemaVersion**。今天 OK,明天加字段全租户升级。
-- **没有 server-driven config**:`maxConcurrentTasks` / `heartbeatInterval` 是租户进程写死;平台想全局限速(orchestrator 过载要求 SDK 降并发)做不到。**建议**:`heartbeat` response 允许返 `serverConfig` 段,SDK 动态调整。Zeebe / Temporal 都做的事,P2+ 该补。
+- **没有 server-driven config**:`maxConcurrentTasks` / `heartbeatInterval` 是租户进程固化;平台想全局限速(orchestrator 过载要求 SDK 降并发)做不到。**建议**:`heartbeat` response 允许返 `serverConfig` 段,SDK 动态调整。Zeebe / Temporal 都做的事,P2+ 该补。
 - **`stop()` 顺序问题**(真 bug):当前是 `heartbeat stop → leaseRenewal stop → kafka stop → join → dispatcher.stop`。**问题**:heartbeat 先停意味着 dispatcher 还在跑 in-flight 任务的 30s drain 窗口里,平台不再收心跳,可能在这 30s 内判死并 reassign 已 in-flight 任务,**重复执行**。
 - **正确顺序**:**先 stop Kafka(不接新)→ drain dispatcher → 最后 stop heartbeat & lease renewal → deactivate**。心跳 + lease renewal 必须活到 dispatcher 真排空。
 

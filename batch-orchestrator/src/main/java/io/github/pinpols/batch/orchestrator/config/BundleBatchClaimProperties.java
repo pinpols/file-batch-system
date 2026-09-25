@@ -21,7 +21,7 @@ public class BundleBatchClaimProperties {
   private boolean enabled = false;
 
   /**
-   * 单次批量领/报的最大 partition 数(O(N)→O(N/K) 的 K 上限)。 防止单批过大撑爆事务 / 超过单次 lease 续租窗口;worker 攒批与
+   * 单次批量领/报的最大 partition 数(O(N)→O(N/K) 的 K 上限)。 防止单批过大放大事务 / 超过单次 lease 续租窗口;worker 攒批与
    * orchestrator 批处理都不得超过它。
    */
   private int maxBatchSize = 50;

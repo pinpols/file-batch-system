@@ -1,19 +1,19 @@
 # 运维 Runbook 索引
 
-部署 / 监控 / 灰度 / 应急 / 巡检 五类 SOP。每份都设计为"事到临头能照着跑"。
+部署、监控、灰度、应急、巡检五类 SOP。每份都按线上事件可直接执行的标准维护。
 
 > **应急入口**:发生线上故障时,先看 [04 incident-response.md](./incident-response.md) → [05 troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md)。
 
 ## 文件清单（编号按"用得最频繁→最少见"排序）
 
-### 一、应急 / 救火（出问题就要打开）
+### 一、应急 / 故障响应
 
 | # | 文件 | 作用 |
 |---|---|---|
 | 01 | [daily-inspection.md](./daily-inspection.md) | 日常巡检 SOP（每日 / 每周 / 每月 check） |
 | 02 | [incident-response.md](./incident-response.md) | 故障响应 runbook（P0/P1 标准动作） |
 | 03 | [troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md) | 故障决策树（按症状分支定位） |
-| 04 | [compensation-cleanup.md](./compensation-cleanup.md) | Compensation 失败清理（长期停滞的补偿任务怎么搞） |
+| 04 | [compensation-cleanup.md](./compensation-cleanup.md) | Compensation 失败清理（长期停滞补偿任务的处理流程） |
 
 ### 二、部署 / 上线（首次部署或上量）
 
@@ -24,7 +24,7 @@
 | 06a | [dependency-operations.md](./dependency-operations.md) | PostgreSQL / Kafka / Valkey / MinIO 日常巡检、故障边界和恢复入口 |
 | 07 | [local-development.md](./local-development.md) | 本地开发环境与联调说明 |
 | 08 | [orchestrator-statefulset-migration.md](./orchestrator-statefulset-migration.md) | orchestrator 从 Deployment 迁到 StatefulSet |
-| 09 | [rolling-upgrade-workers.md](./rolling-upgrade-workers.md) | Worker 滚动升级（Kafka rebalance 安全姿势） |
+| 09 | [rolling-upgrade-workers.md](./rolling-upgrade-workers.md) | Worker 滚动升级（Kafka rebalance 安全流程） |
 
 ### 三、容量 / 弹性（上量评估）
 
@@ -56,7 +56,7 @@
 | # | 文件 | 作用 |
 |---|---|---|
 | 18 | [observability-stack.md](./observability-stack.md) | 一站式观测部署 + 排障 SOP（Prometheus / Loki / Tempo / OTel）|
-| 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（找拐点）|
+| 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（识别容量拐点）|
 | 20 | [worker-stage-coverage.md](./worker-stage-coverage.md) | 三类 Worker 全 Stage 真实覆盖端到端验证 |
 | 21 | [security-scan.md](./security-scan.md) | 本地安全扫描 SOP（trivy / dependency-check）|
 | 22 | [ci.md](./ci.md) | CI 流水线说明（pr-gate / full-ci-gate + 触发时机 + 超时）|
@@ -98,7 +98,7 @@
 | 本地起服务 | 07 → 06 → 05 |
 | 上 staging | 05 → 06 → 11 → 18 |
 | 上 prod | 25（凭据矩阵:逐行核对必配 + prod fail-fast 项）→ 11（部署前 checklist） → 10 → 18 → 02 |
-| 救火（长期停滞 / 数据异常） | 02 → 03 → 04 |
+| 故障处理（长期停滞 / 数据异常） | 02 → 03 → 04 |
 | 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 |
 
 ## 与其他子目录的分工

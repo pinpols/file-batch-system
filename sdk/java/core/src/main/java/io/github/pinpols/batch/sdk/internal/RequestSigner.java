@@ -10,7 +10,7 @@ import javax.crypto.spec.SecretKeySpec;
  * SDK 侧请求签名（方案 A，以 api_key 为 HMAC 密钥）。
  *
  * <p>必须与服务端 {@code io.github.pinpols.batch.common.security.RequestSignatures} 逐字节一致 —— 二者由 SDK
- * 测试里的契约一致性用例钉死。 SDK core 不依赖 batch-common（避免拖入 MyBatis/Flyway/Redis），故此处独立实现同一算法：
+ * 测试里的契约一致性用例固化。 SDK core 不依赖 batch-common（避免拖入 MyBatis/Flyway/Redis），故此处独立实现同一算法：
  *
  * <pre>
  *   canonical = UPPER(method) "\n" path "\n" timestamp "\n" nonce "\n" hex(sha256(body))

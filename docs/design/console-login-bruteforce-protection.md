@@ -14,7 +14,7 @@
 | 威胁 | 说明 | 现有防御 | 缺口 |
 |---|---|---|---|
 | 单 IP 高速暴力破解 | 一个 IP 猛试密码 | ✅ IP 滑动窗口(10/分钟/IP,`ConsoleRateLimitFilter`) | — |
-| 分布式低速撞库 | 代理池,每 IP 慢试,盯账号或撞一批账号 | ❌ 仅 IP 限流挡不住 | **账号维度失败退避** |
+| 分布式低速撞库 | 代理池,每 IP 慢试,盯账号或撞一批账号 | ❌ 仅 IP 限流无法限制 | **账号维度失败退避** |
 | 自动化撞库机器人 | 海量账号 + 分布式 IP + 脚本 | ❌ | **risk-based 验证码** |
 | **账号锁定 DoS(lockout abuse)** | 攻击者故意输错锁死受害者 | — | **必须用"升级摩擦"而非"硬锁定"设计规避** |
 | 用户枚举 | 探测某用户名是否存在 | ✅ `ConsoleLoginService` 统一返回 invalid credentials,不区分"用户不存在/密码错" | — |
@@ -78,7 +78,7 @@ batch.console.captcha:
 ## 6. DDoS 边界(独立线,本文不重复)
 
 - **应用层 L7 限流已在推进**:ADR-019(cross-domain rate limit)、`SlidingWindowRateLimiter`(console)、`TenantActionRateLimiter`(orchestrator)、PR #708(热路径 + 昂贵接口)、PR #694(worker 接入限流 + 配额 + body 上限)。
-- **真正的 L3/L4 容量型 DDoS 应用代码挡不住**,必须靠 **CDN / 云 WAF / 网关**(Cloudflare、云 LB、ingress rate-limit + IP 黑名单)——属运维/基础设施,不在本仓代码范围。
+- **真正的 L3/L4 容量型 DDoS 应用代码无法限制**,必须靠 **CDN / 云 WAF / 网关**(Cloudflare、云 LB、ingress rate-limit + IP 黑名单)——属运维/基础设施,不在本仓代码范围。
 - 本登录方案与 DDoS 线**正交**:登录防护是"防针对性猜测",限流是"防量"。
 
 ## 7. 落地范围

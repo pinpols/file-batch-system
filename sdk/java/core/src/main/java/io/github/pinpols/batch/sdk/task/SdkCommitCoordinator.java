@@ -17,7 +17,7 @@ import java.util.Map;
  * <ol>
  *   <li><b>保存断点</b>(经 {@link SdkCheckpoint#save};JDBC 默认实现在同 Connection 同事务里连业务数据一起提交);
  *   <li><b>限流上报进度</b>:{@code commitCounter % reportIntervalBatches == 0} 时调 {@link
- *       ProgressReporter#report}, 避免每批都打满网络;{@code selfReport=false} 时关掉自动上报,交给业务自己控制;
+ *       ProgressReporter#report}, 避免每批都发起网络请求;{@code selfReport=false} 时关闭自动上报,交给业务自己控制;
  *   <li><b>协作式取消</b>:提交成功后若取消标志命中,在已提交的安全点抛 {@link SdkTaskStoppedException}。
  * </ol>
  *
