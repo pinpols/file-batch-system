@@ -227,7 +227,7 @@ def update_tc():
         # N_OF 工作流：补 FAILURE / CONDITION 边类型
         ("TC_WF_GATEWAY_N_OF","START","FORK","ALWAYS",None),
         ("TC_WF_GATEWAY_N_OF","FORK","BRANCH_A","ALWAYS",None),
-        ("TC_WF_GATEWAY_N_OF","FORK","BRANCH_B","CONDITION","${bizDate != null}"),
+        ("TC_WF_GATEWAY_N_OF","FORK","BRANCH_B","CONDITION","bizDate != null"),
         ("TC_WF_GATEWAY_N_OF","FORK","BRANCH_C","ALWAYS",None),
         ("TC_WF_GATEWAY_N_OF","BRANCH_A","MERGE","SUCCESS",None),
         ("TC_WF_GATEWAY_N_OF","BRANCH_B","MERGE","SUCCESS",None),
