@@ -103,7 +103,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
           registeredCodes.size(),
           registeredCodes);
     } catch (Exception ex) {
-      log.error("step registry snapshot failed: module={}, err={}", module, ex.getMessage(), ex);
+      log.error("step registry snapshot failed: module={}", module, ex);
     }
   }
 

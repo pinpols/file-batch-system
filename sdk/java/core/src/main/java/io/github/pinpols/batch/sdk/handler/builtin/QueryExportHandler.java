@@ -83,7 +83,7 @@ public class QueryExportHandler extends SdkAbstractTaskHandler {
       }
       conn.commit();
     } catch (Exception ex) {
-      log.error("export to {} failed: {}", path, ex.getMessage());
+      log.error("export failed: path={}", path, ex);
       return SdkTaskResult.fail(ex);
     }
     Map<String, Object> out = new LinkedHashMap<>();

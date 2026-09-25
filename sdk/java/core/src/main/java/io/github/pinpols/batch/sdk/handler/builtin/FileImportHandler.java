@@ -90,7 +90,7 @@ public class FileImportHandler extends SdkAbstractTaskHandler {
       }
       conn.commit();
     } catch (Exception ex) {
-      log.error("import into {} failed: {}", config.targetTable(), ex.getMessage());
+      log.error("import failed: targetTable={}", config.targetTable(), ex);
       return SdkTaskResult.fail(ex);
     }
     return SdkTaskResult.ok("imported " + counts.success() + " rows", counts.toOutput());

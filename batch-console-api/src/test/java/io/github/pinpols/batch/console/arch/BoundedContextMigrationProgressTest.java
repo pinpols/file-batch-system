@@ -24,11 +24,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 
 /**
  * P1-A Stage 1 迁移进度 metric。
  *
- * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,输出到 stdout,并校验严格为 0。
+ * <p>统计当前 {@code domain.<ctx>.*} 之间的非法直接依赖数量,通过 JUnit {@link TestReporter} 暴露,并校验严格为 0。
  * 通过 {@code -DboundedContext.report=<path>} 可额外生成逐类 TSV 清单,供迁移批次评审使用。
  *
  * <p>每次跑测试都能看到迁移进度,例如:
@@ -150,7 +151,7 @@ class BoundedContextMigrationProgressTest {
       Map.entry("support", "ADAPTER_OR_SUPPORT"));
 
   @Test
-  void reportCurrentViolationCount() {
+  void reportCurrentViolationCount(TestReporter testReporter) {
     JavaClasses classes = new ClassFileImporter()
         .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
         .importPackages("io.github.pinpols.batch.console..");
@@ -203,16 +204,18 @@ class BoundedContextMigrationProgressTest {
         .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
         .forEach(e -> sorted.put(e.getKey(), e.getValue()));
 
-    System.out.println("[BoundedContext] total cross-context violations: " + total);
-    System.out.println("[BoundedContext] suppressed (whitelisted) edges: " + suppressed);
-    sorted.forEach((k, v) -> System.out.println("[BoundedContext]   " + k + " : " + v));
-    writeInventoryIfRequested(inventoryRows);
+    testReporter.publishEntry(
+        "bounded-context.total-cross-context-violations", String.valueOf(total));
+    testReporter.publishEntry("bounded-context.suppressed-edges", String.valueOf(suppressed));
+    sorted.forEach(
+        (key, count) -> testReporter.publishEntry("bounded-context." + key, String.valueOf(count)));
+    writeInventoryIfRequested(inventoryRows, testReporter);
     assertThat(total)
         .as("bounded-context cross dependencies must be eliminated")
         .isZero();
   }
 
-  private static void writeInventoryIfRequested(List<String> rows) {
+  private static void writeInventoryIfRequested(List<String> rows, TestReporter testReporter) {
     String reportPath = System.getProperty("boundedContext.report");
     if (reportPath == null || reportPath.isBlank()) {
       return;
@@ -227,7 +230,7 @@ class BoundedContextMigrationProgressTest {
           "status\tsource_context\tsource_class\tsource_layer\ttarget_context\ttarget_class\ttarget_layer\tcategory");
       rows.stream().sorted().forEach(output::add);
       Files.write(path, output, StandardCharsets.UTF_8);
-      System.out.println("[BoundedContext] inventory written: " + path);
+      testReporter.publishEntry("bounded-context.inventory", path.toString());
     } catch (IOException exception) {
       throw new UncheckedIOException("failed to write bounded-context inventory", exception);
     }

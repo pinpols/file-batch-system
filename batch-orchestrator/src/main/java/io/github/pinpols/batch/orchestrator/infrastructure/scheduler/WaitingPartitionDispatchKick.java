@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.micrometer.core.instrument.Counter;
@@ -60,7 +61,10 @@ class WaitingPartitionDispatchKick {
       taskScheduler.schedule(this::dispatch, Instant.now().plusMillis(delayMillis));
     } catch (RuntimeException exception) {
       scheduled.set(false);
-      log.warn("schedule waiting-partition dispatch kick failed: {}", exception.getMessage());
+      SwallowedExceptionLogger.warn(
+          WaitingPartitionDispatchKick.class,
+          "schedule waiting-partition dispatch kick failed",
+          exception);
     }
   }
 

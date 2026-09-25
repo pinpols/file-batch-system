@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-25
+- **Java 日志与异常输出规范**：服务/测试统一使用 SLF4J/Logback 或 JUnit `TestReporter`，禁止直接标准输出和 `printStackTrace()`；未预期故障将 Throwable 交由日志框架记录，预期 fallback 使用 `SwallowedExceptionLogger`，周期重试避免重复整栈。唯一标准输出例外为 `security-scan` CLI，并由 Java 日志治理门禁限定。
+
 ### 2026-09-24
 - **ADR-035 Java SDK HTTP 实现边界**：核心 SDK 继续保持 Spring-free，允许以 OkHttp 5 作为内部控制面 HTTP 实现以获得可验证的 IPv4/IPv6 Happy Eyeballs；OkHttp 类型不得暴露到公共 API，SDK 发布物继续遵守 `< 2 MB` 约束，平台内部服务发现与网络策略不随之改变。
 - **业务数据源 RLS 账号边界**：Worker 业务数据源默认使用 `batch_business_writer`；应用启动和健康检查必须拒绝 SUPERUSER / BYPASSRLS 账号。目标环境仍须由 DBA 核验运行账号不是业务表 owner，仓库默认值和本地测试不能替代该证据。

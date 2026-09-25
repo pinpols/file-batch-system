@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -38,9 +39,8 @@ class CorsWildcardArchTest {
   @Test
   void noWildcardOriginInCorsApi() throws IOException {
     if (!Files.isDirectory(MAIN_SOURCES)) {
-      // 跨构建路径异常:不存在则跳过,但让信号留在 stdout 方便排查
-      System.err.println("[CorsWildcardArchTest] skip: source dir not found " + MAIN_SOURCES);
-      return;
+      Assumptions.assumeTrue(
+          false, "CORS source directory is unavailable in this build layout: " + MAIN_SOURCES);
     }
     List<String> offenders = new ArrayList<>();
     try (Stream<Path> walk = Files.walk(MAIN_SOURCES)) {
