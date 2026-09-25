@@ -7,7 +7,7 @@
 #   bash scripts/sim/02-start-sim.sh
 #
 # 网络:复用主 compose 的 batch-network(由 .env.local COMPOSE_PROJECT_NAME 派生)。
-# 容器命名: container_name 写死 sftp / mockserver,跟 ta/tb/tc tenant config 里
+# 容器命名: container_name 固定 sftp / mockserver,跟 ta/tb/tc tenant config 里
 # channel_config.target_endpoint 一致(sftp:22 / http://mockserver:1080)。
 
 services:

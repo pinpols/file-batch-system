@@ -124,7 +124,7 @@ if (batchSecurityProperties.isBypassMode()) {
 
 **位置**:`batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleCorsConfiguration.java:46-53`
 
-显式 allowedHeaders 写死 7 个;新 controller 若要求自定义 header(如 `X-Trace-Override`),改动易漏改 CORS → 浏览器 preflight 失败但测试同源直连成功,容易上线后才发现。
+显式 allowedHeaders 固化 7 个;新 controller 若要求自定义 header(如 `X-Trace-Override`),改动易漏改 CORS → 浏览器 preflight 失败但测试同源直连成功,容易上线后才发现。
 
 **修复**:加 web mvc test 用 `MockMvc + OPTIONS preflight` 跑常见 admin endpoint 的自定义 header,守护 CORS 列表 ⊇ controller 使用集。
 

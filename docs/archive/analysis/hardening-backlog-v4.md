@@ -90,7 +90,7 @@
 **现象**：`wf_eod_process` 实测：START→SETTLE 成功（SETTLE 节点生成了真实 file_record 158 / 236 bytes）→ DISPATCH 失败 `fileId missing`。Workflow 引擎**不会**把 SETTLE 的输出（生成的 fileId）自动写入 DISPATCH 的 partition payload。
 
 **两个独立缺口**：
-1. `workflow_node.node_params` 配置不会被合并到下游 partition 的 Kafka 消息里（所以在 DISPATCH 节点上写死 `channelCode` 也不起作用）
+1. `workflow_node.node_params` 配置不会被合并到下游 partition 的 Kafka 消息里（所以在 DISPATCH 节点上固化 `channelCode` 也不起作用）
 2. 上游节点产物（如 SETTLE 生成的 fileId）没有地方声明「流向下游哪个参数位」
 
 **修法建议**：
@@ -116,7 +116,7 @@
 
 **回归验证**：同时触发 ta/TA_IMPORT_CUSTOMER（customer 模板）+ tb/TB_IMPORT_TRANSACTION（transaction 模板），instance 170/171 双 SUCCESS；`biz.customer_account` / `biz.transaction` 各自落新行。
 
-**顺手修好的相邻测试**：`ImportIngressScannerTest` / `GenerateStepTest` 引用的老版构造器跟 P0-2 加字段不匹配，一起补参（capability_tags + objectMapper）。
+**同步修好的相邻测试**：`ImportIngressScannerTest` / `GenerateStepTest` 引用的老版构造器跟 P0-2 加字段不匹配，一起补参（capability_tags + objectMapper）。
 
 **成本**：实际约 1h
 

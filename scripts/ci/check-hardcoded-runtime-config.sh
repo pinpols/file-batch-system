@@ -61,7 +61,7 @@ assert_no_matches \
   ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestPostgresContainers.java'
 
 assert_no_matches \
-  'Java 测试禁止绕过统一 PG 工厂写死镜像或凭据' \
+  'Java 测试禁止绕过统一 PG 工厂固化镜像或凭据' \
   'DockerImageName\.parse\("postgres:[0-9]+|withUsername\("batch_user"\)|withPassword\("batch_pass_123"\)' \
   'batch-test-support/src/main/**/*.java' '*/src/test/**/*.java' \
   ':!batch-test-support/src/main/java/io/github/pinpols/batch/testing/TestPostgresContainers.java'

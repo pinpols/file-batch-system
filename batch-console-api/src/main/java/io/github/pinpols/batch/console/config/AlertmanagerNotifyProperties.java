@@ -26,7 +26,7 @@ public class AlertmanagerNotifyProperties {
   /** AM 告警渠道归属租户(notification_channel 按租户维度存储);receiver 反查该租户下的 channel_code。 */
   private String tenantId = "system";
 
-  /** 正文逐条展开的告警数上限,防超大批量告警撑爆正文;超出折叠成摘要。 */
+  /** 正文逐条展开的告警数上限,防超大批量告警导致正文过大;超出折叠成摘要。 */
   private int maxAlerts = 50;
 
   /**

@@ -18,7 +18,7 @@
 
 ## 瓶颈定位
 
-orchestrator 主 DB pool 在 `application-local.yml` 写死 `maximum-pool-size: 10`，**远小于生产默认 30**：
+orchestrator 主 DB pool 在 `application-local.yml` 固化 `maximum-pool-size: 10`，**远小于生产默认 30**：
 
 ```yaml
 # batch-orchestrator/src/main/resources/application-local.yml:

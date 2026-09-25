@@ -263,7 +263,7 @@ BFS 已有 workflow DAG、批量日、补数/重放、console。Airflow/DolphinS
 | Transactional Outbox | Debezium/微服务事件一致性 | `outbox_event`、`trigger_outbox_event`、同事务写入红线 | 补 envelope/version/lag 告警 |
 | DLQ | Kafka Connect/Kafka consumer | `dead_letter_task`、DLQ replay | 继续压测 replay 幂等 |
 | Misfire | Quartz/Airflow 调度语义 | trigger misfire listener/pending/metrics | 补高频 cron 组合验证 |
-| Worker lease | Temporal/Kafka Connect | heartbeat、lease renew、超时回收 | 补真 transport 极限测试 |
+| Worker lease | Temporal/Kafka Connect | heartbeat、lease renew、超时回收 | 补真实 transport 极限测试 |
 | DAG/workflow | Airflow/Temporal/DolphinScheduler | workflow_run/node_run、gateway、补偿 | 补运维时间线视图 |
 | Checkpoint 雏形 | Spring Batch | checkpoint 文档/部分阶段能力 | 打通 restart 契约 |
 | 多租隔离 | SaaS/RLS 成熟实践 | tenant_id、RLS、mapper guard | 继续真实跨租数据验证 |

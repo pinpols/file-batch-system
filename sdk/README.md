@@ -1,8 +1,8 @@
 # batch-worker-sdk —— 租户自托管 Worker SDK 使用说明书
 
-让租户在**自己的进程 / 机房 / K8s / VM** 里跑业务 handler,只通过 **HTTP(`/internal/*`)+ Kafka** 与平台通信——**不连平台 DB、不加载平台代码、数据 0 出域**,平台只当调度面(register → 派单 → claim → execute → report)。设计背景与边界见 [ADR-035](../docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)。
+让租户在**自己的进程、机房、K8s 或 VM** 中运行业务 handler，只通过 **HTTP(`/internal/*`) + Kafka** 与平台通信。SDK **不连接平台数据库、不加载平台实现代码，业务数据不离开租户边界**；平台只承担调度面职责（register → dispatch → claim → execute → report）。设计背景与边界见 [ADR-035](../docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)。
 
-> 本文是 SDK 总入口(选语言 / 装 / 跑 / 测 / 查文档)。具体某语言的细节看对应子目录 README;完整接入流程见 [`docs/sdk/quickstart.md`](../docs/sdk/quickstart.md) 与 [`docs/runbook/per-tenant-worker-onboarding.md`](../docs/runbook/per-tenant-worker-onboarding.md)。
+> 本文是 SDK 总入口（选型、安装、运行、测试和文档导航）。各语言细节见对应子目录 README；完整接入流程见 [`docs/sdk/quickstart.md`](../docs/sdk/quickstart.md) 与 [`docs/runbook/per-tenant-worker-onboarding.md`](../docs/runbook/per-tenant-worker-onboarding.md)。
 
 ## 选语言
 
@@ -16,7 +16,7 @@
 | **TypeScript** | `@batch/worker-sdk` | `npm i @batch/worker-sdk` | [`typescript/`](typescript/) |
 | **Rust** | `batch-worker-sdk` (crate) | `cargo add`(`http` / `kafka` feature 可选) | [`rust/`](rust/) |
 
-> 发布名权威源 = 各语言工程的 manifest(`pyproject.toml` / `Cargo.toml` / `package.json` / `pom.xml`);发布通道与真名见 [`docs/sdk/RELEASING.md`](../docs/sdk/RELEASING.md)。1.0 前多数走源码 / 本地安装。
+> 发布名称以各语言工程的 manifest（`pyproject.toml` / `Cargo.toml` / `package.json` / `pom.xml`）为准；发布通道与正式包名见 [`docs/sdk/RELEASING.md`](../docs/sdk/RELEASING.md)。1.0 前多数通过源码或本地安装使用。
 
 ## 最低环境要求
 
@@ -32,16 +32,16 @@
 | 6 | **Rust**(`batch-worker-sdk` crate) | **Rust stable**(edition 2021) | 核心零依赖;`http`(reqwest+rustls)/ `kafka`(rdkafka)= 可选 feature | 默认 feature 全关 = std-only |
 
 **通用前置(所有语言)**:
-- 网络可达平台:HTTP `/internal/*` + Kafka broker(`batch.task.dispatch.<tenant>.*`)
-- 一个平台签发的 **API key**(进 HTTP header,数据 0 出域)
+- 网络可达平台：HTTP `/internal/*` + Kafka broker（`batch.task.dispatch.<tenant>.*`）
+- 平台签发的 **API key**（放入 HTTP header，业务数据不出租户边界）
 - 时区/编码按平台约定(UTF-8;时间统一 UTC 传输)
 
 ## 两种形态(都在每个语言里)
 
-1. **decision core** —— 纯函数、无 IO,把 wire 输入(HTTP 状态 / 心跳指令 / 续租 / 背压 / 停止信号)映射成结构化决策。跨语言 1:1 对齐,由契约 fixture 钉死(`then.expect` 词表)。
-2. **runtime engine** —— 真 transport(HTTP)+ 真 Kafka 消费 + claim/execute/report 回路 + 心跳/租约调度 + 优雅停。
+1. **decision core** —— 纯函数、无 IO，将 wire 输入（HTTP 状态、心跳指令、续租、背压、停止信号）映射为结构化决策。跨语言 1:1 对齐，并由契约 fixture 固化（`then.expect` 词表）。
+2. **runtime engine** —— 真实 transport（HTTP）、Kafka 消费、claim/execute/report 回路、心跳/租约调度和优雅停机。
 
-此外 **Java / Python 自带 batteries**:5 类 worker 的内建/抽象 handler(import / export / process / dispatch / atomic),开箱即用,见 [§5 类 worker handler](#5-类-worker-handler-batteries)。Go / TS / Rust 提供 decision core + runtime engine,业务 handler 由租户实现。
+此外 **Java / Python 提供内置 handler**：5 类 worker 的内建或抽象 handler（import / export / process / dispatch / atomic），可直接复用；见 [§5 类 worker handler](#5-类-worker-handler)。Go / TS / Rust 提供 decision core + runtime engine，业务 handler 由租户实现。
 
 ## 5 分钟接入
 
@@ -53,11 +53,11 @@
 
 平台会下发给你:`BASE_URL` / `TENANT_ID` / `API_KEY`(scope `worker.execute`)/ Kafka bootstrap + topic pattern + group + SASL/SCRAM 凭据。`workerCode` 自取、租户内唯一。
 
-可直接抄 [`examples/self-hosted-sdk/`](../examples/self-hosted-sdk/) 下对应语言的 sample 工程起步。
+可参考 [`examples/self-hosted-sdk/`](../examples/self-hosted-sdk/) 下对应语言的 sample 工程起步。
 
-## 5 类 worker handler(batteries)
+## 5 类 worker handler
 
-Java / Python SDK 自带 5 类 worker 的内建/抽象 handler:
+Java / Python SDK 提供 5 类 worker 的内建或抽象 handler：
 
 | 类型 | 用途 | 内建实现 |
 |---|---|---|
@@ -67,7 +67,7 @@ Java / Python SDK 自带 5 类 worker 的内建/抽象 handler:
 | dispatch | 分发 | HttpDispatch |
 | atomic | 原子任务 | Shell / Sql / StoredProc / Http |
 
-租户继承抽象基类或直接用 typed handler 即可。Go / TS / Rust 不带 batteries,handler 由租户实现。
+租户可以继承抽象基类，也可以直接使用 typed handler。Go / TS / Rust 不提供内置业务 handler，需由租户实现。
 
 ## 测试与验证
 
@@ -75,8 +75,8 @@ Java / Python SDK 自带 5 类 worker 的内建/抽象 handler:
 |---|---|---|
 | 5 类 handler batteries 单测(Java + Python) | `bash scripts/local/sdk-handler-tests.sh [java\|python\|all]` | 环境变量可覆盖;对 stale skip 显式告警 |
 | 跨语言契约 fixture(决策核) | 各语言 test(`go test ./...` / `npm test` / `cargo test` / `pytest tests/contract` / Java surefire) | 同一份 [`docs/api/sdk-contract-fixtures/`](../docs/api/sdk-contract-fixtures/) 跨 5 语言跑,防漂移 |
-| 真 orchestrator 本地全链路 | `bash scripts/local/sdk-e2e-local.sh <go\|python\|typescript\|java\|rust>` | 真栈起后逐阶段断言 register→dispatch→claim→execute→report→terminal,见 [`docs/sdk/local-e2e-coverage.md`](../docs/sdk/local-e2e-coverage.md) |
-| 租户写 handler 单测 | testkit `FakeBatchPlatform` / `@BatchWorkerTest`(Java 见 [`java/testkit/`](java/testkit/),Python `batch_worker_sdk.testkit`) | in-process 平台 fake,不连真栈 |
+| 真实 orchestrator 本地全链路 | `bash scripts/local/sdk-e2e-local.sh <go\|python\|typescript\|java\|rust>` | 真实依赖栈启动后，逐阶段断言 register→dispatch→claim→execute→report→terminal；见 [`docs/sdk/local-e2e-coverage.md`](../docs/sdk/local-e2e-coverage.md) |
+| 租户 handler 单测 | testkit `FakeBatchPlatform` / `@BatchWorkerTest`（Java 见 [`java/testkit/`](java/testkit/)，Python `batch_worker_sdk.testkit`） | 进程内平台替身，不连接真实依赖栈 |
 
 ## 目录结构
 
@@ -95,7 +95,7 @@ sdk/
 
 完整列表见 [`docs/sdk/README.md`](../docs/sdk/README.md)。常用:
 
-- [quickstart.md](../docs/sdk/quickstart.md) —— 5 分钟跑起来
+- [quickstart.md](../docs/sdk/quickstart.md) —— 5 分钟启动示例
 - [byo-sdk-guide.md](../docs/sdk/byo-sdk-guide.md) —— BYO 完整指南
 - [wire-protocol.md](../docs/sdk/wire-protocol.md) —— 通信协议权威源
 - [byo-conformance-contract.md](../docs/sdk/byo-conformance-contract.md) —— 防漂移契约

@@ -133,7 +133,7 @@
 
 主要风险:
 
-- 本轮不能确认 Go/TypeScript/Rust 都达到 Java 同级生产行为；需要逐语言跑 conformance + 真 transport 接入，不只是 fixture 绿。
+- 本轮不能确认 Go/TypeScript/Rust 都达到 Java 同级生产行为；需要逐语言跑 conformance + 真实 transport 接入，不只是 fixture 绿。
 - Python 历史审计曾指出 P0/P1 缺口，当前目录已有不少补丁迹象，但仍要以当前源码和 CI 结果重新签。
 - BYO SDK 真实客户接入最容易漂移的是 lease/heartbeat/cancel/backpressure，必须用统一 conformance gates 卡住。
 

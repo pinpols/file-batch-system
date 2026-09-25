@@ -4,7 +4,7 @@
 
 ## 1. `sdk-orchestrator-e2e`(样例 worker × 真 orchestrator)
 
-真栈往返(register / claim / report / 心跳 directive),`nightly cron + workflow_dispatch` 触发,**始终不进分支保护 required checks**(全栈启动数分钟 + 偶发 flaky,不适合每-PR 硬门禁)。矩阵内每条腿的 `continue-on-error` 是「这条腿本身是否让整个 workflow run 判失败」的开关。
+真实依赖栈往返(register / claim / report / 心跳 directive),`nightly cron + workflow_dispatch` 触发,**始终不进分支保护 required checks**(全栈启动数分钟 + 偶发 flaky,不适合每-PR 硬门禁)。矩阵内每条腿的 `continue-on-error` 是「这条腿本身是否让整个 workflow run 判失败」的开关。
 
 | lang | 当前状态 | 说明 |
 |---|---|---|

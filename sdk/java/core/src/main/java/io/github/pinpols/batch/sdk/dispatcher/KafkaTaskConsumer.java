@@ -34,7 +34,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 /**
- * Kafka task dispatch topic consumer — 单线程 poll loop,把消息反序列化为 {@link TaskDispatchMessage} 后扔给
+ * Kafka task dispatch topic consumer — 单线程 poll loop,把消息反序列化为 {@link TaskDispatchMessage} 后交给
  * {@link TaskDispatcher}。
  *
  * <p>关键约束:
@@ -66,14 +66,14 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
 
   /**
    * Lane E #4-Java:Kafka SASL 认证失败(凭据错误)时置 true。 与 {@link #crashed} 区分:crashed=任意非预期
-   * Throwable;fatalAuthFailure=确定不可恢复的认证错, 无限重试也修不好,必须 fail-fast 让 K8s 拉起重启;{@link
+   * Throwable;fatalAuthFailure=确定不可恢复的认证错误, 无限重试也无法恢复,必须 fail-fast 让 K8s 拉起重启;{@link
    * io.github.pinpols.batch.sdk.client.BatchPlatformClient#stop(java.time.Duration)} 据此跳过
-   * deactivate(凭据已坏,HTTP 也会 401)。
+   * deactivate(凭据已失效,HTTP 也会 401)。
    */
   private final AtomicBoolean fatalAuthFailure = new AtomicBoolean(false);
 
   /**
-   * 未知 schema 大版本被拒后走 WITHHOLD(§A 不提交 offset,记 commit 天花板后继续消费);rebalance / 重启后该 v3 会从旧 commit
+   * 未知 schema 大版本被拒后走 WITHHOLD(§A 不提交 offset,记录 commit 上限后继续消费);rebalance / 重启后该 v3 会从旧 commit
    * 位点再次投递并被拒,节流该 WARN(同 key 60s 一条),避免持续重投造成日志过载。
    */
   private final ThrottledLogger throttledLog = ThrottledLogger.create(log, Duration.ofSeconds(60));
@@ -85,18 +85,18 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private final AtomicReference<Thread> kafkaThread = new AtomicReference<>();
 
   /**
-   * P0 hardening:**容量维度** pause —— in-flight 达上限(或平台 PAUSED/DRAINING)时 pause 整个 assignment;掉下来再
+   * P0 hardening:**容量维度** pause —— in-flight 达上限(或平台 PAUSED/DRAINING)时 pause 整个 assignment;容量恢复后再
    * resume。Zeebe maxJobsActive 模式。瞬时背压(容量 / 平台 / RETRY_LATER 的 per-partition seek+pause)也走此标志, 恢复后由
    * {@link #applyBackpressure()} resume。WITHHOLD(foreign-tenant / 未知 schema)**不** pause 分区,只记
-   * commit 天花板(见 {@link #withheldCeilings}),故与本标志无关。
+   * commit 上限(见 {@link #withheldCeilings}),故与本标志无关。
    */
   private volatile boolean paused = false;
 
   /**
-   * 每分区 commit 天花板 —— WITHHOLD(foreign-tenant / 未知 schema 大版本)记录的 **最低** withheld offset。对齐 Go
-   * {@code Consumer.withheld} / TS #826 {@code #withheld}:天花板之上(offset >= ceiling)的记录永不 commit, 保证
-   * withheld 记录不会被后到的 accepted 记录的 commit 悄悄跨过(§A / §1.9);而分区**继续消费**,不 head-of-line 阻塞同分区其它
-   * 租户的正常消息。天花板不 pause 分区,仅约束 commit。分区被 revoke 时清除(重分配后从 last commit < ceiling 重读会重新记账)。 poll 线程与
+   * 每分区 commit 上限 —— WITHHOLD(foreign-tenant / 未知 schema 大版本)记录的 **最低** withheld offset。对齐 Go
+   * {@code Consumer.withheld} / TS #826 {@code #withheld}:上限之上(offset >= ceiling)的记录永不 commit, 保证
+   * withheld 记录不会被后到的 accepted 记录的 commit 跨过(§A / §1.9);而分区**继续消费**,不 head-of-line 阻塞同分区其它
+   * 租户的正常消息。上限不 pause 分区,仅约束 commit。分区被 revoke 时清除(重分配后从 last commit < ceiling 重读会重新记账)。 poll 线程与
    * rebalance 回调单线程触碰,但单测从测试线程驱动,故用线程安全 map。
    */
   private final Map<TopicPartition, Long> withheldCeilings = new ConcurrentHashMap<>();
@@ -193,7 +193,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       // 正常 stop 触发
     } catch (Throwable t) {
       // P1-4 #1.7:非预期退出 — 置 crashed + running=false,让 BatchPlatformClient.isHealthy() 报 false,
-      // 不静默死。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
+      // 不静默停止。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
       crashed.set(true);
       running.set(false);
       if (t instanceof Error error) {
@@ -231,7 +231,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /**
    * P0 hardening(borrowed from Zeebe maxJobsActive):in-flight 已满则 pause assigned partitions,
    * 队列降到一半以下再 resume。注意 pause/resume 是按 partition 维度,**不停 poll loop**(否则 consumer heartbeat 也会停 →
-   * consumer group rebalance 把当前 worker 踢)。
+   * consumer group rebalance 将当前 worker 移出分配)。
    *
    * <p>Round-3 #1(ADR-035 §11.1 / Round-2 P0 #1 闭环):resume 阈值带 hysteresis —— pause 在 {@code
    * inFlight >= max},resume 只有当 {@code inFlight < max * 0.5}(整数除法即 {@code max / 2}) 时才触发。 上下边界拉开,避免
@@ -266,7 +266,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       boolean canResumeConsumer = paused && !platformPaused && capacityResumeOk;
       if (canResumeConsumer) {
         // 容量 / 平台恢复 → resume 整个 assignment(含被 RETRY_LATER seek+pause 的瞬时背压分区)。WITHHOLD 不再 pause
-        // 分区(只记 commit 天花板),故不存在「resume 后重读 poison 忙旋转」的问题,无需排除任何分区。
+        // 分区(只记 commit 上限),故不存在「resume 后重读 poison 忙等」的问题,无需排除任何分区。
         Set<TopicPartition> assignment = consumer.assignment();
         if (!EmptyChecks.isEmpty(assignment)) {
           consumer.resume(assignment);
@@ -314,8 +314,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     TopicPartition tp = new TopicPartition(rec.topic(), rec.partition());
 
     if (decision == TaskDispatcher.DispatchDecision.WITHHOLD) {
-      // Go / TS #826 对齐:foreign-tenant / 未知 schema —— 不提交、不 pause,记该分区 commit 天花板(取最低 withheld
-      // offset)后**继续消费**。天花板之上的 offset 永不 commit(见下方 commit 分支),withheld 记录随 rebalance / 重启重投
+      // Go / TS #826 对齐:foreign-tenant / 未知 schema —— 不提交、不 pause,记该分区 commit 上限(取最低 withheld
+      // offset)后**继续消费**。上限之上的 offset 永不 commit(见下方 commit 分支),withheld 记录随 rebalance / 重启重投
       // (at-least-once);同分区其它租户的正常消息不被 head-of-line 阻塞。
       long ceiling = withheldCeilings.merge(tp, rec.offset(), Math::min);
       throttledLog.warn(
@@ -337,8 +337,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       return false;
     }
 
-    // commit 分支(SUBMITTED / DROP_TERMINAL):先过天花板过滤 —— 该分区若有 withheld 天花板且本条 offset >= 天花板,
-    // 则不 commit(commit 会推进过 withheld 记录,悄悄跳过它,§A / §1.9)。天花板之下正常前移。对齐 Go committable
+    // commit 分支(SUBMITTED / DROP_TERMINAL):先过上限过滤 —— 该分区若有 withheld 上限且本条 offset >= 上限,
+    // 则不 commit(commit 会推进过 withheld 记录并跳过它,§A / §1.9)。上限之下正常前移。对齐 Go committable
     // (m.Offset >= ceil → drop)。继续消费。
     Long ceiling = withheldCeilings.get(tp);
     if (ceiling != null && rec.offset() >= ceiling) {
@@ -404,8 +404,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
     // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)。
     // wire-protocol §A 硬契约:未知大版本 **不提交 offset**(WITHHOLD),而非 DROP_TERMINAL——
-    // 提交会静默跳过该 v3 任务。对齐 Go(DispositionRejectedSchema)+ TS #826:记 commit 天花板后继续消费,
-    // 不冻结分区(§A 只要求不 commit,不要求 HOL 阻塞;天花板保证 v3 offset 不被跨过,随重启重投等 SDK 升级)。
+    // 提交会静默跳过该 v3 任务。对齐 Go(DispositionRejectedSchema)+ TS #826:记 commit 上限后继续消费,
+    // 不冻结分区(§A 只要求不 commit,不要求 HOL 阻塞;上限保证 v3 offset 不被跨过,随重启重投等 SDK 升级)。
     // 正常情况下 v3 本不该被投到 v2-only worker(consumer-group / 能力协商前置拦截),此分支只在协商失效时触发。
     if (!msg.isSchemaSupported()) {
       throttledLog.warn(
@@ -483,7 +483,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /**
    * Lane E #4-Java:poll loop 是否因 Kafka SASL 认证失败退出。{@link
    * io.github.pinpols.batch.sdk.client.BatchPlatformClient#stop(java.time.Duration)} 据此跳过
-   * deactivate(凭据已坏,HTTP 也会 401,空喊无意义)。
+   * deactivate(凭据已失效,HTTP 也会 401,调用无实际意义)。
    */
   public boolean isFatalAuthFailure() {
     return fatalAuthFailure.get();
@@ -518,8 +518,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
       log.info("kafka partitions revoked: {}", partitions);
-      // 撤走的分区不再归我们,清掉其 commit 天花板(对齐 Go 在 reader 重建时清 withheld)。若重新分配回来,会从 last
-      // commit(< 天花板)重读,重新遇到 withheld 记录再记账。
+      // 撤走的分区不再归本 worker,清掉其 commit 上限(对齐 Go 在 reader 重建时清 withheld)。若重新分配回来,会从 last
+      // commit(< 上限)重读,重新遇到 withheld 记录再记账。
       partitions.forEach(withheldCeilings::remove);
     }
 
@@ -530,7 +530,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         return;
       }
       // 容量/平台 backpressure 仍生效 → 重新 pause 全部新分区(Kafka rebalance 后默认 RESUMED)。WITHHOLD 不 pause
-      // 分区(只记 commit 天花板),故 rebalance 无需为 withheld 分区做任何重新 pause。
+      // 分区(只记 commit 上限),故 rebalance 无需为 withheld 分区做任何重新 pause。
       if (paused) {
         consumer.pause(partitions);
         log.info(

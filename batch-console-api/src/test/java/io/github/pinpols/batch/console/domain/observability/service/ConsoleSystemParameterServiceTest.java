@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.application.observability.ConsoleSystemPa
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleSystemParameterMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.infrastructure.observability.RedisSystemParameterCacheStore;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -33,7 +34,8 @@ class ConsoleSystemParameterServiceTest {
     redisTemplate = mock(StringRedisTemplate.class);
     valueOperations = mock(ValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    service = new ConsoleSystemParameterService(repository, tenantGuard, redisTemplate);
+    service = new ConsoleSystemParameterService(
+        repository, tenantGuard, new RedisSystemParameterCacheStore(redisTemplate));
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
   }
 

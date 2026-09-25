@@ -36,7 +36,7 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
 
   private final ConsoleOpsSummaryPort opsApplicationService;
   private final ConsoleRealtimeEventHub realtimeEventHub;
-  private final ConsoleRealtimeRedisPublisher redisPublisher;
+  private final RealtimeEventBus realtimeEventBusPublisher;
   private final ConsoleRealtimeCursorFactory cursorFactory;
   private final TenantIdResolver tenantGuard;
   private final BatchDateTimeSupport dateTimeSupport;
@@ -55,14 +55,14 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
   public ConsoleOpsSummaryRealtimeStream(
       ConsoleOpsSummaryPort opsApplicationService,
       ConsoleRealtimeEventHub realtimeEventHub,
-      ConsoleRealtimeRedisPublisher redisPublisher,
+      RealtimeEventBus realtimeEventBusPublisher,
       ConsoleRealtimeCursorFactory cursorFactory,
       TenantIdResolver tenantGuard,
       BatchDateTimeSupport dateTimeSupport,
       @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
     this.opsApplicationService = opsApplicationService;
     this.realtimeEventHub = realtimeEventHub;
-    this.redisPublisher = redisPublisher;
+    this.realtimeEventBusPublisher = realtimeEventBusPublisher;
     this.cursorFactory = cursorFactory;
     this.tenantGuard = tenantGuard;
     this.dateTimeSupport = dateTimeSupport;
@@ -148,10 +148,10 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
         summary,
         dateTimeSupport.nowInstant());
     realtimeEventHub.publish(event);
-    redisPublisher.publish(event);
+    realtimeEventBusPublisher.publish(event);
   }
 
-  void publishSnapshot(String tenantId) {
+  public void publishSnapshot(String tenantId) {
     publishSummarySnapshot(tenantId, true);
   }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # scripts/ci/check-mapof-null-values.py
 #
-# Map.of / List.of / Set.of 空值守护(钉死唯一反复复发的生产 NPE 模式)。
+# Map.of / List.of / Set.of 空值守护(固化唯一反复复发的生产 NPE 模式)。
 #
 # 背景(对齐 docs/agent-baseline.md「异常→契约」红线 + 528k LOC null 纪律专项审计结论):
 #   Map.of(...) / List.of(...) / Set.of(...) 是不可变工厂,对 null 键/值零容忍——

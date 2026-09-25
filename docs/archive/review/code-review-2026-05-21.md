@@ -72,7 +72,7 @@ V139/V140/V141 新增了 archive 表和 `archive_policy` 种子，但这三个�
 
 修复: 先单独校验 `partitionPlan.getPartitionNo() != null`，再拼 idempotencyKey。
 
-### 8. V136/V137 同批 VALIDATE 可能卡住已有异常数据环境
+### 8. V136/V137 同批 VALIDATE 可能停滞已有异常数据环境
 
 位置:
 - `db/migration/V136__job_instance_trigger_source_check_not_valid.sql:22-29`

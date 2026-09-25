@@ -46,7 +46,7 @@ import org.springframework.stereotype.Service;
  *   <li>CRON — 使用 {@code withMisfireHandlingInstructionDoNothing}：Quartz 层不补跑， 错失触发由 {@link
  *       QuartzLaunchJob} 在执行时根据 drift 自行决策 catch-up 策略。
  *   <li>FIXED_RATE — 使用 {@code withMisfireHandlingInstructionNextWithExistingCount}：
- *       只补跑丢失的次数，不累积爆发。
+ *       只补跑丢失的次数，不集中补跑过量触发。
  *   <li>EVENT / MANUAL — 静默跳过，无需 Quartz 注册（由外部事件或人工 API 触发）。
  * </ul>
  *

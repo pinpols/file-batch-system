@@ -142,7 +142,7 @@ SELECT instance_no, status, started_at FROM batch.workflow_run WHERE tenant_id =
 
 V4/V5（早期）只有 workflow_definition + workflow_node。V6 加 pipeline_definition + pipeline_step_run，原因：
 
-- 早期 workflow 节点支持任意 handler，但 IMPORT 等场景的 9 阶段总是手写一套，工程上抽象成"内置 pipeline"省事
+- 早期 workflow 节点支持任意 handler，但 IMPORT 等场景的 9 阶段总是手写一套，工程上抽象成"内置 pipeline"简化处理
 - pipeline_step_run 比 workflow_node_run 维度更细（精确到 stage），观测性更好
 
 ### 7.2 是否考虑合并两套体系

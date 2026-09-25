@@ -14,7 +14,7 @@ import (
 //
 // 必须与服务端 io.github.pinpols.batch.common.security.RequestSignatures 以及
 // Java SDK 的 RequestSigner 逐字节一致 —— 三者由各语言 SDK 的 conformance 用例
-// 钉死同一 golden 向量。算法：
+// 固定同一 golden 向量。算法：
 //
 //	canonical = UPPER(method) "\n" path "\n" timestamp "\n" nonce "\n" hex(sha256(body))
 //	signature = hex(hmacSha256(apiKey, canonical))     // 小写 hex

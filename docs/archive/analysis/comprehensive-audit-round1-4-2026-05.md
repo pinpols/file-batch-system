@@ -69,7 +69,7 @@
 **R2 引入的 FQN 违规**: 在 `BatchSecurityProperties` 里用 `java.util.Set` FQN，但 `Set` 已 import  
 **R3 引入的 clock skew 遗漏**: `ConsoleJwtService.decoder()` fallback path 没有 `JwtTimestampValidator`
 
-**原因**: 修复过程中新增代码没走完整的 code review（Copilot 手速 > 人眼），docs/agent-baseline.md 硬约束（FQN / 时区 / JWT 校验）没有 lint 自动化。
+**原因**: 修复过程中新增代码没走完整的 code review（Copilot 手速 > 人工审查），docs/agent-baseline.md 硬约束（FQN / 时区 / JWT 校验）没有 lint 自动化。
 
 **改进**: 上 ArchUnit + spotless 强制 docs/agent-baseline.md 规范，减少人工 review 依赖。
 
@@ -150,7 +150,7 @@
 
 3. **没有"审计日志双轨制"** — DB 表的审计和 SIEM 日志平台的审计脱钩。高危操作（approve / promote / approve_replay）只 DB 记录，没有专用 appender 流向 ELK/Splunk，故障恢复时无实时告警。
 
-4. **docs/agent-baseline.md 规范落地靠人眼** — "禁止 FQN"、"禁止 ZoneId.systemDefault()"、"所有 UNIQUE 含 tenant_id" 等约束，没有自动化校验，R4 还是遇到问题（FQN）。
+4. **docs/agent-baseline.md 规范落地依赖人工审查** — "禁止 FQN"、"禁止 ZoneId.systemDefault()"、"所有 UNIQUE 含 tenant_id" 等约束，没有自动化校验，R4 还是遇到问题（FQN）。
 
 ---
 

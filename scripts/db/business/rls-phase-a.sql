@@ -65,10 +65,21 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA biz
   TO batch_business_writer, batch_business_admin;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA biz
   TO batch_business_writer, batch_business_admin;
+GRANT USAGE ON SCHEMA batch TO batch_business_writer, batch_business_admin;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA batch
+  TO batch_business_writer, batch_business_admin;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA batch
+  TO batch_business_writer, batch_business_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA biz
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES
   TO batch_business_writer, batch_business_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA biz
+  GRANT USAGE, SELECT ON SEQUENCES
+  TO batch_business_writer, batch_business_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA batch
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES
+  TO batch_business_writer, batch_business_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA batch
   GRANT USAGE, SELECT ON SEQUENCES
   TO batch_business_writer, batch_business_admin;
 

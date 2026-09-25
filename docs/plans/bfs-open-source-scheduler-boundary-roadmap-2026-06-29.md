@@ -544,7 +544,7 @@ trigger
 风险:
 
 - 当前状态主机集中在 PG。高压下瓶颈更可能在 launch/claim/report 串行段,不是 worker 执行体。
-- 单机容量报告已显示控制面吞吐有天花板,盲目上 Citus 或加 worker 不一定有效。
+- 单机容量报告已显示控制面吞吐有上限,盲目上 Citus 或加 worker 不一定有效。
 
 影响:
 
@@ -582,7 +582,7 @@ trigger
 影响:
 
 - worker 空闲但任务未到达。
-- 延迟恢复后打爆 worker 或下游。
+- 延迟恢复后压垮 worker 或下游。
 
 缓解:
 
@@ -1069,7 +1069,7 @@ trigger
 
 还未做:
 
-- 每类 adapter 的强制安全属性矩阵(timeout / SSRF / path escape / manifest / readback / credential handling)机器化。
+- 每类 adapter 的强制安全属性矩阵(timeout / SSRF / path escape / manifest / readback / credential handling)自动化。
 - SDK 五语言 adapter conformance;当前 dispatch worker 是平台内置 adapter,不等于 BYO SDK adapter 契约。
 - Console 对非官方 channel_type 的配置期校验。
 
@@ -1103,7 +1103,7 @@ trigger
 
 边界:
 
-- 这一步只把平台内置 dispatch adapter 的安全契约机器化,不开放第三方 adapter 插件。
+- 这一步只把平台内置 dispatch adapter 的安全契约自动化,不开放第三方 adapter 插件。
 - `READBACK` 当前不伪造能力:内置 adapter 还未实现 `DispatchReadbackCapable`,矩阵统一记录为未实现。
 - 这一步不改变运行时行为,避免在没有灰度参数的情况下突然拒绝历史配置。
 

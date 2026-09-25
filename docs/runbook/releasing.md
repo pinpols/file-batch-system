@@ -264,7 +264,7 @@ Release 时把 `[Unreleased]` 改成 `[X.Y.Z] - YYYY-MM-DD`，再开新空 `[Unr
 | MINOR | • 加新 ADR backend（V11x migration）<br>• 加新 console 端点（不破坏旧端点）<br>• 加可选字段（旧客户端未传也能跑） |
 | PATCH | • bug fix 不改外部接口<br>• mapper.xml SQL 调优<br>• 单元测试补全 |
 
-**判定提问**："旧版本部署的客户端跑新版本会爆吗？"
+**判定提问**："旧版本部署的客户端跑新版本会出兼容问题吗？"
 - 是 → MAJOR；
 - 否 + 加东西 → MINOR；
 - 否 + 改东西 → PATCH。

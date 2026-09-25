@@ -128,7 +128,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
   }
 
-  /** R3-P2-5：按 workerType 懒注册 Timer；同一 type 复用同一实例避免 cardinality 爆失败。 */
+  /** R3-P2-5：按 workerType 懒注册 Timer；同一 type 复用同一实例避免 cardinality 失控。 */
   private Timer resolveExecutionTimer(String workerType) {
     if (meterRegistry == null) {
       return null;

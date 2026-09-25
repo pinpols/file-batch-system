@@ -241,8 +241,8 @@ async def test_apply_backpressure_skips_when_no_assignment() -> None:
 async def test_rebalance_listener_resets_capacity_ledger() -> None:
     """on_partitions_assigned → 容量账本翻 False。
 
-    withhold 不再 pause 分区(改走 commit 天花板),故 rebalance 只需重置容量
-    维度;天花板从不 commit,revoke 后由重投从原位恢复,无需在 rebalance 清。
+    withhold 不再 pause 分区(改走 commit 上限),故 rebalance 只需重置容量
+    维度;上限从不 commit,revoke 后由重投从原位恢复,无需在 rebalance 清。
     """
     consumer, _dispatcher, _mock = await _make_consumer()
     try:
@@ -255,10 +255,10 @@ async def test_rebalance_listener_resets_capacity_ledger() -> None:
 
 
 async def test_capacity_resume_resumes_full_assignment_with_ceilings_set() -> None:
-    """容量恢复时 resume 整个 assignment —— withhold 天花板不影响 resume 集合。
+    """容量恢复时 resume 整个 assignment —— withhold 上限不影响 resume 集合。
 
     旧实现把 withhold 分区单独 pause 并从 resume 集合里排除;新实现 withhold
-    根本不 pause(改走 commit 天花板 + 继续消费),因此即便某分区设了天花板,
+    根本不 pause(改走 commit 上限 + 继续消费),因此即便某分区设了上限,
     容量恢复也应 resume **全部** assignment(唯一的 pause 来自 backpressure,
     且必须完整配对 resume,否则会漏 resume 冻住分区)。
     """
@@ -274,7 +274,7 @@ async def test_capacity_resume_resumes_full_assignment_with_ceilings_set() -> No
         try:
             consumer.apply_backpressure()  # 容量 pause
             assert consumer.paused is True
-            # 某分区设了 withhold 天花板(模拟 poll loop 记账),不应影响 resume。
+            # 某分区设了 withhold 上限(模拟 poll loop 记账),不应影响 resume。
             consumer._withheld_ceilings["part-0"] = 42  # type: ignore[index]
             # 容量恢复(排干到 < max//2)。
             while dispatcher.in_flight_count() >= 2:
@@ -287,7 +287,7 @@ async def test_capacity_resume_resumes_full_assignment_with_ceilings_set() -> No
             assert resumed == {"part-0", "part-1"}, (
                 f"capacity resume must cover full assignment, got {resumed}"
             )
-            # 天花板不被容量 resume 影响。
+            # 上限不被容量 resume 影响。
             assert consumer.withheld_ceilings == {"part-0": 42}
         finally:
             for t in list(dispatcher._in_flight.values()):
@@ -362,7 +362,7 @@ async def _drive_one_batch(
     """驱动 poll 循环消费**一个** batch 后退出,返回(处理过的 offset 顺序, commit 的 offsets)。
 
     ``_handle_record`` 被 stub 成按 offset 查表返回 disposition,以便精确控制
-    valid / WITHHOLD / RETRY_LATER / drop 组合,聚焦验证 offset 天花板与 commit 过滤。
+    valid / WITHHOLD / RETRY_LATER / drop 组合,聚焦验证 offset 上限与 commit 过滤。
     """
     handled: list[int] = []
 
@@ -397,8 +397,8 @@ async def test_withhold_no_hol_keeps_consuming_and_sets_ceiling() -> None:
     """HOL 消除回归:valid(10)→foreign/withhold(11)→v3/withhold(12) 同分区。
 
     三条都必须被处理(无 seek/pause/break 冻结分区);foreign/v3 不 commit;
-    天花板取最低 withheld offset=11;仅天花板之下的 valid(10)提交(offset+1=11)。
-    对齐 TS #826:withhold 记 commit 天花板 + 继续消费,而非 pause 冻结。
+    上限取最低 withheld offset=11;仅上限之下的 valid(10)提交(offset+1=11)。
+    对齐 TS #826:withhold 记 commit 上限 + 继续消费,而非 pause 冻结。
     """
     consumer, _dispatcher, mock = await _make_consumer()
     try:
@@ -416,18 +416,18 @@ async def test_withhold_no_hol_keeps_consuming_and_sets_ceiling() -> None:
         # 绝不 seek / pause withhold 路径。
         assert mock.seek.call_count == 0
         assert mock.pause.call_count == 0
-        # 天花板 = 最低 withheld offset。
+        # 上限 = 最低 withheld offset。
         assert consumer.withheld_ceilings == {tp: 11}
-        # 只提交天花板之下的 valid(10)→ next offset 11;withheld(11)从原位重投。
+        # 只提交上限之下的 valid(10)→ next offset 11;withheld(11)从原位重投。
         assert committed == {tp: 11}, f"must commit only below-ceiling record, got {committed}"
     finally:
         await consumer._dispatcher._http.close()
 
 
 async def test_withhold_first_record_commits_nothing_no_clamp() -> None:
-    """不丢消息回归:分区首条即 withhold(5),后续 valid(6/7)照常投递但不越天花板。
+    """不丢消息回归:分区首条即 withhold(5),后续 valid(6/7)照常投递但不越上限。
 
-    天花板=5;5/6/7 都不提交(全部 >= 天花板)——**绝不夹逼到 ceiling-1**
+    上限=5;5/6/7 都不提交(全部 >= 上限)——**绝不夹逼到 ceiling-1**
     (那会 commit offset 5,静默跳过 withheld 消息 = 丢消息,TS 踩过的坑)。
     withheld(5)及其后须靠 rebalance/重启从原位重投。valid(6/7)仍被 handler
     投递(HOL 消除),仅不推进 offset。
@@ -445,7 +445,7 @@ async def test_withhold_first_record_commits_nothing_no_clamp() -> None:
 
         assert handled == [5, 6, 7], f"withhold must not freeze partition, got {handled}"
         assert consumer.withheld_ceilings == {tp: 5}
-        # 该分区无任何可提交 offset:5/6/7 全部 >= 天花板 5 → 不 commit。
+        # 该分区无任何可提交 offset:5/6/7 全部 >= 上限 5 → 不 commit。
         assert tp not in committed, (
             f"nothing below ceiling → partition must not be committed (no clamp to ceiling-1), "
             f"got {committed}"
@@ -483,15 +483,15 @@ async def test_retry_later_seeks_pauses_and_stops_partition_batch() -> None:
 
 
 async def test_withhold_ceiling_persists_across_polls_blocks_later_commit() -> None:
-    """跨 poll 天花板持久:上一 poll 的 withhold(8)必阻塞后续 poll 中 offset>=8 的 commit。
+    """跨 poll 上限持久:上一 poll 的 withhold(8)必阻塞后续 poll 中 offset>=8 的 commit。
 
-    天花板字典按 tp 跨 poll 维护;第二个 batch 的 valid(9)虽被处理,但 9>=8
+    上限字典按 tp 跨 poll 维护;第二个 batch 的 valid(9)虽被处理,但 9>=8
     → 不提交,保证 withheld(8)不被越过。
     """
     consumer, _dispatcher, mock = await _make_consumer()
     try:
         tp = "p0"
-        # 先手动置天花板(等价于前一 poll 的 withhold)。
+        # 先手动置上限(等价于前一 poll 的 withhold)。
         consumer._withheld_ceilings[tp] = 8
         batch = {tp: [_rec(9)]}
         dispositions = {9: DispatchDisposition.ACCEPTED}

@@ -124,7 +124,7 @@ keyset 边界是 plugin 内部计算,不外溢。
 
 - 出现**实测**的大数据(≥ 千万行)+ 高分片数(≥ 8)导出场景,且 hashtext N× 全扫被 benchmark 证明为瓶颈。
 - 现状:`export-partition-slice-fix` 已把正确性治本,放大「已接受」;无实测瓶颈前实现本优化 = 重演 import backlog
-  警告的「为假设做重活」。**先 benchmark,后实现。**
+  警告的「在缺少证据时投入重实现」。**先 benchmark,后实现。**
 
 ## 9. 关联
 

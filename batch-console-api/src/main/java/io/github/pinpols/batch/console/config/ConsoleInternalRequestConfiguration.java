@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ConsoleInternalRequestConfiguration {
 
-  /** order=0:尽早在过滤链前段按 Content-Length 拦掉超大内部请求体,避免撑爆内存(参考 orchestrator 同款)。 */
+  /** order=0:尽早在过滤链前段按 Content-Length 拦掉超大内部请求体,避免耗尽内存(参考 orchestrator 同款)。 */
   @Bean
   public FilterRegistrationBean<ConsoleInternalRequestSizeFilter> consoleInternalRequestSizeFilter(
       ConsoleInternalRequestProperties properties) {

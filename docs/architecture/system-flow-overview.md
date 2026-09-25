@@ -873,7 +873,7 @@ sequenceDiagram
     K->>E: consume task 425
     E->>DB: claim partition (worker_code=export-node-1)
     Note over E: PREPARE: load EXP-RISK-ALERT-JSON template
-    Note over E: GENERATE: SELECT * FROM biz.risk_alert WHERE tenant_id='tc'
+    Note over E: GENERATE: SELECT id, alert_id, entity_id, ... FROM biz.risk_alert WHERE tenant_id='tc'
     E->>BIZ: query → 5 rows
     Note over E: STORE: gzip + PUT
     E->>M: PUT outbound/.../risk_alerts__bizDate_.json.gz

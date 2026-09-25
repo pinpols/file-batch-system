@@ -26,6 +26,7 @@ shell_files=()
 docs_changed=0
 scripts_changed=0
 workflow_changed=0
+loc_affecting_changed=0
 for file in "${staged_files[@]}"; do
   [[ "$file" == *.java ]] && java_files+=("$file")
   [[ "$file" == *.sh ]] && shell_files+=("$file")
@@ -33,6 +34,13 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] \
     && scripts_changed=1
   [[ "$file" == .github/workflows/* || "$file" == .github/actions/* ]] && workflow_changed=1
+  if [[ "$file" != docs/* && "$file" != db/migration/* ]]; then
+    case "$file" in
+      *.java|*.sh|*.py|*.yml|*.yaml|*.xml|*.ts|*.tsx|*.rs|*.go|*.toml|*.properties|*.sql)
+        loc_affecting_changed=1
+        ;;
+    esac
+  fi
 done
 
 if ((${#java_files[@]} > 0)); then
@@ -79,6 +87,44 @@ fi
 if ((docs_changed == 1)); then
   gate_run PRE_COMMIT_DOCS_STRUCTURE "文档结构" \
     "$PYTHON_BIN" scripts/ci/check-docs-structure.py
+  gate_run PRE_COMMIT_DOC_TIMESTAMP_POLICY "文档日期命名策略" \
+    "$PYTHON_BIN" scripts/ci/check-doc-timestamp-policy.py
+fi
+if ((loc_affecting_changed == 1)); then
+  update_loc_snapshot() {
+    local staged_tree
+    local snapshot_commit
+    local tmp_dir
+    local tmp_worktree
+
+    staged_tree="$(git write-tree)"
+    snapshot_commit="$(git commit-tree "$staged_tree" -p HEAD -m pre-commit-loc-snapshot)"
+    tmp_dir="$(mktemp -d)"
+    tmp_worktree="$tmp_dir/worktree"
+    cleanup_loc_worktree() {
+      env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE \
+        git worktree remove "$tmp_worktree" --force >/dev/null 2>&1 || true
+      rm -rf "$tmp_dir"
+    }
+    if ! env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE \
+      git worktree add --detach "$tmp_worktree" "$snapshot_commit" >/dev/null; then
+      cleanup_loc_worktree
+      return 1
+    fi
+    if ! (
+      unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE
+      cd "$tmp_worktree"
+      "$PYTHON_BIN" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null
+      "$PYTHON_BIN" scripts/ci/check-loc-snapshot.py
+    ); then
+      cleanup_loc_worktree
+      return 1
+    fi
+    cp "$tmp_worktree/docs/stats/loc-current-lean.md" docs/stats/loc-current-lean.md
+    cleanup_loc_worktree
+    git add docs/stats/loc-current-lean.md
+  }
+  gate_run PRE_COMMIT_LOC_SNAPSHOT "代码量快照同步" update_loc_snapshot
 fi
 gate_run PRE_COMMIT_REPOSITORY_HYGIENE "仓库卫生" \
   "$PYTHON_BIN" scripts/ci/check-repository-hygiene.py

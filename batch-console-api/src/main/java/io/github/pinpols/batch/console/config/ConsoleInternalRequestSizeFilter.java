@@ -20,7 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>仅作用于 {@code /internal/**} 的 POST / PUT / PATCH / DELETE;先按 {@code Content-Length} 廉价拒绝, 再实际
  * bounded 读取并缓存 body —— 这些端点在 {@code ConsoleSecurityConfiguration} 里 permitAll,{@code @RequestBody}
- * 会在 controller 自校验 bearer token 之前就被 MVC 反序列化,超大体会在鉴权前撑爆内存。
+ * 会在 controller 自校验 bearer token 之前就被 MVC 反序列化,超大体会在鉴权前耗尽内存。
  *
  * <p>与 orchestrator 的 {@code InternalRequestSizeFilter} 同思路(见任务报告 S6 小节)。
  *

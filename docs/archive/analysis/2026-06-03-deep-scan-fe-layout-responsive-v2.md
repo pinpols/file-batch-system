@@ -3,7 +3,7 @@
 - 日期:2026-06-03
 - 扫描仓:`../batch-console`(Vue 3 + TS + Pinia + Element Plus + ECharts + Mermaid)
 - v1 基线:`docs/analysis/2026-06-03-deep-scan-fe-layout-responsive.md`(P0×6 / P1×11 / P2+P3×15)
-- 本次范围:**死角专攻** —— 性能(CLS/LCP)、滚动嵌套、Element Plus 边界、i18n 长度爆破、resize 监听、暗色切换闪烁、滚动条 OS 差异、z-index 治理、图表 size、@media print、iframe、safe-area、命令面板、三态可视化基线。
+- 本次范围:**边界场景专项** —— 性能(CLS/LCP)、滚动嵌套、Element Plus 边界、i18n 长文本压力、resize 监听、暗色切换闪烁、滚动条 OS 差异、z-index 治理、图表 size、@media print、iframe、safe-area、命令面板、三态可视化基线。
 - 模式:只读;**不**重复 v1 已记录的缝隙(出现时只引用 ID + 补充)。
 - 扫描时长:40min(单一会话,工具调用约 25 次)。
 
@@ -68,7 +68,7 @@
 - 顶层 `<html>` 加 `layout-shell-lock` 锁主滚 ✅。
 - 唯一垂直滚动层 `.layout-main__body` ✅。
 - ❌ **DocsDrawer iframe 嵌套陷阱**(v1 完全未提):
-  - `DocsDrawer.vue` 用 `<el-drawer>` 右侧抽屉 + 内嵌 iframe,iframe 自身有滚动条 → **drawer 滚动 + iframe 滚动 + 主容器锁 + macOS trackpad 二指**:用户在 iframe 内滚到底,触摸板继续下拉,**滚动事件会冒泡到 layout-main__body** —— layout-main 此时已被锁,但 drawer 自己的 `el-overlay-dialog` 会捕获(append-to-body)。实测应有"滚到底卡住"现象。
+  - `DocsDrawer.vue` 用 `<el-drawer>` 右侧抽屉 + 内嵌 iframe,iframe 自身有滚动条 → **drawer 滚动 + iframe 滚动 + 主容器锁 + macOS trackpad 二指**:用户在 iframe 内滚到底,触摸板继续下拉,**滚动事件会冒泡到 layout-main__body** —— layout-main 此时已被锁,但 drawer 自己的 `el-overlay-dialog` 会捕获(append-to-body)。实测应有"滚到底停滞"现象。
   - **D-SCR-04(P1)** 给 iframe wrapper 加 `overscroll-behavior: contain`,阻断冒泡。同样建议给所有 `.layout-main__body` 加 `overscroll-behavior-y: contain`。
 - ❌ **iframe 无 `sandbox` 属性**(`DocsDrawer.vue` 第 27–32 行):iframe 加载同站文档,若文档站被攻破,可对父站 DOM 操作。
   - **D-SEC-01(P1)** 加 `sandbox="allow-same-origin allow-scripts allow-popups"` + `referrerpolicy="no-referrer"`。**安全维度,但触发布局边界,记此**。
@@ -113,7 +113,7 @@
 
 ---
 
-## 4. i18n 长度爆破 —— v1 仅提 label/column,本次扫 button/breadcrumb/dropdown
+## 4. i18n 长文本压力 —— v1 仅提 label/column,本次扫 button/breadcrumb/dropdown
 
 - **Button 文案膨胀**:`zh: 新建 (2 字)` → `en: Create (6 字)` / `de: Erstellen (9 字)` —— **300% 膨胀**。抽样 `<el-button>` 文案 30 处,**无一处声明 `min-width` 或 `white-space: nowrap`**,默认 EP 按钮 padding 4 8,按钮高度 32px,中文 "新建" 32×56,英文 "Create" 32×80,**已可能挤压同行第 2 按钮**。
 - **Breadcrumb**:`LayoutHeader` 含 breadcrumb,路径深时 EN 会换行 / overflow。代码 grep `breadcrumb` 抽样未发现 `text-overflow: ellipsis`,EN 极限"Workflow Execution Instance Detail"长度可能撑出 sidebar 边界。
@@ -160,7 +160,7 @@
 - ❌ **首屏 FOUC**:用户保存了 `'dark'` 偏好,但 `localStorage` 读取发生在 `main.ts` 之后(读到时 DOM 已挂载 HTML default light token)→ **首屏 200–400ms 显示 light,然后跳暗**。
   - `index.html` 头部 inline `<script>` 只做了 localStorage shim,**没有提前读 theme**。
   - **D-DARK-01(P0)** `index.html` `<head>` 内 inline 一段小 JS,在 `<body>` 渲染前读 `localStorage['batch-console:theme']`,直接设 `<html class="dark">`,消除 FOUC。这种"theme-init script"是 Tailwind/shadcn/Astro 的标配。
-- ❌ **token 颜色无 transition**:`tokens.css` 切深色时,`--color-bg-page` `--color-text-primary` 全部瞬变,人眼会感觉"闪一下"。view-transition 帮了一部分,但**禁动效**用户或 Safari < 18 完全瞬变。
+- ❌ **token 颜色无 transition**:`tokens.css` 切深色时,`--color-bg-page` `--color-text-primary` 全部瞬变,人工审查会感觉"闪一下"。view-transition 帮了一部分,但**禁动效**用户或 Safari < 18 完全瞬变。
   - `app.css:617` 有 `transition: color 0.2s` 但只对单元素;`element-override.css:856` `transition: background-color 0.12s` 同样局部。
   - **D-DARK-02(P2)** 顶层 `html { transition: background-color 0.2s, color 0.2s }`(prefers-reduced-motion 时禁)平滑切换。注意成本:可能引起其他 token 跟随 transition 拖尾。
 

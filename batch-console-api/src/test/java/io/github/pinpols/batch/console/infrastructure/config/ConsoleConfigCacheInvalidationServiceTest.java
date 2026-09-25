@@ -48,7 +48,8 @@ class ConsoleConfigCacheInvalidationServiceTest {
   void setUp() {
     lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     lenient().when(valueOperations.increment(anyString())).thenReturn(1L);
-    service = new ConsoleConfigCacheInvalidationService(redisTemplate, queryCacheService);
+    service = new ConsoleConfigCacheInvalidationService(
+        new RedisConfigInvalidationStore(redisTemplate), queryCacheService);
   }
 
   @Test

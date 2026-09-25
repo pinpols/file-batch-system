@@ -142,7 +142,7 @@ public final class BatchLifecyclePhases {
 
 验收标准:
 
-- 每个 `SmartLifecycle` 都引用 phase 常量,禁止散落魔法数字。
+- 每个 `SmartLifecycle` 都引用 phase 常量,禁止散落未命名数字常量。
 - 增加一个架构测试或单测,校验关键 bean 的 phase 顺序。
 - 优雅停机日志里不再出现连接工厂 STOPPING 后业务线程继续使用它的错误。
 

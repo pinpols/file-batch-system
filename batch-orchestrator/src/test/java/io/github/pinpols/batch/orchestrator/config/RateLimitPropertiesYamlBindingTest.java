@@ -20,7 +20,7 @@ import org.springframework.core.io.ClassPathResource;
  *
  * <p>为何不只测 {@link RateLimitProperties} 类默认(见 {@code RateLimitPropertiesTest}):类默认对了、yml 里 {@code
  * ${ENV:default}} 的 fallback 写错(历史上 enabled fallback 是 false、阈值 fallback 是 0),生产实际加载的是 yml
- * 值而非类默认,会与文档/类默认相反且无测试发现。本类加载真 yml 并把 {@code ${...:default}} 解析成默认值(不设 env), 钉死 yml 与文档一致。
+ * 值而非类默认,会与文档/类默认相反且无测试发现。本类加载真 yml 并把 {@code ${...:default}} 解析成默认值(不设 env), 固化 yml 与文档一致。
  */
 class RateLimitPropertiesYamlBindingTest {
 

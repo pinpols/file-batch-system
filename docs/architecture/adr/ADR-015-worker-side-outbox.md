@@ -54,7 +54,7 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 ### 数据流（落地）
 
 ```
-业务 execute → REPORT orch →（HTTP 耗尽失败）UPSERT outbox（PG 或 SQLite）
+业务 execute → REPORT orch →（HTTP 请求失败）UPSERT outbox（PG 或 SQLite）
                   ↓ listener 成功返回
               Kafka ack offset
               outbox poll（SKIP LOCKED）→ HTTP REPORT orch → 成功 DELETE / 失败退避

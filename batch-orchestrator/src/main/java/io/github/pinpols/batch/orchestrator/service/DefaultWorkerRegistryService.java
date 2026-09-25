@@ -128,7 +128,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
   /**
    * 缺口②:per-tenant worker 数量配额。仅在注册<b>新</b> worker_code 时调用。{@code maxPerTenant <= 0} 视为不限(opt-in,
-   * 默认不生效);当前活跃数(非 DECOMMISSIONED)已达上限时拒绝注册,防注册风暴撑爆 worker_registry。
+   * 默认不生效);当前活跃数(非 DECOMMISSIONED)已达上限时拒绝注册,防注册风暴撑满 worker_registry。
    */
   private void rejectIfTenantWorkerQuotaExceeded(String tenantId) {
     int max = workerRegistryProperties.getMaxPerTenant();
@@ -145,7 +145,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   /**
    * worker_group 是 {@code worker_registry} 的 NOT NULL 列、且是 SDK 自托管 worker 的选取键(ADR-035 §2)。
    * 缺失时**入口早拒为 400**,而不是让 null 落库撞 NOT NULL 约束抛 500 —— 后者会让漏发该字段的客户端拿到 500 后无限重试、把 orchestrator
-   * 日志刷爆(契约:客户端入参缺失应 4xx 非 5xx)。heartbeat 对未注册 worker 会降级走 register,故本校验同时覆盖两条路径。
+   * 日志量失控(契约:客户端入参缺失应 4xx 非 5xx)。heartbeat 对未注册 worker 会降级走 register,故本校验同时覆盖两条路径。
    */
   private void rejectMissingWorkerGroup(WorkerHeartbeatDto request) {
     String workerGroup = request == null ? null : request.workerGroup();

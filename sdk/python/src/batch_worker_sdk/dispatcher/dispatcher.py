@@ -26,7 +26,7 @@
   §C 做了重试;本类只把 ``TransientError`` 抛出去并跳过该任务,等 Kafka
   通过租约超时 + 幂等键重投递。
 - 没有 ``ThrottledLogger``(Java J #2)。Python ``logging`` 本身可在 handler
-  级别做限速;PAUSED 状态下的丢弃日志直接打 ``DEBUG`` 即可避免刷屏,无需
+  级别做限速;PAUSED 状态下的丢弃日志直接打 ``DEBUG`` 即可避免重复日志,无需
   引新依赖。
 - 没有 MDC。结构化日志字段通过 ``extra=`` 透传,使用方可以在
   ``logging.Formatter`` 里取出。

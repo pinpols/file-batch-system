@@ -77,7 +77,7 @@
 - **docs/agent-baseline.md §模块 / 架构硬约束同步**：正式移除 Wheel 调度器运行时、配置和依赖，Trigger 统一使用 Quartz JDBC JobStore；相关历史设计保留为 `Superseded` 记录，不得把历史方案误当成当前实现。
 
 ### 2026-07-09
-- **docs/agent-baseline.md §构建 改为统一走 Maven Wrapper(`./mvnw`)**:仓库新增 Maven Wrapper 3.3.4(`only-script` 模式,钉死 Maven 3.9.16),7 个 CI workflow 的 `mvn` 调用全部切 `./mvnw`,消除 runner 预装 Maven 版本漂移;对齐配对仓库 file-batch-processor 的既有实践。本地系统 mvn(enforcer 要求 ≥3.9.0)仍可用,但版本一致性以 wrapper 为准。`scripts/ci/*.sh` 内的 mvn 调用暂未切换(后续跟进)。
+- **docs/agent-baseline.md §构建 改为统一走 Maven Wrapper(`./mvnw`)**:仓库新增 Maven Wrapper 3.3.4(`only-script` 模式,固化 Maven 3.9.16),7 个 CI workflow 的 `mvn` 调用全部切 `./mvnw`,消除 runner 预装 Maven 版本漂移;对齐配对仓库 file-batch-processor 的既有实践。本地系统 mvn(enforcer 要求 ≥3.9.0)仍可用,但版本一致性以 wrapper 为准。`scripts/ci/*.sh` 内的 mvn 调用暂未切换(后续跟进)。
 
 ### 2026-06-29
 - **docs/agent-baseline.md §模块 边界表述澄清**：把开头的"9 模块 Maven multi-module"改为"根 Maven reactor 9 个 module path + 平台运行时固定 10 个逻辑模块"，避免把 Maven 聚合路径数、worker 子模块数、SDK 三件套与运行时服务边界混在一起。明确 `sdk/java/{core,spring,testkit}` 已纳入根 reactor，但属于 ADR-035 SDK 发布 / 测试 / Spring 适配模块，不属于平台运行时固定 10 模块；Go / Python / Rust / TypeScript SDK 仍是独立语言工具链。
@@ -126,7 +126,7 @@
 
 ### 2026-05-07
 - **docs/agent-baseline.md §版本管理重写**：从"默认 1.0.0 非 SNAPSHOT"改为完整 SemVer 2.0.0 + `${revision}` 模型；约定 `MAJOR.MINOR.PATCH[-PRERELEASE]` / `-SNAPSHOT` 是 main 分支默认形态 / git tag 用 annotated `v<version>` / 描述性 tag 与版本 tag 共存。新增 [`docs/runbook/releasing.md`](runbook/releasing.md) 落地完整 release flow（标准 / hotfix / RC / patch / Maven 命令速查 / SemVer 判定提问 / FAQ）。明确**不抄 Spring Cloud Release Train / CalVer**：单 repo 单 PR 单部署 → 9 模块共 `${revision}` 已是主流；BOM 模块也不引入。当前 GA = `v1.0.0` @ commit `525e60f0`，main 默认 `1.1.0-SNAPSHOT`。
-- **docs/agent-baseline.md 新增 §ADR 实施范围纪律（防越界）**：写死系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用「不做清单」。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
+- **docs/agent-baseline.md 新增 §ADR 实施范围纪律（防越界）**：固化系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用「不做清单」。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
 - **docs/agent-baseline.md §archive 冷表对齐**：覆盖范围由 "14 张" 修正为 17 张（V108 加 result_version；V110 加 batch_day_replay_session + batch_day_replay_entry）；新增 V116 forensic_export_log / V118 data_quality_rule / V118 data_quality_check 暂未入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 的事实说明（运维域 + 时间点决定是否归档）。
 
 ### 2026-05-04

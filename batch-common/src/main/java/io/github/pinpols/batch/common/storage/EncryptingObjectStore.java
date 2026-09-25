@@ -18,7 +18,7 @@ import java.util.Collection;
  *   <li><b>get</b>：非 bypass-mode 时 {@link BatchObjectCryptoService#decryptIfNeeded}
  *       流式解密（魔数嗅探后透传明文）； bypass-mode 直透。
  *   <li><b>getFrom</b>：⚠ <b>始终抛 {@link UnsupportedOperationException}</b>。AES-GCM 是整对象加密、密文 offset
- *       ≠ 明文 offset，对加密对象做 range 读拿不到有意义的明文（设计 §5 写死的约束）。即便 bypass-mode 也不放行——避免误用。
+ *       ≠ 明文 offset，对加密对象做 range 读拿不到有意义的明文（设计 §5 固化的约束）。即便 bypass-mode 也不放行——避免误用。
  *   <li><b>copy / delete / statSize / exists / list / presign</b>：透传 delegate。
  * </ul>
  *

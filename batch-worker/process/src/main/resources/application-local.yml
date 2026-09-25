@@ -34,6 +34,10 @@ batch:
     task-client:
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
     process:
+      staging-cleanup:
+        # 本地 profile 只验证业务链路，不让普通业务 writer 承担 process_staging 分区 DDL。
+        # 生产默认仍开启，由运行环境确保维护账号/权限满足分区管理要求。
+        enabled: false
       worker-code: process-node-1
       worker-type: PROCESS
       tenant-id: default-tenant

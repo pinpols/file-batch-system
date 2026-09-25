@@ -75,9 +75,9 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
     ``apply_backpressure`` 会重新 pause。
 
     withhold(未知 schema / 外租户 / 不可处理)**不再** pause 分区,而是记
-    每分区 commit 天花板并继续消费(见 :class:`KafkaTaskConsumer`),因此
-    rebalance 无需清任何 poison 账本 —— 天花板从不 commit,revoke 后由后续
-    rebalance/重启从原位重投,保留旧天花板既无害也不需要主动清理(对齐 TS
+    每分区 commit 上限并继续消费(见 :class:`KafkaTaskConsumer`),因此
+    rebalance 无需清任何 poison 账本 —— 上限从不 commit,revoke 后由后续
+    rebalance/重启从原位重投,保留旧上限既无害也不需要主动清理(对齐 TS
     #826 的 ``#withheld`` 生命周期)。
     """
 
@@ -133,11 +133,11 @@ class KafkaTaskConsumer:
         # apply_backpressure 独占翻转(见其注释)。这是**唯一**会 pause 分区的
         # 路径,且总有配对的 resume。
         self._capacity_paused: bool = False
-        # 每分区 commit 天花板(对齐 Go ``committable`` / TS #826 ``#withheld``):
+        # 每分区 commit 上限(对齐 Go ``committable`` / TS #826 ``#withheld``):
         # withhold(未知 schema 大版本 / 外租户 / 不可处理)不 pause、不 seek,而是
-        # 把该 tp 遇到的**最低** withheld offset 记为天花板并继续消费;commit 时
-        # offset >= 天花板者一律不提交(留待 rebalance/重启从原位重投),offset <
-        # 天花板者按自身 offset 提交。既消除首条 withhold 的 head-of-line 冻结,又
+        # 把该 tp 遇到的**最低** withheld offset 记为上限并继续消费;commit 时
+        # offset >= 上限者一律不提交(留待 rebalance/重启从原位重投),offset <
+        # 上限者按自身 offset 提交。既消除首条 withhold 的 head-of-line 冻结,又
         # 保证 at-least-once 不丢、不越过 withheld offset。
         self._withheld_ceilings: dict[TopicPartition, int] = {}
         self._poll_task: asyncio.Task[None] | None = None
@@ -274,15 +274,15 @@ class KafkaTaskConsumer:
                     continue
                 # 按分区累积「可提交到哪」的 offset。对齐 Go ``committable`` /
                 # TS #826:
-                #   - WITHHOLD → 记该 tp 的 commit 天花板(最低
+                #   - WITHHOLD → 记该 tp 的 commit 上限(最低
                 #     withheld offset),**不 seek、不 pause、不 break**,继续处理
                 #     本批后续记录 → 消除 head-of-line 冻结。
                 #   - RETRY_LATER(平台 PAUSED / draining / fatal 的瞬时竞态)→
                 #     seek 回本条 + 临时 pause,条件恢复后由 apply_backpressure
                 #     resume;不把瞬时背压固化成长期 commit ceiling。
                 #   - ACCEPTED / DROP_TERMINAL → 候选前移 offset,但仅当本条
-                #     offset **严格小于** 该 tp 天花板时才提交(offset >= 天花板
-                #     一律不提交,留待重投);绝不夹逼到「天花板-1」(那会提交没
+                #     offset **严格小于** 该 tp 上限时才提交(offset >= 上限
+                #     一律不提交,留待重投);绝不夹逼到「上限-1」(那会提交没
                 #     处理的中间 offset = 丢消息)。
                 commit_offsets: dict[TopicPartition, int] = {}
                 for tp, records in batches.items():
@@ -296,10 +296,10 @@ class KafkaTaskConsumer:
                             self._consumer.pause(tp)
                             self._capacity_paused = True
                             break
-                        # ACCEPTED / DROP_TERMINAL:仅在天花板之下才推进 offset。
+                        # ACCEPTED / DROP_TERMINAL:仅在上限之下才推进 offset。
                         ceiling = self._withheld_ceilings.get(tp)
                         if ceiling is not None and rec.offset >= ceiling:
-                            # 越过/等于天花板:提交会静默跳过 withheld offset → 不提交。
+                            # 越过/等于上限:提交会静默跳过 withheld offset → 不提交。
                             continue
                         commit_offsets[tp] = rec.offset + 1
                 if commit_offsets:
@@ -351,10 +351,10 @@ class KafkaTaskConsumer:
         return await self._dispatcher.on_message(msg)
 
     def _lower_ceiling(self, tp: TopicPartition, offset: int) -> None:
-        """把分区 ``tp`` 的 commit 天花板降到不高于 ``offset``(保留最低 withheld)。
+        """把分区 ``tp`` 的 commit 上限降到不高于 ``offset``(保留最低 withheld)。
 
         对齐 TS #826 ``loweredCeiling`` / Go ``committable`` 的最低 offset 语义:
-        一个分区可能先后 withhold 多条(乱序 offset),天花板须取其中**最低**者,
+        一个分区可能先后 withhold 多条(乱序 offset),上限须取其中**最低**者,
         才能保证任何一条 withheld 都不会被后续 commit 越过。
         """
         current = self._withheld_ceilings.get(tp)
@@ -382,7 +382,7 @@ class KafkaTaskConsumer:
 
         ``_capacity_paused`` 缓存上次容量/平台决策,避免每次 poll 都发
         pause/resume RPC;rebalance 时由 listener 清空。这是唯一 pause 分区的
-        路径且 pause/resume 成对;withhold 不再 pause(改走 commit 天花板,见
+        路径且 pause/resume 成对;withhold 不再 pause(改走 commit 上限,见
         ``_poll_loop`` / ``_withheld_ceilings``),故 resume 直接覆盖整个
         assignment,无需再排除任何「poison 分区」。
         """
@@ -407,7 +407,7 @@ class KafkaTaskConsumer:
             )
         elif self._capacity_paused and not platform_paused and capacity_resume_ok:
             # 容量恢复:resume 整个 assignment。withhold 不再 pause 分区(改走
-            # commit 天花板),故这里无需排除任何分区。
+            # commit 上限),故这里无需排除任何分区。
             self._consumer.resume(*assignment)
             self._capacity_paused = False
             logger.info(
@@ -429,10 +429,10 @@ class KafkaTaskConsumer:
 
     @property
     def withheld_ceilings(self) -> dict[TopicPartition, int]:
-        """每分区 commit 天花板快照:``tp → 最低 withheld offset``(供测试 + 诊断)。
+        """每分区 commit 上限快照:``tp → 最低 withheld offset``(供测试 + 诊断)。
 
-        withhold(未知 schema 大版本 / 外租户 / 不可处理)记天花板并继续消费;
-        offset >= 天花板者永不提交(留待 rebalance/重启重投),消除 head-of-line
+        withhold(未知 schema 大版本 / 外租户 / 不可处理)记上限并继续消费;
+        offset >= 上限者永不提交(留待 rebalance/重启重投),消除 head-of-line
         冻结的同时保证不丢、不越过 withheld offset。
         """
         return dict(self._withheld_ceilings)

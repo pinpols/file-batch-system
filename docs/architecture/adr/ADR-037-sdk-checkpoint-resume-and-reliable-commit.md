@@ -100,7 +100,7 @@ public interface SdkTaskContext {
 
 **为什么是强约束**:这是续跑可靠性的根。如果业务数据提交了而断点没更新,重跑会重复处理;反之会丢数据。SDK 提供的默认实现(针对 JDBC business)在**同一个 `Connection`**里先 `update 断点行(不单独 commit)` 再 `connection.commit()`,把两者合成一个事务。租户用别的存储时,必须自行保证同等原子性,文档与 code review 卡这一点。
 
-进度上报搭 `commit` 的车,按**批次计数取模**限流,避免每批都打满网络:
+进度上报搭 `commit` 的车,按**批次计数取模**限流,避免每批都频繁发起网络请求:
 
 ```
 commitCounter++

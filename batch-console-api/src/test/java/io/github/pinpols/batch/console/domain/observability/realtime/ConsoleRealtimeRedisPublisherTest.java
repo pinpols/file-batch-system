@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +28,7 @@ class ConsoleRealtimeRedisPublisherTest {
   private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
 
   @Mock
-  private ConsoleRealtimeReplayStore replayStore;
+  private RealtimeReplayStore replayStore;
 
   private ConsoleRealtimeRedisPublisher publisher;
 

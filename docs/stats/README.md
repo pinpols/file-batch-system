@@ -4,14 +4,14 @@
 
 新的精简口径使用 [scripts/dev/lean-loc-report.py](../../scripts/dev/lean-loc-report.py)。注意：主流工具（Sonar `NCLOC`、cloc、scc、tokei）的默认结果通常仍是“物理非空/非注释行”，不是逻辑语句行；本口径专门用于回答“格式化换行带来的体量水分”。
 
-当前快照：[loc-2026-09-24-lean.md](./loc-2026-09-24-lean.md)。
+当前快照：[loc-current-lean.md](./loc-current-lean.md)。
 
 归档说明：[archive/README.md](./archive/README.md)。历史快照已移入 `archive/`，不作为当前代码量基线。
 
 历史快照：
 
 - 物理行口径：见 [`archive/`](./archive/)，包括 2026-05-29 至 2026-07-19 快照。
-- 精简口径：见 [`archive/`](./archive/)，包括 2026-07-22 至 2026-09-01 快照。
+- 精简口径：见 [`archive/`](./archive/)，包括 2026-07-22 至 2026-09-24 快照。
 
 - 只统计 git 跟踪文件。
 - 排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration。
@@ -20,5 +20,5 @@
 复跑示例：
 
 ```bash
-python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-$(date +%F)-lean.md
+python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
 ```

@@ -30,7 +30,8 @@ class ConsoleIdempotencyInterceptorTest {
     redisTemplate = mock(StringRedisTemplate.class);
     valueOps = mock(ValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valueOps);
-    interceptor = new ConsoleIdempotencyInterceptor(redisTemplate, new BatchSecurityProperties());
+    interceptor = new ConsoleIdempotencyInterceptor(
+        new RedisConsoleIdempotencyStore(redisTemplate), new BatchSecurityProperties());
     idempotentHandler = new HandlerMethod(
         new SampleController(), SampleController.class.getDeclaredMethod("mutate"));
   }

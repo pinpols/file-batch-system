@@ -26,10 +26,10 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
 /**
  * worker 侧 export（{@code SqlTemplateExportSqlValidator}）/ process（{@code
  * SqlTransformComputeSqlValidator}） 与 orchestrator 侧 sensor（{@code SensorSqlValidator}）/
- * DataQuality（{@code DataQualityCheckExecutor}） 共享的 SELECT/WITH AST 校验核心 —— SELECT * 检测、schema
- * allowlist 检测、禁用函数调用检测三条规则的树遍历逻辑此前在多侧逐行重复维护，导致 各侧规则漂移（process 早先已把禁用函数检测升级为 AST
- * 遍历，防"函数名与左括号间插注释"及带引号标识符两类绕过，而 export 曾停留在旧的大小写不敏感子串匹配、sensor/DQ 则整块缺失禁用函数黑名单）。统一成本类的 AST
- * 版本，各侧都受益。放在 batch-common 是因为 orchestrator 不依赖 worker-core，只有下沉到基座 batch-common
+ * DataQuality（{@code DataQualityCheckExecutor}）共享的 SELECT/WITH AST 校验核心。SELECT * 检测、schema
+ * allowlist 检测、禁用函数调用检测三条规则此前在多侧重复维护，导致规则漂移：process 早先已把禁用函数检测升级为 AST
+ * 遍历，用于识别"函数名与左括号间插注释"及带引号标识符两类绕过，而 export 曾停留在旧的大小写不敏感子串匹配，sensor/DQ 则缺失禁用函数黑名单。统一为本类的 AST
+ * 版本后，各侧共享同一套判定。放在 batch-common 是因为 orchestrator 不依赖 worker-core，只有下沉到基座 batch-common
  * 才能被两边同时复用；本类是纯静态工具、不装配任何 bean。
  *
  * <p>本类只做规则判定、不抛业务异常——各调用方的错误契约不同（export/sensor 用 {@code IllegalArgumentException}，process 用 {@code
@@ -43,7 +43,7 @@ public final class SelectSqlAstValidator {
    * 危险 PG 函数黑名单的单一权威源。sensor / DataQuality（{@code SensorSqlValidator}）、export（{@code
    * SqlTemplateExportSecurityProperties}）、process（{@code SqlTransformComputeSecurityProperties}）
    * 三侧默认清单此前各自维护同一份字面量（历史上曾漂移：export/process 早于 sensor/DQ 补齐 pg_sleep_for/pg_sleep_until 与 dblink
-   * 家族），改一处漏一处。统一到此常量后，各侧仍保留自己的默认值字段（properties 语义不变，租户仍可在 yml 覆盖/追加），只是默认值取自这里，防止再次漂移。
+   * 家族），容易出现单侧遗漏。统一到此常量后，各侧仍保留自己的默认值字段（properties 语义不变，租户仍可在 yml 覆盖/追加），只是默认值取自这里，防止再次漂移。
    *
    * <p>覆盖：任意命令 / 网络连接（{@code dblink} 家族 / {@code copy_from_program}）、后端控制（{@code
    * pg_terminate_backend} / {@code pg_cancel_backend}）、服务器文件读取（{@code pg_read_file} / {@code
@@ -98,7 +98,7 @@ public final class SelectSqlAstValidator {
     return false;
   }
 
-  /** 解包 ParenthesedSelect → 真实的 PlainSelect / SetOperationList。 */
+  /** 解包 ParenthesedSelect → 实际的 PlainSelect / SetOperationList。 */
   private static Select unwrap(Select select) {
     while (select instanceof ParenthesedSelect ps) {
       select = ps.getSelect();

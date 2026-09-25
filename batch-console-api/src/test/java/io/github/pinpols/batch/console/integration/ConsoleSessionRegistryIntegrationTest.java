@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import io.github.pinpols.batch.console.infrastructure.rbac.RedisConsoleSessionStore;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,7 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   @SpringBootConfiguration
   @EnableAutoConfiguration
   @EnableConfigurationProperties(ConsoleSecurityProperties.class)
-  @Import({BatchClockConfig.class, ConsoleSessionRegistry.class})
+  @Import({BatchClockConfig.class, ConsoleSessionRegistry.class, RedisConsoleSessionStore.class})
   static class TestApplication {}
 
   @Autowired

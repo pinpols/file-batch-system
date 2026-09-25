@@ -101,7 +101,7 @@ public abstract class AbstractApiExceptionHandler {
 
   /**
    * 404 NoResourceFoundException 显式按 404 + INFO 处理,不走 Exception.class 回退的 500 + ERROR 路径。否则任何请求不存在
-   * URL(浏览器探测 favicon.ico / 误填 actuator path)都会被记成 ERROR 刷屏,且返回 500 误导调用方。
+   * URL(浏览器探测 favicon.ico / 误填 actuator path)都会被记成 ERROR 产生日志噪音,且返回 500 误导调用方。
    */
   @ExceptionHandler(NoResourceFoundException.class)
   public ResponseEntity<CommonResponse<Void>> handleNoResourceFound(

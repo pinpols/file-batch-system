@@ -36,7 +36,7 @@
 
 ### 1.2 三大风险
 
-1. **🔴 P0 — KafkaTaskConsumer 缺 capacity-aware pause**:in-flight 满 `maxConcurrentTasks` 时不 pause partition,持续 poll 会内存爆。ADR-035 §11.1 已有伪码,代码未落。
+1. **🔴 P0 — KafkaTaskConsumer 缺 capacity-aware pause**:in-flight 满 `maxConcurrentTasks` 时不 pause partition,持续 poll 可能导致内存耗尽。ADR-035 §11.1 已有伪码,代码未落。
 2. **🟠 优雅停止无 timeout 上限**:`BatchPlatformClient.stop()` 没有 `Duration timeout` 参数,K8s `terminationGracePeriodSeconds` 到期前不结束就被 SIGKILL,正在跑的 task 状态错乱。
 3. **🟠 lease 配置无 cross-field 校验**:`leaseRenewInterval` 配 >= server TTL 时任务被无故回收,无运行期校验,无告警。
 
@@ -200,7 +200,7 @@
 
 | 风险 | 概率 | 影响 | 缓解 |
 |---|---|---|---|
-| Kafka in-flight 满,consumer 不 pause → OOM/lag 爆 | 中 | 极高 | 改进 #1 |
+| Kafka in-flight 满,consumer 不 pause → OOM/lag 失控 | 中 | 极高 | 改进 #1 |
 | 生产配 atomic 时 allowlist 留空 fail-open → SSRF/RCE | 中 | 极高 | 改进 #2(prod profile fail-closed) |
 | 运营把密码填到 atomic 试填表单 → 截图传 → 凭据泄露 | 高 | 高 | 改进 #3(三层警示) |
 | executor 加字段 console schema 没改 → FE 显示陈旧/缺字段 | 中 | 中 | 改进 #4 |
@@ -240,7 +240,7 @@
 ### 8.1 关键超出预期发现(交付中浮现)
 
 1. **Lane A1 早已实现**:`KafkaTaskConsumer.applyBackpressure()` 在历史 SDK Phase 1-3 P0 hardening 时就完整覆盖了 capacity-aware pause/resume(含 `paused` flag、rebalance re-pause、平台 directive 联动)。本批 Lane A 只补缺的聚焦测试,主体逻辑不动。**审查报告 §1.2 「P0 hardening 缺失」结论需修正为「未覆盖 Kafka SASL fail-fast」**。
-2. **Lane B `TaskContext.isDryRun()` 之前不存在**:agent 顺手在 `batch-common` 加默认方法,SPI 兼容改动,现有 record 构造点零改。原审查报告假设 ctx 已有该方法,实际本批才补齐。
+2. **Lane B `TaskContext.isDryRun()` 之前不存在**:agent 同步在 `batch-common` 加默认方法,SPI 兼容改动,现有 record 构造点零改。原审查报告假设 ctx 已有该方法,实际本批才补齐。
 3. **Lane C atomic executor 入口注入未冲突 Lane B**:GitHub 自动 rebase 把 Lane B 的 dry-run 短路 + Lane C 的 validator 调用合并干净,两段都进了 `execute()` 顶部。
 4. **Lane C 凭据关键字 `token` 过宽**:可能误报 `csrf_token` / `idempotency_token` 等协议字段;HTTP executor 已显式豁免 `auth.password / auth.token` 子树(否则全部 bearer 任务挂)。需 ADR follow-up 把 HTTP auth 改成 `auth.envRef: "MY_TOKEN"` 风格 secret reference,彻底干掉 payload 明文凭据。
 5. **Lane D worker_registry 实际字段差异**:`heartbeat_at`(非 `last_heartbeat_at`)、`process_id`(非 `pid`)、status 枚举 `ONLINE/OFFLINE/DRAINING/DECOMMISSIONED`(无 `ACTIVE`)— 实现以 schema 为准。

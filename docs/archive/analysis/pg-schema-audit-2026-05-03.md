@@ -136,7 +136,7 @@ ALTER TABLE batch.workflow_edge
 
 ---
 
-### P1-3: `pipeline_*` vs `workflow_*` 双轨设计目的不明 — 代码腐烂风险
+### P1-3: `pipeline_*` vs `workflow_*` 双轨设计目的不明 — 代码维护风险
 
 **位置**：
 - `batch.pipeline_*` 4 表（V6）：pipeline_definition, pipeline_step_definition, pipeline_instance, pipeline_step_run
@@ -149,7 +149,7 @@ ALTER TABLE batch.workflow_edge
 - V4 job_definition 有 job_type ∈ `{GENERAL, IMPORT, EXPORT, DISPATCH, WORKFLOW}`
 - 都能表示文件处理链路，代码维护者困惑
 
-**风险**：死代码腐烂；新需求不清楚用哪条主线；查询散漫（一个 query 同时 UNION pipeline_instance + job_instance）。
+**风险**：废弃代码长期保留；新需求不清楚用哪条主线；查询散漫（一个 query 同时 UNION pipeline_instance + job_instance）。
 
 **修复建议**：
 - V82 添加 `docs/design/pipeline-vs-workflow-definition.md`，明确：

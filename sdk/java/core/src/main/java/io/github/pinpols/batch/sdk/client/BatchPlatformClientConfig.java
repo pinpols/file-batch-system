@@ -283,10 +283,10 @@ public class BatchPlatformClientConfig {
    * <ul>
    *   <li>{@code heartbeatInterval >= 1s} — 防止极端配置压垮 orchestrator
    *   <li>{@code leaseRenewInterval >= 5s} — 同上
-   *   <li>{@code leaseRenewInterval <= heartbeatInterval × 3} — 避免 lease 续约比心跳还少,task 半路被 orch
-   *       误判租约过期回收。注意:server 端真正的 lease TTL SDK 不知道,这里用 heartbeatInterval × 3 做"代理上限",经验上 orch 默认
+   *   <li>{@code leaseRenewInterval <= heartbeatInterval × 3} — 避免 lease 续约比心跳还少,task 执行中被 orch
+   *       误判租约过期回收。注意:server 端实际 lease TTL SDK 不知道,这里用 heartbeatInterval × 3 做"代理上限",经验上 orch 默认
    *       TTL ~3min、heartbeat 默认 30s 的组合下安全;若 orch TTL 调更短,租户应同步调小 heartbeatInterval
-   *   <li>{@code httpTimeout <= heartbeatInterval / 2} — 避免单次心跳超时排队后 backlog 把 scheduler 拖死
+   *   <li>{@code httpTimeout <= heartbeatInterval / 2} — 避免单次心跳超时排队后 backlog 阻塞 scheduler
    * </ul>
    */
   private void validateTimings() {

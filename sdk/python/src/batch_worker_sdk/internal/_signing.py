@@ -2,7 +2,7 @@
 
 对齐 Java ``io.github.pinpols.batch.sdk.internal.RequestSigner`` 与服务端
 ``io.github.pinpols.batch.common.security.RequestSignatures`` —— 三者必须**逐字节**一致,
-由各语言 SDK 的契约一致性(conformance)用例钉死;任一边改了 canonical 串 / HMAC 细节,
+由各语言 SDK 的契约一致性(conformance)用例固化;任一边改了 canonical 串 / HMAC 细节,
 测试立刻红。算法:
 
     canonical = UPPER(method) "\\n" path "\\n" timestamp "\\n" nonce "\\n" hex(sha256(body))

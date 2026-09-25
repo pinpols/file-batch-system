@@ -11,7 +11,7 @@ package io.github.pinpols.batch.console.domain.ops.dto;
  * worker 维度)。因此本兼容判定只基于 {@code sdkVersion} 的主版本 vs 平台当前 SDK 主版本:
  *
  * <ul>
- *   <li>{@code sdkVersion} 为空 / 解析不出主版本 → {@link Status#UNKNOWN}(不瞎判)
+ *   <li>{@code sdkVersion} 为空 / 解析不出主版本 → {@link Status#UNKNOWN}(不做无依据判断)
  *   <li>主版本 &lt; 平台当前 → {@link Status#SDK_OUTDATED}(旧 SDK,建议升级)
  *   <li>主版本 &gt; 平台当前 → {@link Status#PROTOCOL_UNSUPPORTED}(worker 跑在平台尚不支持的更新主线)
  *   <li>否则 → {@link Status#OK}

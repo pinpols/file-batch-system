@@ -239,7 +239,7 @@ async def test_handler_success_is_executed_and_reported(httpx_mock: HTTPXMock) -
     body = _report_body(report_reqs)
     assert body["success"] is True
     assert body["outputs"] == {"rows": 3}
-    # resultSummary 是平台 jsonb 列 → 发 {code,message} JSON 对象(非裸串)。
+    # resultSummary 是平台 jsonb 列 → 发 {code,message} JSON 对象(非普通文本)。
     assert json.loads(body["resultSummary"]) == {"code": "SUCCESS", "message": "done"}
 
 

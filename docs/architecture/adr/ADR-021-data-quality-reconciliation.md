@@ -159,7 +159,7 @@ DataQualityCheckExecutor — 取 (tenant, business_key) 关联的 enabled rules
 
 总 ~3.5-5 人天。
 
-#### v0.0 mini 边界（写死）
+#### v0.0 mini 边界（固化）
 
 | ✅ v0.0 做 | ❌ v0.0 不做（v1.0 才做） |
 |---|---|

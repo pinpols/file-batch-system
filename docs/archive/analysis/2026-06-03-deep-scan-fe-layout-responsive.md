@@ -22,7 +22,7 @@
 | 桌面 views 用 `EmptyState`/`DataState` | **28 / 98 = 28.5%** | 其余仍走 `v-loading` + el-table 空态(43 处 v-loading) |
 | 桌面 views 用 `el-skeleton`/`TableSkeleton` | **2 / 98** | 几乎全部经 `ProTable` 间接获得 |
 | `ProTable` 接入率 | **32 / 98 = 32.6%** | 还有 60+ 页面手写 `el-table` |
-| 固定 `width="\d+px"` 弹层 | **4 处** dialog 写死 800/640px | 平板 768 / 手机会溢出 |
+| 固定 `width="\d+px"` 弹层 | **4 处** dialog 固化 800/640px | 平板 768 / 手机会溢出 |
 
 ---
 

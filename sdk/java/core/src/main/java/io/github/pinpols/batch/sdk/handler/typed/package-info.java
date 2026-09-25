@@ -1,6 +1,6 @@
 /**
  * 强类型 handler 模板族(租户公开 API)—— 框架在调用前把 {@code SdkTaskContext.parameters()} 经 Jackson 反序列化成强类型入参,
- * handler 直接拿强类型字段,省去 {@code Map<String,Object>} 瞎转型。
+ * handler 直接拿强类型字段,省去 {@code Map<String,Object>} 无类型约束转换。
  *
  * <ul>
  *   <li>{@link SdkTypedTaskHandler} —— 单方法 typed 入口(入参 {@code I} → 业务结果 {@code O})。

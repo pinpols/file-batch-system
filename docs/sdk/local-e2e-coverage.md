@@ -11,7 +11,7 @@ SDK 自托管 worker 是 **BYO 通用**的:它的 wire 路径(register → 消�
 | 关注点 | 由谁保证 | 测试层 |
 |---|---|---|
 | SDK wire 路径(register/消费/claim/report) | SDK,**类型无关** | conformance fixture(决策核)+ 本地全链路(真 wire,每语言 1 遍 echo) |
-| "类型无关"这条性质本身 | SDK | 单测 `sdk/go/kafka/topic_match_test.go`(node-direct 匹配对 import/export/process/dispatch/atomic 全 base 命中,钉死无需每类型跑真链路) |
+| "类型无关"这条性质本身 | SDK | 单测 `sdk/go/kafka/topic_match_test.go`(node-direct 匹配对 import/export/process/dispatch/atomic 全 base 命中,固化无需每类型跑真链路) |
 | import/export/process/dispatch/atomic **主链路** | 内建平台 worker | `batch-e2e-tests/*E2eIT` |
 | Java/Python batteries handler(内建 import/export/dispatch 处理器) | SDK batteries | 各语言单测(Java 16 + Python 28) |
 | 跨语言决策核(消息形状/版本/错误分类/offset) | conformance | 30 条 fixture × 5 语言(`sdk-contract-parity.yml`) |
@@ -22,7 +22,7 @@ SDK 自托管 worker 是 **BYO 通用**的:它的 wire 路径(register → 消�
 
 ## 怎么跑
 
-前置:本地真栈已起(orchestrator :18082 + trigger :18081 + postgres :15432 + kafka)，
+前置:本地真实依赖栈已起(orchestrator :18082 + trigger :18081 + postgres :15432 + kafka)，
 平台库已完成迁移。脚本会创建独立 queue/job fixture，不依赖 system-test seed。
 
 ```bash
@@ -57,7 +57,7 @@ CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boo
 > **Rust 历史"本地编不了"已破**:`cargo`/`rustc` 1.96 一直装着只是没在 PATH(`~/.cargo/bin`);`cmake`(rdkafka 硬依赖)`brew install cmake` 即得;曾经的 crate CDN 封锁现已解除。⇒ Rust 现可本地全链路实测,不再只能 CI 验。
 
 > **#2 是平台级通病**:`batch.task.dispatch.<tenant>.*`(tenant-first)这个错方案 5 语言一致沿用
-> (java-spring `application.yml` 默认值即 `batch.task.dispatch.tenant-a.*`),Go 只是把它写死了。
+> (java-spring `application.yml` 默认值即 `batch.task.dispatch.tenant-a.*`),Go 只是把它固化了。
 > 正确方案是 node-direct(`...<workerType>.node.<workerCode>`,对齐内建 worker)。Java/Python/TS
 > 的 pattern 可配,改默认值即可;Go 已改成自动派生。
 

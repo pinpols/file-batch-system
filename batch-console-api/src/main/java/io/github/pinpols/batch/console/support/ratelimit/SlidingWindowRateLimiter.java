@@ -1,11 +1,8 @@
 package io.github.pinpols.batch.console.support.ratelimit;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,28 +27,7 @@ public class SlidingWindowRateLimiter {
 
   private static final long WINDOW_MILLIS = 60_000L;
 
-  /**
-   * Lua 脚本：原子执行滑动窗口计数 + 条件写入。 KEYS[1] = rate limit key ARGV[1] = now (ms) ARGV[2] = window start
-   * (ms) = now - windowMillis ARGV[3] = limit ARGV[4] = unique member ARGV[5] = TTL seconds 返回 1
-   * 表示允许，0 表示超限。
-   */
-  private static final DefaultRedisScript<Long> RATE_LIMIT_SCRIPT;
-
-  static {
-    RATE_LIMIT_SCRIPT = new DefaultRedisScript<>();
-    RATE_LIMIT_SCRIPT.setResultType(Long.class);
-    RATE_LIMIT_SCRIPT.setScriptText("redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[2]) "
-        + "local count = redis.call('ZCARD', KEYS[1]) "
-        + "if count < tonumber(ARGV[3]) then "
-        + "  redis.call('ZADD', KEYS[1], ARGV[1], ARGV[4]) "
-        + "  redis.call('EXPIRE', KEYS[1], ARGV[5]) "
-        + "  return 1 "
-        + "else "
-        + "  return 0 "
-        + "end");
-  }
-
-  private final StringRedisTemplate redisTemplate;
+  private final RateLimitStore rateLimitStore;
   private final BatchDateTimeSupport dateTimeSupport;
 
   /**
@@ -67,14 +43,7 @@ public class SlidingWindowRateLimiter {
     long ttlSeconds = (WINDOW_MILLIS / 1000) + 1;
     String member = UUID.randomUUID().toString();
 
-    Long result = redisTemplate.execute(
-        RATE_LIMIT_SCRIPT,
-        List.of("rate_limit:" + key),
-        String.valueOf(now),
-        String.valueOf(windowStart),
-        String.valueOf(limit),
-        member,
-        String.valueOf(ttlSeconds));
-    return Long.valueOf(1L).equals(result);
+    return rateLimitStore.tryAcquire(
+        "rate_limit:" + key, now, windowStart, limit, member, ttlSeconds);
   }
 }

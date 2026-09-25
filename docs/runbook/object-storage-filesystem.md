@@ -84,5 +84,5 @@ FS 模式 presign 返回的是 console-api `/api/console/files/fs-download` 端�
 ## 7. 已知限制
 
 - **etag = `size + mtime` 合成**（非内容哈希）。若"原地改写但 size + mtime 不变"（罕见），scanner 漏检。
-- **加密 × `getFrom` 不兼容**（设计 §5 写死）：`EncryptingObjectStore.getFrom` 抛 `UnsupportedOperationException`。range-slice 分区优化本就只对未加密文件生效，两者天然不相交。
+- **加密 × `getFrom` 不兼容**（设计 §5 固化）：`EncryptingObjectStore.getFrom` 抛 `UnsupportedOperationException`。range-slice 分区优化本就只对未加密文件生效，两者天然不相交。
 - **list 大目录性能**：FS 走 `Files.walk` 全量扫描后排序 + 分页。bucket 单层超过 10 万对象时 list 延迟显著上升，建议按业务日期 / 租户分目录组织 key。

@@ -44,7 +44,7 @@ date: 2026-06-02
 | 缺陷 | 位置 | 影响 | 后果 |
 |---|---|---|---|
 | **KafkaTaskConsumer.close() 不 join() poll 线程** | `KafkaTaskConsumer.java:259-265` | `consumer.wakeup()` 后立即返回,但 poll 线程可能还在跑;BatchPlatformClient.stop() 已进 deactivate 阶段,Kafka **offset 尚未 commit** | K8s SIGKILL 时任务可能重放 / 损坏的状态(in-flight 标记已清,但 offset 未 reset) |
-| **LeaseRenewalScheduler 用 scheduleAtFixedRate 而非 fixedDelay** | `LeaseRenewalScheduler.java:46` vs `HeartbeatScheduler.java:76`(fixedDelay) | 若续约 tick 卡(5xx retry),下轮立即又来(fixedRate 的宿命);堆积导致内存爆,线程池拒绝 | heap dump 显示 `RejectedExecutionException` / out-of-memory; HeartbeatScheduler 没这问题,两边差异是技术债 |
+| **LeaseRenewalScheduler 用 scheduleAtFixedRate 而非 fixedDelay** | `LeaseRenewalScheduler.java:46` vs `HeartbeatScheduler.java:76`(fixedDelay) | 若续约 tick 停滞(5xx retry),下轮立即又来(fixedRate 的固有行为);堆积可能导致内存耗尽、线程池拒绝 | heap dump 显示 `RejectedExecutionException` / out-of-memory; HeartbeatScheduler 没这问题,两边差异是技术债 |
 | **claimWithRetry 退避无 jitter** | `TaskDispatcher.java:414-420` `delayMs = baseDelayMs << attempt` | N 个 worker 同步雪崩 retry (all backoff exponentially in sync) | orch DB 收到 5xx → requeue claim → N 个 worker 再齐声等 200ms*2^n,形成脉冲(thundering herd) |
 
 ---

@@ -451,7 +451,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
    *
    * <p><b>方言支持</b>:本检查仅对 PostgreSQL 有效(查 {@code pg_roles} / {@code pg_has_role()})。其他方言上若仍开 {@code
    * forbidOsCapableRole=true},本方法 <b>fail-closed 拒绝执行</b>——既然运维显式要求"禁 OS 能力角色"、而本闸在该方言下无法核验,
-   * 静默放行等于安全控制 no-op(原 WARN+放行的"假阴性"姿态比报错更危险)。要在非 PG 方言上跑,须显式 {@code
+   * 静默放行等于安全控制 no-op(原 WARN+放行的"漏检"姿态比报错更危险)。要在非 PG 方言上跑,须显式 {@code
    * forbidOsCapableRole=false}(明确接受该方言下无 OS 角色核验)并自行用方言原生最小权限角色回退。
    *
    * <p>见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。

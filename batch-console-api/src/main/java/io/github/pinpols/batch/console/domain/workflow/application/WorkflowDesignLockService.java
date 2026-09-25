@@ -8,11 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 /**
@@ -39,51 +35,23 @@ public class WorkflowDesignLockService {
 
   private static final String KEY_PREFIX = "wf-design-lock:";
 
-  /**
-   * 原子释放:GET → 校验 lockedBy == 调用者 → DEL,全程在 Redis 单线程内执行,消除「GET 后 TTL 过期、他人重新获锁、本调用误删他人锁」 的竞态。返回
-   * 0=无锁(幂等) / 1=已删 / -1=非持锁人。lockedBy 用 Redis 内置 cjson 解析。
-   */
-  private static final RedisScript<Long> RELEASE_SCRIPT =
-      new DefaultRedisScript<>("""
-      local v = redis.call('GET', KEYS[1])
-      if not v then return 0 end
-      if cjson.decode(v)['lockedBy'] == ARGV[1] then
-        return redis.call('DEL', KEYS[1])
-      else
-        return -1
-      end
-      """.stripTrailing(), Long.class);
-
-  /** 原子续期:GET → 校验 lockedBy == 调用者 → SET 新 payload + TTL。返回 0=锁不存在(已过期) / 1=已续 / -1=非持锁人。 */
-  private static final RedisScript<Long> RENEW_SCRIPT =
-      new DefaultRedisScript<>("""
-      local v = redis.call('GET', KEYS[1])
-      if not v then return 0 end
-      if cjson.decode(v)['lockedBy'] == ARGV[1] then
-        redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
-        return 1
-      else
-        return -1
-      end
-      """.stripTrailing(), Long.class);
-
   private static final long RESULT_NOT_OWNER = -1L;
   private static final long RESULT_ABSENT = 0L;
 
-  private final StringRedisTemplate redisTemplate;
+  private final DesignLockStore designLockStore;
   private final ObjectMapper objectMapper;
   private Clock clock;
 
-  public WorkflowDesignLockService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
-    this.redisTemplate = redisTemplate;
+  public WorkflowDesignLockService(DesignLockStore designLockStore, ObjectMapper objectMapper) {
+    this.designLockStore = designLockStore;
     this.objectMapper = objectMapper;
     this.clock = Clock.systemUTC();
   }
 
   /** 测试构造:允许注入 fixed Clock 验证 expiresAt。仅可见 package-private。 */
   static WorkflowDesignLockService withClock(
-      StringRedisTemplate redisTemplate, ObjectMapper objectMapper, Clock clock) {
-    WorkflowDesignLockService svc = new WorkflowDesignLockService(redisTemplate, objectMapper);
+      DesignLockStore designLockStore, ObjectMapper objectMapper, Clock clock) {
+    WorkflowDesignLockService svc = new WorkflowDesignLockService(designLockStore, objectMapper);
     svc.setClock(clock);
     return svc;
   }
@@ -98,7 +66,7 @@ public class WorkflowDesignLockService {
     Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
     LockHolder holder = new LockHolder(userId, expiresAt);
     String payload = serialize(holder);
-    Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, payload, LOCK_TTL);
+    Boolean ok = designLockStore.acquire(key, payload, LOCK_TTL);
     if (Boolean.TRUE.equals(ok)) {
       return holder;
     }
@@ -113,7 +81,7 @@ public class WorkflowDesignLockService {
   /** 释放锁:必须持锁人调用;非持锁人调用 → FORBIDDEN(防误删别人锁)。GET+校验+DEL 由 Lua 原子完成。 */
   public void release(String tenantId, Long definitionId, String userId) {
     String key = buildKey(tenantId, definitionId);
-    Long result = redisTemplate.execute(RELEASE_SCRIPT, List.of(key), userId);
+    Long result = designLockStore.release(key, userId);
     if (result != null && result == RESULT_NOT_OWNER) {
       throw BizException.of(
           ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
@@ -126,12 +94,7 @@ public class WorkflowDesignLockService {
     String key = buildKey(tenantId, definitionId);
     Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
     LockHolder renewed = new LockHolder(userId, expiresAt);
-    Long result = redisTemplate.execute(
-        RENEW_SCRIPT,
-        List.of(key),
-        userId,
-        serialize(renewed),
-        String.valueOf(LOCK_TTL.toMillis()));
+    Long result = designLockStore.renew(key, userId, serialize(renewed), LOCK_TTL.toMillis());
     long code = result == null ? RESULT_ABSENT : result;
     if (code == RESULT_ABSENT) {
       throw BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.expired");
@@ -155,7 +118,7 @@ public class WorkflowDesignLockService {
   }
 
   private LockHolder readCurrent(String key) {
-    String raw = redisTemplate.opsForValue().get(key);
+    String raw = designLockStore.get(key);
     if (raw == null) {
       return null;
     }

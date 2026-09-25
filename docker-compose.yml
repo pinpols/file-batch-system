@@ -273,13 +273,13 @@ services:
 
   minio:
     logging: *container-logging
-    image: quay.io/minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-09-07T16-13-09Z}
+    image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
     container_name: batch-minio
     restart: unless-stopped
     # 本地依赖也必须有 cgroup 边界，避免异常 multipart/扫描占满宿主机内存。
     # 精确生产规格由 MinIO Tenant 清单按节点资源单独定义。
     mem_limit: ${MINIO_MEMORY_LIMIT:-1024m}
-    command: server /data --console-address ":9001"
+    command: server /bitnami/minio/data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -322,7 +322,7 @@ services:
 
   valkey:
     logging: *container-logging
-    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1}
+    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
     container_name: batch-valkey
     restart: unless-stopped
     # 数据上限保留 25% 给复制/AOF fork、连接缓冲和 allocator 碎片。

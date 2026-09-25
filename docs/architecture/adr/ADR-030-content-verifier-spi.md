@@ -54,7 +54,7 @@ public record VerifyResult(
 - `batch.verifier.failures{code, reason}` Counter（reason = `VerifyResult.code()`）
 
 只把 `code` / `outcome` / `reason` 作为 tag —— 这三项是有限基数，安全。`tenantId` / `taskId`
-**不**进 tag（high-cardinality 会爆 Prometheus）。
+**不**进 tag（high-cardinality 会导致 Prometheus 基数失控）。
 
 ### 失败语义
 

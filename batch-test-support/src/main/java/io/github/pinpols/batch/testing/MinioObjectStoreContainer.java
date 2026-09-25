@@ -35,7 +35,7 @@ public final class MinioObjectStoreContainer extends GenericContainer<MinioObjec
     withExposedPorts(MINIO_API_PORT, MINIO_CONSOLE_PORT);
     withEnv("MINIO_ROOT_USER", accessKey);
     withEnv("MINIO_ROOT_PASSWORD", secretKey);
-    withCommand("server", "/data", "--console-address", ":9001");
+    withCommand("server", "/bitnami/minio/data", "--console-address", ":9001");
     waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
   }
 
@@ -47,5 +47,15 @@ public final class MinioObjectStoreContainer extends GenericContainer<MinioObjec
 
   public String getEndpoint() {
     return "http://" + getHost() + ":" + getMappedPort(MINIO_API_PORT);
+  }
+
+  @Override
+  public final boolean equals(Object other) {
+    return super.equals(other);
+  }
+
+  @Override
+  public final int hashCode() {
+    return super.hashCode();
   }
 }

@@ -89,7 +89,7 @@ public class JobDefinitionCreateRequest {
   private Boolean enabled;
   private String description;
 
-  /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止垃圾表达式入库运行期才炸。 */
+  /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止非法表达式入库后在运行期失败。 */
   @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
   public boolean isScheduleExprValidForCron() {
     if (!"CRON".equals(scheduleType) || scheduleExpr == null || scheduleExpr.isBlank()) {

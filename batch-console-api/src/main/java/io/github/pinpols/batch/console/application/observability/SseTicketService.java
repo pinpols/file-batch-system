@@ -8,7 +8,6 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,13 +24,12 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2259")
 public class SseTicketService {
 
-  private static final String KEY_PREFIX = "console:sse:ticket:";
   private static final Duration TICKET_TTL = Duration.ofMinutes(5);
   private static final String FIELD_SEPARATOR = "|";
   private static final String FIELD_SEPARATOR_REGEX = "\\|";
   private static final String ROLE_SEPARATOR = ",";
 
-  private final StringRedisTemplate redisTemplate;
+  private final SseTicketStore ticketStore;
 
   /** 签发一次性 ticket，绑定签发时的角色集。 */
   public String issue(String username, String tenantId, Collection<String> authorities) {
@@ -43,7 +41,7 @@ public class SseTicketService {
             authorities.stream().filter(Texts::hasText).distinct().toList());
     String value =
         username + FIELD_SEPARATOR + (tenantId == null ? "" : tenantId) + FIELD_SEPARATOR + roles;
-    redisTemplate.opsForValue().set(KEY_PREFIX + ticket, value, TICKET_TTL);
+    ticketStore.save(ticket, value, TICKET_TTL);
     return ticket;
   }
 
@@ -52,8 +50,7 @@ public class SseTicketService {
     if (!Texts.hasText(ticket)) {
       return null;
     }
-    String key = KEY_PREFIX + ticket.trim();
-    String value = redisTemplate.opsForValue().getAndDelete(key);
+    String value = ticketStore.consume(ticket.trim());
     if (!Texts.hasText(value)) {
       return null;
     }

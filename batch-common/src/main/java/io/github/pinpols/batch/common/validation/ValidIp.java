@@ -11,8 +11,8 @@ import java.lang.annotation.Target;
 /**
  * IP 地址校验(IPv4 + IPv6)。
  *
- * <p>动机:worker 注册 / 客户端 IP 字段 / IP 白名单等场景手写 regex 太乱(不少地方还放过 256.x.x.x);统一委托给 JDK
- * `InetAddress.getByName`(本地解析,不会走 DNS),既能拒非法,又能识别 IPv6 缩写形态。
+ * <p>动机:worker 注册、客户端 IP 字段和 IP 白名单等场景不应重复维护正则表达式。统一委托给 JDK
+ * `InetAddress.getByName`(本地解析,不会走 DNS),既能拒绝非法地址,也能识别 IPv6 缩写形态。
  *
  * <p>空 / null 视为合法(用 {@code @NotBlank} 单独约束必填)。
  */

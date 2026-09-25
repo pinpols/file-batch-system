@@ -8,7 +8,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 /**
  * 类型安全的任务执行基类 — SDK Phase 5 / SDK-P5-1。
  *
- * <p>租户写 handler 不再用 {@code Map<String, Object>} 瞎转型:框架在调用前把 {@link SdkTaskContext#parameters()} 经
+ * <p>租户写 handler 不再用 {@code Map<String, Object>} 无类型约束转换:框架在调用前把 {@link SdkTaskContext#parameters()} 经
  * Jackson 反序列化成强类型入参 {@code I},handler 返回业务结果 {@code O},框架再把它序列化进 {@link
  * SdkTaskResult#output()}。编译期即校验入参 / 出参类型。
  *

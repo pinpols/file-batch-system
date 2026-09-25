@@ -23,7 +23,7 @@
 | 构建与运行时 | [构建耗时](./build-time-optimization-2026-09-12.md)、[脚本兼容矩阵](./script-runtime-compatibility-matrix-2026-09-01.md)、[JDK 特性](./jdk-feature-usage-analysis-2026-06-09.md) |
 | 数据与扩展 | [Schema 优化](./schema-optimization-review-2026-09-07.md)、[扩展状态](./scaling-state-and-biz-path-2026-06-14.md)、[单 Worker 容量](./single-worker-tens-of-thousands-capacity-2026-06-21.md) |
 | 对象存储 | [RustFS S3 兼容 POC](./rustfs-poc-2026-09-25.md)、[SeaweedFS S3 兼容 POC](./seaweedfs-poc-2026-09-25.md)、[对齐验证对比](./s3-compatible-backend-comparison-2026-09-25.md) |
-| 架构治理 | [面向抽象接口治理](./interface-abstraction-governance-2026-09-25.md)、[bounded context 计划](./bounded-context-migration-plan-2026-08-03.md)、[系统能力差距](./system-wide-capability-gap-analysis-2026-06-20.md)、[行业对标计划](./industry-benchmark-improvement-plan.md) |
+| 架构治理 | [面向抽象接口治理](./interface-abstraction-governance-2026-09-25.md)、[Redis / MQ 抽象治理](./redis-mq-abstraction-governance-2026-09-25.md)、[端口化与 Sonar 复核](./infra-port-abstraction-sonar-review-2026-09-25.md)、[bounded context 计划](./bounded-context-migration-plan-2026-08-03.md)、[系统能力差距](./system-wide-capability-gap-analysis-2026-06-20.md)、[行业对标计划](./industry-benchmark-improvement-plan.md) |
 | 代码质量 | [语义表达扫描](./java-semantic-expression-scan-2026-08-26.md)、[可读性机器快照](./java-readability-inventory-2026-08-12.md) |
 | 历史审计 | [提交审查](./commit-review-2026-06-05-to-09.md)、[上线真实性](./go-live-realism-audit-2026-06-21.md)、[鲁棒性扫描](./robustness-deep-scan-2026-06-10.md)、[SQL 配置治理](./sql-config-governance-report-2026-06-08.md) |
 | 历史路线 | [P1A 迁移](./p1a-stage1-migration-plan-2026-05-30.md)、[开源系统差距](./competitive-gap-analysis-2026-05-30.md)、[P0/P1 状态](./p0-p1-governance-status-2026-09-02.md) |

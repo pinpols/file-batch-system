@@ -12,7 +12,7 @@
 
 本平台 9 模块跨进程通信:Console / Trigger / Orchestrator / 4 Worker / 共享 PG / Kafka / Redis / MinIO,涉及任务状态机、outbox 事件、多租户、RBAC、补偿、审批等多写路径。
 
-历史上**没有把 CAP 立场写死**,导致:
+历史上**没有把 CAP 立场固化**,导致:
 - 设计 review 时遇到"分区时怎么办"反复辩论
 - 部分 proxy / fallback 各自决策(triggerList 降级 / outbox 写 fail-fast)缺乏统一原则
 - 新模块开发不知道默认走哪一边

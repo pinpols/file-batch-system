@@ -16,15 +16,15 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class ConsoleRealtimeEventBridge {
 
   private final ConsoleRealtimeEventHub realtimeEventHub;
-  private final ConsoleRealtimeRedisPublisher redisPublisher;
+  private final RealtimeEventBus realtimeEventBusPublisher;
   private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
 
   public ConsoleRealtimeEventBridge(
       ConsoleRealtimeEventHub realtimeEventHub,
-      ConsoleRealtimeRedisPublisher redisPublisher,
+      RealtimeEventBus realtimeEventBusPublisher,
       ConsoleOpsSummaryRealtimeStream summaryRealtimeStream) {
     this.realtimeEventHub = realtimeEventHub;
-    this.redisPublisher = redisPublisher;
+    this.realtimeEventBusPublisher = realtimeEventBusPublisher;
     this.summaryRealtimeStream = summaryRealtimeStream;
   }
 
@@ -52,6 +52,6 @@ public class ConsoleRealtimeEventBridge {
         event.data(),
         event.emittedAt());
     realtimeEventHub.publish(sseEvent);
-    redisPublisher.publish(sseEvent);
+    realtimeEventBusPublisher.publish(sseEvent);
   }
 }

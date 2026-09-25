@@ -179,7 +179,7 @@ Lane S (P2) 把 dispatcher + Kafka consumer 接上,对齐 Java SDK 下列 5 个�
 **P2 简化 vs Java**(明列出来,P3 接续清单):
 
 - 没有 CLAIM 5xx 重试 loop —— Python `_http.PlatformHttpClient` 在 wire-protocol §C 层做过 retry,我们这里只 surface `TransientError` 让 Kafka lease timeout 重投。
-- 没有 `ThrottledLogger`(Java Lane J #2)—— PAUSED-state drop 日志降到 DEBUG 避免刷屏,不引外部依赖。
+- 没有 `ThrottledLogger`(Java Lane J #2)—— PAUSED-state drop 日志降到 DEBUG 避免重复日志,不引外部依赖。
 - 没有 MDC —— 结构化字段以 `logging.LogRecord.extra` 形式传给用户的 formatter。
 
 权威文档(两个 SDK 都从这里读):

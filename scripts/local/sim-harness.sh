@@ -530,7 +530,7 @@ routing_sim() {
   local tbl="customer_account"  # ta 写 customer;tc 写 risk_score。两边都查,任一有 tc 行即证
   local on1 on0
   for tbl in risk_score customer_account transaction; do
-    on1=$(PGPASSWORD="$s1p" docker run --rm -i --network "$(docker inspect "$PG" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" -e PGPASSWORD="$s1p" postgres:17 \
+    on1=$(PGPASSWORD="$s1p" docker run --rm -i --network "$(docker inspect "$PG" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')" -e PGPASSWORD="$s1p" postgres:17.11 \
       psql -X -v ON_ERROR_STOP=1 -h "$BIZ_SHARD_1_CONTAINER" -U "$s1n" -d "$BIZ_DB" -tA \
       -v table_name="$tbl" -v tenant_id=tc -f /dev/stdin < "$SIM_SQL_DIR/count-business-tenant-rows.sql" 2>/dev/null || echo 0)
     on0=$(sim_business_sql count-business-tenant-rows.sql -tA \

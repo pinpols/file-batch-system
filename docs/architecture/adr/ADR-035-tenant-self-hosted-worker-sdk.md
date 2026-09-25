@@ -297,7 +297,7 @@ SDK 侧 `TaskDispatchMessage` 用 `@JsonIgnoreProperties(ignoreUnknown=true)` �
 
 ### Wire-protocol 契约守门
 
-`sdk/java/core/src/test/.../dispatcher/SdkPlatformContractTest`:fail-fast 守门测试,任何 BE DTO 字段重命名 / 删除会让本测试爆。**改 BE DTO 必须同步改 SDK + 契约测试**(ADR §9 两套绑定一个 wire 协议)。
+`sdk/java/core/src/test/.../dispatcher/SdkPlatformContractTest`:fail-fast 守门测试,任何 BE DTO 字段重命名 / 删除会让本测试失败。**改 BE DTO 必须同步改 SDK + 契约测试**(ADR §9 两套绑定一个 wire 协议)。
 
 ### workerId vs workerCode
 

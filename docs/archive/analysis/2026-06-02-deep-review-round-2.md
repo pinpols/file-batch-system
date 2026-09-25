@@ -264,7 +264,7 @@ Round-1 列的"最后一公里"问题在 24h 并发 5 lane(F/G/H/I/J/K/L/N)推�
 |---|---|---|
 | `atomic_error_codes` 在 `sdk-shared-constants.yaml` 占位空数组(Java `AtomicErrorCode` 是 Lane K 新加未被 Lane P 看到)| Parity test 不校验该 key,人为同步责任 | Round-3 follow-up:Lane P agent 拉新 main,补真实 7 个错误码 |
 | Java `schema_versions_supported` 是 `[v1, v2]` 字符串 vs 早期文档写 `[1]`(整数)| 协议正源是 Java enum,文档以后对齐 yaml | 已对齐,本批无遗留 |
-| Python `BatchPlatformClient` 高层类未建(直接用 `_http.py` 还是被禁) | P0.5 + P1 公共 API 还不完整,租户直接 wire 用麻烦 | P3 完成 scheduler 后顺手做 `BatchPlatformClient` 外壳 |
+| Python `BatchPlatformClient` 高层类未建(直接用 `_http.py` 还是被禁) | P0.5 + P1 公共 API 还不完整,租户直接 wire 用麻烦 | P3 完成 scheduler 后同步做 `BatchPlatformClient` 外壳 |
 | `httpx` / `pydantic` 版本下限锁太松(`>=0.27` / `>=2.7`)| 未来 major 升级可能破坏 | 版本上限 `<1.0` / `<3.0` 已在 pyproject 限,主要风险可控 |
 | 多 agent 同时改 sdk-python(并发 P/Q/R)导致 worktree 被切来切去,几个 PR 都报告过这类摩擦 | 不直接影响 PR 质量(最终 cherry-pick 救回),但浪费 ~ 20% agent 时间 | Round-3 起 SDK 全交一个 agent 串行;并发只用于跨模块独立任务 |
 

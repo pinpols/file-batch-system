@@ -8,11 +8,11 @@
 
 | 方向 | 守护 |
 |---|---|
-| 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
+| 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-direct-client-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
-| 文档与变更 | `check-docs-structure.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-readiness-doc-sync.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
+| 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py` |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
@@ -278,6 +278,17 @@ python3 scripts/ci/check-infrastructure-abstraction-boundaries.py --base origin/
 
 该守护已接入 PR gate。历史存量按治理文档分批收敛，不在本守护里一次性清零。
 
+## `check-direct-client-boundaries.py`
+
+全量扫描生产 Java 源码，禁止 application/domain 业务层直接导入 Redis、Kafka、JDBC 等具体客户端。
+测试源码、`infrastructure`、`config`、`support`、Kafka consumer 入口和运维 lag 探针按职责放行。
+
+```bash
+python3 scripts/ci/check-direct-client-boundaries.py
+```
+
+该守护已接入 PR gate 和 full gate，用于防止缓存、MQ、数据访问实现细节重新漂回业务层。
+
 ## `check-java-logging-governance.py`
 
 禁止 Java 应用和测试直接写 `System.out` / `System.err`，并禁止直接调用
@@ -345,4 +356,15 @@ URL 不联网检查，避免历史快照或第三方站点波动造成误报。�
 
 ```bash
 bash scripts/python.sh scripts/ci/check-docs-structure.py
+```
+
+## `check-doc-timestamp-policy.py`
+
+校验 `docs/` 文件名是否符合“当前事实稳定命名、一次性报告带日期、历史材料归档”的策略。
+当前事实目录（如 `architecture/design/runbook/sdk`）不允许继续新增带日期文件名；报告、审计、
+复核、验证、backlog、plan 默认应带日期或阶段标识。存量历史例外集中登记在脚本白名单里，
+便于后续逐步归档。
+
+```bash
+python3 scripts/ci/check-doc-timestamp-policy.py
 ```

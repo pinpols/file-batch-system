@@ -30,7 +30,7 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
     StringRedisTemplate template = new StringRedisTemplate(factory);
     template.afterPropertiesSet();
     rateLimiter = new SlidingWindowRateLimiter(
-        template,
+        new RedisRateLimitStore(template),
         new BatchDateTimeSupport(
             Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }

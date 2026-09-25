@@ -2,21 +2,21 @@ package io.github.pinpols.batch.trigger.infrastructure.mq;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
+import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
 import io.opentelemetry.context.Scope;
-import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,7 +28,6 @@ import org.springframework.stereotype.Component;
  * <p>ADR-010 固化路径，无条件实例化（2026-05-02 同步 HTTP 路径已删除）。
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
@@ -36,8 +35,15 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   private static final String HEADER_TENANT_ID = CommonConstants.DEFAULT_TENANT_ID_HEADER;
   private static final String HEADER_ENVELOPE_VERSION = "X-Envelope-Version";
 
-  private final KafkaTemplate<String, String> triggerKafkaTemplate;
+  private final MqMessagePublisher mqMessagePublisher;
   private final TriggerKafkaProperties kafkaProperties;
+
+  public KafkaTriggerEventPublisher(
+      @Qualifier("triggerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
+      TriggerKafkaProperties kafkaProperties) {
+    this.mqMessagePublisher = mqMessagePublisher;
+    this.kafkaProperties = kafkaProperties;
+  }
 
   @Override
   public CompletableFuture<PublishResult> publishAsync(
@@ -58,29 +64,18 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       return CompletableFuture.completedFuture(
           PublishResult.fail("serialize envelope: " + ex.getMessage()));
     }
-    ProducerRecord<String, String> producerRecord =
-        new ProducerRecord<>(topic, messageKey, payload);
+    Map<String, String> headers = new LinkedHashMap<>();
     if (EmptyChecks.isNotBlank(traceId)) {
-      producerRecord
-          .headers()
-          .add(new RecordHeader(HEADER_TRACE_ID, traceId.getBytes(StandardCharsets.UTF_8)));
+      headers.put(HEADER_TRACE_ID, traceId);
     }
     if (EmptyChecks.isNotNull(envelope.launchRequest().tenantId())) {
-      producerRecord
-          .headers()
-          .add(new RecordHeader(
-              HEADER_TENANT_ID,
-              envelope.launchRequest().tenantId().getBytes(StandardCharsets.UTF_8)));
+      headers.put(HEADER_TENANT_ID, envelope.launchRequest().tenantId());
     }
-    producerRecord
-        .headers()
-        .add(new RecordHeader(
-            HEADER_ENVELOPE_VERSION,
-            String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
+    headers.put(HEADER_ENVELOPE_VERSION, String.valueOf(envelope.envelopeVersion()));
     try {
-      CompletableFuture<SendResult<String, String>> sendFuture;
+      CompletableFuture<MqPublishResult> sendFuture;
       try (Scope ignored = OtelTracePropagation.restore(envelope.traceContext())) {
-        sendFuture = triggerKafkaTemplate.send(producerRecord);
+        sendFuture = mqMessagePublisher.publish(new MqMessage(topic, messageKey, payload, headers));
       }
       return sendFuture
           .orTimeout(kafkaProperties.getSendTimeoutSeconds(), java.util.concurrent.TimeUnit.SECONDS)
@@ -108,14 +103,14 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   }
 
   private PublishResult toPublishResult(
-      String topic, String messageKey, SendResult<String, String> result, Throwable throwable) {
+      String topic, String messageKey, MqPublishResult result, Throwable throwable) {
     if (EmptyChecks.isNull(throwable)) {
       log.debug(
           "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
           topic,
           messageKey,
-          result.getRecordMetadata().partition(),
-          result.getRecordMetadata().offset());
+          result.partition(),
+          result.offset());
       return PublishResult.ok();
     }
     Throwable cause = unwrapCompletionException(throwable);

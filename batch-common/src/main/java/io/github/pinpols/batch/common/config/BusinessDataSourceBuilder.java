@@ -77,7 +77,7 @@ public final class BusinessDataSourceBuilder {
       cfg.setUsername(shard.getUsername());
       cfg.setPassword(shard.getPassword());
       applyPoolDefaults(cfg, properties);
-      // 多片:每片池上限可独立调小,控制 片数×池×worker 数 的总连接,防压爆 PG max_connections
+      // 多片:每片池上限可独立调小,控制 片数×池×worker 数 的总连接,防压垮 PG max_connections
       int shardPool = routingProperties.getShardMaximumPoolSize();
       if (shardPool > 0) {
         cfg.setMaximumPoolSize(shardPool);

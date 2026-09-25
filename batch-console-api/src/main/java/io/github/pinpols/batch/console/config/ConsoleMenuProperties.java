@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 控制台侧边栏菜单配置（{@code batch.console.menu}）——外置于 {@code menu.yml}。
  *
- * <p>设计:菜单结构/文案/图标/顺序/分组/minRole 从此处加载,不再写死在 {@link
+ * <p>设计:菜单结构/文案/图标/顺序/分组/minRole 从此处加载,不再固化在 {@link
  * io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry} 的 Java 常量里。改菜单 = 改 yml +
  * 重启(不重编译、不走 DB)。加载优先级(后者覆盖前者,见 application.yml 的 spring.config.import):
  *

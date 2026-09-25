@@ -62,7 +62,7 @@ public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryR
 
 - 批量调度系统**不该**是"前端埋点接收平台"。这是 RUM / Sentry / 字节火山引擎应用监控的活；
 - 前端任何 error 都会进 batch 系统 ERROR 日志，污染调度告警视图（ops 看 ERROR 想找调度问题，结果一半是前端 NPE）；
-- 前端 QPS 远超调度路径，批量系统的 console-api 容易被压爆；
+- 前端 QPS 远超调度路径，批量系统的 console-api 容易被压垮；
 - 跨业务系统都会想往这里塞事件，最终扩成"通用前端日志中转站"。
 
 **建议**：

@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * 缺口③：内部端点（{@code /internal/**}）请求体大小硬上限过滤器。
  *
  * <p>仅作用于 {@code /internal/**} 的 POST / PUT / PATCH / DELETE；先按 {@code Content-Length} 廉价拒绝， 再实际
- * bounded 读取并缓存 body，兜住 chunked / 缺失长度请求，防超大 report / outputs 撑爆内存。
+ * bounded 读取并缓存 body，兜住 chunked / 缺失长度请求，防超大 report / outputs 耗尽内存。
  *
  * <ul>
  *   <li>{@code maxBodyBytes <= 0}：不限（放行）。

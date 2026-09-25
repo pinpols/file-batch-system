@@ -86,7 +86,7 @@
 | `OutboxForwarderE2eIT` | 等待 outbox status=PUBLISHED 超时，实际为 FAILED |
 | `OutboxForwarderRetryE2eIT` | 等待 outbox status=PUBLISHED 超时，实际为 NEW |
 
-**共同特征：** 全部是异步等待超时，说明链路中某个环节卡住，需深入查 E2E 业务侧错误日志。
+**共同特征：** 全部是异步等待超时，说明链路中某个环节停滞，需深入查 E2E 业务侧错误日志。
 
 ---
 

@@ -13,7 +13,7 @@
 #
 # 关系:确定性的「⌈N/K⌉ HTTP 往返」已由单测 HttpTaskExecutionClientTest
 #       #claimBatchReducesClaimRoundTripsToCeilNOverK 固化(进 CI,不需独占栈)。
-#       本脚本是「真栈端到端」的补充验收,需要一个**独占的本地全栈窗口**
+#       本脚本是「真实依赖栈端到端」的补充验收,需要一个**独占的本地全栈窗口**
 #       (workers 必须以 flag 开启动),不要在别人正在跑的共享栈上跑。
 #
 # 前置:

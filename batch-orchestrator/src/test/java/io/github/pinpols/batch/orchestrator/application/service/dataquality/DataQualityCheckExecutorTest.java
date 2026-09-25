@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.config.DataQualityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityCheckEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.dataquality.JdbcDataQualitySqlRuleProbe;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityCheckMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DataQualityRuleMapper;
 import java.time.LocalDate;
@@ -42,7 +43,8 @@ class DataQualityCheckExecutorTest {
     ObjectProvider<NamedParameterJdbcTemplate> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(jdbcTemplate);
     properties = new DataQualityProperties();
-    executor = new DataQualityCheckExecutor(ruleMapper, checkMapper, provider, properties);
+    executor = new DataQualityCheckExecutor(
+        ruleMapper, checkMapper, new JdbcDataQualitySqlRuleProbe(provider), properties);
   }
 
   @Test

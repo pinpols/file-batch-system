@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
  * 防护测试：限流默认必须开启且各动作阈值为正。
  *
  * <p>历史上 {@code batch.rate-limit} 默认 {@code enabled=false} 且阈值全 0，导致 launch/register/release
- * 无任何硬保护，api_key 泄漏即可被打爆（防接口盗刷审计 P0 缺口）。本测试钉死"默认即生效"，防止后续改动悄悄关回去； 阈值设在远高于任何合法单租速率的高水位，只拦截 runaway
+ * 无任何硬保护，api_key 泄漏即可被过载请求压垮（防接口盗刷审计 P0 缺口）。本测试固化"默认即生效"，防止后续改动悄悄关回去； 阈值设在远高于任何合法单租速率的高水位，只拦截 runaway
  * 滥用，不误伤正常高吞吐。
  */
 class RateLimitPropertiesTest {

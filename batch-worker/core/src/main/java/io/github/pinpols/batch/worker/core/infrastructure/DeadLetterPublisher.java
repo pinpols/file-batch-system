@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
@@ -15,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -42,16 +44,16 @@ public class DeadLetterPublisher {
    */
   static final int ENVELOPE_VERSION = 1;
 
-  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final MqMessagePublisher mqMessagePublisher;
   private final Counter successCounter;
   private final Counter timeoutCounter;
   private final Counter failureCounter;
   private final Timer publishTimer;
 
   public DeadLetterPublisher(
-      KafkaTemplate<String, String> kafkaTemplate,
+      @Qualifier("workerMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.kafkaTemplate = kafkaTemplate;
+    this.mqMessagePublisher = mqMessagePublisher;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
       this.successCounter = null;
@@ -100,7 +102,8 @@ public class DeadLetterPublisher {
 
     long startNanos = System.nanoTime();
     try {
-      CompletableFuture<?> future = kafkaTemplate.send(BatchTopics.TASK_DEAD_LETTER, value);
+      CompletableFuture<?> future =
+          mqMessagePublisher.publish(MqMessage.of(BatchTopics.TASK_DEAD_LETTER, null, value));
       if (future != null) {
         future.get(PUBLISH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       }

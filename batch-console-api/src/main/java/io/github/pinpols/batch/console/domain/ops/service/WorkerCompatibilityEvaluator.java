@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * 由 worker 上报的 {@code sdkVersion} 算出协议/SDK 兼容状态(console SDK 运行时可见性 ①)。
  *
  * <p>判定纯只读、无副作用:对照 worker 上报版本主版本号 vs {@link SdkPlatformConstants#CURRENT_SDK_MAJOR}。 仅依据
- * 真实可得字段(sdkVersion),算不出主版本一律 {@link Status#UNKNOWN},不瞎判。
+ * 真实可得字段(sdkVersion),算不出主版本一律 {@link Status#UNKNOWN},不做无依据判断。
  */
 @Component
 public class WorkerCompatibilityEvaluator {

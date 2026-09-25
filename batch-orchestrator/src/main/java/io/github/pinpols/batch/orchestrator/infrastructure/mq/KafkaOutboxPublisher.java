@@ -10,6 +10,9 @@ import io.github.pinpols.batch.common.kafka.BatchMessageType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.mq.MqMessage;
+import io.github.pinpols.batch.common.mq.MqMessagePublisher;
+import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -31,8 +34,6 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import org.apache.kafka.common.utils.Utils;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 /**
@@ -56,7 +57,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class KafkaOutboxPublisher implements OutboxPublisher {
 
-  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final MqMessagePublisher mqMessagePublisher;
   private final BatchOrchestratorGovernanceProperties governance;
   private final EventDeliveryLogMapper eventDeliveryLogMapper;
   private final BatchTopicResolver topicResolver;
@@ -71,14 +72,14 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private final Executor deliveryLogExecutor;
 
   public KafkaOutboxPublisher(
-      KafkaTemplate<String, String> kafkaTemplate,
+      @Qualifier("orchestratorMqMessagePublisher") MqMessagePublisher mqMessagePublisher,
       BatchOrchestratorGovernanceProperties governance,
       EventDeliveryLogMapper eventDeliveryLogMapper,
       BatchTopicResolver topicResolver,
       BizMessageResolver bizMessageResolver,
       ObjectMapper objectMapper,
       @Qualifier("applicationTaskExecutor") Executor deliveryLogExecutor) {
-    this.kafkaTemplate = kafkaTemplate;
+    this.mqMessagePublisher = mqMessagePublisher;
     this.governance = governance;
     this.eventDeliveryLogMapper = eventDeliveryLogMapper;
     this.topicResolver = topicResolver;
@@ -142,9 +143,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     // 不再混入通用 outbox fallback 桶（之前会被 ops 默认 ACL 屏蔽，告警系统拿不到）。
     String dedicatedTopic = resolveDedicatedTopic(event.getEventType());
     if (dedicatedTopic != null) {
-      return kafkaTemplate
-          .send(dedicatedTopic, event.getEventKey(), event.getPayloadJson())
-          .toCompletableFuture()
+      return mqMessagePublisher
+          .publish(MqMessage.of(dedicatedTopic, event.getEventKey(), event.getPayloadJson()))
           .handleAsync(
               (result, ex) -> {
                 if (ex == null) {
@@ -188,9 +188,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
         event.getCreatedAt(),
         Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
         Map.of("aggregateId", event.getAggregateId()));
-    return kafkaTemplate
-        .send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message))
-        .toCompletableFuture()
+    return mqMessagePublisher
+        .publish(MqMessage.of(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message)))
         .handleAsync(
             (result, ex) -> {
               if (ex == null) {
@@ -213,10 +212,10 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             deliveryLogExecutor);
   }
 
-  private CompletableFuture<SendResult<String, String>> sendWithTraceContext(
+  private CompletableFuture<MqPublishResult> sendWithTraceContext(
       String topic, String key, String payload, W3cTraceContext traceContext) {
     try (Scope ignored = OtelTracePropagation.restore(traceContext)) {
-      return kafkaTemplate.send(topic, key, payload).toCompletableFuture();
+      return mqMessagePublisher.publish(MqMessage.of(topic, key, payload));
     }
   }
 

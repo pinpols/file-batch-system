@@ -74,7 +74,7 @@ class ConfigDriftGuardTest {
    *
    * <p>与 {@link #OWNED_KEYS} 的区别：OWNED_KEYS 守护 application.yml + 非 local profile；本集合专门守护
    * application-local.yml（OWNED_KEYS 豁免它）。开发者本机若确需不同值，应改 {@code .env} 的对应 ENV 变量，而非在 local-yml
-   * 写死——保持"单点"。
+   * 固化——保持"单点"。
    *
    * <p>历史扩散背景：S3 凭据曾散在 import/console（trigger 缺凭据启动崩溃，见 PR #409）；KMS/kafka 曾在 7-8 个模块各抄一份。
    */
@@ -206,13 +206,13 @@ class ConfigDriftGuardTest {
     }
     assertThat(scatter)
         .as("application-local.yml 不应重复声明已收敛到单点的键（kafka bootstrap / KMS / S3 凭据）；"
-            + "本机如需不同值请改 .env 的对应 ENV 变量，不要在 local-yml 写死（见 CONSOLIDATED_LOCAL_KEYS 注释）")
+            + "本机如需不同值请改 .env 的对应 ENV 变量，不要在 local-yml 固化（见 CONSOLIDATED_LOCAL_KEYS 注释）")
         .isEmpty();
   }
 
   /**
    * 守护范围：application.yml + 所有 application-<profile>.yml，但 <b>豁免</b> application-local.yml —— 它是开发者
-   * IDE 沙箱（指向本机 docker 端口），写死 localhost:15432 / 19092 等是设计意图，不属于"基线 drift"。生产/CI 不会激活 local
+   * IDE 沙箱（指向本机 docker 端口），固化 localhost:15432 / 19092 等是设计意图，不属于"基线 drift"。生产/CI 不会激活 local
    * profile。
    */
   private static List<Path> listApplicationYmls(Path resourcesDir) throws IOException {

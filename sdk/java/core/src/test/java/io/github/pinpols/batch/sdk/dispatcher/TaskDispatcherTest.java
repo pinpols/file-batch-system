@@ -194,7 +194,7 @@ class TaskDispatcherTest {
         .containsEntry("success", false)
         .containsEntry("message", "biz boom") // 顶层 message 仍是业务原因(不变)
         .containsEntry("errorCode", "EXECUTION_FAILED");
-    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是裸串(否则平台解析 500)
+    // result_summary 是 JSONB:发 {code,message} 合法 JSON 对象,不是普通文本(否则平台解析 500)
     assertThat(reportBody.getValue().get("resultSummary").toString())
         .contains("\"code\":\"EXECUTION_FAILED\"")
         .contains("biz boom")

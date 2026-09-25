@@ -14,7 +14,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
  * S3 Bucket 自动初始化辅助工具类。 {@code ensureBucket} 在 Bucket 不存在时自动创建，成功返回 {@code true}，失败返回 {@code false}
- * 并记录警告日志。 为避免高频失败场景刷屏，日志输出有 5 分钟冷却窗口（per component+bucket 维度）。 S3Client 为 {@code null} 或 bucket
+ * 并记录警告日志。 为避免高频失败场景产生日志噪音，日志输出有 5 分钟冷却窗口（per component+bucket 维度）。 S3Client 为 {@code null} 或 bucket
  * 名为空时直接返回 {@code false}，不抛异常。
  */
 @SuppressWarnings("java:S2583")

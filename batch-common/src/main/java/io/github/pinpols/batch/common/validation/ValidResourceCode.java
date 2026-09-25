@@ -17,7 +17,8 @@ import java.lang.annotation.Target;
  *
  * <p>规则：字母开头 + 字母/数字/下划线/连字符；长度 ≤ 128。
  *
- * <p>动机：前端发现 "q q q" / 含中文 / 空字符串能入库导致路由跳转崩溃；统一在 DTO 层 400，避免散落 写 @Pattern 字面量重复（且容易漏）。
+ * <p>动机：前端曾发现空白、中文或带空格的 code 可入库并导致路由跳转失败；统一在 DTO 层返回 400，避免各处重复书写 {@code @Pattern}
+ * 字面量并产生遗漏。
  */
 @Documented
 @Target({ElementType.FIELD, ElementType.PARAMETER})

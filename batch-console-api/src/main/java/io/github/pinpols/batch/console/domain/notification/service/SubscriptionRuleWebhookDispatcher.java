@@ -172,7 +172,7 @@ public class SubscriptionRuleWebhookDispatcher {
     if (!dispatchPolicy.withinSendRateLimit(tenantId, channelCode, channelType, eventType)) {
       return;
     }
-    // 去重:相同(渠道+事件+内容)在滑窗内只发一次,挡风暴重复刷屏。
+    // 去重:相同(渠道+事件+内容)在滑窗内只发一次,挡风暴重复产生日志噪音。
     if (dispatchPolicy.isDuplicateWithinWindow(tenantId, channelCode, eventType, payloadJson)) {
       return;
     }

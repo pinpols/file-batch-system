@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 契约一致性：SDK 侧 {@link RequestSigner} 必须与服务端签名规范逐字节相同。
  *
- * <p>SDK core 不依赖 batch-common；这里用固定测试向量钉死 canonical 串、body hash 和 HMAC 输出。
+ * <p>SDK core 不依赖 batch-common；这里用固定测试向量固化 canonical 串、body hash 和 HMAC 输出。
  */
 class RequestSignerConformanceTest {
 

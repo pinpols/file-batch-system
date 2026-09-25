@@ -22,7 +22,7 @@
 | `V181__alert_event_escalation_notify.sql` | db | `alert_event` 加 `escalation_notified_tier`(通知水位线,默认 0)+ OPEN 行 notify 扫描 partial index |
 | `AlertEscalationNotifier` | console-api | 默认每 60s 扫「`escalation_tier > escalation_notified_tier` 的 OPEN 告警」,经现有 webhook 投递链路推「告警已升级」,再 CAS 推进水位线;自管理调度 + ShedLock `alert-escalation-notify` 多实例互斥 |
 
-**SLA 随 tier 递进**:第 `N` 级需静默 `slaMinutes * N` 分钟才触发(越往上越慢),避免单故障短时间连环升级刷屏。
+**SLA 随 tier 递进**:第 `N` 级需静默 `slaMinutes * N` 分钟才触发(越往上越慢),避免单故障短时间连环升级产生日志噪音。
 升级用 `expectedTier` 乐观守护,被并发 ack 或其它节点抢先升级时跳过(不重复计数)。
 
 **为什么 notifier 在 console-api 而非 orchestrator**:升级在 orchestrator 抬 tier 写共享表 `alert_event`;真正的通知渠道配置 / webhook 投递 /

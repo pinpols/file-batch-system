@@ -1,7 +1,10 @@
-package io.github.pinpols.batch.console.domain.observability.realtime;
+package io.github.pinpols.batch.console.infrastructure.realtime;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
+import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
+import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
+import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeReplayStore;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,7 +18,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ConsoleRealtimeReplayStore {
+public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
   private static final String KEY_PREFIX = "batch:console:realtime:buffer:";
 
@@ -23,6 +26,7 @@ public class ConsoleRealtimeReplayStore {
   private final ConsoleRealtimeProperties realtimeProperties;
   private final ConsoleRealtimeMetrics realtimeMetrics;
 
+  @Override
   public void append(ConsoleRealtimeStreamEnvelope envelope) {
     if (envelope == null
         || envelope.tenantId() == null
@@ -52,6 +56,7 @@ public class ConsoleRealtimeReplayStore {
     });
   }
 
+  @Override
   public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
     if (tenantId == null
         || tenantId.isBlank()
@@ -118,6 +123,4 @@ public class ConsoleRealtimeReplayStore {
   private static String logValue(String value) {
     return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
   }
-
-  public record ReplayBatch(List<ConsoleRealtimeStreamEnvelope> events, boolean cursorFound) {}
 }

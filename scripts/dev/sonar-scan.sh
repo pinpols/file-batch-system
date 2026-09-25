@@ -283,9 +283,10 @@ mvn "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSI
   -Dsonar.java.skipUnchanged=false \
   -Dsonar.analysisCache.enabled=false \
   "${SONAR_COVERAGE_ARGS[@]}" \
-  2>&1 | tee "$SONAR_LOG" | grep -E "INFO.*task|INFO.*More|ERROR.*Unable|BUILD (SUCCESS|FAILURE)"
-SONAR_STATUS=${PIPESTATUS[0]}
+  >"$SONAR_LOG" 2>&1
+SONAR_STATUS=$?
 set -e
+grep -E "INFO.*task|INFO.*More|ERROR.*Unable|BUILD (SUCCESS|FAILURE)" "$SONAR_LOG" || true
 
 if [ "$SONAR_STATUS" -ne 0 ]; then
   error "Sonar analysis failed."

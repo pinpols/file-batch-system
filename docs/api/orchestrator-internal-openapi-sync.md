@@ -1,6 +1,6 @@
 # orchestrator internal OpenAPI ↔ controller 同步守护
 
-`docs/api/orchestrator-internal.openapi.yaml` 是 SDK-facing internal API 的手写契约(BYO SDK 按它实现 CLAIM/REPORT/heartbeat/renew 等)。它与真实 `batch-orchestrator` internal controller 之间此前是**人肉同步链**(评审 R5)。本页记录已落地的机器化守护与后续收口。
+`docs/api/orchestrator-internal.openapi.yaml` 是 SDK-facing internal API 的手写契约(BYO SDK 按它实现 CLAIM/REPORT/heartbeat/renew 等)。它与真实 `batch-orchestrator` internal controller 之间此前是**人工同步链**(评审 R5)。本页记录已落地的自动化守护与后续收口。
 
 ## 现状:静态路径存在性守护(已落地,log-only)
 
@@ -21,7 +21,7 @@ log-only 起步:`continue-on-error` + 只写 job summary。稳定一轮后把脚
 
 ## 收口 follow-up:字段级 schema diff(需 springdoc)
 
-路径存在性抓不到 **request/response 字段级漂移**(如 `TaskExecutionReportDto` 改字段名 / 增删属性)。要机器化字段级对账,需运行期产真 spec 再与手写 yaml diff:
+路径存在性抓不到 **request/response 字段级漂移**(如 `TaskExecutionReportDto` 改字段名 / 增删属性)。要自动化字段级对账,需运行期产真 spec 再与手写 yaml diff:
 
 1. batch-orchestrator 依赖当前**不含** springdoc(`springdoc-openapi-starter-webmvc-*`);引入后 `@RestController` 自动产 `/v3/api-docs`。
 2. 加一个只对 internal controller group 产 spec 的最小配置(`GroupedOpenApi` 限定 `/internal/**`),用 `@WebMvcTest` 或轻量 boot 在 test 阶段 dump spec 到文件。

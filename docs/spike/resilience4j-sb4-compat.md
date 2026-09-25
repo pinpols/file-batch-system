@@ -107,7 +107,7 @@ autoconfig(它们要 Clock / InformationSchemaMapper / DataSource 等无关 bean
 **修法**:不用 `@SpringBootApplication`,改用 `@SpringBootConfiguration` + `@ImportAutoConfiguration`
 明确只导 R4J 4 个 autoconfig。spike 不验本项目业务路径,只验 R4J 本身。
 
-### 3. Spring 6 vs Spring 7 API surface 未爆雷
+### 3. Spring 6 vs Spring 7 API surface 未暴露兼容风险
 
 预期最大风险:`resilience4j-spring6` 模块用 Spring 6 接口,可能在 Spring 7 下方法签名漂移。
 **实际**:核心路径(`@Aspect` / `BeanPostProcessor` / `ConfigurationProperties`)在 Spring 6→7 没断,

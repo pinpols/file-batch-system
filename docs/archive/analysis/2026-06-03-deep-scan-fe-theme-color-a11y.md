@@ -75,7 +75,7 @@
 | `WorkflowMermaidViewer.vue` | 18 | P1 — Mermaid `classDef` 字符串 + 图例样式硬编码 |
 | `echarts.ts` | 18 | P1 — 7 色 palette + 轴/网格灰阶硬编码 |
 | `app.css` | 14 | 主要是 token 定义补充,可接受 |
-| `TenantPackageImportWizard.vue` | 11 | 大部分 `var(--token, #fallback)`,**1 处** `color: #fff` 写死,可接受 |
+| `TenantPackageImportWizard.vue` | 11 | 大部分 `var(--token, #fallback)`,**1 处** `color: #fff` 固化,可接受 |
 | `MobileAppBar.vue` | 10 | P0 — iOS 蓝硬编码 |
 | `JsonNode.vue` | 8 | P2 — JSON 高亮配色,token 化可行 |
 | `MobileTabBar.vue` | 8 | P0 — iOS 蓝 + 红徽章硬编码 |
@@ -286,7 +286,7 @@ Mermaid 不读 CSS var,只能字符串插值。建议运行时读 token 然后�
 
 **[P1-C2] palette 与 button token 解耦**
 
-PALETTE 第一色 `#1677ff` 写死,而 `--button-primary-bg` 暗色下变为 `#3b82f6`(亮蓝)。两者**不同步**。建议 echarts 主题改为从 `getComputedStyle` 读 token 后注册,主题切换时 reregister。
+PALETTE 第一色 `#1677ff` 固化,而 `--button-primary-bg` 暗色下变为 `#3b82f6`(亮蓝)。两者**不同步**。建议 echarts 主题改为从 `getComputedStyle` 读 token 后注册,主题切换时 reregister。
 
 **[P2-C3] palette 仅 7 色,Top-N 图超 7 类后会循环**
 

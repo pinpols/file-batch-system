@@ -1,3 +1,4 @@
+# 设计示例，非生产批准清单：MinIO 镜像授权及当前维护支持须先经审查确认。
 # 阶段 2 · 对象存储 HA(MinIO Operator,distributed Tenant 纠删码)。
 # 4 节点 × 4 盘 = 16 drive,1 个 erasure set。
 # ⚠️ parity 必须 ≥ 单节点盘数(=4)才能扛住"1 整节点宕":本清单 server 已做节点级反亲和,
@@ -15,7 +16,7 @@ metadata:
   name: batch-minio
   namespace: minio
 spec:
-  image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z   # 与本仓一致
+  image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z   # 旧版示例镜像；部署前须完成授权与维护状态审查
   configuration:
     name: batch-minio-creds          # ← 上面建的 secret
   # 纠删码 parity 显式锁 EC:4 —— 16 drive 下 MinIO 默认即 EC:4,这里写死防漂移,

@@ -320,7 +320,7 @@ public final class ImportPreprocessPipeline {
   // 解压后字节同时受两个上限制约，取最小值：
   //   1) 绝对上限 batch.worker.import.max-decompress-bytes（默认 256 MiB，防单文件过大拖死堆）
   //   2) 相对输入的膨胀倍数 batch.worker.import.max-decompress-ratio（默认 50x，典型文本压缩 3-10x）
-  // 超过即抛 IMPORT_PREPROCESS_DECOMPRESS_TOO_LARGE，文件拒收而不是静默把堆写爆。
+  // 超过即抛 IMPORT_PREPROCESS_DECOMPRESS_TOO_LARGE，文件拒收而不是静默耗尽堆内存。
   //
   // 2026-05-03 ⚠1: 默认从 1 GiB 下调到 256 MiB. 之前 1 GiB × 6 并发 task = 6 GiB 堆压, 真实业务大文件
   // 需要更大上限可通过 Spring 配置或环境变量显式提高。
@@ -532,7 +532,7 @@ public final class ImportPreprocessPipeline {
       int n;
       while ((n = reader.read(buf)) > 0) {
         writer.write(buf, 0, n);
-        // 中途即检查 cap, 避免超量字节先被 transcode 出来再爆
+        // 中途即检查 cap, 避免超量字节先被 transcode 出来再超过上限
         if (out.size() > cap) {
           throw new IllegalArgumentException("CHARSET_TRANSCODE output exceeds cap: inputBytes="
               + input.length

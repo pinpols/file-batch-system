@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.application.service.sensor;
+package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,6 +6,11 @@ import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
+import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSqlValidator;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class DbRowExistsSensorPolicy implements SensorPolicy {
 
+  private static final String SENSOR_TYPE = "DB_ROW_EXISTS";
+  private static final String SENSOR_SPEC_INVALID = "error.workflow.sensor_spec_invalid";
+
   private final NamedParameterJdbcTemplate jdbc;
   private final DataSource dataSource;
   private final SensorProperties props;
@@ -71,20 +79,19 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
     String sql = SensorSpecs.string(spec, "sql");
     if (!Texts.hasText(schema) || !Texts.hasText(sql)) {
       return SensorProbeResult.error(
-          "error.workflow.sensor_spec_invalid", List.of("DB_ROW_EXISTS", "schema/sql required"));
+          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema/sql required"));
     }
     if (!props.getDbAllowedSchemas().contains(schema.toLowerCase(Locale.ROOT))) {
       return SensorProbeResult.error(
-          "error.workflow.sensor_spec_invalid",
-          List.of("DB_ROW_EXISTS", "schema not in allowlist: " + schema));
+          SENSOR_SPEC_INVALID, List.of(SENSOR_TYPE, "schema not in allowlist: " + schema));
     }
     try {
       SensorSqlValidator.validate(sql, props.getDbAllowedSchemas());
     } catch (IllegalArgumentException e) {
       return SensorProbeResult.error(
-          "error.workflow.sensor_spec_invalid",
+          SENSOR_SPEC_INVALID,
           List.of(
-              "DB_ROW_EXISTS",
+              SENSOR_TYPE,
               Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
 
@@ -105,7 +112,7 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(
-              "DB_ROW_EXISTS",
+              SENSOR_TYPE,
               Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     }
   }

@@ -60,7 +60,7 @@
 
 ## 3. 决断清单
 
-### ✅ 保持现状（合理，**禁止瞎改**）
+### ✅ 保持现状（合理，**禁止无依据改动**）
 
 - **IMPORT Excel SAX**（`ExcelFormatParser.java:77-99`）— POI `XSSFReader` + `ReadOnlySharedStringsTable` + `XSSFSheetXMLHandler` 是业界处理大 xlsx 的标准方案。再优化只能换 SDK 不会更快。
 - **IMPORT CSV Univocity**（`DelimitedFormatParser.java:58-114`）— 业界最快的 Java CSV 解析器之一，已开 `BufferedReader` 流式。

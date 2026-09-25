@@ -10,11 +10,11 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlProbe;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -26,7 +26,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
-import software.amazon.awssdk.services.s3.S3Client;
 
 class DefaultDryRunPlanServiceTest {
 
@@ -46,19 +45,15 @@ class DefaultDryRunPlanServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<JdbcTemplate> jdbcTemplateProvider = mock(ObjectProvider.class);
     when(jdbcTemplateProvider.getIfAvailable()).thenReturn(jdbcTemplate);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<S3Client> s3ClientProvider = mock(ObjectProvider.class);
-    @SuppressWarnings("unchecked")
-    ObjectProvider<S3StorageProperties> s3PropsProvider = mock(ObjectProvider.class);
+    DryRunObjectStorageProbe objectStorageProbe = mock(DryRunObjectStorageProbe.class);
     service = new DefaultDryRunPlanService(
         configCache,
         planBuilder,
         nodeMapper,
         edgeMapper,
         tz,
-        jdbcTemplateProvider,
-        s3ClientProvider,
-        s3PropsProvider,
+        new JdbcDryRunSqlProbe(jdbcTemplateProvider),
+        objectStorageProbe,
         request -> new OutboundHttpResponse(200, ""));
   }
 

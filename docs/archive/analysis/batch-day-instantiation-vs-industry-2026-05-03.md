@@ -10,7 +10,7 @@
 | 机制 | 现状 | 关键文件 |
 |---|---|---|
 | **biz_date 计算** | Quartz fire→`CalendarBizDateResolver` 按 cutoffTime 滚算（< cutoff = 昨天）+ 节假日 SKIP/PREV/NEXT roll；API 触发由调用方传 `bizDate`，不再 resolve | `CalendarBizDateResolver.java:42` `DefaultLaunchAdapterService.java:49` |
-| **batch_day 创建** | **lazy upsert**：第一条命中 `(tenant,calendar,bizDate)` 的 `job_instance` 写入数据库时由 `LaunchBatchDayService.upsertBatchDayInstance` 顺手插入；无定时器预创建 | `LaunchBatchDayService.java:101` `DefaultLaunchService.java:164` |
+| **batch_day 创建** | **lazy upsert**：第一条命中 `(tenant,calendar,bizDate)` 的 `job_instance` 写入数据库时由 `LaunchBatchDayService.upsertBatchDayInstance` 同步插入；无定时器预创建 | `LaunchBatchDayService.java:101` `DefaultLaunchService.java:164` |
 | **cutoff** | 独立扫描器：每 60s 扫 OPEN 候选，本地时间过 cutoff 时单行 CAS 翻 CUTOFF；ShedLock 防双 leader | `BatchDayCutoffScheduler.java:38` |
 | **late_arrival** | EVENT 触发路径专属：`routeLateArrivalIfNeeded` 判 cutoff 后 + 容忍窗口内→LATE_ACCEPTED 继续走；窗口外→DB CAS 把 trigger_type EVENT→CATCH_UP 路由补跑 | `LaunchBatchDayService.java:410` |
 | **settle** | 60s 扫 CUTOFF/IN_FLIGHT，按 active/failed/total 计数推进：active>0→IN_FLIGHT；failed>0→FAILED+driveCatchUp；其余→SETTLED | `BatchDaySettleScheduler.java:101` |
