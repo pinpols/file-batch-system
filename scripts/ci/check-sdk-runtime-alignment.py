@@ -26,15 +26,19 @@ def read(path: Path) -> str:
         return ""
 
 
-frontend_package = json.loads(read(FRONTEND / "package.json"))
 typescript_package = json.loads(read(ROOT / "sdk/typescript/package.json"))
-require(frontend_package.get("engines", {}).get("node") == "^22 || ^24", "frontend engines.node must support Node 22 and 24 only")
 require(typescript_package.get("engines", {}).get("node") == "^22 || ^24", "TypeScript SDK engines.node must support Node 22 and 24 only")
-require("engine-strict=true" in read(FRONTEND / ".npmrc"), "frontend npm must enforce the declared Node engine")
 require((ROOT / "sdk/typescript/package-lock.json").is_file(), "TypeScript SDK development dependencies must be lockfile-backed")
-for version_file in (".node-version", ".nvmrc"):
-    require(read(FRONTEND / version_file).strip() == "24", f"frontend {version_file} must select Node 24")
-require(bool(re.search(r"^FROM node:24-alpine AS build$", read(FRONTEND / "Dockerfile"), re.M)), "frontend Docker build image must use Node 24")
+
+# The frontend is a separately checked-out repository in CI. Validate it when
+# both repositories are available locally; its own CI remains authoritative.
+if FRONTEND.is_dir():
+    frontend_package = json.loads(read(FRONTEND / "package.json"))
+    require(frontend_package.get("engines", {}).get("node") == "^22 || ^24", "frontend engines.node must support Node 22 and 24 only")
+    require("engine-strict=true" in read(FRONTEND / ".npmrc"), "frontend npm must enforce the declared Node engine")
+    for version_file in (".node-version", ".nvmrc"):
+        require(read(FRONTEND / version_file).strip() == "24", f"frontend {version_file} must select Node 24")
+    require(bool(re.search(r"^FROM node:24-alpine AS build$", read(FRONTEND / "Dockerfile"), re.M)), "frontend Docker build image must use Node 24")
 
 go_files = (ROOT / "sdk/go/go.mod", ROOT / "sdk/go/kafka/go.mod")
 for path in go_files:
