@@ -29,6 +29,16 @@ class PlatformRepositoryTest {
             .getMethod("createFileRecord", FileRecordParam.class)
             .getAnnotation(Transactional.class))
         .isNotNull();
+    assertThat(PlatformPipelineRunRepository.class
+            .getMethod("startStepRun", Long.class, String.class, String.class, Object.class)
+            .getAnnotation(Transactional.class))
+        .extracting(Transactional::isolation)
+        .isEqualTo(org.springframework.transaction.annotation.Isolation.READ_COMMITTED);
+    assertThat(PlatformPipelineRunRepository.class
+            .getMethod("startStepRun", Long.class, String.class, String.class, Object.class)
+            .getAnnotation(Transactional.class))
+        .extracting(Transactional::propagation)
+        .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
   }
 
   @Test
