@@ -12,5 +12,6 @@
 | [log-noise-2026-06-02.md](./log-noise-2026-06-02.md) | 日志噪声治理快照 |
 | [outstanding-work-2026-06-23.md](./outstanding-work-2026-06-23.md) | 2026-06-23 遗留事项快照 |
 | [pre-production-capacity-optimization-plan-2026-06-08.md](./pre-production-capacity-optimization-plan-2026-06-08.md) | 上线前容量优化计划 |
+| [rest-command-api-toggle-governance-2026-09-26.md](./rest-command-api-toggle-governance-2026-09-26.md) | REST / Command API 中启停接口命名与幂等语义治理待办 |
 | [single-node-throughput-optimization-2026-06-06.md](./single-node-throughput-optimization-2026-06-06.md) | 单节点吞吐优化计划 |
 | [worker-throughput-benchmark-plan-2026-06-07.md](./worker-throughput-benchmark-plan-2026-06-07.md) | Worker 压测计划 |

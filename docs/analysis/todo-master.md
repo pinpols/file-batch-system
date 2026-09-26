@@ -183,6 +183,12 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 5 项 checklist 嵌入 `.github/PULL_REQUEST_TEMPLATE.md` "涉及删除语义的接口" 段，reviewer PR-time 勾选即可。同模板顺带嵌 4 类常见 review checklist（console-api / 字典 / 方法参数 / i18n / 规范条款）。
 
+### G2. REST / Command API Toggle 语义治理 · P2 · 🟡 暂缓
+
+| ID | 主题 | 来源 | 状态 |
+|---|---|---|---|
+| **API-TOGGLE-1** | 6 个 `POST .../toggle?enabled=` 接口命名与显式状态契约收敛 | [`../backlog/rest-command-api-toggle-governance-2026-09-26.md`](../backlog/rest-command-api-toggle-governance-2026-09-26.md) | 当前不是活 bug；现有接口已显式传 `enabled`，建议后续新增 `PATCH .../enabled` 兼容迁移 |
+
 ### H. 合规收尾 · P3
 
 | ID | 主题 | 来源 | 状态 |
