@@ -10,6 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "CODE_DOC_REFERENCES"
+GATE_NAME = "代码与文档路径引用"
 CODE_PREFIXES = (
     "batch-common/",
     "batch-console-api/",
@@ -72,12 +74,12 @@ def main() -> int:
                     errors.append(f"{relative}:{line_number}: missing repo path {referenced}")
 
     if errors:
-        print("❌ code documentation reference check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print("✅ code documentation references are valid")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

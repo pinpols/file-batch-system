@@ -183,6 +183,23 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 5 项 checklist 嵌入 `.github/PULL_REQUEST_TEMPLATE.md` "涉及删除语义的接口" 段，reviewer PR-time 勾选即可。同模板顺带嵌 4 类常见 review checklist（console-api / 字典 / 方法参数 / i18n / 规范条款）。
 
+### G2. REST / Command API Toggle 语义治理 · P2 · 🟡 暂缓
+
+| ID | 主题 | 来源 | 状态 |
+|---|---|---|---|
+| **API-TOGGLE-1** | 6 个 `POST .../toggle?enabled=` 接口命名与显式状态契约收敛 | [`../backlog/rest-command-api-toggle-governance-2026-09-26.md`](../backlog/rest-command-api-toggle-governance-2026-09-26.md) | 当前不是活 bug；现有接口已显式传 `enabled`，建议后续新增 `PATCH .../enabled` 兼容迁移 |
+
+### G3. 批量平台能力演进 · P0/P1/P2 · 🟡 待验收
+
+| ID | 主题 | 来源 | 状态 |
+|---|---|---|---|
+| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | P0；已有观测栈，缺目标链路证据 |
+| **PLAT-BP-1** | 背压与容量大盘收口：admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease | 同上 | P0；容量结论必须可定位瓶颈 |
+| **PLAT-WR-1** | 五类 Worker Runtime / SPI 行为一致性复核 | 同上 | P0/P1；不能破坏现有 pipeline 主链 |
+| **PLAT-KEDA-1** | KEDA staging 验证：dynamic sharding + backlog / lag 扩缩 + drain | 同上 | P1；需要真实 K8s + KEDA operator |
+| **PLAT-GITOPS-1** | GitOps staging 接入：镜像、ops repo、Argo CD、Helm values、smoke | 同上 | P1；当前只有骨架 |
+| **PLAT-CDC-1** | CDC / Streaming 方案设计 | 同上 | P2；业务触发后再立项 |
+
 ### H. 合规收尾 · P3
 
 | ID | 主题 | 来源 | 状态 |

@@ -11,6 +11,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "docs/governance/application-governance-contract.yaml"
+GATE_CODE = "APPLICATION_GOVERNANCE"
+GATE_NAME = "应用治理契约"
 REQUIRED_CONTROLS = {
     "timeout-budget",
     "runtime-compatibility",
@@ -85,12 +87,12 @@ def main() -> int:
     errors.extend(f"missing required control: {control_id}" for control_id in sorted(missing))
     validate_business_role_defaults(errors)
     if errors:
-        print("❌ application governance contract validation failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print(f"✅ application governance contract valid: {len(controls)} controls")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | controls={len(controls)}")
     return 0
 
 

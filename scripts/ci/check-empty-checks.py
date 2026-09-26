@@ -47,6 +47,8 @@ ALLOWED_IDIOMS = (
     "Objects.requireNonNullElse",
     "Objects.requireNonNullElseGet",
 )
+GATE_CODE = "EMPTY_CHECKS"
+GATE_NAME = "空值判断统一入口"
 
 
 def is_production_java(path: str) -> bool:
@@ -142,7 +144,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if is_pure_merge_revert(args.base):
-        print("EmptyChecks guard passed: pure merge revert does not add production code.")
+        print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | reason=pure merge revert")
         return 0
 
     violations = []
@@ -168,19 +170,21 @@ def main() -> int:
                 break
 
     if bad_allows:
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         print("empty-check 豁免必须写明原因：", file=sys.stderr)
         for path, line_no, source in bad_allows:
             print(f"  {path}:{line_no}: {source}", file=sys.stderr)
         return 1
 
     if violations:
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         print("发现新增零散空值判断，请改用 EmptyChecks：", file=sys.stderr)
         for path, line_no, label, source in violations:
             print(f"  {path}:{line_no}: [{label}] {source}", file=sys.stderr)
         print("确需保留原生判断时，在同一行追加：// empty-check: allow - 原因", file=sys.stderr)
         return 1
 
-    print("EmptyChecks guard passed: 新增生产代码未发现零散空值判断。")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

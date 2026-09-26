@@ -44,6 +44,8 @@ BANNED_IMPORT = re.compile(
     r"|javax\.sql\."
     r")"
 )
+GATE_CODE = "DIRECT_CLIENT_BOUNDARIES"
+GATE_NAME = "基础设施直连边界"
 
 
 def is_business_layer(path: Path) -> bool:
@@ -78,7 +80,7 @@ def main() -> int:
     for path in ROOT.glob("**/src/main/java/**/*.java"):
         errors.extend(scan_file(path))
     if errors:
-        print("❌ Direct infrastructure client boundary check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         print(
             "Application/domain business code must depend on ports, not Redis/Kafka/JDBC clients."
         )
@@ -88,7 +90,7 @@ def main() -> int:
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("✅ Direct infrastructure client boundary passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

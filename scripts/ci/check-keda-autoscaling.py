@@ -15,6 +15,8 @@ WORKERS = {
     "dispatch": ("batch.task.dispatch.dispatch", "batch-worker-dispatch"),
     "atomic": ("batch.task.dispatch.atomic", "batch-worker-atomic"),
 }
+GATE_CODE = "KEDA_AUTOSCALING"
+GATE_NAME = "KEDA 自动扩缩容"
 
 
 def main() -> int:
@@ -51,11 +53,11 @@ def main() -> int:
                 errors.append(f"values.yaml: missing {marker!r}")
 
     if errors:
-        print("❌ KEDA 自动扩缩容契约校验失败:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("✅ 五类 Worker 的 KEDA 自动扩缩容契约有效")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

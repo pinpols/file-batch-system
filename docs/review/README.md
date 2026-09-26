@@ -25,6 +25,7 @@
 | `p1-p2-follow-up-2026-08-06.md` | 历史 P1/P2 | 跟进复核与整改计划 |
 | `idea-qodana-sonar-cross-review-2026-08-12.md` | IDEA/Qodana/Sonar | 静态扫描交叉复核快照 |
 | `runtime-parameter-tuning-review-2026-09-14.md` | JVM/PG/Redis/Kafka/MinIO | 参数落地状态、已有容量证据和生产压测计划 |
+| `console-api-restful-review-2026-09-26.md` | Console API RESTful 风格 | 资源 CRUD / 查询投影 / Command API 的全量风格审查 |
 
 历史单次审查快照见 [`../archive/review/`](../archive/review/)。
 

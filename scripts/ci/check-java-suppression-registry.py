@@ -46,6 +46,8 @@ KNOWN_RULES = {
     "java:S5164",
     "java:S6218",
 }
+GATE_CODE = "JAVA_SUPPRESSION_REGISTRY"
+GATE_NAME = "Java SuppressWarnings 登记"
 
 
 def production_sources(candidates: list[str] | None = None) -> list[Path]:
@@ -92,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Java production suppressions: {len(findings)}")
     print("Reviewed rules: " + ", ".join(f"{rule}={counts[rule]}" for rule in sorted(counts)))
     if unknown:
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         print("\nUnregistered production suppressions:")
         for path, line, rule in unknown:
             print(f"  - {path}:{line}: {rule}")
@@ -99,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             "\nAdd the rule to KNOWN_RULES and document its owner/reason before merging."
         )
         return 1
-    print("Suppression registry check passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

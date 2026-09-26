@@ -10,6 +10,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "OBSERVABILITY_CONTRACT"
+GATE_NAME = "可观测性契约"
 APP_SERVICES = (
     "console-api",
     "trigger",
@@ -190,11 +192,11 @@ def main() -> int:
         )
 
     if errors:
-        print("Observability contract failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("Observability contract passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

@@ -8,6 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
+GATE_CODE = "SCRIPT_GOVERNANCE"
+GATE_NAME = "脚本治理"
 
 
 def main() -> int:
@@ -32,11 +34,11 @@ def main() -> int:
             errors.append(f"CI guard is not registered in scripts/ci/README.md: {guard}")
 
     if errors:
-        print("Script governance guard failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print(f"✅ Script governance guard passed: {len(guards)} CI guards registered")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | guards={len(guards)}")
     return 0
 
 

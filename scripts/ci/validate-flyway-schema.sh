@@ -19,6 +19,8 @@
 set -euo pipefail
 
 MIGRATION_DIR="${1:-db/migration}"
+GATE_CODE="FLYWAY_SCHEMA"
+GATE_NAME="Flyway 迁移静态校验"
 if [[ -z "${BASE_REF:-}" ]]; then
   if [[ -n "${GUARD_BASE:-}" ]]; then
     BASE_REF="$GUARD_BASE"
@@ -30,7 +32,8 @@ if [[ -z "${BASE_REF:-}" ]]; then
 fi
 
 if [[ ! -d "$MIGRATION_DIR" ]]; then
-  echo "❌ ERROR: migration dir not found: $MIGRATION_DIR"
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
+  echo "  - migration dir not found: $MIGRATION_DIR"
   exit 1
 fi
 
@@ -67,10 +70,11 @@ while IFS= read -r file; do
 done < <(ls "$MIGRATION_DIR"/V*.sql 2>/dev/null | sort -V)
 
 if [[ $file_count -eq 0 ]]; then
-  echo "❌ ERROR: no V*.sql files found under $MIGRATION_DIR"
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
+  echo "  - no V*.sql files found under $MIGRATION_DIR"
   exit 1
 fi
-echo "✅ $file_count migration files name/uniqueness/order check passed"
+echo "ℹ️  $file_count migration files name/uniqueness/order check ok"
 
 # ── 校验 3: 完全空文件(0 字节) ─────────────────────────────────────────────
 # 注:全注释占位是允许的(eg V35 历史脚本被 V51 替代后保留空 body 维持 checksum 连续性);
@@ -81,7 +85,7 @@ for file in "$MIGRATION_DIR"/V*.sql; do
     errors=$((errors + 1))
   fi
 done
-echo "✅ All migrations are non-empty"
+echo "ℹ️  All migrations are non-empty"
 
 # ── 校验 4: BOM / CRLF ─────────────────────────────────────────────────────
 for file in "$MIGRATION_DIR"/V*.sql; do
@@ -96,7 +100,7 @@ for file in "$MIGRATION_DIR"/V*.sql; do
     errors=$((errors + 1))
   fi
 done
-echo "✅ No BOM / CRLF in migration files"
+echo "ℹ️  No BOM / CRLF in migration files"
 
 # ── 校验 5: checksum drift(已 commit 的 V## 文件被改动) ──────────────────────
 # 仅在 git 仓库里 + 有 BASE_REF 时跑
@@ -136,7 +140,7 @@ if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/nu
     echo "   action: 不要改已 commit 的 V<num>__*.sql,要修就新建 V<next>__fix_xxx.sql 走重做语义"
     errors=$((errors + 1))
   else
-    echo "✅ No checksum drift on existing migrations vs $BASE_REF"
+    echo "ℹ️  No checksum drift on existing migrations vs $BASE_REF"
   fi
 else
   echo "⚠️  skipping checksum drift check (not in git repo or BASE_REF unavailable)"
@@ -144,9 +148,10 @@ fi
 
 if [[ $errors -gt 0 ]]; then
   echo
-  echo "💥 $errors migration error(s) — fix and retry"
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
+  echo "  - $errors migration error(s) — fix and retry"
   exit 1
 fi
 
 echo
-echo "✅ Flyway schema validation passed"
+echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME}"

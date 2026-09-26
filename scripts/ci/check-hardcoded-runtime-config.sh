@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+GATE_CODE="HARDCODED_RUNTIME_CONFIG"
+GATE_NAME="硬编码运行配置"
 failures=0
 
 assert_no_matches() {
@@ -120,8 +122,9 @@ if [[ -e docker-compose.test.yml ]]; then
 fi
 
 if ((failures > 0)); then
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1" >&2
   echo "硬编码运行配置契约失败：${failures} 类问题" >&2
   exit 1
 fi
 
-echo '✅ 硬编码运行配置契约通过'
+echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME}"

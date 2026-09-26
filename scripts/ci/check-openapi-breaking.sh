@@ -10,6 +10,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 BASE_REF="${1:-${OASDIFF_BASE_REF:-origin/main}}"
+GATE_CODE="OPENAPI_BREAKING"
+GATE_NAME="OpenAPI 破坏性变更"
 
 SPECS=(
   "docs/api/console-api.openapi.yaml"
@@ -36,12 +38,13 @@ is_pure_merge_revert() {
 }
 
 if ! command -v oasdiff >/dev/null 2>&1; then
-  echo "❌ 未找到 oasdiff(CI 应经 action 安装)"
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
+  echo "  - 未找到 oasdiff(CI 应经 action 安装)"
   exit 1
 fi
 
 if is_pure_merge_revert; then
-  echo "✅ OpenAPI breaking guard passed: pure merge revert restores the base API."
+  echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME} | reason=pure merge revert restores the base API"
   exit 0
 fi
 
@@ -93,7 +96,8 @@ for spec in "${SPECS[@]}"; do
 done
 
 if [[ "$fail" -ne 0 ]]; then
-  echo "💥 OpenAPI 破坏性变更门禁未通过。"
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
+  echo "  - OpenAPI 破坏性变更门禁未通过。"
   exit 1
 fi
-echo "✅ 所有受管 OpenAPI 无破坏性变更"
+echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME}"

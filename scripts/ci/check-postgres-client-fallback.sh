@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+GATE_CODE="POSTGRES_CLIENT_FALLBACK"
+GATE_NAME="PostgreSQL 客户端 fallback"
 
 export BATCH_ENV_COMMON_ROOT="$ROOT"
 # shellcheck source=../lib/env-common.sh
@@ -70,4 +72,4 @@ if [[ "$BATCH_REDIS_HOST" != "external-redis.example.test" ]]; then
   exit 1
 fi
 
-echo "✅ PostgreSQL client fallback and local JVM topology guard passed"
+echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME}"

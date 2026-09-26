@@ -28,6 +28,8 @@ RELEASE_FILES = {
     "docs/api/orchestrator-internal.openapi.yaml",
     "docs/api/sdk-shared-constants.yaml",
 }
+GATE_CODE = "CHANGELOG_SYNC"
+GATE_NAME = "Changelog 同步"
 
 
 def changed_files(base: str | None) -> set[str]:
@@ -65,11 +67,11 @@ def main() -> int:
         errors.append("release-sensitive configuration/contract changed without CHANGELOG.md")
 
     if errors:
-        print("Changelog sync guard failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("✅ Changelog sync guard passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

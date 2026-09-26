@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "JAVA_TEXT_BLOCK_STYLE"
+GATE_NAME = "Java 文本块格式"
 
 
 def tracked_java_sources(candidates: list[str] | None = None) -> list[Path]:
@@ -67,12 +69,12 @@ def main(argv: list[str] | None = None) -> int:
         errors.extend(scan_file(path))
 
     if errors:
-        print("❌ Java text block style check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print("✅ Java text block style check passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

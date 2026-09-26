@@ -13,6 +13,8 @@ STDOUT_WRITE = re.compile(r"\bSystem\s*\.\s*out\b")
 STDERR_WRITE = re.compile(r"\bSystem\s*\.\s*err\b")
 STACK_TRACE = re.compile(r"\bprintStackTrace\s*\(")
 CLI_STDOUT_PREFIX = Path("security-scan/src/main/java/")
+GATE_CODE = "JAVA_LOGGING_GOVERNANCE"
+GATE_NAME = "Java 日志治理"
 
 
 def java_sources(candidates: list[str] | None = None) -> set[Path]:
@@ -49,14 +51,14 @@ def main(argv: list[str] | None = None) -> int:
             errors.append(f"{relative}: direct System.err writes are prohibited; use the logger")
 
     if errors:
-        print("❌ Java logging governance check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
     print(
-        "✅ Java logging governance passed: direct console output is limited to the security-scan CLI; "
-        "no direct stack-trace printing found"
+        f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | "
+        "reason=direct console output is limited to the security-scan CLI"
     )
     return 0
 

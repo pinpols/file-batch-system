@@ -27,6 +27,8 @@ DOCS_README_REQUIRED_REFERENCES = (
     "runbook/README.md",
     "scripts/ci/check-docs-structure.py",
 )
+GATE_CODE = "DOCS_STRUCTURE"
+GATE_NAME = "文档结构"
 
 
 def tracked_docs() -> list[Path]:
@@ -173,11 +175,11 @@ def main() -> int:
     check_internal_links(errors)
     check_residual_files(errors)
     if errors:
-        print("Document structure guard failed:", file=sys.stderr)
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
-    print("✅ Document structure guard passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

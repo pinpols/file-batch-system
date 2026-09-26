@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "REPOSITORY_HYGIENE"
+GATE_NAME = "仓库卫生"
 ALLOWED_BUILD_FILES = {"build/pmd-ruleset.xml", "build/spotbugs-npe-filter.xml"}
 TEXT_SUFFIXES = {".java", ".kt", ".py", ".sh", ".md", ".xml", ".yml", ".yaml", ".properties", ".toml", ".json"}
 ABSOLUTE_PATH = re.compile(r"/Users/|/var/folders/|[A-Za-z]:\\\\Users\\\\")
@@ -53,11 +55,11 @@ def main() -> int:
                 errors.append(f"personal absolute path: {relative}:{line_number}")
 
     if errors:
-        print("Repository hygiene guard failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("Repository hygiene guard passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

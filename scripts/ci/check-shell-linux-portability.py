@@ -11,6 +11,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "SHELL_LINUX_PORTABILITY"
+GATE_NAME = "Shell Linux 兼容性"
 
 
 @dataclass(frozen=True)
@@ -100,11 +102,11 @@ def main(argv: list[str] | None = None) -> int:
     for path in tracked_shell_files(candidates):
         errors.extend(scan_file(path))
     if errors:
-        print("❌ Shell Linux portability guard failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("✅ Shell Linux portability guard passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 
