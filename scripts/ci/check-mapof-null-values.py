@@ -147,6 +147,17 @@ def _iter_prod_java(root):
                 yield os.path.join(dp, f)
 
 
+def _iter_candidate_java(root, candidates):
+    for relative in candidates:
+        if not relative.endswith('.java'):
+            continue
+        if '/src/test/' in relative or '/test/' in relative or '/generated-sources/' in relative:
+            continue
+        path = os.path.join(root, relative)
+        if os.path.isfile(path):
+            yield path
+
+
 # ---- 自测:规则对 #752 修复前的代码必须能报,对修复后不得误报 ----
 _PREFIX_752 = (
     'audit(Map.of(\n'
@@ -199,7 +210,9 @@ def main(argv):
 
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
     violations = []
-    for path in _iter_prod_java(root):
+    candidates = [arg for arg in argv if arg != '--self-test']
+    java_paths = _iter_candidate_java(root, candidates) if candidates else _iter_prod_java(root)
+    for path in java_paths:
         try:
             text = open(path, encoding='utf-8').read()
         except OSError:

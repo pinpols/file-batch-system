@@ -56,7 +56,13 @@ RULES = (
 )
 
 
-def tracked_shell_files() -> list[Path]:
+def tracked_shell_files(candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return [
+            ROOT / relative
+            for relative in candidates
+            if relative.endswith(".sh") and (ROOT / relative).is_file()
+        ]
     result = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sh"],
         cwd=ROOT,
@@ -88,9 +94,10 @@ def scan_file(path: Path) -> list[str]:
     return errors
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    candidates = argv if argv else None
     errors: list[str] = []
-    for path in tracked_shell_files():
+    for path in tracked_shell_files(candidates):
         errors.extend(scan_file(path))
     if errors:
         print("❌ Shell Linux portability guard failed:")
@@ -102,4 +109,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

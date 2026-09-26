@@ -23,21 +23,29 @@ gate_run PRE_COMMIT_DIFF_CHECK "暂存区空白与冲突标记" git diff --cache
 
 java_files=()
 shell_files=()
+mapper_xml_files=()
 docs_changed=0
 scripts_changed=0
 workflow_changed=0
 loc_affecting_changed=0
 env_file_changed=0
+config_default_changed=0
+feature_switch_changed=0
 maven_descriptor_changed=0
 helm_changed=0
 for file in "${staged_files[@]}"; do
   [[ "$file" == *.java ]] && java_files+=("$file")
   [[ "$file" == *.sh ]] && shell_files+=("$file")
+  [[ "$file" == *Mapper.xml ]] && mapper_xml_files+=("$file")
   [[ "$file" == *.md || "$file" == docs/* ]] && docs_changed=1
   [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] \
     && scripts_changed=1
   [[ "$file" == .github/workflows/* || "$file" == .github/actions/* ]] && workflow_changed=1
   [[ "$file" == .env* ]] && env_file_changed=1
+  [[ "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml || "$file" == .env* ]] \
+    && config_default_changed=1
+  [[ "$file" == docs/runbook/feature-switch-registry.yml || "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml ]] \
+    && feature_switch_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
   if [[ "$file" != docs/* && "$file" != db/migration/* ]]; then
@@ -53,10 +61,25 @@ if ((${#java_files[@]} > 0)); then
   gate_run PRE_COMMIT_SPOTLESS "Java Spotless 格式化（${#java_files[@]} 个文件）" \
     ./mvnw -q spotless:apply
   gate_run PRE_COMMIT_JAVA_LOGGING "Java 日志与异常输出治理" \
-    "$PYTHON_BIN" scripts/ci/check-java-logging-governance.py
+    "$PYTHON_BIN" scripts/ci/check-java-logging-governance.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_READABILITY "Java 可读性约定" \
+    "$PYTHON_BIN" scripts/ci/check-java-readability.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" \
+    "$PYTHON_BIN" scripts/ci/check-java-text-block-style.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" \
+    "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${java_files[@]}"
+  gate_run PRE_COMMIT_MAPOF_NULL_VALUES "Map/List/Set.of 空值风险" \
+    "$PYTHON_BIN" scripts/ci/check-mapof-null-values.py "${java_files[@]}"
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done
+fi
+
+if ((${#mapper_xml_files[@]} > 0)); then
+  gate_run PRE_COMMIT_MYBATIS_GENERATED_KEYS "MyBatis generated key 列限制" \
+    "$PYTHON_BIN" scripts/ci/check-mybatis-generated-key-columns.py "${mapper_xml_files[@]}"
+  gate_run PRE_COMMIT_NO_POSITIONAL_INSERT_SELECT_STAR "禁止位置式 INSERT SELECT *" \
+    "$PYTHON_BIN" scripts/ci/check-no-positional-insert-select-star.py "${mapper_xml_files[@]}"
 fi
 
 if ((${#shell_files[@]} > 0)); then
@@ -74,7 +97,7 @@ if ((${#shell_files[@]} > 0)); then
   gate_run PRE_COMMIT_SHELLCHECK "Shell 语法与 ShellCheck（${#shell_files[@]} 个文件）" \
     check_shell_files
   gate_run PRE_COMMIT_SHELL_LINUX_PORTABILITY "Shell Linux 可移植性" \
-    "$PYTHON_BIN" scripts/ci/check-shell-linux-portability.py
+    "$PYTHON_BIN" scripts/ci/check-shell-linux-portability.py "${shell_files[@]}"
 fi
 
 if ((workflow_changed == 1)); then
@@ -104,11 +127,21 @@ if ((env_file_changed == 1)); then
   gate_run PRE_COMMIT_ENV_FILE_SHELL_SAFETY ".env 文件 Shell 安全" \
     "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py
 fi
+if ((config_default_changed == 1)); then
+  gate_run PRE_COMMIT_CONFIG_DEFAULTS_SYNC "配置默认值同步" \
+    "$PYTHON_BIN" scripts/ci/check-config-defaults-sync.py --check
+fi
+if ((feature_switch_changed == 1)); then
+  gate_run PRE_COMMIT_FEATURE_SWITCH_REGISTRY "功能开关注册表" \
+    "$PYTHON_BIN" scripts/ci/check-feature-switch-registry.py
+fi
 if ((maven_descriptor_changed == 1)); then
   gate_run PRE_COMMIT_DEPENDENCY_BOUNDARIES "Maven 模块依赖边界" \
     "$PYTHON_BIN" scripts/ci/check-dependency-boundaries.py
 fi
 if ((helm_changed == 1)); then
+  gate_run PRE_COMMIT_HELM_ENV_SYNC "Helm 环境变量同步" \
+    "$PYTHON_BIN" scripts/ci/check-helm-env-sync.py
   gate_run PRE_COMMIT_PRODUCTION_OVERLAY "Helm 生产配置安全" \
     "$PYTHON_BIN" scripts/ci/check-production-overlay-safety.py
 fi

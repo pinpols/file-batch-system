@@ -18,7 +18,9 @@ import java.io.StringReader;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -466,7 +468,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         if (isRowLevelSecurityEnabled(conn, destinationTable)) {
           String tempTable = "batch_import_copy_" + UUID.randomUUID().toString().replace("-", "");
           String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
-          try (var statement = conn.createStatement()) {
+          try (Statement statement = conn.createStatement()) {
             statement.execute("CREATE TEMP TABLE " + quotedTempTable + " (LIKE " + destinationTable
                 + ")" + " ON COMMIT DROP");
           }
@@ -487,7 +489,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           String insertSql = "INSERT INTO " + destinationTable + " ("
               + quotedColumns(insertCols) + ") SELECT " + quotedColumns(insertCols)
               + " FROM pg_temp." + quotedTempTable;
-          try (var statement = conn.createStatement()) {
+          try (Statement statement = conn.createStatement()) {
             int inserted = statement.executeUpdate(insertSql);
             if (inserted != n) {
               throw new IllegalStateException("RLS-protected insert row count mismatch: expected="
@@ -522,7 +524,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
             + " WHERE n.nspname = ? AND c.relname = ?")) {
       statement.setString(1, parts[0].replace("\"", ""));
       statement.setString(2, parts[1].replace("\"", ""));
-      try (var result = statement.executeQuery()) {
+      try (ResultSet result = statement.executeQuery()) {
         return result.next() && result.getBoolean(1);
       }
     }

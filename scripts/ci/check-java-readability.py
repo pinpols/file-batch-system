@@ -24,7 +24,16 @@ CONFIGURATION = re.compile(r"@Configuration\b(?:\s*\((?P<arguments>[^)]*)\))?")
 LITE_CONFIGURATION = re.compile(r"\bproxyBeanMethods\s*=\s*false\b")
 
 
-def tracked_main_sources() -> list[Path]:
+def tracked_main_sources(candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return [
+            ROOT / relative
+            for relative in candidates
+            if relative.endswith(".java")
+            and "/src/main/java/" in relative
+            and (ROOT / relative).is_file()
+            and relative.startswith(SOURCE_PREFIXES)
+        ]
     result = subprocess.run(
         ["git", "ls-files", "--", *SOURCE_PREFIXES],
         cwd=ROOT,
@@ -110,9 +119,10 @@ def strip_non_code(source: str) -> str:
     return "".join(output)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    candidates = argv if argv else None
     errors: list[str] = []
-    for path in tracked_main_sources():
+    for path in tracked_main_sources(candidates):
         source = path.read_text(encoding="utf-8")
         stripped = strip_non_code(source)
         relative = path.relative_to(ROOT).as_posix()
@@ -138,4 +148,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
