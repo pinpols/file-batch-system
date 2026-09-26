@@ -11,6 +11,7 @@
 | [cross-platform-scripts-2026-05-24.md](./cross-platform-scripts-2026-05-24.md) | 跨平台脚本治理快照 |
 | [log-noise-2026-06-02.md](./log-noise-2026-06-02.md) | 日志噪声治理快照 |
 | [outstanding-work-2026-06-23.md](./outstanding-work-2026-06-23.md) | 2026-06-23 遗留事项快照 |
+| [platform-capability-evolution-backlog-2026-09-26.md](./platform-capability-evolution-backlog-2026-09-26.md) | 批量平台能力演进待办：OTel、Worker Runtime、KEDA、GitOps、Secret、CDC、AI Ops |
 | [pre-production-capacity-optimization-plan-2026-06-08.md](./pre-production-capacity-optimization-plan-2026-06-08.md) | 上线前容量优化计划 |
 | [rest-command-api-toggle-governance-2026-09-26.md](./rest-command-api-toggle-governance-2026-09-26.md) | REST / Command API 中启停接口命名与幂等语义治理待办 |
 | [single-node-throughput-optimization-2026-06-06.md](./single-node-throughput-optimization-2026-06-06.md) | 单节点吞吐优化计划 |
